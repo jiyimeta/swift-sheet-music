@@ -1,4 +1,5 @@
 import QuartzCore
+import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicLayoutApple
 
@@ -16,11 +17,14 @@ extension ScoreLayerBuilder {
         )
     }
 
+    /// `properties` is the marking's font override and `color` its ink; both reach the metronome glyph and the
+    /// number alike, since they are one marking.
     static func drawTempoText(
-        text: String, origin: CGPoint, metrics: StaffMetrics, height: CGFloat, into parent: CALayer,
+        text: String, origin: CGPoint, properties: TextProperties, color: CGColor,
+        metrics: StaffMetrics, height: CGFloat, into parent: CALayer,
     ) {
         let provider = AppleFontMetricsProvider()
-        for run in TextInkGeometry.tempoRuns(text: text, origin: origin, metrics: metrics) {
+        for run in TextInkGeometry.tempoRuns(text: text, origin: origin, properties: properties, metrics: metrics) {
             guard let path = textPath(run.text, font: provider.renderingFont(for: run.font)) else { continue }
             var transform = CGAffineTransform(
                 a: 1,
@@ -31,7 +35,7 @@ extension ScoreLayerBuilder {
                 ty: run.baseline.y,
             )
             guard let shifted = path.copy(using: &transform) else { continue }
-            parent.addSublayer(fillLayer(path: shifted, height: height))
+            parent.addSublayer(fillLayer(path: shifted, height: height, color: color))
         }
     }
 }

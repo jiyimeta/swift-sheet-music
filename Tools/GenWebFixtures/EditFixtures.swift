@@ -140,6 +140,9 @@ extension GenWebFixtures {
         case .element:
             // This generator emits web hit fixtures; element-hit fixtures arrive in a later phase.
             return nil
+        case .graceNote:
+            // Mirrors `editHitItem`: the web hit item has no grace fields.
+            return nil
         }
     }
 

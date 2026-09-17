@@ -29,25 +29,9 @@ extension ScoreLayerBuilder {
         into parent: CALayer,
     ) {
         let (baseDur, dots) = DurationInterpretation.split(duration)
+        // `moved(to:)` keeps a grace head's `graceNoteID`, which the selection registration below keys by.
         let shifted = notes.map { n -> LayoutChordNote in
-            LayoutChordNote(
-                noteID: n.noteID,
-                step: n.step,
-                accidental: n.accidental,
-                origin: CGPoint(
-                    x: base.x + n.origin.x,
-                    y: base.y + n.origin.y,
-                ),
-                tieForward: n.tieForward,
-                tieBack: n.tieBack,
-                hasGlissando: n.hasGlissando,
-                headType: n.headType,
-                mirror: n.mirror,
-                isInvisible: n.isInvisible,
-                color: n.color,
-                accidentalBracket: n.accidentalBracket,
-                parentheses: n.parentheses,
-            )
+            n.moved(to: CGPoint(x: base.x + n.origin.x, y: base.y + n.origin.y))
         }
         // Stem / flag inherit the chord's notehead color (first
         // colored note wins) — MuseScore stores `<Stem>/<Hook>` color
@@ -98,7 +82,9 @@ extension ScoreLayerBuilder {
                 height: height,
             ) {
                 noteTarget.addSublayer(layer)
-                context.attach(layer, to: .note(n.noteID))
+                // `selectionItem`, not `.note(noteID)`: `drawGraceChord` reuses this function, and a grace head's
+                // `noteID` is a synthetic layout key no selection can name.
+                context.attach(layer, to: n.selectionItem)
             }
             drawNoteheadParentheses(
                 parentheses: n.parentheses,
@@ -113,7 +99,7 @@ extension ScoreLayerBuilder {
                    metrics: metrics, height: height, into: noteTarget,
                )
             {
-                context.attach(accLayer, to: .note(n.noteID))
+                context.attach(accLayer, to: n.selectionItem)
             }
             drawDots(
                 after: visualOrigin, count: dots,

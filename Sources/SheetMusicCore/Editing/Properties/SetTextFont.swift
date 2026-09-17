@@ -3,16 +3,18 @@ import SheetMusicFoundation
 /// Patches authored font and frame overrides on one existing text, preserving all other metadata.
 /// Each field distinguishes unchanged, clear (nil/style inheritance), and set (including empty or zero).
 ///
-/// | Field | Harmony | Lyric / StaffText / RehearsalMark |
-/// | --- | --- | --- |
-/// | face | Drawn (subject to font fallback) | Not yet drawn |
-/// | size | Drawn | Not yet drawn |
-/// | style | Bold/italic drawn; underline/strike not yet drawn | Not yet drawn |
-/// | frameType | Not yet drawn | Not yet drawn |
-/// | framePadding | Not yet drawn | Not yet drawn |
+/// | Field | Harmony / Lyric / StaffText / RehearsalMark |
+/// | --- | --- |
+/// | face | Drawn on Apple (subject to font fallback); not carried by Android's draw program |
+/// | size | Drawn, and measured by layout |
+/// | style | Bold/italic drawn and measured; underline/strike not yet drawn |
+/// | frameType | RehearsalMark only, while its own `frame` is the default rectangle (the encoder's rule) |
+/// | framePadding | Not yet drawn |
 ///
+/// The tempo marking takes the same patch through `SetTempoFont` and draws the same three font fields.
 /// All five fields are written and preserved through MSCX even where they are not yet drawn.
-/// Hosts must not interpret a lack of visible change as a failed edit. This command changes no layout wiring.
+/// Hosts must not interpret a lack of visible change as a failed edit. A text that carries no face, size or
+/// style override lays out exactly as it did before overrides were honored.
 /// StaffText includes staff and system text, independently addressed at the same beat.
 ///
 /// > Note: Harmony is sugar over ReplaceVoiceElement; the other arms write their owner's field directly.

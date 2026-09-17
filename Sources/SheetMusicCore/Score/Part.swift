@@ -4,6 +4,9 @@ import SheetMusicFoundation
 /// C++: `mu::engraving::Part`.
 public struct Part: Sendable, Equatable {
     public var id: String
+    /// The PART name — MuseScore's `<Part><trackName>`, `Part::partName()`: what its Mixer, instrument list and
+    /// Parts dialog call the part. Not the instrument's own name, which is `Instrument.trackName`; MuseScore fills an
+    /// empty part name from that one. `SetPartNames` keeps it in step with a renamed long name.
     public var trackName: String?
     public var instrument: Instrument
     public var staves: IdentifiedArray<Staff>

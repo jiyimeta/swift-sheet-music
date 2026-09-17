@@ -19,6 +19,7 @@ extension LayoutDocument {
     ///
     /// 1. `ScoreHitTester.hitTest(at:)` ladder (notehead → rest → beam → flag → stem → tuplet → clef).
     ///    `.stem`/`.flag`/`.beam` resolve to their first `NoteID`; `.clef` is ignored in v1 (no clef editing UI).
+    ///    A grace notehead resolves to `.graceNote`, never to the chord beside it.
     /// 2. If the hit's `voiceIndex != activeVoice` and an item of the active voice lies within
     ///    `nearMissTolerance` of `point` (via `itemIDs(near:within:)`), prefer the nearest such item
     ///    (spec §5.5 — the picker targets a voice).
@@ -110,6 +111,7 @@ extension LayoutDocument {
         case let .note(id): .note(id)
         case let .rest(id): .rest(id)
         case let .tuplet(id): .tuplet(id)
+        case let .graceNote(id): .graceNote(id)
         case let .stem(notes), let .flag(notes), let .beam(notes):
             notes.first.map(ScoreItemID.note)
         case .clef, .lyric, .staffText, .harmony, .rehearsalMark,
@@ -132,6 +134,8 @@ extension LayoutDocument {
     /// the column of the bracket's FIRST member chord/rest instead — the same element a selection expansion
     /// starts from, and where an edit targeting the tuplet lands. The wasm editing spec (§7.1) requires a
     /// selected tuplet to caret like any other selectable item.
+    ///
+    /// A `.graceNote` item carets on its own grace column, not its parent's, inside the parent's staff band.
     ///
     /// `nil` when the item doesn't resolve to a laid-out frame (a stale ID right after an edit reflows the
     /// document) or names a staff/measure this document doesn't contain.

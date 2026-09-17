@@ -4,6 +4,9 @@ import SheetMusicEditWire
 import Testing
 import Wirelet
 
+/// The staff a single-staff fixture's key and time signature glyphs are drawn on, which their identity names.
+private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+
 struct ScoreItemIDCodecTests {
     private let addr = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
@@ -153,7 +156,8 @@ extension ScoreItemIDCodecTests {
         let old: [ScoreElementID] = [
             .dynamic(anchor: anchor), .fermata(anchor: anchor), .breath(anchor: anchor),
             .tempo(anchor: anchor), .spanner(anchor: anchor, kind: .pedal),
-            .keySignature(measureIndex: 3), .timeSignature(measureIndex: 3),
+            .keySignature(measureIndex: 3, staff: signatureStaff),
+            .timeSignature(measureIndex: 3, staff: signatureStaff),
             .barLine(measureIndex: 3, role: .explicit), .articulation(anchor: anchor, kind: .accent),
         ]
         let expected: [UInt64] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 12]

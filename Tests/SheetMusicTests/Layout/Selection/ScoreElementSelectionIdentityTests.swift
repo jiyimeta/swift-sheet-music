@@ -18,7 +18,7 @@ struct ScoreElementSelectionIdentityTests {
     ]
 
     private static let barAddressed: [ScoreElementID] = [
-        .keySignature(measureIndex: 13), .timeSignature(measureIndex: 13),
+        .keySignature(measureIndex: 13, staff: anchor.staff), .timeSignature(measureIndex: 13, staff: anchor.staff),
         .barLine(measureIndex: 13, role: .explicit),
         .barLine(measureIndex: 13, role: .startRepeat),
         .barLine(measureIndex: 13, role: .trailing),
@@ -37,12 +37,14 @@ struct ScoreElementSelectionIdentityTests {
         #expect(item.textID == nil)
     }
 
+    /// A key or time signature names the staff of the glyph that was selected; a barline names none, so it keeps
+    /// the top-staff approximation.
     @Test("Bar addresses preserve the bar and approximate the remaining position", arguments: barAddressed)
     func barPosition(_ id: ScoreElementID) {
         let item = ScoreItemID.element(id)
         #expect(id.anchor == nil)
         #expect(id.measureIndexIfAddressedByBar == 13)
-        #expect(item.staff == StaffAddress(partIndex: 0, staffIndexInPart: 0))
+        #expect(item.staff == (id.staffIfAddressed ?? StaffAddress(partIndex: 0, staffIndexInPart: 0)))
         #expect(item.measureIndex == 13)
         #expect(item.voiceIndex == 0)
         #expect(item.elementIndex == 0)
@@ -77,7 +79,8 @@ struct ScoreElementSelectionIdentityTests {
             .dynamic(anchor: Self.anchor), .fermata(anchor: Self.anchor), .breath(anchor: Self.anchor),
             .tempo(anchor: Self.anchor), .spanner(anchor: Self.anchor, kind: .hairpin),
             .articulation(anchor: Self.anchor, kind: .accent),
-            .keySignature(measureIndex: 13), .timeSignature(measureIndex: 13),
+            .keySignature(measureIndex: 13, staff: Self.anchor.staff),
+            .timeSignature(measureIndex: 13, staff: Self.anchor.staff),
             .barLine(measureIndex: 13, role: .explicit),
             .barLine(measureIndex: 13, role: .startRepeat),
             .barLine(measureIndex: 13, role: .trailing),
@@ -109,6 +112,9 @@ struct ScoreElementSelectionIdentityTests {
             { .dynamic(anchor: $0) }, { .fermata(anchor: $0) }, { .breath(anchor: $0) },
             { .tempo(anchor: $0) }, { .spanner(anchor: $0, kind: .pedal) },
             { .articulation(anchor: $0, kind: .unknown(subtype: "custom-mark")) },
+            // A signature names its glyph's staff, so it re-stamps exactly as an anchor does.
+            { .keySignature(measureIndex: $0.measureIndex, staff: $0.staff) },
+            { .timeSignature(measureIndex: $0.measureIndex, staff: $0.staff) },
         ]
         for makeID in constructors {
             let filteredCursor = ScoreCursor.item(.element(makeID(filtered)))
@@ -116,7 +122,8 @@ struct ScoreElementSelectionIdentityTests {
             #expect(score.engineCursorForFilteredTap(filteredCursor, hiddenStaves: hidden) == fullCursor)
             #expect(score.translateCursorForHiddenStaves(fullCursor, hiddenStaves: hidden) == filteredCursor)
         }
-        for id in Self.barAddressed {
+        // Only a barline still has no staff of its own to re-stamp.
+        for id in Self.barAddressed where id.staffIfAddressed == nil {
             let cursor = ScoreCursor.item(.element(id))
             // The approximate top-staff path resolves, so an accidental beat fallback is observable.
             #expect(score.resolveTickInMeasure(for: .element(id)) == 0)
@@ -331,14 +338,16 @@ extension ScoreElementSelectionIdentityTests {
         #expect(noVoice.translateCursorForHiddenStaves(cursor, hiddenStaves: [owner]) == cursor)
         #expect(score.translateCursorForHiddenStaves(nil, hiddenStaves: [owner]) == nil)
         let top = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        let bars: [ScoreElementID] = [
-            .keySignature(measureIndex: 7), .timeSignature(measureIndex: 7),
-            .barLine(measureIndex: 7, role: .trailing),
+        let barCursor = ScoreCursor.item(.element(.barLine(measureIndex: 7, role: .trailing)))
+        #expect(score.translateCursorForHiddenStaves(barCursor, hiddenStaves: [top]) == barCursor)
+        #expect(score.engineCursorForFilteredTap(barCursor, hiddenStaves: [top]) == barCursor)
+        // A signature on a hidden staff owns that staff, exactly as a navigation list does.
+        let signatures: [ScoreElementID] = [
+            .keySignature(measureIndex: 7, staff: owner), .timeSignature(measureIndex: 7, staff: owner),
         ]
-        for bar in bars {
-            let barCursor = ScoreCursor.item(.element(bar))
-            #expect(score.translateCursorForHiddenStaves(barCursor, hiddenStaves: [top]) == barCursor)
-            #expect(score.engineCursorForFilteredTap(barCursor, hiddenStaves: [top]) == barCursor)
+        for signature in signatures {
+            #expect(score.translateCursorForHiddenStaves(.item(.element(signature)), hiddenStaves: [owner])
+                == .beat(measureIndex: 7, tickInMeasure: 0))
         }
     }
 

@@ -241,7 +241,7 @@ extension SkylineAutoplacePass {
             let row: LyricRow
             if let explicit = element.textPlacement?.row {
                 row = explicit
-            } else if case let .textMark(.lyrics(_, verse, _, _), _, _) = element {
+            } else if case let .textMark(.lyrics(_, verse, _, _, _), _, _) = element {
                 row = LyricRow(side: .below, verse: verse)
             } else {
                 let y = LayoutEngine.elementYPoints(element).first ?? 0
@@ -250,7 +250,7 @@ extension SkylineAutoplacePass {
                 } else { 0 }
                 let candidates = addresses.compactMap { candidate -> (Int, CGFloat)? in
                     guard case let .textMark(
-                        .lyrics(_, verse, _, _),
+                        .lyrics(_, verse, _, _, _),
                         _,
                         point,
                     ) = measures[candidate.measure][candidate.index] else { return nil }

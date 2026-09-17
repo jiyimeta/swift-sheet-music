@@ -6,15 +6,17 @@ import SheetMusicCore
 extension LayoutDocument {
     /// The final lyric ink anchor, including authored offsets. Empty rows resolve through
     /// the supplied style context; the displayed cursor remains the only address used here.
+    /// `textProperties` is the syllable's authored font, read from the full score like `elementProperties`.
     public func lyricEntryOrigin(
         at cursor: LyricInputPlanner.Cursor,
         placementStyle: TextPlacementStyles? = nil,
         elementProperties: ElementProperties = .default,
+        textProperties: TextProperties = TextProperties(),
     ) -> CGPoint? {
         for system in systems {
             for measure in system.measures where measure.measureIndex == cursor.location.measureIndex {
                 for element in measure.elements {
-                    guard case let .textMark(.lyrics(_, verse, anchor, _), _, point) = element,
+                    guard case let .textMark(.lyrics(_, verse, anchor, _, _), _, point) = element,
                           anchor == cursor.location, verse == cursor.verse else { continue }
                     return absolute(point, in: system, measure: measure)
                 }
@@ -26,6 +28,7 @@ extension LayoutDocument {
                   verse: cursor.verse,
                   placementStyle: placementStyle,
                   elementProperties: elementProperties,
+                  textProperties: textProperties,
               )
         else { return nil }
         let style = placementStyle ?? TextPlacementStyles()
@@ -101,7 +104,7 @@ extension LayoutDocument {
         style: TextStyleType,
     ) -> CGPoint? {
         firstOrigin(inMeasure: anchor.measureIndex) { element in
-            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _) = element,
+            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _, _) = element,
                   candidateAnchor == anchor,
                   candidateStyle == style
             else { return nil }
@@ -151,7 +154,7 @@ extension LayoutDocument {
         if let exact = staffTextOrigin(at: anchor, style: style) { return exact }
         guard let wanted = SystemLaneSlot.position(of: anchor, in: score) else { return nil }
         return firstOrigin(inMeasure: anchor.measureIndex) { element in
-            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _) = element,
+            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _, _) = element,
                   candidateStyle == style,
                   let candidateAnchor,
                   candidateAnchor.measureIndex == anchor.measureIndex,
@@ -199,7 +202,7 @@ extension LayoutDocument {
                 where measure.measureIndex == anchor.measureIndex
             {
                 for element in measure.elements {
-                    guard case let .rehearsalMark(_, origin, _, _, candidateMeasureIndex, _) = element,
+                    guard case let .rehearsalMark(_, origin, _, _, candidateMeasureIndex, _, _) = element,
                           candidateMeasureIndex == anchor.measureIndex
                     else { continue }
                     let padding = RehearsalMarkFrame.paddingSp(sp: system.sp)

@@ -37,6 +37,33 @@ struct ScoreClipboardSeamTests {
         ])
     }
 
+    @Test("a note copied from the score's first bar pastes without the clef that bar opens with")
+    func pastesWithoutTheOpeningClef() throws {
+        let flute = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .keySignature(KeySignature(concertKey: 0)),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+                .rest(duration: .half),
+            ])]),
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+        ])
+        var score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [flute]),
+        ])
+        let document = try #require(score.clipboardDocument(
+            for: VoiceElementRange(start: Self.slot(Self.flute, 0, 3), end: Self.slot(Self.flute, 0, 3)),
+        ))
+        let text = try #require(String(data: MSCXEncoder.encode(document), encoding: .utf8))
+        _ = try PasteRange(at: Self.slot(Self.flute, 1, 0), payload: text, readPayload: MSCXParser.parse)
+            .apply(to: &score)
+        let landed = try #require(score[Self.flute]).measures[1].voices[0].elements
+        #expect(!landed.values.contains { if case .clef = $0 { true } else { false } })
+        #expect(landed.values.first == .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])))
+    }
+
     @Test("clipboardDocument refuses a range that cuts a tuplet, with nothing for a host to put on the board")
     func refusesAPartialTuplet() {
         let source = RangeCopyPayloadTests.tripletFixture()

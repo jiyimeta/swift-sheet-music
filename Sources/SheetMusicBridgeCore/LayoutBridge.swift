@@ -534,12 +534,30 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     sp: sp,
                     into: &out,
                 )
-            } else if case .lyrics = kind {
+            } else if case let .lyrics(color, _, _, _, properties) = kind {
+                // Color and font override as the Apple renderers draw them. The face is not on the wire, so
+                // it stays the bundled one; size and bold/italic are.
+                let argb = color.flatMap(LayoutBridge.argb(from:))
+                if let argb { out.append(.setColor(argb: argb)) }
                 emitRoleText(
-                    text: text, style: .lyricsOdd,
+                    text: text, style: .lyricsOdd, properties: properties,
                     originX: mox + Double(origin.x), originY: moy + Double(origin.y),
                     sp: sp, anchor: CGPoint(x: 0.5, y: 0.5), into: &out,
                 )
+                if argb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
+            } else if case let .tempo(_, color, properties) = kind {
+                let argb = color.flatMap(LayoutBridge.argb(from:))
+                if let argb { out.append(.setColor(argb: argb)) }
+                emitText(
+                    text: text,
+                    style: .tempo,
+                    properties: properties,
+                    originX: mox + Double(origin.x),
+                    originY: moy + Double(origin.y),
+                    sp: sp,
+                    into: &out,
+                )
+                if argb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
             } else {
                 emitText(
                     text: text,
@@ -551,12 +569,13 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .staffText(text, origin, color, style, _, _):
+        case let .staffText(text, origin, color, style, _, _, properties):
             let argb = color.flatMap(LayoutBridge.argb(from:))
             if let argb { out.append(.setColor(argb: argb)) }
             emitRoleText(
                 text: text,
                 style: style,
+                properties: properties,
                 originX: mox + Double(origin.x),
                 originY: moy + Double(origin.y),
                 sp: sp,
@@ -609,13 +628,14 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .rehearsalMark(text, origin, frame, color, _, _):
+        case let .rehearsalMark(text, origin, frame, color, _, _, properties):
             encodeRehearsalMark(
                 text: text,
                 originX: mox + Double(origin.x),
                 originY: moy + Double(origin.y),
                 frame: frame,
                 color: color,
+                properties: properties,
                 sp: sp,
                 into: &out,
             )

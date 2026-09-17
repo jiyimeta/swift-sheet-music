@@ -52,12 +52,18 @@ extension Score {
                 return .item(.element(.jump(staff: full, measureIndex: measureIndex, index: index)))
             case let .marker(_, measureIndex, index):
                 return .item(.element(.marker(staff: full, measureIndex: measureIndex, index: index)))
-            case .keySignature, .timeSignature, .barLine:
-                // Bar addresses have no staff field to re-stamp; this is not a deferred remapping.
+            case let .keySignature(measureIndex, _):
+                return .item(.element(.keySignature(measureIndex: measureIndex, staff: full)))
+            case let .timeSignature(measureIndex, _):
+                return .item(.element(.timeSignature(measureIndex: measureIndex, staff: full)))
+            case .barLine:
+                // A barline's bar address has no staff field to re-stamp; this is not a deferred remapping.
                 return cursor
             }
         case let .clef(anchor):
             return .item(.clef(anchor.withStaff(full)))
+        case let .graceNote(graceID):
+            return .item(.graceNote(graceID.withParent(graceID.parent.withStaff(full))))
         }
     }
 
@@ -125,9 +131,9 @@ extension Score {
     ///
     /// `.beat` cursors and visible-staff `.item` values whose full and filtered addresses already match pass
     /// through unchanged. This is the playback-side mirror of `engineCursorForFilteredTap` (tap → engine).
-    /// Bar-addressed element identities also pass through: their approximate staff is not a field to remap.
-    /// Jump and marker identities instead own a staff's list and follow the existing staff remap and
-    /// hidden-owner fallback. A list index is not a voice slot; tick lookup uses voice 0 / slot 0.
+    /// A barline identity also passes through: its approximate staff is not a field to remap.
+    /// Key and time signature, jump and marker identities instead name a staff and follow the existing staff
+    /// remap and hidden-owner fallback. A list index is not a voice slot; tick lookup uses voice 0 / slot 0.
     /// A tie's two endpoints are re-stamped separately, before the start-only staff guard below.
     public func translateCursorForHiddenStaves(
         _ cursor: ScoreCursor?, hiddenStaves hidden: Set<StaffAddress>,
@@ -135,7 +141,7 @@ extension Score {
         guard let cursor else { return nil }
         guard !hidden.isEmpty, case let .item(id) = cursor else { return cursor }
         // The top-staff approximation is not an owned staff and must not trigger the hidden-staff beat fallback.
-        if id.elementID?.measureIndexIfAddressedByBar != nil { return cursor }
+        if case .element(.barLine) = id { return cursor }
         if hidden.contains(id.staff) {
             guard let tick = resolveTickInMeasure(for: id) else { return cursor }
             return .beat(measureIndex: id.measureIndex, tickInMeasure: tick)
@@ -182,12 +188,18 @@ extension Score {
                 return .item(.element(.jump(staff: filteredStaff, measureIndex: measureIndex, index: index)))
             case let .marker(_, measureIndex, index):
                 return .item(.element(.marker(staff: filteredStaff, measureIndex: measureIndex, index: index)))
-            case .keySignature, .timeSignature, .barLine:
-                // Bar addresses have no staff field to re-stamp; this is not a deferred remapping.
+            case let .keySignature(measureIndex, _):
+                return .item(.element(.keySignature(measureIndex: measureIndex, staff: filteredStaff)))
+            case let .timeSignature(measureIndex, _):
+                return .item(.element(.timeSignature(measureIndex: measureIndex, staff: filteredStaff)))
+            case .barLine:
+                // A barline's bar address has no staff field to re-stamp; this is not a deferred remapping.
                 return cursor
             }
         case let .clef(anchor):
             return .item(.clef(anchor.withStaff(filteredStaff)))
+        case let .graceNote(graceID):
+            return .item(.graceNote(graceID.withParent(graceID.parent.withStaff(filteredStaff))))
         }
     }
 }

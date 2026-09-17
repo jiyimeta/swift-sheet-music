@@ -41,20 +41,24 @@ extension LayoutDocument {
     /// Final lyric row Y. An existing syllable wins; an empty editor can supply style
     /// and element properties without mixing a model address into the displayed document.
     /// Omitting that context retains the default-style fallback for existing callers.
+    /// `textProperties` is the syllable's authored font: a syllable in its own font shares the row's baseline,
+    /// so its center — what this returns — sits off the row's by `LayoutEngine.lyricCenterShift`.
     public func lyricLineY(
         at voiceElementID: VoiceElementID, verse: Int,
         placementStyle: TextPlacementStyles? = nil,
         elementProperties: ElementProperties = .default,
+        textProperties: TextProperties = TextProperties(),
     ) -> CGFloat? {
         let style = placementStyle ?? TextPlacementStyles()
         let side = style.side(for: .lyrics, element: elementProperties)
+        let ownShift = LayoutEngine.lyricCenterShift(properties: textProperties, metrics: metrics)
         for system in systems {
             guard let measure = system.measures.first(where: { $0.measureIndex == voiceElementID.measureIndex }),
                   let staffIndex = system.flatIndex(for: voiceElementID.staff),
                   system.staffOrigins.indices.contains(staffIndex) else { continue }
             var candidates: [(verse: Int, side: Placement, y: CGFloat)] = []
             for el in measure.elements {
-                guard case let .textMark(.lyrics(_, markVerse, anchor, metadata), _, point) = el,
+                guard case let .textMark(.lyrics(_, markVerse, anchor, metadata, _), _, point) = el,
                       anchor?.staff == voiceElementID.staff else { continue }
                 let y = system.origin.y + measure.origin.y + point.y
                 if anchor == voiceElementID, markVerse == verse { return y }
@@ -67,7 +71,7 @@ extension LayoutDocument {
             if let exact = candidates
                 .first(where: { $0.verse == verse && (placementStyle == nil || $0.side == side) })
             {
-                return exact.y
+                return exact.y + ownShift
             }
             let maxAboveVerse = system.measures.flatMap(\.elements).compactMap { element -> Int? in
                 guard element.textPlacement?.side == .above,
@@ -78,7 +82,7 @@ extension LayoutDocument {
                 .min(by: { abs($0.verse - verse) < abs($1.verse - verse) }),
                 side == .below || verse <= maxAboveVerse
             {
-                return nearest.y + CGFloat(verse - nearest.verse) * system.sp * lyricVerseStrideInSpatiums
+                return nearest.y + CGFloat(verse - nearest.verse) * system.sp * lyricVerseStrideInSpatiums + ownShift
             }
             let position = style.position(for: .lyrics, side: side)
             let geometry = system.geometry(atFlatIndex: staffIndex)
@@ -91,8 +95,8 @@ extension LayoutDocument {
                     + CGFloat(row) * system.sp * lyricVerseStrideInSpatiums,
             )
             return LayoutEngine.textPlacementOrigin(
-                text: "", font: TextInkGeometry.font(for: .lyricsOdd, metrics: metrics), baseline: baseline,
-                center: true,
+                text: "", font: TextInkGeometry.font(for: .lyricsOdd, overrides: textProperties, metrics: metrics),
+                baseline: baseline, center: true,
             ).y
         }
         return nil

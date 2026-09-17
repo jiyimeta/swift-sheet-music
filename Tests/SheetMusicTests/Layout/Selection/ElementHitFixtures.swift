@@ -12,6 +12,9 @@ import SheetMusicLayout
     private typealias CGPoint = SheetMusicLayout.CGPoint
 #endif
 
+/// The staff a single-staff fixture's key and time signature glyphs are drawn on, which their identity names.
+private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+
 enum ElementHitFixtures {
     static let anchor = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
@@ -87,23 +90,31 @@ enum ElementHitFixtures {
         ),
         Sample(element: spanner(.volta(endings: [1])), id: .spanner(anchor: anchor, kind: .volta)),
         Sample(
-            element: .keySignature(sharps: 4, flats: 0, clef: .bass, origin: origin, measureIndex: 0),
-            id: .keySignature(measureIndex: 0),
+            element: .keySignature(
+                sharps: 4, flats: 0, clef: .bass, origin: origin,
+                identity: .keySignature(measureIndex: 0, staff: signatureStaff),
+            ),
+            id: .keySignature(measureIndex: 0, staff: signatureStaff),
         ),
         Sample(
-            element: .timeSignature(numerator: 12, denominator: 8, origin: origin, measureIndex: 0),
-            id: .timeSignature(measureIndex: 0),
+            element: .timeSignature(
+                numerator: 12, denominator: 8, origin: origin,
+                identity: .timeSignature(measureIndex: 0, staff: signatureStaff),
+            ),
+            id: .timeSignature(measureIndex: 0, staff: signatureStaff),
         ),
         Sample(element: bar("end-repeat"), id: .barLine(measureIndex: 0, role: .explicit)),
     ]
 
     static let variants: [Sample] = [
         Sample(element: .keySignature(
-            sharps: 0, flats: 7, clef: .treble, naturals: [4, 1, 5, 2], origin: origin, measureIndex: 0,
-        ), id: .keySignature(measureIndex: 0)),
+            sharps: 0, flats: 7, clef: .treble, naturals: [4, 1, 5, 2], origin: origin,
+            identity: .keySignature(measureIndex: 0, staff: signatureStaff),
+        ), id: .keySignature(measureIndex: 0, staff: signatureStaff)),
         Sample(element: .timeSignature(
-            numerator: 12, denominator: 16, origin: origin, measureIndex: 0,
-        ), id: .timeSignature(measureIndex: 0)),
+            numerator: 12, denominator: 16, origin: origin,
+            identity: .timeSignature(measureIndex: 0, staff: signatureStaff),
+        ), id: .timeSignature(measureIndex: 0, staff: signatureStaff)),
         Sample(
             element: .textMark(kind: .dynamic(anchor: anchor), text: "very soft", origin: origin),
             id: .dynamic(anchor: anchor),
@@ -120,15 +131,15 @@ enum ElementHitFixtures {
             clef: .treble,
             naturals: [4, 1],
             origin: origin,
-            measureIndex: 0,
-        ), id: .keySignature(measureIndex: 0)),
+            identity: .keySignature(measureIndex: 0, staff: signatureStaff),
+        ), id: .keySignature(measureIndex: 0, staff: signatureStaff)),
         Sample(element: .timeSignature(
             numerator: 4,
             denominator: 4,
             symbol: .common,
             origin: origin,
-            measureIndex: 0,
-        ), id: .timeSignature(measureIndex: 0)),
+            identity: .timeSignature(measureIndex: 0, staff: signatureStaff),
+        ), id: .timeSignature(measureIndex: 0, staff: signatureStaff)),
     ]
 
     static var signatures: [Sample] {

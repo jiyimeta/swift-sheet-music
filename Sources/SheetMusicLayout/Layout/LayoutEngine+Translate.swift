@@ -16,15 +16,15 @@ extension LayoutEngine {
         switch element {
         case let .clef(t, p, anchor):
             return .clef(rawType: t, origin: shift(p), anchor: anchor)
-        case let .keySignature(s, f, clef, naturals, p, measureIndex):
+        case let .keySignature(s, f, clef, naturals, p, identity):
             return .keySignature(
                 sharps: s, flats: f, clef: clef, naturals: naturals,
-                origin: shift(p), measureIndex: measureIndex,
+                origin: shift(p), identity: identity,
             )
-        case let .timeSignature(n, d, symbol, p, measureIndex):
+        case let .timeSignature(n, d, symbol, p, identity):
             return .timeSignature(
                 numerator: n, denominator: d, symbol: symbol,
-                origin: shift(p), measureIndex: measureIndex,
+                origin: shift(p), identity: identity,
             )
         case let .barLine(s, p, halfHeight, measureIndex, role):
             return .barLine(
@@ -54,23 +54,7 @@ extension LayoutEngine {
             stemHidden,
             mag,
         ):
-            let shiftedNotes = notes.map {
-                LayoutChordNote(
-                    noteID: $0.noteID,
-                    step: $0.step,
-                    accidental: $0.accidental,
-                    origin: shift($0.origin),
-                    tieForward: $0.tieForward,
-                    tieBack: $0.tieBack,
-                    hasGlissando: $0.hasGlissando,
-                    headType: $0.headType,
-                    mirror: $0.mirror,
-                    isInvisible: $0.isInvisible,
-                    color: $0.color,
-                    accidentalBracket: $0.accidentalBracket,
-                    parentheses: $0.parentheses,
-                )
-            }
+            let shiftedNotes = notes.map { $0.moved(to: shift($0.origin)) }
             return .chord(
                 notes: shiftedNotes,
                 duration: dur,
@@ -185,7 +169,7 @@ extension LayoutEngine {
                 toOrigin: shift(to),
                 placement: placement,
             )
-        case let .staffText(text, p, color, style, anchor, placement):
+        case let .staffText(text, p, color, style, anchor, placement, properties):
             // Emitted by `placeMeasureElements` in staff-local coords
             // (relative to a virtual staff with top at sp * 2), so the
             // per-staff `dy` must be applied for the text to land above
@@ -198,8 +182,9 @@ extension LayoutEngine {
                 style: style,
                 anchor: anchor,
                 placement: placement,
+                properties: properties,
             )
-        case let .rehearsalMark(text, p, frame, color, measureIndex, placement):
+        case let .rehearsalMark(text, p, frame, color, measureIndex, placement, properties):
             // Same staff-local origin convention as `.staffText`;
             // shift onto the system's actual top-staff y.
             return .rehearsalMark(
@@ -207,6 +192,7 @@ extension LayoutEngine {
                 frame: frame, color: color,
                 measureIndex: measureIndex,
                 placement: placement,
+                properties: properties,
             )
         case let .harmony(lh):
             // Apply per-staff dy to the anchor point. The runs are
@@ -224,23 +210,8 @@ extension LayoutEngine {
         case let .graceChord(
             notes, dur, stem, so, relX, slash, mag, vi,
         ):
-            let shiftedNotes = notes.map {
-                LayoutChordNote(
-                    noteID: $0.noteID,
-                    step: $0.step,
-                    accidental: $0.accidental,
-                    origin: shift($0.origin),
-                    tieForward: $0.tieForward,
-                    tieBack: $0.tieBack,
-                    hasGlissando: $0.hasGlissando,
-                    headType: $0.headType,
-                    mirror: $0.mirror,
-                    isInvisible: $0.isInvisible,
-                    color: $0.color,
-                    accidentalBracket: $0.accidentalBracket,
-                    parentheses: $0.parentheses,
-                )
-            }
+            // `moved(to:)` rather than a field-by-field rebuild: a grace head's `graceNoteID` must survive the shift.
+            let shiftedNotes = notes.map { $0.moved(to: shift($0.origin)) }
             return .graceChord(
                 notes: shiftedNotes,
                 duration: dur,
@@ -298,17 +269,18 @@ extension LayoutEngine {
             CGPoint(x: p.x + dx, y: p.y)
         }
         switch element {
-        case let .staffText(text, p, color, style, anchor, placement):
+        case let .staffText(text, p, color, style, anchor, placement, properties):
             return .staffText(
                 text: text, origin: shift(p),
-                color: color, style: style, anchor: anchor, placement: placement,
+                color: color, style: style, anchor: anchor, placement: placement, properties: properties,
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))
-        case let .rehearsalMark(text, p, frame, color, measureIndex, placement):
+        case let .rehearsalMark(text, p, frame, color, measureIndex, placement, properties):
             return .rehearsalMark(
                 text: text, origin: shift(p),
                 frame: frame, color: color, measureIndex: measureIndex, placement: placement,
+                properties: properties,
             )
         default:
             return element

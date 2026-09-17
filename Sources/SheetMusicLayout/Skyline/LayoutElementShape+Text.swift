@@ -161,10 +161,11 @@ extension LayoutElementShape {
         }
     }
 
+    /// `overrides` is an element's authored font; an empty one resolves to exactly the style's font.
     private static func styleFont(
-        _ style: TextStyleType, sp: CGFloat,
+        _ style: TextStyleType, overrides: TextProperties = TextProperties(), sp: CGFloat,
     ) -> LayoutFont {
-        TextInkGeometry.font(for: style, metrics: StaffMetrics(staffSize: sp * 4))
+        TextInkGeometry.font(for: style, overrides: overrides, metrics: StaffMetrics(staffSize: sp * 4))
     }
 
     /// Rects for the elements the skyline pass is allowed to move.
@@ -179,9 +180,9 @@ extension LayoutElementShape {
                 markKind: markKind, text: text, origin: origin,
                 kind: kind, metrics: metrics,
             )]
-        case let .staffText(text, origin, _, style, _, _):
+        case let .staffText(text, origin, _, style, _, _, properties):
             return [textRect(
-                text: text, font: TextInkGeometry.font(for: style, metrics: metrics),
+                text: text, font: TextInkGeometry.font(for: style, overrides: properties, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
             )]
         case let .measureNumber(text, origin):
@@ -194,9 +195,9 @@ extension LayoutElementShape {
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .leadingCenter,
             )]
-        case let .rehearsalMark(text, origin, frame, _, _, _):
+        case let .rehearsalMark(text, origin, frame, _, _, _, properties):
             return [rehearsalMarkRect(
-                text: text, origin: origin, frame: frame,
+                text: text, origin: origin, frame: frame, properties: properties,
                 metrics: metrics,
             )]
         case let .harmony(lh):
@@ -232,9 +233,12 @@ extension LayoutElementShape {
         origin: CGPoint, kind: ShapeItemKind, metrics: StaffMetrics,
     ) -> CGRect {
         switch markKind {
-        case .lyrics:
+        case let .lyrics(_, _, _, _, properties):
             return textRect(
-                text: text, font: font(for: kind, metrics: metrics),
+                text: text,
+                font: properties.hasFontOverride
+                    ? styleFont(.lyricsOdd, overrides: properties, sp: metrics.sp)
+                    : font(for: kind, metrics: metrics),
                 origin: origin, anchor: .center,
             )
         case .dynamic:
@@ -254,9 +258,9 @@ extension LayoutElementShape {
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .leadingCenter,
             )
-        case .tempo:
+        case let .tempo(_, _, properties):
             return tempoRect(
-                text: text, origin: origin, metrics: metrics,
+                text: text, origin: origin, properties: properties, metrics: metrics,
             )
         }
     }
@@ -308,9 +312,9 @@ extension LayoutElementShape {
     /// `.leading` on `origin.y`; the two renderers disagree on the beat
     /// glyph's Y and the CALayer one is production.
     private static func tempoRect(
-        text: String, origin: CGPoint, metrics: StaffMetrics,
+        text: String, origin: CGPoint, properties: TextProperties, metrics: StaffMetrics,
     ) -> CGRect {
-        let textFont = font(for: .tempo, metrics: metrics)
+        let textFont = styleFont(.tempo, overrides: properties, sp: metrics.sp)
         let glyphFont = LayoutFont(
             face: SMuFLFamily.bravura, pointSize: textFont.pointSize,
         )
@@ -352,9 +356,9 @@ extension LayoutElementShape {
 
     private static func rehearsalMarkRect(
         text: String, origin: CGPoint,
-        frame: RehearsalMark.FrameKind, metrics: StaffMetrics,
+        frame: RehearsalMark.FrameKind, properties: TextProperties, metrics: StaffMetrics,
     ) -> CGRect {
-        let f = font(for: .rehearsalMark, metrics: metrics)
+        let f = styleFont(.rehearsalMark, overrides: properties, sp: metrics.sp)
         let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)
         let inner = textRect(
             text: text, font: f, origin: CGPoint(x: origin.x + pad, y: origin.y - pad), anchor: .bottomLeading,

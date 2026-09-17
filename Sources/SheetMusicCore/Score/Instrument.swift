@@ -5,6 +5,8 @@ public struct Instrument: Sendable, Equatable {
     public var id: String
     public var longName: String?
     public var shortName: String?
+    /// The instrument's own name ("Piano") — MuseScore's `<Instrument><trackName>`, which a part rename leaves alone.
+    /// The part's name is `Part.trackName`.
     public var trackName: String?
     public var minPitchPlayable: Int? // C++: minPitchP
     public var maxPitchPlayable: Int? // C++: maxPitchP

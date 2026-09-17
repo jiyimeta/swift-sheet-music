@@ -287,6 +287,7 @@ extension LayoutEngine {
     static func courtesyElements(
         _ courtesy: TrailingCourtesy,
         staffIndex: Int,
+        staff: StaffAddress,
         contentWidth: CGFloat,
         clef: NotatedClef,
         lineGeometry: StaffLineGeometry,
@@ -316,7 +317,7 @@ extension LayoutEngine {
                 // The bar being announced, not the bar doing the announcing:
                 // these glyphs restate the next system's declaration, and
                 // that declaration is what a click on them means.
-                measureIndex: courtesy.announcedMeasureIndex,
+                identity: .keySignature(measureIndex: courtesy.announcedMeasureIndex, staff: staff),
             ))
         }
         if let time = courtesy.time {
@@ -329,7 +330,7 @@ extension LayoutEngine {
                     y: staffMidY
                         + metrics.sp * lineGeometry.centerOffsetSp,
                 ),
-                measureIndex: courtesy.announcedMeasureIndex,
+                identity: .timeSignature(measureIndex: courtesy.announcedMeasureIndex, staff: staff),
             ))
         }
         return out

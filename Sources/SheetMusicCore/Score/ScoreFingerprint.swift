@@ -38,10 +38,12 @@ import SheetMusicFoundation
 ///   parsed from MSCX still agree; see `combineSystemLane`. Nor is the display trivia hanging off each element —
 ///   `offsetX` / `offsetY`, `RehearsalMark.frame`, `InstrumentChange.isUserInitialized`.
 ///   TextProperties on lyric, staff/system text, rehearsal mark and harmony are included by occupants
-///   (tags 85...104), including fields not yet drawn, because SetTextFont writes all five overrides.
-///   Same reasoning as the `Chord` / `Note` bullets above. The one exception is `elementProperties` on a
+///   (tags 85...104), and on a tempo marking (106...110), including fields not yet drawn, because SetTextFont
+///   and SetTempoFont write all five overrides.
+///   Same reasoning as the `Chord` / `Note` bullets above. The exceptions are `elementProperties` on a
 ///   rehearsal mark (visible tag 63, color 64) and on a staff / system text (65, 66), which `SetTextVisible`
-///   writes; the lane's other three cases still carry theirs unhashed.
+///   writes, and a tempo's color (105), which `SetElementColor` writes; the lane's other cases still carry theirs
+///   unhashed.
 /// - The walk's own shape: it emits a flat sequence of staff blocks with no part/staff-count delimiter, so two
 ///   scores whose staves are grouped into parts differently — but which total the same number of staves — hash
 ///   identically.

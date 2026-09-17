@@ -442,7 +442,7 @@ extension LayoutEngine {
                     // sheet, so answering "not a thing" to a click on it is wrong however true it is that the
                     // redraw declares nothing. `initialKeyMeasureIndex` is that declaration's bar, resolved by
                     // the caller, which is the level that can see the bars before this system.
-                    measureIndex: initialKeyMeasureIndex,
+                    identity: initialKeyMeasureIndex.map { .keySignature(measureIndex: $0, staff: staffAddress) },
                 ))
                 remainingSynthKeySig = false
             }
@@ -535,8 +535,8 @@ extension LayoutEngine {
                             clef: currentClef,
                         ),
                         origin: CGPoint(x: keyX, y: staffMidY),
-                        measureIndex: isPitchedStaff && voiceIdx == 0 && voiceElemIdx < signaturePrefixCount
-                            ? measureIndex : nil,
+                        identity: isPitchedStaff && voiceIdx == 0 && voiceElemIdx < signaturePrefixCount
+                            ? .keySignature(measureIndex: measureIndex, staff: staffAddress) : nil,
                     )
                     if key.visible {
                         out.append(element)
@@ -552,7 +552,7 @@ extension LayoutEngine {
                         denominator: ts.denominator,
                         symbol: ts.symbol,
                         origin: CGPoint(x: tsX, y: timeSigY),
-                        measureIndex: measureIndex,
+                        identity: .timeSignature(measureIndex: measureIndex, staff: staffAddress),
                     )
                     if ts.visible {
                         out.append(element)
@@ -1014,7 +1014,7 @@ extension LayoutEngine {
                         guard lyric.visible || options.showsInvisibleElements
                         else {
                             let textWidth = Self.lyricsTextWidth(
-                                lyric.text, sp: metrics.sp,
+                                lyric.text, properties: lyric.properties, metrics: metrics,
                             )
                             previousLyric[row] = LyricTrail(
                                 centerX: origin.x,
@@ -1038,6 +1038,7 @@ extension LayoutEngine {
                                 verse: verseIdx,
                                 anchor: lyricAnchor,
                                 placement: placement,
+                                properties: lyric.properties.fontOverrides,
                             ),
                             text: lyric.text,
                             origin: origin,
@@ -1048,7 +1049,7 @@ extension LayoutEngine {
                             invisibleOut.append(lyricElement)
                         }
                         let textWidth = Self.lyricsTextWidth(
-                            lyric.text, sp: metrics.sp,
+                            lyric.text, properties: lyric.properties, metrics: metrics,
                         )
                         // Hyphens between this syllable and the
                         // previous one in the same verse. Only the
@@ -1115,6 +1116,7 @@ extension LayoutEngine {
                             emitMelismaLine(
                                 chordX: origin.x,
                                 lyricText: lyric.text,
+                                lyricProperties: lyric.properties,
                                 lyricTicks: lyric.ticks,
                                 lyricsY: melismaLineY,
                                 tickCursor: tickCursor,
@@ -1989,6 +1991,8 @@ extension LayoutEngine {
                 maxAboveVerse: maxAboveLyricVerse,
                 tickColumns: tickColumns,
                 headerContentStartX: headerSchedule.contentStartX,
+                // Only a system's first measure synthesizes the opening clef (`buildSystem`'s `j == 0`).
+                isSystemHead: initialClefRawType != nil,
                 measureWidth: width,
                 metrics: metrics,
                 out: &out,
@@ -2012,11 +2016,17 @@ extension LayoutEngine {
                 // `t.beatGlyph` is the marking's beat note as Bravura "Individual notes" glyphs (e.g. a quarter
                 // U+E1D5, or a dotted quarter U+E1D5 U+E1E7). Renderers split the string into Bravura-glyph and
                 // Edwin-text runs via `MusicTextRuns.runs`.
+                // Color and font ride along for the renderers. Neither moves the origin, which is a fixed offset
+                // from the staff rather than a measured one.
                 let element = LayoutElement.textMark(
-                    kind: .tempo(anchor: systemLaneAnchor(
-                        atTick: tick, in: measure, staff: staffAddress,
-                        measureIndex: measureIndex, measureDuration: measureDuration, division: division,
-                    )),
+                    kind: .tempo(
+                        anchor: systemLaneAnchor(
+                            atTick: tick, in: measure, staff: staffAddress,
+                            measureIndex: measureIndex, measureDuration: measureDuration, division: division,
+                        ),
+                        color: t.elementProperties.color,
+                        properties: t.properties.fontOverrides,
+                    ),
                     text: "\(t.beatGlyph) = \(value)",
                     origin: CGPoint(
                         x: xAtTick
@@ -2035,7 +2045,8 @@ extension LayoutEngine {
                     origin: placedTextOrigin(
                         text: st.text, role: role, properties: st.elementProperties,
                         style: textPlacementStyle, x: xAtTick, lineGeometry: lineGeometry, metrics: metrics,
-                        font: TextInkGeometry.font(for: st.styleType, metrics: metrics), center: false,
+                        font: TextInkGeometry.font(for: st.styleType, overrides: st.properties, metrics: metrics),
+                        center: false,
                     ),
                     color: st.color,
                     style: st.styleType,
@@ -2048,6 +2059,7 @@ extension LayoutEngine {
                         division: division,
                     ),
                     placement: TextPlacementMetadata(side: side, autoplace: st.elementProperties.autoplace ?? true),
+                    properties: st.properties.fontOverrides,
                 )
                 if st.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .swing(s):
@@ -2099,13 +2111,14 @@ extension LayoutEngine {
                     origin: placedTextOrigin(
                         text: rm.text, role: .rehearsalMark, properties: rm.elementProperties,
                         style: textPlacementStyle, x: originX, lineGeometry: lineGeometry, metrics: metrics,
-                        font: TextInkGeometry.font(for: .rehearsalMark, metrics: metrics), center: false,
-                        padding: RehearsalMarkFrame.paddingSp(sp: metrics.sp),
+                        font: TextInkGeometry.font(for: .rehearsalMark, overrides: rm.properties, metrics: metrics),
+                        center: false, padding: RehearsalMarkFrame.paddingSp(sp: metrics.sp),
                     ),
-                    frame: rm.frame,
+                    frame: rm.drawnFrame,
                     color: rm.color,
                     measureIndex: measureIndex,
                     placement: TextPlacementMetadata(side: side, autoplace: rm.elementProperties.autoplace ?? true),
+                    properties: rm.properties.fontOverrides,
                 )
                 if rm.visible {
                     out.append(rehearsalElement)
@@ -2283,6 +2296,7 @@ extension LayoutEngine {
                 color: n.color,
                 accidentalBracket: n.accidentalBracket,
                 parentheses: n.parentheses,
+                graceNoteID: n.graceNoteID,
             )
         }
     }
@@ -2290,8 +2304,9 @@ extension LayoutEngine {
     /// Build `LayoutChordNote` values for a single `GraceChord`.
     /// Mirrors the inline notehead construction used for main chords
     /// but takes `graceIdx` / `isAfter` so synthesized `NoteID`s
-    /// don't collide with the parent chord's notes — important for
-    /// hit-testing and the chord-origin lookup.
+    /// don't collide with the parent chord's notes, and so each head
+    /// carries the real `GraceNoteID` hit testing, selection tint and
+    /// caret geometry key it by (`LayoutChordNote.selectionItem`).
     fileprivate static func makeGraceLayoutNotes( // swiftlint:disable:this function_parameter_count
         grace: GraceChord,
         atX x: CGFloat,
@@ -2348,6 +2363,15 @@ extension LayoutEngine {
                 color: note.elementProperties.color,
                 accidentalBracket: note.accidentalBracket,
                 parentheses: note.parentheses,
+                graceNoteID: GraceNoteID(
+                    parent: VoiceElementID(
+                        staff: staffAddress, measureIndex: measureIndex,
+                        voiceIndex: voiceIdx, elementIndex: voiceElemIdx,
+                    ),
+                    side: isAfter ? .after : .before,
+                    graceIndex: graceIdx,
+                    noteIndexInGraceChord: noteIdx,
+                ),
             )
         }
     }

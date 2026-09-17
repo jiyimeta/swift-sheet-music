@@ -154,8 +154,32 @@
         /// each only by an appended `identity:` naming the drawn staff,
         /// the measure and the list index; no other line moved. Both
         /// sample lines matched the ones derived by hand before the run.
+        ///
+        /// **Re-recorded when text font overrides reached layout.** The
+        /// tree this branched from already hashed to d0750a60… rather than
+        /// the committed f4f11d06…, so the constant was stale before this
+        /// change too. Against that parent's recorded digest (3889 lines
+        /// both sides): every `staffText` / `rehearsalMark` / lyric and tempo
+        /// `textMark` line gains its new payload, and once the empty ones
+        /// (`properties` all nil, tempo `color: nil`) are stripped from both
+        /// digests, 64 of 66 fixture blocks are identical to the character.
+        /// The two that move are `guitarbend_simple.mscx` (both wraps, 30
+        /// lines each): its two `<SystemText>` carry `<size>7</size>`, now
+        /// measured at 7 pt instead of the style's 10, so the texts sit
+        /// lower and the system is 3.1 pt shorter. No other fixture carries
+        /// a face, size or style override or a tempo color.
+        ///
+        /// **Re-recorded when signature and grace-note identities joined
+        /// the text-font branch.** 644 of 3890 lines changed, each only in
+        /// an identity payload: a key or time signature's trailing
+        /// `measureIndex: Optional(n)` became `identity:` naming the same
+        /// bar plus the glyph's staff, and every `LayoutChordNote` gained a
+        /// `graceNoteID` (`nil` on ordinary heads, the grace's own address
+        /// on grace heads). With those two payloads rewritten back to the
+        /// bare bar index and the grace id dropped on both sides, the merged
+        /// digest and the text-font branch's are identical line for line.
         private static let expectedDigestSHA256 =
-            "f4f11d06c9a780386a0a169c392ab822af2c89f80ab35489e83c8818c385d35a"
+            "c19936084d83afa7e6ab4192fa1daa869ef0573fc51835d11cd64543352082e0"
 
         @Test("write digest")
         func writeDigest() throws {

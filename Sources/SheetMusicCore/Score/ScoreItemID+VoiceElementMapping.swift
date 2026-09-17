@@ -1,7 +1,7 @@
 import SheetMusicFoundation
 
 extension ScoreItemID {
-    /// Maps owned voice slots while preserving note, verse, articulation, and slur identities.
+    /// Maps owned voice slots while preserving note, verse, articulation, slur, and grace identities.
     /// Bar addresses and staff-owned navigation lists do not own a voice slot.
     func mappingVoiceElements(_ transform: (VoiceElementID) -> VoiceElementID?) -> ScoreItemID? {
         func note(_ id: NoteID) -> NoteID? {
@@ -56,6 +56,9 @@ extension ScoreItemID {
                 return transform(anchor).map { .element(.slur(.voice($0))) }
             case .keySignature, .timeSignature, .barLine, .jump, .marker: return self
             }
+        case let .graceNote(id):
+            // The grace list travels with its parent chord, so only the parent's slot moves.
+            return transform(id.parent).map { .graceNote(id.withParent($0)) }
         }
     }
 }

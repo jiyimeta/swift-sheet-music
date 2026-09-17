@@ -310,13 +310,13 @@ struct FNV1a {
     ///
     /// What stays out is the display trivia hanging off each one (`offsetX` / `offsetY`,
     /// `RehearsalMark.frame`, `InstrumentChange.isUserInitialized`), in the same spirit as this file's other
-    /// exclusions. Font properties stay out except on StaffText and RehearsalMark, whose five fields
-    /// SetTextFont writes and which are now included by occupants.
+    /// exclusions. Font properties stay out except on StaffText, RehearsalMark and Tempo, whose five fields
+    /// SetTextFont / SetTempoFont write and which are now included by occupants.
     ///
     /// `elementProperties` was on that list until `SetTextVisible` (intent 75) started writing it on a rehearsal
     /// mark and on a staff / system text. Those two cases now feed it BY OCCUPANTS, so a lane whose marks are all
-    /// visible and uncolored feeds the bytes it always did; the other three cases still feed none, because
-    /// nothing writes theirs.
+    /// visible and uncolored feeds the bytes it always did. A tempo feeds its color the same way (tag 105) since
+    /// `SetElementColor.Target.tempo` writes it; the other two cases still feed none, because nothing writes theirs.
     mutating func combine(_ element: SystemElement) {
         switch element {
         case let .tempo(tempo):
@@ -324,6 +324,8 @@ struct FNV1a {
             combine(tempo.beatsPerSecond)
             combine(tempo.beatNote)
             combine(tempo.beatDots)
+            combineOccupiedColor(tempo.elementProperties.color, tag: 105)
+            combineOccupied(tempo.properties, firstTag: 106)
         case let .rehearsalMark(mark):
             combine(1)
             combine(mark.text)

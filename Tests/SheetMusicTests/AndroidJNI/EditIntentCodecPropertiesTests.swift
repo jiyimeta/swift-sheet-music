@@ -132,13 +132,15 @@ struct EditIntentCodecPropertiesTests {
         #expect(throws: WireFormatError.unknownChoiceDiscriminator(255)) { try placement.decoded() }
     }
 
-    @Test("target discriminators remain text 0, note 1, chord 2; unknown targets are refused")
+    @Test("target discriminators remain text 0, note 1, chord / tempo 2; unknown targets are refused")
     func targetDiscriminators() throws {
         #expect(ElementColorTargetWire(from: .note(Self.note)).encodeToData()[1] == 1)
+        #expect(ElementColorTargetWire(from: .tempo(anchor: Self.slot)).encodeToData()[1] == 2)
         #expect(ElementPlacementTargetWire(from: .note(Self.note)).encodeToData()[1] == 1)
         #expect(ElementPlacementTargetWire(from: .chord(Self.slot)).encodeToData()[1] == 2)
-        #expect(throws: WireFormatError.unknownChoiceDiscriminator(2)) {
-            try ElementColorTargetWire(decoding: .init([0x01, 0x02]))
+        // Color's 2 was unknown until the tempo target was appended there; 3 is the first unknown now.
+        #expect(throws: WireFormatError.unknownChoiceDiscriminator(3)) {
+            try ElementColorTargetWire(decoding: .init([0x01, 0x03]))
         }
         #expect(throws: WireFormatError.unknownChoiceDiscriminator(3)) {
             try ElementPlacementTargetWire(decoding: .init([0x01, 0x03]))

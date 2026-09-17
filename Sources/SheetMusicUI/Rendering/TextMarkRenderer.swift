@@ -88,12 +88,15 @@ enum TextMarkRenderer {
 
     /// Tempo indication ("♩ = 120"). MuseScore default: Edwin 12 pt
     /// bold for the text portion + Bravura for the leading music
-    /// symbol; runs come from `MusicTextRuns.runs`.
+    /// symbol; runs come from `MusicTextRuns.runs`. `properties` and
+    /// `color` are the marking's own font override and ink, applied to
+    /// both runs.
     static func drawTempo(
         context: inout GraphicsContext,
         text: String,
         origin: CGPoint,
         properties: TextProperties = TextProperties(),
+        color: Color = .primary,
         metrics: StaffMetrics,
     ) {
         let style = ResolvedTextStyle.resolve(
@@ -111,7 +114,7 @@ enum TextMarkRenderer {
             case .musicSymbol:
                 resolved = context.resolve(
                     Text(run.text)
-                        .foregroundColor(.primary)
+                        .foregroundColor(color)
                         .font(.custom(BravuraFont.familyName, size: glyphSize)),
                 )
                 font = LayoutFont(
@@ -120,7 +123,7 @@ enum TextMarkRenderer {
             case .text:
                 resolved = context.resolve(
                     Text(run.text)
-                        .foregroundColor(.primary)
+                        .foregroundColor(color)
                         .font(style.font),
                 )
                 font = LayoutFont(

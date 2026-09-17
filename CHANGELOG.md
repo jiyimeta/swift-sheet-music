@@ -7,13 +7,129 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: a key or time signature identity names the staff of the glyph that was selected.**
+  `ScoreElementID.keySignature` / `.timeSignature` and `ScoreHitTarget.keySignature` / `.timeSignature` are now
+  `(measureIndex:staff:)`, and `LayoutElement.keySignature` / `.timeSignature` carry an `identity: ScoreElementID?`
+  in place of `measureIndex: Int?`. One bar draws a signature on every staff, and every one of those glyphs used to
+  answer to the same bar address, so a click on one selected — and tinted — the whole column. Now a click selects
+  the glyph it landed on, as in MuseScore. The commands are unchanged: `SetKeySignature` and `SetTimeSignature`
+  still take only the bar, so identities that differ only in `staff` address the same edit
+  (`measureIndexIfAddressedByBar` still answers it). `ScoreElementID.staffIfAddressed` is new; `ScoreItemID.staff`
+  reads it. The filtered-score re-addressing (`engineCursorForFilteredTap`, `translateCursorForHiddenStaves`,
+  `ScoreEditingAddressMap`) re-stamps a signature's staff like any other staff-owned identity, and a barline is now
+  the only element that passes through with no staff. `ScoreElementIDWire` choices 5 and 6 carry
+  `(measureIndex, staff)` in place of a bare index; the bytes are a host↔bridge transport nothing persists.
+
+- **Line- and page-break badges are drawn as outlines.** `BreakIndicatorOverlay` (Apple) and the Compose
+  `BreakIndicatorOverlay` drew a solid colored plate with a white glyph, and a page break used the filled `doc.fill`
+  symbol; at the end of every broken measure that block pulled the eye away from the notation it annotates. Both
+  now draw the glyph alone in the badge's hue — a return arrow for a line break, an outlined page for a page
+  break — at the same position and size.
+
+- **A text's authored font is measured and drawn, not just saved.** `TextProperties`' face, size and bold/italic
+  on a lyric, a staff or system text, a rehearsal mark and a tempo marking were written by `SetTextFont` and
+  round-tripped through MSCX, but layout measured and both Apple renderers drew every one of them in its style's
+  default font — only a chord symbol honored them. Layout now measures the override wherever it measures the
+  text (ink and hit rects, the skyline, the lyric row's baseline, and for a lyric its width in chord spacing,
+  hyphens and the melisma start), and the CALayer and Canvas renderers draw it. A tempo marking's author color is
+  drawn too. The Android draw program carries size and bold/italic through its existing `.text` size and
+  `setTextStyle`, and color through `setColor` — including a lyric's color, which it had never emitted; the
+  face has no opcode and stays unsupported there, as it is for chord symbols. The draw-program format is
+  unchanged. A rehearsal mark also draws an authored `frameType` while its own `frame` is the default rectangle,
+  which is the frame the MSCX encoder saves.
+
+  A text that sets no face, size or style lays out exactly as before: the override path is taken only when one
+  of those three is set, so frame-only properties change nothing, and the lyric width keeps its long-standing
+  system-font measurement. Instrument-name width, which shares that measurement, is untouched.
+
+  To carry the font to the renderers, `LayoutElement.staffText` and `.rehearsalMark` gain a trailing
+  `properties: TextProperties` (face, size and style only), `TextMarkKind.lyrics` gains the same, and
+  `TextMarkKind.tempo` gains `color` and `properties`. All are defaulted, so construction sites compile unchanged;
+  a positional pattern over these cases needs one more `_`.
+
+- **Renaming a part renames it in MuseScore too: `SetPartNames` writes a new long name to `Part.trackName`.**
+  That field is MuseScore's part name (`<Part><trackName>`), which MuseScore 3.6 and 4.0–4.7 show in the Mixer, the
+  instrument list and the Parts dialog, while the long name is only the label engraved at the staff; a rename used
+  to write the label alone, so MuseScore showed the new name on the page and the old one everywhere else. Only a
+  changed long name moves it — an edit to the abbreviation alone keeps a part name the file set apart from its
+  label — and the inverse restores it, so one undo still takes the whole rename back. `Instrument.trackName`, the
+  instrument's own name, is untouched. The documentation that called `Part.trackName` the instrument's name was
+  wrong and is corrected; a host that read it back to say what a renamed part plays should read
+  `Instrument.trackName` instead.
+
 ### Added
+
+- **A host can edit the title block in place: `LayoutDocument.creditTextLines`, `creditTextLine(at:tolerance:)` and
+  `creditTextLine(for:)`.** Each `CreditTextLine` names the `ScoreInfoWrite.Field` it is, its text and size, the
+  anchor point and horizontal alignment the renderer places it by, and its box in document coordinates — enough to
+  find the credit under a double-click and to sit an inline editor over it, then write it back with
+  `.setScoreInfo`. Only what that command can write back is reported: the first frame text of each field's style,
+  on one line. The placement the renderers draw from moved down beside it as `LayoutTitleFrame.placedLines(origin:)`
+  (with `LayoutFrameText.Anchor.horizontalFraction`), so the screen, the PDF and a host's editor read one answer.
+
+- **A tempo marking's color and font are editable.** `SetElementColor.Target.tempo(anchor:)` colors the tempo
+  at a chord or rest's beat — the address `SetTempo` and `ScoreElementID.tempo` already use — and the new
+  `SetTempoFont` / `EditIntent.setTempoFont(anchor:patch:)` applies `SetTextFont`'s three-state patch to it. Both
+  plan through `ScoreEditSession` with the usual no-op and `.targetNotFound` rules and undo like the text
+  commands. On the wire the color target is appended as index 2 of `ElementColorTargetWire` and the font intent
+  as index 89 (`SetTempoFontIntentWire`, the anchor followed by intent 78's patch fields); no earlier index moves.
+  `stableFingerprint` now feeds a tempo's color (tag 105) and font overrides (106…110) by occupants, so a score
+  without them keeps its hash. A tempo was not given a `ScoreTextID`, which would have let one mark be selected
+  under two names.
 
 - **`PreparedPlayback` and `PlaybackEngine.replaceScore(with:)` move score-derived playback work ahead of Play.**
   Hosts can render an edited score away from the main actor, then swap it into an existing backend-backed engine
   without rebuilding its SoundFont, metronome, audio graph, or user mixer state when the channel layout is unchanged.
 
+- **Breaking: a grace note is a selectable item.** Nothing could name one before — a grace chord is not a voice
+  element, so no `NoteID` reaches it — which left a click on a grace head selecting the chord beside it and the arrow
+  keys walking straight past it. New:
+  - `GraceNoteID` (`parent: VoiceElementID`, `side: .before / .after`, `graceIndex`, `noteIndexInGraceChord`), with
+    `staff` / `measureIndex` / `voiceIndex` / `elementIndex` answered from the parent, `Score[graceNoteID]`,
+    `Score.graceChord(at:)`, `Chord.graceNotes(on:)`, and `Score.eid(at:)` / `Score.graceNotePosition(of:)` for
+    following one across an edit.
+  - **`ScoreItemID.graceNote` and `ScoreHitTarget.graceNote` — both appended cases, so an exhaustive `switch` over
+    either in a host stops compiling.** `ScoreItemID.graceNoteID` reads the payload. `ScoreItemIDWire` gains choice
+    6 (`GraceNoteIDWire`); choices 0–5 are unchanged.
+  - `LayoutChordNote.graceNoteID` (set on every head of a `.graceChord` layout element) and
+    `LayoutChordNote.selectionItem`, which is `.graceNote` for a grace head and `.note(noteID)` otherwise. A grace
+    head's `noteID` stays the synthetic layout key it was. `LayoutChordNote.moved(to:)` shifts a head without
+    dropping the identity; the layout's translate pass and the three renderers now use it.
+  - The notehead rung of `ScoreHitTester` tests grace heads (reach scaled by their `mag`): a grace head wins over
+    an ordinary head only when strictly nearer, so a measure without graces answers exactly as before.
+    `hitTest(at:)`, `itemID(at:)`, `selectableItem` and `LayoutDocument.editingHitTest` all pass the grace through.
+  - The CALayer path registers a grace head's layers — and the Android draw program decides its tint — by
+    `selectionItem`, so a selected grace tints alone and a selected note never tints its graces.
+  - `LayoutDocument.cursorFrame(for:in:)` and `editingCaretRect(for:in:minimumWidth:)` frame a grace note's own
+    column instead of answering `nil`.
+  - The filtered-staff re-addressing (`engineCursorForFilteredTap`, `translateCursorForHiddenStaves`,
+    `ScoreEditingAddressMap`) re-stamps a grace note's parent onto the other staff numbering.
+  - `ElementNavigator.nextChordRest(after:in:)` / `previousChordRest(before:in:)`: MuseScore's plain-arrow walk
+    (`Navigation::nextChordRest` / `prevChordRest` with `skipGrace = false`). Within a voice it runs
+    `… chord → its after-graces → next chord's before-graces → next chord`, crosses barlines like
+    `nextTimedElement`, and lands on a chord's note 0 — the representative the selection vocabulary already uses.
+  The wasm bridge's `EditHitItem` has no grace fields yet, so a web tap on a grace head reports no item. Editing a
+  single grace note is out of scope; `SetGraceNotes` still replaces a chord's lists wholesale.
+
 ### Fixed
+
+- **Copying the first note of a bar no longer takes the bar's clef with it.** A range copy carried every
+  clef and breath from its first tick on, so copying a note out of a score's first bar — or out of any bar that
+  opens with a clef change — put that clef on the clipboard, and pasting it anywhere else wrote a clef change
+  nobody asked for. MuseScore starts a range at its first ChordRest segment and writes the clipboard from there
+  (`Score::selectRange`, `TWrite::writeSegments`); the Clef and Breath segments at the same tick sort ahead of it
+  and are never copied. `RangeCopySource` now leaves a clef or breath standing exactly on the range's first tick
+  behind, which covers ⌘C/⌘V and `R` alike. The segment annotations at that tick — a dynamic, a chord symbol —
+  still come along, and a clef change anywhere later in the range is still carried.
+
+- **A melisma's extender line runs unbroken through a mid-system clef, key, meter or start-repeat change.** The
+  line's continuation in each later measure started after whatever header that measure drew, while the previous
+  measure's rule stops at the barline, so the line showed a gap exactly as wide as the change (26–44 pt on a
+  28-point staff). The glyphs sit inside the staff and the rule runs below it, so there was nothing to avoid:
+  only a system's first measure now starts the rule past its header, which is where MuseScore pulls a
+  `LyricsLine` segment in (`lyricslayout.cpp:765-779`).
 
 - **The Android workflows set up the SDK again.** `android-actions/setup-android`'s default package list still
   names the obsolete `tools` package, and Google has since withdrawn it from the SDK repository, so

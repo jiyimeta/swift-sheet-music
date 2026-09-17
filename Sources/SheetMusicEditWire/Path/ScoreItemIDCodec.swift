@@ -16,6 +16,7 @@ import Wirelet
 /// 3 = clef(ClefAnchorWire), see ClefAnchorCodec.swift
 /// 4 = text(ScoreTextIDWire), below
 /// 5 = element(ScoreElementIDWire), below
+/// 6 = graceNote(GraceNoteIDWire), see PathIDCodecs.swift
 ///
 /// ScoreTextIDWire — case indices matching ScoreTextID's declaration order:
 /// 0 = lyric(LyricTextIDWire)
@@ -62,6 +63,8 @@ public enum ScoreItemIDWire {
     case clef(ClefAnchorWire)
     case text(ScoreTextIDWire)
     case element(ScoreElementIDWire)
+    /// Appended as choice 6; the choices above keep their numbers.
+    case graceNote(GraceNoteIDWire)
 
     public init(from value: ScoreItemID) {
         switch value {
@@ -77,6 +80,8 @@ public enum ScoreItemIDWire {
             self = .text(ScoreTextIDWire(from: id))
         case let .element(id):
             self = .element(ScoreElementIDWire(from: id))
+        case let .graceNote(id):
+            self = .graceNote(GraceNoteIDWire(from: id))
         }
     }
 
@@ -88,6 +93,7 @@ public enum ScoreItemIDWire {
         case let .clef(wire): return .clef(wire.decoded())
         case let .text(wire): return .text(wire.decoded())
         case let .element(wire): return try .element(wire.decoded())
+        case let .graceNote(wire): return .graceNote(wire.decoded())
         }
     }
 }
@@ -159,6 +165,9 @@ public enum ScoreTextIDWire {
 /// Anchored, bar-addressed, and staff-owned list cases carry their own payload.
 /// New choices: 9 = tie (start/end), 10 = slur, 11 = jump, 12 = marker.
 /// Navigation tags are 1 = staff, 2 = measureIndex, 3 = list index; existing payloads are unchanged.
+/// Signature tags (5 = keySignature, 6 = timeSignature) are 1 = measureIndex, 2 = staff. Before the selected
+/// glyph's staff joined the identity, both cases carried a bare measure index; the bytes are a host↔bridge
+/// transport that nothing persists, so the payload changed in place rather than taking a new choice.
 @WireFormatChoice
 public enum ScoreElementIDWire {
     case dynamic(VoiceElementIDWire)
@@ -167,8 +176,8 @@ public enum ScoreElementIDWire {
     case tempo(VoiceElementIDWire)
     /// Uses `Spanner.Kind.rawValue`, matching `RemoveSpannerIntentWire`; this codec does not own its case order.
     case spanner(anchor: VoiceElementIDWire, kind: String)
-    case keySignature(Int32)
-    case timeSignature(Int32)
+    case keySignature(measureIndex: Int32, staff: StaffAddressWire)
+    case timeSignature(measureIndex: Int32, staff: StaffAddressWire)
     case barLine(measureIndex: Int32, role: BarLineRoleWire)
     case articulation(anchor: VoiceElementIDWire, kind: ScoreArticulationKindWire)
     case tie(start: NoteIDWire, end: NoteIDWire)
@@ -184,8 +193,10 @@ public enum ScoreElementIDWire {
         case let .tempo(anchor): self = .tempo(VoiceElementIDWire(from: anchor))
         case let .spanner(anchor, kind):
             self = .spanner(anchor: VoiceElementIDWire(from: anchor), kind: kind.rawValue)
-        case let .keySignature(index): self = .keySignature(Int32(index))
-        case let .timeSignature(index): self = .timeSignature(Int32(index))
+        case let .keySignature(index, staff):
+            self = .keySignature(measureIndex: Int32(index), staff: StaffAddressWire(from: staff))
+        case let .timeSignature(index, staff):
+            self = .timeSignature(measureIndex: Int32(index), staff: StaffAddressWire(from: staff))
         case let .barLine(index, role):
             self = .barLine(measureIndex: Int32(index), role: BarLineRoleWire(from: role))
         case let .articulation(anchor, kind):
@@ -211,8 +222,8 @@ public enum ScoreElementIDWire {
                 throw WireFormatError.unknownChoiceDiscriminator(0)
             }
             return .spanner(anchor: anchor.decoded(), kind: decodedKind)
-        case let .keySignature(index): return .keySignature(measureIndex: Int(index))
-        case let .timeSignature(index): return .timeSignature(measureIndex: Int(index))
+        case let .keySignature(index, staff): return .keySignature(measureIndex: Int(index), staff: staff.decoded())
+        case let .timeSignature(index, staff): return .timeSignature(measureIndex: Int(index), staff: staff.decoded())
         case let .barLine(index, role): return .barLine(measureIndex: Int(index), role: role.decoded())
         case let .articulation(anchor, kind): return .articulation(anchor: anchor.decoded(), kind: kind.decoded())
         case let .tie(start, end): return .tie(start: start.decoded(), end: end.decoded())

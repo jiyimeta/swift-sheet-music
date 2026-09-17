@@ -9,15 +9,13 @@ extension LayoutElement {
         switch self {
         case let .tieArc(_, _, _, identity): return identity
         case let .marker(_, _, _, identity), let .jump(_, _, identity): return identity
-        case let .keySignature(_, _, _, _, _, measureIndex):
-            return measureIndex.map { .keySignature(measureIndex: $0) }
-        case let .timeSignature(_, _, _, _, measureIndex):
-            return measureIndex.map { .timeSignature(measureIndex: $0) }
+        case let .keySignature(_, _, _, _, _, identity), let .timeSignature(_, _, _, _, identity):
+            return identity
         case let .barLine(_, _, _, measureIndex, role):
             return measureIndex.map { .barLine(measureIndex: $0, role: role) }
         case let .textMark(.dynamic(anchor), _, _):
             return anchor.map { .dynamic(anchor: $0) }
-        case let .textMark(.tempo(anchor), _, _):
+        case let .textMark(.tempo(anchor, _, _), _, _):
             return anchor.map { .tempo(anchor: $0) }
         case let .fermata(_, _, anchor):
             return anchor.map { .fermata(anchor: $0) }

@@ -74,8 +74,8 @@ extension LayoutEngine {
              let .multiMeasureRest(_, p),
              let .measureNumber(_, p),
              let .staffName(_, p),
-             let .staffText(_, p, _, _, _, _),
-             let .rehearsalMark(_, p, _, _, _, _),
+             let .staffText(_, p, _, _, _, _, _),
+             let .rehearsalMark(_, p, _, _, _, _, _),
              let .rest(_, p, _, _, _),
              let .note(_, _, _, _, p, _, _, _):
             return [p.y]
@@ -205,10 +205,10 @@ extension LayoutEngine {
             CGPoint(x: p.x, y: p.y + dy)
         }
         switch element {
-        case let .textMark(.lyrics(color, verse, anchor, placement), text, p):
+        case let .textMark(.lyrics(color, verse, anchor, placement, properties), text, p):
             return .textMark(
                 kind: .lyrics(
-                    color: color, verse: verse, anchor: anchor, placement: placement,
+                    color: color, verse: verse, anchor: anchor, placement: placement, properties: properties,
                 ),
                 text: text,
                 origin: bump(p),

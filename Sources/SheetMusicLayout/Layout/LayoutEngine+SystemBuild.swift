@@ -425,7 +425,7 @@ extension LayoutEngine {
                     perStaff[staffIdx, default: []].append(
                         contentsOf: courtesyElements(
                             courtesy,
-                            staffIndex: staffIdx,
+                            staffIndex: staffIdx, staff: allStaves[staffIdx].address,
                             contentWidth: w,
                             clef: clefs[staffIdx],
                             lineGeometry: staffGeometries[staffIdx],
@@ -897,7 +897,7 @@ extension LayoutEngine {
                         let yOffset = staffY - metrics.sp * 2
                         elements.append(contentsOf: courtesyElements(
                             courtesy,
-                            staffIndex: staffIdx,
+                            staffIndex: staffIdx, staff: allStaves[staffIdx].address,
                             contentWidth: um.contentWidth,
                             clef: clefs[staffIdx],
                             lineGeometry: staffGeometries[staffIdx],

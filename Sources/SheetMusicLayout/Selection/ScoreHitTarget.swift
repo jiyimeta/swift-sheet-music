@@ -19,6 +19,12 @@ import SheetMusicCore
 ///
 /// **notehead → rest → beam → flag → stem → tuplet → clef → text → engraved element.**
 ///
+/// The notehead rung covers grace noteheads too (`.graceNote`). Within it an ordinary head keeps first-match order,
+/// and a grace head wins only when the point is inside the grace head's own reach — the notehead radius scaled by
+/// the grace chord's `mag` — and strictly nearer it than every ordinary head that also contains the point. A grace
+/// sits 1.5 sp from its parent, close enough that the parent head's 1.2 sp reach covers the grace head's inner edge,
+/// so first match alone would hand those clicks to the chord beside it.
+///
 /// This is the one place that order is written down; `hitTest`'s own doc points here, because the copy it
 /// used to carry went stale. Each rung earns its position: beam precedes stem so a click on the beam bar
 /// resolves to `.beam` rather than the stem endpoint beneath it, and flag precedes stem so the flag curve
@@ -89,10 +95,12 @@ public enum ScoreHitTarget: Hashable, Sendable {
     case tempo(anchor: VoiceElementID)
     /// A spanner identified by its anchor and kind for `RemoveSpanner`. See `ScoreElementID.spanner`.
     case spanner(anchor: VoiceElementID, kind: Spanner.Kind)
-    /// A bar's key signature, addressed by `SetKeySignature`. See `ScoreElementID.keySignature` for its scope.
-    case keySignature(measureIndex: Int)
-    /// A bar's meter, addressed by `SetTimeSignature`. See `ScoreElementID.timeSignature` for the re-bar scope.
-    case timeSignature(measureIndex: Int)
+    /// A bar's key signature on one staff, addressed by `SetKeySignature`. See `ScoreElementID.keySignature` for
+    /// its scope and for why the staff is the selection's rather than the command's.
+    case keySignature(measureIndex: Int, staff: StaffAddress)
+    /// A bar's meter on one staff, addressed by `SetTimeSignature`. See `ScoreElementID.timeSignature` for the
+    /// re-bar scope.
+    case timeSignature(measureIndex: Int, staff: StaffAddress)
     /// A barline: explicit and trailing roles feed `SetBarLine`, start-repeat feeds `SetRepeatBarLines`.
     /// See `ScoreElementID.barLine` for its address semantics.
     case barLine(measureIndex: Int, role: BarLineRole)
@@ -106,6 +114,9 @@ public enum ScoreHitTarget: Hashable, Sendable {
     case jump(staff: StaffAddress, measureIndex: Int, index: Int)
     /// One entry in the owning staff's measure-level markers list.
     case marker(staff: StaffAddress, measureIndex: Int, index: Int)
+    /// One grace notehead, reported by the notehead rung. A click that lands on a grace head resolves here rather
+    /// than to the main chord beside it; see `ScoreHitTester`'s notehead rung for how the two are separated.
+    case graceNote(GraceNoteID)
 }
 
 extension ScoreHitTarget {
@@ -139,7 +150,7 @@ extension ScoreHitTarget {
             return .harmony(anchor: anchor)
         case let .rehearsalMark(measureIndex):
             return .rehearsalMark(measureIndex: measureIndex)
-        case .note, .rest, .stem, .flag, .beam, .tuplet, .clef:
+        case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote:
             return nil
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
              .tie, .slur, .jump, .marker:
@@ -160,6 +171,7 @@ extension ScoreHitTarget {
         case let .rest(id): return .rest(id)
         case let .tuplet(id): return .tuplet(id)
         case let .clef(anchor): return .clef(anchor)
+        case let .graceNote(id): return .graceNote(id)
         case let .stem(notes), let .flag(notes), let .beam(notes):
             return notes.first.map(ScoreItemID.note)
         case .lyric, .staffText, .harmony, .rehearsalMark:
@@ -183,10 +195,10 @@ extension ScoreHitTarget {
             self = .tempo(anchor: anchor)
         case let .spanner(anchor, kind):
             self = .spanner(anchor: anchor, kind: kind)
-        case let .keySignature(measureIndex):
-            self = .keySignature(measureIndex: measureIndex)
-        case let .timeSignature(measureIndex):
-            self = .timeSignature(measureIndex: measureIndex)
+        case let .keySignature(measureIndex, staff):
+            self = .keySignature(measureIndex: measureIndex, staff: staff)
+        case let .timeSignature(measureIndex, staff):
+            self = .timeSignature(measureIndex: measureIndex, staff: staff)
         case let .barLine(measureIndex, role):
             self = .barLine(measureIndex: measureIndex, role: role)
         case let .articulation(anchor, kind):
@@ -213,10 +225,10 @@ extension ScoreHitTarget {
             return .tempo(anchor: anchor)
         case let .spanner(anchor, kind):
             return .spanner(anchor: anchor, kind: kind)
-        case let .keySignature(measureIndex):
-            return .keySignature(measureIndex: measureIndex)
-        case let .timeSignature(measureIndex):
-            return .timeSignature(measureIndex: measureIndex)
+        case let .keySignature(measureIndex, staff):
+            return .keySignature(measureIndex: measureIndex, staff: staff)
+        case let .timeSignature(measureIndex, staff):
+            return .timeSignature(measureIndex: measureIndex, staff: staff)
         case let .barLine(measureIndex, role):
             return .barLine(measureIndex: measureIndex, role: role)
         case let .articulation(anchor, kind):
@@ -227,7 +239,7 @@ extension ScoreHitTarget {
             return .jump(staff: staff, measureIndex: measureIndex, index: index)
         case let .marker(staff, measureIndex, index):
             return .marker(staff: staff, measureIndex: measureIndex, index: index)
-        case .note, .rest, .stem, .flag, .beam, .tuplet, .clef,
+        case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
              .lyric, .staffText, .harmony, .rehearsalMark:
             return nil
         }

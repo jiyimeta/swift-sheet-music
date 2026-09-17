@@ -57,13 +57,14 @@ public enum LayoutElement: Sendable, Equatable {
     /// on C while a non-zero key was in force — see
     /// `KeySignatureSteps.cancellationNaturals`. In that case `sharps`
     /// and `flats` are both 0 and the naturals are the only glyphs.
-    /// `measureIndex` names the bar whose declaration these glyphs show. An end-of-system COURTESY
-    /// announcement names the bar it announces — the one opening the next system — because the announcement is
-    /// that declaration seen early, and it is the only place those glyphs appear before the break. Keys with no
-    /// addressable declaration at all, and the sticky header's restatements, still pass `nil`.
+    /// `identity` is always a `ScoreElementID.keySignature`: the bar whose declaration these glyphs show, on the
+    /// staff they are drawn on. An end-of-system COURTESY announcement names the bar it announces — the one
+    /// opening the next system — because the announcement is that declaration seen early, and it is the only
+    /// place those glyphs appear before the break. Keys with no addressable declaration at all, and the sticky
+    /// header's restatements, still pass `nil`.
     case keySignature(
         sharps: Int, flats: Int, clef: NotatedClef,
-        naturals: [Int] = [], origin: CGPoint, measureIndex: Int?,
+        naturals: [Int] = [], origin: CGPoint, identity: ScoreElementID?,
     )
     /// `symbol` decides the SHAPE: `.numeric` is the two numbers
     /// stacked around `origin`, anything else is one glyph centered on
@@ -71,12 +72,13 @@ public enum LayoutElement: Sendable, Equatable {
     /// `denominator` ride along either way — the meter is what they say
     /// even when the page draws a C — so a renderer that has no glyph
     /// for a symbol can still fall back to the numbers.
-    /// `measureIndex` names the bar's meter, including declarations outside its leading run, and an
-    /// end-of-system courtesy announcement names the bar it announces — see `keySignature` above for why a
-    /// restatement carries the identity of what it restates. The sticky header's restatements pass `nil`.
+    /// `identity` is always a `ScoreElementID.timeSignature`: the bar's meter, including declarations outside
+    /// its leading run, on the staff the glyphs are drawn on. An end-of-system courtesy announcement names the
+    /// bar it announces — see `keySignature` above for why a restatement carries the identity of what it
+    /// restates. The sticky header's restatements pass `nil`.
     case timeSignature(
         numerator: Int, denominator: Int,
-        symbol: TimeSignatureSymbol = .numeric, origin: CGPoint, measureIndex: Int?,
+        symbol: TimeSignatureSymbol = .numeric, origin: CGPoint, identity: ScoreElementID?,
     )
     /// `origin.y` is the vertical center of the barline's stroke — for
     /// a staff with more than one line that is the staff's own center,
@@ -204,6 +206,11 @@ public enum LayoutElement: Sendable, Equatable {
     /// `<Swing>` marking and an instrument-change instruction are separate model elements that merely reach
     /// the page through this layout case, and a lane element positioned at a tick no chord starts (the
     /// `<location>`-shifted case `SystemLaneSlot` documents) has no voice element to name.
+    ///
+    /// `properties` is the text's authored font override — face, size and style only (`fontOverrides`); every
+    /// consumer resolves it against `style` through `TextInkGeometry.font(for:overrides:metrics:)`, so what
+    /// layout measures is what the renderers draw. Empty for swing and instrument-change text, which no command
+    /// writes a font to.
     case staffText(
         text: String,
         origin: CGPoint,
@@ -211,6 +218,7 @@ public enum LayoutElement: Sendable, Equatable {
         style: TextStyleType,
         anchor: VoiceElementID?,
         placement: TextPlacementMetadata? = nil,
+        properties: TextProperties = TextProperties(),
     )
     /// Pre-typeset chord symbol with a baked-in run list (text +
     /// SMuFL accidental glyphs) and total width. The placement
@@ -263,6 +271,9 @@ public enum LayoutElement: Sendable, Equatable {
     /// it is for, rather than a caller inferring it from where the element happens to have been filed.
     /// (The multi-measure-rest collapse is the one path where a layout measure is not one source bar, and it
     /// bypasses `placeMeasureElements` entirely, so no rehearsal mark is emitted through it.)
+    ///
+    /// `properties` is the mark's authored font override (face, size, style), measured and drawn like
+    /// `.staffText`'s. The frame it is boxed in is already resolved into `frame`.
     case rehearsalMark(
         text: String,
         origin: CGPoint,
@@ -270,6 +281,7 @@ public enum LayoutElement: Sendable, Equatable {
         color: ScoreColor?,
         measureIndex: Int,
         placement: TextPlacementMetadata? = nil,
+        properties: TextProperties = TextProperties(),
     )
     /// Navigation owned by the first drawn staff's measure list, in the input score's coordinates.
     /// Same-origin jumps retain distinct identities. At overlapping ink, only the first is
@@ -425,20 +437,29 @@ public enum LayoutElement: Sendable, Equatable {
     public enum TextMarkKind: Sendable, Equatable {
         /// The chord with notes accepted by `SetDynamic`, not the marking slot.
         case dynamic(anchor: VoiceElementID?)
-        /// The timed element accepted by `SetTempo`, or nil when the lane tick has no onset.
-        case tempo(anchor: VoiceElementID?)
+        /// The timed element accepted by `SetTempo`, or nil when the lane tick has no onset. `color` is the
+        /// marking's author color (`nil` = default ink) and `properties` its font override (face, size, style),
+        /// which sizes the number and the metronome glyph together.
+        case tempo(
+            anchor: VoiceElementID?,
+            color: ScoreColor? = nil,
+            properties: TextProperties = TextProperties(),
+        )
         /// Lyric syllable. Carries the author-supplied color
         /// (`<Lyrics><color>`) from `Lyric.elementProperties.color`
         /// and the lyric-array index used as its verse. `anchor`
         /// identifies the chord that owns the syllable so render-only
         /// consumers can address it without mutating the score model.
-        /// `nil` color = default ink. Dynamics / tempo inherit their
-        /// style color and don't carry a per-element override here.
+        /// `nil` color = default ink. Dynamics inherit their style
+        /// color and don't carry a per-element override here.
+        /// `properties` is the syllable's font override (face, size, style); without one, spacing keeps its
+        /// long-standing measurement (`LayoutEngine.lyricsTextWidth`).
         case lyrics(
             color: ScoreColor? = nil,
             verse: Int = 0,
             anchor: VoiceElementID? = nil,
             placement: TextPlacementMetadata? = nil,
+            properties: TextProperties = TextProperties(),
         )
     }
 }
@@ -479,6 +500,13 @@ public struct LayoutChordNote: Sendable, Equatable {
     /// none. Carried from `Note.parentheses` and consumed by all three
     /// render paths via `NoteheadParenthesisGlyph.glyphs`.
     public let parentheses: NoteParentheses
+    /// The grace note this head draws, for a head inside a `.graceChord`; `nil` for every ordinary chord note.
+    ///
+    /// A grace head's `noteID` is only a layout-unique key — the parent's slot with a synthetic
+    /// `noteIndexInChord` of `1000 + grace * 100 + note` (before) or `2000 + …` (after) — and names nothing in the
+    /// score. This is the identity a selection, a hit test and a tint registration use instead; see
+    /// `selectionItem`. Anything that rebuilds a `LayoutChordNote` must carry it across.
+    public let graceNoteID: GraceNoteID?
 
     public init(
         noteID: NoteID,
@@ -494,6 +522,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         color: ScoreColor? = nil,
         accidentalBracket: AccidentalBracket = .none,
         parentheses: NoteParentheses = .none,
+        graceNoteID: GraceNoteID? = nil,
     ) {
         self.noteID = noteID
         self.step = step
@@ -508,6 +537,25 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.color = color
         self.accidentalBracket = accidentalBracket
         self.parentheses = parentheses
+        self.graceNoteID = graceNoteID
+    }
+
+    /// The selectable item this head stands for: `.graceNote` for a grace head, `.note(noteID)` otherwise. The one
+    /// key hit testing, selection tint and caret geometry share, so a selected note never lights up its graces and
+    /// a selected grace never lights up its parent.
+    public var selectionItem: ScoreItemID {
+        graceNoteID.map(ScoreItemID.graceNote) ?? .note(noteID)
+    }
+
+    /// This head at `origin`, every other field — `graceNoteID` included — unchanged. For the passes that shift
+    /// laid-out heads between coordinate spaces.
+    public func moved(to origin: CGPoint) -> LayoutChordNote {
+        LayoutChordNote(
+            noteID: noteID, step: step, accidental: accidental, origin: origin,
+            tieForward: tieForward, tieBack: tieBack, hasGlissando: hasGlissando, headType: headType,
+            mirror: mirror, isInvisible: isInvisible, color: color,
+            accidentalBracket: accidentalBracket, parentheses: parentheses, graceNoteID: graceNoteID,
+        )
     }
 
     /// Horizontal offset from `origin.x` to the visual center of the

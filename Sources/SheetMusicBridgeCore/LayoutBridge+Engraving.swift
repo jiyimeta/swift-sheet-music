@@ -59,7 +59,16 @@ extension LayoutBridge {
     /// draw them either — adding wire bits for a decoration nothing produces would be inventing a
     /// contract rather than closing a gap. `TextStyleFlag`'s mask has room when one appears.
     static func styleFlags(for style: TextStyleType) -> UInt8 {
-        let set = TextRoleStyle.fontStyle(for: style)
+        styleFlags(TextRoleStyle.fontStyle(for: style))
+    }
+
+    /// `styleFlags(for:)` after an element's authored font override: its `style`, when set, replaces the
+    /// role's — clearing a bold role's bold, too, as MuseScore's per-property override does.
+    static func styleFlags(for style: TextStyleType, overrides: TextProperties) -> UInt8 {
+        styleFlags(overrides.resolved(against: style).style)
+    }
+
+    private static func styleFlags(_ set: FontStyleSet) -> UInt8 {
         var flags = DrawCommand.TextStyleFlag.none
         if set.contains(.bold) { flags |= DrawCommand.TextStyleFlag.bold }
         if set.contains(.italic) { flags |= DrawCommand.TextStyleFlag.italic }
@@ -95,9 +104,13 @@ extension LayoutBridge {
     /// are the reason a tempo mark and a rehearsal mark used to render in regular weight everywhere
     /// but Apple: the wire had no way to say "bold", so `ResolvedTextStyle`'s answer stopped at the
     /// Apple renderer's own door.
+    ///
+    /// `properties` is the element's font override — a tempo marking's, today — applied the way
+    /// `emitRoleText` applies it.
     static func emitText(
         text: String,
         style: TextStyleType,
+        properties: TextProperties = TextProperties(),
         originX: Double,
         originY: Double,
         sp: Double,
@@ -106,7 +119,8 @@ extension LayoutBridge {
         let metrics = StaffMetrics(staffSize: CGFloat(sp) * 4)
         let origin = CGPoint(x: originX, y: originY)
         if style == .tempo {
-            for run in TextInkGeometry.tempoRuns(text: text, origin: origin, metrics: metrics) {
+            let runs = TextInkGeometry.tempoRuns(text: text, origin: origin, properties: properties, metrics: metrics)
+            for run in runs {
                 let flags: UInt8 = (run.font.weight == .bold ? 1 : 0) | (run.font.isItalic ? 2 : 0)
                 withTextStyle(flags, into: &out) { out in
                     emitBaselineText(
@@ -119,10 +133,10 @@ extension LayoutBridge {
                 }
             }
         } else {
-            withTextStyle(styleFlags(for: style), into: &out) { out in
+            withTextStyle(styleFlags(for: style, overrides: properties), into: &out) { out in
                 emitAnchoredText(
                     text: text,
-                    font: TextInkGeometry.font(for: style, metrics: metrics),
+                    font: TextInkGeometry.font(for: style, overrides: properties, metrics: metrics),
                     origin: origin,
                     anchor: CGPoint(x: 0, y: 0.5),
                     into: &out,
@@ -1001,6 +1015,7 @@ extension LayoutBridge {
         originY: Double,
         frame: TextFrameType,
         color: ScoreColor?,
+        properties: TextProperties = TextProperties(),
         sp: Double,
         into out: inout [DrawCommand],
     ) {
@@ -1008,17 +1023,26 @@ extension LayoutBridge {
         let argb = color.flatMap(argb(from:))
         if let argb { out.append(.setColor(argb: argb)) }
         let pad = Double(RehearsalMarkFrame.paddingSp(sp: CGFloat(sp)))
-        let textPt = TextRoleStyle.fontSize(
-            for: .rehearsalMark, sp: CGFloat(sp),
-        )
         // Measured at the weight it is DRAWN at. `.rehearsalMark`'s MuseScore default is bold
         // (`TextStyle.swift`), and the frame below is sized from this measurement — so measuring
         // regular while drawing bold puts the letters through the right-hand edge of their own box.
         // That is the failure the weight-aware `FontMetricsTable.face(for:)` lookup exists for.
-        let styleFlags = styleFlags(for: .rehearsalMark)
-        let font = LayoutFont(
-            face: "Edwin", pointSize: textPt, weight: measurementWeight(for: .rehearsalMark),
-        )
+        let styleFlags = styleFlags(for: .rehearsalMark, overrides: properties)
+        let font: LayoutFont
+        if properties.hasFontOverride {
+            // The authored size and style, measured in the face the device draws: the wire has no face.
+            let resolved = properties.resolved(against: .rehearsalMark)
+            font = LayoutFont(
+                face: "Edwin", pointSize: TextRoleStyle.fontSize(defaults: resolved, sp: CGFloat(sp)),
+                weight: resolved.style.contains(.bold) ? .bold : .regular,
+                isItalic: resolved.style.contains(.italic),
+            )
+        } else {
+            font = LayoutFont(
+                face: "Edwin", pointSize: TextRoleStyle.fontSize(for: .rehearsalMark, sp: CGFloat(sp)),
+                weight: measurementWeight(for: .rehearsalMark),
+            )
+        }
         let origin = CGPoint(x: CGFloat(originX), y: CGFloat(originY))
         withTextStyle(styleFlags, into: &out) { out in
             emitAnchoredText(

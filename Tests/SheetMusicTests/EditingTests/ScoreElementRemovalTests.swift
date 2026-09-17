@@ -1,6 +1,9 @@
 import SheetMusicCore
 import Testing
 
+/// The staff a single-staff fixture's key and time signature glyphs are drawn on, which their identity names.
+private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+
 @Suite("ScoreElementID removal resolver")
 struct ScoreElementRemovalTests {
     private static let staff = StaffAddress(partIndex: 1, staffIndexInPart: 2)
@@ -45,7 +48,8 @@ struct ScoreElementRemovalTests {
     func unsupported() {
         let ids: [ScoreElementID] = [
             .dynamic(anchor: Self.anchor), .fermata(anchor: Self.anchor), .breath(anchor: Self.anchor),
-            .tempo(anchor: Self.anchor), .keySignature(measureIndex: 3), .timeSignature(measureIndex: 3),
+            .tempo(anchor: Self.anchor), .keySignature(measureIndex: 3, staff: signatureStaff),
+            .timeSignature(measureIndex: 3, staff: signatureStaff),
             .barLine(measureIndex: 3, role: .explicit), .articulation(anchor: Self.anchor, kind: .accent),
         ]
         for id in ids {

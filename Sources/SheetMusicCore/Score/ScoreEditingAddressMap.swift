@@ -82,8 +82,12 @@ public struct ScoreEditingAddressMap: Sendable {
 }
 
 extension ScoreItemID {
+    /// A bar address that names no staff, so it maps to itself. A key or time signature is bar-addressed for its
+    /// command but names the staff of its selected glyph, so it maps through that staff like any other item.
     fileprivate var isAddressedByBar: Bool {
-        if case .text(.rehearsalMark) = self { return true }
-        return elementID?.measureIndexIfAddressedByBar != nil
+        switch self {
+        case .text(.rehearsalMark), .element(.barLine): true
+        default: false
+        }
     }
 }

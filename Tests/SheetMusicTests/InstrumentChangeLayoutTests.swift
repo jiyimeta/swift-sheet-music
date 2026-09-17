@@ -60,7 +60,7 @@ struct InstrumentChangeLayoutTests {
             anchor: nil,
         )
         let moved = LayoutEngine.translate(element: element, dy: 12)
-        guard case let .staffText(_, origin, _, style, _, _) = moved else {
+        guard case let .staffText(_, origin, _, style, _, _, _) = moved else {
             Issue.record("expected .staffText")
             return
         }
@@ -111,7 +111,7 @@ struct InstrumentChangeLayoutTests {
             .flatMap(\.measures)
             .flatMap(\.elements)
             .compactMap { element -> (text: String, origin: CGPoint, style: TextStyleType)? in
-                guard case let .staffText(text, origin, _, style, _, _) = element
+                guard case let .staffText(text, origin, _, style, _, _, _) = element
                 else { return nil }
                 return (text, origin, style)
             }
@@ -155,7 +155,7 @@ struct InstrumentChangeLayoutTests {
             .flatMap(\.measures)
             .flatMap(\.elements)
             .contains { element in
-                guard case let .staffText(text, _, _, _, _, _) = element
+                guard case let .staffText(text, _, _, _, _, _, _) = element
                 else { return false }
                 return text == "to Accordion"
             }

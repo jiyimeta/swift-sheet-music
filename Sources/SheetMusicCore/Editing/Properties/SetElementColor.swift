@@ -9,14 +9,19 @@ import SheetMusicFoundation
 ///
 /// Text uses ScoreTextID's existing lyric, lane, and harmony attachment rules. A note uses NoteID,
 /// including noteIndexInChord, so coloring one note never recolors its chord or a neighboring note.
+/// A tempo marking is addressed as a click selects it (`ScoreElementID.tempo(anchor:)`) and as `SetTempo`
+/// writes it, by the chord or rest at its beat; its color reaches the metronome glyph and the number alike.
 ///
 /// > Note: The note and harmony writes are sugar over ReplaceVoiceElement. The other
-/// > text arms write their owner's field directly; lookup rules match SetTextVisible.
+/// > text arms and the tempo arm write their owner's field directly; lookup rules match SetTextVisible and
+/// > SetTempo respectively.
 public struct SetElementColor: EditCommand {
     /// The identity of the thing written, not a selection translated into another vocabulary.
     public enum Target: Sendable, Equatable {
         case text(ScoreTextID)
         case note(NoteID)
+        /// The tempo marking at the beat of this chord or rest — `ScoreElementID.tempo`'s address.
+        case tempo(anchor: VoiceElementID)
     }
 
     public let target: Target
@@ -30,6 +35,7 @@ public struct SetElementColor: EditCommand {
     public var affectedLocation: VoiceElementID {
         switch target {
         case let .note(id): VoiceElementID(id)
+        case let .tempo(anchor): anchor
         case let .text(text):
             switch text {
             case let .lyric(anchor, _), let .staffText(anchor, _), let .harmony(anchor): anchor
@@ -57,6 +63,15 @@ public struct SetElementColor: EditCommand {
             else { throw Self.refused(.noteNotFound(id)) }
             chord.notes.updateNote(at: id.noteIndexInChord) { $0.elementProperties.color = color }
             score[slot] = .chord(chord)
+        case let .tempo(anchor):
+            guard let slot = SetTempo.slot(at: anchor, in: score),
+                  case var .tempo(tempo) = score.systemMeasures[slot.measureIndex].elements[slot.elementIndex]
+                      .element
+            else { throw Self.refused(.targetNotFound(anchor)) }
+            tempo.elementProperties.color = color
+            score.systemMeasures.updateValue(at: slot.measureIndex) {
+                $0.elements.updateValue(at: slot.elementIndex) { $0.element = .tempo(tempo) }
+            }
         }
         return SetElementColor(target, color: old.color)
     }
@@ -66,6 +81,7 @@ public struct SetElementColor: EditCommand {
     public static func currentProperties(for target: Target, in score: Score) -> ElementProperties? {
         switch target {
         case let .note(id): return score[id]?.elementProperties
+        case let .tempo(anchor): return SetTempo.tempo(at: anchor, in: score)?.elementProperties
         case let .text(text):
             switch text {
             case let .lyric(anchor, verse):

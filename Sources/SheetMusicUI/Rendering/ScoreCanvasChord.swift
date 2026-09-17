@@ -42,23 +42,7 @@ extension ScoreCanvasDrawing {
             CGPoint(x: base.x + p.x, y: base.y + p.y)
         }
         let (baseDur, dots) = DurationInterpretation.split(duration)
-        let shiftedNotes = notes.map {
-            LayoutChordNote(
-                noteID: $0.noteID,
-                step: $0.step,
-                accidental: $0.accidental,
-                origin: shift($0.origin),
-                tieForward: $0.tieForward,
-                tieBack: $0.tieBack,
-                hasGlissando: $0.hasGlissando,
-                headType: $0.headType,
-                mirror: $0.mirror,
-                isInvisible: $0.isInvisible,
-                color: $0.color,
-                accidentalBracket: $0.accidentalBracket,
-                parentheses: $0.parentheses,
-            )
-        }
+        let shiftedNotes = notes.map { $0.moved(to: shift($0.origin)) }
         // Stem / flag inherit the chord's notehead color (the first
         // colored note wins) — MuseScore stores `<Stem>/<Hook>`
         // color separately but in practice it matches the note.

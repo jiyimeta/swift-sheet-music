@@ -70,6 +70,7 @@ struct LayoutSystemEventColumnsTests {
             case .clef: "clef"
             case .text: "text"
             case .element: "element"
+            case .graceNote: "graceNote"
             }
         })
         #expect(kinds == ["note", "rest"])
