@@ -30,7 +30,7 @@ extension ScoreItemID {
             ))
         case let .clef(.explicit(anchor)):
             return transform(anchor).map { .clef(.explicit($0)) }
-        case .clef(.staffDefault), .text(.rehearsalMark): return self
+        case .clef(.staffDefault), .clef(.restatement), .text(.rehearsalMark): return self
         case let .text(.lyric(anchor, verse)):
             return transform(anchor).map { .text(.lyric(anchor: $0, verse: verse)) }
         case let .text(.staffText(anchor, style)):

@@ -60,6 +60,15 @@ struct ScoreItemIDCodecTests {
     }
 
     @Test
+    func clefRestatementRoundTrip() throws {
+        let original = ScoreItemID.clef(.restatement(
+            staff: StaffAddress(partIndex: 1, staffIndexInPart: 0), measureIndex: 7,
+        ))
+        let decoded = try ScoreItemIDCodec.decode(ScoreItemIDCodec.encode(original))
+        #expect(decoded == original)
+    }
+
+    @Test
     func emptyArrayRoundTrip() throws {
         let blob = ScoreItemIDCodec.encodeArray([])
         let decoded = try ScoreItemIDCodec.decodeArray(blob)

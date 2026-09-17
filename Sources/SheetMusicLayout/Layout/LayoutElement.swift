@@ -43,6 +43,10 @@ public enum TremoloAnchor: Sendable, Equatable {
 /// where its lines stop, how far a barline spans, how tall the cursor
 /// is — must go through `StaffLineGeometry`, not through `staffHeight`.
 public enum LayoutElement: Sendable, Equatable {
+    /// `anchor` names the clef this glyph is: `.explicit` for a declared one, `.staffDefault` for the opening
+    /// clef bar 0 synthesizes, and `.restatement` for the one a continuation system redraws at its head — which
+    /// names THAT bar, so each system's restatement is an identity of its own and an edit through it starts a
+    /// clef there. `nil` only for the sticky header's clef: chrome drawn over the score rather than the score.
     case clef(rawType: String, origin: CGPoint, anchor: ClefAnchor?)
     /// `clef` is the clef in force where the signature is drawn. It
     /// selects the accidental step table — MuseScore reads the same
@@ -57,11 +61,13 @@ public enum LayoutElement: Sendable, Equatable {
     /// on C while a non-zero key was in force — see
     /// `KeySignatureSteps.cancellationNaturals`. In that case `sharps`
     /// and `flats` are both 0 and the naturals are the only glyphs.
-    /// `identity` is always a `ScoreElementID.keySignature`: the bar whose declaration these glyphs show, on the
-    /// staff they are drawn on. An end-of-system COURTESY announcement names the bar it announces — the one
-    /// opening the next system — because the announcement is that declaration seen early, and it is the only
-    /// place those glyphs appear before the break. Keys with no addressable declaration at all, and the sticky
-    /// header's restatements, still pass `nil`.
+    /// `identity` is always a `ScoreElementID.keySignature`: the bar these glyphs are drawn in, on the staff
+    /// they are drawn on. A system-head REDRAW therefore names its OWN bar rather than the one that declared
+    /// the key, so an edit through it declares the key there and the systems before the break keep what they
+    /// were reading. An end-of-system COURTESY announcement is the one glyph that names another bar — the one
+    /// it announces, which opens the next system — because the announcement is that declaration seen early, and
+    /// it is the only place those glyphs appear before the break. Keys on an unpitched staff, keys outside the
+    /// command's leading run or voice, and the sticky header's restatements still pass `nil`.
     case keySignature(
         sharps: Int, flats: Int, clef: NotatedClef,
         naturals: [Int] = [], origin: CGPoint, identity: ScoreElementID?,

@@ -143,17 +143,16 @@ struct LayoutMeasureIdentityTests {
         #expect(allMatch2)
     }
 
-    /// **A system-head restatement names the bar that DECLARED the signature, never its own.**
+    /// **A system-head restatement names the bar it is DRAWN in, not the one that declared the signature.**
     ///
-    /// The distinction is the whole point. The restatement declares nothing, so giving it the identity of the
-    /// bar it is drawn in would invent a declaration that is not in the score — and an edit addressed there
-    /// would write one. Naming the bar it restates invents nothing: it is the same declaration, shown again,
-    /// and a click on the only signature visible on page two resolves to it. Here that is m0, whose two sharps
-    /// are still in force on the system that opens with m1.
+    /// The restatement declares nothing, and naming it for its own bar is exactly what makes a click on it
+    /// editable: `SetKeySignature(measureIndex:)` on a bar that declares no key adds one there, which is
+    /// MuseScore's `KeySig::drop`, so the change runs from the system the reader clicked and the systems before
+    /// it keep what they declared. Here that bar is m1 — m0's two sharps are what it redraws, and m0 is what it
+    /// named until 2026-09-18, when editing through it silently rewrote every earlier system.
     ///
-    /// It answered `nil` until 2026-09-12, which kept the invention away at the cost of making the glyph
-    /// unclickable — the bug QA hit in page mode.
-    @Test("A system-head key restatement names the bar that declared it, not its own")
+    /// It answered `nil` until 2026-09-12, which made the glyph unclickable — the bug QA hit in page mode.
+    @Test("A system-head key restatement names the bar it is drawn in, not the one that declared it")
     func keyRestatement() {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         var score = Self.score([Self.chord(.whole)])
@@ -180,7 +179,7 @@ struct LayoutMeasureIdentityTests {
         }
         #expect(keys.count == 2)
         #expect(keys.compactMap(\.elementID) == [
-            .keySignature(measureIndex: 0, staff: Self.staff(0)), .keySignature(measureIndex: 0, staff: Self.staff(1)),
+            .keySignature(measureIndex: 1, staff: Self.staff(0)), .keySignature(measureIndex: 1, staff: Self.staff(1)),
         ])
     }
 

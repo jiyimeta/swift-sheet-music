@@ -225,17 +225,11 @@ public final class LayoutCache: @unchecked Sendable {
         /// invalidate the cached placements even though `measure` and
         /// every other input is unchanged.
         let lineCount: Int
+        /// The clef a system head synthesizes when the bar declares none, or `nil` mid-system. The identity that
+        /// glyph carries is not part of the key: a restatement names the bar it is drawn at the head of, and an
+        /// entry is already keyed by that bar and staff.
         let initialClefRawType: String?
-        /// The declaration a synthesized leading clef restates. Part of the key because two systems can
-        /// synthesize the SAME raw type while restating different declarations — a staff that changes from
-        /// treble to treble8vb and back reads "treble" in both places, and the identity the glyph carries has
-        /// to follow the declaration rather than the glyph.
-        let initialClefAnchor: ClefAnchor?
         let initialKeyForSynth: Int?
-        /// The bar a synthesized leading key signature restates, part of the key for the same reason
-        /// `initialClefAnchor` is: two systems can redraw the same NUMBER of sharps while restating different
-        /// declarations.
-        let initialKeyMeasureIndex: Int?
         let headerSchedule: LayoutEngine.HeaderSchedule
         let tickColumns: [Int: CGFloat]
         let division: Int

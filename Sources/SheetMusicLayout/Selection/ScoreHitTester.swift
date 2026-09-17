@@ -456,7 +456,8 @@ public struct ScoreHitTester: Sendable {
     /// Bounding-box hit-test for a clef glyph. Mirrors the
     /// per-clef y-offset that `drawClef` applies (treble +1 sp,
     /// bass −1 sp, C-clef 0). Returns nil for clefs without an
-    /// `anchor` (i.e. continuation-system header restatements).
+    /// `anchor` — the sticky header's, which is chrome over the score.
+    /// A continuation system's restatement HAS one: its own bar's.
     private func hitClef(
         measure: LayoutMeasure,
         base: CGPoint, point: CGPoint, sp: CGFloat,

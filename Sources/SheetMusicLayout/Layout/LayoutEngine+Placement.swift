@@ -66,13 +66,7 @@ extension LayoutEngine {
         activeKey: Int = 0,
         lineGeometry: StaffLineGeometry,
         initialClefRawType: String? = nil,
-        // The declaration a synthesized leading clef RESTATES — see the emission site below for why a
-        // restatement carries the identity of what it restates rather than none at all.
-        initialClefAnchor: ClefAnchor? = nil,
         initialKeyForSynth: Int? = nil,
-        // The bar whose key-signature declaration a synthesized leading signature RESTATES — the sibling of
-        // `initialClefAnchor`, resolved by the caller for the same reason.
-        initialKeyMeasureIndex: Int? = nil,
         headerSchedule: HeaderSchedule,
         tickColumns: [Int: CGFloat],
         division: Int,
@@ -397,17 +391,18 @@ extension LayoutEngine {
             // Emit the synthesized leading clef exactly once, at the top
             // of the first voice to process it.
             if remainingSynthClef, let rawType = initialClefRawType {
-                // **A continuation system's clef restates a declaration, and it names the one it restates.**
-                // It used to name nothing at all past the first system — the reasoning being that a restatement
-                // is not a declaration and so has nothing to edit. True, and beside the point once a host lets
-                // a reader click a clef: the glyph at the head of system four is the only clef on screen there,
-                // and answering "that is not a thing" to a click on it is wrong however defensible the identity
-                // rule is. `initialClefAnchor` is the declaration in force here, resolved by the caller, which
-                // is the one that can see the bars before this system.
+                // **A continuation system's clef names the bar it is drawn at the head of, not the declaration
+                // it redraws.** MuseScore's rule for a system-head clef (`EditClef::undoChangeClef` takes the
+                // `moveClef` path for one): a change made through this glyph starts a new clef HERE, so the
+                // systems before it keep the clef they were reading, and each system's restatement selects and
+                // tints on its own. Naming the declaration instead — which this did until 2026-09-18 — meant
+                // editing the clef on system four rewrote bar 0 and repainted every earlier system with it.
                 //
-                // Falls back to the staff's own default, which is what a first system's synthesized clef has
-                // always named and is still correct when no explicit clef precedes this point.
-                let synthAnchor = initialClefAnchor ?? .staffDefault(staffAddress)
+                // Bar 0 is the exception and keeps `.staffDefault`: nothing precedes it, so its synthesized
+                // glyph IS the staff's opening clef, which `SetStaffDefaultClef` is the command for.
+                let synthAnchor: ClefAnchor = measureIndex == 0
+                    ? .staffDefault(staffAddress)
+                    : .restatement(staff: staffAddress, measureIndex: measureIndex)
                 out.append(.clef(
                     rawType: rawType,
                     origin: CGPoint(
@@ -437,12 +432,13 @@ extension LayoutEngine {
                     origin: CGPoint(
                         x: headerSchedule.keySigX, y: staffMidY,
                     ),
-                    // Same rule the synthesized clef above follows: a system-head redraw names the declaration
-                    // it redraws. On page two of a paged score this glyph is the only key signature on the
-                    // sheet, so answering "not a thing" to a click on it is wrong however true it is that the
-                    // redraw declares nothing. `initialKeyMeasureIndex` is that declaration's bar, resolved by
-                    // the caller, which is the level that can see the bars before this system.
-                    identity: initialKeyMeasureIndex.map { .keySignature(measureIndex: $0, staff: staffAddress) },
+                    // Same rule the synthesized clef above follows: a system-head redraw names the bar it is
+                    // drawn in, so `SetKeySignature` through it declares the key HERE — MuseScore's `KeySig
+                    // ::drop`, which adds a key change at the clicked glyph's tick — and the bars before the
+                    // break keep what they declared. Unpitched staves are left unaddressed, as their explicit
+                    // declarations are (`SetKeySignature` writes pitched staves only).
+                    identity: isPitchedStaff
+                        ? .keySignature(measureIndex: measureIndex, staff: staffAddress) : nil,
                 ))
                 remainingSynthKeySig = false
             }

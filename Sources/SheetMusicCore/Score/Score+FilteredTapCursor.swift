@@ -229,6 +229,7 @@ extension ClefAnchor {
         switch self {
         case let .explicit(anchor): .explicit(anchor.withStaff(staff))
         case .staffDefault: .staffDefault(staff)
+        case let .restatement(_, measureIndex): .restatement(staff: staff, measureIndex: measureIndex)
         }
     }
 }

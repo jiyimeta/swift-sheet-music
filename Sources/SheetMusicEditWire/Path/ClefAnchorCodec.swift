@@ -11,7 +11,9 @@ import Wirelet
 /// Case indices, matching ClefAnchor's declaration order:
 /// 0 = explicit(VoiceElementIDWire), see PathIDCodecs.swift
 /// 1 = staffDefault(StaffAddressWire), see StaffAddressCodec.swift
+/// 2 = restatement(staff: StaffAddressWire, measureIndex: Int32)
 /// ```
+/// Append new cases at the end: the indices are what a Kotlin host decodes by.
 public enum ClefAnchorCodec {
     public static func encode(_ value: ClefAnchor) -> Data {
         ClefAnchorWire(from: value).encodeToData()
@@ -26,6 +28,7 @@ public enum ClefAnchorCodec {
 public enum ClefAnchorWire {
     case explicit(VoiceElementIDWire)
     case staffDefault(StaffAddressWire)
+    case restatement(staff: StaffAddressWire, measureIndex: Int32)
 
     public init(from value: ClefAnchor) {
         switch value {
@@ -33,6 +36,8 @@ public enum ClefAnchorWire {
             self = .explicit(VoiceElementIDWire(from: id))
         case let .staffDefault(staff):
             self = .staffDefault(StaffAddressWire(from: staff))
+        case let .restatement(staff, measureIndex):
+            self = .restatement(staff: StaffAddressWire(from: staff), measureIndex: Int32(measureIndex))
         }
     }
 
@@ -42,6 +47,8 @@ public enum ClefAnchorWire {
             return .explicit(wire.decoded())
         case let .staffDefault(wire):
             return .staffDefault(wire.decoded())
+        case let .restatement(staff, measureIndex):
+            return .restatement(staff: staff.decoded(), measureIndex: Int(measureIndex))
         }
     }
 }

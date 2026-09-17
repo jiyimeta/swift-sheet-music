@@ -244,21 +244,8 @@ extension LayoutEngine {
                 let synthClef: String? = synthesizeClefHere
                     ? clefs[staffIdx].rawType
                     : nil
-                // Which declaration that synthesized clef is restating. Resolved HERE rather than inside
-                // placement because only this level can see the bars before this system — placement is handed
-                // one measure. See `placeMeasureElements`'s own emission comment for why a restatement names
-                // the declaration it restates.
-                let synthClefAnchor: ClefAnchor? = synthesizeClefHere
-                    ? declaringClefAnchor(
-                        before: measureIdx, staff: staff, address: allStaves[staffIdx].address,
-                    )
-                    : nil
                 let synthKey: Int? = synthesizeKeySigHere
                     ? keys[staffIdx]
-                    : nil
-                // Which bar's declaration that redraw shows — the key-signature sibling of `synthClefAnchor`.
-                let synthKeyMeasure: Int? = synthesizeKeySigHere
-                    ? declaringKeySignatureMeasure(before: measureIdx, staff: staff)
                     : nil
                 let part = context.score.parts[allStaves[staffIdx].address.partIndex]
                 let isPitchedStaff = !part.instrument.useDrumset && staff.group != "percussion"
@@ -297,9 +284,7 @@ extension LayoutEngine {
                     activeKey: keys[staffIdx],
                     lineCount: staffGeometries[staffIdx].lineCount,
                     initialClefRawType: synthClef,
-                    initialClefAnchor: synthClefAnchor,
                     initialKeyForSynth: synthKey,
-                    initialKeyMeasureIndex: synthKeyMeasure,
                     headerSchedule: schedule,
                     tickColumns: tickCols,
                     division: context.score.division,
@@ -346,9 +331,7 @@ extension LayoutEngine {
                         activeKey: keys[staffIdx],
                         lineGeometry: staffGeometries[staffIdx],
                         initialClefRawType: synthClef,
-                        initialClefAnchor: synthClefAnchor,
                         initialKeyForSynth: synthKey,
-                        initialKeyMeasureIndex: synthKeyMeasure,
                         headerSchedule: schedule,
                         tickColumns: tickCols,
                         division: context.score.division,

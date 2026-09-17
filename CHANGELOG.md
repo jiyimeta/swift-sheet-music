@@ -9,6 +9,27 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking: a restated clef or key signature names the bar it is drawn in, so an edit through it starts there.**
+  The clef and key a continuation system redraws at its head declare nothing, and they used to carry the identity of
+  the declaration they redraw. That made the glyph clickable at the cost of the wrong edit: changing the clef on
+  system four rewrote the declaration back in bar 0, so every earlier system changed with it, and one identity was
+  shared by every restatement, so selecting one tinted them all. Both now name the bar at their own system's head —
+  MuseScore's rule (`EditClef::undoChangeClef` takes its `moveClef` path for a system-head clef; `KeySig::drop` adds
+  a key change at the clicked glyph's tick). A host turns a click on a restated clef into
+  `SetClef(before:)` at voice 0's first chord or rest of that bar, and a click on a restated key signature into
+  `SetKeySignature(measureIndex:)` on it, which adds a declaration where the bar had none; `RemoveKeySignature`
+  there plans to nothing, as it does on any bar that declares no key.
+
+  `ClefAnchor` gains `case restatement(staff: StaffAddress, measureIndex: Int)` — **breaking for exhaustive
+  switches**, and a new wire choice index 2 (`ClefAnchorWire`; 0 and 1 are unchanged). It resolves to the clef in
+  force at the head of that bar, which is `Score.clefInForce(at:)` at element 0. The first system's synthesized
+  opening clef still carries `.staffDefault`, the identity `SetStaffDefaultClef` addresses, and an explicit clef
+  still carries `.explicit`. `LayoutElement.keySignature`'s `identity` names the bar the glyph is drawn in; the one
+  glyph that still names another bar is the end-of-system courtesy announcement, which names the bar it announces.
+  A system-head key redraw on an unpitched staff now carries no identity, matching its explicit declarations.
+  `LayoutEngine.declaringClefAnchor` / `declaringKeySignatureMeasure` are gone with the rule they served, and
+  `ScoreHitTester.clefHitRects(for:)` answers with one rectangle per anchor rather than one per system.
+
 - **Breaking: a key or time signature identity names the staff of the glyph that was selected.**
   `ScoreElementID.keySignature` / `.timeSignature` and `ScoreHitTarget.keySignature` / `.timeSignature` are now
   `(measureIndex:staff:)`, and `LayoutElement.keySignature` / `.timeSignature` carry an `identity: ScoreElementID?`

@@ -35,7 +35,12 @@ public enum ScoreElementID: Hashable, Sendable {
     /// one of them selects that one glyph (as in MuseScore) rather than lighting up the whole column. Two
     /// identities differing only in `staff` therefore address the same command.
     /// Mid-bar keys, keys outside that run or voice, and unpitched-staff keys have no identity by design.
-    /// Courtesy announcements and system-head restatements likewise do not name a new declaration.
+    /// **The bar named is the one the glyph is DRAWN in**, which for a system-head restatement is the bar
+    /// opening that system rather than the bar that declared the key: `SetKeySignature(measureIndex:)` on a bar
+    /// that declares none adds a declaration there (`KeySig::drop`'s rule in MuseScore), so an edit through a
+    /// restatement changes the key from that system on and leaves the earlier ones alone, and
+    /// `RemoveKeySignature` on it plans to nothing. The one glyph that names another bar is an end-of-system
+    /// courtesy announcement, which names the bar it announces.
     /// Each staff's declaration slot has its own durable identifier, available through `Score.eid(at:)`.
     case keySignature(measureIndex: Int, staff: StaffAddress)
     /// Transitional positional bar address for a time signature stored in `Voice.elements`, on the staff whose

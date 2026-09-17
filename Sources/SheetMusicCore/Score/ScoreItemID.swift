@@ -29,7 +29,7 @@ public enum ScoreItemID: Hashable, Sendable {
         case let .rest(id): return id.staff
         case let .tuplet(id): return id.staff
         case let .clef(.explicit(id)): return id.staff
-        case let .clef(.staffDefault(staff)): return staff
+        case let .clef(.staffDefault(staff)), let .clef(.restatement(staff, _)): return staff
         case let .text(id):
             // A rehearsal mark has no anchor: it is a system element
             // engraved once, on the score's top staff, which is the
@@ -50,6 +50,7 @@ public enum ScoreItemID: Hashable, Sendable {
         case let .tuplet(id): return id.measureIndex
         case let .clef(.explicit(id)): return id.measureIndex
         case .clef(.staffDefault): return 0
+        case let .clef(.restatement(_, measureIndex)): return measureIndex
         case let .text(.rehearsalMark(measureIndex)): return measureIndex
         case let .text(id): return id.anchor?.measureIndex ?? 0
         case let .element(.jump(_, measureIndex, _)), let .element(.marker(_, measureIndex, _)): return measureIndex
@@ -64,7 +65,7 @@ public enum ScoreItemID: Hashable, Sendable {
         case let .rest(id): return id.voiceIndex
         case let .tuplet(id): return id.voiceIndex
         case let .clef(.explicit(id)): return id.voiceIndex
-        case .clef(.staffDefault): return 0
+        case .clef(.staffDefault), .clef(.restatement): return 0
         case let .text(id): return id.anchor?.voiceIndex ?? 0
         case let .element(id): return id.anchor?.voiceIndex ?? 0
         case let .graceNote(id): return id.voiceIndex
@@ -72,8 +73,8 @@ public enum ScoreItemID: Hashable, Sendable {
     }
 
     /// Element index of this item — for tuplets this is the
-    /// `startElementIndex` (the first member). For staff-default
-    /// clefs this is `0` (a positional approximation; the
+    /// `startElementIndex` (the first member). For staff-default and
+    /// restated clefs this is `0` (a positional approximation; the
     /// authoritative target is the `ClefAnchor` itself), and for a
     /// bar-addressed item likewise `0` (the authoritative target is the
     /// bar index, which `measureIndex` answers exactly). A barline also
@@ -87,7 +88,7 @@ public enum ScoreItemID: Hashable, Sendable {
         case let .rest(id): return id.elementIndex
         case let .tuplet(id): return id.startElementIndex
         case let .clef(.explicit(id)): return id.elementIndex
-        case .clef(.staffDefault): return 0
+        case .clef(.staffDefault), .clef(.restatement): return 0
         case let .text(id): return id.anchor?.elementIndex ?? 0
         case let .element(id): return id.anchor?.elementIndex ?? 0
         case let .graceNote(id): return id.elementIndex

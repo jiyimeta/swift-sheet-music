@@ -84,14 +84,13 @@ struct LayoutElementClefAnchorTests {
     ///
     /// It used to answer `nil`, on the reasoning that a restatement declares nothing and so has nothing to
     /// edit. True of the model and wrong about the page: on system four that glyph is the only clef on screen,
-    /// and a host that lets a reader click a clef has to be able to answer the click. `LayoutEngine
-    /// .declaringClefAnchor(before:staff:address:)` resolves it to whichever declaration is in force — an
-    /// earlier explicit clef, or the staff's own default when none precedes it.
+    /// and a host that lets a reader click a clef has to be able to answer the click. It names its own bar —
+    /// `ClefAnchor.restatement` — so an edit through it starts a clef there, as MuseScore's `moveClef` does.
     ///
     /// The sticky header above is deliberately NOT part of this: it is chrome drawn over the score rather than
     /// the score itself, and nothing clicks it.
     @available(macOS 15.0, iOS 16.0, *)
-    @Test("a continuation system's clef names the declaration it restates")
+    @Test("a continuation system's clef names the bar it opens")
     func continuationSystemSynthClefNamesItsDeclaration() throws {
         // `harmony-basic` reliably wraps into ≥3 systems at small
         // widths; `multiPartMixedStaves` (used by the other tests
@@ -128,10 +127,15 @@ struct LayoutElementClefAnchorTests {
             for el in firstMeasure.elements {
                 if case let .clef(_, _, anchor) = el {
                     restatements += 1
-                    #expect(
-                        anchor != nil,
-                        "a continuation-system clef must name the declaration it restates",
-                    )
+                    // A synthesized head clef names the bar it opens; an explicit one there names its own slot.
+                    switch anchor {
+                    case let .restatement(_, measureIndex):
+                        #expect(measureIndex == firstMeasure.measureIndex)
+                    case .explicit:
+                        break
+                    default:
+                        Issue.record("a head clef must name its own bar: \(String(describing: anchor))")
+                    }
                 }
             }
         }

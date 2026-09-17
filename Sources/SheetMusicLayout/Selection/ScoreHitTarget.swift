@@ -69,10 +69,12 @@ public enum ScoreHitTarget: Hashable, Sendable {
     case tuplet(TupletID)
     /// Selectable clef glyph. Only emitted for clefs whose `LayoutElement.clef.anchor` is non-nil.
     ///
-    /// **A restatement names what it restates.** The clef a continuation system opens with declares nothing —
-    /// it redraws whatever is in force — but it is the only clef on that system's screen, so it carries the
-    /// anchor of the declaration it redraws and a click on it selects that. The sticky-header clef stays
-    /// unanchored: that is chrome drawn over the score rather than the score itself.
+    /// **A restatement names where it is drawn.** The clef a continuation system opens with declares nothing —
+    /// it redraws whatever is in force — but it is the only clef on that system's screen, so it carries
+    /// `.restatement(staff:measureIndex:)` for the bar at that system's head: a click selects that glyph alone,
+    /// and an edit through it (`SetClef(before:)` on voice 0's first chord or rest of the bar) starts a clef
+    /// there rather than rewriting the declaration every earlier system is reading. The sticky-header clef
+    /// stays unanchored: that is chrome drawn over the score rather than the score itself.
     case clef(ClefAnchor)
     /// An engraved lyric syllable. `anchor` is the chord that owns it, `verse` its lyric-array index — the
     /// two arguments `SetLyric` takes.
@@ -96,7 +98,8 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// A spanner identified by its anchor and kind for `RemoveSpanner`. See `ScoreElementID.spanner`.
     case spanner(anchor: VoiceElementID, kind: Spanner.Kind)
     /// A bar's key signature on one staff, addressed by `SetKeySignature`. See `ScoreElementID.keySignature` for
-    /// its scope and for why the staff is the selection's rather than the command's.
+    /// its scope, for why the staff is the selection's rather than the command's, and for why a system-head
+    /// restatement names the bar it is drawn in — the bar an edit through it declares the key at.
     case keySignature(measureIndex: Int, staff: StaffAddress)
     /// A bar's meter on one staff, addressed by `SetTimeSignature`. See `ScoreElementID.timeSignature` for the
     /// re-bar scope.
