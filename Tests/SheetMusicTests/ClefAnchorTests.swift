@@ -22,6 +22,21 @@ struct ClefAnchorTests {
         // swiftlint:disable:next identical_operands
         #expect(ClefAnchor.staffDefault(staff) == ClefAnchor.staffDefault(staff))
     }
+
+    /// Restatements on two systems are two anchors, which is what keeps a click on one from tinting both — and
+    /// neither is the staff default the first system's opening clef carries.
+    @Test("restatements differ by bar, and from the staff default")
+    func restatementsDifferByBar() {
+        let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let second: ClefAnchor = .restatement(staff: staff, measureIndex: 4)
+        let third: ClefAnchor = .restatement(staff: staff, measureIndex: 9)
+        #expect(second != third)
+        #expect(second != .staffDefault(staff))
+        #expect(second != .restatement(staff: StaffAddress(partIndex: 1, staffIndexInPart: 0), measureIndex: 4))
+        #expect(Set([second, third, .staffDefault(staff)]).count == 3)
+        // swiftlint:disable:next identical_operands
+        #expect(ClefAnchor.restatement(staff: staff, measureIndex: 4) == .restatement(staff: staff, measureIndex: 4))
+    }
 }
 
 @Suite("ScoreItemID.clef")
@@ -32,6 +47,18 @@ struct ScoreItemIDClefTests {
         let id: ScoreItemID = .clef(.staffDefault(staff))
         #expect(id.staff == staff)
         #expect(id.measureIndex == 0)
+        #expect(id.voiceIndex == 0)
+        #expect(id.elementIndex == 0)
+    }
+
+    /// A restatement is bar-addressed: it answers with the bar it is drawn at the head of, and approximates
+    /// voice and element with `0` — the slot `SetClef(before:)` aims at is voice 0's first chord there.
+    @Test("restatement accessors return the bar it is drawn in")
+    func restatementAccessors() {
+        let staff = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+        let id: ScoreItemID = .clef(.restatement(staff: staff, measureIndex: 6))
+        #expect(id.staff == staff)
+        #expect(id.measureIndex == 6)
         #expect(id.voiceIndex == 0)
         #expect(id.elementIndex == 0)
     }

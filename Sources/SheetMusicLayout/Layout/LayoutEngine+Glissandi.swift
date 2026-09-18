@@ -19,6 +19,9 @@ extension LayoutEngine {
         let toOrigin: CGPoint
         let wavy: Bool
         let text: String?
+        /// The note the glissando is stored on, which names it for selection. Every segment `attachGlissandi`
+        /// emits from this pair carries it, so a split line's two halves answer as one element.
+        var start: NoteID?
         /// Staff both endpoints share (a glissando never crosses
         /// staves). Lets `attachGlissandi` look up each system's
         /// per-staff origin via `LayoutSystem.flatIndex(for:)` to
@@ -189,6 +192,7 @@ extension LayoutEngine {
             return GlissandoPair(
                 fromOrigin: fromOrigin, toOrigin: toOrigin,
                 wavy: item.wavy, text: item.text,
+                start: item.from,
                 staff: item.from.staff,
             )
         }
@@ -232,6 +236,7 @@ extension LayoutEngine {
                     toOrigin: toLocal,
                     wavy: pair.wavy,
                     text: pair.text,
+                    start: pair.start,
                 ))
             } else if let from = fromSysIdx, let to = toSysIdx {
                 // Note: only the immediately-adjacent-system case is
@@ -323,6 +328,7 @@ extension LayoutEngine {
                         toOrigin: beginTo,
                         wavy: pair.wavy,
                         text: pair.text,
+                        start: pair.start,
                     ))
                 }
 
@@ -336,6 +342,9 @@ extension LayoutEngine {
                         // Only the BEGIN segment carries the label —
                         // otherwise "gliss." would print twice.
                         text: nil,
+                        // The identity is on BOTH halves: they are one
+                        // glissando, and a click on either selects it.
+                        start: pair.start,
                     ))
                 }
             }

@@ -35,7 +35,12 @@ public enum ScoreElementID: Hashable, Sendable {
     /// one of them selects that one glyph (as in MuseScore) rather than lighting up the whole column. Two
     /// identities differing only in `staff` therefore address the same command.
     /// Mid-bar keys, keys outside that run or voice, and unpitched-staff keys have no identity by design.
-    /// Courtesy announcements and system-head restatements likewise do not name a new declaration.
+    /// **The bar named is the one the glyph is DRAWN in**, which for a system-head restatement is the bar
+    /// opening that system rather than the bar that declared the key: `SetKeySignature(measureIndex:)` on a bar
+    /// that declares none adds a declaration there (`KeySig::drop`'s rule in MuseScore), so an edit through a
+    /// restatement changes the key from that system on and leaves the earlier ones alone, and
+    /// `RemoveKeySignature` on it plans to nothing. The one glyph that names another bar is an end-of-system
+    /// courtesy announcement, which names the bar it announces.
     /// Each staff's declaration slot has its own durable identifier, available through `Score.eid(at:)`.
     case keySignature(measureIndex: Int, staff: StaffAddress)
     /// Transitional positional bar address for a time signature stored in `Voice.elements`, on the staff whose
@@ -68,13 +73,17 @@ public enum ScoreElementID: Hashable, Sendable {
     case jump(staff: StaffAddress, measureIndex: Int, index: Int)
     /// One entry in the owning staff's measure-level markers list.
     case marker(staff: StaffAddress, measureIndex: Int, index: Int)
+    /// A glissando line, owned by its starting note. `Note.glissando` on `start` is the whole glissando — its end is
+    /// implicit, the next chord in the voice — so `SetGlissando(at: start, glissando:)` edits it and a `nil` write
+    /// removes it. Both drawn halves of a line split across a system break name this one identity.
+    case glissando(start: NoteID)
 
     /// The voice-element owner anchor, or `nil` for bar and staff-owned navigation lists.
     public var anchor: VoiceElementID? {
         switch self {
         case let .dynamic(anchor), let .fermata(anchor), let .breath(anchor), let .tempo(anchor),
              let .spanner(anchor, _), let .articulation(anchor, _): return anchor
-        case let .tie(start, _): return VoiceElementID(start)
+        case let .tie(start, _), let .glissando(start): return VoiceElementID(start)
         case let .slur(id): return id.anchor
         case .keySignature, .timeSignature, .barLine, .jump, .marker: return nil
         }
@@ -84,7 +93,8 @@ public enum ScoreElementID: Hashable, Sendable {
     public var measureIndexIfAddressedByBar: Int? {
         switch self {
         case let .keySignature(index, _), let .timeSignature(index, _), let .barLine(index, _): return index
-        case .dynamic, .fermata, .breath, .tempo, .spanner, .articulation, .tie, .slur, .jump, .marker: return nil
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .articulation, .tie, .slur, .jump, .marker, .glissando:
+            return nil
         }
     }
 
@@ -94,7 +104,8 @@ public enum ScoreElementID: Hashable, Sendable {
         switch self {
         case let .keySignature(_, staff), let .timeSignature(_, staff),
              let .jump(staff, _, _), let .marker(staff, _, _): return staff
-        case .dynamic, .fermata, .breath, .tempo, .spanner, .barLine, .articulation, .tie, .slur: return nil
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .barLine, .articulation, .tie, .slur, .glissando:
+            return nil
         }
     }
 }

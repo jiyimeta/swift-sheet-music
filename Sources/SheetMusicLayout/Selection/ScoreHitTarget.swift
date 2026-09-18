@@ -25,6 +25,14 @@ import SheetMusicCore
 /// sits 1.5 sp from its parent, close enough that the parent head's 1.2 sp reach covers the grace head's inner edge,
 /// so first match alone would hand those clicks to the chord beside it.
 ///
+/// **Hidden ink is on the ladder too.** Every rung searches what its measure DRAWS — `elements` first, then the
+/// `invisibleElements` the engine parks beside them when `ScoreViewOptions.showsInvisibleElements` is on
+/// (`LayoutMeasure.drawnElements`) — so an element hidden with `V` answers a click exactly like a visible one for
+/// as long as the reader can see it greyed. Otherwise hiding a thing removed the only way to select it and show
+/// it again. With that option off nothing is parked, so nothing new is clickable. Visible ink comes first within
+/// each rung and still wins a contested point; the one rung where that is not the whole rule is the notehead's
+/// grace override, which compares distances (see `ScoreHitTester.hitNote`).
+///
 /// This is the one place that order is written down; `hitTest`'s own doc points here, because the copy it
 /// used to carry went stale. Each rung earns its position: beam precedes stem so a click on the beam bar
 /// resolves to `.beam` rather than the stem endpoint beneath it, and flag precedes stem so the flag curve
@@ -69,10 +77,12 @@ public enum ScoreHitTarget: Hashable, Sendable {
     case tuplet(TupletID)
     /// Selectable clef glyph. Only emitted for clefs whose `LayoutElement.clef.anchor` is non-nil.
     ///
-    /// **A restatement names what it restates.** The clef a continuation system opens with declares nothing —
-    /// it redraws whatever is in force — but it is the only clef on that system's screen, so it carries the
-    /// anchor of the declaration it redraws and a click on it selects that. The sticky-header clef stays
-    /// unanchored: that is chrome drawn over the score rather than the score itself.
+    /// **A restatement names where it is drawn.** The clef a continuation system opens with declares nothing —
+    /// it redraws whatever is in force — but it is the only clef on that system's screen, so it carries
+    /// `.restatement(staff:measureIndex:)` for the bar at that system's head: a click selects that glyph alone,
+    /// and an edit through it (`SetClef(before:)` on voice 0's first chord or rest of the bar) starts a clef
+    /// there rather than rewriting the declaration every earlier system is reading. The sticky-header clef
+    /// stays unanchored: that is chrome drawn over the score rather than the score itself.
     case clef(ClefAnchor)
     /// An engraved lyric syllable. `anchor` is the chord that owns it, `verse` its lyric-array index — the
     /// two arguments `SetLyric` takes.
@@ -96,7 +106,8 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// A spanner identified by its anchor and kind for `RemoveSpanner`. See `ScoreElementID.spanner`.
     case spanner(anchor: VoiceElementID, kind: Spanner.Kind)
     /// A bar's key signature on one staff, addressed by `SetKeySignature`. See `ScoreElementID.keySignature` for
-    /// its scope and for why the staff is the selection's rather than the command's.
+    /// its scope, for why the staff is the selection's rather than the command's, and for why a system-head
+    /// restatement names the bar it is drawn in — the bar an edit through it declares the key at.
     case keySignature(measureIndex: Int, staff: StaffAddress)
     /// A bar's meter on one staff, addressed by `SetTimeSignature`. See `ScoreElementID.timeSignature` for the
     /// re-bar scope.
@@ -117,6 +128,10 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// One grace notehead, reported by the notehead rung. A click that lands on a grace head resolves here rather
     /// than to the main chord beside it; see `ScoreHitTester`'s notehead rung for how the two are separated.
     case graceNote(GraceNoteID)
+    /// A glissando line, addressed by `SetGlissando(at: start, glissando:)`; see `ScoreElementID.glissando`. It is an
+    /// engraved element, reported only after every notehead has declined the point: the line stops 0.8 sp from each
+    /// notehead's center, inside the head's 1.2 sp reach, so a click at either end still selects the note.
+    case glissando(start: NoteID)
 }
 
 extension ScoreHitTarget {
@@ -153,7 +168,7 @@ extension ScoreHitTarget {
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote:
             return nil
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker:
+             .tie, .slur, .jump, .marker, .glissando:
             return nil
         }
     }
@@ -177,7 +192,7 @@ extension ScoreHitTarget {
         case .lyric, .staffText, .harmony, .rehearsalMark:
             return textID.map(ScoreItemID.text)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker:
+             .tie, .slur, .jump, .marker, .glissando:
             return elementID.map(ScoreItemID.element)
         }
     }
@@ -209,6 +224,7 @@ extension ScoreHitTarget {
             self = .jump(staff: staff, measureIndex: measureIndex, index: index)
         case let .marker(staff, measureIndex, index):
             self = .marker(staff: staff, measureIndex: measureIndex, index: index)
+        case let .glissando(start): self = .glissando(start: start)
         }
     }
 
@@ -239,6 +255,7 @@ extension ScoreHitTarget {
             return .jump(staff: staff, measureIndex: measureIndex, index: index)
         case let .marker(staff, measureIndex, index):
             return .marker(staff: staff, measureIndex: measureIndex, index: index)
+        case let .glissando(start): return .glissando(start: start)
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
              .lyric, .staffText, .harmony, .rehearsalMark:
             return nil

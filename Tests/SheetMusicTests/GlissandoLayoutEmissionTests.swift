@@ -34,7 +34,7 @@ struct GlissandoLayoutEmissionTests {
     ) -> [GlissLine] {
         systems.flatMap { system in
             system.spanners.compactMap { el -> GlissLine? in
-                guard case let .glissandoLine(from, to, wavy, text) = el
+                guard case let .glissandoLine(from, to, wavy, text, _) = el
                 else { return nil }
                 return (from, to, wavy, text)
             }

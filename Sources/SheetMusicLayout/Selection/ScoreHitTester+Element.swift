@@ -34,7 +34,8 @@ extension ScoreHitTester {
     private func hitElement(elements: [LayoutElement], base: CGPoint, point: CGPoint) -> ScoreHitTarget? {
         for element in elements {
             guard let id = element.elementID else { continue }
-            if let contains = arcContains(element, point: CGPoint(x: point.x - base.x, y: point.y - base.y)) {
+            let local = CGPoint(x: point.x - base.x, y: point.y - base.y)
+            if let contains = arcContains(element, point: local) ?? glissandoContains(element, point: local) {
                 if contains { return ScoreHitTarget(elementID: id) }
                 continue
             }
@@ -105,10 +106,10 @@ extension ScoreHitTester {
     ///
     /// `elementHitRect(for:)` unions these, which is the right answer for "how big is this thing" and the wrong
     /// one for "where is this thing". An identity can be drawn in places that are nowhere near each other: a
-    /// spanner clipped across a system break, and — since restatements began naming what they restate — a key
-    /// signature whose declaration sits at the head of one system while its courtesy announcement sits at the
-    /// trailing edge of the one before. Unioning those spans the gap between two systems, so a host floating a
-    /// control beside the selection needs the pieces rather than their envelope.
+    /// spanner clipped across a system break, and a key or time signature whose declaration opens one system
+    /// while its courtesy announcement sits at the trailing edge of the one before — the announcement names the
+    /// bar it announces, so the two glyphs share an identity. Unioning those spans the gap between two systems,
+    /// so a host floating a control beside the selection needs the pieces rather than their envelope.
     ///
     /// Empty for a target with no element identity or no laid-out geometry.
     public func elementHitRects(for target: ScoreHitTarget) -> [CGRect] {
@@ -143,13 +144,15 @@ extension ScoreHitTester {
         return result
     }
 
+    /// Arcs and glissandi measure the ink they are drawn with, in their own frame; see `ScoreHitTester+Arc.swift`
+    /// and `ScoreHitTester+Glissando.swift`, which also own their hit rule — neither falls back to a rectangle.
     /// Barlines use stroke/dot ink bounds; pedals, key signatures and time signatures use glyph ink bounds.
     /// Navigation uses unpadded shipped text rectangles or centered glyph ink, according to its renderer.
     /// Remaining kinds use skyline measurements: fermatas, breaths and articulations use glyph path bounds
     /// with the skyline helper's fallback; dynamics and tempo mix glyph and font metrics; hairpins, ottavas
     /// and voltas use coarse span reservations. No universal ink-coverage claim follows.
     private func elementRects(_ element: LayoutElement) -> [CGRect] {
-        if let rects = arcInkRects(element) { return rects }
+        if let rects = arcInkRects(element) ?? glissandoInkRects(element) { return rects }
         if let rects = navigationRects(element) { return rects }
         switch element {
         case let .barLine(subtype, origin, halfHeight, _, _):

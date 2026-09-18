@@ -2818,13 +2818,25 @@
                 return nil
             case let .staffDefault(staff):
                 return score[staff]?.defaultClefType
+            case let .restatement(staff, measureIndex):
+                // A restatement shows whatever is in force at the head
+                // of the bar it opens, which is what the popover has to
+                // tick — it declares nothing of its own.
+                return score.clefInForce(at: VoiceElementID(
+                    staff: staff, measureIndex: measureIndex,
+                    voiceIndex: 0, elementIndex: 0,
+                )).rawType
             }
         }
 
         /// Dispatch the popover's pick into an edit command — replace
-        /// an explicit clef voice element, or set the staff's default
-        /// clef when the user tapped the synthesized opening clef.
-        /// Either path goes through `NoteInputController.apply` so the
+        /// an explicit clef voice element, set the staff's default clef
+        /// when the user tapped the synthesized opening clef, or write
+        /// a new clef at the head of the bar when they tapped a
+        /// continuation system's restatement (MuseScore's rule: the
+        /// change takes effect from the system that was clicked, and
+        /// the ones before it keep what they had).
+        /// Every path goes through `NoteInputController.apply` so the
         /// `undoManager` records a reverse command for ⌘Z.
         private func applyClefChoice(
             _ choice: ClefChoice, for anchor: ClefAnchor,
@@ -2850,6 +2862,17 @@
                         ),
                         undoManager: undoManager,
                     )
+                case let .restatement(staff, measureIndex):
+                    guard let target = firstTimedSlot(
+                        staff: staff, measureIndex: measureIndex,
+                    ) else { break }
+                    try controller.apply(
+                        SetClef(
+                            before: target,
+                            clef: NotatedClef(rawType: choice.rawType),
+                        ),
+                        undoManager: undoManager,
+                    )
                 }
                 adoptEditedScore(controller.score)
             } catch {
@@ -2858,6 +2881,24 @@
             }
             clefPopover = nil
             selection = .none
+        }
+
+        /// Voice 0's first chord or rest in `measureIndex` on `staff` —
+        /// what `SetClef(before:)` takes to write a clef at the head of
+        /// a bar. `nil` when the bar holds no timed element at all.
+        private func firstTimedSlot(
+            staff: StaffAddress, measureIndex: Int,
+        ) -> VoiceElementID? {
+            guard let voice = score?[voice: VoiceRef(
+                staff: staff, measureIndex: measureIndex, voiceIndex: 0,
+            )] else { return nil }
+            guard let index = voice.elements.indices.first(where: {
+                if case .chord = voice.elements[$0] { true } else { false }
+            }) else { return nil }
+            return VoiceElementID(
+                staff: staff, measureIndex: measureIndex,
+                voiceIndex: 0, elementIndex: index,
+            )
         }
 
         /// Remove a single note from its chord via
@@ -3031,7 +3072,7 @@
             case .timeSignature: "Time signatures can't be deleted yet."
             case .barLine: "Barlines can't be deleted yet."
             case .articulation: "Articulations can't be deleted yet."
-            case .tie, .slur, .jump, .marker: "This element can't be deleted."
+            case .tie, .slur, .jump, .marker, .glissando: "This element can't be deleted."
             }
         }
 
@@ -3414,7 +3455,7 @@
                 selection = .none
                 return
             case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker, .graceNote:
+                 .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote:
                 // An engraved marking or a grace note selects itself rather than the chord beside it, so the
                 // renderer tints just that. It takes no part in the note-range logic below.
                 selection = target.selectableItem.map { .single($0) } ?? .none
@@ -3486,7 +3527,7 @@
                 )
             case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
                  .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker:
+                 .articulation, .tie, .slur, .jump, .marker, .glissando:
                 return
             }
             textEntryFocused = true

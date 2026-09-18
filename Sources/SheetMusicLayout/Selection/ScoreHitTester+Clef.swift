@@ -10,32 +10,36 @@ import SheetMusicCore
 @available(macOS 15.0, *)
 extension ScoreHitTester {
     /// Document-coord rectangle of the clef glyph identified by
-    /// `anchor`: the FIRST place it is drawn, which is where it is
-    /// declared. Returns nil when no layout element matches — e.g.
-    /// after a re-layout invalidates the anchor.
+    /// `anchor`: the FIRST place it is drawn. Returns nil when no
+    /// layout element matches — e.g. after a re-layout invalidates the
+    /// anchor.
     ///
-    /// A clef that carries on across a system break is drawn again at
-    /// the head of each continuation system, and every one of those
-    /// restatements names the declaration it restates
-    /// (`LayoutEngine.declaringClefAnchor`), so one anchor can match
-    /// several places. Use `clefHitRects(for:)` when it matters WHICH
-    /// of them — the union is not an answer here, since the places sit
-    /// systems apart.
+    /// Each anchor names ONE drawn glyph: a continuation system's
+    /// restatement names that system's head bar rather than the
+    /// declaration it redraws, so the clef carried across three
+    /// systems is three anchors, not one drawn three times. This
+    /// therefore answers with the only rectangle there is.
+    /// `clefHitRects(for:)` stays the primitive — it is a scan over
+    /// the whole document, and nothing in the layout contract promises
+    /// a scan finds at most one match.
     public func clefHitRect(for anchor: ClefAnchor) -> CGRect? {
         clefHitRects(for: anchor).first
     }
 
     /// Every place the clef identified by `anchor` is drawn, one
-    /// rectangle each, in document order — the declaration first, then
-    /// each continuation system's restatement of it.
+    /// rectangle each, in document order — normally exactly one, since
+    /// each drawn clef carries its own anchor (see `ClefAnchor
+    /// .restatement`).
     ///
     /// The clef counterpart of `elementHitRects(for:)`, and it exists
     /// for the same reason: a host floating a control beside the
     /// selection has to put it beside the glyph the reader actually
-    /// clicked, which on a score of any length is usually not the
-    /// first one.
+    /// clicked. It kept its plural shape when restatements stopped
+    /// sharing their declaration's anchor, because the answer is a
+    /// scan of the document rather than a promise about it.
     ///
-    /// Empty when no layout element matches the anchor.
+    /// Answers for a hidden clef while it is drawn, matching the rung that can now select one
+    /// (`LayoutMeasure.drawnElements`). Empty when no layout element matches the anchor.
     public func clefHitRects(for anchor: ClefAnchor) -> [CGRect] {
         let sp = document.metrics.sp
         var result: [CGRect] = []
@@ -45,7 +49,7 @@ extension ScoreHitTester {
                     x: system.origin.x + measure.origin.x,
                     y: system.origin.y + measure.origin.y,
                 )
-                for el in measure.elements {
+                for el in measure.drawnElements {
                     guard case let .clef(rawType, origin, elAnchor) = el,
                           elAnchor == anchor
                     else { continue }

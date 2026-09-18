@@ -75,6 +75,18 @@ class ScoreElementIDDecoderTest {
     }
 
     @Test
+    fun glissandoVectorDecodesItsStartingNote() {
+        val bytes = byteArrayOf(
+            0x14, 0x05, 0x0A, 0x11, 0x0D,
+            0x0A, 0x0E, 0x0A, 0x04, 0x08, 0x04, 0x10, 0x02, 0x10, 0x06, 0x18, 0x02, 0x20, 0x08, 0x28, 0x04,
+        )
+        assertEquals(
+            ScoreItemID.Element(ScoreElementID.Glissando(start = start)),
+            ScoreItemIDCodec.decode(bytes),
+        )
+    }
+
+    @Test
     fun previousElementDiscriminatorsRemainCompatible() {
         // Hand-derived TLV vectors for choices 0..8 except the signatures (5, 6), whose payload changed shape and
         // has its own test below. Anchor payload length is 12 (0x0C):

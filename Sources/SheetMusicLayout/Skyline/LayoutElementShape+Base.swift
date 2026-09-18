@@ -93,7 +93,7 @@ extension LayoutElementShape {
             )]
         case let .tupletLabel(from, to, _, _, _, _):
             return [spanRect(from, to, thickness: sp * 1.5)]
-        case let .glissandoLine(from, to, _, _):
+        case let .glissandoLine(from, to, _, _, _):
             return [spanRect(from, to, thickness: sp * 0.3)]
         case let .guitarBend(from, vertex, to, _):
             // Both legs of the polyline (both halves of the cubic for a

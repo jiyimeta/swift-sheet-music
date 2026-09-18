@@ -57,14 +57,27 @@ class ClefAnchorDecoderTest {
         assertEquals(value, decoded)
     }
 
+    // MARK: - Restatement branch
+
+    @Test
+    fun restatementBranchDecodes() {
+        // ClefAnchor.Restatement(StaffAddress(1,0), measureIndex=12)
+        val value = ClefAnchor.Restatement(StaffAddress(partIndex = 1, staffIndexInPart = 0), measureIndex = 12)
+        val w = BinaryWriter()
+        ClefAnchorCodec.encodePayload(value, w)
+        val r = BinaryReader(w.toByteArray())
+        val decoded = ClefAnchorCodec.decodePayload(r)
+        assertEquals(value, decoded)
+    }
+
     // MARK: - Unknown discriminator
 
     @Test
     fun unknownKindThrows() {
-        // Encode a valid discriminator=0 payload, then hand-craft discriminator=2 (unknown).
-        // In TLV format the choice discriminator is a varint. Build a payload with disc=2.
+        // Discriminators 0…2 are explicit / staffDefault / restatement; hand-craft 3 (unknown).
+        // In TLV format the choice discriminator is a varint. Build a payload with disc=3.
         val w = BinaryWriter()
-        w.writeVarint(2L) // discriminator = 2 (unknown)
+        w.writeVarint(3L) // discriminator = 3 (unknown)
         val r = BinaryReader(w.toByteArray())
         try {
             ClefAnchorCodec.decodePayload(r)

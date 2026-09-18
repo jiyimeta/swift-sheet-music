@@ -178,8 +178,32 @@
         /// on grace heads). With those two payloads rewritten back to the
         /// bare bar index and the grace id dropped on both sides, the merged
         /// digest and the text-font branch's are identical line for line.
+        ///
+        /// **Re-recorded when a system-head clef became a restatement of its
+        /// own bar.** 11 of 3890 lines changed — every one an `el clef(` whose
+        /// `anchor:` went from `.staffDefault(staff)` to
+        /// `.restatement(staff:measureIndex:)` naming the bar that opens its
+        /// system (m7 twice, and m4…m36 in steps of 4, across two
+        /// fixtures). Line counts match
+        /// (3890 both sides), nothing but that payload differs on any changed
+        /// line, and with the `anchor:` field normalized away the two digests
+        /// are identical. No `el keySignature(` line moved, and the reason is
+        /// worth recording rather than reading as agreement: scanning both
+        /// digests, all 44 key lines name the bar they are drawn in ALREADY,
+        /// so the corpus holds no system-head key redraw of an earlier bar's
+        /// declaration. The key half of this change rests on
+        /// `LayoutMeasureIdentityTests` and the restatement suite, not here.
+        ///
+        /// **Re-recorded when a glissando line gained identity.** 4 of 3890 lines changed, and they are all four
+        /// `spanner glissandoLine(` lines the corpus holds: each gains a trailing `start:` naming the note it is
+        /// drawn from, and nothing else on the line moves. With that field stripped from the new digest the two
+        /// files are identical byte for byte (`diff -q` on the normalized copy), so no engraving moved.
+        ///
+        /// **Re-recorded once more where the two met.** Measured against the glissando branch's own digest, the
+        /// merged one differs on exactly the 11 `el clef(` lines the restatement change owns and on nothing else
+        /// — so the merge is the union of the two, with neither change moving what the other draws.
         private static let expectedDigestSHA256 =
-            "c19936084d83afa7e6ab4192fa1daa869ef0573fc51835d11cd64543352082e0"
+            "17b1272434414fc05fc42f4c283aac0472e7e7b7f03262cb7ad50a70074189b9"
 
         @Test("write digest")
         func writeDigest() throws {

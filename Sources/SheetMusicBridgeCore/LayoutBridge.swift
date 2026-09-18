@@ -807,7 +807,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 out.append(.stroke(width: thickness * ptToMM))
             }
 
-        case let .glissandoLine(fromOrigin, toOrigin, wavy, text):
+        case let .glissandoLine(fromOrigin, toOrigin, wavy, text, _):
             encodeGlissandoLine(
                 fromX: mox + Double(fromOrigin.x),
                 fromY: moy + Double(fromOrigin.y),

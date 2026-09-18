@@ -163,7 +163,7 @@ public enum ScoreTextIDWire {
 
 /// Wire projection of the element identity. Case order is persistent; append new cases at the end.
 /// Anchored, bar-addressed, and staff-owned list cases carry their own payload.
-/// New choices: 9 = tie (start/end), 10 = slur, 11 = jump, 12 = marker.
+/// New choices: 9 = tie (start/end), 10 = slur, 11 = jump, 12 = marker, 13 = glissando (start note, tag 1).
 /// Navigation tags are 1 = staff, 2 = measureIndex, 3 = list index; existing payloads are unchanged.
 /// Signature tags (5 = keySignature, 6 = timeSignature) are 1 = measureIndex, 2 = staff. Before the selected
 /// glyph's staff joined the identity, both cases carried a bare measure index; the bytes are a host↔bridge
@@ -184,6 +184,7 @@ public enum ScoreElementIDWire {
     case slur(SlurIDWire)
     case jump(staff: StaffAddressWire, measureIndex: Int32, index: Int32)
     case marker(staff: StaffAddressWire, measureIndex: Int32, index: Int32)
+    case glissando(start: NoteIDWire)
 
     public init(from value: ScoreElementID) {
         switch value {
@@ -208,6 +209,7 @@ public enum ScoreElementIDWire {
             self = .jump(staff: StaffAddressWire(from: staff), measureIndex: Int32(measureIndex), index: Int32(index))
         case let .marker(staff, measureIndex, index):
             self = .marker(staff: StaffAddressWire(from: staff), measureIndex: Int32(measureIndex), index: Int32(index))
+        case let .glissando(start): self = .glissando(start: NoteIDWire(from: start))
         }
     }
 
@@ -232,6 +234,7 @@ public enum ScoreElementIDWire {
             return .jump(staff: staff.decoded(), measureIndex: Int(measureIndex), index: Int(index))
         case let .marker(staff, measureIndex, index):
             return .marker(staff: staff.decoded(), measureIndex: Int(measureIndex), index: Int(index))
+        case let .glissando(start): return .glissando(start: start.decoded())
         }
     }
 }

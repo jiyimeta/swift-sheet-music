@@ -113,6 +113,28 @@ public struct LayoutMeasure: Sendable, Equatable {
         self.dynamicExtents = dynamicExtents
     }
 
+    /// Everything this measure DRAWS, visible ink first: `elements`, then `invisibleElements`.
+    ///
+    /// What the hit test walks, and what a "where is this drawn" lookup scans. A hidden element is still ON THE
+    /// PAGE whenever the host engraves with `ScoreViewOptions.showsInvisibleElements` on — greyed, but there to
+    /// be read — and something a reader can see has to be something a reader can click. Hiding a lyric or a
+    /// staff text otherwise made it unselectable, leaving undo as the only way back (user report, 2026-09-18).
+    ///
+    /// **Nothing new becomes clickable in print-like rendering.** `invisibleElements` is filled only when that
+    /// option is on: with it off, placement drops a hidden element instead of parking it. So this IS `elements`
+    /// there, sharing its storage rather than copying it.
+    ///
+    /// **Visible ink first is the priority rule.** Every rung takes its first match in this order, so a visible
+    /// element still wins a point an invisible one also claims.
+    ///
+    /// `markers` and `jumps` stay out. They are separate containers with their own place in the
+    /// engraved-element rung's order (`ScoreHitTester.hitElement`), and folding them in here would move that
+    /// order. Internal for the same reason: a renderer must keep the two apart to grey one of them, so the
+    /// merged list answers a question only selection asks.
+    var drawnElements: [LayoutElement] {
+        invisibleElements.isEmpty ? elements : elements + invisibleElements
+    }
+
     /// Whether `other` would draw identically to this measure's per-measure
     /// `CALayer` container content once translated to its own `origin.x`.
     ///

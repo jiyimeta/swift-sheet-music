@@ -141,14 +141,16 @@ own substantive logic.
 | `RemoveSlur(_:)` — removes one chord/rest slur by slur-only ordinal (hidden entries included), or one standalone voice slot; does not remove sibling slurs | Backspace / forward Delete on a selected slur | sugar over `ReplaceVoiceElement` / `ReplaceVoiceElements` |
 | `RemoveJump(staff:measureIndex:index:)` — removes one entry from that staff's jumps list; other staves' duplicate copies remain | Backspace / forward Delete on a selected jump | staff-scoped read–replace–write sugar |
 | `RemoveMarker(staff:measureIndex:index:)` — removes one entry from that staff's markers list; other staves' duplicate copies remain | Backspace / forward Delete on a selected marker | staff-scoped read–replace–write sugar |
-| `ScoreElementID.removalCommand` — resolves only tie, slur, jump and marker identities; returns nil for the previous twelve visual kinds, including legacy `.spanner` identities | selected-element Delete dispatch | factory, not an `EditCommand` |
+| `ScoreElementID.removalCommand` — resolves tie, slur, jump, marker and glissando identities (a glissando resolves to `SetGlissando(at: start, glissando: nil)`, the command that also edits it); returns nil for the previous twelve visual kinds, including legacy `.spanner` identities | selected-element Delete dispatch | factory, not an `EditCommand` |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
 command).
 
 The four individual removal commands have no `EditIntent` or edit-command
-wire cases yet. The current Android/Web editing paths do not select engraved
+wire cases yet. A glissando is the exception the resolver already crosses:
+its removal is `SetGlissando`, which relays as `.setGlissando(at:glissando:)`
+like any other glissando edit. The current Android/Web editing paths do not select engraved
 elements: `LayoutDocument+Editing.swift` drops their hit targets and the
 wasm `EditEntry+Geometry.swift` DTO drops `.element`. Identity wire support
 does not make those hosts selectable. The Core commands and resolver are

@@ -7,7 +7,50 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-09-18
+
 ### Changed
+
+- **Breaking: a restated clef or key signature names the bar it is drawn in, so an edit through it starts there.**
+  The clef and key a continuation system redraws at its head declare nothing, and they used to carry the identity of
+  the declaration they redraw. That made the glyph clickable at the cost of the wrong edit: changing the clef on
+  system four rewrote the declaration back in bar 0, so every earlier system changed with it, and one identity was
+  shared by every restatement, so selecting one tinted them all. Both now name the bar at their own system's head —
+  MuseScore's rule (`EditClef::undoChangeClef` takes its `moveClef` path for a system-head clef; `KeySig::drop` adds
+  a key change at the clicked glyph's tick). A host turns a click on a restated clef into
+  `SetClef(before:)` at voice 0's first chord or rest of that bar, and a click on a restated key signature into
+  `SetKeySignature(measureIndex:)` on it, which adds a declaration where the bar had none; `RemoveKeySignature`
+  there plans to nothing, as it does on any bar that declares no key.
+
+  `ClefAnchor` gains `case restatement(staff: StaffAddress, measureIndex: Int)` — **breaking for exhaustive
+  switches**, and a new wire choice index 2 (`ClefAnchorWire`; 0 and 1 are unchanged). It resolves to the clef in
+  force at the head of that bar, which is `Score.clefInForce(at:)` at element 0. The first system's synthesized
+  opening clef still carries `.staffDefault`, the identity `SetStaffDefaultClef` addresses, and an explicit clef
+  still carries `.explicit`. `LayoutElement.keySignature`'s `identity` names the bar the glyph is drawn in; the one
+  glyph that still names another bar is the end-of-system courtesy announcement, which names the bar it announces.
+  A system-head key redraw on an unpitched staff now carries no identity, matching its explicit declarations.
+  `LayoutEngine.declaringClefAnchor` / `declaringKeySignatureMeasure` are gone with the rule they served, and
+  `ScoreHitTester.clefHitRects(for:)` answers with one rectangle per anchor rather than one per system.
+- **Breaking: a glissando line is a selectable item.** Hit testing could not report a glissando at all: the layout
+  drew the line with no identity, so `ScoreHitTester` skipped it, the renderer had nothing to tint, and a host had
+  no way to open a properties popover on a line the user had clicked. `ScoreElementID.glissando(start:)` and
+  `ScoreHitTarget.glissando(start:)` name it by the note it is stored on — `Note.glissando` on that note IS the
+  glissando, and its end is implicit (the next chord) — so `SetGlissando(at: start, glissando:)` edits every
+  property through a read–modify–write and `ScoreElementID.removalCommand` answers `SetGlissando(at: start,
+  glissando: nil)`. No glissando property is new.
+
+  The line takes a click within 0.7 sp of the ink it is drawn with, measured in the line's own rotated frame — the
+  centerline for a straight stroke (the tie and slur reach), the wiggle glyphs' ink for a wavy one — plus the
+  label's ink where a label is drawn, and never its bounding box, which for a slanted line covers the empty
+  triangles beside it. A notehead still wins every click it claims: engraved elements are the last rung of the
+  ladder, and the line stops 0.8 sp short of each head. `elementHitRects(for:)` answers one rectangle per drawn
+  half, so a host anchors a popover to the half that was hit; the CALayer renderer registers every stroke, wiggle
+  glyph and label under the identity, so a selected glissando tints whole.
+
+  Breaking: `LayoutElement.glissandoLine` gains a trailing `start: NoteID?` (defaulted, so construction sites
+  compile unchanged; a positional pattern over the case needs one more `_`), and the new `ScoreElementID` /
+  `ScoreHitTarget` cases break exhaustive switches in hosts. Both halves of a line split across a system break
+  carry the same `start`. `ScoreElementIDWire` appends choice 13; every existing tag is unchanged.
 
 - **Breaking: a key or time signature identity names the staff of the glyph that was selected.**
   `ScoreElementID.keySignature` / `.timeSignature` and `ScoreHitTarget.keySignature` / `.timeSignature` are now
@@ -63,6 +106,10 @@ and this project adheres to
   `Instrument.trackName` instead.
 
 ### Added
+
+- **`MidiRenderer.xFromYBezier(_:easeIn:easeOut:)` is public.** A host editing a glissando's `easeIn` / `easeOut`
+  can now draw the timing curve from the same function the portamento pitch-bend ramp rides, instead of from a
+  lookalike of its own.
 
 - **A host can edit the title block in place: `LayoutDocument.creditTextLines`, `creditTextLine(at:tolerance:)` and
   `creditTextLine(for:)`.** Each `CreditTextLine` names the `ScoreInfoWrite.Field` it is, its text and size, the

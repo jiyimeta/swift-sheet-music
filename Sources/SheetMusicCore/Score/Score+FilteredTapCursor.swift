@@ -52,6 +52,8 @@ extension Score {
                 return .item(.element(.jump(staff: full, measureIndex: measureIndex, index: index)))
             case let .marker(_, measureIndex, index):
                 return .item(.element(.marker(staff: full, measureIndex: measureIndex, index: index)))
+            case let .glissando(start):
+                return .item(.element(.glissando(start: start.withStaff(full))))
             case let .keySignature(measureIndex, _):
                 return .item(.element(.keySignature(measureIndex: measureIndex, staff: full)))
             case let .timeSignature(measureIndex, _):
@@ -134,7 +136,8 @@ extension Score {
     /// A barline identity also passes through: its approximate staff is not a field to remap.
     /// Key and time signature, jump and marker identities instead name a staff and follow the existing staff
     /// remap and hidden-owner fallback. A list index is not a voice slot; tick lookup uses voice 0 / slot 0.
-    /// A tie's two endpoints are re-stamped separately, before the start-only staff guard below.
+    /// A tie's two endpoints are re-stamped separately, before the start-only staff guard below; a glissando names
+    /// one note and re-stamps with the rest.
     public func translateCursorForHiddenStaves(
         _ cursor: ScoreCursor?, hiddenStaves hidden: Set<StaffAddress>,
     ) -> ScoreCursor? {
@@ -168,38 +171,46 @@ extension Score {
         case let .text(textID):
             return .item(.text(textID.withStaff(filteredStaff)))
         case let .element(elementID):
-            switch elementID {
-            case let .dynamic(anchor): return .item(.element(.dynamic(anchor: anchor.withStaff(filteredStaff))))
-            case let .fermata(anchor): return .item(.element(.fermata(anchor: anchor.withStaff(filteredStaff))))
-            case let .breath(anchor): return .item(.element(.breath(anchor: anchor.withStaff(filteredStaff))))
-            case let .tempo(anchor): return .item(.element(.tempo(anchor: anchor.withStaff(filteredStaff))))
-            case let .spanner(anchor, kind):
-                return .item(.element(.spanner(anchor: anchor.withStaff(filteredStaff), kind: kind)))
-            case let .articulation(anchor, kind):
-                return .item(.element(.articulation(anchor: anchor.withStaff(filteredStaff), kind: kind)))
-            case .tie:
-                // Both endpoints were handled before the start-only staff equality guard.
-                return cursor
-            case let .slur(.chord(anchor, ordinal)):
-                return .item(.element(.slur(.chord(anchor: anchor.withStaff(filteredStaff), ordinal: ordinal))))
-            case let .slur(.voice(anchor)):
-                return .item(.element(.slur(.voice(anchor.withStaff(filteredStaff)))))
-            case let .jump(_, measureIndex, index):
-                return .item(.element(.jump(staff: filteredStaff, measureIndex: measureIndex, index: index)))
-            case let .marker(_, measureIndex, index):
-                return .item(.element(.marker(staff: filteredStaff, measureIndex: measureIndex, index: index)))
-            case let .keySignature(measureIndex, _):
-                return .item(.element(.keySignature(measureIndex: measureIndex, staff: filteredStaff)))
-            case let .timeSignature(measureIndex, _):
-                return .item(.element(.timeSignature(measureIndex: measureIndex, staff: filteredStaff)))
-            case .barLine:
-                // A barline's bar address has no staff field to re-stamp; this is not a deferred remapping.
-                return cursor
-            }
+            return Self.elementCursor(elementID, onStaff: filteredStaff) ?? cursor
         case let .clef(anchor):
             return .item(.clef(anchor.withStaff(filteredStaff)))
         case let .graceNote(graceID):
             return .item(.graceNote(graceID.withParent(graceID.parent.withStaff(filteredStaff))))
+        }
+    }
+}
+
+extension Score {
+    /// An element identity re-stamped onto `staff`, for a staff that is visible but renumbered.
+    ///
+    /// `nil` for the two identities with no staff field to move: a barline, whose address is a bar, and a tie,
+    /// whose two endpoints were re-stamped separately before the caller's start-only staff guard. The caller keeps
+    /// its cursor for both.
+    fileprivate static func elementCursor(_ id: ScoreElementID, onStaff staff: StaffAddress) -> ScoreCursor? {
+        switch id {
+        case let .dynamic(anchor): return .item(.element(.dynamic(anchor: anchor.withStaff(staff))))
+        case let .fermata(anchor): return .item(.element(.fermata(anchor: anchor.withStaff(staff))))
+        case let .breath(anchor): return .item(.element(.breath(anchor: anchor.withStaff(staff))))
+        case let .tempo(anchor): return .item(.element(.tempo(anchor: anchor.withStaff(staff))))
+        case let .spanner(anchor, kind):
+            return .item(.element(.spanner(anchor: anchor.withStaff(staff), kind: kind)))
+        case let .articulation(anchor, kind):
+            return .item(.element(.articulation(anchor: anchor.withStaff(staff), kind: kind)))
+        case let .slur(.chord(anchor, ordinal)):
+            return .item(.element(.slur(.chord(anchor: anchor.withStaff(staff), ordinal: ordinal))))
+        case let .slur(.voice(anchor)):
+            return .item(.element(.slur(.voice(anchor.withStaff(staff)))))
+        case let .jump(_, measureIndex, index):
+            return .item(.element(.jump(staff: staff, measureIndex: measureIndex, index: index)))
+        case let .marker(_, measureIndex, index):
+            return .item(.element(.marker(staff: staff, measureIndex: measureIndex, index: index)))
+        case let .glissando(start):
+            return .item(.element(.glissando(start: start.withStaff(staff))))
+        case let .keySignature(measureIndex, _):
+            return .item(.element(.keySignature(measureIndex: measureIndex, staff: staff)))
+        case let .timeSignature(measureIndex, _):
+            return .item(.element(.timeSignature(measureIndex: measureIndex, staff: staff)))
+        case .tie, .barLine: return nil
         }
     }
 }
@@ -229,6 +240,7 @@ extension ClefAnchor {
         switch self {
         case let .explicit(anchor): .explicit(anchor.withStaff(staff))
         case .staffDefault: .staffDefault(staff)
+        case let .restatement(_, measureIndex): .restatement(staff: staff, measureIndex: measureIndex)
         }
     }
 }
