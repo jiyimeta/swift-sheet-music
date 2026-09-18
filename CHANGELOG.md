@@ -7,8 +7,6 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [4.0.0] - 2026-09-18
-
 ### Changed
 
 - **Breaking: a restated clef or key signature names the bar it is drawn in, so an edit through it starts there.**
