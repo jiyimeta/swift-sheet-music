@@ -85,6 +85,43 @@ Scripts/preflight.sh --apple    # Apple / SwiftPM only (fast)
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design rationale behind
 these conventions.
 
+## Versioning and API compatibility
+
+Releases follow [Semantic Versioning](https://semver.org/), but **a major
+version is a milestone we choose, not an automatic consequence of a break.**
+`2.0.0` was the release that made a score live in the browser — a virtualized
+viewer, editing, playback and audio export — and `3.0.0` was the one that gave
+every score element a stable identifier. Both carried breaks, but neither was
+numbered for them. The default is to not break at all: reach for a compatible
+shape first, and save the major for a release that earns the number on its own.
+
+- **Adding to a function, initializer or property?** Add the new spelling and
+  leave the old one forwarding to it under
+  `@available(*, deprecated, renamed: "…")`. A defaulted trailing parameter is
+  usually enough, and it keeps every construction site compiling.
+- **Changing what an enum case carries?** Append a new case, mark the old one
+  deprecated, and keep decoding it. Never re-purpose an existing case.
+- **Wire formats are append-only.** A choice index, once shipped, means what it
+  meant. Give the new shape the next free index and keep the old tag readable —
+  `ScoreElementIDWire` grew choice 13 for a glissando this way. `1.15.0` is the
+  cautionary tale in the other direction: it appended `LayoutOptionsWire`'s
+  `showsLyrics` with no declared default, and although the wire stayed readable,
+  the generated Kotlin constructor gained a required ninth parameter and every
+  Kotlin host stopped compiling against a release meant to be compatible.
+- **Deprecated API is removed at the next major**, not before, and the
+  CHANGELOG entry that deprecates something says which release will drop it.
+- Mark a genuinely breaking commit with `!` in its type (`feat(selection)!:`)
+  and lead its CHANGELOG entry with **Breaking:**, so the next release can be
+  numbered by reading the log.
+
+One break has no compatible shape: **adding a case to a public `enum` breaks a
+client's exhaustive `switch`,** and the escape hatch for that — letting clients
+write `@unknown default` — requires library evolution, which this package
+cannot enable. A consumer resolving it by version is refused any target
+carrying `.unsafeFlags`, and `-enable-library-evolution` has no other spelling
+in a SwiftPM manifest. So a new case on a public enum is a major, and the way
+to keep majors rare is to batch such additions rather than ship one alone.
+
 ## Licensing of contributions
 
 - Code you contribute under `Sources/` is MIT-licensed.
