@@ -47,6 +47,12 @@ public struct ScoreHitTester: Sendable {
     /// First match wins, down a fixed priority ladder. The ladder is documented once, on `ScoreHitTarget` —
     /// duplicating the order here is how the previous copy went stale (it still read
     /// "notehead → rest → beam → flag → stem" two rungs after tuplet and clef were added).
+    ///
+    /// Every rung searches what the measure DRAWS (`LayoutMeasure.drawnElements`), so an element hidden with `V`
+    /// stays selectable for as long as it is on the page — greyed — under
+    /// `ScoreViewOptions.showsInvisibleElements`. With that option off it is not laid out at all, so nothing new
+    /// becomes clickable in print-like rendering. Visible ink is searched first, so it still wins a contested
+    /// point.
     public func hitTest(at point: CGPoint) -> ScoreHitTarget? {
         let sp = document.metrics.sp
         for system in document.systems {
@@ -169,7 +175,7 @@ public struct ScoreHitTester: Sendable {
         let bracketTolerance = sp * 0.6
         let labelHalfHeight = sp * 1.2
         let labelHalfWidth = sp * 1.0
-        for el in measure.elements {
+        for el in measure.drawnElements {
             guard case let .tupletLabel(from, to, _, _, _, tid) = el,
                   let tupletID = tid
             else { continue }
@@ -209,6 +215,11 @@ public struct ScoreHitTester: Sendable {
     /// reach and when strictly nearer than every ordinary head that also claims the point. `ScoreHitTarget`'s ladder
     /// doc has the reason. A measure without graces never enters the grace branch, so its answer is the first match
     /// exactly as before graces could be hit at all.
+    ///
+    /// This is the one rung where visible-first does not settle everything: the grace override is decided by
+    /// DISTANCE, so a drawn-but-hidden grace head nearer the point than a visible ordinary head wins it — the
+    /// same rule that already decides between two visible heads, applied to ink the reader can equally see. At
+    /// an exactly equal distance the ordinary head keeps the point, the comparison being strict.
     private func hitNote(
         measure: LayoutMeasure,
         base: CGPoint, point: CGPoint, sp: CGFloat,
@@ -223,7 +234,7 @@ public struct ScoreHitTester: Sendable {
             let dy = point.y - (base.y + note.origin.y)
             return dx * dx + dy * dy
         }
-        for el in measure.elements {
+        for el in measure.drawnElements {
             switch el {
             case let .chord(notes, _, stem, _, _, _, _, _, _, _, _):
                 for n in notes {
@@ -256,7 +267,7 @@ public struct ScoreHitTester: Sendable {
     ) -> ScoreHitTarget? {
         let halfWidth = sp * 1.8
         let halfHeight = sp * 2.5
-        for el in measure.elements {
+        for el in measure.drawnElements {
             guard case let .rest(_, origin, _, rid, _) = el
             else { continue }
             let ax = base.x + origin.x
@@ -277,7 +288,7 @@ public struct ScoreHitTester: Sendable {
         base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
         let threshold = sp * 0.7
-        for el in measure.elements {
+        for el in measure.drawnElements {
             guard case let .beam(from, to, direction, level, _) = el
             else { continue }
             // Secondary beams (level >= 2) are drawn offset from the
@@ -334,7 +345,7 @@ public struct ScoreHitTester: Sendable {
         let span = toX - fromX
 
         var result: [NoteID] = []
-        for el in measure.elements {
+        for el in measure.drawnElements {
             guard case let .chord(
                 notes, _, _, stemOrigin, _, _, isBeamed, _, _, _, _,
             ) = el,
@@ -362,7 +373,7 @@ public struct ScoreHitTester: Sendable {
         measure: LayoutMeasure,
         base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
-        for el in measure.elements {
+        for el in measure.drawnElements {
             guard case let .chord(
                 notes, dur, stem, _, _, _, isBeamed, _, _, _, _,
             ) = el,
@@ -412,7 +423,7 @@ public struct ScoreHitTester: Sendable {
     ) -> ScoreHitTarget? {
         let halfWidth = sp * 0.5
         let stemXOffset = sp * 0.59
-        for el in measure.elements {
+        for el in measure.drawnElements {
             guard case let .chord(
                 notes, _, stem, stemOrigin, _, _, isBeamed, _, _, _, _,
             ) = el,
@@ -467,7 +478,7 @@ public struct ScoreHitTester: Sendable {
         // pointer had to be placed on exactly.
         let halfWidth = sp * (1.0 + Self.elementHitTolerance)
         let halfHeight = sp * (2.5 + Self.elementHitTolerance)
-        for el in measure.elements {
+        for el in measure.drawnElements {
             guard case let .clef(rawType, origin, anchor) = el,
                   let anchor
             else { continue }

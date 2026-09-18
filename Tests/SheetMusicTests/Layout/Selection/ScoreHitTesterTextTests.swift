@@ -35,6 +35,15 @@
             )
         }
 
+        @available(macOS 15.0, *)
+        private func layout(_ score: Score, showsInvisibleElements: Bool) -> LayoutDocument {
+            LayoutEngine.layout(
+                score: score,
+                options: ScoreViewOptions(showsInvisibleElements: showsInvisibleElements),
+                availableWidth: 600,
+            )
+        }
+
         // MARK: - Lyrics
 
         @Test("A point on an engraved syllable reports the lyric, its chord and its verse")
@@ -344,6 +353,100 @@
                 tester.hitTest(at: CGPoint(x: origin.x + 2, y: origin.y - 2))
                     == .rehearsalMark(measureIndex: 0),
             )
+        }
+
+        // MARK: - Hidden text stays clickable for as long as it is drawn
+
+        /// Document-space origin of the hidden text `id`, read out of the measure's INVISIBLE container.
+        ///
+        /// The probe point has to come from the document rather than from the box the hit tester measures (this
+        /// suite's header says why), and the `LayoutDocument` origin accessors the visible cases use scan
+        /// `elements` only — deliberately, since where a CARET opens is a different question from what a click
+        /// selects. So this takes the element's own origin from the container the engine parked it in.
+        @available(macOS 15.0, *)
+        private static func hiddenTextOrigin(
+            of id: ScoreTextID, in document: LayoutDocument,
+        ) -> CGPoint? {
+            for system in document.systems {
+                for measure in system.measures {
+                    for element in measure.invisibleElements where element.textID == id {
+                        let local: CGPoint
+                        switch element {
+                        case let .textMark(_, _, origin): local = origin
+                        case let .staffText(_, origin, _, _, _, _, _): local = origin
+                        default: continue
+                        }
+                        return CGPoint(
+                            x: system.origin.x + measure.origin.x + local.x,
+                            y: system.origin.y + measure.origin.y + local.y,
+                        )
+                    }
+                }
+            }
+            return nil
+        }
+
+        /// The reported bug (2026-09-18): hiding a syllable made it unclickable, so nothing but undo could show
+        /// it again — while the host was drawing it, greyed, the whole time.
+        @Test("A hidden lyric answers a click, and anchors a popover, while it is drawn")
+        func hiddenLyricIsHitWhileDrawn() throws {
+            guard #available(macOS 15.0, *) else { return }
+            var score = EditingFixtures.twoConsecutiveC4Chords()
+            _ = try SetLyric(at: Self.anchor, verse: 0, text: "glo").apply(to: &score)
+            _ = try SetTextVisible(.lyric(anchor: Self.anchor, verse: 0), visible: false).apply(to: &score)
+
+            let shown = layout(score, showsInvisibleElements: true)
+            let origin = try #require(
+                Self.hiddenTextOrigin(of: .lyric(anchor: Self.anchor, verse: 0), in: shown),
+                "a hidden syllable is laid out into `invisibleElements` with the toggle on",
+            )
+            // The visible case's probe: a syllable is drawn centred on its origin.
+            let probe = CGPoint(x: origin.x + 2, y: origin.y - 2)
+            let target = ScoreHitTarget.lyric(anchor: Self.anchor, verse: 0)
+            let tester = ScoreHitTester(document: shown)
+
+            #expect(tester.hitTest(at: probe) == target)
+            // A selectable text with no popover anchor is half a selection. Checked by round trip rather than
+            // by containing `probe`, which sits inside the CLICK box and so may sit outside the ink one.
+            let rect = try #require(tester.textHitRect(for: target))
+            #expect(tester.hitTest(at: CGPoint(x: rect.midX, y: rect.midY)) == target)
+
+            // Toggle off: the syllable is not laid out at all, so nothing there is clickable.
+            let dropped = ScoreHitTester(document: layout(score, showsInvisibleElements: false))
+            #expect(dropped.hitTest(at: probe) == nil)
+            #expect(dropped.textHitRect(for: target) == nil)
+        }
+
+        @Test("A hidden staff text answers a click, and anchors a popover, while it is drawn")
+        func hiddenStaffTextIsHitWhileDrawn() throws {
+            guard #available(macOS 15.0, *) else { return }
+            var score = EditingFixtures.twoConsecutiveC4Chords()
+            _ = try SetStaffText(
+                anchor: Self.anchor, text: "solo", isSystemText: false,
+            ).apply(to: &score)
+            _ = try SetTextVisible(
+                .staffText(anchor: Self.anchor, style: .staffText), visible: false,
+            ).apply(to: &score)
+
+            let shown = layout(score, showsInvisibleElements: true)
+            let origin = try #require(
+                Self.hiddenTextOrigin(
+                    of: .staffText(anchor: Self.anchor, style: .staffText), in: shown,
+                ),
+                "a hidden staff text is laid out into `invisibleElements` with the toggle on",
+            )
+            // The visible case's probe: staff text is drawn `.bottomLeading`.
+            let probe = CGPoint(x: origin.x + 2, y: origin.y - 2)
+            let target = ScoreHitTarget.staffText(anchor: Self.anchor, style: .staffText)
+            let tester = ScoreHitTester(document: shown)
+
+            #expect(tester.hitTest(at: probe) == target)
+            let rect = try #require(tester.textHitRect(for: target))
+            #expect(tester.hitTest(at: CGPoint(x: rect.midX, y: rect.midY)) == target)
+
+            let dropped = ScoreHitTester(document: layout(score, showsInvisibleElements: false))
+            #expect(dropped.hitTest(at: probe) == nil)
+            #expect(dropped.textHitRect(for: target) == nil)
         }
 
         // MARK: - The editing selection ladder must ignore all of it

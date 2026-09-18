@@ -38,7 +38,8 @@ extension ScoreHitTester {
     /// sharing their declaration's anchor, because the answer is a
     /// scan of the document rather than a promise about it.
     ///
-    /// Empty when no layout element matches the anchor.
+    /// Answers for a hidden clef while it is drawn, matching the rung that can now select one
+    /// (`LayoutMeasure.drawnElements`). Empty when no layout element matches the anchor.
     public func clefHitRects(for anchor: ClefAnchor) -> [CGRect] {
         let sp = document.metrics.sp
         var result: [CGRect] = []
@@ -48,7 +49,7 @@ extension ScoreHitTester {
                     x: system.origin.x + measure.origin.x,
                     y: system.origin.y + measure.origin.y,
                 )
-                for el in measure.elements {
+                for el in measure.drawnElements {
                     guard case let .clef(rawType, origin, elAnchor) = el,
                           elAnchor == anchor
                     else { continue }

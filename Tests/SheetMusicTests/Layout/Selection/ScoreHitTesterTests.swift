@@ -96,6 +96,52 @@
             #expect(id == .rest(hit.id))
         }
 
+        /// A hidden CHORD is parked in `LayoutMeasure.invisibleElements` whole, so it left every early rung of
+        /// the hit test — unlike a single hidden NOTEHEAD, which stays inside its chord in `elements` and was
+        /// always clickable. Hiding it therefore removed the only way to select it and show it again.
+        @Test("A hidden chord's notehead is clickable while it is drawn, and gone when it is not")
+        func hiddenChordIsHitWhileDrawn() throws {
+            guard #available(macOS 15.0, *) else { return }
+            var score = sample()
+            _ = try SetElementVisible(
+                at: VoiceElementID(
+                    staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                    measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+                ),
+                visible: false,
+            ).apply(to: &score)
+
+            let shown = LayoutEngine.layout(
+                score: score,
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 600,
+            )
+            var head: (point: CGPoint, id: NoteID)?
+            for system in shown.systems {
+                for measure in system.measures {
+                    for element in measure.invisibleElements {
+                        guard case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = element,
+                              let note = notes.first
+                        else { continue }
+                        head = (CGPoint(
+                            x: system.origin.x + measure.origin.x + note.origin.x,
+                            y: system.origin.y + measure.origin.y + note.origin.y,
+                        ), note.noteID)
+                    }
+                }
+            }
+            let hit = try #require(head, "a hidden chord is laid out into `invisibleElements` with the toggle on")
+            #expect(ScoreHitTester(document: shown).itemID(at: hit.point) == .note(hit.id))
+
+            // Toggle off: the chord is not laid out at all, so nothing there is clickable.
+            let dropped = LayoutEngine.layout(
+                score: score,
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 600,
+            )
+            #expect(ScoreHitTester(document: dropped).hitTest(at: hit.point) == nil)
+        }
+
         @Test("Tap on empty space returns nil")
         func missesEmptySpace() {
             guard #available(macOS 15.0, *) else { return }

@@ -25,6 +25,14 @@ import SheetMusicCore
 /// sits 1.5 sp from its parent, close enough that the parent head's 1.2 sp reach covers the grace head's inner edge,
 /// so first match alone would hand those clicks to the chord beside it.
 ///
+/// **Hidden ink is on the ladder too.** Every rung searches what its measure DRAWS — `elements` first, then the
+/// `invisibleElements` the engine parks beside them when `ScoreViewOptions.showsInvisibleElements` is on
+/// (`LayoutMeasure.drawnElements`) — so an element hidden with `V` answers a click exactly like a visible one for
+/// as long as the reader can see it greyed. Otherwise hiding a thing removed the only way to select it and show
+/// it again. With that option off nothing is parked, so nothing new is clickable. Visible ink comes first within
+/// each rung and still wins a contested point; the one rung where that is not the whole rule is the notehead's
+/// grace override, which compares distances (see `ScoreHitTester.hitNote`).
+///
 /// This is the one place that order is written down; `hitTest`'s own doc points here, because the copy it
 /// used to carry went stale. Each rung earns its position: beam precedes stem so a click on the beam bar
 /// resolves to `.beam` rather than the stem endpoint beneath it, and flag precedes stem so the flag curve
