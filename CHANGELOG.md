@@ -7,9 +7,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-09-19
+
+The set of things a click can name grew — a glissando line, a grace note, each
+restated clef and key signature, and each staff's own copy of a key or time
+signature. Per CONTRIBUTING's versioning section the selection identity types
+(`ScoreItemID`, `ScoreElementID`, `ScoreHitTarget`, `ClefAnchor`) are
+non-exhaustive by contract, so growing them is a minor. A host that switches
+exhaustively over one of them — deliberately, because it wants the compiler to
+stop at every site — has arms to add; the entries below say where and what the
+reference host answered. A host that would rather be told than stopped can
+carry `@unknown default`.
+
 ### Changed
 
-- **Breaking: a restated clef or key signature names the bar it is drawn in, so an edit through it starts there.**
+- **Selection identity: a restated clef or key signature names the bar it is drawn in, so an edit through it starts there.**
   The clef and key a continuation system redraws at its head declare nothing, and they used to carry the identity of
   the declaration they redraw. That made the glyph clickable at the cost of the wrong edit: changing the clef on
   system four rewrote the declaration back in bar 0, so every earlier system changed with it, and one identity was
@@ -29,7 +41,7 @@ and this project adheres to
   A system-head key redraw on an unpitched staff now carries no identity, matching its explicit declarations.
   `LayoutEngine.declaringClefAnchor` / `declaringKeySignatureMeasure` are gone with the rule they served, and
   `ScoreHitTester.clefHitRects(for:)` answers with one rectangle per anchor rather than one per system.
-- **Breaking: a glissando line is a selectable item.** Hit testing could not report a glissando at all: the layout
+- **Selection identity: a glissando line is a selectable item.** Hit testing could not report a glissando at all: the layout
   drew the line with no identity, so `ScoreHitTester` skipped it, the renderer had nothing to tint, and a host had
   no way to open a properties popover on a line the user had clicked. `ScoreElementID.glissando(start:)` and
   `ScoreHitTarget.glissando(start:)` name it by the note it is stored on — `Note.glissando` on that note IS the
@@ -45,12 +57,13 @@ and this project adheres to
   half, so a host anchors a popover to the half that was hit; the CALayer renderer registers every stroke, wiggle
   glyph and label under the identity, so a selected glissando tints whole.
 
-  Breaking: `LayoutElement.glissandoLine` gains a trailing `start: NoteID?` (defaulted, so construction sites
-  compile unchanged; a positional pattern over the case needs one more `_`), and the new `ScoreElementID` /
-  `ScoreHitTarget` cases break exhaustive switches in hosts. Both halves of a line split across a system break
-  carry the same `start`. `ScoreElementIDWire` appends choice 13; every existing tag is unchanged.
+  Host churn, within the non-exhaustive contract: `LayoutElement.glissandoLine` gains a trailing `start: NoteID?`
+  (defaulted, so construction sites compile unchanged; a positional pattern over the case needs one more `_`), and
+  the new `ScoreElementID` / `ScoreHitTarget` cases each need an arm in an exhaustive switch. Both halves of a line
+  split across a system break carry the same `start`. `ScoreElementIDWire` appends choice 13; every existing tag is
+  unchanged.
 
-- **Breaking: a key or time signature identity names the staff of the glyph that was selected.**
+- **Selection identity: a key or time signature identity names the staff of the glyph that was selected.**
   `ScoreElementID.keySignature` / `.timeSignature` and `ScoreHitTarget.keySignature` / `.timeSignature` are now
   `(measureIndex:staff:)`, and `LayoutElement.keySignature` / `.timeSignature` carry an `identity: ScoreElementID?`
   in place of `measureIndex: Int?`. One bar draws a signature on every staff, and every one of those glyphs used to
@@ -131,7 +144,7 @@ and this project adheres to
   Hosts can render an edited score away from the main actor, then swap it into an existing backend-backed engine
   without rebuilding its SoundFont, metronome, audio graph, or user mixer state when the channel layout is unchanged.
 
-- **Breaking: a grace note is a selectable item.** Nothing could name one before — a grace chord is not a voice
+- **Selection identity: a grace note is a selectable item.** Nothing could name one before — a grace chord is not a voice
   element, so no `NoteID` reaches it — which left a click on a grace head selecting the chord beside it and the arrow
   keys walking straight past it. New:
   - `GraceNoteID` (`parent: VoiceElementID`, `side: .before / .after`, `graceIndex`, `noteIndexInGraceChord`), with

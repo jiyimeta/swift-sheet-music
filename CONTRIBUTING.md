@@ -100,7 +100,8 @@ shape first, and save the major for a release that earns the number on its own.
   `@available(*, deprecated, renamed: "…")`. A defaulted trailing parameter is
   usually enough, and it keeps every construction site compiling.
 - **Changing what an enum case carries?** Append a new case, mark the old one
-  deprecated, and keep decoding it. Never re-purpose an existing case.
+  deprecated, and keep decoding it. Never re-purpose an existing case. The
+  selection identity types are the one documented exception — see below.
 - **Wire formats are append-only.** A choice index, once shipped, means what it
   meant. Give the new shape the next free index and keep the old tag readable —
   `ScoreElementIDWire` grew choice 13 for a glissando this way. `1.15.0` is the
@@ -114,13 +115,40 @@ shape first, and save the major for a release that earns the number on its own.
   and lead its CHANGELOG entry with **Breaking:**, so the next release can be
   numbered by reading the log.
 
-One break has no compatible shape: **adding a case to a public `enum` breaks a
-client's exhaustive `switch`,** and the escape hatch for that — letting clients
-write `@unknown default` — requires library evolution, which this package
-cannot enable. A consumer resolving it by version is refused any target
-carrying `.unsafeFlags`, and `-enable-library-evolution` has no other spelling
-in a SwiftPM manifest. So a new case on a public enum is a major, and the way
-to keep majors rare is to batch such additions rather than ship one alone.
+### The selection and layout types are non-exhaustive by contract
+
+`ScoreItemID`, `ScoreElementID`, `ScoreHitTarget` and `ClefAnchor` name the
+things a user can click, and `LayoutElement` names the things the engine draws.
+Those sets grow whenever the engine learns to engrave or select something new,
+and **growing one — a new case, or a new member on an existing case's payload —
+is a MINOR release, not a major.**
+
+This is a contract rather than something the compiler enforces, because the
+package has no way to enforce it. Marking an enum non-frozen, so that clients
+are *required* to write `@unknown default`, needs library evolution, and a
+package resolved by version is refused any target carrying `.unsafeFlags`,
+which is the only spelling `-enable-library-evolution` has in a SwiftPM
+manifest. So the obligation moves to the client, and it is this:
+
+- **Treat these four as non-frozen.** A `switch` over one of them may carry
+  `@unknown default`, which is legal Swift against any enum and needs nothing
+  from us: it demotes the "switch must be exhaustive" error to a warning that
+  names the case you have not handled, so a new kind arrives as a diagnostic
+  instead of a broken build.
+- **Switch exhaustively anyway where the answer has to be decided, not
+  defaulted** — and accept the compile error when the set grows. That error is
+  worth having. When `ScoreElementID` gained `.glissando`, the errors it raised
+  in the reference host are what forced six deliberate answers: which palette
+  section to offer (none), which command removes it, that cut and copy decline
+  because a glissando's end is implicit, how a hidden-staff re-stamp rebuilds
+  it, that a double-click opens no caret, and that the properties panel shows
+  nothing. A `@unknown default` would have skipped all six in silence.
+- Pattern matches bind a case's whole payload, so a payload that gains a member
+  breaks them however they are spelled. That churn is part of the same
+  contract.
+
+What stays major for these types: removing or renaming a case, or changing what
+an existing one means.
 
 ## Licensing of contributions
 
