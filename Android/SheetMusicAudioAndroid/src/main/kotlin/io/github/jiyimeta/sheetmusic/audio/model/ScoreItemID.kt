@@ -8,4 +8,5 @@ sealed class ScoreItemID {
     data class Clef(val arg0: ClefAnchor) : ScoreItemID()
     data class Text(val arg0: ScoreTextID) : ScoreItemID()
     data class Element(val arg0: ScoreElementID) : ScoreItemID()
+    data class GraceNote(val arg0: GraceNoteID) : ScoreItemID()
 }

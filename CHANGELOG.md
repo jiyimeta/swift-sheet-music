@@ -61,7 +61,10 @@ and this project adheres to
   reads it. The filtered-score re-addressing (`engineCursorForFilteredTap`, `translateCursorForHiddenStaves`,
   `ScoreEditingAddressMap`) re-stamps a signature's staff like any other staff-owned identity, and a barline is now
   the only element that passes through with no staff. `ScoreElementIDWire` choices 5 and 6 carry
-  `(measureIndex, staff)` in place of a bare index; the bytes are a host↔bridge transport nothing persists.
+  `(measureIndex, staff)` in place of a bare index; the bytes are a host↔bridge transport nothing persists. The
+  Android Kotlin mirrors follow: `ScoreElementID.KeySignature` / `.TimeSignature` take `(measureIndex, staff)`, and
+  `ScoreItemID.GraceNote` and `GraceNoteID` are new beside the grace-note selection above — a generated codec
+  references those hand-written classes by name, so a Kotlin host that spells either one itself needs the same edit.
 
 - **Line- and page-break badges are drawn as outlines.** `BreakIndicatorOverlay` (Apple) and the Compose
   `BreakIndicatorOverlay` drew a solid colored plate with a white glyph, and a page break used the filled `doc.fill`
