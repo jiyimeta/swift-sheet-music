@@ -7,6 +7,63 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-09-20
+
+### Added
+
+- **`[Measure].anacrusisOffsets()`** — how far into a notional full bar each measure's content starts, which is 0
+  for every ordinary bar and the shortfall for a pickup. MuseScore's `Measure::anacrusisOffset()`
+  (`engraving/dom/measure.cpp`). Anything that reads a beat position out of a tick needs it; swing is the first
+  caller, and the bug below is what it was written for.
+- **`SwingUnit` is `Codable`**, so a host can persist a chosen unit. The raw values are the case names rather than
+  the MSCX tokens — `mscxString` owns that spelling, and a preference file has no business being tied to
+  MuseScore's.
+
+### Fixed
+
+- **Swing read its grid from the score's tick 0, so a pickup inverted every pair.** `startTick % swingBeat ==
+  unitTicks` is the whole of the up-beat test, so everything turns on where the ticks are counted from. A 1/8
+  pickup is 240 ticks and an eighth pair is 480, so every bar line after the pickup sat at `tick % 480 == 240` —
+  exactly the up-beat test — and the two halves of every pair swapped roles for the rest of the piece. Down-beats
+  played short, up-beats long. A sixteenth pair is 240 ticks, which the same shift leaves alone, so the report
+  arrived as "eighth swing is backwards, sixteenth swing is fine" and read as a bug in the unit rather than in
+  the grid the unit is measured on.
+
+  Both walks now measure from the bar and add the pickup's shortfall, the way
+  `chord->rtick() + chord->measure()->anacrusisOffset()` does: `MidiRenderer+Voice` renders the note-ons and
+  `SwingOnsetShifts` tells the playback cursor how far each onset moved, and a cursor reading a different grid
+  from the notes it follows steps against them.
+
+- **A pickup bar emitted a whole bar's worth of beat stops.** `PlaybackTimeline`'s beat loop counted
+  `ts.numerator` steps off each bar's start, which is the bar's length only when the bar is as long as its meter
+  says. A 1/8 pickup in 12/8 produced twelve beats spanning 2880 ticks, eleven of which sat inside the bars that
+  follow while still labelled as measure 0; the cursor snapped back to the pickup on every one and jumped forward
+  again on the next real item. Bounded by the bar's own `effectiveMeasureDurations` entry instead.
+
+  `MetronomeBeat.metronomeBeats(score:)` has always had this bound and `CountInBeats` has its own
+  `anacrusisShim`; those are the three places in this layer that derive a bar's beats from its meter, and this
+  was the one that skipped the check.
+
+- **A lyric's spacing ran to the next NOTE rather than to the next syllable.** `lyricsPairWidth` asked the
+  immediate neighbour's gap for `curWidth / 2 + inter + nextWidth / 2` whatever was written under it, so a long
+  word under one note in the middle of an otherwise plain run tore a wide hole beside it; MuseScore leaves the
+  run evenly spaced and lets the text spill over its neighbours, because a lyric only has to clear another lyric.
+  And the walk stopped at the first REST and reported "no lyric follows", so the syllable before a rest bought
+  the same room against nothing.
+
+  The constraint now runs to the next chord that actually carries a syllable and is divided by the tick gaps in
+  between. Adjacent syllables are unchanged, which is the common case and why the layout golden corpus comes out
+  byte-identical.
+
+### Changed
+
+- **Playback runs to the end of the score, empty bars and all** (`renderForPlayback`), matching MuseScore. It
+  stopped at the barline of the last bar holding sound, on the grounds that a new score is padded out with empty
+  bars long before it is filled in. `PlaybackTimeline` has always walked to the notated end, so the seek bar
+  showed a length the transport refused to play; the two now agree on any score whose bars hold what their meter
+  says. EXPORT is unchanged: `render(score:)` still ends one tick after the final note-off, which is what
+  MuseScore's own file does.
+
 ## [3.4.1] - 2026-09-19
 
 ### Fixed

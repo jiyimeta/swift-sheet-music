@@ -202,8 +202,16 @@
         /// **Re-recorded once more where the two met.** Measured against the glissando branch's own digest, the
         /// merged one differs on exactly the 11 `el clef(` lines the restatement change owns and on nothing else
         /// — so the merge is the union of the two, with neither change moving what the other draws.
+        ///
+        /// **Re-recorded 2026-09-20 for the macOS-polish-9 branch, after reading the diff** — a worktree at the
+        /// merge base wrote its own `layout-golden.txt` and the two were compared line by line. Twelve lines
+        /// differ, all of them `el staffText(` gaining the `identity:` field that `bbe69797` added for swing. Every
+        /// origin, every property and every anchor is byte-identical, so nothing engraved moved. The branch's other
+        /// layout work (beams not crossing a tuplet boundary, the blank score's credits, the courtesy-signature
+        /// cursor frame) is absent from this diff because no committed fixture exercises it — the same reason the
+        /// lyric-spacing change came out byte-identical.
         private static let expectedDigestSHA256 =
-            "17b1272434414fc05fc42f4c283aac0472e7e7b7f03262cb7ad50a70074189b9"
+            "acda1d109248d464a71acf7fcde7828d994430b5c75150028925625b0b4b8963"
 
         @Test("write digest")
         func writeDigest() throws {
