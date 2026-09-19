@@ -24,14 +24,19 @@ extension MidiRenderer {
             let swingMap = staffIndex < swingMaps.count ? swingMaps[staffIndex] : SwingMap.empty
             let measures = entry.staff.measures
             let measureDurations = measures.effectiveMeasureDurations()
+            let anacrusisOffsets = measures.anacrusisOffsets()
             var measureBase = 0
             for (measureIndex, measure) in measures.enumerated() {
                 let measureDuration = measureIndex < measureDurations.count
                     ? measureDurations[measureIndex]
                     : Fraction(numerator: 4, denominator: 4)
+                let swingGridBase = (measureIndex < anacrusisOffsets.count
+                    ? anacrusisOffsets[measureIndex].ticks(division: division)
+                    : 0) - measureBase
                 for (voiceIndex, voice) in measure.voices.enumerated() {
                     for (elementIndex, shift) in voiceShifts(
                         in: voice, measureBase: measureBase, measureDuration: measureDuration,
+                        swingGridBase: swingGridBase,
                         division: division, swingMap: swingMap,
                     ) {
                         shifts[.note(NoteID(
@@ -53,11 +58,16 @@ extension MidiRenderer {
 
     /// One voice's swung chords, as `(elementIndex, onsetShift)`. Mirrors `renderVoiceElement`'s
     /// own walk: the running tick advances by each chord's NOMINAL duration — including a rest's,
-    /// which takes no adjustment of its own — so the swing grid stays aligned to the bar.
+    /// which takes no adjustment of its own.
+    ///
+    /// **`swingGridBase` has to match the renderer's exactly.** The two walks compute the same
+    /// answer for two different consumers — the audio and the cursor — and a cursor reading a
+    /// different grid from the notes it follows is worse than one that ignores swing entirely.
     private static func voiceShifts(
         in voice: Voice,
         measureBase: Int,
         measureDuration: Fraction,
+        swingGridBase: Int,
         division: Int,
         swingMap: SwingMap,
     ) -> [(Int, Int)] {
@@ -77,7 +87,8 @@ extension MidiRenderer {
                     .resolved(in: measureDuration)
                     .ticks(division: division)
                 let adjust = swingAdjustment(
-                    startTick: localTick,
+                    // Bar-relative, plus a pickup's shortfall — the renderer's own frame.
+                    startTick: localTick + swingGridBase,
                     chordTicks: chordTicks,
                     prevChordTicks: previousChordTicks(
                         in: voice.elements.values, before: elementIndex,

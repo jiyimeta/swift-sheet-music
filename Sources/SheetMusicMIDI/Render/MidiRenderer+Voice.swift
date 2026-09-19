@@ -21,6 +21,9 @@ extension MidiRenderer {
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
     ) throws -> (events: [TimedMidiEvent], endTick: Int, lyricAnchors: [LyricMidiCodec.Anchor]) {
         let measureDurations = staff.measures.effectiveMeasureDurations()
+        // Swing reads a beat position out of a tick, so its grid has to be measured from the BAR rather than from
+        // the score's tick 0 — see `anacrusisOffsets()` for the pickup that made this a bug rather than a nicety.
+        let anacrusisOffsets = staff.measures.anacrusisOffsets()
         var events: [TimedMidiEvent] = []
         // Every non-rest chord's onset tick + its lyrics, in playback
         // order (repeats re-state lyrics on each take). Encoded into SMF
@@ -196,6 +199,11 @@ extension MidiRenderer {
             let measureDuration = entry.measureIndex < measureDurations.count
                 ? measureDurations[entry.measureIndex]
                 : Fraction(numerator: 4, denominator: 4)
+            // What to ADD to a running `localTick` to get the tick the swing grid should read: back to the bar's
+            // own zero, then forward by however much of a notional full bar a pickup is missing.
+            let swingGridBase = (entry.measureIndex < anacrusisOffsets.count
+                ? anacrusisOffsets[entry.measureIndex].ticks(division: division)
+                : 0) - entry.tickOffset
             // Indices of `.chord` elements consumed by a preceding
             // two-note tremolo. The voice walker still advances
             // `localTick` past them so subsequent elements land
@@ -269,6 +277,7 @@ extension MidiRenderer {
                     velocity: &velocity,
                     currentTempoBps: &currentTempoBps,
                     swingMap: swingMap,
+                    swingGridBase: swingGridBase,
                     voiceIndex: voiceIndex,
                     channel: channel,
                     instrument: part.instrument,
@@ -316,6 +325,9 @@ extension MidiRenderer {
         velocity: inout Int,
         currentTempoBps: inout Double,
         swingMap: SwingMap,
+        // What to ADD to `localTick` to get the tick the swing grid reads: the bar's own zero, shifted forward by
+        // a pickup's shortfall. See `[Measure].anacrusisOffsets()`.
+        swingGridBase: Int,
         voiceIndex: Int,
         channel: Int,
         instrument: Instrument,
@@ -391,13 +403,22 @@ extension MidiRenderer {
             )
             // Apply swing: shift the onset and adjust the played
             // duration per the active swing state. `localTick` itself
-            // continues to advance by the chord's nominal duration so
-            // the swing grid stays aligned to the bar.
+            // continues to advance by the chord's NOMINAL duration, so
+            // a swung onset never drags the notes after it — the shift
+            // is applied to the event, not accumulated.
+            //
+            // `localTick` is the unrolled playback tick, counted from
+            // the score's own zero. It is what the swing STATE is
+            // looked up with (the map is keyed that way), but not what
+            // the grid is read with — see `swingGridBase`.
             let chordTicks = chord.duration
                 .resolved(in: measureDuration)
                 .ticks(division: division)
             let adjust = swingAdjustment(
-                startTick: localTick,
+                // Measured from the BAR, not from the score's tick 0: a pickup shifts every later bar line off the
+                // pair grid, and the two halves of every swung pair then swap roles. MuseScore reads
+                // `chord->rtick() + measure->anacrusisOffset()` here for the same reason (`dom/swing.cpp`).
+                startTick: localTick + swingGridBase,
                 chordTicks: chordTicks,
                 prevChordTicks: previousChordTicks(
                     in: voiceElements,

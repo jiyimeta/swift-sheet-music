@@ -34,6 +34,64 @@ extension [Measure] {
         }
         return result
     }
+
+    /// How far into a notional FULL bar each measure's content starts —
+    /// 0 for every ordinary measure, and the shortfall for a pickup.
+    ///
+    /// MuseScore's `Measure::anacrusisOffset()`
+    /// (`engraving/dom/measure.cpp`): `isAnacrusis() ? timesig() -
+    /// ticks() : 0`, where `isAnacrusis()` is an irregular measure
+    /// shorter than its own time signature. A measure carrying an
+    /// explicit `actualLength` IS the irregular one in this model, so
+    /// that is the test here.
+    ///
+    /// **What it is for.** Anything that reads a beat position out of a
+    /// tick — swing's `startTick % swingBeat` above all — has to measure
+    /// from the BAR, not from the start of the score, or a pickup
+    /// shifts the grid for every bar that follows it. Adding this
+    /// offset puts a pickup's own content at the end of the notional
+    /// bar, which is where it is heard: the single eighth of a 1/8
+    /// pickup in 4/4 lands on the last eighth, an up-beat.
+    ///
+    /// (Origin 2026-09-20: eighth swing played backwards — down-beats
+    /// short, up-beats long — on every score with a pickup, because the
+    /// renderer measured the swing grid from the score's tick 0. A 1/8
+    /// pickup puts every later bar line at `tick % 480 == 240`, which
+    /// is exactly the test for an up-beat, so the two halves of every
+    /// pair swapped roles. Sixteenth swing was untouched, its pair
+    /// being 240 ticks, which is what made the report read as a
+    /// unit-specific bug.)
+    public func anacrusisOffsets() -> [Fraction] {
+        var prevailing = Fraction(numerator: 4, denominator: 4)
+        var result: [Fraction] = []
+        result.reserveCapacity(count)
+        for measure in self {
+            outer: for voice in measure.voices {
+                for el in voice.elements {
+                    if case let .timeSignature(ts) = el {
+                        prevailing = Fraction(
+                            numerator: ts.numerator,
+                            denominator: ts.denominator,
+                        )
+                        break outer
+                    }
+                }
+            }
+            guard let actual = measure.actualLength else {
+                result.append(Fraction(numerator: 0, denominator: 1))
+                continue
+            }
+            // `Fraction` keeps its denominator positive, so the sign lives in the numerator — and it is not
+            // `Comparable`, which is why this reads the numerator rather than writing `shortfall > 0`.
+            let shortfall = prevailing - actual
+            result.append(
+                shortfall.numerator > 0
+                    ? shortfall
+                    : Fraction(numerator: 0, denominator: 1),
+            )
+        }
+        return result
+    }
 }
 
 extension Score {
