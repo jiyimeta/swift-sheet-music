@@ -185,6 +185,8 @@ public enum ScoreElementIDWire {
     case jump(staff: StaffAddressWire, measureIndex: Int32, index: Int32)
     case marker(staff: StaffAddressWire, measureIndex: Int32, index: Int32)
     case glissando(start: NoteIDWire)
+    /// Appended for swing directives. Never renumber anything above it.
+    case swing(anchor: VoiceElementIDWire)
 
     public init(from value: ScoreElementID) {
         switch value {
@@ -210,6 +212,7 @@ public enum ScoreElementIDWire {
         case let .marker(staff, measureIndex, index):
             self = .marker(staff: StaffAddressWire(from: staff), measureIndex: Int32(measureIndex), index: Int32(index))
         case let .glissando(start): self = .glissando(start: NoteIDWire(from: start))
+        case let .swing(anchor): self = .swing(anchor: VoiceElementIDWire(from: anchor))
         }
     }
 
@@ -235,6 +238,7 @@ public enum ScoreElementIDWire {
         case let .marker(staff, measureIndex, index):
             return .marker(staff: staff.decoded(), measureIndex: Int(measureIndex), index: Int(index))
         case let .glissando(start): return .glissando(start: start.decoded())
+        case let .swing(anchor): return .swing(anchor: anchor.decoded())
         }
     }
 }

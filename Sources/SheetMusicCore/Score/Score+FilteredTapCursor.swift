@@ -37,6 +37,7 @@ extension Score {
             case let .fermata(anchor): return .item(.element(.fermata(anchor: anchor.withStaff(full))))
             case let .breath(anchor): return .item(.element(.breath(anchor: anchor.withStaff(full))))
             case let .tempo(anchor): return .item(.element(.tempo(anchor: anchor.withStaff(full))))
+            case let .swing(anchor): return .item(.element(.swing(anchor: anchor.withStaff(full))))
             case let .spanner(anchor, kind):
                 return .item(.element(.spanner(anchor: anchor.withStaff(full), kind: kind)))
             case let .articulation(anchor, kind):
@@ -192,6 +193,7 @@ extension Score {
         case let .fermata(anchor): return .item(.element(.fermata(anchor: anchor.withStaff(staff))))
         case let .breath(anchor): return .item(.element(.breath(anchor: anchor.withStaff(staff))))
         case let .tempo(anchor): return .item(.element(.tempo(anchor: anchor.withStaff(staff))))
+        case let .swing(anchor): return .item(.element(.swing(anchor: anchor.withStaff(staff))))
         case let .spanner(anchor, kind):
             return .item(.element(.spanner(anchor: anchor.withStaff(staff), kind: kind)))
         case let .articulation(anchor, kind):

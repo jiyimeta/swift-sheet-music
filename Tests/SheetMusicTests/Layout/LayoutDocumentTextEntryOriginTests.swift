@@ -138,7 +138,7 @@ struct LayoutDocumentTextEntryOriginTests {
     ) throws -> CGPoint {
         let (system, measure) = try firstMeasure(in: document)
         let local = try #require(measure.elements.compactMap { element -> CGPoint? in
-            guard case let .staffText(candidate, origin, _, candidateStyle, _, _, _) = element,
+            guard case let .staffText(candidate, origin, _, candidateStyle, _, _, _, _) = element,
                   candidate == text,
                   candidateStyle == style
             else { return nil }

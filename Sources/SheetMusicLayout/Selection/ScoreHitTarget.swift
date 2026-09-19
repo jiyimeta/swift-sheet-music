@@ -132,6 +132,12 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// engraved element, reported only after every notehead has declined the point: the line stops 0.8 sp from each
     /// notehead's center, inside the head's 1.2 sp reach, so a click at either end still selects the note.
     case glissando(start: NoteID)
+    /// A swing directive, addressed by `SetSwing(anchor:settings:)`; see `ScoreElementID.swing`. It prints as
+    /// staff text and shares that layout case, so it is separated from an ordinary staff text by the identity the
+    /// layout hangs on it rather than by its style: a staff text carries a text `anchor` and no element identity,
+    /// a swing marking the reverse. That is also what keeps a caret from opening on one — a swing is edited
+    /// through its popover, and no text-entry command addresses it.
+    case swing(anchor: VoiceElementID)
 }
 
 extension ScoreHitTarget {
@@ -168,7 +174,7 @@ extension ScoreHitTarget {
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote:
             return nil
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando:
+             .tie, .slur, .jump, .marker, .glissando, .swing:
             return nil
         }
     }
@@ -192,7 +198,7 @@ extension ScoreHitTarget {
         case .lyric, .staffText, .harmony, .rehearsalMark:
             return textID.map(ScoreItemID.text)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando:
+             .tie, .slur, .jump, .marker, .glissando, .swing:
             return elementID.map(ScoreItemID.element)
         }
     }
@@ -225,6 +231,7 @@ extension ScoreHitTarget {
         case let .marker(staff, measureIndex, index):
             self = .marker(staff: staff, measureIndex: measureIndex, index: index)
         case let .glissando(start): self = .glissando(start: start)
+        case let .swing(anchor): self = .swing(anchor: anchor)
         }
     }
 
@@ -256,6 +263,7 @@ extension ScoreHitTarget {
         case let .marker(staff, measureIndex, index):
             return .marker(staff: staff, measureIndex: measureIndex, index: index)
         case let .glissando(start): return .glissando(start: start)
+        case let .swing(anchor): return .swing(anchor: anchor)
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
              .lyric, .staffText, .harmony, .rehearsalMark:
             return nil

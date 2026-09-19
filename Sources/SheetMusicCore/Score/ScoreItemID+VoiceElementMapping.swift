@@ -43,6 +43,7 @@ extension ScoreItemID {
             case let .fermata(anchor): return transform(anchor).map { .element(.fermata(anchor: $0)) }
             case let .breath(anchor): return transform(anchor).map { .element(.breath(anchor: $0)) }
             case let .tempo(anchor): return transform(anchor).map { .element(.tempo(anchor: $0)) }
+            case let .swing(anchor): return transform(anchor).map { .element(.swing(anchor: $0)) }
             case let .spanner(anchor, kind):
                 return transform(anchor).map { .element(.spanner(anchor: $0, kind: kind)) }
             case let .articulation(anchor, kind):

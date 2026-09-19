@@ -14,6 +14,11 @@ enum ElementHitCommandChecks {
         case .tie, .slur, .jump, .marker, .glissando:
             Issue.record("Use remove(_:from:) with the real layout's score for selection-3 identities")
             return
+        case let .swing(anchor):
+            command = SetSwing(
+                anchor: anchor,
+                settings: SetSwing.Settings(text: "Swing", unit: .eighth, ratio: 60),
+            )
         case let .dynamic(anchor):
             command = SetDynamic(at: anchor, subtype: "ff")
         case let .fermata(anchor):

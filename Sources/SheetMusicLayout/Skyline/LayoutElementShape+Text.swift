@@ -180,7 +180,7 @@ extension LayoutElementShape {
                 markKind: markKind, text: text, origin: origin,
                 kind: kind, metrics: metrics,
             )]
-        case let .staffText(text, origin, _, style, _, _, properties):
+        case let .staffText(text, origin, _, style, _, _, properties, _):
             return [textRect(
                 text: text, font: TextInkGeometry.font(for: style, overrides: properties, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,

@@ -123,6 +123,7 @@ import Wirelet
 /// 87 = setDotsInRange(SetDotsInRangeIntentWire), see EditIntentPayloads+Range.swift
 /// 88 = transposeScore(TransposeScoreIntentWire), see EditIntentPayloads+Range.swift
 /// 89 = setTempoFont(SetTempoFontIntentWire), see EditIntentPayloads+TextFont.swift
+/// 90 = setSwing(SetSwingIntentWire), see EditIntentPayloads+Marks.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -1133,6 +1134,8 @@ public enum EditIntentWire {
     case transposeScore(TransposeScoreIntentWire)
     /// Appended for the text font and color inspector — index 89. Never renumber anything above it.
     case setTempoFont(SetTempoFontIntentWire)
+    /// Appended for swing directives — index 90. Never renumber anything above it.
+    case setSwing(SetSwingIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1335,6 +1338,8 @@ public enum EditIntentWire {
             ))
         case let .setTempoFont(anchor, patch):
             self = .setTempoFont(SetTempoFontIntentWire(anchor: anchor, patch: patch))
+        case let .setSwing(anchor, settings, isSystemText):
+            self = .setSwing(SetSwingIntentWire(anchor: anchor, settings: settings, isSystemText: isSystemText))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         case let .setElementColor(target, color):
@@ -1617,6 +1622,11 @@ public enum EditIntentWire {
         case let .setTempoFont(wire):
             let decoded = try wire.decoded()
             return .setTempoFont(anchor: decoded.anchor, patch: decoded.patch)
+        case let .setSwing(wire):
+            let decoded = wire.decoded()
+            return .setSwing(
+                anchor: decoded.anchor, settings: decoded.settings, isSystemText: decoded.isSystemText,
+            )
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)

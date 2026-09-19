@@ -373,7 +373,7 @@
                         let local: CGPoint
                         switch element {
                         case let .textMark(_, _, origin): local = origin
-                        case let .staffText(_, origin, _, _, _, _, _): local = origin
+                        case let .staffText(_, origin, _, _, _, _, _, _): local = origin
                         default: continue
                         }
                         return CGPoint(

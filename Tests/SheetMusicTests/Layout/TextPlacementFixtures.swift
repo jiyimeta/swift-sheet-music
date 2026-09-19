@@ -54,7 +54,7 @@ enum TextPlacementFixtures {
 
     static func origin(_ element: LayoutElement) -> CGPoint {
         switch element {
-        case let .textMark(_, _, point), let .staffText(_, point, _, _, _, _, _),
+        case let .textMark(_, _, point), let .staffText(_, point, _, _, _, _, _, _),
              let .rehearsalMark(_, point, _, _, _, _, _): point
         case let .harmony(harmony): CGPoint(x: harmony.anchorX, y: harmony.y)
         case let .lyricHyphen(point, _, _), let .lyricsMelisma(point, _, _): point

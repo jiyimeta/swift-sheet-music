@@ -2074,7 +2074,19 @@ extension LayoutEngine {
                     // layout case only because it prints as staff text. No text-entry command addresses it, and
                     // an anchor here would let a caret opened on a staff text at the same beat resolve to the
                     // swing marking instead.
+                    //
+                    // It carries an `identity` instead, which is what makes it SELECTABLE: a click resolves to
+                    // the mark, and the host opens its editor. The two channels are deliberately exclusive —
+                    // see `LayoutElement.staffText`.
                     anchor: nil,
+                    identity: systemLaneAnchor(
+                        atTick: tick,
+                        in: measure,
+                        staff: staffAddress,
+                        measureIndex: measureIndex,
+                        measureDuration: measureDuration,
+                        division: division,
+                    ).map { ScoreElementID.swing(anchor: $0) },
                 )
                 if s.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .instrumentChange(ic):

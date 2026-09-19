@@ -170,7 +170,7 @@ extension LayoutEngine {
                 toOrigin: shift(to),
                 placement: placement,
             )
-        case let .staffText(text, p, color, style, anchor, placement, properties):
+        case let .staffText(text, p, color, style, anchor, placement, properties, identity):
             // Emitted by `placeMeasureElements` in staff-local coords
             // (relative to a virtual staff with top at sp * 2), so the
             // per-staff `dy` must be applied for the text to land above
@@ -184,6 +184,7 @@ extension LayoutEngine {
                 anchor: anchor,
                 placement: placement,
                 properties: properties,
+                identity: identity,
             )
         case let .rehearsalMark(text, p, frame, color, measureIndex, placement, properties):
             // Same staff-local origin convention as `.staffText`;
@@ -270,10 +271,11 @@ extension LayoutEngine {
             CGPoint(x: p.x + dx, y: p.y)
         }
         switch element {
-        case let .staffText(text, p, color, style, anchor, placement, properties):
+        case let .staffText(text, p, color, style, anchor, placement, properties, identity):
             return .staffText(
                 text: text, origin: shift(p),
                 color: color, style: style, anchor: anchor, placement: placement, properties: properties,
+                identity: identity,
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))

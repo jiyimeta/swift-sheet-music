@@ -387,7 +387,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .staffText(text, p, color, style, _, _, properties):
+        case let .staffText(text, p, color, style, _, _, properties, _):
             StaffTextRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p),

@@ -10,6 +10,10 @@ extension LayoutElement {
         case let .tieArc(_, _, _, identity): return identity
         case let .glissandoLine(_, _, _, _, start): return start.map { .glissando(start: $0) }
         case let .marker(_, _, _, identity), let .jump(_, _, identity): return identity
+        // A swing marking, which prints as staff text and says which element it is here rather than through the
+        // text `anchor` beside it — see `LayoutElement.staffText`. An ordinary staff text carries no identity and
+        // falls through to `nil`, so the element rung declines it and the text rung answers for it.
+        case let .staffText(_, _, _, _, _, _, _, identity): return identity
         case let .keySignature(_, _, _, _, _, identity), let .timeSignature(_, _, _, _, identity):
             return identity
         case let .barLine(_, _, _, measureIndex, role):

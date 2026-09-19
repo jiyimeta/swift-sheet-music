@@ -287,7 +287,7 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
-        case let .staffText(text, p, color, style, _, _, properties):
+        case let .staffText(text, p, color, style, _, _, properties, _):
             // Author-supplied staff/system text. Color, font and offset
             // (already baked into `p` by placement) come from the
             // source `.mscx`. Bottom-leading anchor at `p` matches

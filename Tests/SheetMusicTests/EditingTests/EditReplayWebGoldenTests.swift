@@ -262,7 +262,7 @@
                  .setPalmMute, .setLetRing, .removeSpanner,
                  .setChordSymbol, .setLyricSyllables, .setTextVisible, .setElementColor, .setElementPlacement,
                  .setTextFont, .setLyricVerse, .setNoteSmall, .setNotePlay, .setTextOffset, .setTextAutoplace,
-                 .setScoreInfo, .setTempoFont:
+                 .setScoreInfo, .setTempoFont, .setSwing:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }

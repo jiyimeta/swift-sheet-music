@@ -218,6 +218,11 @@ public enum LayoutElement: Sendable, Equatable {
     /// consumer resolves it against `style` through `TextInkGeometry.font(for:overrides:metrics:)`, so what
     /// layout measures is what the renderers draw. Empty for swing and instrument-change text, which no command
     /// writes a font to.
+    /// `identity` is the ELEMENT this text is, for the texts that are an element rather than editable text — a
+    /// `<Swing>` marking, today's only one. It is the other half of the `anchor` rule above: a staff text carries
+    /// an anchor and no identity, a swing marking an identity and no anchor, so a click resolves to exactly one
+    /// of "the text you can type into" and "the mark you can open an editor on". `nil` for everything else, and
+    /// defaulted so the twenty-odd emission sites that have neither concern say nothing about it.
     case staffText(
         text: String,
         origin: CGPoint,
@@ -226,6 +231,7 @@ public enum LayoutElement: Sendable, Equatable {
         anchor: VoiceElementID?,
         placement: TextPlacementMetadata? = nil,
         properties: TextProperties = TextProperties(),
+        identity: ScoreElementID? = nil,
     )
     /// Pre-typeset chord symbol with a baked-in run list (text +
     /// SMuFL accidental glyphs) and total width. The placement

@@ -28,6 +28,15 @@ extension ScoreEditSession {
             let trimmed = text?.trimmingWhitespaceAndNewlines()
             let current = SetStaffText.current(at: anchor, isSystemText: isSystemText, in: score)
             return current == trimmed ? nil : SetStaffText(anchor: anchor, text: text, isSystemText: isSystemText)
+        case let .setSwing(anchor, settings, isSystemText):
+            // Compared on the trimmed label, like the staff text above: an empty one is the command's own refusal
+            // to raise, not something to compare away.
+            var trimmed = settings
+            trimmed?.text = settings?.text.trimmingWhitespaceAndNewlines() ?? ""
+            let current = SetSwing.current(at: anchor, isSystemText: isSystemText, in: score)
+            return current == trimmed
+                ? nil
+                : SetSwing(anchor: anchor, settings: settings, isSystemText: isSystemText)
         case let .setDynamic(location, subtype):
             let current = SetDynamic.current(at: location, in: score)?.subtype
             return current == subtype ? nil : SetDynamic(at: location, subtype: subtype)

@@ -104,7 +104,7 @@ extension LayoutDocument {
         style: TextStyleType,
     ) -> CGPoint? {
         firstOrigin(inMeasure: anchor.measureIndex) { element in
-            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _, _) = element,
+            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _, _, _) = element,
                   candidateAnchor == anchor,
                   candidateStyle == style
             else { return nil }
@@ -154,7 +154,7 @@ extension LayoutDocument {
         if let exact = staffTextOrigin(at: anchor, style: style) { return exact }
         guard let wanted = SystemLaneSlot.position(of: anchor, in: score) else { return nil }
         return firstOrigin(inMeasure: anchor.measureIndex) { element in
-            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _, _) = element,
+            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _, _, _) = element,
                   candidateStyle == style,
                   let candidateAnchor,
                   candidateAnchor.measureIndex == anchor.measureIndex,

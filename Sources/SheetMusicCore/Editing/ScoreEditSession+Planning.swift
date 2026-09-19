@@ -139,8 +139,8 @@ extension ScoreEditSession {
         case .transposeRange, .addIntervalToSelection, .deleteRange, .setAccidentalsInRange, .setDurationInRange,
              .respellRange, .duplicateRange, .pasteRange, .setDotsInRange, .transposeScore:
             return rangeCommand(for: intent, in: score, ids: ids, payloadReader: payloadReader)
-        case .setClef, .removeClef, .setTempo, .setStaffText, .setDynamic, .setFermata, .setBreath, .setJumps,
-             .setMarkers, .setChordSymbol, .setLyricSyllables:
+        case .setClef, .removeClef, .setTempo, .setStaffText, .setSwing, .setDynamic, .setFermata, .setBreath,
+             .setJumps, .setMarkers, .setChordSymbol, .setLyricSyllables:
             return markCommand(for: intent, in: score)
         case .setArticulation, .setGraceNotes, .setTremolo, .setArpeggio, .setGlissando, .setDots, .setChordLine,
              .setNoteParentheses, .setNoteSmall, .setNotePlay:

@@ -82,7 +82,7 @@ public enum TextInkGeometry {
                 origin: origin,
                 anchor: CGPoint(x: 0.5, y: 0.5),
             ).map { [$0] } ?? []
-        case let .staffText(text, origin, _, style, _, _, properties):
+        case let .staffText(text, origin, _, style, _, _, properties, _):
             return rect(
                 text: text,
                 font: font(for: style, overrides: properties, metrics: metrics),

@@ -25,7 +25,7 @@ extension LayoutElement {
         case let .textMark(.lyrics(_, verse, anchor, _, _), _, _):
             guard let anchor else { return nil }
             return .lyric(anchor: anchor, verse: verse)
-        case let .staffText(_, _, _, style, anchor, _, _):
+        case let .staffText(_, _, _, style, anchor, _, _, _):
             guard let anchor, style == .staffText || style == .systemText else { return nil }
             return .staffText(anchor: anchor, style: style)
         case let .harmony(harmony):

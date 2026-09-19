@@ -515,4 +515,12 @@ public enum EditIntent: Sendable, Equatable {
     /// address `.setTempo` and `ScoreElementID.tempo` use, which is why this is not a fifth `ScoreTextID`. An
     /// unchanged patch plans to nothing; a beat with no tempo is refused as `.targetNotFound`. See `SetTempoFont`.
     case setTempoFont(anchor: VoiceElementID, patch: SetTextFont.Patch)
+
+    // Appended for swing directives — index 90.
+
+    /// Write `settings` as the swing directive at the beat of the chord or rest at `anchor`, or remove the one
+    /// there with `nil`. "Straight" is this intent with `unit: .off`, not a second intent — see `SetSwing`.
+    /// Trimmed engine-side; empty after trimming is refused as `.emptyStaffText`. Resolves to nothing to apply
+    /// when the beat already reads exactly this way.
+    case setSwing(anchor: VoiceElementID, settings: SetSwing.Settings?, isSystemText: Bool)
 }

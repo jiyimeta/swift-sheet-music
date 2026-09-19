@@ -569,7 +569,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .staffText(text, origin, color, style, _, _, properties):
+        case let .staffText(text, origin, color, style, _, _, properties, _):
             let argb = color.flatMap(LayoutBridge.argb(from:))
             if let argb { out.append(.setColor(argb: argb)) }
             emitRoleText(

@@ -78,11 +78,20 @@ public enum ScoreElementID: Hashable, Sendable {
     /// removes it. Both drawn halves of a line split across a system break name this one identity.
     case glissando(start: NoteID)
 
+    /// The swing directive at the beat of the chord or rest at `anchor` — `SetSwing`'s own address, and a
+    /// separate identity from the staff text that shares its layout case: a swing marking prints as staff text
+    /// but is a `SystemElement` of its own, edited through a popover rather than typed into.
+    ///
+    /// `isSystemText` is deliberately NOT part of the identity. A beat carries at most one swing directive in
+    /// practice, the two kinds are told apart by the command rather than by the selection, and putting the flag
+    /// here would make "the swing here" two different selections depending on how it was written.
+    case swing(anchor: VoiceElementID)
+
     /// The voice-element owner anchor, or `nil` for bar and staff-owned navigation lists.
     public var anchor: VoiceElementID? {
         switch self {
         case let .dynamic(anchor), let .fermata(anchor), let .breath(anchor), let .tempo(anchor),
-             let .spanner(anchor, _), let .articulation(anchor, _): return anchor
+             let .spanner(anchor, _), let .articulation(anchor, _), let .swing(anchor): return anchor
         case let .tie(start, _), let .glissando(start): return VoiceElementID(start)
         case let .slur(id): return id.anchor
         case .keySignature, .timeSignature, .barLine, .jump, .marker: return nil
@@ -93,7 +102,8 @@ public enum ScoreElementID: Hashable, Sendable {
     public var measureIndexIfAddressedByBar: Int? {
         switch self {
         case let .keySignature(index, _), let .timeSignature(index, _), let .barLine(index, _): return index
-        case .dynamic, .fermata, .breath, .tempo, .spanner, .articulation, .tie, .slur, .jump, .marker, .glissando:
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .articulation, .tie, .slur, .jump, .marker,
+             .glissando, .swing:
             return nil
         }
     }
@@ -104,7 +114,7 @@ public enum ScoreElementID: Hashable, Sendable {
         switch self {
         case let .keySignature(_, staff), let .timeSignature(_, staff),
              let .jump(staff, _, _), let .marker(staff, _, _): return staff
-        case .dynamic, .fermata, .breath, .tempo, .spanner, .barLine, .articulation, .tie, .slur, .glissando:
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .barLine, .articulation, .tie, .slur, .glissando, .swing:
             return nil
         }
     }

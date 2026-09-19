@@ -69,6 +69,47 @@ public struct SetTempoIntentWire {
     }
 }
 
+/// `setSwing`'s payload. `isSystemText` is carried OUTSIDE the settings as well as inside them, because a removal
+/// has no settings and still has to say which of the two kinds at the beat it means — the same question
+/// `SetStaffTextIntentWire` answers with its own top-level flag.
+///
+/// The unit crosses as its MSCX spelling ("", "eighth", "16th") rather than as an ordinal: it is the string the
+/// format itself uses, so a reader on the far side needs no table to agree with the encoder.
+@WireFormat
+public struct SetSwingIntentWire {
+    public var anchor: VoiceElementIDWire
+    public var hasSettings: UInt8
+    public var text: String
+    public var unit: String
+    public var ratio: Int32
+    public var isSystemText: UInt8
+
+    public init(anchor: VoiceElementID, settings: SetSwing.Settings?, isSystemText: Bool) {
+        self.anchor = VoiceElementIDWire(from: anchor)
+        hasSettings = settings == nil ? 0 : 1
+        text = settings?.text ?? ""
+        unit = (settings?.unit ?? .off).mscxString
+        ratio = Int32(settings?.ratio ?? 0)
+        self.isSystemText = isSystemText ? 1 : 0
+    }
+
+    public func decoded() -> (anchor: VoiceElementID, settings: SetSwing.Settings?, isSystemText: Bool) {
+        let system = isSystemText != 0
+        guard hasSettings != 0 else {
+            return (anchor: anchor.decoded(), settings: nil, isSystemText: system)
+        }
+        return (
+            anchor: anchor.decoded(),
+            settings: SetSwing.Settings(
+                // An unrecognized spelling straightens rather than guessing a subdivision — `SwingUnit`'s own
+                // fallback rule, stated where it is applied.
+                text: text, unit: SwingUnit(mscxString: unit) ?? .off, ratio: Int(ratio), isSystemText: system,
+            ),
+            isSystemText: system,
+        )
+    }
+}
+
 @WireFormat
 public struct SetStaffTextIntentWire {
     public var anchor: VoiceElementIDWire
