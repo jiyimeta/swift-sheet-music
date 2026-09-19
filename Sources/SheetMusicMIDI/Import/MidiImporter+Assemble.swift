@@ -69,13 +69,19 @@ extension MidiImporter {
             parts.append(makePart(for: track, staff: staff, id: partID))
         }
         let meta = resolveTitle(file: file, sourceFilename: sourceFilename)
-        return Score(
+        var score = Score(
             division: file.division,
             parts: IdentifiedArray(parts),
             systemMeasures: IdentifiedArray(systemMeasures.map { SystemMeasure(elements: $0) }),
             metaTags: meta,
             source: .midi,
         )
+        // SMF carries no identifiers, so every slot assembled above is unassigned. This is the importer's
+        // chokepoint: a host that dispatches on the file extension reaches `MidiImporter.parse` directly and
+        // never passes `ScoreLoader`'s.
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        return score
     }
 
     /// Quantize one track's per-measure events into `Measure`s, then
