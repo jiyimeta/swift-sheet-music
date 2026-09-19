@@ -1,4 +1,5 @@
 import Foundation
+import SheetMusic
 import SheetMusicCore
 import SheetMusicLoader
 import SheetMusicMSCX
@@ -64,6 +65,15 @@ struct ScoreProducerIdentityTests {
     @Test func musicXMLDecoderIdentifiesItsScore() throws {
         let root = try XMLTreeParser.parse(bytes("glissando-wavy", "musicxml"))
         let score = try Score.decodeMusicXML(root)
+        #expect(!score.parts.isEmpty)
+        #expect(!score.hasUnassignedIDs)
+    }
+
+    /// Same gap as `mscxParserIdentifiesItsScore`, for the importer a host reaches when it dispatches on the
+    /// file extension itself: `SheetMusic.loadScore(midiData:)` lands in `MidiImporter.parse`, never in
+    /// `ScoreLoader`, so the assignment has to be the importer's own.
+    @Test func midiImporterIdentifiesItsScore() throws {
+        let score = try SheetMusic.loadScore(midiData: bytes("midi01-ref", "mid"))
         #expect(!score.parts.isEmpty)
         #expect(!score.hasUnassignedIDs)
     }
