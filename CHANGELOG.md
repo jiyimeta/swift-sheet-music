@@ -7,6 +7,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.4.1] - 2026-09-19
+
+### Fixed
+
+- **A score imported from a MIDI file now arrives identified.** SMF carries no identifiers, so
+  `MidiImporter` assembles every slot unassigned and something has to fill them at a chokepoint.
+  `ScoreLoader.loadScore` has one, but a host that dispatches on the file extension itself calls
+  `SheetMusic.loadScore(midiData:)`, which lands in `MidiImporter.parse` and never passes through
+  `ScoreLoader` — so an imported `.mid` reached that host with every part, staff, measure column,
+  voice element and note unidentified. `MSCXEncoder.encode` fills the gaps on the way out, which kept
+  saving working and hid this, but it fills a copy with a fresh allocator: two saves of the same score
+  wrote different `<eid>`s, and the identifiers written to the file were not the ones the host held.
+  The importer now assigns at its own chokepoint, the way `MSCXParser`, `MusicXMLDecoder`,
+  `PDFImporter` and `Score.blank` already do.
+
+  `ScoreProducerIdentityTests` covered every other producer with a direct-call test and MIDI only
+  through `ScoreLoader`, which assigns after every producer and so passes whether or not the producer
+  has a chokepoint of its own; `midiImporterIdentifiesItsScore` closes that gap.
+
 ## [3.4.0] - 2026-09-19
 
 The set of things a click can name grew — a glissando line, a grace note, each
