@@ -505,15 +505,39 @@ extension PlaybackTimeline {
             // the simpler denominator-derived step is what the
             // user asked for.
             let step = max(1, division * 4 / ts.denominator)
-            for i in 0 ..< ts.numerator {
-                let beatTick = measureStarts[mi] + i * step
+            // **Bounded by the bar's OWN length, not by the time
+            // signature's numerator.** A pickup is shorter than its
+            // meter, so counting `ts.numerator` beats off its start
+            // walked straight out of it: a 1/8 pickup in 12/8 emitted
+            // twelve beats spanning 2880 ticks, eleven of which landed
+            // inside the bars that follow while still carrying
+            // `measureIndex: 0`. `beatFrame` then resolved them inside
+            // the tiny pickup bar, so the cursor snapped back to it on
+            // every one and jumped forward again on the next real item
+            // — the "cursor goes back and forth in 12/8" report
+            // (2026-09-20). Measured on the user's own score: three
+            // backward steps in the first system, all of them these.
+            //
+            // `MetronomeBeat.metronomeBeats(score:)` has always had
+            // this bound (`if offset >= measureLen { break }`) and even
+            // knows to drop the downbeat on an irregular bar. The two
+            // walks compute the same beat grid, and its comment cites
+            // THIS one as the reference for the step formula — so the
+            // reference pointed at the copy that was wrong.
+            let measureTicks = mi < measureDurations.count
+                ? measureDurations[mi].ticks(division: division)
+                : division * 4 * ts.numerator / ts.denominator
+            var tickInMeasure = 0
+            while tickInMeasure < measureTicks {
+                defer { tickInMeasure += step }
+                let beatTick = measureStarts[mi] + tickInMeasure
                 guard !occupied.contains(beatTick) else { continue }
                 pending.append(.init(
                     tick: beatTick,
                     sortKey: (Int.max, Int.max),
                     cursor: .beat(
                         measureIndex: mi,
-                        tickInMeasure: i * step,
+                        tickInMeasure: tickInMeasure,
                     ),
                 ))
                 occupied.insert(beatTick)
