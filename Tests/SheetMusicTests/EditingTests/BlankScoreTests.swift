@@ -62,6 +62,44 @@ struct BlankScoreTests {
         #expect(texts.contains(FrameText(style: .composer, text: "Me")))
     }
 
+    @Test("every credit reaches its metaTag, and the four with a style reach the title block")
+    func credits() {
+        var template = pianoTemplate()
+        template.subtitle = "A Study"
+        template.arranger = "Arr. Someone"
+        template.lyricist = "Words by Someone"
+        template.copyright = "© 2026"
+        let score = Score.blank(template)
+
+        // The keys are the fields' own (`workTitle`, not `title`), which is what a properties dialog and every
+        // importer read.
+        #expect(score.metaTags["workTitle"] == "My Piece")
+        #expect(score.metaTags["subtitle"] == "A Study")
+        #expect(score.metaTags["composer"] == "Me")
+        #expect(score.metaTags["arranger"] == "Arr. Someone")
+        #expect(score.metaTags["lyricist"] == "Words by Someone")
+        #expect(score.metaTags["copyright"] == "© 2026")
+
+        // Arranger and copyright have no title-block style — MuseScore engraves an arranger as part of the
+        // composer line and reads the copyright through the page footer's macro.
+        let texts = score.titleFrame?.texts ?? []
+        #expect(texts == [
+            FrameText(style: .title, text: "My Piece"),
+            FrameText(style: .subtitle, text: "A Study"),
+            FrameText(style: .composer, text: "Me"),
+            FrameText(style: .lyricist, text: "Words by Someone"),
+        ])
+    }
+
+    @Test("an empty credit is not written at all")
+    func emptyCreditsOmitted() {
+        var template = pianoTemplate()
+        template.subtitle = ""
+        let score = Score.blank(template)
+        #expect(score.metaTags["subtitle"] == nil)
+        #expect(!(score.titleFrame?.texts ?? []).contains { $0.style == .subtitle })
+    }
+
     @Test("single-staff template omits brace, nil composer omits composer text")
     func singleStaff() {
         var template = pianoTemplate()

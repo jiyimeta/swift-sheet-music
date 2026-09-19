@@ -49,8 +49,19 @@ public struct BlankScoreTemplate: Sendable, Equatable {
         }
     }
 
+    /// The score's credits. Every one of them is a `ScoreInfoWrite.Field`, and `Score.blank` writes them through
+    /// that type's own tables — so a credit created here lands in the same `<metaTag>` and, where the field has a
+    /// title-block style, the same `FrameText` that `SetScoreInfo` would later write it to. A host's creation
+    /// screen and its score-info screen therefore cannot disagree about where a composer lives.
+    ///
+    /// Only the title is required. `arranger` and `copyright` reach the metaTags alone, because MuseScore has no
+    /// title-block style for either (`ScoreInfoWrite.Field.frameTextStyle` owns that rule and why).
     public var title: String
+    public var subtitle: String?
     public var composer: String?
+    public var arranger: String?
+    public var lyricist: String?
+    public var copyright: String?
     public var parts: [PartPlan]
     /// Half-open part ranges to group under a `.normal` bracket (SATB, string quartet). Ranges that fall
     /// outside `parts` — or that are empty — are ignored rather than trapping.
@@ -69,7 +80,12 @@ public struct BlankScoreTemplate: Sendable, Equatable {
     public var pickup: Fraction?
 
     public init(
-        title: String, composer: String? = nil,
+        title: String,
+        subtitle: String? = nil,
+        composer: String? = nil,
+        arranger: String? = nil,
+        lyricist: String? = nil,
+        copyright: String? = nil,
         parts: [PartPlan],
         bracketGroups: [Range<Int>] = [],
         concertKey: Int = 0, timeNumerator: Int = 4, timeDenominator: Int = 4,
@@ -77,7 +93,11 @@ public struct BlankScoreTemplate: Sendable, Equatable {
         pickup: Fraction? = nil,
     ) {
         self.title = title
+        self.subtitle = subtitle
         self.composer = composer
+        self.arranger = arranger
+        self.lyricist = lyricist
+        self.copyright = copyright
         self.parts = parts
         self.bracketGroups = bracketGroups
         self.concertKey = concertKey
@@ -211,11 +231,25 @@ extension Score {
             originalStaff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
         )])
 
-        var metaTags = ["workTitle": template.title]
-        var frameTexts = [FrameText(style: .title, text: template.title)]
-        if let composer = template.composer {
-            metaTags["composer"] = composer
-            frameTexts.append(FrameText(style: .composer, text: composer))
+        // Every credit goes through `ScoreInfoWrite.Field`'s own tables rather than through literals here: the
+        // field decides which `<metaTag>` key it takes and whether it has a title-block style at all, and
+        // `SetScoreInfo` — the command that edits these afterwards — reads the same tables. Written out by field
+        // in engraving order, so the title block reads title, subtitle, composer, lyricist down the page.
+        var metaTags: [String: String] = [:]
+        var frameTexts: [FrameText] = []
+        for (field, value) in [
+            (ScoreInfoWrite.Field.title, template.title),
+            (.subtitle, template.subtitle),
+            (.composer, template.composer),
+            (.lyricist, template.lyricist),
+            (.arranger, template.arranger),
+            (.copyright, template.copyright),
+        ] {
+            guard let value, !value.isEmpty else { continue }
+            metaTags[field.metaTagKey] = value
+            if let style = field.frameTextStyle {
+                frameTexts.append(FrameText(style: style, text: value))
+            }
         }
 
         var score = Score(

@@ -80,7 +80,11 @@ public struct SetTempo: EditCommand {
     }
 
     /// The marking at the anchor's beat, or `nil` when there is none (or the anchor does not resolve).
-    static func current(at anchor: VoiceElementID, in score: Score) -> Marking? {
+    ///
+    /// Public because a host editing a marking has to show what it currently says — folino's tempo popover puts a
+    /// BPM field on the selected marking and writes the edited number back through `SetTempo`, preserving the beat
+    /// note this read hands it.
+    public static func current(at anchor: VoiceElementID, in score: Score) -> Marking? {
         guard let tempo = tempo(at: anchor, in: score) else { return nil }
         return Marking(beatsPerSecond: tempo.beatsPerSecond, beatNote: tempo.beatNote, beatDots: tempo.beatDots)
     }
