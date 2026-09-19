@@ -310,37 +310,6 @@ extension LayoutDocument {
         return leftX
     }
 
-    /// Approximate right edge of a measure's leading clef / key sig /
-    /// time sig column, in measure-local coords. Mirrors the
-    /// `HeaderSchedule.contentStartX` the layout engine derived when
-    /// placing the measure — the `sp * 2` `clefX` baseline plus each
-    /// column's own width. Used by `beatXInMeasure`'s no-anchors
-    /// fallback so the cursor doesn't sit on the leading glyphs.
-    ///
-    /// Mid-measure clef / key changes land in `elements` too, but only
-    /// after a chord — and a measure with any chord never reaches this
-    /// fallback, so widening the floor with them is a no-op.
-    private func leadingHeaderRightEdge(in measure: LayoutMeasure) -> CGFloat {
-        let sp = metrics.sp
-        var rightEdge: CGFloat = sp * 2
-        for el in measure.elements {
-            switch el {
-            case let .clef(_, origin, _):
-                rightEdge = max(rightEdge, origin.x + sp * 2)
-            case let .keySignature(sharps, flats, _, naturals, origin, _):
-                let glyphs = max(sharps, flats, naturals.count)
-                rightEdge = max(rightEdge, LayoutEngine.keySignatureColumnEnd(
-                    anchorX: origin.x, glyphCount: glyphs, sp: sp,
-                ))
-            case let .timeSignature(_, _, _, origin, _):
-                rightEdge = max(rightEdge, origin.x + sp * 3.5)
-            default:
-                break
-            }
-        }
-        return rightEdge
-    }
-
     private func itemX(
         _ id: ScoreItemID, in measure: LayoutMeasure,
     ) -> CGFloat? {
