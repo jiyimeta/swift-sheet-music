@@ -120,7 +120,10 @@ public struct Swing: Sendable, Equatable {
 /// without removing the parameter (used to switch swing off mid-piece
 /// while leaving the ratio recorded). Maps to MuseScore's
 /// `DurationType::V_EIGHTH` / `V_16TH` / `V_ZERO` on the wire.
-public enum SwingUnit: String, Sendable, Equatable, CaseIterable {
+/// `Codable` so a host can persist a chosen unit (folino's palette stores one per shipped swing cell). The raw
+/// values are the case names, not the MSCX tokens — `mscxString` owns that spelling, and a preference file has no
+/// business being tied to MuseScore's.
+public enum SwingUnit: String, Sendable, Equatable, CaseIterable, Codable {
     case off
     case eighth
     case sixteenth
