@@ -3,14 +3,15 @@ import SheetMusicAudioCore
 @testable import SheetMusicMIDI
 import Testing
 
-/// Playback runs to the barline of the bar the music stops in, rather than cutting off the instant the last note
-/// releases.
+/// Playback runs to the END OF THE SCORE, rather than cutting off the instant the last note releases — MuseScore's
+/// own behaviour, and what the project owner asked for (2026-09-20). Several assertions below are one bar long
+/// simply because their fixture is a one-bar score, where the last barline and the notated end are the same tick.
 ///
 /// The subject is the RENDERED SEQUENCE, not `PlaybackTimeline`: the timeline already walks rests and already
 /// reported the full bar, and `PlaybackEngine` decides end-of-score from the transport (`!sequencer.isPlaying` /
 /// `backend.isAtEnd`), never from the timeline. So every assertion here reads the end-of-track tick, which is what
 /// the transport's length actually is.
-@Suite("Rendered tail reaches the barline")
+@Suite("Rendered tail reaches the end of the score")
 struct MidiRendererBarlineTailTests {
     /// One 4/4 bar at division 480: a quarter note on beat 1, then rests to the barline.
     private static func quarterThenRests(division: Int = 480) -> Score {
@@ -67,9 +68,15 @@ struct MidiRendererBarlineTailTests {
         #expect(try Self.endOfTrackTicks(MidiRenderer.renderForPlayback(score: score)) == [1920])
     }
 
-    /// Trailing EMPTY bars are not played through. A new score in folino is 32 bars by default, so padding to the
-    /// notated end would answer "it stops too soon" with half a minute of silence — the music's own bar is the end.
-    @Test func `trailing empty bars are not played through`() throws {
+    /// Trailing EMPTY bars ARE played through, because MuseScore plays a score to its end and the project owner
+    /// asked for that parity (2026-09-20).
+    ///
+    /// This assertion used to be its own opposite. The reasoning then was that a new folino score is 32 empty bars
+    /// by default, so running to the notated end answers "it stops too soon" with half a minute of silence — a
+    /// real cost, but the user's to weigh, and they weighed it the other way. It also settles a genuine
+    /// inconsistency: `PlaybackTimeline` has always walked to the notated end, so the seek bar showed a length the
+    /// transport refused to play.
+    @Test func `trailing empty bars are played through`() throws {
         var score = Score.blank(BlankScoreTemplate(
             title: "T",
             parts: [.init(instrumentID: "piano", staves: [.init(clefType: "G")])],
@@ -81,7 +88,33 @@ struct MidiRendererBarlineTailTests {
         )
         score[slot] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
         let ends = try Self.endOfTrackTicks(MidiRenderer.renderForPlayback(score: score))
-        #expect(ends == [1920], "padded past the first bar into the 7 empty ones")
+        #expect(ends == [8 * 1920], "all eight bars, not just the one holding the note")
+    }
+
+    /// And the transport's length now agrees with the seek bar's, which is the inconsistency the change closes.
+    ///
+    /// **The fixture keeps its first bar FULL** — a quarter plus three quarter rests, not a quarter written over
+    /// the bar's measure rest. The two lengths are measured differently and only coincide on a well-formed score:
+    /// the transport pads to the NOMINAL end (`effectiveMeasureDurations`, i.e. what the meter says each bar is
+    /// worth) while `PlaybackTimeline.totalTicks` reports where the CONTENT actually ran out. Replacing a measure
+    /// rest with a quarter leaves a bar holding 480 ticks of a 1920-tick meter, and the two then differ by the
+    /// 1440 that bar is missing — which is a property of that score, not of either measurement.
+    @Test func `the transport and the timeline report the same length`() throws {
+        let first = Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+        ])
+        let empty = { Measure(voices: [Voice(elements: [.rest(duration: .measure)])]) }
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "1", instrument: Instrument(id: "piano"), staves: [Staff(
+                measures: [Measure(voices: [first])] + (0 ..< 7).map { _ in empty() },
+            )])],
+        )
+        let ends = try Self.endOfTrackTicks(MidiRenderer.renderForPlayback(score: score))
+        #expect(ends == [8 * 1920], "eight full bars")
+        #expect(ends == [PlaybackTimeline(score: score).totalTicks])
     }
 
     /// Every track in a multi-staff score is carried to the same end, so the transport's length does not depend on
@@ -124,14 +157,15 @@ struct MidiRendererBarlineTailTests {
     }
 
     /// A pickup bar is shorter than its time signature, and `effectiveMeasureDurations` is what knows that — so the
-    /// first barline of a score with an anacrusis is the pickup's own end, not a full bar in.
-    @Test func `a pickup bar's barline is the pickup's own length`() {
+    /// notated end of a score with an anacrusis counts the pickup at its own length, not at a full bar.
+    @Test func `the notated end counts a pickup at its own length`() {
         let score = Score.blank(BlankScoreTemplate(
             title: "T",
             parts: [.init(instrumentID: "piano", staves: [.init(clefType: "G")])],
             measureCount: 4, pickup: Fraction(numerator: 1, denominator: 4),
         ))
-        // A note released one eighth into a quarter-note pickup reaches that pickup's barline at 480, not at 1920.
-        #expect(MidiRenderer.ticksToBarline(afterNotated: 240, in: score) == 240)
+        // 4 bars: a 480-tick pickup plus three full 4/4 bars = 6240. From one eighth in, 6000 still to go — a
+        // pickup counted as a whole bar would ask for 1440 more than that.
+        #expect(MidiRenderer.ticksToNotatedEnd(afterNotated: 240, in: score) == 6000)
     }
 }
