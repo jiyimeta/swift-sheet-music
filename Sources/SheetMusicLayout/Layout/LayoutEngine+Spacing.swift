@@ -613,7 +613,7 @@ extension LayoutEngine {
                 for (idx, el) in voice.elements.enumerated() {
                     switch el {
                     case let .chord(c) where !c.notes.isEmpty:
-                        let nextLyrics = nextChordLyrics(
+                        let nextLyric = nextLyricBearingChord(
                             in: voice.elements.values, after: idx,
                         )
                         // Reserve column width for grace clusters whose
@@ -654,7 +654,7 @@ extension LayoutEngine {
                             durationWidth(c.duration, metrics: metrics) + graceBudget,
                             lyricsPairWidth(
                                 currentLyrics: c.lyrics,
-                                nextLyrics: nextLyrics,
+                                next: nextLyric,
                                 metrics: metrics,
                             ),
                             inflection.rightward,
@@ -951,12 +951,12 @@ extension LayoutEngine {
                     w += metrics.sp
                 case let .chord(c) where !c.notes.isEmpty:
                     let tickW = durationWidth(c.duration, metrics: metrics)
-                    let nextLyrics = nextChordLyrics(
+                    let nextLyric = nextLyricBearingChord(
                         in: voice.elements.values, after: idx,
                     )
                     let lyricW = lyricsPairWidth(
                         currentLyrics: c.lyrics,
-                        nextLyrics: nextLyrics,
+                        next: nextLyric,
                         metrics: metrics,
                     )
                     w += max(tickW, lyricW)
@@ -1159,25 +1159,44 @@ extension LayoutEngine {
     ///
     /// Returns 0 when the current chord has no lyric — duration spacing
     /// still applies via `durationWidth`.
+    ///
+    /// **The constraint runs to the next SYLLABLE, not to the next
+    /// note, and it is shared out over the gaps in between.** A lyric
+    /// only has to clear another lyric; over a note that carries none
+    /// it is free to spill into that note's space, which is what
+    /// MuseScore does and what this used to get wrong. The old rule
+    /// asked the immediate neighbour's gap for `curWidth / 2 + 0.25 sp`
+    /// even when nothing was written under it, so one long syllable in
+    /// the middle of an otherwise plain run tore a hole beside it while
+    /// MuseScore left the run evenly spaced (user report, 2026-09-20).
+    ///
+    /// `next.gaps` is how many tick gaps separate the two syllables —
+    /// one per timed element crossed — so each gap is asked for its
+    /// share rather than the whole distance. Adjacent syllables
+    /// (`gaps == 1`) are unchanged, which is the common case and the
+    /// one every existing spacing expectation was written against.
+    ///
+    /// With no following syllable at all there is nothing to clear, so
+    /// the answer is 0 and the tail of the line stays at duration
+    /// spacing.
     static func lyricsPairWidth(
         currentLyrics: [Lyric],
-        nextLyrics: [Lyric],
+        next: (lyrics: [Lyric], gaps: Int)?,
         metrics: StaffMetrics,
     ) -> CGFloat {
         let curWidth = chordLyricMaxWidth(currentLyrics, metrics: metrics)
-        guard curWidth > 0 else { return 0 }
-        let nextWidth = chordLyricMaxWidth(nextLyrics, metrics: metrics)
+        guard curWidth > 0, let next else { return 0 }
+        let nextWidth = chordLyricMaxWidth(next.lyrics, metrics: metrics)
+        guard nextWidth > 0 else { return 0 }
         let dashForce = currentLyrics.contains { lyric in
             !lyric.text.isEmpty
                 && (lyric.syllabic == .begin || lyric.syllabic == .middle)
         }
-        // Dash spacing only applies when the next chord actually has a
-        // syllable to connect to; otherwise we just need the regular
-        // min-distance buffer.
-        let inter: CGFloat = (dashForce && nextWidth > 0)
+        let inter: CGFloat = dashForce
             ? metrics.sp * 0.5
             : metrics.sp * 0.25
-        return curWidth / 2 + inter + nextWidth / 2
+        let required = curWidth / 2 + inter + nextWidth / 2
+        return required / CGFloat(max(next.gaps, 1))
     }
 
     /// Widest rendered lyric in a chord (verse-aware: takes the max
@@ -1195,25 +1214,39 @@ extension LayoutEngine {
         return widest
     }
 
-    /// First chord's lyrics that follow the element at `startIndex` in
-    /// `elements`, looking past clefs / key sigs / barlines / etc. that
-    /// don't carry a tick. Empty when no further chord exists.
-    static func nextChordLyrics(
+    /// The next chord after `startIndex` that actually CARRIES a
+    /// syllable, and how many tick gaps lie between the two — one per
+    /// timed element crossed, so an adjacent syllable answers 1.
+    ///
+    /// Untimed elements (clefs, key signatures, barlines) are stepped
+    /// over without counting: they take width of their own but they do
+    /// not add a tick the lyric's requirement could be shared into.
+    ///
+    /// A REST counts as a gap and is stepped over rather than ending
+    /// the walk. The old `nextChordLyrics` stopped at the first rest and
+    /// reported "no lyric follows", which made the syllable before a
+    /// rest demand its full half-width of the rest's own gap.
+    ///
+    /// `nil` when no syllable follows in this voice at all.
+    static func nextLyricBearingChord(
         in elements: [VoiceElement], after startIndex: Int,
-    ) -> [Lyric] {
-        guard startIndex + 1 < elements.count else { return [] }
+    ) -> (lyrics: [Lyric], gaps: Int)? {
+        guard startIndex + 1 < elements.count else { return nil }
+        var gaps = 1
         for j in (startIndex + 1) ..< elements.count {
             switch elements[j] {
-            case let .chord(nc) where !nc.notes.isEmpty:
-                return nc.lyrics
-            case .chord:
-                // Empty chord = rest.
-                return []
+            case let .chord(nc):
+                if !nc.notes.isEmpty,
+                   nc.lyrics.contains(where: { !$0.text.isEmpty })
+                {
+                    return (nc.lyrics, gaps)
+                }
+                gaps += 1
             default:
                 continue
             }
         }
-        return []
+        return nil
     }
 
     /// Number of before-graces on the next note-chord after `startIndex`.
