@@ -45,6 +45,17 @@ package enum BeamGrouping {
         let maxGroupLen = groupTicks(
             timeSignature: timeSignature, division: division,
         )
+        // A beam never crosses a tuplet boundary, which the tick arithmetic below cannot see: a triplet filling a
+        // quarter ends on a beat, its members are all level 1, and the beat rule therefore MERGES it with the
+        // triplet on the next beat — two quarter-length triplets came out as one six-note beam where MuseScore
+        // draws two. MuseScore beams a tuplet as its own group (`Tuplet` owns its members' beam), so the boundary
+        // is a hard break on both sides regardless of what the meter says.
+        //
+        // The two ends are collected as index sets rather than consulted span-by-span in the loop because a voice
+        // can hold several tuplets and the loop visits each element once.
+        let tupletSpans = voice.tupletSpans
+        let tupletStarts = Set(tupletSpans.map(\.startIndex))
+        let tupletEnds = Set(tupletSpans.map(\.endIndex))
 
         // Pre-scan: for each beat, collect the DISTINCT beam levels so
         // we can tell whether the beat is "uniform" (all notes share a
@@ -105,6 +116,10 @@ package enum BeamGrouping {
                     tick += c.duration.resolved(in: measureDuration).ticks(division: division)
                     continue
                 }
+                // Entering a tuplet: whatever was running stops here, whatever the meter would have said.
+                if tupletStarts.contains(i) {
+                    flush()
+                }
                 if tick > 0 {
                     // Hard boundary (half-note in 4/4).
                     if maxGroupLen > 0 && tick % maxGroupLen == 0 {
@@ -149,6 +164,10 @@ package enum BeamGrouping {
                 currentIndices.append(i)
                 currentLevel = max(currentLevel, level)
                 tick += c.duration.resolved(in: measureDuration).ticks(division: division)
+                // Leaving a tuplet: the group closes ON its last member, so the note after it starts a new one.
+                if tupletEnds.contains(i) {
+                    flush()
+                }
             case let .locationShift(delta):
                 tick += delta.ticks(division: division)
             default:
