@@ -73,7 +73,13 @@ public struct CreateTuplet: EditCommand {
             throw Self.refused(.wrongElementKind(at: location, expected: .chordOrRest))
         }
         let division = score.division
-        let targetTicks = target.duration.ticks(division: division)
+        // **Resolved against the bar first.** `NoteDuration.ticks(division:)` traps on `.measure` — its own doc
+        // says so — and a whole-bar rest is exactly the target a user aims a tuplet at on an empty bar. Asking for
+        // one there killed the app (crash log, 2026-09-20: ⌘3 on a bar holding only a measure rest).
+        let measureDuration = score.effectiveMeasureDuration(
+            at: location.staff, measureIndex: location.measureIndex,
+        )
+        let targetTicks = target.duration.resolved(in: measureDuration).ticks(division: division)
         guard targetTicks % actualNotes == 0 else {
             throw Self.refused(.indivisibleTuplet(
                 targetTicks: targetTicks,
