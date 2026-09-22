@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-09-22
+
 ### Added
 
 - **`SheetMusicEditWire` is exported on every platform**, not only under
@@ -23,6 +25,32 @@ and this project adheres to
   Additive: the Android product set is unchanged (the declaration moved out of
   the `isAndroid` block rather than being duplicated), no target's dependencies
   changed, and nothing about the wire format moved.
+
+### Fixed
+
+- **The `<eid>` reference table said the opposite of what MuseScore does.**
+  `docs/development/mscx-preserved-markup.md` still claimed that 4.6 does not
+  use `<eid>` and regenerates identities on load. Both halves are false, and
+  `PreservedMarkupPolicy` corrected them in 3.5.0 — in the code comment that
+  sends the reader to this very table, which went on contradicting it. The row
+  now gives the reason that is actually true (a modeled carrier's encoder
+  writes its own `<eid>`, so preserving it too would emit the id twice), and
+  `LastEID` is split out as the id-issuing counter it is rather than any
+  element's identity. Two decoder test comments carried the same "regenerated"
+  wording and are corrected with it. Comments and documentation only.
+
+### Changed
+
+- **`README.md`'s product table lists `SheetMusicEditWire` and
+  `SheetMusicZip`.** Both are exported on every platform and neither appeared
+  in the table a consumer picks from, which for a reader choosing dependencies
+  made them invisible.
+- **`docs/development/webassembly.md` points at the ceiling the script
+  enforces** rather than restating a number: `CEILING_BYTES` in
+  `Scripts/wasm-size.sh` is 4.5 MiB, and the doc still said the 4 MB it was
+  raised from. The same file now also says what a wasm run leaves in
+  `git status` — `Package.resolved` with `originHash` as the only changed line
+  and no pin moved, which is noise to discard rather than commit.
 
 ## [3.5.0] - 2026-09-20
 
