@@ -30,22 +30,76 @@ extension Score {
     /// are always kept and they don't update the state) — a conservative
     /// choice, since a wrongly-suppressed grace accidental is worse than
     /// a redundant one.
+    ///
+    /// **A percussion staff draws no accidental at all** — a drumset part
+    /// (`Instrument.useDrumset`) or a `"percussion"` staff, the pair
+    /// `RangeEditPlanner.isPitched` also reads. A drum note's pitch picks
+    /// a kit piece and its line comes from the drumset, so an accidental
+    /// has nothing to alter; MuseScore never computes one for a drum note
+    /// (`Chord::cmdUpdateNotes` takes its PERCUSSION branch, which only
+    /// re-lines the notes). One that reached the model anyway — an edit
+    /// that treated a kit piece as a pitch, which swapped the snare for a
+    /// C♯ — is dropped here, grace notes included, rather than drawn.
     public func suppressingRedundantAccidentals() -> Score {
         var copy = self
         let division = copy.division
         for partIndex in copy.parts.indices {
+            let isDrumset = copy.parts[partIndex].instrument.useDrumset
             for staffIndex in copy.parts[partIndex].staves.indices {
                 copy.parts.updateValue(at: partIndex) { partValue in
                     partValue.staves.updateValue(at: staffIndex) { staffValue in
-                        Self.suppressInStaff(
-                            &staffValue,
-                            division: division,
-                        )
+                        if isDrumset || staffValue.group == "percussion" {
+                            Self.dropAccidentals(in: &staffValue)
+                        } else {
+                            Self.suppressInStaff(
+                                &staffValue,
+                                division: division,
+                            )
+                        }
                     }
                 }
             }
         }
         return copy
+    }
+
+    /// Every note on `staff` — grace notes too — without its accidental.
+    private static func dropAccidentals(in staff: inout Staff) {
+        func stripped(_ note: inout Note) {
+            note.accidental = nil
+            note.accidentalBracket = .none
+        }
+        for measureIndex in staff.measures.indices {
+            for voiceIndex in staff.measures[measureIndex].voices.indices {
+                let elements = staff.measures[measureIndex].voices[voiceIndex].elements
+                for elementIndex in elements.indices {
+                    guard case var .chord(chord) = elements[elementIndex] else { continue }
+                    let graces = chord.graceNotesBefore.values + chord.graceNotesAfter.values
+                    let carriesOne = chord.notes.contains { $0.accidental != nil }
+                        || graces.contains { $0.notes.contains { $0.accidental != nil } }
+                    guard carriesOne else { continue }
+                    for noteIndex in chord.notes.indices {
+                        chord.notes.updateNote(at: noteIndex, stripped)
+                    }
+                    for graceIndex in chord.graceNotesBefore.indices {
+                        chord.graceNotesBefore.updateValue(at: graceIndex) { grace in
+                            for noteIndex in grace.notes.indices {
+                                grace.notes.updateNote(at: noteIndex, stripped)
+                            }
+                        }
+                    }
+                    for graceIndex in chord.graceNotesAfter.indices {
+                        chord.graceNotesAfter.updateValue(at: graceIndex) { grace in
+                            for noteIndex in grace.notes.indices {
+                                grace.notes.updateNote(at: noteIndex, stripped)
+                            }
+                        }
+                    }
+                    staff.measures[measureIndex].voices[voiceIndex].elements
+                        .updateValue(at: elementIndex) { $0 = .chord(chord) }
+                }
+            }
+        }
     }
 
     private static func suppressInStaff(_ staff: inout Staff, division: Int) {

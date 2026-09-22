@@ -43,6 +43,25 @@ struct MeasureAccidentalsPlannerTests {
         #expect(!repairs.isEmpty)
     }
 
+    /// The same edit on a drum staff plans nothing: a drumset spells its pitches (hi-hat F♯, ride E♭, crash C♯),
+    /// and renotating against those spellings wrote ♯ and ♭ onto every drum bar an edit touched — marks MuseScore
+    /// never draws on a percussion staff (found 2026-09-22 in folino).
+    @Test(arguments: [(group: "percussion", useDrumset: false), (group: "pitched", useDrumset: true)])
+    func `an edit on a drum staff plans no glyph`(group: String, useDrumset: Bool) {
+        var previous = ScoreEditor(score: EditingFixtures.twoMeasuresOfQuarterRests(key: 2)).score
+        previous.parts.updateValue(at: 0) { part in
+            part.instrument.useDrumset = useDrumset
+            part.staves.updateValue(at: 0) { $0.group = group }
+        }
+        let first = VoiceElementID(EditingFixtures.restID(element: 2))
+        let second = VoiceElementID(EditingFixtures.restID(element: 3))
+        previous[first] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 42, tpc: 20)]))
+        previous[second] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 51, tpc: 11)]))
+        var current = previous
+        current[first] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 46, tpc: 12)]))
+        #expect(MeasureAccidentals.renotationCommands(in: current, changedFrom: previous).isEmpty)
+    }
+
     @Test func `an unchanged bar needs no repairs`() {
         let score = EditingFixtures.twoMeasuresOfQuarterRests(key: 2)
         #expect(MeasureAccidentals.renotationCommands(in: score, changedFrom: score).isEmpty)

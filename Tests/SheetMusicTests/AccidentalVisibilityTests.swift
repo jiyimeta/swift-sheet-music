@@ -221,4 +221,39 @@ struct AccidentalVisibilityTests {
         let note = try parseNote("<Note><pitch>60</pitch><tpc>14</tpc></Note>")
         #expect(note.accidentalRole == .auto)
     }
+
+    // MARK: - Percussion draws none
+
+    /// A C♯ crash, an F♯ hi-hat and a USER-forced natural, with a sharped grace note in front of the crash — every
+    /// one of which a pitched staff would keep.
+    private static func percussionScore(group: String, useDrumset: Bool) -> Score {
+        let grace = GraceChord(graceType: .acciaccatura, duration: .eighth, notes: ChordNotes([Self.fSharp4()]))
+        let voice = Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: [Self.cSharp4()], graceNotesBefore: [grace])),
+            .chord(Chord(duration: .quarter, notes: [Self.fSharp4()])),
+            .chord(Chord(duration: .half, notes: [Self.eNatural4(role: .user)])),
+        ])
+        var instrument = Instrument(id: "drumset")
+        instrument.useDrumset = useDrumset
+        let staff = Staff(group: group, measures: [Measure(voices: [voice])])
+        return Score(division: 480, parts: [Part(id: "1", instrument: instrument, staves: [staff])])
+    }
+
+    /// MuseScore never computes an accidental for a drum note, and one that reached the model anyway — an edit that
+    /// moved a kit piece by a semitone — is not drawn: grace notes and USER-forced ones included.
+    @Test("A percussion staff or a drumset part draws no accidental", arguments: [
+        ("percussion", false), ("pitched", true), ("percussion", true),
+    ])
+    func percussionDrawsNone(group: String, useDrumset: Bool) {
+        let out = Self.percussionScore(group: group, useDrumset: useDrumset).suppressingRedundantAccidentals()
+        for chord in 0 ..< 3 {
+            #expect(Self.accidental(out, measure: 0, chord: chord) == nil, "chord \(chord)")
+        }
+        guard case let .chord(crash) = out.parts[0].staves[0].measures[0].voices[0].elements[0] else {
+            Issue.record("the first element is not the crash")
+            return
+        }
+        #expect(crash.graceNotesBefore.first?.notes.first?.accidental == nil)
+        #expect(crash.notes.first?.pitch == 61, "a drop, never a respelling: the kit piece stays the kit piece")
+    }
 }

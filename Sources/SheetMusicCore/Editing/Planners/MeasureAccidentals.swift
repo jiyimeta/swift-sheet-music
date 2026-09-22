@@ -130,10 +130,12 @@ public enum MeasureAccidentals {
     /// Measure-scoped because accidental state is: it is seeded from the key signature at every barline, so an edit
     /// can only ever disturb the bar it lands in. Comparing measures rather than trusting the command's reported
     /// location keeps chains that span bars (`CrossBarInputPlanner`) covered without special-casing them.
+    ///
+    /// **Percussion is skipped**, for `renotationCommands(in:measureRange:)`'s reason (drum bars got ♯/♭, 2026-09-22).
     public static func renotationCommands(in current: Score, changedFrom previous: Score) -> [any EditCommand] {
         var commands: [any EditCommand] = []
-        for (partIndex, part) in current.parts.enumerated() {
-            for (staffIndex, staff) in part.staves.enumerated() {
+        for (partIndex, part) in current.parts.enumerated() where !part.instrument.useDrumset {
+            for (staffIndex, staff) in part.staves.enumerated() where staff.group != "percussion" {
                 let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
                 let before = previous[address]?.measures
                 let durations = current.effectiveMeasureDurations(partIndex: partIndex, staffIndex: staffIndex)

@@ -26,6 +26,14 @@ and this project adheres to
 - **`TransposeScore` by an octave rewrote a seven-accidental key.** The key was read back through the −7…+7
   window like any other move, so C♯ major moved an octave became D♭ major. A whole number of octaves leaves every
   key where it was, as the command's own documentation already said it did.
+- **Every edit to a drum bar wrote sharps and flats into it.**
+  `MeasureAccidentals.renotationCommands(in:changedFrom:)` — the pass `ScoreEditSession` runs after each edit —
+  renotated percussion bars against their notes' tpcs, and a MuseScore drumset spells its pitches (closed hi-hat
+  F♯, ride E♭, crash C♯). It now skips a `useDrumset` part and a `"percussion"` staff, as its `measureRange:`
+  sibling already did.
+- **A percussion staff draws no accidental.** `Score.suppressingRedundantAccidentals()` — the layout's first pass —
+  drops every accidental on a drumset part or a `"percussion"` staff, grace notes and USER-forced ones included, so a
+  score the bug above already wrote into renders the way MuseScore draws it. The model is untouched.
 
 ## [3.5.0] - 2026-09-20
 
