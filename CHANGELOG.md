@@ -16,6 +16,12 @@ and this project adheres to
   With `transposeKeySignatures` off the notes are spelled for the key the music would have moved to. A spelling
   past 𝄫 / 𝄪 is read back twelve fifths to its enharmonic. The diatonic notes of a key come out as before — every
   existing expectation of the old rule held under the new one.
+- **A note's color is its notehead's.** The stem and flag no longer take the first colored note's color, and the
+  augmentation dots and (on Android) the accidental no longer take their note's: all draw in ink, in all three
+  renderers (`ScoreLayerBuilder`, the SwiftUI canvas, the Android draw program). That is how MuseScore draws a
+  colored `Note` — `<Stem>`, `<Hook>`, `<NoteDot>` and `<Accidental>` are elements with colors of their own — and all
+  a selection highlights. A MuseScore file that colored those elements themselves now shows them in ink, since the
+  model carries no color for them.
 
 ### Fixed
 

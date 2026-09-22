@@ -43,12 +43,10 @@ extension ScoreCanvasDrawing {
         }
         let (baseDur, dots) = DurationInterpretation.split(duration)
         let shiftedNotes = notes.map { $0.moved(to: shift($0.origin)) }
-        // Stem / flag inherit the chord's notehead color (the first
-        // colored note wins) — MuseScore stores `<Stem>/<Hook>`
-        // color separately but in practice it matches the note.
-        let stemColor: Color = shiftedNotes
-            .compactMap(\.color).first
-            .map { Color(scoreColor: $0) } ?? .primary
+        // Stem / flag draw in ink, never a notehead's color — see
+        // `ScoreLayerBuilder+Chord.swift`'s `stemColor`. The dots in
+        // `drawNote` follow the same rule.
+        let stemColor: Color = .primary
         // Ledger lines are no longer drawn here: `LedgerLinePass`
         // emits them as `.ledgerLine` elements immediately before
         // this chord, so they still render behind the chord's ink
@@ -150,7 +148,7 @@ extension ScoreCanvasDrawing {
             after: visualOrigin,
             count: dots,
             onStaffLine: note.step.isMultiple(of: 2),
-            color: color,
+            color: .primary,
             metrics: metrics,
         )
     }

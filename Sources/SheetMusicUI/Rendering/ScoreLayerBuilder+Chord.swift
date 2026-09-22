@@ -33,11 +33,12 @@ extension ScoreLayerBuilder {
         let shifted = notes.map { n -> LayoutChordNote in
             n.moved(to: CGPoint(x: base.x + n.origin.x, y: base.y + n.origin.y))
         }
-        // Stem / flag inherit the chord's notehead color (first
-        // colored note wins) — MuseScore stores `<Stem>/<Hook>` color
-        // separately but in practice it matches the note.
-        let stemColor: CGColor = shifted.compactMap(\.color).first
-            .map(scoreColorToCGColor) ?? inkColor
+        // Stem / flag draw in ink, never a notehead's color: a note's
+        // color is its HEAD's, which is how MuseScore draws a colored
+        // Note (`<Stem>` / `<Hook>` / `<NoteDot>` are elements with colors
+        // of their own, which this model does not carry) and all a
+        // selection highlights. The dots below follow the same rule.
+        let stemColor: CGColor = inkColor
         // Ledger lines are no longer drawn here: `LedgerLinePass` emits
         // them as `.ledgerLine` elements immediately before this chord,
         // so they still render behind the chord's ink while the geometry
@@ -104,7 +105,7 @@ extension ScoreLayerBuilder {
             drawDots(
                 after: visualOrigin, count: dots,
                 onStaffLine: n.step.isMultiple(of: 2),
-                color: headColor,
+                color: inkColor,
                 metrics: metrics, height: height, into: noteTarget,
             )
         }

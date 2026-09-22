@@ -103,13 +103,10 @@ extension LayoutBridge {
         let xStem = Double(geometry.xStem)
         let startY = Double(geometry.startY)
         let endY = Double(geometry.endY)
-        // Stem + flag inherit the chord's notehead color (first colored
-        // note wins) — matches Apple's `ScoreLayerBuilder` `stemColor`.
-        // MuseScore stores `<Stem>/<Hook>` color separately but in practice
-        // it tracks the note.
-        let stemARGB = notes.compactMap(\.color).first
-            .flatMap(LayoutBridge.argb(from:))
-        if let stemARGB { out.append(.setColor(argb: stemARGB)) }
+        // Stem + flag draw in the ambient color, never a notehead's: a
+        // note's color is its head's, as MuseScore draws it (`<Stem>` /
+        // `<Hook>` are elements with colors of their own, which this model
+        // does not carry). Matches Apple's `ScoreLayerBuilder`.
         out.append(.moveTo(x: xStem * ptToMMScale, y: startY * ptToMMScale))
         out.append(.lineTo(x: xStem * ptToMMScale, y: endY * ptToMMScale))
         out.append(.stroke(width: ctx.stemThickness * mag * ptToMMScale))
@@ -130,7 +127,6 @@ extension LayoutBridge {
                 fontId: .smufl,
             ))
         }
-        if stemARGB != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
     }
 
     /// Emit noteheads + accidentals + augmentation dots for a subset of a
@@ -140,10 +136,11 @@ extension LayoutBridge {
     /// false`, so the gray override wins over any author `<color>`).
     ///
     /// When `honorColor` is set, each note carrying an author color
-    /// (`Note.elementProperties.color`) has its notehead + accidental +
-    /// dots wrapped in a `setColor` / reset-to-black pair — matching the
-    /// Apple `ScoreLayerBuilder` per-note `headColor`. Uncolored notes
-    /// paint in the ambient color.
+    /// (`Note.elementProperties.color`) has its notehead and parentheses
+    /// wrapped in a `setColor` / reset-to-black pair — matching the Apple
+    /// `ScoreLayerBuilder` per-note `headColor`. Its accidental and dots
+    /// stay in the ambient color: a note's color is its head's, as in
+    /// MuseScore. Uncolored notes paint in the ambient color.
     ///
     /// A selected note (`note.selectionItem` in `tint.ids`) is handled by a separate branch below —
     /// **only the notehead and accidental glyphs take the tint**, never the parentheses or augmentation dots.
@@ -192,9 +189,9 @@ extension LayoutBridge {
                 continue
             }
 
-            // Not selected — unchanged from before the selection feature: the note's whole visual footprint
-            // (notehead, parentheses, accidental, dots) shares one `setColor` / reset bracket keyed off the
-            // author color alone.
+            // Not selected: the author color brackets the notehead and its parentheses only — a note's color is
+            // its head's, the way MuseScore draws a colored Note (its accidental and dots are elements of their
+            // own). The accidental and the dots follow in the ambient color.
             let argb = authorArgb
             if let argb { out.append(.setColor(argb: argb)) }
             emitNoteheadGlyph(
@@ -205,6 +202,7 @@ extension LayoutBridge {
                 note, glyphSize: glyphSize, metrics: ctx, mag: mag,
                 measureOriginX: mox, measureOriginY: moy, into: &out,
             )
+            if argb != nil { out.append(.setColor(argb: resetArgb)) }
             if note.accidental != nil {
                 guard emitNoteAccidentalGlyphs(
                     note, glyphSize: glyphSize, metrics: ctx, mag: mag,
@@ -221,14 +219,13 @@ extension LayoutBridge {
                     into: &out,
                 )
             }
-            if argb != nil { out.append(.setColor(argb: resetArgb)) }
         }
     }
 
     // The selected-note branch of `emitNoteGlyphs`'s per-note loop: notehead + accidental bracketed in
-    // `selectedArgb`, parentheses + dots bracketed in `authorArgb` (or left at the ambient color when the
-    // note has no author color) — see `emitNoteGlyphs`'s doc comment for why this specific split mirrors
-    // `ScoreLayerBuilder+Chord.swift`'s `context.attach` set.
+    // `selectedArgb`, parentheses bracketed in `authorArgb` (or left at the ambient color when the note has no
+    // author color), dots in the ambient color — see `emitNoteGlyphs`'s doc comment for why this specific split
+    // mirrors `ScoreLayerBuilder+Chord.swift`'s `context.attach` set.
     // swiftlint:disable:next function_parameter_count
     private static func emitSelectedNoteGlyphs(
         _ note: LayoutChordNote,
@@ -271,7 +268,6 @@ extension LayoutBridge {
         guard accidentalOK else { return }
 
         if dotCount > 0 {
-            if let authorArgb { out.append(.setColor(argb: authorArgb)) }
             emitAugmentationDots(
                 anchorX: mox + Double(note.origin.x),
                 anchorY: moy + Double(note.origin.y),
@@ -280,7 +276,6 @@ extension LayoutBridge {
                 sp: ctx.sp,
                 into: &out,
             )
-            if authorArgb != nil { out.append(.setColor(argb: resetArgb)) }
         }
     }
 

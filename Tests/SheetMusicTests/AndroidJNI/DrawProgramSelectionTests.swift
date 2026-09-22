@@ -206,12 +206,49 @@
             #expect(withTintNil == withNoTint)
 
             // 0xFFFF0000 = opaque red, per `LayoutBridge.argb(from:)`'s ARGB (0xAARRGGBB) packing of
-            // `ScoreColor(red: 255, green: 0, blue: 0)`. Not asserting an exact count: the stem/flag inherit
-            // the chord's notehead color too (`encodeChord`'s "first colored note wins" — a second, unrelated
-            // bracket), so more than one occurrence is legitimate; the point here is "at least one", not
-            // "exactly one".
+            // `ScoreColor(red: 255, green: 0, blue: 0)`.
             let authorArgb: UInt32 = 0xFFFF_0000
             #expect(!Self.setColorIndices(withTintNil, argb: authorArgb).isEmpty)
+        }
+
+        /// A note's color is its HEAD's, as MuseScore draws a colored Note: the stem, the flag, the accidental
+        /// and the augmentation dot are elements of their own and stay in ink. Before 2026-09-22 the stem and
+        /// flag took the first colored note's color and the accidental and dots took their note's, so coloring
+        /// one note of a chord painted the chord's stem (reported from folino's palette).
+        @Test("an author color paints the notehead and nothing after it")
+        func authorColorPaintsTheHeadOnly() throws {
+            var note = Note(pitch: 61, tpc: 21, accidental: .sharp)
+            note.elementProperties.color = ScoreColor(red: 255, green: 0, blue: 0)
+            let voice = Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: NoteDuration.eighth.dotted(1), notes: [note])),
+            ])
+            let score = Score(division: 480, parts: [Part(
+                id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [Measure(voices: [voice])])],
+            )])
+            let commands = LayoutBridge.buildCommands(layout: Self.layout(score))
+
+            let opens = Self.setColorIndices(commands, argb: 0xFFFF_0000)
+            #expect(opens.count == 1, "one bracket, around the head — not a second one for the stem")
+            let open = try #require(opens.first)
+            let close = try #require(commands[(open + 1)...].firstIndex {
+                if case .setColor = $0 { return true }
+                return false
+            })
+            let bracketed = commands[(open + 1) ..< close]
+            let glyphs = bracketed.filter {
+                if case .glyph = $0 { return true }
+                return false
+            }
+            #expect(glyphs.count == 1, "the notehead alone — no accidental, no flag")
+            let strokesOrDots = bracketed.contains {
+                switch $0 {
+                case .moveTo, .lineTo, .stroke, .fillRect: true
+                default: false
+                }
+            }
+            #expect(!strokesOrDots, "no stem, no augmentation dot inside the author color")
         }
 
         /// Same gap, for the invisible-element path: a per-note-invisible chord routes through
