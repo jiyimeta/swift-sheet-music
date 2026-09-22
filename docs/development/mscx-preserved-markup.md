@@ -98,7 +98,8 @@ of an encode made with `emitPreservedMarkup = false`.
 
 | tag | why |
 |---|---|
-| `eid`, `LastEID` | MuseScore 5 element identity. This encoder declares `version="4.60"`, and 4.6 does not use `<eid>`. An id duplicated or stranded by an edit is worse than an absent one — MuseScore regenerates them on load. |
+| `eid` | MuseScore's element identity, and **not** because 4.6 ignores it: 4.6 reads `<eid>` (`read460.cpp:127`, `tread.cpp:540, 577-585`) and writes back whatever it read (`twrite.cpp:495-511`) rather than regenerating on load. This library models `<eid>` for the carriers it gives identity to, and each of those encoders writes its own `<eid>` child directly — so keeping the tag out of the preserved bag is what stops that carrier's id from being emitted twice. For a tag the model gives no identity to, a decoded `<eid>` has nothing to attach to and is dropped; MuseScore assigns that element a fresh one the next time it reads the file. |
+| `LastEID` | MuseScore's own id-issuing counter — the highest id it has ever handed out — not the identity of any element. This library neither reads nor writes it, so it is dropped whole rather than round-tripped. |
 | `programVersion`, `programRevision` | The encoder writes its own values for the format generation it targets. |
 
 **The exclusion fires at a capture point, not inside a captured subtree.**

@@ -226,7 +226,9 @@ struct SlurDecodeTests {
             == "<Slur> children not modeled and dropped: lineType, up")
     }
 
-    /// `<eid>` is MuseScore 4.6's regenerated element id, `<linkedMain>` /
+    /// `<eid>` is MuseScore's element id — which 4.6 reads and writes back
+    /// rather than regenerating (see `PreservedMarkupPolicy`), though `<Slur>`
+    /// is not a carrier this library gives identity to — and `<linkedMain>` /
     /// `<linked>` are the part-linking bookkeeping every score with parts
     /// carries. None hold user data, so none warn — see the allowlist comments
     /// in `MSCXDecoder+Chord.swift`.
