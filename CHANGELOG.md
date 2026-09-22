@@ -40,6 +40,20 @@ and this project adheres to
 - **A percussion staff draws no accidental.** `Score.suppressingRedundantAccidentals()` — the layout's first pass —
   drops every accidental on a drumset part or a `"percussion"` staff, grace notes and USER-forced ones included, so a
   score the bug above already wrote into renders the way MuseScore draws it. The model is untouched.
+- **An accidental no longer lands on the previous note.** The horizontal spacing knew how far apart two columns
+  should be but not what hangs off their sides, so at a system's minimum width — and whenever a host packed music
+  densely through `EngravingSpacing.systemStretch` — a ♯ or ♭ sat on top of the notehead before it. Each gap now has
+  a collision floor, per staff, from the previous column's noteheads, dots and rests to the next column's
+  accidentals, padded as MuseScore's `paddingtable.cpp` pads them (0.35 sp after a note or dot, 0.45 sp after a
+  rest), and every gap is laid out as `max(floor, k · weight)`: the stretch spreads the weights and leaves a gap an
+  accidental already pushed open alone until the others catch up — MuseScore's
+  `HorizontalSpacing::spaceAgainstPreviousSegments`, where spacing density divides only the natural width. A measure
+  with an accidental squeezed in it is therefore wider at its minimum, and a little wider at the default stretch;
+  one without is laid out exactly as before.
+- **A horizontal layout at a stretch below 1 drew measures narrower than their notes.** `systemStretch` scaled each
+  measure's minimum width down with it, so every column past the first spilled over the barline onto the next
+  measure. A measure now stays at its minimum below a stretch of 1, which is where a wrapped system's hard ceiling
+  already held it.
 
 ## [3.5.0] - 2026-09-20
 

@@ -77,6 +77,11 @@ extension LayoutEngine {
         // — including after the run splits or the policy is switched off.
         // So the entry always stores the PRE-override width, and the override
         // is applied only to the value this closure RETURNS.
+        //
+        // Each measure's aggregate is kept alongside (the cache is optional,
+        // so it cannot be the only holder): its collision floors decide how
+        // much of the width is stretchable — see `naturalWidthRatio`.
+        var aggregates = [TickAggregate?](repeating: nil, count: measureCount)
         let cachedMinWidths: [CGFloat] = (0 ..< measureCount).map { i in
             let measuresAt = staves.map { staff in
                 i < staff.measures.count ? staff.measures[i] : nil
@@ -93,15 +98,13 @@ extension LayoutEngine {
                 // any plan — only the returned value is overridden.
                 context.cache?.entries[i] = prior
                 context.cache?.widthHits += 1
+                aggregates[i] = prior.tickAggregate
                 return collapsedOverride(for: i, baseline: prior.minWidth)
             }
             context.cache?.widthMisses += 1
             let baseHeader = computeHeaderSchedule(
-                measureIdx: i,
-                staves: staves,
-                metrics: context.metrics,
-                synthesizeClefForAllStaves: false,
-                synthesizeKeySigForAllStaves: false,
+                measureIdx: i, staves: staves, metrics: context.metrics,
+                synthesizeClefForAllStaves: false, synthesizeKeySigForAllStaves: false,
             )
             let result = crossStaffMinimumMeasureWidthWithAggregate(
                 staves: staves,
@@ -120,6 +123,7 @@ extension LayoutEngine {
                 tickAggregate: result.aggregate,
                 placements: [:],
             )
+            aggregates[i] = result.aggregate
             return collapsedOverride(for: i, baseline: result.width)
         }
 
@@ -139,6 +143,27 @@ extension LayoutEngine {
                   i < cancellationWidths.count
             else { return cachedMinWidths[i] }
             return cachedMinWidths[i] + cancellationWidths[i]
+        }
+
+        // A measure's natural width at the host's stretch, divided back by
+        // that stretch so it can stand in for `width` in the natural-stretch
+        // test (`… > contentAvail / naturalStretch`). The weights stretch;
+        // a collision floor adds only what stretching them has not already
+        // cleared — at the default stretch, much less than at the minimum.
+        // Exactly `width` for a measure no floor binds in.
+        let naturalStretch = context.options.spacing.systemStretch
+        func naturalWidthRatio(_ i: Int, _ width: CGFloat) -> CGFloat {
+            guard let agg = aggregates[i],
+                  plan.runLength(startingAt: i) == nil,
+                  !plan.isInteriorOfRun(i)
+            else { return width }
+            let atMinimum = agg.collisionGrowth(
+                atStretch: 1, contentFloor: sp * 4,
+            )
+            let atStretch = agg.collisionGrowth(
+                atStretch: naturalStretch, contentFloor: sp * 4,
+            )
+            return width - atMinimum + atStretch / naturalStretch
         }
 
         // What each possible system boundary would announce at its
@@ -207,6 +232,9 @@ extension LayoutEngine {
             // fit within availableWidth − labelW.
             let contentAvail = context.availableWidth - labelW
             var widthSoFar: CGFloat = 0
+            // The same sum in `naturalWidthRatio` units, for the
+            // natural-stretch test.
+            var naturalSoFar: CGFloat = 0
             let systemStart = cursor
             // Engraving convention redraws the active clef + key
             // signature at every system head. `minWidths[systemStart]`
@@ -255,7 +283,6 @@ extension LayoutEngine {
             // wraps emerge on dense lyric content; loosening
             // further re-introduces 5-6 measure systems. The host can now
             // override this ratio through its engraving spacing options.
-            let naturalStretch = context.options.spacing.systemStretch
             let naturalAvail = contentAvail / naturalStretch
             while cursor < measureCount {
                 // Multi-measure-rest interior indices contribute width 0 and emit
@@ -271,6 +298,7 @@ extension LayoutEngine {
                 let w = cursor == systemStart
                     ? baseW + firstHeaderBoost
                     : baseW
+                let naturalW = naturalWidthRatio(cursor, w)
                 // Hard ceiling — never let a system overflow the
                 // page horizontally.
                 if context.options.wrapToViewWidth
@@ -287,7 +315,7 @@ extension LayoutEngine {
                 // get a system to themselves).
                 if context.options.wrapToViewWidth
                     && cursor > systemStart
-                    && widthSoFar + w > naturalAvail
+                    && naturalSoFar + naturalW > naturalAvail
                 {
                     break
                 }
@@ -297,6 +325,7 @@ extension LayoutEngine {
                     break
                 }
                 widthSoFar += w
+                naturalSoFar += naturalW
                 cursor += 1
                 // Explicit `<LayoutBreak><subtype>line</subtype>`
                 // forces the next measure onto a new system —
@@ -381,7 +410,20 @@ extension LayoutEngine {
                 // where the viewport stretches them ~1.5×; apply
                 // the same `naturalStretch` here so horizontal
                 // mode has matching breathing room.
-                stretched = widthsSlice.map { $0 * naturalStretch }
+                //
+                // Never below the minimum, though: a stretch under 1
+                // (a host packing music densely) would otherwise draw
+                // each measure narrower than its own content — every
+                // column past the barline and into the next measure.
+                // Below 1 the measure simply stays at its minimum,
+                // as a wrapped system's hard ceiling already makes it.
+                stretched = widthsSlice.indices.map { j in
+                    max(
+                        widthsSlice[j],
+                        naturalStretch
+                            * naturalWidthRatio(systemStart + j, widthsSlice[j]),
+                    )
+                }
             }
             // Snapshot carry-in state BEFORE buildSystem mutates it.
             // Used either as cache key (on miss store) or for hit check.

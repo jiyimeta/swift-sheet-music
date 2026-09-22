@@ -354,8 +354,30 @@ extension LayoutEngine {
     struct TickAggregate: Equatable {
         let sortedTicks: [Int]
         let gapWeights: [CGFloat]
+        /// Least width of each gap in `gapWeights`, whatever the stretch — what keeps an accidental off the previous
+        /// note (`LayoutEngine+ColumnCollision.swift`). `0` where nothing collides, which is most gaps.
+        let gapFloors: [CGFloat]
         let totalWeight: CGFloat
         let measureEnd: Int
+
+        /// `Σ max(floor, k · weight)`: the gaps' total width at stretch `k`.
+        func contentWidth(atStretch k: CGFloat) -> CGFloat {
+            zip(gapWeights, gapFloors).reduce(0) { $0 + max($1.1, k * $1.0) }
+        }
+
+        /// The gaps' total at `k = 1`, the least they can be placed in without a collision. Equal to `totalWeight`
+        /// when no floor binds.
+        var minimumContentWidth: CGFloat {
+            contentWidth(atStretch: 1)
+        }
+
+        /// How much wider the floors make this measure's content at `stretch` than stretching its weights alone
+        /// would: `0` when no floor binds there. `contentFloor` is the least content width a measure is given
+        /// (`crossStaffMinimumMeasureWidth`'s 4 sp).
+        func collisionGrowth(atStretch stretch: CGFloat, contentFloor: CGFloat) -> CGFloat {
+            let stretchedWeights = stretch * max(contentFloor, totalWeight)
+            return max(stretchedWeights, contentWidth(atStretch: stretch)) - stretchedWeights
+        }
     }
 
     /// Shared x-coordinate for every unique tick in a measure, computed
@@ -400,15 +422,16 @@ extension LayoutEngine {
         // 1 sp also gives flagged 8th / 16th notes room for their
         // flag glyph before the barline.
         let trailingGap = metrics.sp * 1
-        // Floor `contentWidth` at `totalWeight`: even when callers
+        // Floor `contentWidth` at `minimumContentWidth`: even when callers
         // hand us a `width` smaller than the cross-staff aggregated
         // minimum, never squeeze gaps below their declared per-segment
         // minimum — that would re-introduce the lyric overlap that
-        // `lyricsPairWidth` is supposed to prevent. Excess width
-        // beyond `totalWeight` still spreads proportionally, so the
-        // measure can stretch but cannot collapse.
+        // `lyricsPairWidth` is supposed to prevent, and put accidentals
+        // on the previous note (`gapFloors`). Excess width spreads
+        // proportionally to the weights, so the measure can stretch but
+        // cannot collapse.
         let contentWidth = max(
-            agg.totalWeight,
+            agg.minimumContentWidth,
             max(
                 metrics.sp * 4,
                 width - headerSchedule.contentStartX - trailingGap,
@@ -417,12 +440,30 @@ extension LayoutEngine {
         let baseX = headerSchedule.contentStartX + metrics.sp
 
         var tickToX: [Int: CGFloat] = [:]
-        var cumulative: CGFloat = 0
+        let proportional = agg.totalWeight > 0 ? contentWidth / agg.totalWeight : 0
+        let floorsBind = agg.gapFloors.indices.contains {
+            agg.gapFloors[$0] > proportional * agg.gapWeights[$0]
+        }
+        guard floorsBind else {
+            // Pure proportional spread — the arithmetic every measure
+            // without a binding floor has always been placed by.
+            var cumulative: CGFloat = 0
+            for (i, t) in agg.sortedTicks.enumerated() {
+                let fraction = agg.totalWeight > 0
+                    ? cumulative / agg.totalWeight : 0
+                tickToX[t] = baseX + fraction * contentWidth
+                cumulative += agg.gapWeights[i]
+            }
+            return tickToX
+        }
+        let gaps = filledGaps(
+            weights: agg.gapWeights, floors: agg.gapFloors,
+            content: contentWidth,
+        )
+        var x = baseX
         for (i, t) in agg.sortedTicks.enumerated() {
-            let fraction = agg.totalWeight > 0
-                ? cumulative / agg.totalWeight : 0
-            tickToX[t] = baseX + fraction * contentWidth
-            cumulative += agg.gapWeights[i]
+            tickToX[t] = x
+            x += gaps[i]
         }
         return tickToX
     }
@@ -512,7 +553,7 @@ extension LayoutEngine {
         // Must match `tickColumns`' trailingGap so the spacing engine
         // and the placement engine size every measure identically.
         let trailingGap = metrics.sp * 1
-        let contentWidth = max(metrics.sp * 4, agg.totalWeight)
+        let contentWidth = max(metrics.sp * 4, agg.minimumContentWidth)
         // baseX = contentStartX + sp; the rightmost tick lands at
         // baseX + contentWidth; trailing barline / gap follows.
         let width = headerSchedule.contentStartX + metrics.sp
@@ -597,8 +638,13 @@ extension LayoutEngine {
         var voiceElements: [[TimedElement]] = []
         var allTicks: Set<Int> = []
         var measureEnd = 0
+        // Per staff, tick → what its chords and rests there hang off the
+        // column's sides, for `collisionFloors`.
+        var inks: [[Int: ColumnInk]] = []
 
         for staff in staves where measureIdx < staff.measures.count {
+            var staffInks: [Int: ColumnInk] = [:]
+            defer { inks.append(staffInks) }
             for voice in staff.measures[measureIdx].voices {
                 var elements: [TimedElement] = []
                 var tick = 0
@@ -665,6 +711,9 @@ extension LayoutEngine {
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: w,
                         ))
+                        staffInks[tick, default: ColumnInk()].formUnion(
+                            columnInk(of: c, metrics: metrics),
+                        )
                         previousChord = c
                         allTicks.insert(tick)
                         tick = end
@@ -679,6 +728,9 @@ extension LayoutEngine {
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: w,
                         ))
+                        staffInks[tick, default: ColumnInk()].formUnion(
+                            columnInk(of: r, metrics: metrics),
+                        )
                         allTicks.insert(tick)
                         tick = end
                     case let .harmony(harmony) where harmony.visible:
@@ -749,7 +801,7 @@ extension LayoutEngine {
 
         guard !allTicks.isEmpty else {
             return TickAggregate(
-                sortedTicks: [], gapWeights: [],
+                sortedTicks: [], gapWeights: [], gapFloors: [],
                 totalWeight: 0, measureEnd: 0,
             )
         }
@@ -795,6 +847,9 @@ extension LayoutEngine {
         let totalWeight = gapWeights.reduce(0, +)
         return TickAggregate(
             sortedTicks: sortedTicks, gapWeights: gapWeights,
+            gapFloors: collisionFloors(
+                inks: inks, sortedTicks: sortedTicks, gapWeights: gapWeights,
+            ),
             totalWeight: totalWeight, measureEnd: measureEnd,
         )
     }

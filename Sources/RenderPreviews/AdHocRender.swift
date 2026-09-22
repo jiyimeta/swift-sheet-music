@@ -23,6 +23,8 @@
     ///   SM_MEASURE_NUMBERS — measure-number interval; omitted or `0`
     ///             engraves one label per system head (the default
     ///             policy), `1` labels every measure, `N` every N-th
+    ///   SM_STRETCH — `EngravingSpacing.systemStretch` (default 1.5); a
+    ///             host's note-spacing control scales this value
     ///
     /// Usage:
     ///   SM_SCORE=~/Documents/.../foo.mscz SM_COUNT=8 swift run render-previews
@@ -65,11 +67,16 @@
 
             let width = env["SM_WIDTH"].flatMap { Double($0) }
             let interval = env["SM_MEASURE_NUMBERS"].flatMap { Int($0) } ?? 0
+            var spacing = EngravingSpacing.standard
+            if let stretch = env["SM_STRETCH"].flatMap({ Double($0) }) {
+                spacing.systemStretch = CGFloat(stretch)
+            }
             let opts = ScoreViewOptions(
                 staffSize: 28, systemGap: 40,
                 wrapToViewWidth: width != nil,
                 measureNumbers: interval > 0
                     ? .interval(every: interval) : .systemStart,
+                spacing: spacing,
             )
             if let width {
                 try renderScoreToPNG(
