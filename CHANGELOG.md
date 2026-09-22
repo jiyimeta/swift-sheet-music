@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-09-22
+
 ### Changed
 
 - **`respellInKey` keeps a note's place relative to the scale** (`TransposeScore`, `TransposeRange`). A moved note's
