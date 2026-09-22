@@ -51,7 +51,7 @@ struct TransposeRangeTests {
         #expect(tail?.tieBack == 1)
     }
 
-    @Test("respellInKey replaces the chromatic rule's double-alteration spelling with the simplest one")
+    @Test("respellInKey replaces the chromatic rule's spelling with the one the scale asks for")
     func respellInKey() throws {
         var chromatic = EditingFixtures.parityFixture()
         var respelled = chromatic
@@ -61,7 +61,7 @@ struct TransposeRangeTests {
         #expect(Self.note(chromatic, 0, 1)?.pitch == 63)
         #expect(Self.note(chromatic, 0, 1)?.tpc == 23) // D♯ — the rule alternates letter and alteration
         #expect(Self.note(respelled, 0, 1)?.pitch == 63)
-        #expect(Self.note(respelled, 0, 1)?.tpc == 11) // E♭ — simplest in C major
+        #expect(Self.note(respelled, 0, 1)?.tpc == 11) // E♭ — C major's tonic, moved with its key to E♭ major's
         #expect(Self.note(respelled, 0, 1)?.accidental == .flat)
     }
 

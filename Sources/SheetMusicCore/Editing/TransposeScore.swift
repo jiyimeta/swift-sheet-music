@@ -10,9 +10,15 @@ import SheetMusicFoundation
 /// often as by an empty one, and a transposition that skipped it would move every note while leaving the score
 /// claiming to be in C.
 ///
-/// The keys are written FIRST and the notes are planned against the result, so `respellInKey` spells each note in
-/// the key it is now in rather than the one the music just left: a C-major piece moved up two semitones reads in D
-/// with F♯ and C♯ in the signature, not in C with an accidental on every one of them.
+/// The keys are written FIRST and the notes are planned against the result, so each note's accidental is decided
+/// against the key it is now in rather than the one the music just left: a C-major piece moved up two semitones
+/// reads in D with F♯ and C♯ in the signature, not in C with an accidental on every one of them.
+///
+/// **`respellInKey` keeps every note's place relative to the scale.** A note moves round the line of fifths by as
+/// many fifths as its key does, so a chromatic note stays the same chromatic degree: in B major a G♮ is ♭6, and
+/// the piece moved down three semitones into A♭ major writes it F♭, not E♮. With `transposeKeySignatures` off the
+/// notes are spelled the same way — for the key the music WOULD have moved to — and only the signature on the page
+/// stays behind.
 ///
 /// Notes move by the same arithmetic `TransposeRange` uses (`TranspositionPlanner`): tie chains move whole with
 /// the accidental on the head alone, grace notes move with the chord that carries them, and percussion staves are
@@ -41,8 +47,8 @@ public struct TransposeScore: EditCommand {
     /// Whether every key signature moves with the notes. `false` keeps the score's key and spells the move in
     /// accidentals — MuseScore's "Transpose key signatures" unchecked.
     public let transposeKeySignatures: Bool
-    /// Whether each moved note is re-spelled to the simplest reading in the key it lands in, rather than kept in
-    /// the chromatic spelling repeated semitone steps produce.
+    /// Whether each moved note keeps its place relative to the scale — its tpc moved by the fifths its key moves —
+    /// rather than the chromatic spelling repeated semitone steps produce.
     public let respellInKey: Bool
 
     public init(semitones: Int, transposeKeySignatures: Bool, respellInKey: Bool = true) {
@@ -81,9 +87,9 @@ public struct TransposeScore: EditCommand {
         guard semitones != 0 else { return nil }
         try ensureEveryNoteCanMove(Self.pitchedChords(in: score), in: score)
 
-        // The keys are applied to a preview before the notes are planned, so every note's `activeKey` — the key
-        // `respellInKey` spells it in, and the key the chromatic step rule reads its predicate from — is the one it
-        // will actually be read under, not the one being replaced.
+        // The keys are applied to a preview before the notes are planned, so every note's `activeKey` — the key its
+        // accidental is decided against, and the key the chromatic step rule reads its predicate from — is the one
+        // it will actually be read under, not the one being replaced.
         var scratch = ids
         var preview = score
         var commands: [any EditCommand] = []
@@ -100,8 +106,11 @@ public struct TransposeScore: EditCommand {
         var visited: Set<NoteID> = []
         let targets = Self.pitchedChords(in: preview)
         let notes = try RangeEditPlanner.plan(targets: targets, in: preview, ids: scratch) { target, working in
+            // Spelled FROM the key each note was in before the move — `score`, not the preview, whose signatures
+            // already say where the music is going.
             TranspositionPlanner.steps(
-                at: target, in: working, semitones: semitones, respellInKey: respellInKey, visited: &visited,
+                at: target, in: working, semitones: semitones, sourceKeys: respellInKey ? score : nil,
+                visited: &visited,
             )
         }
         commands += notes?.commands ?? []

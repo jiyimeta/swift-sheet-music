@@ -7,6 +7,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **`respellInKey` keeps a note's place relative to the scale** (`TransposeScore`, `TransposeRange`). A moved note's
+  tpc now moves round the line of fifths by as many fifths as its key does, so a chromatic note stays the same
+  chromatic degree: in B major a G♮ is ♭6, and moved down three semitones into A♭ major it is written F♭ — it used
+  to be re-spelled E♮, the plainest name for its new pitch, which threw away what the reader knew about the note.
+  With `transposeKeySignatures` off the notes are spelled for the key the music would have moved to. A spelling
+  past 𝄫 / 𝄪 is read back twelve fifths to its enharmonic. The diatonic notes of a key come out as before — every
+  existing expectation of the old rule held under the new one.
+
+### Fixed
+
+- **An octave re-spelled the note it only meant to lift.** `Note.shifted(bySemitones:in:)` walks the chromatic
+  rule one semitone at a time, and twelve steps do not come back to where they started: under C major an E♭
+  moved up an octave landed on D♯. A whole number of octaves now keeps the tpc and the written accidental, which
+  is MuseScore's Ctrl+↑ / Ctrl+↓ — and what `TransposeRange` over a range selection now does with ±12.
+- **`TransposeScore` by an octave rewrote a seven-accidental key.** The key was read back through the −7…+7
+  window like any other move, so C♯ major moved an octave became D♭ major. A whole number of octaves leaves every
+  key where it was, as the command's own documentation already said it did.
+
 ## [3.5.0] - 2026-09-20
 
 ### Added

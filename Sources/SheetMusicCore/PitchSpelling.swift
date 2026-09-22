@@ -166,8 +166,19 @@ extension Note {
     ///
     /// Returns `nil` when the resulting pitch falls outside the
     /// MIDI range `0…127`.
+    ///
+    /// **A whole number of octaves keeps the spelling** — the tpc and the written accidental come across
+    /// unchanged, which is MuseScore's Ctrl+↑ / Ctrl+↓. Twelve steps of the rule above do not come back to where
+    /// they started: under C major an E♭ walked up twelve semitones lands on D♯, so an octave move would silently
+    /// re-spell the note it was only meant to lift.
     public func shifted(bySemitones delta: Int, in keySig: Int = 0) -> Note? {
         if delta == 0 { return self }
+        if delta % 12 == 0 {
+            guard (0 ... 127).contains(pitch + delta) else { return nil }
+            var moved = self
+            moved.pitch += delta
+            return moved
+        }
         let direction = delta > 0 ? 1 : -1
         var current = self
         for _ in 0 ..< abs(delta) {
@@ -191,7 +202,7 @@ extension Note {
     }
 }
 
-/// How `RespellRange` — and `TransposeRange` with `respellInKey` — picks among a pitch's enharmonic spellings.
+/// How `RespellRange` picks among a pitch's enharmonic spellings.
 /// Raw values are the wire bytes (`RespellRangeIntentWire.mode`).
 public enum RespellMode: UInt8, Sendable, CaseIterable {
     /// One accidental at most; flats on the flat side of the circle, sharps on the sharp side, relative to the key.

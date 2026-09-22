@@ -223,9 +223,10 @@ public enum EditIntent: Sendable, Equatable {
     // intent expands to one `CompositeEditCommand` over `Score.voiceElements(in:)`, applied in ascending onset order
     // and re-resolved by tick (`RangeEditPlanner`); refusal on any element rolls back all of it.
 
-    /// Move every note in `over` by `semitones` (−24…24); tie chains move whole. `respellInKey` re-spells each
-    /// result to the simplest reading in the key in force. Resolves to nothing to apply for zero semitones or a
-    /// range with no pitched note; refused as `.invalidTransposition` past two octaves.
+    /// Move every note in `over` by `semitones` (−24…24); tie chains move whole, and a whole number of octaves
+    /// keeps every spelling. `respellInKey` keeps each note's place relative to the scale of the key in force.
+    /// Resolves to nothing to apply for zero semitones or a range with no pitched note; refused as
+    /// `.invalidTransposition` past two octaves.
     case transposeRange(over: VoiceElementRange, semitones: Int, respellInKey: Bool)
 
     /// Add a note `|steps|` diatonic degrees (1 unison … 8 octave … 10 tenth) above (positive) each chord's top note
@@ -503,8 +504,8 @@ public enum EditIntent: Sendable, Equatable {
 
     /// Move every note in the score by `semitones` (−24…24) — a change of KEY, not a pitch edit over a wide
     /// selection. With `transposeKeySignatures` every key signature moves too, bar 1 included whether or not it
-    /// writes one down; the keys are written first so `respellInKey` spells each note in the key it lands in.
-    /// Chord symbols do not move (`docs/edit-commands.md` §C). Resolves to nothing to apply for zero semitones;
+    /// writes one down. `respellInKey` keeps each note's place relative to the scale as its key moves. Chord
+    /// symbols do not move (`docs/edit-commands.md` §C). Resolves to nothing to apply for zero semitones;
     /// refused as `.invalidTransposition` past two octaves and as `.transpositionOutOfRange` when any note could
     /// not stay inside MIDI 0…127.
     case transposeScore(semitones: Int, transposeKeySignatures: Bool, respellInKey: Bool)
