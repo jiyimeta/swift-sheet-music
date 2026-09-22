@@ -7,7 +7,24 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [3.7.0] - 2026-09-22
+## [3.6.0] - 2026-09-22
+
+### Added
+
+- **`SheetMusicEditWire` is exported on every platform**, not only under
+  `SWIFT_SHEET_MUSIC_ANDROID=1`. The target itself has no JNI and no Apple
+  dependency — its own declaration has said so since the product was first
+  gated — so there was nothing for the gate to protect, and it cost an Apple
+  consumer the one thing the module is for. `SheetMusicEditWire` and
+  `SheetMusicUI` are exported by mutually exclusive branches of the manifest,
+  so an iOS or macOS host that wanted `EditIntentCodec` could not link it at
+  all: the two products could not resolve in one evaluation. A host that
+  replicates an edit over the network needs the same intent wire an Android
+  mirror session already uses, and now it can name it.
+
+  Additive: the Android product set is unchanged (the declaration moved out of
+  the `isAndroid` block rather than being duplicated), no target's dependencies
+  changed, and nothing about the wire format moved.
 
 ### Changed
 
@@ -24,9 +41,29 @@ and this project adheres to
   colored `Note` — `<Stem>`, `<Hook>`, `<NoteDot>` and `<Accidental>` are elements with colors of their own — and all
   a selection highlights. A MuseScore file that colored those elements themselves now shows them in ink, since the
   model carries no color for them.
+- **`README.md`'s product table lists `SheetMusicEditWire` and
+  `SheetMusicZip`.** Both are exported on every platform and neither appeared
+  in the table a consumer picks from, which for a reader choosing dependencies
+  made them invisible.
+- **`docs/development/webassembly.md` points at the ceiling the script
+  enforces** rather than restating a number: `CEILING_BYTES` in
+  `Scripts/wasm-size.sh` is 4.5 MiB, and the doc still said the 4 MB it was
+  raised from. The same file now also says what a wasm run leaves in
+  `git status` — `Package.resolved` with `originHash` as the only changed line
+  and no pin moved, which is noise to discard rather than commit.
 
 ### Fixed
 
+- **The `<eid>` reference table said the opposite of what MuseScore does.**
+  `docs/development/mscx-preserved-markup.md` still claimed that 4.6 does not
+  use `<eid>` and regenerates identities on load. Both halves are false, and
+  `PreservedMarkupPolicy` corrected them in 3.5.0 — in the code comment that
+  sends the reader to this very table, which went on contradicting it. The row
+  now gives the reason that is actually true (a modeled carrier's encoder
+  writes its own `<eid>`, so preserving it too would emit the id twice), and
+  `LastEID` is split out as the id-issuing counter it is rather than any
+  element's identity. Two decoder test comments carried the same "regenerated"
+  wording and are corrected with it. Comments and documentation only.
 - **An octave re-spelled the note it only meant to lift.** `Note.shifted(bySemitones:in:)` walks the chromatic
   rule one semitone at a time, and twelve steps do not come back to where they started: under C major an E♭
   moved up an octave landed on D♯. A whole number of octaves now keeps the tpc and the written accidental, which
@@ -56,51 +93,6 @@ and this project adheres to
   measure's minimum width down with it, so every column past the first spilled over the barline onto the next
   measure. A measure now stays at its minimum below a stretch of 1, which is where a wrapped system's hard ceiling
   already held it.
-
-## [3.6.0] - 2026-09-22
-
-### Added
-
-- **`SheetMusicEditWire` is exported on every platform**, not only under
-  `SWIFT_SHEET_MUSIC_ANDROID=1`. The target itself has no JNI and no Apple
-  dependency — its own declaration has said so since the product was first
-  gated — so there was nothing for the gate to protect, and it cost an Apple
-  consumer the one thing the module is for. `SheetMusicEditWire` and
-  `SheetMusicUI` are exported by mutually exclusive branches of the manifest,
-  so an iOS or macOS host that wanted `EditIntentCodec` could not link it at
-  all: the two products could not resolve in one evaluation. A host that
-  replicates an edit over the network needs the same intent wire an Android
-  mirror session already uses, and now it can name it.
-
-  Additive: the Android product set is unchanged (the declaration moved out of
-  the `isAndroid` block rather than being duplicated), no target's dependencies
-  changed, and nothing about the wire format moved.
-
-### Fixed
-
-- **The `<eid>` reference table said the opposite of what MuseScore does.**
-  `docs/development/mscx-preserved-markup.md` still claimed that 4.6 does not
-  use `<eid>` and regenerates identities on load. Both halves are false, and
-  `PreservedMarkupPolicy` corrected them in 3.5.0 — in the code comment that
-  sends the reader to this very table, which went on contradicting it. The row
-  now gives the reason that is actually true (a modeled carrier's encoder
-  writes its own `<eid>`, so preserving it too would emit the id twice), and
-  `LastEID` is split out as the id-issuing counter it is rather than any
-  element's identity. Two decoder test comments carried the same "regenerated"
-  wording and are corrected with it. Comments and documentation only.
-
-### Changed
-
-- **`README.md`'s product table lists `SheetMusicEditWire` and
-  `SheetMusicZip`.** Both are exported on every platform and neither appeared
-  in the table a consumer picks from, which for a reader choosing dependencies
-  made them invisible.
-- **`docs/development/webassembly.md` points at the ceiling the script
-  enforces** rather than restating a number: `CEILING_BYTES` in
-  `Scripts/wasm-size.sh` is 4.5 MiB, and the doc still said the 4 MB it was
-  raised from. The same file now also says what a wasm run leaves in
-  `git status` — `Package.resolved` with `originHash` as the only changed line
-  and no pin moved, which is noise to discard rather than commit.
 
 ## [3.5.0] - 2026-09-20
 
