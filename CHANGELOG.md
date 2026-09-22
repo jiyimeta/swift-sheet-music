@@ -7,6 +7,23 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`SheetMusicEditWire` is exported on every platform**, not only under
+  `SWIFT_SHEET_MUSIC_ANDROID=1`. The target itself has no JNI and no Apple
+  dependency — its own declaration has said so since the product was first
+  gated — so there was nothing for the gate to protect, and it cost an Apple
+  consumer the one thing the module is for. `SheetMusicEditWire` and
+  `SheetMusicUI` are exported by mutually exclusive branches of the manifest,
+  so an iOS or macOS host that wanted `EditIntentCodec` could not link it at
+  all: the two products could not resolve in one evaluation. A host that
+  replicates an edit over the network needs the same intent wire an Android
+  mirror session already uses, and now it can name it.
+
+  Additive: the Android product set is unchanged (the declaration moved out of
+  the `isAndroid` block rather than being duplicated), no target's dependencies
+  changed, and nothing about the wire format moved.
+
 ## [3.5.0] - 2026-09-20
 
 ### Added

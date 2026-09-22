@@ -68,6 +68,17 @@ var products: [Product] = [
     // `MSCZWriter` — folino's `.folino` container takes that shape for a PDF-backed score. `ZipWriter`,
     // `ZipReader` and `ZipCompressionMethod` have been public all along; only their reachability changes.
     .library(name: "SheetMusicZip", targets: ["SheetMusicZip"]),
+    // Not `.dynamic`: Folino's `FolinoEditorJNI` and this package's `SheetMusicAndroidJNI` are separate
+    // `.so`s, each linking its own copy of the wire code. That's fine — the wire is pure code with no
+    // shared state, and what must match between the two images is the *schema*, which now has exactly
+    // one declaration instead of two hand-maintained copies.
+    //
+    // Exported unconditionally rather than only under `isAndroid`: the target has no JNI and no Apple
+    // dependency (see its own declaration below), and an Apple consumer needs the same intent wire to
+    // replicate an edit — folino's cloud op log carries `EditIntent`s encoded by `EditIntentCodec`. While
+    // the product was Android-gated, `SheetMusicEditWire` and `SheetMusicUI` could not resolve in one
+    // evaluation of this manifest, so an iOS host could not link the wire at all.
+    .library(name: "SheetMusicEditWire", targets: ["SheetMusicEditWire"]),
 ]
 
 var targets: [Target] = [
@@ -196,9 +207,10 @@ var targets: [Target] = [
         ] : [],
     ),
     // Always declared: Android and Apple host tests reach it through SheetMusicAndroidJNI,
-    // while WebAssembly reaches it through SheetMusicBridgeCore. Only its *product*
-    // (below, in the `if isAndroid` block) is Android-gated because the Swift target
-    // itself has no JNI or Apple dependency.
+    // while WebAssembly reaches it through SheetMusicBridgeCore. Its *product* is exported
+    // unconditionally too — the Swift target has no JNI and no Apple dependency, so there is
+    // nothing for a platform gate to protect, and gating it stopped an Apple consumer from
+    // linking the intent wire at all (see the product declaration at the top of this file).
     //
     // The `Path/` and `Intent/` subdirectories are load-bearing for the Kotlin side, not just tidiness:
     // wirelet's Gradle codegen scans exactly one directory per source set, and `:SheetMusicAudioAndroid`
@@ -552,14 +564,6 @@ if isAndroid {
             name: "SheetMusicAndroidJNI",
             type: .dynamic,
             targets: ["SheetMusicAndroidJNI"],
-        ),
-        // Not `.dynamic`: Folino's `FolinoEditorJNI` and this package's `SheetMusicAndroidJNI` are separate
-        // `.so`s, each linking its own copy of the wire code. That's fine — the wire is pure code with no
-        // shared state, and what must match between the two images is the *schema*, which now has exactly
-        // one declaration instead of two hand-maintained copies.
-        .library(
-            name: "SheetMusicEditWire",
-            targets: ["SheetMusicEditWire"],
         ),
     ]
     targets += [
