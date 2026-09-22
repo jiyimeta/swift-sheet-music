@@ -104,11 +104,12 @@ struct SetDotsTests {
         #expect(Self.reason(of: refusal) == .notDottable(at: Self.slot(1, 1)))
     }
 
-    /// `SetDots` adds NO tuplet check of its own — the refusal is `SetRestDuration`'s, raised under that
-    /// operation name. Reaching it needs a member inside a tuplet span whose duration still has a dotted
-    /// spelling, which `CreateTuplet` alone cannot produce (see above), so the member is re-spelled as the
-    /// value-equal enum case first.
-    @Test("a member inside a tuplet span inherits SetRestDuration's refusal, not a new one")
+    /// `SetDots` adds NO tuplet check of its own — the answer is `SetRestDuration`'s. Reaching it needs a member
+    /// inside a tuplet span whose duration still has a dotted spelling, which `CreateTuplet` alone cannot produce
+    /// (see above), so the member is re-spelled as the value-equal enum case first. Inside a tuplet the length is
+    /// written and scaled by the bracket (`TupletDurationChange`), so a dotted eighth in this 2:3 duplet asks for
+    /// 540 ticks where the last member has 240 and nothing follows it inside the bracket.
+    @Test("a member inside a tuplet span inherits SetRestDuration's answer, not a new one")
     func insideTupletIsInherited() throws {
         var score = EditingFixtures.parityFixture()
         // A 2:3 duplet over the bar's first quarter rest: members span element indices 0...1.
@@ -117,7 +118,7 @@ struct SetDotsTests {
         let refusal = #expect(throws: SheetMusicError.self) {
             _ = try SetDots(at: Self.slot(1, 1), dots: 1).apply(to: &score)
         }
-        #expect(Self.reason(of: refusal) == .insideTuplet(at: Self.slot(1, 1)))
+        #expect(Self.reason(of: refusal) == .insufficientRoom(neededTicks: 300, availableTicks: 0))
     }
 
     @Test("a missing element and a non-timed element are refused")

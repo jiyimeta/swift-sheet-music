@@ -168,14 +168,15 @@ struct SetChordDurationTests {
         }
     }
 
-    @Test("Refuses when chord is inside a tuplet")
-    func refusesInsideTuplet() {
+    /// A single tuplet takes a written length now (`TupletDurationChangeTests`); a NESTED one is still out of scope.
+    @Test("Refuses when chord is inside a nested tuplet")
+    func refusesInsideNestedTuplet() {
         let voice = Voice(
             elements: [chord(.eighth), chord(.eighth), chord(.eighth)],
-            tuplets: [Tuplet(
-                normalNotes: 2, actualNotes: 3,
-                startIndex: 0, endIndex: 2,
-            )],
+            tuplets: [
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 1),
+            ],
         )
         let measure = Measure(voices: [voice])
         var score = Score(

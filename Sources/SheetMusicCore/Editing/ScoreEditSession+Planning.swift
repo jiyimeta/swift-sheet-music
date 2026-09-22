@@ -27,16 +27,16 @@ extension ScoreEditSession {
         case let .setRestDuration(location, duration):
             // The rest key has the same cross-bar hole the note key does — mirrors Folino's
             // `EditorViewModel+Input.swift`'s `writeRest(over:in:)`, which asks the same planner before falling back
-            // to a plain retime.
-            if let plan = CrossBarInputPlanner.plan(.rest, duration: duration, at: location, in: score) {
+            // to a plain retime. Not in a tuplet, whose member lengths are written and stay in the bracket.
+            let inTuplet = DurationChangeAlgorithm.isInsideTuplet(location, in: score)
+            if !inTuplet, let plan = CrossBarInputPlanner.plan(.rest, duration: duration, at: location, in: score) {
                 return CompositeEditCommand(commands: plan.commands, location: plan.head)
             }
             // A rest that fills its bar from beat one is spelled `.measure`, not the literal length — the same
             // promotion Folino's `restDuration(_:at:)` applies before this same fallback. `SetRestDuration` writes
             // whatever it's handed without judging that, so the fallback has to do the judging itself.
-            return SetRestDuration(
-                at: location, duration: RestDurationPromotion.promoted(duration, at: location, in: score),
-            )
+            let promoted = inTuplet ? duration : RestDurationPromotion.promoted(duration, at: location, in: score)
+            return SetRestDuration(at: location, duration: promoted)
         case let .setChordDuration(location, duration):
             // The same cross-bar hole `.setRestDuration` has just above: the engine refuses any single-slot
             // lengthening that would cross a barline, so without this a host's length key reads as dead at every
@@ -48,8 +48,9 @@ extension ScoreEditSession {
             // (and its articulations, grace notes and ties) on the far side of the barline.
             //
             // No `.measure` promotion, unlike the rest case: `.measure` is a rest-only spelling — `MSCXEncoder` traps
-            // rather than emit one on a chord (see `InputNote`'s doc comment).
+            // rather than emit one on a chord (see `InputNote`'s doc comment). A tuplet member stays in its bracket.
             if case let .chord(current)? = score[location], !current.notes.isEmpty,
+               !DurationChangeAlgorithm.isInsideTuplet(location, in: score),
                let plan = CrossBarInputPlanner.plan(.chord(current), duration: duration, at: location, in: score)
             {
                 return CompositeEditCommand(commands: plan.commands, location: plan.head)

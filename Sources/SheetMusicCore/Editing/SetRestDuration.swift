@@ -6,8 +6,10 @@ import SheetMusicFoundation
 /// chord/rest elements (and surfaces overshoot of a chord as a
 /// tied chain of that chord's clones, preserving its pitch).
 ///
+/// Inside a tuplet `duration` is the WRITTEN length, as for `SetChordDuration` — see `TupletDurationChange`.
+///
 /// Identical out-of-scope behavior to `SetChordDuration`:
-/// - rest is inside a tuplet
+/// - rest is inside a nested tuplet, or asks for more time than its tuplet has left
 /// - lengthening crosses the measure boundary
 /// - lengthening consumes past a non-timed element
 /// - lengthening overlaps a downstream tuplet
@@ -41,12 +43,16 @@ public struct SetRestDuration: EditCommand {
         else {
             throw Self.refused(.wrongElementKind(at: location, expected: .rest))
         }
-        try DurationChangeAlgorithm.ensureNotInsideTuplet(
-            voice: voice,
-            at: location,
-            operation: "SetRestDuration",
-        )
         let division = score.division
+        if let inTuplet = try TupletDurationChange.compute(
+            in: voice, atIdx: location.elementIndex, mutatedTarget: .chord(rest), written: duration,
+            division: division, baseLocation: location, operation: "SetRestDuration", ids: &ids,
+        ) {
+            return try ReplaceVoiceElements(
+                staff: location.staff, measureIndex: location.measureIndex, voiceIndex: location.voiceIndex,
+                elements: inTuplet.elements, tuplets: inTuplet.tuplets,
+            ).apply(to: &score, ids: &ids)
+        }
         let measureDuration = score
             .effectiveMeasureDurations(
                 partIndex: location.staff.partIndex,

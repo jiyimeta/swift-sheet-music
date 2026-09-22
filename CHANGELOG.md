@@ -25,6 +25,15 @@ and this project adheres to
   Additive: the Android product set is unchanged (the declaration moved out of
   the `isAndroid` block rather than being duplicated), no target's dependencies
   changed, and nothing about the wire format moved.
+- **A tuplet member's length can be changed** (`SetChordDuration`, `SetRestDuration`, and so `.setChordDuration` /
+  `.setRestDuration`). Both used to refuse anything inside a tuplet. Inside one, the requested length is the WRITTEN
+  value and the tuplet's ratio scales it, as MuseScore's `Score::changeCRlen` does with its `tuplet` argument: on
+  the first of three triplet eighths a quarter becomes a triplet quarter that takes the second note's time, so the
+  beat divides 2:1, and a sixteenth leaves a triplet-sixteenth rest inside the bracket. The tuplet's own time never
+  changes — asking for more than the bracket has left is refused (`insufficientRoom`) rather than tearing it down —
+  and the bracket's end follows its new last member. Members are written as the MSCX decoder writes them
+  (`written × normalNotes / actualNotes`), so the encoder and the renderers read the result like any decoded
+  tuplet. Still refused: a nested tuplet, and the range forms (`SetDurationInRange`, `SetDotsInRange`).
 
 ### Changed
 

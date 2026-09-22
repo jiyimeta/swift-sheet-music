@@ -314,6 +314,15 @@ public enum DurationChangeAlgorithm {
         return voices[id.voiceIndex]
     }
 
+    /// Whether the element at `location` sits inside a tuplet span — where a length is written and scaled by the
+    /// tuplet (`TupletDurationChange`) rather than planned against the bar.
+    static func isInsideTuplet(_ location: VoiceElementID, in score: Score) -> Bool {
+        guard let voice = voice(in: score, at: location) else { return false }
+        return voice.tupletSpans.contains {
+            $0.startIndex <= location.elementIndex && location.elementIndex <= $0.endIndex
+        }
+    }
+
     /// Common precondition: refuse when the target element sits
     /// inside any tuplet span.
     static func ensureNotInsideTuplet(

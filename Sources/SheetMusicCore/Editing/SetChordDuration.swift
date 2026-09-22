@@ -15,8 +15,11 @@ import SheetMusicFoundation
 /// was a rest) or a tied chain of chord clones (when it was a
 /// chord — preserving its pitch).
 ///
+/// Inside a tuplet `duration` is the WRITTEN length and the tuplet's ratio is applied to it, the time staying
+/// inside the bracket — see `TupletDurationChange`.
+///
 /// Out of scope (refused with `invalidEdit`):
-/// - the chord is inside a `Tuplet` span
+/// - the chord is inside a nested tuplet, or asks for more time than its tuplet has left
 /// - lengthening would cross the measure boundary
 /// - lengthening would consume past a non-timed element
 ///   (clef / key sig / time sig / barline)
@@ -50,12 +53,16 @@ public struct SetChordDuration: EditCommand {
         else {
             throw Self.refused(.wrongElementKind(at: location, expected: .chord))
         }
-        try DurationChangeAlgorithm.ensureNotInsideTuplet(
-            voice: voice,
-            at: location,
-            operation: "SetChordDuration",
-        )
         let division = score.division
+        if let inTuplet = try TupletDurationChange.compute(
+            in: voice, atIdx: location.elementIndex, mutatedTarget: .chord(chord), written: duration,
+            division: division, baseLocation: location, operation: "SetChordDuration", ids: &ids,
+        ) {
+            return try ReplaceVoiceElements(
+                staff: location.staff, measureIndex: location.measureIndex, voiceIndex: location.voiceIndex,
+                elements: inTuplet.elements, tuplets: inTuplet.tuplets,
+            ).apply(to: &score, ids: &ids)
+        }
         let srcTicks = chord.duration.ticks(division: division)
         let dstTicks = duration.ticks(division: division)
         if srcTicks == dstTicks {
