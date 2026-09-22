@@ -178,9 +178,11 @@ struct LegacyBendDecodeTests {
             == "<Bend> children not modeled and dropped: offset, visible")
     }
 
-    /// `<eid>` is MuseScore 4.6's regenerated internal element id. No decoder
-    /// in this package models it, it carries no user data, and announcing it
-    /// would fire on every element of every 4.6 score — so it stays silent.
+    /// `<eid>` is MuseScore's internal element id, which 4.6 reads and writes
+    /// back rather than regenerating (see `PreservedMarkupPolicy`). `<Bend>` is
+    /// not one of the carriers this library gives identity to, so no decoder
+    /// here models it, it carries no user data, and announcing it would fire on
+    /// every element of every 4.6 score — so it stays silent.
     @Test("<eid> is elided without a diagnostic")
     func eidIsSilentlyElided() throws {
         let decoded = try decodeNote("""

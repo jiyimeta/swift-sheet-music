@@ -679,9 +679,12 @@ Scripts/wasm-size.sh
 Scripts/wasm-size.sh --report
 ```
 
-The wider brotli measurement has a 4 MB ceiling. The script also reports the
-optimized artifact that a browser downloads; these numbers are intentionally
-different and are not interchangeable.
+The wider brotli measurement has a 4.5 MiB ceiling — `CEILING_BYTES` in
+`Scripts/wasm-size.sh`, which is the one place it is written down; quote the
+script rather than a number remembered from an earlier release, because this
+line has already been raised once. The script also reports the optimized
+artifact that a browser downloads; these numbers are intentionally different
+and are not interchangeable.
 
 When a dependency changes, measure from a clean wasm build. Incremental output
 can retain an older dependency artifact and report a size that does not respond
@@ -691,6 +694,14 @@ to the source change. Any new wasm surface must also be reachable from
 `Package.resolved` is manifest-shape dependent. Declare lightweight wasm-only
 dependencies unconditionally when practical so running different manifest
 shapes does not churn its origin hash.
+
+**So check `git status` after any wasm run.** Measured 2026-09-22: one
+`Scripts/preflight.sh --wasm` leaves `Package.resolved` modified with
+**`originHash` as the only changed line** — not a single pin moves. It is pure
+noise from having evaluated the wasm shape, it says nothing about what the
+package resolves to, and committing it puts a meaningless diff in front of the
+next reader. Discard it (`git checkout -- Package.resolved`) unless a pin
+genuinely moved.
 
 For byte-for-byte parity, both sides must use the same `FontMetricsProvider`.
 The generated SMuFL table stores rescaled `Float` values and does not produce
