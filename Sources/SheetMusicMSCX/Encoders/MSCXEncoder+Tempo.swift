@@ -38,14 +38,15 @@ extension Tempo {
     }
 
     /// The engraved marking, in the `<sym>` markup MuseScore's own palette writes (`tempotext.cpp:176-197`):
-    /// the beat glyph, then for a dotted beat one `space` and one `metAugmentationDot` per dot, then the number.
-    /// The number rides in a `<b>`, which is NOT what MuseScore 4's writer emits: MS4 writes the number as plain
-    /// character data trailing the `<sym>` (`<sym>metNoteQuarterUp</sym> = 135`), and `XMLTreeSerializer` cannot
-    /// represent that — it writes a node's text BEFORE its children, so a trailing run has to be an element.
-    /// `<b>` is the closest representable shape: it has MS3-era precedent in MuseScore's own writer
-    /// (`Tests/SheetMusicTests/Resources/testVoltaTemp.mscx:189`, `<b><font face="FreeSerif"/> = 180</b>`),
-    /// MuseScore's reader keeps inline elements in order while dropping the whitespace between them
-    /// (`xmlreader.cpp:212-237`) so it reads back as the same marking, and tempo text is bold anyway.
+    /// the beat glyph, then for a dotted beat one `space` and one `metAugmentationDot` per dot, then the number as
+    /// plain character data trailing the glyphs — `<text><sym>metNoteQuarterUp</sym> = 120</text>`, exactly what
+    /// MuseScore 4's writer emits (`TWrite::write(const TempoText*)` → `XmlWriter::writeXml`, one line).
+    ///
+    /// **Written inline, through `mixedContent`.** It used to be ordinary children, which `XMLTreeSerializer`
+    /// pretty-prints one per line, with the number in a `<b>` because the serializer could not then write trailing
+    /// character data. MuseScore opened that as a two-line marking — the note on one line, "= 120" on the next —
+    /// because the indentation between the tags is character data inside a `<text>` it reads as markup. The inline
+    /// path (`XMLTreeSerializer.writeInline`) writes the content with nothing between the items.
     ///
     /// Only what `Tempo.decode` can read back is printed: the six bases `matchBeat` snaps to, with 0…2 dots. Any
     /// other beat prints as a plain quarter at `bps × 60`, which is exactly what decoding it would fall back
@@ -65,16 +66,21 @@ extension Tempo {
             dots = 0
             bpm = beatsPerSecond * 60
         }
-        var children = [XMLTreeNode(name: "sym", text: glyph)]
+        var symbols = [XMLTreeNode(name: "sym", text: glyph)]
         if dots > 0 {
-            children.append(XMLTreeNode(name: "sym", text: "space"))
+            symbols.append(XMLTreeNode(name: "sym", text: "space"))
             for _ in 0 ..< dots {
-                children.append(XMLTreeNode(name: "sym", text: "metAugmentationDot"))
+                symbols.append(XMLTreeNode(name: "sym", text: "metAugmentationDot"))
             }
         }
         let printed = (bpm * 100).rounded() / 100
-        children.append(XMLTreeNode(name: "b", text: " = \(formatDouble(printed))"))
-        return XMLTreeNode(name: "text", children: children)
+        let number = " = \(formatDouble(printed))"
+        return XMLTreeNode(
+            name: "text",
+            text: number.trimmingWhitespaceAndNewlines(),
+            children: symbols,
+            mixedContent: symbols.map(XMLContentItem.element) + [.characters(number)],
+        )
     }
 
     /// SMuFL name of the metronome glyph for `beat` — the `tpSym` names — or `nil` for a beat the decoder's

@@ -102,7 +102,7 @@ struct MSCXTextMarkupTests {
         let xml = try #require(String(bytes: encoded, encoding: .utf8))
 
         #expect(xml.contains("<sym>metNoteQuarterUp</sym>"))
-        #expect(xml.contains("<b> = 120</b>"))
+        #expect(xml.contains("<text><sym>metNoteQuarterUp</sym> = 120</text>"))
         #expect(!xml.contains("<font"))
     }
 

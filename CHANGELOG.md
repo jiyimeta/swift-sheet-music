@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A saved tempo marking opens in MuseScore on one line.** The encoder wrote
+  the marking's `<text>` pretty-printed — each `<sym>` and the number on its
+  own indented line, the number wrapped in `<b>` — and MuseScore showed the
+  note glyph and "= 120" on two lines. The marking is now written inline
+  through `mixedContent`, exactly as MuseScore's own writer does:
+  `<text><sym>metNoteQuarterUp</sym> = 120</text>`. Decoding reads both shapes.
+
 ## [3.6.0] - 2026-09-22
 
 ### Added

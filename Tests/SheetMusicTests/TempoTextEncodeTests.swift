@@ -23,39 +23,55 @@ struct TempoTextEncodeTests {
         #expect(node.first("followText")?.text == "1")
         #expect(node.children.last?.name == "text")
         #expect(Self.syms(node.first("text")) == ["metNoteQuarterUp"])
-        #expect(node.first("text")?.first("b")?.text == " = 120")
+        #expect(node.first("text")?.text == "= 120")
     }
 
     @Test("a dotted quarter prints the space-and-dot run MuseScore's tpSym table lists")
     func dottedQuarter() {
         let text = Self.text(of: Tempo(beatsPerSecond: 2, beatNote: .quarter, beatDots: 1))
         #expect(Self.syms(text) == ["metNoteQuarterUp", "space", "metAugmentationDot"])
-        #expect(text?.first("b")?.text == " = 80")
+        #expect(text?.text == "= 80")
     }
 
     @Test("a double-dotted half prints two dots")
     func doubleDottedHalf() {
         let text = Self.text(of: Tempo(beatsPerSecond: 3.5, beatNote: .half, beatDots: 2))
         #expect(Self.syms(text) == ["metNoteHalfUp", "space", "metAugmentationDot", "metAugmentationDot"])
-        #expect(text?.first("b")?.text == " = 60")
+        #expect(text?.text == "= 60")
     }
 
     @Test("six-digit bps prints a clean integer")
     func roundsToTwoDecimals() {
-        #expect(Self.text(of: Tempo(beatsPerSecond: 0.666667))?.first("b")?.text == " = 40")
-        #expect(Self.text(of: Tempo(beatsPerSecond: 1.24667))?.first("b")?.text == " = 74.8")
+        #expect(Self.text(of: Tempo(beatsPerSecond: 0.666667))?.text == "= 40")
+        #expect(Self.text(of: Tempo(beatsPerSecond: 1.24667))?.text == "= 74.8")
     }
 
     @Test("a beat the decoder cannot read back is printed as a quarter, and a non-positive bps prints nothing")
     func fallbacks() {
         let sixtyFourth = Self.text(of: Tempo(beatsPerSecond: 2, beatNote: .sixtyFourth))
         #expect(Self.syms(sixtyFourth) == ["metNoteQuarterUp"])
-        #expect(sixtyFourth?.first("b")?.text == " = 120")
+        #expect(sixtyFourth?.text == "= 120")
         let threeDots = Self.text(of: Tempo(beatsPerSecond: 2, beatNote: .quarter, beatDots: 3))
         #expect(Self.syms(threeDots) == ["metNoteQuarterUp"])
         let silent = Tempo(beatsPerSecond: 0).encode(eid: .invalid)
         #expect(silent.all("text").isEmpty)
         #expect(silent.all("followText").isEmpty)
+    }
+
+    /// MuseScore opened the old pretty-printed marking as two lines — the note, then "= 120" below it — so the
+    /// marking is written on one line, as MuseScore's own writer does.
+    @Test("the marking is serialized on one line, the number trailing the glyphs")
+    func serializedInline() throws {
+        var score = EditingFixtures.fourQuarterRests()
+        score.systemMeasures = [SystemMeasure(elements: [
+            PositionedSystemElement(position: .start, element: .tempo(Tempo(
+                beatsPerSecond: 2, beatNote: .quarter, beatDots: 1,
+            ))),
+        ])]
+        let xml = try #require(String(data: MSCXEncoder.encode(score), encoding: .utf8))
+        #expect(xml.contains(
+            "<text><sym>metNoteQuarterUp</sym><sym>space</sym><sym>metAugmentationDot</sym> = 80</text>",
+        ))
     }
 
     @Test("encode → parse → encode is a fixed point for every beat the text can spell", arguments: [
