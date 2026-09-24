@@ -188,4 +188,27 @@ struct GraceNoteSelectionIdentityTests {
         #expect(SelectionExpansion.selectedIDs(for: .single(grace), in: score) == [grace])
         #expect(SelectionExpansion.selectedIDs(for: .single(parentNote), in: score) == [parentNote])
     }
+
+    /// A range edit carries the graces (a transposition moves them), so a range lights them too — both sides, and
+    /// only for the chords inside it.
+    @Test("A range covers the grace notes of every chord in it")
+    func rangeCoversItsGraces() {
+        let score = Self.twoStaffScore()
+        func note(_ element: Int) -> ScoreItemID {
+            .note(NoteID(
+                staff: Self.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: element, noteIndexInChord: 0,
+            ))
+        }
+        let firstBefore = GraceNoteID(
+            parent: Self.parent(Self.staff0, element: 1), side: .before, graceIndex: 0, noteIndexInGraceChord: 0,
+        )
+
+        let both = SelectionExpansion.selectedIDs(for: .range(anchor: note(1), target: note(2)), in: score)
+        #expect(both == [
+            note(1), note(2), .graceNote(firstBefore), .graceNote(Self.secondBefore), .graceNote(Self.firstAfter),
+        ])
+
+        let first = SelectionExpansion.selectedIDs(for: .range(anchor: note(1), target: note(1)), in: score)
+        #expect(first == [note(1), .graceNote(firstBefore), .graceNote(Self.secondBefore)])
+    }
 }

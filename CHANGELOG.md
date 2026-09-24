@@ -15,6 +15,13 @@ and this project adheres to
   note glyph and "= 120" on two lines. The marking is now written inline
   through `mixedContent`, exactly as MuseScore's own writer does:
   `<text><sym>metNoteQuarterUp</sym> = 120</text>`. Decoding reads both shapes.
+- **A range selection tints the grace notes of the chords in it.**
+  `SelectionExpansion.selectedIDs(for:in:)` expanded a `.range` through
+  `Score.items(inRangeFrom:to:)`, which names notes and rests only, so every head
+  in a range lit up but the graces — although a range transposition moves them.
+  The range now adds a `.graceNote` for each grace, both sides, of every chord in
+  it. `items(inRangeFrom:to:)` is unchanged: it is also the range editing
+  commands address.
 
 ## [3.6.0] - 2026-09-22
 
