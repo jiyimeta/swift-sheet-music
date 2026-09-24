@@ -7,6 +7,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Backends loading one SoundFont share one parse.** Every `SwiftySynthBackend`
+  used to parse its own copy of the font — the high-quality General MIDI font is
+  ~200 MB in memory — so an export rendering beside live playback held two, and
+  rendering several parts in parallel held one per render. Loads now go through
+  a shared cache keyed by the file's path, size and modification date: a font
+  some backend still holds is handed out again, concurrent loads of one file
+  parse it once, and nothing is kept once the last synth using it lets go.
+
 ### Fixed
 
 - **A saved tempo marking opens in MuseScore on one line.** The encoder wrote

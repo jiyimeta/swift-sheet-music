@@ -181,17 +181,19 @@ public final class SwiftySynthBackend: SynthBackend {
         // synths back to the main actor via `install`, boxed as `LoadedSynths`.
         loadTask = Task.detached(priority: .userInitiated) { [weak self] in
             if Task.isCancelled { return }
-            func read(_ url: URL?) -> SoundFont? {
-                url.flatMap { try? Data(contentsOf: $0, options: .mappedIfSafe) }
-                    .flatMap { try? SoundFont(data: $0) }
+            /// Through `SoundFontCache`: a font another backend already has loaded — live playback while an export
+            /// renders, or several part renders at once — is the same parse, not another ~200 MB copy.
+            func read(_ url: URL?) async -> SoundFont? {
+                guard let url else { return nil }
+                return await SoundFontCache.shared.soundFont(at: url)?.font
             }
-            let soundFont = read(soundfontURL)
+            let soundFont = await read(soundfontURL)
             if Task.isCancelled { return }
             // A generated click SF2 is a few tens of KB, so the extra parse is
             // negligible next to the score font. Falling back to `soundFont`
             // keeps the shared-font behavior for `.defaultGM` hosts and for a
             // click font that fails to parse.
-            let clickFont = metronomeSoundfontURL == soundfontURL
+            let clickFont = await metronomeSoundfontURL == soundfontURL
                 ? soundFont
                 : (read(metronomeSoundfontURL) ?? soundFont)
             if Task.isCancelled { return }
