@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.6.1] - 2026-09-25
+
 ### Changed
 
 - **Backends loading one SoundFont share one parse.** Every `SwiftySynthBackend`
