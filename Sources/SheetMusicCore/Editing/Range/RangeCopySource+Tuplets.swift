@@ -1,5 +1,12 @@
 import SheetMusicFoundation
 
+extension TupletSpan {
+    /// `Voice.tupletSpans` resolves a dangling endpoint to -1, and forming a closed range over it traps.
+    fileprivate var isResolved: Bool {
+        startIndex >= 0 && startIndex <= endIndex
+    }
+}
+
 /// What the source side has to know about the tuplets a range touches: which elements stand under a bracket,
 /// and which brackets travel with the copy.
 ///
@@ -22,7 +29,7 @@ extension RangeCopySource {
         for measureIndex in measureOrder {
             let ref = VoiceRef(staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex)
             guard let voice = score[voice: ref] else { continue }
-            for span in voice.tupletSpans where span.startIndex >= 0 && span.startIndex <= span.endIndex {
+            for span in voice.tupletSpans where span.isResolved {
                 for index in span.startIndex ... span.endIndex {
                     members.insert(MeasureElementLocation(measureIndex: measureIndex, elementIndex: index))
                 }
@@ -57,7 +64,7 @@ extension RangeCopySource {
             let ref = VoiceRef(staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex)
             guard let voice = score[voice: ref] else { continue }
             let presentIndices = Set(ids.filter { $0.measureIndex == measureIndex }.map(\.elementIndex))
-            for span in voice.tupletSpans {
+            for span in voice.tupletSpans where span.isResolved {
                 guard !presentIndices.isDisjoint(with: span.startIndex ... span.endIndex) else { continue }
                 let startPresent = presentIndices.contains(span.startIndex)
                 let endPresent = presentIndices.contains(span.endIndex)
