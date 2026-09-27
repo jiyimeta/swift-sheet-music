@@ -92,6 +92,7 @@ extension LayoutBridge {
             beamY: beamY,
             defaultStemLength: CGFloat(ctx.defaultStemLength * mag),
             stemExtension: CGFloat(stemExtension),
+            stemThickness: CGFloat(ctx.stemThickness * mag),
             // `attachDx` inside `StemGeometry` scales with `sp`; for a
             // mag-reduced grace chord the stem must attach at the
             // SHRUNKEN notehead's edge, so feed the magnified spatium

@@ -44,6 +44,9 @@ public enum StemGeometry {
     ///     the outermost notehead.
     ///   - stemExtension: Additional length (e.g. extra leger-line
     ///     headroom). Defaults to 0.
+    ///   - stemThickness: MuseScore's `lineWidthCorrection`. Moves the
+    ///     stem center half the line width toward the notehead so the far
+    ///     edge lands on the SMuFL anchor. Defaults to 0.
     ///   - sp: Staff-space size, used by `attachDx`.
     public static func compute(
         noteOrigins: [CGPoint],
@@ -51,6 +54,7 @@ public enum StemGeometry {
         beamY: CGFloat?,
         defaultStemLength: CGFloat,
         stemExtension: CGFloat = 0,
+        stemThickness: CGFloat = 0,
         sp: CGFloat,
     ) -> Result? {
         guard !noteOrigins.isEmpty else { return nil }
@@ -64,13 +68,13 @@ public enum StemGeometry {
         switch direction {
         case .up:
             return Result(
-                xStem: xMax + attach,
+                xStem: xMax + attach - stemThickness / 2,
                 startY: beamY ?? (yTop - defaultStemLength - stemExtension),
                 endY: yBot,
             )
         case .down:
             return Result(
-                xStem: xMin - attach,
+                xStem: xMin - attach + stemThickness / 2,
                 startY: yTop,
                 endY: beamY ?? (yBot + defaultStemLength + stemExtension),
             )

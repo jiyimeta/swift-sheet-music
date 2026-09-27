@@ -7,6 +7,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **Draw-program stems sit where the Apple renderer's do.** Android and the
+  web canvas drew every stem half a stem-width too far from the notehead. Their
+  shared stem geometry now applies MuseScore's line-width correction.
+
 ## [3.6.1] - 2026-09-25
 
 ### Changed
