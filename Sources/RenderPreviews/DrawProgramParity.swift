@@ -31,6 +31,9 @@
     ///   SM_PARITY_OUT        — output directory (default `tmp/parity`)
     ///   SM_PARITY_WIDTH      — available width in points (default: natural width)
     ///   SM_PARITY_THRESHOLD  — per-pixel max-channel difference that counts as "differing", 0–255 (default 48)
+    ///   SM_PARITY_SHIFT      — whole-pixel nudge "dx,dy" applied to the draw-program render (default 0,0)
+    ///   SM_PARITY_ONLY       — with `samples`, run just the catalog entry with this name
+    ///   SM_PARITY_MAX_MEAN   — exit 1 when the mean differing share (in percent) exceeds this budget
     ///
     /// Writes `<name>-apple.png`, `<name>-drawprogram.png` and `<name>-diff.png` per score and prints one line per
     /// score plus a summary: the share of pixels that differ, the mean and maximum channel delta.
@@ -113,6 +116,11 @@
             print("\(rows.count) scores, threshold \(threshold): mean differing \(meanPercent)%,"
                 + " worst \(worst?.name ?? "-") at \(worstPercent)%")
             print("wrote \(outDir.path)")
+            // The gate a CI job leans on: a mean above the budget is a non-zero exit, not just a line to read.
+            if let budget = env["SM_PARITY_MAX_MEAN"].flatMap({ Double($0) }), meanShare * 100 > budget {
+                print("mean differing \(meanPercent)% exceeds SM_PARITY_MAX_MEAN=\(budget)")
+                exit(1)
+            }
         }
 
         /// One score: lay out once, render twice, diff.
@@ -142,11 +150,17 @@
                 pageHeightMM: Double(document.size.height) * ptToMM,
             )
             guard let page = pages.first else { throw RenderError.zeroSize }
+            // `renderDocumentImage` rounds the bitmap height UP and anchors its content at the bottom (CoreGraphics
+            // Y-up), so the fractional row the `ceil` added sits at the TOP of the Apple render. The draw program
+            // is Y-down and anchors at the top, so without this it lands that fraction (< 1 px) higher than the
+            // Apple content and every horizontal edge in the diff picks up a sub-pixel smear that is not a renderer
+            // difference.
+            let ceilRemainder = CGFloat(apple.height) - (document.size.height + 2 * padding) * scale
             let program = try DrawProgramCGRenderer.render(
                 page.commands,
                 widthPx: apple.width, heightPx: apple.height,
                 pxPerMM: scale / ptToMM,
-                offsetPx: CGPoint(x: padding * scale + nudge.x, y: padding * scale + nudge.y),
+                offsetPx: CGPoint(x: padding * scale + nudge.x, y: padding * scale + ceilRemainder + nudge.y),
             )
 
             let result = try BitmapDiff.compare(apple, program, threshold: threshold)
