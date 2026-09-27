@@ -6,6 +6,12 @@ public struct TupletSpan: Sendable, Equatable {
     public var actualNotes: Int
     public var startIndex: Int
     public var endIndex: Int
+
+    /// `Voice.tupletSpans` resolves a dangling endpoint to -1, and forming a closed range over it traps.
+    public var isResolved: Bool {
+        startIndex >= 0 && startIndex <= endIndex
+    }
+
     /// The owning `Voice.tuplets` slot's identifier, carried alongside for the
     /// encoder's convenience. `.invalid` by default for every call site that
     /// only cares about the span's shape (nesting validation, onset math);

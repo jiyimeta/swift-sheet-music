@@ -42,7 +42,8 @@ public struct RemoveTuplet: EditCommand {
             throw Self.refused(.targetNotFound(location))
         }
         guard let tuplet = voice.tupletSpans.first(where: {
-            $0.startIndex <= location.elementIndex
+            $0.isResolved
+                && $0.startIndex <= location.elementIndex
                 && location.elementIndex <= $0.endIndex
         }) else {
             throw Self.refused(.wrongElementKind(at: location, expected: .tuplet))

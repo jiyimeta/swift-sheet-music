@@ -1,12 +1,5 @@
 import SheetMusicFoundation
 
-extension TupletSpan {
-    /// `Voice.tupletSpans` resolves a dangling endpoint to -1, and forming a closed range over it traps.
-    fileprivate var isResolved: Bool {
-        startIndex >= 0 && startIndex <= endIndex
-    }
-}
-
 /// What the source side has to know about the tuplets a range touches: which elements stand under a bracket,
 /// and which brackets travel with the copy.
 ///

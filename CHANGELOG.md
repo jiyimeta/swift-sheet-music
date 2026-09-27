@@ -13,7 +13,8 @@ and this project adheres to
   that names no element to `-1`, and `RangeCopySource.tupletBounds` formed the closed range `start ... -1` over it,
   which traps ("Range requires lowerBound <= upperBound"). Such a tuplet only comes from an external `.mscx`; nothing
   this package writes produces one. Both range-copy walks now skip an unresolved span, as `tupletMemberLocations`
-  already did.
+  already did. The same shared resolution check now also protects `SelectionExpansion`, `RemoveTuplet`,
+  `TupletDurationChange`, and `DurationChangeAlgorithm` from dangling spans.
 
 ## [3.6.1] - 2026-09-25
 

@@ -25,7 +25,9 @@ public enum SelectionExpansion {
         guard voices.indices.contains(tid.voiceIndex)
         else { return [id] }
         let voice = voices[tid.voiceIndex]
-        guard let tuplet = voice.tupletSpans.first(where: { $0.startIndex == tid.startElementIndex })
+        guard let tuplet = voice.tupletSpans.first(where: {
+            $0.isResolved && $0.startIndex == tid.startElementIndex
+        })
         else { return [id] }
         let elements = voice.elements
         var out: Set<ScoreItemID> = [id]

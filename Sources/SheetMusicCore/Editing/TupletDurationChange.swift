@@ -26,7 +26,9 @@ enum TupletDurationChange {
         baseLocation: VoiceElementID, operation: String, ids: inout EIDAllocator,
     ) throws -> (elements: IdentifiedArray<VoiceElement>, tuplets: IdentifiedArray<Tuplet>)? {
         let spans = voice.tupletSpans
-        let containing = spans.indices.filter { spans[$0].startIndex <= idx && idx <= spans[$0].endIndex }
+        let containing = spans.indices.filter {
+            spans[$0].isResolved && spans[$0].startIndex <= idx && idx <= spans[$0].endIndex
+        }
         guard let spanIndex = containing.first else { return nil }
         let span = spans[spanIndex]
         let holdsAnother = spans.indices.contains {

@@ -67,7 +67,7 @@ public enum DurationChangeAlgorithm {
                 // tick length, and the overshoot is filled with
                 // rests via `setRest`).
                 if let containing = voice.tupletSpans.first(where: {
-                    $0.startIndex <= i && i <= $0.endIndex
+                    $0.isResolved && $0.startIndex <= i && i <= $0.endIndex
                 }) {
                     var tupletTicks = 0
                     for j in containing.startIndex ... containing.endIndex {
