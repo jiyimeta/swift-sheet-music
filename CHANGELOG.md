@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.6.2] - 2026-09-29
+
 ### Fixed
 
 - **A tuplet with a dangling endpoint no longer traps the range copy.** `Voice.tupletSpans` resolves an endpoint
