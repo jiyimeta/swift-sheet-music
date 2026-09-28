@@ -45,6 +45,28 @@ struct StemGeometryTests {
         #expect(result?.endY == CGFloat(78))
     }
 
+    @Test func stemThicknessMovesStemCenterTowardNoteheads() {
+        let up = StemGeometry.compute(
+            noteOrigins: [CGPoint(x: 10, y: 30)],
+            direction: .up,
+            beamY: nil,
+            defaultStemLength: 28,
+            stemThickness: 2,
+            sp: 5,
+        )
+        #expect(up?.xStem == 10 + 5 * 0.59 - 1)
+
+        let down = StemGeometry.compute(
+            noteOrigins: [CGPoint(x: 10, y: 30)],
+            direction: .down,
+            beamY: nil,
+            defaultStemLength: 28,
+            stemThickness: 2,
+            sp: 5,
+        )
+        #expect(down?.xStem == 10 - 5 * 0.59 + 1)
+    }
+
     @Test func beamYReplacesNaturalTipOnBeamSide() {
         // Up stem: beamY replaces the (yTop - stemLength) tip.
         let up = StemGeometry.compute(

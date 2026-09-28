@@ -25,6 +25,7 @@ enum StemRenderer {
             beamY: beamY,
             defaultStemLength: metrics.defaultStemLength,
             stemExtension: stemExtension,
+            stemThickness: metrics.stemThickness,
             sp: metrics.sp,
         ) else { return }
         let xStem = geometry.xStem

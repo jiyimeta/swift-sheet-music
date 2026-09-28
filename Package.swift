@@ -479,6 +479,9 @@ if !isAndroid {
                 "SheetMusicUI",
                 "SheetMusicPDF",
                 "SheetMusicOMRModel",
+                // `DrawProgramParity` walks the draw-program stream the Android / web renderers consume and
+                // compares it against the Apple renderer on the same layout.
+                "SheetMusicBridgeCore",
             ],
         ),
     ]

@@ -53,6 +53,12 @@
             try await AdHocPDFImport.run()
             return true
         }
+        // Draw-program parity (SM_PARITY=samples|<score> swift run render-previews): the Apple renderer
+        // against a CoreGraphics walk of the same page's `DrawCommand` stream, pixel-diffed.
+        if DrawProgramParity.isRequested {
+            try DrawProgramParity.run()
+            return true
+        }
         // Corpus batch render (SM_RENDER_DIR=… swift run render-previews),
         // the BEFORE/AFTER pixel gate for layout refactors.
         if CorpusRender.isRequested {
@@ -83,40 +89,7 @@
 
         _ = SheetMusicLayoutApple.install
 
-        let samples: [(name: String, score: Score)] = [
-            ("01-empty", Samples.empty),
-            ("02-whole-note", Samples.wholeNote),
-            ("03-c-major-scale", Samples.cMajorScale),
-            ("04-eighths-beamed", Samples.eighthsBeamed),
-            ("05-piano-grand", Samples.pianoGrand),
-            ("05b-tall-brace", Samples.tallBrace),
-            ("06-accidentals", Samples.accidentals),
-            ("07-rests", Samples.rests),
-            ("08-key-sigs", Samples.keySignatures),
-            ("09-time-sigs", Samples.timeSignatures),
-            ("10-dynamics-tempo", Samples.dynamicsTempo),
-            ("11-isolated-flags", Samples.isolatedFlags),
-            ("12-dotted-durations", Samples.dottedDurations),
-            ("13-mixed-beams", Samples.mixedBeams),
-            ("14-tuplets", Samples.tuplets),
-            ("15-tuplet-bracket", Samples.tupletBracket),
-            ("16-beat-boundary", Samples.beatBoundaryBreak),
-            ("17-beat-boundary-16ths", Samples.beatBoundary16ths),
-            ("18-multi-staff-alignment", Samples.multiStaffAlignment),
-            ("19-two-voice-rest-note", Samples.twoVoiceRestNote),
-            ("20-multivoice-whole-rest", Samples.multiVoiceWholeRest),
-            ("21-rest-note-overlap-repro", Samples.restNoteOverlapRepro),
-            ("22-dynamics-low-chord", Samples.dynamicsLowChord),
-            ("23-above-staff-overlap", Samples.aboveStaffOverlap),
-            ("24-location-system-text", Samples.locationSystemText),
-            ("25-harmony-basic", Samples.harmonyBasic),
-            ("26-harmony-high-chord", Samples.harmonyHighChord),
-            ("27-harmony-high-chord-tied", Samples.harmonyHighChordTied),
-            ("28-multi-measure-rest", Samples.multiMeasureRest),
-            ("30-rest-tuplet", Samples.restTuplet),
-        ]
-
-        for (name, score) in samples {
+        for (name, score) in Samples.catalog {
             let url = outputDir.appendingPathComponent("\(name).png")
             try renderScoreToPNG(score, to: url, scale: 2)
             print("wrote \(url.path)")
@@ -239,7 +212,17 @@
             availableWidth: naturalWidth,
         )
 
-        let padding: CGFloat = 16
+        let cg = try renderDocumentImage(doc, scale: scale, padding: 16)
+        try writePNG(cg, to: url)
+    }
+
+    /// Rasterise an already-laid-out document through `ScoreLayerBuilder` — the Apple renderer — into a bitmap
+    /// with a white background and `padding` points of margin on every side. `renderScoreToPNG` is this plus
+    /// the layout pass; `DrawProgramParity` calls it directly so both of its renderers draw the SAME
+    /// `LayoutDocument` and any difference between the two bitmaps is a renderer difference, never a layout one.
+    @available(macOS 15.0, *)
+    @MainActor
+    func renderDocumentImage(_ doc: LayoutDocument, scale: CGFloat, padding: CGFloat) throws -> CGImage {
         let pxW = Int(ceil((doc.size.width + 2 * padding) * scale))
         let pxH = Int(ceil((doc.size.height + 2 * padding) * scale))
         guard pxW > 0, pxH > 0 else { throw RenderError.zeroSize }
@@ -279,8 +262,12 @@
             )
             tree.layoutIfNeeded()
             ctx.saveGState()
+            // The tree's own height, not `sys.size.height`: `ScoreLayerBuilder` builds the system layer one point
+            // taller than the system and flips its content about THAT height, so positioning by the system's
+            // height put every render one point too low (`DrawProgramParity` measured it as a constant 2 px
+            // offset at scale 2 before this line changed).
             let ty = doc.size.height + 2 * padding
-                - padding - sys.origin.y - sys.size.height
+                - padding - sys.origin.y - tree.bounds.height
             ctx.translateBy(x: sys.origin.x + padding, y: ty)
             tree.render(in: ctx)
             ctx.restoreGState()
@@ -289,7 +276,7 @@
         guard let cg = ctx.makeImage() else {
             throw RenderError.makeImageFailed
         }
-        try writePNG(cg, to: url)
+        return cg
     }
 
     enum RenderError: Error {
