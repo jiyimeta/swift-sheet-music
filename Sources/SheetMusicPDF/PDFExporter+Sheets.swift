@@ -34,10 +34,14 @@ extension PDFExporter {
     public struct SheetOptions: Sendable {
         public var title: String?
         public var author: String?
+        /// Whether elements the layout parked as invisible are drawn. `false` prints them away and keeps the room
+        /// the layout gave them; see `ScoreCanvasDrawing.drawSystem`.
+        public var drawsInvisibleElements: Bool
 
-        public init(title: String? = nil, author: String? = nil) {
+        public init(title: String? = nil, author: String? = nil, drawsInvisibleElements: Bool = true) {
             self.title = title
             self.author = author
+            self.drawsInvisibleElements = drawsInvisibleElements
         }
     }
 
@@ -74,6 +78,7 @@ extension PDFExporter {
                 margins: sheet.margins,
                 // Authoring overlay is for previews only; the exported file must not show it.
                 breakIndicatorVisibility: .none,
+                drawsInvisibleElements: options.drawsInvisibleElements,
             )
             let renderer = ImageRenderer(content: view)
             renderer.proposedSize = ProposedViewSize(width: sheet.pageSize.width, height: sheet.pageSize.height)

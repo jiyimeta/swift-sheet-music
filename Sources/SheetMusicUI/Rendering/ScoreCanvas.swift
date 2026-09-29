@@ -16,11 +16,17 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
     /// of CALayer trees, so **no caller in this package passes it any
     /// more**; it stays because it is public API and callers outside
     /// the package may rely on it.
+    ///
+    /// `drawsInvisibleElements` `false` prints what the layout parked as invisible away — the measures'
+    /// `invisibleElements`, the system's `invisibleSpanners`, and invisible notes and stems inside visible chords —
+    /// while every other mark stays exactly where that layout put it. `true` (the default) draws them gray, as the
+    /// layout's `showsInvisibleElements` asked; a layout made without it parks nothing, so the switch is then moot.
     public static func drawSystem( // swiftlint:disable:this function_body_length
         _ system: LayoutSystem,
         metrics: StaffMetrics,
         into context: inout GraphicsContext,
         visibleX: ClosedRange<CGFloat>? = nil,
+        drawsInvisibleElements: Bool = true,
     ) {
         // Staves
         let staffEndX = StaffRenderer.endX(for: system)
@@ -74,7 +80,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             )
         }
         // Measures — skip those entirely outside the visible x range.
-        let showsInvisible = system.showsInvisibleElements
+        let showsInvisible = system.showsInvisibleElements && drawsInvisibleElements
         for measure in system.measures {
             if let vx = visibleX {
                 let mLeft = system.origin.x + measure.origin.x
@@ -96,7 +102,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     into: &context,
                 )
             }
-            if !measure.invisibleElements.isEmpty {
+            if drawsInvisibleElements, !measure.invisibleElements.isEmpty {
                 var gray = context
                 // MuseScore invisibleColor() = #808080; 50% black on the
                 // white score background is the exact equivalent.
@@ -144,7 +150,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 into: &context,
             )
         }
-        if !system.invisibleSpanners.isEmpty {
+        if drawsInvisibleElements, !system.invisibleSpanners.isEmpty {
             var gray = context
             // MuseScore invisibleColor() = #808080; 50% black on the
             // white score background is the exact equivalent.

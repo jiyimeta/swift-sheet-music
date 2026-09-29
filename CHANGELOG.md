@@ -13,6 +13,10 @@ and this project adheres to
   screen shows the score as pages of its own — its own paper, margins and page breaks — hands over the systems on
   each page and where the page starts, and the PDF is exactly those pages, with the score's own header and footer in
   their margins. `export(score:options:)` is now built on it and draws the same PDF it did before.
+- **Invisible elements can keep their room and not print.** `PDFExporter.SheetOptions.drawsInvisibleElements`
+  (and the same parameter on `PDFPageView` and `ScoreCanvasDrawing.drawSystem`) omits what a layout made with
+  `showsInvisibleElements` parked as invisible, without moving anything else — so a host can print the layout its
+  screen shows, where hidden marks still take their room, without printing the marks.
 
 ## [3.6.2] - 2026-09-29
 
