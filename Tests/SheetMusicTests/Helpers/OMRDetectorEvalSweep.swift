@@ -1,4 +1,4 @@
-#if !os(Android) && !os(WASI)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import Foundation
     @testable import SheetMusicCore
     @testable import SheetMusicMSCX

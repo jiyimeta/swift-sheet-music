@@ -1,4 +1,4 @@
-#if !os(Android) && !os(WASI)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import Foundation
 
     /// Page-label file format, schema v1 (spec §7.1). All coordinates are

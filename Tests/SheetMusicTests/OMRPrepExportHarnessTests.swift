@@ -1,4 +1,4 @@
-#if !os(Android) && !os(WASI)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import Foundation
     @testable import SheetMusicPDF
     import Testing
@@ -301,7 +301,7 @@
         /// sweep (Task 6 review round 2). Reproduced portably with a
         /// POSIX permission split rather than anything Android/Linux
         /// wouldn't share the exact bits of — this file is already
-        /// `#if !os(Android)`-gated, so that is not a constraint here:
+        /// gated to the Apple test shape, so that is not a constraint here:
         /// `chmod 0111` (execute-only, no read) leaves `stat`-by-known-
         /// name working — so `renderOrFrozenDirectories`'s
         /// `fileExists(atPath: "<dir>/render.json")` still finds the
