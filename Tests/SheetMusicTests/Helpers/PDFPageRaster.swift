@@ -60,6 +60,14 @@
             return ys.reduce(0) { total, y in total + xs.count { isMarked(x: $0, y: y) } }
         }
 
+        /// The whole pixel rows whose page-point Y, from the top, lies in `ys`.
+        func rows(_ ys: Range<CGFloat>) -> ArraySlice<UInt8> {
+            let first = max(0, Int((ys.lowerBound * scale).rounded()))
+            let last = min(height, Int((ys.upperBound * scale).rounded()))
+            guard first < last else { return [] }
+            return rgba[(first * width * 4) ..< (last * width * 4)]
+        }
+
         /// Fraction of `rect`'s pixels that are marked.
         func markedFraction(in rect: CGRect) -> Double {
             let area = (rect.width * scale).rounded() * (rect.height * scale).rounded()

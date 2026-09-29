@@ -125,9 +125,11 @@
             let legacy = try PDFPageRaster.pages(of: LegacyPDFExport.export(score: score, options: options))
             #expect(routed.count > 1, "the fixture must paginate, or page 2's chrome and offset go untested")
             #expect(routed.count == legacy.count)
-            for (page, oracle) in zip(routed, legacy) {
+            for (index, (page, oracle)) in zip(routed, legacy).enumerated() {
                 #expect(page.mediaBox == oracle.mediaBox)
-                #expect(page.rgba == oracle.rgba)
+                // Bound to a Bool first: a failed `==` on the byte arrays would print all of them.
+                let identical = page.rgba == oracle.rgba
+                #expect(identical, "page \(index + 1) differs from the 3.6.2 export")
             }
         }
 
@@ -193,9 +195,13 @@
             #expect(titled.count == 2)
             #expect(plain.count == 2)
             #expect(titledFirst.systems[0].origin.y > 0, "the title frame must push system 0 down")
-            // The title draws on page 1 only: page 1 differs from the untitled one, page 2 is identical.
-            #expect(titled[0].rgba != plain[0].rgba)
-            #expect(titled[1].rgba == plain[1].rgba)
+            // The title draws on page 1 only: page 1 differs from the untitled one, and page 2's music — the rows
+            // between the margins, since only the titled score carries a header and footer — is identical.
+            let firstPageDiffers = titled[0].rgba != plain[0].rgba
+            #expect(firstPageDiffers, "the title frame left page 1 unchanged")
+            let content = CGFloat(36) ..< (size.height - 36)
+            let secondPageMusicIdentical = titled[1].rows(content) == plain[1].rows(content)
+            #expect(secondPageMusicIdentical, "page 2's music differs, so the title frame drew there too")
             let titleBand = CGRect(x: 36, y: 36, width: 500, height: titledFirst.systems[0].origin.y)
             #expect(titled[0].markedPixels(in: titleBand) > 0)
             // Header and footer sit in the margins of every page, and the page number differs between pages.
@@ -203,8 +209,9 @@
                 #expect(page.markedPixels(in: CGRect(x: 0, y: 0, width: size.width, height: 36)) > 0)
                 #expect(page.markedPixels(in: CGRect(x: 0, y: size.height - 36, width: size.width, height: 36)) > 0)
             }
-            let headerBytes = titled.map { $0.rgba.prefix($0.width * Int(36 * $0.scale) * 4) }
-            #expect(headerBytes[0] != headerBytes[1])
+            let headerRows = titled.map { $0.rows(0 ..< 36) }
+            let pageNumbersDiffer = headerRows[0] != headerRows[1]
+            #expect(pageNumbersDiffer, "pages 1 and 2 have the same header")
         }
     }
 #endif
