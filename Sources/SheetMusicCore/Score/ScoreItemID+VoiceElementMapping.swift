@@ -1,8 +1,17 @@
 import SheetMusicFoundation
 
 extension ScoreItemID {
-    /// Maps owned voice slots while preserving note, verse, articulation, slur, glissando, and grace identities.
-    /// Bar addresses and staff-owned navigation lists do not own a voice slot.
+    // Maps owned voice slots while preserving note, verse, articulation, slur, glissando, and grace identities.
+    // Bar addresses and staff-owned navigation lists do not own a voice slot.
+    //
+    // Not optimized on Windows: SILCombine gives an instruction in this function a return location, which the
+    // Windows toolchain — the only swift.org release built with compiler assertions — rejects in
+    // `DebugInfoVerifier` ("return locations are only allowed on branch and return instructions"), so
+    // `-c release` could not build SheetMusicCore there (swift 6.3.3, 2026-09-29). It is the only such site in
+    // the package. Other toolchains accept the same code, so they keep optimizing it.
+    #if os(Windows)
+        @_optimize(none)
+    #endif
     func mappingVoiceElements(_ transform: (VoiceElementID) -> VoiceElementID?) -> ScoreItemID? {
         func note(_ id: NoteID) -> NoteID? {
             guard let location = transform(VoiceElementID(id)) else { return nil }
