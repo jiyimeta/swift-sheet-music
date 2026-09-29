@@ -267,5 +267,60 @@
             let removedRows = shownInk.subtracting(printedInk).map { $0 / shown.width }
             #expect(try CGFloat(#require(removedRows.max())) / shown.scale < staffTop)
         }
+
+        /// One bar with a quarter chord of a visible B4 and an invisible middle C. The invisible note never leaves the
+        /// chord — the layout keeps it in `measure.elements`, flagged `isInvisible` — so it is `drawSystem`'s per-note
+        /// path, not the `invisibleElements` container, that decides whether its notehead and ledger line print.
+        static func scoreWithHiddenNoteInChord() -> Score {
+            let visible = Note(pitch: 71, tpc: 19)
+            var hidden = Note(pitch: 60, tpc: 14)
+            hidden.visible = false
+            let voice = Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .quarter, notes: ChordNotes([visible, hidden]))),
+            ])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1", instrument: Instrument(id: "voice"),
+                    staves: [Staff(measures: [Measure(voices: [voice])])],
+                )],
+            )
+        }
+
+        @Test
+        func `an invisible note inside a visible chord prints nothing when the switch is off`() throws {
+            guard #available(macOS 15.0, *) else { return }
+            _ = SheetMusicLayoutApple.install
+            let score = Self.scoreWithHiddenNoteInChord()
+            let document = LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(showsInvisibleElements: true), availableWidth: 500,
+            )
+            let system = try #require(document.systems.first)
+            let measures = system.measures
+            #expect(measures.flatMap(\.invisibleElements).isEmpty, "the chord must not be parked as a whole")
+            let chordNotes = measures.flatMap(\.elements).compactMap { element -> [LayoutChordNote]? in
+                if case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = element { notes } else { nil }
+            }.flatMap(\.self)
+            #expect(chordNotes.count == 2, "both notes stay in the visible chord")
+            #expect(chordNotes.contains { $0.isInvisible }, "the fixture must carry an invisible note")
+            let sheet = PDFExporter.Sheet(
+                systems: document.systems, pageStartY: 0, pageSize: CGSize(width: 572, height: 400),
+                margins: PageMargins(top: 36, leading: 36, bottom: 36, trailing: 36),
+            )
+            let shown = try #require(PDFPageRaster.pages(of: PDFExporter.export(
+                document: document, sheets: [sheet], score: score, options: .init(drawsInvisibleElements: true),
+            )).first)
+            let printed = try #require(PDFPageRaster.pages(of: PDFExporter.export(
+                document: document, sheets: [sheet], score: score, options: .init(drawsInvisibleElements: false),
+            )).first)
+            let shownInk = shown.markedIndices
+            let printedInk = printed.markedIndices
+            #expect(printedInk.count < shownInk.count, "control: the switch has something to omit")
+            let subset = printedInk.isSubset(of: shownInk)
+            #expect(subset, "printing with the switch off added or moved ink")
+            #expect(!printedInk.isEmpty, "the visible note and the staff must still print")
+        }
     }
 #endif
