@@ -74,23 +74,52 @@
         private let _installApple = TestSupport.installApple
 
         /// `measures` whole-note bars on every one of `parts` single-staff parts.
-        static func wholeNoteScore(measures: Int, parts: Int) -> Score {
+        static func wholeNoteScore(measures: Int, parts: Int, titled: Bool = false) -> Score {
             let chord = Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])
             let bars = (0 ..< measures).map { _ in Measure(voices: [Voice(elements: [.chord(chord)])]) }
+            var style = ScoreStyle.museScoreDefaults
+            if titled {
+                // A page number in the header and the footer of EVERY page, first included, plus the page count.
+                let row = TextRow(left: "", center: "$P / $N", right: "")
+                for keyPath in [\PageChrome.header, \PageChrome.footer] {
+                    style.pageChrome[keyPath: keyPath].enabled = true
+                    style.pageChrome[keyPath: keyPath].showOnFirstPage = true
+                    style.pageChrome[keyPath: keyPath].oddEvenDifferent = false
+                    style.pageChrome[keyPath: keyPath].odd = row
+                }
+            }
             return Score(
                 division: 480,
                 parts: IdentifiedArray((0 ..< parts).map { index in
                     Part(id: "\(index + 1)", instrument: Instrument(id: "x"), staves: [Staff(measures: bars)])
                 }),
+                titleFrame: titled ? ScoreFrame(
+                    heightSp: 12, texts: [FrameText(style: .title, text: "Sheet Title")],
+                ) : nil,
+                style: style,
             )
         }
 
-        @Test(arguments: zip([240, 60], [1, 2]))
+        /// A fixture for the characterization test; `titled` adds a title frame and a page number to every page.
+        struct Fixture: Sendable, CustomTestStringConvertible {
+            let measures: Int
+            let parts: Int
+            let titled: Bool
+            var testDescription: String {
+                "\(measures) bars × \(parts) parts, titled: \(titled)"
+            }
+        }
+
+        @Test(arguments: [
+            Fixture(measures: 240, parts: 1, titled: false),
+            Fixture(measures: 60, parts: 2, titled: false),
+            Fixture(measures: 240, parts: 1, titled: true),
+        ])
         func `routing export(score:) through the sheet entry point leaves every page unchanged`(
-            measures: Int, parts: Int,
+            fixture: Fixture,
         ) throws {
             guard #available(macOS 15.0, *) else { return }
-            let score = Self.wholeNoteScore(measures: measures, parts: parts)
+            let score = Self.wholeNoteScore(measures: fixture.measures, parts: fixture.parts, titled: fixture.titled)
             let options = PDFExporter.Options(title: "T")
             let routed = try PDFPageRaster.pages(of: PDFExporter.export(score: score, options: options))
             let legacy = try PDFPageRaster.pages(of: LegacyPDFExport.export(score: score, options: options))
@@ -133,6 +162,49 @@
             let top = 36 + system.origin.y + system.staffOrigins[0].y - sheets[1].pageStartY
             let band = CGRect(x: 36, y: top - 3, width: 400, height: 6)
             #expect(pages[1].markedPixels(in: band) > 0)
+        }
+
+        /// The title frame belongs to the first sheet alone, and each sheet gets its own header and footer.
+        @Test
+        func `the first sheet carries the title frame and every sheet its page chrome`() throws {
+            guard #available(macOS 15.0, *) else { return }
+            _ = SheetMusicLayoutApple.install
+            let size = CGSize(width: 572, height: 400)
+            let margins = PageMargins(top: 36, leading: 36, bottom: 36, trailing: 36)
+            func render(titled: Bool) throws -> (PDFExporter.Sheet, [PDFPageRaster]) {
+                let score = Self.wholeNoteScore(measures: 24, parts: 1, titled: titled)
+                let document = LayoutEngine.layout(
+                    score: score, options: ScoreViewOptions(staffSize: 16), availableWidth: 500,
+                )
+                #expect(document.systems.count >= 2)
+                #expect((document.titleFrame != nil) == titled)
+                let sheets = [
+                    PDFExporter.Sheet(systems: [document.systems[0]], pageStartY: 0, pageSize: size, margins: margins),
+                    PDFExporter.Sheet(
+                        systems: [document.systems[1]], pageStartY: document.systems[1].origin.y,
+                        pageSize: size, margins: margins,
+                    ),
+                ]
+                let pdf = try PDFExporter.export(document: document, sheets: sheets, score: score)
+                return try (sheets[0], PDFPageRaster.pages(of: pdf))
+            }
+            let (titledFirst, titled) = try render(titled: true)
+            let (_, plain) = try render(titled: false)
+            #expect(titled.count == 2)
+            #expect(plain.count == 2)
+            #expect(titledFirst.systems[0].origin.y > 0, "the title frame must push system 0 down")
+            // The title draws on page 1 only: page 1 differs from the untitled one, page 2 is identical.
+            #expect(titled[0].rgba != plain[0].rgba)
+            #expect(titled[1].rgba == plain[1].rgba)
+            let titleBand = CGRect(x: 36, y: 36, width: 500, height: titledFirst.systems[0].origin.y)
+            #expect(titled[0].markedPixels(in: titleBand) > 0)
+            // Header and footer sit in the margins of every page, and the page number differs between pages.
+            for page in titled {
+                #expect(page.markedPixels(in: CGRect(x: 0, y: 0, width: size.width, height: 36)) > 0)
+                #expect(page.markedPixels(in: CGRect(x: 0, y: size.height - 36, width: size.width, height: 36)) > 0)
+            }
+            let headerBytes = titled.map { $0.rgba.prefix($0.width * Int(36 * $0.scale) * 4) }
+            #expect(headerBytes[0] != headerBytes[1])
         }
     }
 #endif
