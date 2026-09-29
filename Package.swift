@@ -601,6 +601,46 @@ if isAndroid {
     ]
 }
 
+// Playback on Windows: FluidSynth renders (as on Android), WASAPI plays, and the cursor follows the device clock.
+// Declared on Windows only. FluidSynth is found through the include and library paths the build passes
+// (`-Xcc -I<fluidsynth>\include -Xlinker -L<fluidsynth>\lib`, the official release zip's cpp11 flavor), and ships
+// as its LGPL DLL beside the app.
+if isWindows {
+    products += [
+        .library(name: "SheetMusicAudioWindows", targets: ["SheetMusicAudioWindows"]),
+        .executable(name: "windows-playback-probe", targets: ["WindowsPlaybackProbe"]),
+    ]
+    targets += [
+        .systemLibrary(name: "CFluidSynth", path: "Sources/CFluidSynth"),
+        .target(
+            name: "CWASAPI",
+            path: "Sources/CWASAPI",
+            linkerSettings: [
+                .linkedLibrary("ole32"),
+                .linkedLibrary("avrt"),
+            ],
+        ),
+        .target(
+            name: "SheetMusicAudioWindows",
+            dependencies: [
+                "CFluidSynth",
+                "CWASAPI",
+                "SheetMusicBridgeCore",
+                "SheetMusicCore",
+                "SheetMusicMIDI",
+            ],
+            linkerSettings: [
+                // The import library in FluidSynth's Windows release zip; Unix builds call it `fluidsynth`.
+                .linkedLibrary("libfluidsynth-3"),
+            ],
+        ),
+        .executableTarget(
+            name: "WindowsPlaybackProbe",
+            dependencies: ["SheetMusicAudioWindows", "SheetMusicLoader"],
+        ),
+    ]
+}
+
 if vendorsZlib {
     targets += [
         // Vendored zlib 1.3.1, raw-DEFLATE subset — see Sources/zlib/README.md.

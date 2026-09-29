@@ -1,0 +1,4 @@
+module CFluidSynth [system] {
+    header "shim.h"
+    export *
+}
