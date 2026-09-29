@@ -18,6 +18,12 @@ and this project adheres to
   `showsInvisibleElements` parked as invisible, without moving anything else — so a host can print the layout its
   screen shows, where hidden marks still take their room, without printing the marks.
 
+### Fixed
+
+- **The Canvas renderer draws multi-measure rests.** `ScoreCanvasDrawing` skipped `.multiMeasureRest`, so
+  `PDFPageView` — and every PDF of a layout that collapses rest runs — printed an empty bar where the screen showed the
+  H-bar and its count. It now draws both, as the CALayer renderer does.
+
 ## [3.6.2] - 2026-09-29
 
 ### Fixed
