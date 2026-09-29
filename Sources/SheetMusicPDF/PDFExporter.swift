@@ -94,7 +94,10 @@ public enum PDFExporter {
     }
 
     /// Render `score` to a PDF document and return its raw bytes.
-    public static func export( // swiftlint:disable:this function_body_length
+    ///
+    /// Lays the score out and paginates it from its `<Style>`, then draws through
+    /// `export(document:sheets:score:options:)`.
+    public static func export(
         score: Score,
         options: Options = Options(),
     ) throws -> Data {
@@ -132,64 +135,20 @@ public enum PDFExporter {
             policy: options.breakPolicy,
         )
 
-        let data = NSMutableData()
-        guard let consumer = CGDataConsumer(data: data),
-              let pdfContext = CGContext(
-                  consumer: consumer,
-                  mediaBox: nil,
-                  makePDFInfo(options: options) as CFDictionary,
-              )
-        else {
-            throw PDFExportError.contextCreationFailed
-        }
-
-        for (idx, page) in pages.enumerated() {
-            let margins = resolved.page.margins(forPageIndex: idx)
-            let view = PDFPageView(
+        let sheets = pages.enumerated().map { idx, page in
+            Sheet(
                 systems: page.systems,
                 pageStartY: page.startY,
-                titleFrame: idx == 0 ? document.titleFrame : nil,
-                metrics: document.metrics,
                 pageSize: resolved.page.size,
-                margins: margins,
-                // Authoring overlay is for previews only; the
-                // exported file must not show it.
-                breakIndicatorVisibility: .none,
-                policy: options.breakPolicy,
+                margins: resolved.page.margins(forPageIndex: idx),
             )
-            let renderer = ImageRenderer(content: view)
-            renderer.proposedSize = ProposedViewSize(
-                width: resolved.page.size.width,
-                height: resolved.page.size.height,
-            )
-            renderer.scale = 1
-            renderer.isOpaque = true
-            renderer.render { _, drawInto in
-                var mediaBox = CGRect(
-                    origin: .zero, size: resolved.page.size,
-                )
-                pdfContext.beginPDFPage(
-                    [
-                        kCGPDFContextMediaBox as String:
-                            Data(bytes: &mediaBox, count: MemoryLayout<CGRect>.size),
-                    ] as CFDictionary,
-                )
-                drawInto(pdfContext)
-                PageChromeRenderer.draw(
-                    chrome: score.style.pageChrome,
-                    pageIndex: idx,
-                    pageCount: pages.count,
-                    pageSize: resolved.page.size,
-                    margins: margins,
-                    metaTags: score.metaTags,
-                    into: pdfContext,
-                )
-                pdfContext.endPDFPage()
-            }
         }
-
-        pdfContext.closePDF()
-        return data as Data
+        return try export(
+            document: document,
+            sheets: sheets,
+            score: score,
+            options: SheetOptions(title: options.title, author: options.author),
+        )
     }
 
     /// Render `score` and write the resulting PDF to `url`.
@@ -327,20 +286,5 @@ public enum PDFExporter {
             staffSize = v
         }
         return Resolved(page: page, staffSize: staffSize)
-    }
-
-    private static func makePDFInfo(
-        options: Options,
-    ) -> [String: Any] {
-        var info: [String: Any] = [
-            kCGPDFContextCreator as String: "swift-sheet-music",
-        ]
-        if let title = options.title {
-            info[kCGPDFContextTitle as String] = title
-        }
-        if let author = options.author {
-            info[kCGPDFContextAuthor as String] = author
-        }
-        return info
     }
 }

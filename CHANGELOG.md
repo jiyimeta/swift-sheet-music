@@ -7,6 +7,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`PDFExporter.export(document:sheets:score:options:)` prints pages the host already laid out.** A host whose
+  screen shows the score as pages of its own — its own paper, margins and page breaks — hands over the systems on
+  each page and where the page starts, and the PDF is exactly those pages, with the score's own header and footer in
+  their margins. `export(score:options:)` is now built on it and draws the same PDF it did before.
+
 ## [3.6.2] - 2026-09-29
 
 ### Fixed
