@@ -20,6 +20,21 @@ let isAndroid = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_ANDROID"]
 /// `WasmSizeProbe` executable that `Scripts/wasm-size.sh` measures. Kept behind
 /// a flag so the shipping package shape carries no extra product.
 let isWasm = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_WASM"] == "1"
+// True when SwiftPM itself runs on Windows. No environment variable is needed: the manifest is compiled for the host,
+// and a Windows host builds for Windows. Windows takes the Apple-free shape Android takes (`isAppleFree`), except for
+// what is Android's alone — the JNI bridge and the swift-java tooling it pulls in, whose build-tool plugin SwiftPM
+// would otherwise compile for every build of this package as a root.
+#if os(Windows)
+    let isWindows = true
+#else
+    let isWindows = false
+#endif
+/// The shape without Apple's frameworks: no SwiftUI / CoreGraphics / AVFoundation targets, PDF in its import-only form.
+/// Android and Windows both build it; `isAndroid` alone still gates what is Android-specific.
+let isAppleFree = isAndroid || isWindows
+/// Where `import zlib` resolves to the vendored copy in `Sources/zlib` rather than a system module: the WebAssembly
+/// SDK and the Windows toolchain ship none.
+let vendorsZlib = isWasm || isWindows
 
 /// Linker flags every WebAssembly target here carries. Empty off the wasm path, so the Apple and Android builds —
 /// and any consumer resolving this package by version — never see `.unsafeFlags`.
@@ -100,11 +115,11 @@ var targets: [Target] = [
     .target(
         name: "SheetMusicZip",
         // Linux and Android link the system libz and resolve `import zlib`
-        // against their sysroot's modulemap. The WebAssembly SDK ships
-        // neither, so under SWIFT_SHEET_MUSIC_WASM the vendored target
-        // below supplies a module of the same name. Apple uses
+        // against their sysroot's modulemap. The WebAssembly SDK and the
+        // Windows toolchain ship neither, so there the vendored target
+        // below supplies a module of the same name (`vendorsZlib`). Apple uses
         // `Compression` and needs nothing here.
-        dependencies: isWasm ? ["SheetMusicFoundation", "zlib"] : ["SheetMusicFoundation"],
+        dependencies: vendorsZlib ? ["SheetMusicFoundation", "zlib"] : ["SheetMusicFoundation"],
         linkerSettings: [
             .linkedLibrary("z", .when(platforms: [.linux, .android])),
         ],
@@ -171,13 +186,13 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicPDF",
-        dependencies: isAndroid
+        dependencies: isAppleFree
             ? ["SheetMusicCore", "SheetMusicLayout"]
             : ["SheetMusicCore", "SheetMusicLayout", "SheetMusicLayoutApple", "SheetMusicUI"],
         // Apple-only files (CGPDFScanner walker, PDFDocument entry, PDF export,
-        // SwiftUI/PDFKit views) are excluded from the Android build; Android
-        // parses via the Foundation-only pure-Swift reader.
-        exclude: isAndroid ? [
+        // SwiftUI/PDFKit views) are excluded from the Apple-free build; Android
+        // and Windows parse via the Foundation-only pure-Swift reader.
+        exclude: isAppleFree ? [
             "PageChromeRenderer.swift",
             "PDFPageLayerView.swift",
             "PDFPageView.swift",
@@ -327,7 +342,7 @@ if isWasm {
         .define("SHEET_MUSIC_HAS_FOUNDATION_XML_REFERENCE_ORACLE"),
     ]
 
-    if !isAndroid {
+    if !isAppleFree {
         sheetMusicTestsSwiftSettings += [
             .define("SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT"),
             // JNI bridge tests currently run in the Apple-host SheetMusicTests shape.
@@ -350,26 +365,28 @@ if isWasm {
         ]
     }
 
+    // The Apple-free test shape. The JNI bridge joins it on Android only: Windows declares no such target.
+    let appleFreeTestDependencies: [Target.Dependency] = [
+        "SheetMusic",
+        "SheetMusicCore",
+        "SheetMusicMIDI",
+        "SheetMusicMSCX",
+        "SheetMusicMusicXML",
+        "SheetMusicLayout",
+        "SheetMusicBridgeCore",
+        "SheetMusicLoader",
+        "SheetMusicEditWire",
+        "SheetMusicAudioCore",
+        .product(name: "Wirelet", package: "swift-wirelet"),
+        "SheetMusicFoundation",
+        "SheetMusicXMLTools",
+        "SheetMusicZip",
+    ] + (isAndroid ? ["SheetMusicAndroidJNI"] : [])
+
     targets += [
         .testTarget(
             name: "SheetMusicTests",
-            dependencies: isAndroid ? [
-                "SheetMusic",
-                "SheetMusicCore",
-                "SheetMusicMIDI",
-                "SheetMusicMSCX",
-                "SheetMusicMusicXML",
-                "SheetMusicLayout",
-                "SheetMusicAndroidJNI",
-                "SheetMusicBridgeCore",
-                "SheetMusicLoader",
-                "SheetMusicEditWire",
-                "SheetMusicAudioCore",
-                .product(name: "Wirelet", package: "swift-wirelet"),
-                "SheetMusicFoundation",
-                "SheetMusicXMLTools",
-                "SheetMusicZip",
-            ] : [
+            dependencies: isAppleFree ? appleFreeTestDependencies : [
                 "SheetMusic",
                 "SheetMusicCore",
                 "SheetMusicMIDI",
@@ -400,7 +417,7 @@ if isWasm {
     ]
 }
 
-if !isAndroid {
+if !isAppleFree {
     products += [
         .library(name: "SheetMusicLayoutApple", targets: ["SheetMusicLayoutApple"]),
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
@@ -531,7 +548,10 @@ if !isAndroid {
     }
 }
 
-if !isWasm {
+// Declared off wasm and off Windows. Apple keeps it because SheetMusicTests exercises the bridge on the Apple host;
+// Windows has no JVM to bridge to, and declaring it there would make SwiftPM build swift-java's plugin tooling for
+// every root build of this package (measured 2026-09-29: ~480 extra compile steps on a two-core machine).
+if !isWasm, !isWindows {
     targets += [
         .target(
             name: "SheetMusicAndroidJNI",
@@ -578,10 +598,7 @@ if isAndroid {
     ]
 }
 
-if isWasm {
-    products += [
-        .executable(name: "sheet-music-wasm", targets: ["SheetMusicWasmEntry"]),
-    ]
+if vendorsZlib {
     targets += [
         // Vendored zlib 1.3.1, raw-DEFLATE subset — see Sources/zlib/README.md.
         // Lowercase on purpose: the module name has to match the system
@@ -599,6 +616,14 @@ if isWasm {
                 .define("NO_GZIP"),
             ],
         ),
+    ]
+}
+
+if isWasm {
+    products += [
+        .executable(name: "sheet-music-wasm", targets: ["SheetMusicWasmEntry"]),
+    ]
+    targets += [
         // The `@JS` entry points. A library rather than the executable because
         // BridgeJS scans only the target it is attached to — the same residency
         // rule jextract imposes on `SheetMusicAndroidJNI` — and keeping them in

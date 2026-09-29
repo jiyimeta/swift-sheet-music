@@ -33,6 +33,8 @@
 // `FoundationEssentials` does not, so the shim has to supply them or the
 // FoundationEssentials branch fails to compile wherever the renderers do
 // trigonometry (`MidiRenderer+GlissandoMath`, the layout geometry helpers).
+// Windows' C runtime is `ucrt`; without it `tan` / `cos` / `acos` are not in
+// scope there, which is how Layout, MIDI and MSCX first failed on Windows.
 #if canImport(Darwin)
     @_exported import Darwin
 #elseif canImport(Android)
@@ -43,6 +45,8 @@
     @_exported import Musl
 #elseif canImport(WASILibc)
     @_exported import WASILibc
+#elseif canImport(ucrt)
+    @_exported import ucrt
 #endif
 
 /// `CharacterSet` is one of the pieces `FoundationEssentials` does not carry, so
