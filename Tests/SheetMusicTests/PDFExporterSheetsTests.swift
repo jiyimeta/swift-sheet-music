@@ -324,5 +324,50 @@
             #expect(subset, "printing with the switch off added or moved ink")
             #expect(!printedInk.isEmpty, "the visible note and the staff must still print")
         }
+
+        @Test
+        func `a collapsed rest run prints its H-bar and its count`() throws {
+            guard #available(macOS 15.0, *) else { return }
+            _ = SheetMusicLayoutApple.install
+            let sounding = Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])),
+            ])])
+            let rest = Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+            let bars = [sounding, rest, rest, rest, rest, sounding]
+            let score = Score(
+                division: 480,
+                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: bars)])],
+                systemMeasures: IdentifiedArray(Array(repeating: SystemMeasure(), count: bars.count)),
+            )
+            let document = LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(multiMeasureRest: .collapse(minimumMeasures: 2)),
+                availableWidth: 500,
+            )
+            let system = try #require(document.systems.first)
+            let found = system.measures.lazy.compactMap { measure -> (LayoutMeasure, CGPoint)? in
+                for case let .multiMeasureRest(_, point) in measure.elements {
+                    return (measure, point)
+                }
+                return nil
+            }.first
+            let (measure, origin) = try #require(found)
+            let sheet = PDFExporter.Sheet(
+                systems: document.systems, pageStartY: 0, pageSize: CGSize(width: 572, height: 400),
+                margins: PageMargins(top: 36, leading: 36, bottom: 36, trailing: 36),
+            )
+            let pdf = try PDFExporter.export(document: document, sheets: [sheet], score: score)
+            let page = try #require(PDFPageRaster.pages(of: pdf).first)
+            let sp = document.metrics.sp
+            let center = CGPoint(
+                x: 36 + system.origin.x + measure.origin.x + origin.x,
+                y: 36 + system.origin.y + measure.origin.y + origin.y,
+            )
+            // Control: the staff's middle line crosses this box, so a bare staff marks a thin band of it.
+            let bar = CGRect(x: center.x - sp, y: center.y - sp * 0.3, width: sp * 2, height: sp * 0.6)
+            #expect(page.markedFraction(in: bar) > 0.6, "the H-bar fills the middle of the bar")
+            // The run length sits 2.5 sp above the middle line — above the top staff line, which is 2 sp above it.
+            let count = CGRect(x: center.x - sp, y: center.y - sp * 4, width: sp * 2, height: sp * 1.6)
+            #expect(page.markedPixels(in: count) > 0, "the count 4 is printed above the staff")
+        }
     }
 #endif
