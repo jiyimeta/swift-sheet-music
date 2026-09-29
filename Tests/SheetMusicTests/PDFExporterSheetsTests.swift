@@ -268,12 +268,14 @@
             #expect(try CGFloat(#require(removedRows.max())) / shown.scale < staffTop)
         }
 
-        /// One bar with a quarter chord of a visible B4 and an invisible middle C. The invisible note never leaves the
+        /// One bar with a quarter chord of a visible B4 and an invisible G4. The invisible note never leaves the
         /// chord — the layout keeps it in `measure.elements`, flagged `isInvisible` — so it is `drawSystem`'s per-note
-        /// path, not the `invisibleElements` container, that decides whether its notehead and ledger line print.
+        /// path, not the `invisibleElements` container, that decides whether its notehead prints. G4 sits inside the
+        /// staff on purpose: a note that needs a ledger line has that line parked in `invisibleElements`, which the
+        /// container guard would omit on its own and hide a broken per-note path.
         static func scoreWithHiddenNoteInChord() -> Score {
             let visible = Note(pitch: 71, tpc: 19)
-            var hidden = Note(pitch: 60, tpc: 14)
+            var hidden = Note(pitch: 67, tpc: 15)
             hidden.visible = false
             let voice = Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
