@@ -186,8 +186,9 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicPDF",
+        // `PDFFlate` inflates through `zlib` off Apple, which Windows' toolchain does not ship as a module either.
         dependencies: isAppleFree
-            ? ["SheetMusicCore", "SheetMusicLayout"]
+            ? ["SheetMusicCore", "SheetMusicLayout"] + (vendorsZlib ? ["zlib"] : [])
             : ["SheetMusicCore", "SheetMusicLayout", "SheetMusicLayoutApple", "SheetMusicUI"],
         // Apple-only files (CGPDFScanner walker, PDFDocument entry, PDF export,
         // SwiftUI/PDFKit views) are excluded from the Apple-free build; Android
