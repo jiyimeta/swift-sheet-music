@@ -652,9 +652,11 @@ The XML reference-oracle boundary is intentional:
   implementation that `XMLTreeParser` replaced and that the byte-identical MSCX
   corpus gates encode. swift-corelibs-foundation's WASI `XMLParser` is a
   different implementation, not that reference: it drops CDATA text and accepts
-  multiple roots. The comparison therefore stays confined to the manifest shape
-  where `SHEET_MUSIC_HAS_FOUNDATION_XML_REFERENCE_ORACLE` is defined, instead
-  of changing the production parser to match the WASI implementation. The
+  multiple roots. Windows' `FoundationXML` is the same corelibs implementation and
+  measured the same way (2026-09-29: CDATA dropped, one malformed input accepted).
+  The comparison therefore stays confined to the Apple manifest shape, the only
+  one where `SHEET_MUSIC_HAS_FOUNDATION_XML_REFERENCE_ORACLE` is defined, instead
+  of changing the production parser to match the corelibs implementation. The
   adversarial XML corpus now carries checked-in `XMLTreeNode` expectations
   asserted on every platform, so the wasm side is no longer assertion-free.
 

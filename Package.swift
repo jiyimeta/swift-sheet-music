@@ -339,12 +339,14 @@ if isWasm {
         ),
     ]
 } else {
-    var sheetMusicTestsSwiftSettings: [SwiftSetting] = [
-        .define("SHEET_MUSIC_HAS_FOUNDATION_XML_REFERENCE_ORACLE"),
-    ]
+    var sheetMusicTestsSwiftSettings: [SwiftSetting] = []
 
     if !isAppleFree {
         sheetMusicTestsSwiftSettings += [
+            // The XML differential oracle is Apple's Foundation `XMLParser`. Off Apple, `FoundationXML` is
+            // swift-corelibs-foundation's, a different implementation that drops CDATA text and accepts
+            // malformed input (measured on Windows; docs/development/webassembly.md has the WASI case).
+            .define("SHEET_MUSIC_HAS_FOUNDATION_XML_REFERENCE_ORACLE"),
             .define("SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT"),
             // JNI bridge tests currently run in the Apple-host SheetMusicTests shape.
             // The Android cross-build links SheetMusicAndroidJNI to compile portable
