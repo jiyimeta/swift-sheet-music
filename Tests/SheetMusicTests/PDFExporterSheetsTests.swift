@@ -213,5 +213,59 @@
             let pageNumbersDiffer = headerRows[0] != headerRows[1]
             #expect(pageNumbersDiffer, "pages 1 and 2 have the same header")
         }
+
+        /// One bar under a hidden tempo marking — `Tempo(visible: false)`, which a layout that shows invisible
+        /// elements parks in the measure's `invisibleElements` above the staff.
+        static func scoreWithHiddenTempo() -> Score {
+            let voice = Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])),
+            ])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1", instrument: Instrument(id: "voice"),
+                    staves: [Staff(measures: [Measure(voices: [voice])])],
+                )],
+                systemMeasures: [SystemMeasure(elements: [
+                    PositionedSystemElement(
+                        position: .start, element: .tempo(Tempo(beatsPerSecond: 2, visible: false)),
+                    ),
+                ])],
+            )
+        }
+
+        @Test
+        func `invisible elements keep their room but print nothing when the switch is off`() throws {
+            guard #available(macOS 15.0, *) else { return }
+            _ = SheetMusicLayoutApple.install
+            let score = Self.scoreWithHiddenTempo()
+            let document = LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(showsInvisibleElements: true), availableWidth: 500,
+            )
+            let system = try #require(document.systems.first)
+            #expect(!system.measures.flatMap(\.invisibleElements).isEmpty, "the fixture must park something")
+            let sheet = PDFExporter.Sheet(
+                systems: document.systems, pageStartY: 0, pageSize: CGSize(width: 572, height: 400),
+                margins: PageMargins(top: 36, leading: 36, bottom: 36, trailing: 36),
+            )
+            let shown = try #require(PDFPageRaster.pages(of: PDFExporter.export(
+                document: document, sheets: [sheet], score: score, options: .init(drawsInvisibleElements: true),
+            )).first)
+            let printed = try #require(PDFPageRaster.pages(of: PDFExporter.export(
+                document: document, sheets: [sheet], score: score, options: .init(drawsInvisibleElements: false),
+            )).first)
+            let shownInk = shown.markedIndices
+            let printedInk = printed.markedIndices
+            #expect(printedInk.count < shownInk.count, "control: the switch has something to omit")
+            // Nothing is added or moved — the layout is the same, only the parked marks go.
+            let subset = printedInk.isSubset(of: shownInk)
+            #expect(subset, "printing with the switch off added or moved ink")
+            // And what went is the tempo text above the staff, not a note or a staff line.
+            let staffTop = 36 + system.origin.y + system.staffOrigins[0].y
+            let removedRows = shownInk.subtracting(printedInk).map { $0 / shown.width }
+            #expect(try CGFloat(#require(removedRows.max())) / shown.scale < staffTop)
+        }
     }
 #endif
