@@ -19,7 +19,10 @@ extension PDFExporter {
         public var systems: [LayoutSystem]
         /// The document Y drawn at the page's top margin.
         public var pageStartY: CGFloat
+        /// The page's media box, in points.
         public var pageSize: CGSize
+        /// Used exactly as given — no odd/even resolution. The systems are drawn at
+        /// `(margins.leading, margins.top − pageStartY)`, and the page chrome sits in these margins.
         public var margins: PageMargins
 
         public init(systems: [LayoutSystem], pageStartY: CGFloat, pageSize: CGSize, margins: PageMargins) {
@@ -48,7 +51,8 @@ extension PDFExporter {
     /// Draw `sheets` — pages of `document` that the caller has already paginated — to a PDF, one page per sheet, each
     /// at its own size and margins. The first sheet carries `document.titleFrame`. `score` supplies the page chrome
     /// (`score.style.pageChrome` and `score.metaTags`), drawn into each sheet's margins as `export(score:options:)`
-    /// draws it, which is now built on this.
+    /// draws it, which is now built on this. An empty `sheets` still yields a one-page PDF (CoreGraphics writes a page
+    /// of its default size); pass a sheet with no systems to choose that page's size.
     public static func export(
         document: LayoutDocument,
         sheets: [Sheet],
