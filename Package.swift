@@ -639,6 +639,34 @@ if isWindows {
             dependencies: ["SheetMusicAudioWindows", "SheetMusicLoader"],
         ),
     ]
+
+    // Drawing the draw program on Windows: Direct2D + DirectWrite behind a C API (the WinSDK module has neither
+    // header, and DirectWrite has no C interface), and the walk `DrawProgramCGRenderer` does on the Mac over it.
+    products += [
+        .library(name: "SheetMusicRenderWindows", targets: ["SheetMusicRenderWindows"]),
+        .executable(name: "windows-render-probe", targets: ["WindowsRenderProbe"]),
+    ]
+    targets += [
+        .target(
+            name: "CDirect2D",
+            path: "Sources/CDirect2D",
+            linkerSettings: [
+                .linkedLibrary("d2d1"),
+                .linkedLibrary("dwrite"),
+                .linkedLibrary("windowscodecs"),
+                .linkedLibrary("ole32"),
+                .linkedLibrary("uuid"),
+            ],
+        ),
+        .target(
+            name: "SheetMusicRenderWindows",
+            dependencies: ["CDirect2D", "SheetMusicBridgeCore"],
+        ),
+        .executableTarget(
+            name: "WindowsRenderProbe",
+            dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore"],
+        ),
+    ]
 }
 
 if vendorsZlib {

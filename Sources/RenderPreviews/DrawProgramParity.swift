@@ -3,6 +3,7 @@
     import CoreGraphics
     import CoreText
     import Foundation
+    import ImageIO
     import SheetMusic
     import SheetMusicBridgeCore
     import SheetMusicCore
@@ -34,9 +35,18 @@
     ///   SM_PARITY_SHIFT      — whole-pixel nudge "dx,dy" applied to the draw-program render (default 0,0)
     ///   SM_PARITY_ONLY       — with `samples`, run just the catalog entry with this name
     ///   SM_PARITY_MAX_MEAN   — exit 1 when the mean differing share (in percent) exceeds this budget
+    ///   SM_PARITY_EXPORT     — `1` also writes each score's page as `<name>-page.bin` (a `DrawProgramCodec` payload)
+    ///                          and its canvas as `<name>-page.txt` ("widthPx heightPx pxPerMM offsetX offsetY"),
+    ///                          which is what the Windows renderer's probe (`windows-render-probe`) draws from
+    ///   SM_PARITY_WINDOWS_MAX_MEAN — exit 1 when the Windows renders' mean differing share against the CoreGraphics
+    ///                          walk (in percent) exceeds this budget. The same stream through a second rasterizer
+    ///                          differs only at anti-aliased edges: 0.007% on the samples (2026-09-30), so 0.1 is
+    ///                          a budget a missing or misplaced command blows through.
     ///
     /// Writes `<name>-apple.png`, `<name>-drawprogram.png` and `<name>-diff.png` per score and prints one line per
-    /// score plus a summary: the share of pixels that differ, the mean and maximum channel delta.
+    /// score plus a summary: the share of pixels that differ, the mean and maximum channel delta. When the output
+    /// directory holds a `<name>-windows.png` — the Windows renderer's drawing of the exported page, copied back —
+    /// it is diffed against both renders too (`<name>-windows-diff.png` against the CoreGraphics walk).
     ///
     /// Usage:
     ///   SM_PARITY=samples swift run render-previews
@@ -99,14 +109,23 @@
                 subjects = [(url.deletingPathExtension().lastPathComponent, score)]
             }
 
+            let exports = env["SM_PARITY_EXPORT"] == "1"
             var rows: [Row] = []
+            var windowsRows: [(vsWalk: Row, vsApple: Row)] = []
             for (name, score) in subjects {
                 let row = try compare(
                     name: name, score: score, width: width, threshold: threshold, nudge: nudge, outDir: outDir,
+                    exports: exports,
                 )
                 rows.append(row)
                 print(row.line)
+                if let windows = try compareWindows(name: name, threshold: threshold, outDir: outDir) {
+                    windowsRows.append(windows)
+                    print("  windows vs walk  " + windows.vsWalk.line.dropFirst(32))
+                    print("  windows vs apple " + windows.vsApple.line.dropFirst(32))
+                }
             }
+            reportWindows(windowsRows, budget: env["SM_PARITY_WINDOWS_MAX_MEAN"].flatMap { Double($0) })
             guard !rows.isEmpty else { return }
             let worst = rows.max { $0.share < $1.share }
             let meanShare = rows.reduce(0.0) { $0 + $1.share } / Double(rows.count)
@@ -126,6 +145,7 @@
         /// One score: lay out once, render twice, diff.
         static func compare(
             name: String, score: Score, width: CGFloat?, threshold: UInt8, nudge: CGPoint, outDir: URL,
+            exports: Bool = false,
         ) throws -> Row {
             // `includeTitleFrame: false` on purpose: `renderDocumentImage` composites systems only (it never draws
             // `TitleFrameView`), and the draw program would draw the title block, so the two would disagree on
@@ -156,12 +176,20 @@
             // Apple content and every horizontal edge in the diff picks up a sub-pixel smear that is not a renderer
             // difference.
             let ceilRemainder = CGFloat(apple.height) - (document.size.height + 2 * padding) * scale
+            let offset = CGPoint(x: padding * scale + nudge.x, y: padding * scale + ceilRemainder + nudge.y)
             let program = try DrawProgramCGRenderer.render(
                 page.commands,
                 widthPx: apple.width, heightPx: apple.height,
                 pxPerMM: scale / ptToMM,
-                offsetPx: CGPoint(x: padding * scale + nudge.x, y: padding * scale + ceilRemainder + nudge.y),
+                offsetPx: offset,
             )
+            if exports {
+                // The same page and the same canvas the walk above drew with, for the Windows renderer to draw.
+                try DrawProgramCodec.encode(pages: [page])
+                    .write(to: outDir.appendingPathComponent("\(name)-page.bin"))
+                try "\(apple.width) \(apple.height) \(Double(scale / ptToMM)) \(Double(offset.x)) \(Double(offset.y))\n"
+                    .write(to: outDir.appendingPathComponent("\(name)-page.txt"), atomically: true, encoding: .utf8)
+            }
 
             let result = try BitmapDiff.compare(apple, program, threshold: threshold)
             try writePNG(apple, to: outDir.appendingPathComponent("\(name)-apple.png"))
@@ -171,6 +199,51 @@
                 name: name, total: result.total, differing: result.differing,
                 meanDelta: result.meanDelta, maxDelta: result.maxDelta, bestShift: result.bestShift,
             )
+        }
+
+        /// The Windows renders' summary, and the gate: exit 1 when their mean differing share against the walk is
+        /// above `budget` percent.
+        static func reportWindows(_ rows: [(vsWalk: Row, vsApple: Row)], budget: Double?) {
+            guard !rows.isEmpty else { return }
+            let vsWalk = rows.reduce(0.0) { $0 + $1.vsWalk.share } / Double(rows.count)
+            let vsApple = rows.reduce(0.0) { $0 + $1.vsApple.share } / Double(rows.count)
+            print("")
+            print("windows: \(rows.count) scores, mean differing \(String(format: "%.3f", vsWalk * 100))% "
+                + "vs the CoreGraphics walk, \(String(format: "%.3f", vsApple * 100))% vs the Apple renderer")
+            if let budget, vsWalk * 100 > budget {
+                print("windows mean differing exceeds SM_PARITY_WINDOWS_MAX_MEAN=\(budget)")
+                exit(1)
+            }
+        }
+
+        /// The Windows renderer's `<name>-windows.png`, when there is one, against the CoreGraphics walk (the same
+        /// command stream, so the difference is the rasterizer's) and against the Apple renderer (what a user sees on
+        /// the Mac). `nil` when the file is absent.
+        static func compareWindows(
+            name: String, threshold: UInt8, outDir: URL,
+        ) throws -> (vsWalk: Row, vsApple: Row)? {
+            let windowsURL = outDir.appendingPathComponent("\(name)-windows.png")
+            guard FileManager.default.fileExists(atPath: windowsURL.path) else { return nil }
+            let windows = try readPNG(windowsURL)
+            let walk = try readPNG(outDir.appendingPathComponent("\(name)-drawprogram.png"))
+            let apple = try readPNG(outDir.appendingPathComponent("\(name)-apple.png"))
+            let vsWalk = try BitmapDiff.compare(walk, windows, threshold: threshold)
+            let vsApple = try BitmapDiff.compare(apple, windows, threshold: threshold)
+            try writePNG(vsWalk.image, to: outDir.appendingPathComponent("\(name)-windows-diff.png"))
+            func row(_ result: BitmapDiff.Result) -> Row {
+                Row(
+                    name: name, total: result.total, differing: result.differing,
+                    meanDelta: result.meanDelta, maxDelta: result.maxDelta, bestShift: result.bestShift,
+                )
+            }
+            return (row(vsWalk), row(vsApple))
+        }
+
+        private static func readPNG(_ url: URL) throws -> CGImage {
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+            else { throw RenderError.makeImageFailed }
+            return image
         }
     }
 
