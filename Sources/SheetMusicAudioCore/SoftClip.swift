@@ -3,11 +3,9 @@ import SheetMusicFoundation
 /// A saturation curve for the master output stage: linear below a knee,
 /// then bending asymptotically toward full scale.
 ///
-/// It exists as an alternative to the peak limiter, whose gain reduction
-/// makes the master gain control run *backwards* above unity — measured
-/// on a steady sine, driving the limiter with 8x input yields a quieter
-/// output than 1x does. A control that reverses direction is not
-/// something a listener can reason about.
+/// It exists instead of a peak limiter, whose gain reduction makes the master gain control run *backwards* above
+/// unity — measured on a steady sine, driving Apple's limiter with 8x input yielded a quieter output than 1x did. A
+/// control that reverses direction is not something a listener can reason about.
 ///
 /// This curve is strictly monotonic instead: louder in is always louder
 /// out, all the way up, and the price is progressive harmonic

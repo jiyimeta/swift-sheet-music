@@ -189,7 +189,7 @@ extension Shared {
     }
 
     /// Master gain, then the level reading (post-gain, pre-shaping — what the output stage is being asked to deal
-    /// with, Android's rule), then the soft clip when chosen. `.peakLimiter` behaves as `.none` here, as on Android.
+    /// with, Android's rule), then the soft clip when chosen.
     private mutating func applyOutputStage(
         to buffer: UnsafeMutablePointer<Float>, frames: Int, outcome: inout RenderOutcome,
     ) {

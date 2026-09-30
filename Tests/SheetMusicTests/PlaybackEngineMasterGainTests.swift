@@ -10,7 +10,7 @@
     /// not exercise audio output — they verify the public clamping
     /// contract, that the clamped value reaches the underlying mixer
     /// node, and that the value survives `prepare(score:)`. Audible
-    /// limiter behavior is verified in the Mac example app with a real
+    /// output-stage behavior is verified in the Mac example app with a real
     /// GM soundfont (CI has no audio device).
     extension AudioEngineSerial {
         @Suite("PlaybackEngine master gain")

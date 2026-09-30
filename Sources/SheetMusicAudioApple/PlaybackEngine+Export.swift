@@ -271,13 +271,10 @@ extension PlaybackEngine {
         // ordering.
         MidiChannelRemap.apply(midi: &midi, plan: plan)
         if metronomeSampler != nil {
-            // This controller is used only to generate the metronome
-            // MIDI track; `prepare(soundfontURL:)` is never called on it,
-            // so `output` is never connected. Pass the real metronome
-            // output anyway (not `mainMixerNode`) so that if a future
-            // change does call `prepare`, the click lands where the live
-            // engine puts it rather than silently bypassing the gain
-            // stage and the limiter.
+            // This controller is used only to generate the metronome MIDI track; `prepare(soundfontURL:)` is never
+            // called on it, so `output` is never connected. Pass the real metronome output anyway (not
+            // `mainMixerNode`) so that if a future change does call `prepare`, the click lands where the live engine
+            // puts it rather than silently bypassing the gain stage and the soft clip.
             let metronome = MetronomeController(
                 engine: engine, output: metronomeOutput,
             )
@@ -336,17 +333,12 @@ extension PlaybackEngine {
         try sequencer.start()
     }
 
-    /// Attach the master output chain
-    /// (scoreGainMixer → sumMixer → softClip → PeakLimiter →
-    /// mainMixerNode) to `engine`, seed `scoreGainMixer.outputVolume`
-    /// with `gain`, and bypass whichever shaping nodes `stage` does not
-    /// select. Returns `scoreGainMixer` — the chain's entry point, which
-    /// both the score synth and the metronome sampler feed. `sumMixer` is
-    /// wired but not handed back: nothing joins the chain after the gain
-    /// stage, and live it exists only as the metering tap point.
-    /// Mirrors `PlaybackEngine.buildMasterChain` from `+Master.swift`.
-    /// `internal` (not `private`) so the backend pipeline in
-    /// `PlaybackEngine+ExportBackend` builds the identical master stage.
+    /// Attach the master output chain (scoreGainMixer → sumMixer → softClip → mainMixerNode) to `engine`, seed
+    /// `scoreGainMixer.outputVolume` with `gain`, and bypass the soft clip unless `stage` selects it. Returns
+    /// `scoreGainMixer` — the chain's entry point, which both the score synth and the metronome sampler feed.
+    /// `sumMixer` is wired but not handed back: nothing joins the chain after the gain stage, and live it exists only
+    /// as the metering tap point. Mirrors `PlaybackEngine.buildMasterChain` from `+Master.swift`. `internal` (not
+    /// `private`) so the backend pipeline in `PlaybackEngine+ExportBackend` builds the identical master stage.
     static func buildOutputChain(
         engine: AVAudioEngine,
         gain: Float,
@@ -355,17 +347,13 @@ extension PlaybackEngine {
         let scoreGainMixer = AVAudioMixerNode()
         let sumMixer = AVAudioMixerNode()
         let softClip = SoftClipAudioUnit.makeNode()
-        let limiter = makePeakLimiter()
         softClip.bypass = stage != .softClip
-        limiter.bypass = stage != .peakLimiter
         engine.attach(scoreGainMixer)
         engine.attach(sumMixer)
         engine.attach(softClip)
-        engine.attach(limiter)
         engine.connect(scoreGainMixer, to: sumMixer, format: nil)
         engine.connect(sumMixer, to: softClip, format: nil)
-        engine.connect(softClip, to: limiter, format: nil)
-        engine.connect(limiter, to: engine.mainMixerNode, format: nil)
+        engine.connect(softClip, to: engine.mainMixerNode, format: nil)
         scoreGainMixer.outputVolume = gain
         return scoreGainMixer
     }

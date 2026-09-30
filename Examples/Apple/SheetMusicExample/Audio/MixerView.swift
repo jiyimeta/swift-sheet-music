@@ -33,16 +33,12 @@ struct MixerView: View {
     }
 }
 
-/// Master gain + peak meter. The meter reads `sumMixer` (post gain,
-/// pre limiter), so "Hold" is the highest level the mix actually
-/// reached before any limiting — which is what tells you how much
-/// headroom is left below 0 dBFS. Play the loudest passage with every
-/// staff sounding, then read Hold.
+/// Master gain + peak meter. The meter reads `sumMixer` (post gain, pre soft clip), so "Hold" is the highest level
+/// the mix actually reached before any shaping — which is what tells you how much headroom is left below 0 dBFS. Play
+/// the loudest passage with every staff sounding, then read Hold.
 ///
-/// The name keeps "master": it is the audio-engineering term for the
-/// summed output bus, the same one `PlaybackEngine`'s master gain /
-/// limiter stage carries — and the same reason `MasterTuning` keeps it
-/// in the library.
+/// The name keeps "master": it is the audio-engineering term for the summed output bus, the same one
+/// `PlaybackEngine`'s master gain / output stage carries — and the same reason `MasterTuning` keeps it in the library.
 private struct MasterLevelSection: View { // swiftlint:disable:this inclusive_language
     let engine: PlaybackEngine
 
@@ -62,7 +58,6 @@ private struct MasterLevelSection: View { // swiftlint:disable:this inclusive_la
             Picker("Output stage", selection: $stage) {
                 Text("None").tag(MasterOutputStage.none)
                 Text("Soft clip").tag(MasterOutputStage.softClip)
-                Text("Peak limiter").tag(MasterOutputStage.peakLimiter)
             }
             .pickerStyle(.segmented)
             .font(.caption)

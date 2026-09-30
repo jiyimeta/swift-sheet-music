@@ -108,21 +108,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// path only when this layout is still installed unchanged.
     private var loadedChannelLayout: PlaybackChannelLayout?
 
-    /// Master output stage. The score synth and the metronome both feed
-    /// `scoreGainMixer`, whose `outputVolume` is the user's master gain
-    /// (`0...`). Its output passes through `sumMixer`, then `softClip`
-    /// and `limiter` — both bypassed unless
-    /// `masterOutputStage` selects one — then routed into
-    /// `mainMixerNode`. `sumMixer` no longer sums anything the gain
-    /// stage didn't already; it stays as the metering tap point (see
-    /// `+Metering`), which must read the post-gain mix. Built once in
-    /// `init` and reused across every `prepare(score:)`, so `masterGain`
-    /// survives score reloads. `internal` so the `+Master` / `+Export`
-    /// extensions in sibling files can reach the nodes directly.
+    /// Master output stage. The score synth and the metronome both feed `scoreGainMixer`, whose `outputVolume` is
+    /// the user's master gain (`0...`). Its output passes through `sumMixer`, then `softClip` — bypassed unless
+    /// `masterOutputStage` selects it — then routed into `mainMixerNode`. `sumMixer` no longer sums anything the gain
+    /// stage didn't already; it stays as the metering tap point (see `+Metering`), which must read the post-gain mix.
+    /// Built once in `init` and reused across every `prepare(score:)`, so `masterGain` survives score reloads.
+    /// `internal` so the `+Master` / `+Export` extensions in sibling files can reach the nodes directly.
     let scoreGainMixer = AVAudioMixerNode()
     let sumMixer = AVAudioMixerNode()
     let softClip = SoftClipAudioUnit.makeNode()
-    let limiter = PlaybackEngine.makePeakLimiter()
 
     /// Which shaping node — if any — is active past full scale. Setter is
     /// module-internal so the `+Master` extension (a different file) can
@@ -1297,18 +1291,18 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
     }
 
-    /// Start a *sustained* preview note on `flatStaffIndex`'s own MIDI channel —
-    /// so it sounds in the mixer-selected program and the melodic synth's global
-    /// tuning (calibration + whole-score transpose), exactly like `playPreview`,
-    /// but held until `previewNoteOff(pitch:)` or a superseding `previewNoteOn`.
-    /// Resumes a host-parked graph and re-parks it on the matching note-off when
-    /// not playing. Intended for use only while stopped/paused (the caller gates
-    /// this); the held note shares the staff's sequencer channel, so it is not
-    /// meant to overlap live playback. `atTick` auditions the instrument active
-    /// at the cursor (see `midiChannel(forStaff:atTick:)`); it defaults to `0`
-    /// (the part's opening instrument) so existing callers keep compiling.
+    /// Start a *sustained* preview note on `flatStaffIndex`'s own MIDI channel — so it sounds in the mixer-selected
+    /// program and the melodic synth's global tuning (calibration + whole-score transpose), exactly like
+    /// `playPreview`, but held until `previewNoteOff(pitch:)` or a superseding `previewNoteOn`. Resumes a host-parked
+    /// graph and re-parks it on the matching note-off when not playing. Intended for use only while stopped/paused
+    /// (the caller gates this); the held note shares the staff's sequencer channel, so it is not meant to overlap
+    /// live playback.
+    ///
+    /// `atTick` is the score tick the note sits at, and picks the instrument active there (see
+    /// `midiChannel(forStaff:atTick:)`): after a mid-score instrument change only the right tick auditions the new
+    /// instrument. Pass `0` only when the preview genuinely belongs to the part's opening instrument.
     public func previewNoteOn(
-        pitch: UInt8, onStaff flatStaffIndex: Int, velocity: UInt8 = 96, atTick tick: Int = 0,
+        pitch: UInt8, onStaff flatStaffIndex: Int, velocity: UInt8 = 96, atTick tick: Int,
     ) {
         guard state != .exporting else { return }
         // Same as `playPreview`: an audition sounds on a mixing session, never on the exclusive one playback took.

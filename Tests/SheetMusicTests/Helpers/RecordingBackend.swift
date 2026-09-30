@@ -11,7 +11,7 @@
     /// observe program-change / CC 7 delivery without a real synth —
     /// extend this in place rather than writing another fake backend.
     @MainActor
-    final class RecordingBackend: SynthBackend {
+    final class RecordingBackend: SynthBackendTestDouble {
         let outputNode: AVAudioNode = AVAudioMixerNode()
         var currentPositionSeconds: TimeInterval = 0
         var isAtEnd = false

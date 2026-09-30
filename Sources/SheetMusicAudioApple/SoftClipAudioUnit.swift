@@ -5,12 +5,10 @@ import SheetMusicAudioCore
 /// Wraps the `SoftClip` curve in a v3 Audio Unit so it can sit in the
 /// master chain as an ordinary effect node.
 ///
-/// Apple ships no stock effect that does plain, predictable saturation —
-/// `AUPeakLimiter` reduces gain (which is what makes the master control
-/// run backwards above unity) and `AUDistortion` is a multi-stage
-/// character effect. So this is a minimal in-place effect of our own:
-/// pull the upstream audio into the output buffers, shape each sample,
-/// done.
+/// Apple ships no stock effect that does plain, predictable saturation — its peak limiter reduces gain (which would
+/// make the master control run backwards above unity, why the engine no longer offers it) and `AUDistortion` is a
+/// multi-stage character effect. So this is a minimal in-place effect of our own: pull the upstream audio into the
+/// output buffers, shape each sample, done.
 final class SoftClipAudioUnit: AUAudioUnit {
     /// Our own component identity. Registered in-process only, which is all
     /// `AVAudioUnitEffect` needs to instantiate it.

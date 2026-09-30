@@ -21,17 +21,9 @@ public enum MasterOutputStage: String, Sendable, CaseIterable { // swiftlint:dis
     /// Ordinary playback is untouched, and loudness keeps rising as the
     /// gain goes up, so the control still runs the right way. The cost is
     /// progressive harmonic distortion instead of a hard edge.
-    case softClip
-
-    /// Apple's `AUPeakLimiter`, which is what this engine used to apply
-    /// unconditionally.
     ///
-    /// Kept for hosts that depended on the old behavior, but not
-    /// recommended: it holds the ceiling by *reducing gain*, so above
-    /// unity the master control runs backwards. Measured on a steady
-    /// sine, output RMS falls monotonically as drive rises — 8x drive
-    /// lands 2.4 dB quieter than 1x, on top of the pumping. A control
-    /// that reverses direction is not something a listener can reason
-    /// about.
-    case peakLimiter
+    /// There is deliberately no limiter option (4.0.0 removed Apple's peak limiter): a limiter holds the ceiling by
+    /// *reducing gain*, so above unity the master control runs backwards — measured on a steady sine, 8x drive
+    /// landed 2.4 dB quieter than 1x, on top of the pumping.
+    case softClip
 }

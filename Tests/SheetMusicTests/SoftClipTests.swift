@@ -4,7 +4,7 @@
     import Testing
 
     /// The soft-clip curve's contract. The properties asserted here are
-    /// exactly the ones the peak limiter fails: staying out of the way
+    /// exactly the ones a peak limiter fails: staying out of the way
     /// below the knee, and never turning a louder input into a quieter
     /// output.
     @Suite("Soft clip curve")
@@ -42,10 +42,10 @@
             }
         }
 
-        /// The property the peak limiter fails outright: driving the stage
+        /// The property a peak limiter fails outright: driving the stage
         /// harder has to make the *signal* louder. A clipped sine grows
         /// toward a square wave, so its RMS keeps climbing even once the
-        /// peak has pinned to full scale. The limiter measured the other
+        /// peak has pinned to full scale. Apple's limiter measured the other
         /// way — 8x drive was 2.4 dB quieter than 1x.
         @Test("loudness keeps rising as the stage is driven harder")
         func loudnessKeepsRising() {

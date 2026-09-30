@@ -204,17 +204,21 @@
         }
     }
 
-    /// Minimal transport-only double that leaves `makeOfflineInstance` at its
-    /// protocol default (`nil`) — the fallback contract for a backend that
-    /// can't render offline.
+    /// Minimal transport-only double whose `makeOfflineInstance` returns `nil` — the fallback contract for a backend
+    /// that can't render offline.
     @MainActor
-    private final class OfflinelessBackend: SynthBackend {
+    private final class OfflinelessBackend: SynthBackendTestDouble {
         let outputNode: AVAudioNode = AVAudioMixerNode()
         var currentPositionSeconds: TimeInterval = 0
         var currentTick = 0
 
         func attach(to engine: AVAudioEngine) {
             engine.attach(outputNode)
+        }
+
+        /// Spelled out rather than taken from `SynthBackendTestDouble`: returning `nil` is what this double is for.
+        func makeOfflineInstance(sampleRate _: Double) -> (any SynthBackend)? {
+            nil
         }
 
         func prepare(

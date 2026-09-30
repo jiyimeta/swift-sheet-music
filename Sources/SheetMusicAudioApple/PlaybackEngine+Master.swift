@@ -1,4 +1,3 @@
-import AudioToolbox
 import AVFoundation
 import Foundation
 import SheetMusicAudioCore
@@ -26,54 +25,30 @@ extension PlaybackEngine {
         scoreGainMixer.outputVolume = clamped
     }
 
-    /// Choose what — if anything — shapes the mix once the master gain
-    /// has pushed it past full scale. Idempotent; persists across
-    /// `prepare(score:)`. Switching flips `bypass` on nodes that are
-    /// always wired in, so it is safe to call during playback.
+    /// Choose what — if anything — shapes the mix once the master gain has pushed it past full scale. Idempotent;
+    /// persists across `prepare(score:)`. Switching flips `bypass` on a node that is always wired in, so it is safe
+    /// to call during playback.
     public func setMasterOutputStage(_ stage: MasterOutputStage) { // swiftlint:disable:this inclusive_language
         masterOutputStage = stage
         softClip.bypass = stage != .softClip
-        limiter.bypass = stage != .peakLimiter
     }
 
-    /// Attach the master output stage and wire it once:
-    /// `scoreGainMixer → sumMixer → softClip → limiter → mainMixerNode`.
-    /// The score synth is connected to `scoreGainMixer` in
-    /// `prepareSynth`; the metronome sampler connects to the same node
-    /// from `MetronomeController`, so the click is scaled by the master
-    /// gain too. Called from `init`, so the chain — and
-    /// therefore `masterGain` and `masterOutputStage` — outlives every
-    /// `prepare(score:)`.
+    /// Attach the master output stage and wire it once: `scoreGainMixer → sumMixer → softClip → mainMixerNode`.
+    /// The score synth is connected to `scoreGainMixer` in `prepareSynth`; the metronome sampler connects to the same
+    /// node from `MetronomeController`, so the click is scaled by the master gain too. Called from `init`, so the
+    /// chain — and therefore `masterGain` and `masterOutputStage` — outlives every `prepare(score:)`.
     ///
-    /// Both shaping nodes stay in the graph permanently and are switched
-    /// with `bypass` rather than rewired, so changing the stage mid-play
-    /// cannot glitch the graph.
+    /// The shaping node stays in the graph permanently and is switched with `bypass` rather than rewired, so
+    /// changing the stage mid-play cannot glitch the graph.
     func buildMasterChain() { // swiftlint:disable:this inclusive_language
         engine.attach(scoreGainMixer)
         engine.attach(sumMixer)
         engine.attach(softClip)
-        engine.attach(limiter)
         engine.connect(scoreGainMixer, to: sumMixer, format: nil)
         engine.connect(sumMixer, to: softClip, format: nil)
-        engine.connect(softClip, to: limiter, format: nil)
-        engine.connect(limiter, to: engine.mainMixerNode, format: nil)
+        engine.connect(softClip, to: engine.mainMixerNode, format: nil)
         scoreGainMixer.outputVolume = masterGain
         setMasterOutputStage(masterOutputStage)
-    }
-
-    /// Build a brick-wall peak limiter (`kAudioUnitSubType_PeakLimiter`,
-    /// Apple). Transparent below full scale, but above it this reduces
-    /// gain rather than clipping — see `MasterOutputStage.peakLimiter`
-    /// for why that makes it the non-default choice.
-    static func makePeakLimiter() -> AVAudioUnitEffect {
-        let description = AudioComponentDescription(
-            componentType: kAudioUnitType_Effect,
-            componentSubType: kAudioUnitSubType_PeakLimiter,
-            componentManufacturer: kAudioUnitManufacturer_Apple,
-            componentFlags: 0,
-            componentFlagsMask: 0,
-        )
-        return AVAudioUnitEffect(audioComponentDescription: description)
     }
 
     /// Test-only read-back of the gain actually applied to the audio
@@ -82,13 +57,9 @@ extension PlaybackEngine {
         scoreGainMixer.outputVolume
     }
 
-    /// Test-only read-back of the bypass actually applied to each shaping
-    /// node, distinct from the `masterOutputStage` stored mirror.
+    /// Test-only read-back of the bypass actually applied to the shaping node, distinct from the
+    /// `masterOutputStage` stored mirror.
     var softClipIsBypassed: Bool {
         softClip.bypass
-    }
-
-    var limiterIsBypassed: Bool {
-        limiter.bypass
     }
 }

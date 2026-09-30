@@ -22,7 +22,7 @@
             /// is exactly what `currentTimeSeconds` reads back. If `skip` fails to reach the
             /// backend, that clock stays at 0 and the assertions below catch it.
             @MainActor
-            private final class TransportBackend: SynthBackend {
+            private final class TransportBackend: SynthBackendTestDouble {
                 let outputNode: AVAudioNode = AVAudioMixerNode()
                 var currentPositionSeconds: TimeInterval = 0
                 var isAtEnd = false

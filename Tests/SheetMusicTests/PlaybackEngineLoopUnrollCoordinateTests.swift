@@ -18,7 +18,7 @@
         @MainActor
         struct PlaybackEngineLoopUnrollCoordinateTests {
             @MainActor
-            private final class RecordingTransport: SynthBackend {
+            private final class RecordingTransport: SynthBackendTestDouble {
                 let outputNode: AVAudioNode = AVAudioMixerNode()
                 var currentTick = 0
                 var currentPositionSeconds: TimeInterval = 0

@@ -20,7 +20,7 @@
         @MainActor
         struct PlaybackEngineBackendElapsedTimeTests {
             @MainActor
-            private final class TransportBackend: SynthBackend {
+            private final class TransportBackend: SynthBackendTestDouble {
                 let outputNode: AVAudioNode = AVAudioMixerNode()
                 var currentPositionSeconds: TimeInterval = 0
                 var isAtEnd = false

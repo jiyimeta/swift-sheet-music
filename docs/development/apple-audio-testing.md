@@ -51,9 +51,8 @@ which crashed in exactly one cell — sandboxed with flags `0` — and exited
 cleanly in the other three. Rebuilding that bench is the only way to re-verify
 it: a minimal entitled `.app` that constructs the node and exits.
 
-Descriptions used purely to *find* an Apple component (`makePeakLimiter`,
-`MIDISynthBuilder.make`) pass `componentFlagsMask: 0`, so their flags are not
-matched and need no change.
+Descriptions used purely to *find* an Apple component (`MIDISynthBuilder.make`)
+pass `componentFlagsMask: 0`, so their flags are not matched and need no change.
 
 ## Audio route / device changes
 

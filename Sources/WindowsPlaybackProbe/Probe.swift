@@ -462,7 +462,7 @@ final class Probe { // swiftlint:disable:this type_body_length
             let silent = waitUntil(timeout: 3) { engine.probeActiveVoices[0] == 0 }
             report.check("preview", "drum silent after 2 s + tail", silent, value: "\(silent)", limit: "silent")
         }
-        engine.previewNoteOn(pitch: 60, onStaff: 0)
+        engine.previewNoteOn(pitch: 60, onStaff: 0, atTick: 0)
         wait(0.3)
         let held = engine.probeActiveVoices[0]
         engine.previewNoteOff(pitch: 60)

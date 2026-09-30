@@ -294,8 +294,7 @@ internal open class OboeStream(
                     if (magR > peak) peak = magR
                     sumSquares += l.toDouble() * l + r.toDouble() * r
                 }
-                // SOFT_CLIP only. PEAK_LIMITER is documented as behaving like
-                // NONE here — see `MasterOutputStage`.
+                // SOFT_CLIP shapes; NONE passes the sample through.
                 if (stage == MasterOutputStage.SOFT_CLIP) {
                     interleaved[i * 2] = SoftClip.apply(l)
                     interleaved[i * 2 + 1] = SoftClip.apply(r)

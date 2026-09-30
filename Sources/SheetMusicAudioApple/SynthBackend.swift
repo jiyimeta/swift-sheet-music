@@ -87,8 +87,8 @@ public protocol SynthBackend: AnyObject {
     /// seeks into — and reports from — the wrong measure-play. Called right after
     /// `loadSequence`, and always before the next transport move.
     ///
-    /// The default is a no-op, so a backend written before this existed keeps its
-    /// previous behavior (correct for any score without repeats).
+    /// A backend whose transport is tick-based, or that maps ticks to its transport itself, may ignore the map;
+    /// ignoring it is correct only on a score without a repeat plan.
     func setUnrolledTimeMap(_ map: UnrolledTimeMap)
 
     /// Load the metronome-only SMF (click track + the score's tempo map) onto
@@ -108,10 +108,9 @@ public protocol SynthBackend: AnyObject {
     /// the beat.
     func setMetronomeMuted(_ muted: Bool)
 
-    /// Linear gain for the backend's own metronome mix (the mixer's metronome
-    /// strip). Separate from `setMetronomeMuted` — a backend that only honors
-    /// the mute can be silenced but not turned down. Persisted by the backend
-    /// across sequence / SoundFont reloads, like `setRate` / `setTuning`.
+    /// Linear gain for the backend's own metronome mix (the mixer's metronome strip). Separate from
+    /// `setMetronomeMuted`, which silences without turning down. Persisted by the backend across sequence /
+    /// SoundFont reloads, like `setRate` / `setTuning`.
     func setMetronomeVolume(_ volume: Float)
 
     /// Transport control. `currentTick` is the SMF-tick clock the cursor timer
@@ -198,10 +197,8 @@ public protocol SynthBackend: AnyObject {
     /// backend that fixes its render format at init (as `SwiftySynthBackend`
     /// does) MUST honor it here — a mismatch would resample the whole export.
     ///
-    /// Returning `nil` is not a soft failure: exports then sound like the
-    /// AUMIDISynth path, i.e. with the voice stealing this backend exists to
-    /// avoid. Only leave the default in place for backends that genuinely can't
-    /// render offline (and for transport-only test doubles).
+    /// Returning `nil` is not a soft failure: exports then sound like the AUMIDISynth path, i.e. with the voice
+    /// stealing this backend exists to avoid. Return `nil` only from a backend that genuinely can't render offline.
     func makeOfflineInstance(sampleRate: Double) -> (any SynthBackend)?
 }
 
@@ -218,31 +215,6 @@ extension SynthBackend {
     public var onReadyChanged: (@MainActor (Bool) -> Void)? {
         get { nil }
         set { _ = newValue } // synchronous backend never fires readiness changes
-    }
-
-    /// Default for a backend that can't hold its score transport: it simply
-    /// starts, i.e. plays without a count-in rather than mis-timing one. Keeps
-    /// transport-only test doubles source-compatible.
-    public func play(afterCountInSeconds _: TimeInterval) {
-        play()
-    }
-
-    /// Default for a backend that renders its metronome at a fixed level: the
-    /// strip's volume is dropped rather than mis-applied. Keeps existing
-    /// conformers — including transport-only test doubles — source-compatible.
-    public func setMetronomeVolume(_: Float) {}
-
-    /// Default for a backend that maps ticks to its transport itself, or one
-    /// written before the map existed: ignoring it is exactly the old behavior,
-    /// which is correct on every score without a repeat plan.
-    public func setUnrolledTimeMap(_: UnrolledTimeMap) {}
-
-    /// Default for a backend that can't render offline: the export falls back to
-    /// the built-in AUMIDISynth pipeline. Chosen over a required member so
-    /// existing conformers — including transport-only test doubles — stay
-    /// source-compatible.
-    public func makeOfflineInstance(sampleRate _: Double) -> (any SynthBackend)? {
-        nil
     }
 
     /// Default for a backend with no end-of-sequence signal of its own: never

@@ -6,26 +6,23 @@
     @testable import SheetMusicCore
     import Testing
 
-    /// The master output stage selector. Both shaping nodes stay wired
-    /// into the chain permanently and are switched by `bypass`, so these
-    /// assert the bypass flags rather than the graph's shape.
+    /// The master output stage selector. The shaping node stays wired into the chain permanently and is switched by
+    /// `bypass`, so these assert the bypass flag rather than the graph's shape.
     extension AudioEngineSerial {
         @Suite("PlaybackEngine master output stage")
         @MainActor
         struct PlaybackEngineMasterOutputStageTests { // swiftlint:disable:this inclusive_language
-            /// Linear by default. The peak limiter used to be unconditional,
-            /// and it makes the master gain run backwards above unity —
-            /// measured, an 8x drive came out 2.4 dB quieter than 1x. A
-            /// host has to opt into that, not inherit it.
+            /// Linear by default. The peak limiter this engine once applied unconditionally made the master gain run
+            /// backwards above unity — measured, an 8x drive came out 2.4 dB quieter than 1x. Shaping is something a
+            /// host opts into, not something it inherits.
             @Test("defaults to no shaping at all")
             func defaultsToLinear() {
                 let engine = PlaybackEngine(soundfontResolver: NullStageResolver())
                 #expect(engine.masterOutputStage == .none)
                 #expect(engine.softClipIsBypassed)
-                #expect(engine.limiterIsBypassed)
             }
 
-            @Test("soft clip engages only the soft clip node")
+            @Test("soft clip engages the soft clip node")
             func softClipEngagesOnlySoftClip() {
                 let engine = PlaybackEngine(soundfontResolver: NullStageResolver())
 
@@ -33,30 +30,17 @@
 
                 #expect(engine.masterOutputStage == .softClip)
                 #expect(engine.softClipIsBypassed == false)
-                #expect(engine.limiterIsBypassed)
             }
 
-            @Test("peak limiter engages only the limiter")
-            func peakLimiterEngagesOnlyLimiter() {
-                let engine = PlaybackEngine(soundfontResolver: NullStageResolver())
-
-                engine.setMasterOutputStage(.peakLimiter)
-
-                #expect(engine.masterOutputStage == .peakLimiter)
-                #expect(engine.softClipIsBypassed)
-                #expect(engine.limiterIsBypassed == false)
-            }
-
-            @Test("switching back to none bypasses everything again")
+            @Test("switching back to none bypasses the shaping again")
             func switchingBackToNone() {
                 let engine = PlaybackEngine(soundfontResolver: NullStageResolver())
 
-                engine.setMasterOutputStage(.peakLimiter)
+                engine.setMasterOutputStage(.softClip)
                 engine.setMasterOutputStage(.none)
 
                 #expect(engine.masterOutputStage == .none)
                 #expect(engine.softClipIsBypassed)
-                #expect(engine.limiterIsBypassed)
             }
 
             /// An export that ignored the stage would not sound like what
@@ -70,9 +54,6 @@
 
                 engine.setMasterOutputStage(.softClip)
                 #expect(engine.exportEngineSnapshot().masterOutputStage == .softClip)
-
-                engine.setMasterOutputStage(.peakLimiter)
-                #expect(engine.exportEngineSnapshot().masterOutputStage == .peakLimiter)
             }
 
             /// The master chain is built once in `init` and outlives every

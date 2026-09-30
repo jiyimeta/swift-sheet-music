@@ -404,7 +404,7 @@
 
                 // SilentResolver produces silence regardless of gain, so this
                 // is a pipeline-integrity / no-crash guard: the rewired export
-                // chain (scoreGainMixer → sumMixer → limiter) must still render
+                // chain (scoreGainMixer → sumMixer → softClip) must still render
                 // a valid file with a non-unity master gain set. Audible boost
                 // is verified in the Mac example app with a real soundfont.
                 let file = try AVAudioFile(forReading: url)

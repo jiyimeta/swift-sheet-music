@@ -44,7 +44,7 @@
             }
 
             @MainActor
-            private final class FakeBackend: SynthBackend {
+            private final class FakeBackend: SynthBackendTestDouble {
                 private(set) var events: [NoteEvent] = []
                 private(set) var programCalls: [ProgramCall] = []
                 private(set) var volumeCalls: [VolumeCall] = []
@@ -181,7 +181,7 @@
                 engine.setVolume(forChannel: .instrument(partIndex: 0, ordinal: 0), to: 0.5)
                 backend.resetRecording()
 
-                engine.previewNoteOn(pitch: 60, onStaff: 0)
+                engine.previewNoteOn(pitch: 60, onStaff: 0, atTick: 0)
 
                 #expect(backend.programCalls == [ProgramCall(channel: channel, program: 42)])
                 #expect(backend.volumeCalls == [VolumeCall(channel: channel, cc7: 64)])
@@ -212,7 +212,7 @@
                 engine.pause() // host parks the graph
                 #expect(engine.engine.isRunning == false)
 
-                engine.previewNoteOn(pitch: 60, onStaff: 0)
+                engine.previewNoteOn(pitch: 60, onStaff: 0, atTick: 0)
                 #expect(engine.engine.isRunning == true) // resumed so the note can actually sound
 
                 // Far longer than any fixed-duration tap preview (0.3 s default / 2 s drum tail).
@@ -231,7 +231,7 @@
                 try engine.prepare(score: score)
                 engine.pause()
 
-                engine.previewNoteOn(pitch: 60, onStaff: 0)
+                engine.previewNoteOn(pitch: 60, onStaff: 0, atTick: 0)
                 #expect(engine.engine.isRunning == true)
 
                 engine.previewNoteOff(pitch: 61) // not the held pitch — must not cut it
@@ -254,7 +254,7 @@
                 engine.pause() // host parks the graph
 
                 engine.playPreview(noteID: firstNoteID, in: score, duration: 0.05)
-                engine.previewNoteOn(pitch: 60, onStaff: 0)
+                engine.previewNoteOn(pitch: 60, onStaff: 0, atTick: 0)
                 #expect(engine.engine.isRunning == true)
 
                 try await Task.sleep(for: .milliseconds(250)) // let the tap's drain fire (must no-op)
@@ -277,7 +277,7 @@
                 try engine.prepare(score: score)
                 engine.pause() // host parks the graph
 
-                engine.previewNoteOn(pitch: 60, onStaff: 0)
+                engine.previewNoteOn(pitch: 60, onStaff: 0, atTick: 0)
                 #expect(engine.engine.isRunning == true)
 
                 engine.playPreview(noteID: firstNoteID, in: score, duration: 0.05)
@@ -298,7 +298,7 @@
                 try engine.prepare(score: score)
                 let channel = try #require(engine.midiChannel(forStaff: 0))
 
-                engine.previewNoteOn(pitch: 60, onStaff: 0)
+                engine.previewNoteOn(pitch: 60, onStaff: 0, atTick: 0)
                 #expect(backend.events == [.on(channel: channel, pitch: 60, velocity: 96)])
 
                 engine.previewNoteOff(pitch: 60)
@@ -316,8 +316,8 @@
                 try engine.prepare(score: score)
                 let channel = try #require(engine.midiChannel(forStaff: 0))
 
-                engine.previewNoteOn(pitch: 60, onStaff: 0)
-                engine.previewNoteOn(pitch: 64, onStaff: 0)
+                engine.previewNoteOn(pitch: 60, onStaff: 0, atTick: 0)
+                engine.previewNoteOn(pitch: 64, onStaff: 0, atTick: 0)
 
                 #expect(backend.events == [
                     .on(channel: channel, pitch: 60, velocity: 96),
@@ -338,7 +338,7 @@
                 engine.playPreview(noteID: firstNoteID, in: score, duration: 5.0)
                 #expect(backend.events == [.on(channel: channel, pitch: 60, velocity: 96)])
 
-                engine.previewNoteOn(pitch: 64, onStaff: 0)
+                engine.previewNoteOn(pitch: 64, onStaff: 0, atTick: 0)
                 #expect(backend.events == [
                     .on(channel: channel, pitch: 60, velocity: 96),
                     .off(channel: channel, pitch: 60),

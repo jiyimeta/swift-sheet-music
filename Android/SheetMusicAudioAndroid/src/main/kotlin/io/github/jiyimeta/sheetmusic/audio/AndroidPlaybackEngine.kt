@@ -1409,25 +1409,9 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Sets the master output volume.
-     *
-     * Kept as the name every existing host already calls, now delegating to [setMasterGain]. The
-     * rename matters because the old name promised a 0..1 volume control and the new one does not
-     * cap: what a host passes has not changed meaning, but what it is *allowed* to pass has.
-     */
-    @Deprecated(
-        "Renamed: values above 1.0 are now allowed, which 'volume' misdescribes.",
-        ReplaceWith("setMasterGain(volume)"),
-    )
-    fun setMasterVolume(volume: Float) {
-        setMasterGain(volume)
-    }
-
-    /**
      * Chooses what — if anything — shapes the mix once [setMasterGain] has pushed it past full
-     * scale. Idempotent, persists across [prepare], and safe to call during playback.
-     *
-     * See [MasterOutputStage]; note that `PEAK_LIMITER` behaves as `NONE` here and says why.
+     * scale. Idempotent, persists across [prepare], and safe to call during playback. See
+     * [MasterOutputStage].
      */
     fun setMasterOutputStage(stage: MasterOutputStage) {
         masterOutputStage = stage

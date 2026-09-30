@@ -60,8 +60,7 @@ extension WindowsPlaybackEngine {
         core.shared.withLock { $0.outputGain = max(0, gain) }
     }
 
-    /// What shapes a mix the gain pushed past full scale. `.softClip` is the shared `SoftClip` curve;
-    /// `.peakLimiter` behaves as `.none` here, as on Android (there is no limiter to be had without a dependency).
+    /// What shapes a mix the gain pushed past full scale. `.softClip` is the shared `SoftClip` curve.
     public func setMasterOutputStage(_ stage: MasterOutputStage) { // swiftlint:disable:this inclusive_language
         core.shared.withLock { $0.outputStage = stage }
     }
@@ -108,8 +107,9 @@ extension WindowsPlaybackEngine {
 
     /// Starts a held preview on `flatStaffIndex`'s channel at `tick` — sounding until `previewNoteOff(pitch:)` or the
     /// next `previewNoteOn`. Cuts a tap preview still ringing. Meant for while stopped or paused; the caller gates it,
-    /// as on the Apple engine.
-    public func previewNoteOn(pitch: UInt8, onStaff flatStaffIndex: Int, velocity: UInt8 = 96, atTick tick: Int = 0) {
+    /// as on the Apple engine. `tick` is the score tick the note sits at: after a mid-score instrument change only the
+    /// right tick sounds the new instrument.
+    public func previewNoteOn(pitch: UInt8, onStaff flatStaffIndex: Int, velocity: UInt8 = 96, atTick tick: Int) {
         guard let channel = midiChannel(forStaff: flatStaffIndex, atTick: tick) else { return }
         core.shared.withLock { shared in
             guard let synth = shared.session?.score else { return }

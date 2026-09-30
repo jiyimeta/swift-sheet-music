@@ -32,7 +32,7 @@
             /// Transport stub whose position / end flag the test sets directly, so a tick can be
             /// parked at the exact saturated value the real backend reports at end of piece.
             @MainActor
-            private final class TransportBackend: SynthBackend {
+            private final class TransportBackend: SynthBackendTestDouble {
                 let outputNode: AVAudioNode = AVAudioMixerNode()
                 var currentTick = 0
                 var currentPositionSeconds: TimeInterval = 0
