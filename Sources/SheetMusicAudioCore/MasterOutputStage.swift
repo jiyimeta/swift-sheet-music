@@ -1,5 +1,3 @@
-import Foundation
-
 /// What the master chain does with a mix the master gain has pushed past
 /// full scale.
 ///

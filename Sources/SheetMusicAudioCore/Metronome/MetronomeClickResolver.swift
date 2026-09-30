@@ -1,12 +1,11 @@
-import Foundation
-import SheetMusicAudioCore
+import SheetMusicFoundation
 
 /// Resolves a `MetronomeClickProvider`'s `MetronomeClickSource` into a
 /// concrete SoundFont URL the metronome synth can load.
 ///
 /// * `.clickSamples` — reads the WAV pair with `WavPcmReader`, builds an
-///   SF2 with `ClickSoundFontBuilder`, writes it to the caches directory
-///   once, and caches the generated URL keyed by the source so repeated
+///   SF2 with `ClickSoundFontBuilder`, writes it to the engine's cache
+///   directory once, and caches the generated URL keyed by the source so repeated
 ///   `prepare(score:)` / export calls reuse the same file.
 /// * `.soundFont` — returns the host's SF2 URL verbatim.
 /// * `.defaultGM` (or no provider) — falls back to the score's
@@ -16,21 +15,25 @@ import SheetMusicAudioCore
 /// the `.defaultGM` URL so a bad click file degrades to the GM drum-kit
 /// rather than failing score preparation (metronome load is non-fatal).
 ///
-/// Used only from `PlaybackEngine` on the main actor, so it needs no
+/// Used from one engine's control thread (the Apple engine's main actor, the Windows engine's caller), so it needs no
 /// internal synchronization.
-final class MetronomeClickResolver {
+package final class MetronomeClickResolver {
     private let provider: MetronomeClickProvider?
     private let soundfontResolver: SoundfontResolver
+    private let cacheDirectory: URL?
     private var generatedCache: [MetronomeClickSource: URL] = [:]
 
-    init(provider: MetronomeClickProvider?, soundfontResolver: SoundfontResolver) {
+    /// `cacheDirectory` is where generated click SoundFonts are written (created when missing); nil disables
+    /// generation, so `.clickSamples` falls back to the GM kit.
+    package init(provider: MetronomeClickProvider?, soundfontResolver: SoundfontResolver, cacheDirectory: URL?) {
         self.provider = provider
         self.soundfontResolver = soundfontResolver
+        self.cacheDirectory = cacheDirectory
     }
 
     /// The SoundFont URL the metronome should load, or `nil` when even the
     /// GM fallback is unavailable (host ships no SoundFont).
-    func resolvedSoundFontURL() -> URL? {
+    package func resolvedSoundFontURL() -> URL? {
         let source = provider?.metronomeClickSource() ?? .defaultGM
         switch source {
         case .defaultGM:
@@ -64,10 +67,7 @@ final class MetronomeClickResolver {
             strong: strongPCM.samples, strongRate: strongPCM.sampleRate,
             weak: weakPCM.samples, weakRate: weakPCM.sampleRate,
         )
-        guard let dir = FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("SheetMusicMetronomeClicks", isDirectory: true)
-        else { return nil }
+        guard let dir = cacheDirectory else { return nil }
         try? FileManager.default.createDirectory(
             at: dir, withIntermediateDirectories: true,
         )
@@ -75,12 +75,18 @@ final class MetronomeClickResolver {
         // so generated SF2s don't accumulate across resolver instances /
         // app launches, and a changed click (new bytes) gets a new name.
         let file = dir.appendingPathComponent(
-            String(format: "%016llx.sf2", Self.fnv1a(sf2)),
+            Self.hex16(Self.fnv1a(sf2)) + ".sf2",
         )
         if !FileManager.default.fileExists(atPath: file.path) {
             guard (try? sf2.write(to: file)) != nil else { return nil }
         }
         return file
+    }
+
+    /// Sixteen lowercase hex digits, zero-padded.
+    private static func hex16(_ value: UInt64) -> String {
+        let digits = String(value, radix: 16)
+        return String(repeating: "0", count: 16 - digits.count) + digits
     }
 
     /// FNV-1a 64-bit hash, used to derive a stable, content-addressed

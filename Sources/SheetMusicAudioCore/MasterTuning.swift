@@ -15,6 +15,13 @@ public enum MasterTuning { // swiftlint:disable:this inclusive_language
         return (coarse, cents - 100 * Double(coarse))
     }
 
+    /// The cents a channel is retuned by: the A4 calibration plus the transposition for a melodic channel, the
+    /// calibration alone for percussion — a drum kit's notes name instruments, not pitches, so transposing them would
+    /// swap drums.
+    public static func effectiveCents(tuning: Double, transposeSemitones: Int, isPercussion: Bool) -> Double {
+        isPercussion ? tuning : tuning + Double(transposeSemitones) * 100
+    }
+
     /// One MIDI Control-Change message (controller + 7-bit value).
     public struct CC: Equatable, Sendable {
         public let controller: UInt8

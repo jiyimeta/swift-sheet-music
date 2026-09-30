@@ -80,8 +80,7 @@ extension PlaybackEngine {
         for channel in mixerChannels {
             switch channel.id {
             case .instrument:
-                let effectivelyMuted = channel.isMuted
-                    || (soloing && !channel.isSoloed)
+                let effectivelyMuted = channel.isSilenced(soloing: soloing)
                 applyInstrumentGain(
                     forChannel: channel.id,
                     gain: effectivelyMuted ? 0 : channel.volume,
@@ -98,7 +97,7 @@ extension PlaybackEngine {
     /// `applyMixerState`, `reassertBackendChannelState` and the export
     /// snapshot all read it so they can't drift apart.
     var isSoloing: Bool {
-        mixerChannels.contains { $0.isSoloable && $0.isSoloed }
+        mixerChannels.isSoloing
     }
 
     /// Re-assert EVERY mixer-managed instrument channel's program +
@@ -125,8 +124,7 @@ extension PlaybackEngine {
             if let program = channel.program, midiCh != 9 {
                 backend.setProgram(channel: midiCh, program: program)
             }
-            let effectivelyMuted = channel.isMuted
-                || (soloing && !channel.isSoloed)
+            let effectivelyMuted = channel.isSilenced(soloing: soloing)
             let gain: Float = effectivelyMuted ? 0 : channel.volume
             backend.sendVolume(
                 channel: midiCh, cc7: UInt8(clamping: Int((gain * 127).rounded())),

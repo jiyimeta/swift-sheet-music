@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import SheetMusicAudioCore
 
 /// Wraps the `SoftClip` curve in a v3 Audio Unit so it can sit in the
 /// master chain as an ordinary effect node.

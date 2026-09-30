@@ -377,6 +377,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// extension.
     var isRebuildingForConfigurationChange = false
 
+    /// Where generated metronome-click SoundFonts go (`MetronomeClickResolver`): the user caches directory.
+    nonisolated static let clickCacheDirectory: URL? = FileManager.default
+        .urls(for: .cachesDirectory, in: .userDomainMask).first?
+        .appendingPathComponent("SheetMusicMetronomeClicks", isDirectory: true)
+
     public init(
         soundfontResolver: SoundfontResolver,
         metronomeClickProvider metronomeClickProvider0: MetronomeClickProvider? = nil,
@@ -390,6 +395,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         clickResolver = MetronomeClickResolver(
             provider: metronomeClickProvider0,
             soundfontResolver: soundfontResolver,
+            cacheDirectory: Self.clickCacheDirectory,
         )
         // The metronome joins the master stage at `scoreGainMixer`, i.e. the
         // click IS scaled by the master gain, along with the score.
@@ -589,11 +595,18 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         if let melodicSynth {
             Self.applyMasterTuning(
                 to: melodicSynth,
-                cents: masterTuningCents + Double(transposeSemitones) * 100,
+                cents: MasterTuning.effectiveCents(
+                    tuning: masterTuningCents, transposeSemitones: transposeSemitones, isPercussion: false,
+                ),
             )
         }
         if let percussionSynth {
-            Self.applyMasterTuning(to: percussionSynth, cents: masterTuningCents)
+            Self.applyMasterTuning(
+                to: percussionSynth,
+                cents: MasterTuning.effectiveCents(
+                    tuning: masterTuningCents, transposeSemitones: transposeSemitones, isPercussion: true,
+                ),
+            )
         }
     }
 
@@ -904,6 +917,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // the metronome bound to the old font (observed in Folino).
         clickResolver = MetronomeClickResolver(
             provider: metronomeClickProvider, soundfontResolver: newResolver,
+            cacheDirectory: Self.clickCacheDirectory,
         )
         do {
             try restartGraphPreservingState()
@@ -1888,44 +1902,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         transportLoop = projectLoopOntoTransport(loop)
     }
 
-    /// `loopRange` expressed in the transport's own coordinates.
-    ///
-    /// `LoopRange` is a region of the SCORE, so it is stored — and handed back to the host — in
-    /// notated ticks. The transport plays the UNROLLED render, where the same music can sit at
-    /// several positions (one per pass) and generally none of them is the notated tick. Every
-    /// comparison against a polled transport position therefore has to use this instead.
-    /// Internal rather than private so `wrapToLoopStart` — itself internal, so tests can drive one
-    /// wrap deterministically — can take it, and so a test can assert the projection directly.
-    struct TransportLoop: Equatable {
-        /// Unrolled tick of the loop's start — its FIRST occurrence in playback order, matching
-        /// the rule the rest of scheduling follows.
-        let startTick: Int
-        /// Exclusive unrolled end. Derived as `startTick + notated span` rather than by looking the
-        /// notated end tick up on its own: within one measure-play the region is contiguous and
-        /// slope-1, whereas the end tick's own first occurrence can belong to a LATER pass (a loop
-        /// over a repeated bar would then swallow the repeat's second take).
-        let endTick: Int
-        /// The same two bounds on the transport's seconds clock, for a time-based backend. The
-        /// span is taken from the notated clock for the same reason: a pass replays its own
-        /// stretch of the tempo map, so its duration is the notated one.
-        let startSeconds: TimeInterval
-        let endSeconds: TimeInterval
-    }
+    /// `loopRange` in the transport's own coordinates (`SheetMusicAudioCore.TransportLoop`, shared with the other
+    /// engines). Internal so `wrapToLoopStart` — itself internal, so tests can drive one wrap deterministically — can
+    /// take it, and so a test can assert the projection directly.
+    typealias TransportLoop = SheetMusicAudioCore.TransportLoop
 
     private(set) var transportLoop: TransportLoop?
 
     private func projectLoopOntoTransport(_ loop: LoopRange) -> TransportLoop? {
         guard let timeline else { return nil }
-        let startTick = unrolledTick(forNotated: loop.startTick)
-        let notatedStartSeconds = timeline.seconds(atTick: Double(loop.startTick))
-        let notatedEndSeconds = timeline.seconds(atTick: Double(loop.endTick))
-        let startSeconds = unrolledTimeMap.unrolledSeconds(fromNotated: notatedStartSeconds)
-        return TransportLoop(
-            startTick: startTick,
-            endTick: startTick + (loop.endTick - loop.startTick),
-            startSeconds: startSeconds,
-            endSeconds: startSeconds + (notatedEndSeconds - notatedStartSeconds),
-        )
+        return TransportLoop.project(loop, timeline: timeline, unroll: unroll, unrolledTimeMap: unrolledTimeMap)
     }
 
     /// The UNROLLED transport tick a NOTATED score tick sits at — its first occurrence in playback

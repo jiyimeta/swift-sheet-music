@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A saturation curve for the master output stage: linear below a knee,
 /// then bending asymptotically toward full scale.
@@ -13,11 +13,13 @@ import Foundation
 /// out, all the way up, and the price is progressive harmonic
 /// distortion rather than a moving gain. Below the knee it does nothing
 /// at all, so ordinary playback is bit-for-bit untouched.
-enum SoftClip {
+///
+/// Shared by every engine: the Apple one runs it in `SoftClipAudioUnit`, the Windows one in its render callback.
+package enum SoftClip {
     /// Where the curve leaves the linear region, in linear amplitude.
     /// -3 dBFS: high enough that normal material never reaches it, low
     /// enough to leave room to bend in before full scale.
-    static let defaultKnee: Float = 0.7071068
+    package static let defaultKnee: Float = 0.7071068
 
     /// Shape one sample.
     ///
@@ -29,7 +31,7 @@ enum SoftClip {
     ///
     /// A `knee` at or above full scale leaves nothing to bend into, so
     /// the curve degenerates to a hard clip rather than dividing by zero.
-    static func apply(_ sample: Float, knee: Float = defaultKnee) -> Float {
+    package static func apply(_ sample: Float, knee: Float = defaultKnee) -> Float {
         let magnitude = abs(sample)
         guard magnitude > knee else { return sample }
         guard knee < 1 else {

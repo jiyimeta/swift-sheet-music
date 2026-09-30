@@ -464,10 +464,19 @@ extension PlaybackEngine {
         // melodic = calibration + transpose (semitones→cents), percussion = calibration only.
         Self.applyMasterTuning(
             to: melodic,
-            cents: snapshot.masterTuningCents + Double(snapshot.transposeSemitones) * 100,
+            cents: MasterTuning.effectiveCents(
+                tuning: snapshot.masterTuningCents, transposeSemitones: snapshot.transposeSemitones,
+                isPercussion: false,
+            ),
         )
         if let percussion {
-            Self.applyMasterTuning(to: percussion, cents: snapshot.masterTuningCents)
+            Self.applyMasterTuning(
+                to: percussion,
+                cents: MasterTuning.effectiveCents(
+                    tuning: snapshot.masterTuningCents, transposeSemitones: snapshot.transposeSemitones,
+                    isPercussion: true,
+                ),
+            )
         }
 
         return ScoreSynth(

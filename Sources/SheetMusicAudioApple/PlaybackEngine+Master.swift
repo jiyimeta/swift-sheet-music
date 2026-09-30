@@ -1,6 +1,7 @@
 import AudioToolbox
 import AVFoundation
 import Foundation
+import SheetMusicAudioCore
 
 extension PlaybackEngine {
     /// Set the master output gain — a linear amplitude multiplier

@@ -1,6 +1,6 @@
 #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import Foundation
-    @testable import SheetMusicAudioApple
+    @testable import SheetMusicAudioCore
     import Testing
 
     /// The soft-clip curve's contract. The properties asserted here are

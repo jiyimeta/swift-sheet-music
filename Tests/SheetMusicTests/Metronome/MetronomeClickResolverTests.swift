@@ -7,6 +7,10 @@
 
     extension AudioEngineSerial {
         struct MetronomeClickResolverTests {
+            /// Where the generated click SoundFonts go in these tests — the engine passes the user caches directory.
+            private static let cacheDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("SheetMusicMetronomeClicks-tests", isDirectory: true)
+
             private struct StubResolver: SoundfontResolver {
                 let drumURL: URL?
                 let gmURL: URL?
@@ -41,6 +45,7 @@
                 let resolver = MetronomeClickResolver(
                     provider: nil,
                     soundfontResolver: StubResolver(drumURL: drum, gmURL: nil),
+                    cacheDirectory: Self.cacheDirectory,
                 )
                 #expect(resolver.resolvedSoundFontURL() == drum)
             }
@@ -50,6 +55,7 @@
                 let resolver = MetronomeClickResolver(
                     provider: FixedProvider(source: .soundFont(sf2)),
                     soundfontResolver: StubResolver(drumURL: nil, gmURL: nil),
+                    cacheDirectory: Self.cacheDirectory,
                 )
                 #expect(resolver.resolvedSoundFontURL() == sf2)
             }
@@ -65,6 +71,7 @@
                 let resolver = MetronomeClickResolver(
                     provider: FixedProvider(source: .clickSamples(strong: strong, weak: weak)),
                     soundfontResolver: StubResolver(drumURL: nil, gmURL: nil),
+                    cacheDirectory: Self.cacheDirectory,
                 )
                 let url = try #require(resolver.resolvedSoundFontURL())
                 defer { try? FileManager.default.removeItem(at: url) }
@@ -109,6 +116,7 @@
                 let resolver = MetronomeClickResolver(
                     provider: FixedProvider(source: .clickSamples(strong: strong, weak: weak)),
                     soundfontResolver: StubResolver(drumURL: nil, gmURL: nil),
+                    cacheDirectory: Self.cacheDirectory,
                 )
                 let first = try #require(resolver.resolvedSoundFontURL())
                 defer { try? FileManager.default.removeItem(at: first) }
@@ -125,6 +133,7 @@
                 let resolver = MetronomeClickResolver(
                     provider: FixedProvider(source: .clickSamples(strong: bad, weak: bad)),
                     soundfontResolver: StubResolver(drumURL: drum, gmURL: nil),
+                    cacheDirectory: Self.cacheDirectory,
                 )
                 #expect(resolver.resolvedSoundFontURL() == drum)
             }
