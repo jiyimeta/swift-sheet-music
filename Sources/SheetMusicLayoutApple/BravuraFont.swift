@@ -19,8 +19,6 @@ import os
 /// SMuFL glyphs. The diagnostics below help pinpoint where that happened.
 @available(macOS 15.0, *)
 public enum BravuraFont {
-    public static let familyName = "Bravura"
-
     /// Registration result, published the first time `register` is touched.
     /// `true` means CoreText can now resolve the Bravura family in this
     /// process. `false` means all resolution strategies failed; glyphs
