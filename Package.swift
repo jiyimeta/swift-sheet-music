@@ -605,8 +605,8 @@ if isAndroid {
     ]
 }
 
-// Playback on Windows: FluidSynth renders (as on Android), WASAPI plays, and the cursor follows the device clock.
-// Declared on Windows only. FluidSynth is found through the include and library paths the build passes
+// Playback on Windows: FluidSynth renders and schedules (as on Android), WASAPI plays, and the cursor follows the score
+// player's tick. Declared on Windows only. FluidSynth is found through the include and library paths the build passes
 // (`-Xcc -I<fluidsynth>\include -Xlinker -L<fluidsynth>\lib`, the official release zip's cpp11 flavor), and ships
 // as its LGPL DLL beside the app.
 if isWindows {
@@ -629,6 +629,7 @@ if isWindows {
             dependencies: [
                 "CFluidSynth",
                 "CWASAPI",
+                "SheetMusicAudioCore",
                 "SheetMusicBridgeCore",
                 "SheetMusicCore",
                 "SheetMusicMIDI",
@@ -640,7 +641,9 @@ if isWindows {
         ),
         .executableTarget(
             name: "WindowsPlaybackProbe",
-            dependencies: ["SheetMusicAudioWindows", "SheetMusicLoader"],
+            dependencies: [
+                "SheetMusicAudioWindows", "SheetMusicAudioCore", "SheetMusicCore", "SheetMusicLoader", "SheetMusicMIDI",
+            ],
         ),
     ]
 
@@ -655,6 +658,8 @@ if isWindows {
             name: "CDirect2D",
             path: "Sources/CDirect2D",
             linkerSettings: [
+                .linkedLibrary("d3d11"),
+                .linkedLibrary("dxgi"),
                 .linkedLibrary("d2d1"),
                 .linkedLibrary("dwrite"),
                 .linkedLibrary("windowscodecs"),
@@ -668,6 +673,11 @@ if isWindows {
         ),
         .executableTarget(
             name: "WindowsRenderProbe",
+            dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore"],
+        ),
+        // The onscreen renderer's pure geometry (tiles, the cache's eviction). Windows only, like the module.
+        .testTarget(
+            name: "SheetMusicRenderWindowsTests",
             dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore"],
         ),
     ]
