@@ -1,118 +1,118 @@
-// Plays a score through WindowsPlaybackEngine and prints where playback is once a second — the probe behind the
-// Windows roadmap's W0-5 ("a piece sounds and the cursor follows it"). The sound is for a person to hear. The
-// printout is what shows the cursor keeping up: the wall clock, the device clock, their difference (it should hold
-// steady — a drift means the cursor and the sound part ways) and the measure the device clock maps to.
+// Scripted checks of WindowsPlaybackEngine — the exit of ssm 4.0.0 sub-project D (its design's §7). Each step drives
+// the engine the way folino will and reads back what FluidSynth and the transport actually did; every check prints
+// one `ok` / `FAIL` line, and the run ends with a JSON summary.
 //
-//     windows-playback-probe <score> <soundfont.sf2> [--seconds N] [--pause-at S]
+//     windows-playback-probe <score> <soundfont.sf2> [--scenario NAME[,NAME…]] [--json PATH]
 //
-// --pause-at pauses for two seconds at S seconds of wall time: the device clock must hold still through it and the
-// music resume where it stopped. Two seconds in, the probe also reads back each channel's program, to show that the
-// programs the engine sets survived the player taking up the sequence.
+// Scenarios, in order: prepare, play, seek, rate, loop, tuning, mixer, preview, countin, device-fault, device-real.
+// The default is every one but device-real, which waits for a person to switch the output device. device-fault needs
+// the process to run with SSM_WASAPI_FAIL_ONCE=invalidated. The exit status is the number of failed checks (capped at
+// 100), so a script can gate on it.
 
 import Foundation
-import SheetMusicAudioWindows
+import SheetMusicAudioCore
+import SheetMusicCore
+@_spi(PlaybackProbe) import SheetMusicAudioWindows
 import SheetMusicLoader
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data("windows-playback-probe: \(message)\n".utf8))
-    exit(1)
+    exit(200)
 }
 
-func seconds(_ duration: Duration) -> Double {
-    Double(duration.components.seconds) + Double(duration.components.attoseconds) * 1e-18
-}
-
+let allScenarios = [
+    "prepare", "play", "seek", "rate", "loop", "tuning", "mixer", "preview", "countin", "device-fault", "device-real",
+]
 var positional: [String] = []
-var limit: Double?
-var pauseAt: Double?
+var scenarios = allScenarios.filter { $0 != "device-real" }
+var jsonPath: String?
 var arguments = CommandLine.arguments.dropFirst().makeIterator()
 while let argument = arguments.next() {
     switch argument {
-    case "--seconds": limit = arguments.next().flatMap(Double.init)
-    case "--pause-at": pauseAt = arguments.next().flatMap(Double.init)
-    default: positional.append(argument)
+    case "--scenario":
+        scenarios = (arguments.next() ?? "").split(separator: ",").map(String.init)
+        if let unknown = scenarios.first(where: { !allScenarios.contains($0) }) {
+            fail("unknown scenario \(unknown); known: \(allScenarios.joined(separator: ", "))")
+        }
+    case "--json":
+        jsonPath = arguments.next()
+    default:
+        positional.append(argument)
     }
 }
 
 guard positional.count == 2 else {
-    fail("usage: windows-playback-probe <score> <soundfont.sf2> [--seconds N] [--pause-at S]")
+    fail("usage: windows-playback-probe <score> <soundfont.sf2> [--scenario NAME[,NAME…]] [--json PATH]")
 }
 
 let scoreURL = URL(fileURLWithPath: positional[0])
-let engine: WindowsPlaybackEngine
+let score: Score
 do {
-    engine = try WindowsPlaybackEngine(soundFontPath: positional[1])
-    try engine.load(ScoreLoader.loadScore(contentsOf: scoreURL))
+    score = try ScoreLoader.loadScore(contentsOf: scoreURL)
 } catch {
-    fail("\(error)")
+    fail("cannot load \(scoreURL.lastPathComponent): \(error)")
 }
 
-let setup = engine.diagnostics
-let format: (String, Double) -> String = { String(format: $0, $1) }
-print(
-    "device   \(Int(setup.sampleRate)) Hz, buffer \(setup.bufferFrames) frames "
-        + "(\(format("%.1f", Double(setup.bufferFrames) / setup.sampleRate * 1000)) ms), "
-        + "latency \(format("%.1f", setup.latencySeconds * 1000)) ms",
+/// The engine loads a copy the probe owns, so asking whether a loaded SoundFont can be renamed touches nothing else.
+let soundFontCopy = FileManager.default.temporaryDirectory
+    .appendingPathComponent("windows-playback-probe-\(ProcessInfo.processInfo.processIdentifier).sf2")
+do {
+    if FileManager.default.fileExists(atPath: soundFontCopy.path) {
+        try FileManager.default.removeItem(at: soundFontCopy)
+    }
+    try FileManager.default.copyItem(at: URL(fileURLWithPath: positional[1]), to: soundFontCopy)
+} catch {
+    fail("cannot copy the SoundFont: \(error)")
+}
+
+let report = ProbeReport()
+let inbox = ProbeInbox()
+let engine = WindowsPlaybackEngine(soundfontResolver: FileResolver(url: soundFontCopy))
+engine.onEvent = { [inbox] event in inbox.record(event) }
+do {
+    try engine.prepare(score: score)
+} catch {
+    fail("prepare failed: \(error)")
+}
+
+report.note(
+    "prepare",
+    "\(scoreURL.lastPathComponent): \(formatted(engine.totalTimeSeconds, 1)) s, "
+        + "\(engine.mixerChannels.count - 1) strips",
 )
-print("score    \(scoreURL.lastPathComponent), \(format("%.1f", engine.totalPlayerSeconds)) s to play")
 
-let clock = ContinuousClock()
-let start = clock.now
-do {
-    try engine.play()
-} catch {
-    fail("\(error)")
+let probe = Probe(engine: engine, score: score, report: report, inbox: inbox, soundFontCopy: soundFontCopy)
+let steps: [(String, () -> Void)] = [
+    ("prepare", probe.prepare), ("play", probe.play), ("seek", probe.seek), ("rate", probe.rate),
+    ("loop", probe.loop), ("tuning", probe.tuning), ("mixer", probe.mixer), ("preview", probe.preview),
+    ("countin", probe.countIn), ("device-fault", probe.deviceFault), ("device-real", probe.deviceReal),
+]
+for (name, step) in steps where scenarios.contains(name) {
+    step()
 }
 
-var reportedPrograms = false
-var paused = false
-var pausedAudioSeconds = 0.0
-while true {
-    Thread.sleep(forTimeInterval: 1)
-    let wall = seconds(clock.now - start)
-    let position = engine.position
+let diagnostics = engine.diagnostics
+report.check(
+    "summary",
+    "underruns (whole run)",
+    diagnostics.underruns == 0,
+    value: "\(diagnostics.underruns)",
+    limit: "0",
+)
+engine.teardown()
+try? FileManager.default.removeItem(at: soundFontCopy)
 
-    if !reportedPrograms, wall >= 2 {
-        reportedPrograms = true
-        let programs = engine.channelPrograms.map { entry in
-            let actual = entry.actual.map(String.init) ?? "?"
-            let note = entry.actual == entry.expected ? "" : " (expected \(entry.expected))"
-            return "ch\(entry.channel) \(actual)\(note)"
-        }
-        let held = engine.channelPrograms.allSatisfy { $0.actual == $0.expected }
-        print("programs \(programs.joined(separator: ", ")) - \(held ? "all held" : "NOT all held")")
+let json = report.summaryJSON(diagnostics: diagnostics)
+if let jsonPath {
+    do {
+        try json.write(to: URL(fileURLWithPath: jsonPath))
+    } catch {
+        fail("cannot write \(jsonPath): \(error)")
     }
-
-    let measure = position.measureIndex.map { String($0 + 1) } ?? "-"
-    print(
-        "wall \(format("%7.2f", wall))  audio \(format("%7.2f", position.playerSeconds))  "
-            + "diff \(format("%+7.3f", position.playerSeconds - wall))  measure \(measure)"
-            + (paused ? "  (paused)" : ""),
-    )
-
-    if let pauseAt, !paused, wall >= pauseAt, wall < pauseAt + 1 {
-        engine.pause()
-        paused = true
-        pausedAudioSeconds = engine.position.playerSeconds
-    } else if paused, let pauseAt, wall >= pauseAt + 2 {
-        let held = abs(engine.position.playerSeconds - pausedAudioSeconds) < 0.001
-        print("pause    the device clock \(held ? "held" : "MOVED") while paused")
-        do {
-            try engine.play()
-        } catch {
-            fail("resuming: \(error)")
-        }
-        paused = false
-    }
-
-    if let limit, wall >= limit { break }
-    if engine.isAtEnd { break }
+} else {
+    print(String(bytes: json, encoding: .utf8) ?? "{}")
 }
 
-do {
-    try engine.stop()
-} catch {
-    fail("stopping: \(error)")
-}
-
-print("underruns \(engine.diagnostics.underruns)")
+let failed = report.checks.count(where: { !$0.ok })
+print("\(report.checks.count - failed) passed, \(failed) failed")
+exit(Int32(min(failed, 100)))
