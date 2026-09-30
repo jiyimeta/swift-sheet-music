@@ -38,7 +38,9 @@ extension LayoutBridge {
         // `label.origin.x` already encodes the right-edge X (clearing any
         // bracket columns); `.partLabel`'s `.trailingCenter` anchor lands the
         // text's right edge there, matching the Apple `PartLabelRenderer`.
-        for label in system.partLabels {
+        // A nameless part's empty label draws nothing, so it is skipped rather
+        // than left to emit a bare semibold style pair where one is measured.
+        for label in system.partLabels where !label.text.isEmpty {
             encodeNotationText(
                 text: label.text,
                 role: .partLabel,

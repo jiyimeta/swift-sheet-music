@@ -44,6 +44,20 @@
             commands.compactMap { if case let .setTextStyle(flags) = $0 { flags } else { nil } }
         }
 
+        /// The `setTextStyle` bits in force when `text` is drawn. Scoped to the one text rather than the whole
+        /// program, because the system-head measure number carries the provider's semibold wherever it measures one.
+        private static func style(of text: String, in commands: [DrawCommand]) -> UInt8? {
+            var flags = DrawCommand.TextStyleFlag.none
+            for command in commands {
+                switch command {
+                case let .setTextStyle(value): flags = value
+                case let .text(value, _, _, _, _) where value == text: return flags
+                default: break
+                }
+            }
+            return nil
+        }
+
         private static func size(of text: String, in commands: [DrawCommand]) -> Double? {
             commands.lazy.compactMap { command -> Double? in
                 if case let .text(value, _, _, size, _) = command, value == text { size } else { nil }
@@ -69,9 +83,9 @@
             let styled = Self.commands(lane: [.staffText(StaffText(
                 text: "dolce", properties: TextProperties(size: 20, style: [.bold, .italic]),
             ))])
-            #expect(Self.styles(plain).isEmpty)
+            #expect(Self.style(of: "dolce", in: plain) == DrawCommand.TextStyleFlag.none)
             let both = DrawCommand.TextStyleFlag.bold | DrawCommand.TextStyleFlag.italic
-            #expect(Self.styles(styled).contains(both))
+            #expect(Self.style(of: "dolce", in: styled) == both)
             let plainSize = try #require(Self.size(of: "dolce", in: plain))
             let styledSize = try #require(Self.size(of: "dolce", in: styled))
             #expect(styledSize > plainSize * 1.5)

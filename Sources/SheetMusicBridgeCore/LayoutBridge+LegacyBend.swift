@@ -179,13 +179,16 @@ extension LayoutBridge {
         // Canvas anchors text at its baseline-leading corner, so shift by
         // half the width and by the descent to land bottom-center on the
         // anchor.
-        out.append(.text(
-            text: text,
-            x: Double(anchor.x - textWidth / 2) * ptToMMScale,
-            y: Double(anchor.y - descent) * ptToMMScale,
-            size: Double(fontSize) * ptToMMScale,
-            fontId: .textRoman,
-        ))
+        let wire = TextFontMapping.wire(for: font)
+        withTextStyle(wire.style, into: &out) { out in
+            out.append(.text(
+                text: text,
+                x: Double(anchor.x - textWidth / 2) * ptToMMScale,
+                y: Double(anchor.y - descent) * ptToMMScale,
+                size: Double(fontSize) * ptToMMScale,
+                fontId: wire.fontId,
+            ))
+        }
     }
 
     private static func legacyBendLineWidthMM(spPt: Double) -> Double {

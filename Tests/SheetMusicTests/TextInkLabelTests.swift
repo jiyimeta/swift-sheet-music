@@ -101,13 +101,21 @@
 
         /// Reconstruct the Web renderer's real outlines from emitted baseline commands.
         /// No layout metrics or anchoring helper contributes the expected geometry.
+        ///
+        /// The web draws `FontID.system` in Edwin and ignores the semibold bit, which is only right because a
+        /// table-provider stream never carries either: the table normalizes the system semibold request to Edwin
+        /// regular before anything is measured. So either one showing up here is a failure, not something to draw.
         private static func portableOutline(_ commands: [DrawCommand]) -> CGRect? {
             var result: CGRect?
             var flags: UInt8 = 0
             let scale = 72.0 / 25.4
             for command in commands {
-                if case let .setTextStyle(value) = command { flags = value }
+                if case let .setTextStyle(value) = command {
+                    flags = value
+                    #expect(value & DrawCommand.TextStyleFlag.semibold == 0, "a portable stream names no semibold")
+                }
                 guard case let .text(text, x, y, size, fontID) = command else { continue }
+                #expect(fontID != .system, "a portable stream names no system face")
                 let font = TextInkOracle.font(face: fontID == .smufl ? "Bravura" : "Edwin", size: size * scale)
                 guard let path = TextInkOracle.path(text, font: font) else { continue }
                 let outline = CGMutablePath(); outline.addPath(path)

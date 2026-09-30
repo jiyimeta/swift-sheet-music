@@ -80,6 +80,37 @@
             #expect(abs(got.maxY - painted.maxY) < 0.001)
         }
 
+        /// A notation label's position is anchored against the ink the Apple provider measured — the system face,
+        /// semibold — so the command has to name that face, or a reader draws Edwin at an x resolved for SF and a
+        /// right- or center-anchored label misses its anchor. Drawn back in the face its id and style bits name, the
+        /// command paints exactly the ink rect the layout reports.
+        @Test(arguments: 0 ... 2)
+        func notationLabelsPaintTheInkTheLayoutMeasured(kind: Int) throws {
+            guard #available(macOS 15.0, *) else { return }
+            let origin = ElementHitFixtures.origin
+            let element: LayoutElement = switch kind {
+            case 0: .measureNumber(text: "17", origin: origin)
+            case 1: .staffName(text: "Violin", origin: origin)
+            default: .jump(text: "D.S. al Fine", origin: origin)
+            }
+            let doc = ElementHitFixtures.document([element])
+            let system = try #require(doc.systems.first)
+            let measure = try #require(system.measures.first)
+            let local = try #require(TextInkGeometry.rects(for: element, metrics: doc.metrics)?.first)
+            let measured = local.offsetBy(
+                dx: system.origin.x + measure.origin.x, dy: system.origin.y + measure.origin.y,
+            )
+            let commands = LayoutBridge.buildCommands(layout: doc)
+            #expect(commands.contains {
+                if case let .text(_, _, _, _, fontID) = $0 { fontID == .system } else { false }
+            })
+            let painted = try #require(Self.textBounds(commands))
+            #expect(abs(measured.minX - painted.minX) < 0.001)
+            #expect(abs(measured.minY - painted.minY) < 0.001)
+            #expect(abs(measured.maxX - painted.maxX) < 0.001)
+            #expect(abs(measured.maxY - painted.maxY) < 0.001)
+        }
+
         /// Decode the actual emitted baseline commands, then independently typeset their payloads.
         static func textBounds(_ commands: [DrawCommand]) -> CGRect? {
             var result: CGRect?
@@ -100,12 +131,7 @@
                     (text, x, y, size, fontID) = (String(scalar), px, py, pointSize, face)
                 default: continue
                 }
-                let font = TextInkOracle.font(
-                    face: fontID == .smufl ? "Bravura" : "Edwin",
-                    size: size * scale,
-                    bold: flags & 1 != 0,
-                    italic: flags & 2 != 0,
-                )
+                let font = TextInkOracle.font(fontID: fontID, size: size * scale, flags: flags)
                 guard let ink = TextInkOracle.path(text, font: font)?.boundingBoxOfPath else { continue }
                 let rect = CGRect(
                     x: x * scale + ink.minX,
@@ -118,8 +144,10 @@
             return result
         }
 
+        /// The painted bounds of every path: a stroked one widened by its width, a filled one (`fillPath`) its own
+        /// points. Each terminator ends its path, as it does in every reader.
         private static func strokeBounds(_ commands: [DrawCommand]) -> CGRect? {
-            let path = CGMutablePath()
+            var path = CGMutablePath()
             let scale = 72.0 / 25.4
             var result: CGRect?
             for command in commands {
@@ -140,6 +168,11 @@
                         miterLimit: 10,
                     ).boundingBoxOfPath
                     result = result.map { $0.union(bounds) } ?? bounds
+                    path = CGMutablePath()
+                case .fillPath:
+                    let bounds = path.boundingBoxOfPath
+                    result = result.map { $0.union(bounds) } ?? bounds
+                    path = CGMutablePath()
                 default: break
                 }
             }

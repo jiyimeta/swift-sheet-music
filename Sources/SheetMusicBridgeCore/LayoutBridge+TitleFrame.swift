@@ -38,13 +38,13 @@ extension LayoutBridge {
         _ entry: LayoutFrameText,
         into out: inout [DrawCommand],
     ) {
-        // Apple draws title-block text in the system font; Android's draw
-        // program only carries the Edwin (text-roman) and Bravura (SMuFL)
-        // faces, so title text engraves in Edwin — the same face MuseScore
-        // defaults the title styles to. `fontSize` is already resolved per
-        // style by the layout engine, so the style itself needs no remapping.
+        // Apple draws title-block text in the system font; this bridge measures it in Edwin — the face MuseScore
+        // defaults the title styles to — so it is drawn in Edwin too, the face id naming the face each line was
+        // anchored with (`TextFontMapping`). `fontSize` is already resolved per style by the layout engine, so the
+        // style itself needs no remapping.
         let fontSize = Double(entry.fontSize)
         let font = LayoutFont(face: "Edwin", pointSize: entry.fontSize)
+        let wire = TextFontMapping.wire(for: font)
         let ascent = Double(FontMetrics.provider.ascent(font: font))
 
         let lines = entry.text.split(
@@ -76,13 +76,15 @@ extension LayoutBridge {
             }
             let lineTopY = topY + Double(idx) * lineHeight
             let baselineY = lineTopY + ascent
-            out.append(.text(
-                text: line,
-                x: (posX + anchorDx) * ptToMMScale,
-                y: baselineY * ptToMMScale,
-                size: fontSize * ptToMMScale,
-                fontId: .textRoman,
-            ))
+            withTextStyle(wire.style, into: &out) { out in
+                out.append(.text(
+                    text: line,
+                    x: (posX + anchorDx) * ptToMMScale,
+                    y: baselineY * ptToMMScale,
+                    size: fontSize * ptToMMScale,
+                    fontId: wire.fontId,
+                ))
+            }
         }
     }
 }

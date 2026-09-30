@@ -62,12 +62,6 @@ extension LayoutBridge {
         styleFlags(TextRoleStyle.fontStyle(for: style))
     }
 
-    /// `styleFlags(for:)` after an element's authored font override: its `style`, when set, replaces the
-    /// role's — clearing a bold role's bold, too, as MuseScore's per-property override does.
-    static func styleFlags(for style: TextStyleType, overrides: TextProperties) -> UInt8 {
-        styleFlags(overrides.resolved(against: style).style)
-    }
-
     private static func styleFlags(_ set: FontStyleSet) -> UInt8 {
         var flags = DrawCommand.TextStyleFlag.none
         if set.contains(.bold) { flags |= DrawCommand.TextStyleFlag.bold }
@@ -100,10 +94,10 @@ extension LayoutBridge {
     /// each run. The first run anchors at `originX` (adjusted by anchor
     /// offset using the total width).
     ///
-    /// The role's bold / italic defaults ride along as a `setTextStyle` pair around the runs. They
-    /// are the reason a tempo mark and a rehearsal mark used to render in regular weight everywhere
-    /// but Apple: the wire had no way to say "bold", so `ResolvedTextStyle`'s answer stopped at the
-    /// Apple renderer's own door.
+    /// The role's bold / italic defaults ride along as a `setTextStyle` pair around the runs, read off the font each
+    /// run is measured in (`TextFontMapping`). They are the reason a tempo mark and a rehearsal mark used to render in
+    /// regular weight everywhere but Apple: the wire had no way to say "bold", so `ResolvedTextStyle`'s answer stopped
+    /// at the Apple renderer's own door.
     ///
     /// `properties` is the element's font override — a tempo marking's, today — applied the way
     /// `emitRoleText` applies it.
@@ -121,27 +115,18 @@ extension LayoutBridge {
         if style == .tempo {
             let runs = TextInkGeometry.tempoRuns(text: text, origin: origin, properties: properties, metrics: metrics)
             for run in runs {
-                let flags: UInt8 = (run.font.weight == .bold ? 1 : 0) | (run.font.isItalic ? 2 : 0)
-                withTextStyle(flags, into: &out) { out in
-                    emitBaselineText(
-                        text: run.text,
-                        font: run.font,
-                        baseline: run.baseline,
-                        fontID: run.font.face == SMuFLFamily.bravura ? .smufl : .textRoman,
-                        into: &out,
-                    )
+                withTextStyle(TextFontMapping.wire(for: run.font).style, into: &out) { out in
+                    emitBaselineText(text: run.text, font: run.font, baseline: run.baseline, into: &out)
                 }
             }
         } else {
-            withTextStyle(styleFlags(for: style, overrides: properties), into: &out) { out in
-                emitAnchoredText(
-                    text: text,
-                    font: TextInkGeometry.font(for: style, overrides: properties, metrics: metrics),
-                    origin: origin,
-                    anchor: CGPoint(x: 0, y: 0.5),
-                    into: &out,
-                )
-            }
+            emitAnchoredText(
+                text: text,
+                font: TextInkGeometry.font(for: style, overrides: properties, metrics: metrics),
+                origin: origin,
+                anchor: CGPoint(x: 0, y: 0.5),
+                into: &out,
+            )
         }
     }
 
@@ -271,13 +256,16 @@ extension LayoutBridge {
         let ascent = Double(FontMetrics.provider.ascent(font: font))
         let descent = Double(FontMetrics.provider.descent(font: font))
         let centerY = cyPt - sp * 2.5
-        out.append(.text(
-            text: label,
-            x: (cxPt - advance / 2) * ptToMMScale,
-            y: (centerY + (ascent - descent) / 2) * ptToMMScale,
-            size: Double(textPt) * ptToMMScale,
-            fontId: .textRoman,
-        ))
+        let wire = TextFontMapping.wire(for: font)
+        withTextStyle(wire.style, into: &out) { out in
+            out.append(.text(
+                text: label,
+                x: (cxPt - advance / 2) * ptToMMScale,
+                y: (centerY + (ascent - descent) / 2) * ptToMMScale,
+                size: Double(textPt) * ptToMMScale,
+                fontId: wire.fontId,
+            ))
+        }
     }
 
     // swiftlint:disable:next function_parameter_count
@@ -429,13 +417,16 @@ extension LayoutBridge {
         // down by half of (ascent − descent) to vertically center the
         // digit on `labelCenter.y`.
         let baselineY = Double(segments.labelCenter.y) + (ascent - descent) / 2
-        withTextStyle(DrawCommand.TextStyleFlag.italic, into: &out) { out in
+        // Measured upright, drawn italic, as before v8 — measuring italic would move the label on a table provider,
+        // whose italic face has its own advances. The id and style are the measured font's, with italic on top.
+        let wire = TextFontMapping.wire(for: labelFont)
+        withTextStyle(wire.style | DrawCommand.TextStyleFlag.italic, into: &out) { out in
             out.append(.text(
                 text: text,
                 x: (Double(segments.labelCenter.x) - labelWidth / 2) * ptToMMScale,
                 y: baselineY * ptToMMScale,
                 size: fontSize * ptToMMScale,
-                fontId: .textRoman,
+                fontId: wire.fontId,
             ))
         }
         guard hasBracket else { return }
@@ -911,14 +902,17 @@ extension LayoutBridge {
             pivotY: Double(world.y) * ptToMMScale,
         ))
         // `.glissando`'s MuseScore default is italic (`styledef.cpp:1484-1488`), so the style comes
-        // from the role rather than being spelled here — one answer for what a role looks like.
-        withTextStyle(styleFlags(for: .glissando), into: &out) { out in
+        // from the role rather than being spelled here — one answer for what a role looks like. It is drawn on top
+        // of the measured font's id and style: the label is measured upright, as before v8, since measuring italic
+        // would move it on a table provider, whose italic face has its own advances.
+        let wire = TextFontMapping.wire(for: font)
+        withTextStyle(wire.style | styleFlags(for: .glissando), into: &out) { out in
             out.append(.text(
                 text: text,
                 x: Double(world.x - textWidth / 2) * ptToMMScale,
                 y: Double(world.y - descent) * ptToMMScale,
                 size: Double(fontSize) * ptToMMScale,
-                fontId: .textRoman,
+                fontId: wire.fontId,
             ))
         }
         out.append(.setRotation(radians: 0, pivotX: 0, pivotY: 0))
@@ -950,23 +944,18 @@ extension LayoutBridge {
             face: SMuFLFamily.bravura,
             pointSize: HarmonyRendering.glyphPointSize(for: lh.harmony, metrics: metrics),
         )
-        let resolved = lh.harmony.properties.resolved(against: lh.harmony.styleType)
-        var flags: UInt8 = 0
-        if resolved.style.contains(.bold) { flags |= DrawCommand.TextStyleFlag.bold }
-        if resolved.style.contains(.italic) { flags |= DrawCommand.TextStyleFlag.italic }
         for run in lh.runs {
             let origin = CGPoint(x: mox + lh.anchorX + run.x, y: moy + lh.y)
             switch run.kind {
             case .text:
-                withTextStyle(flags, into: &out) { out in
-                    emitAnchoredText(
-                        text: run.content,
-                        font: textFont,
-                        origin: origin,
-                        anchor: CGPoint(x: 0, y: 0.5),
-                        into: &out,
-                    )
-                }
+                // Bold / italic come from `textFont`, which resolved the chord symbol's style and override.
+                emitAnchoredText(
+                    text: run.content,
+                    font: textFont,
+                    origin: origin,
+                    anchor: CGPoint(x: 0, y: 0.5),
+                    into: &out,
+                )
             case let .accidental(acc):
                 let baseline = TextInkGeometry.baselineOrigin(
                     text: String(acc.codepoint), font: glyphFont, origin: origin, anchor: CGPoint(x: 0, y: 0.5),
@@ -988,6 +977,10 @@ extension LayoutBridge {
     /// baseline Y from the role's anchor + the platform-measured
     /// ascent/descent so Canvas.drawText lands where SwiftUI's anchored
     /// `Text` would on Apple.
+    ///
+    /// The face and weight on the wire are the provider's `renderingTextFont` answer, the font the anchor was
+    /// measured in: the system face semibold where the provider measures it (Apple), Edwin regular where a table
+    /// provider normalizes it — never the role's.
     static func encodeNotationText(
         text: String,
         role: NotationTextStyle.Role,
@@ -996,13 +989,11 @@ extension LayoutBridge {
         sp: Double,
         into out: inout [DrawCommand],
     ) {
-        let font = NotationTextStyle.font(for: role, sp: CGFloat(sp))
-        withTextStyle(font.isItalic ? DrawCommand.TextStyleFlag.italic : 0, into: &out) { out in
-            emitAnchoredText(
-                text: text, font: font, origin: CGPoint(x: originX, y: originY),
-                anchor: NotationTextStyle.anchorPoint(for: role), into: &out,
-            )
-        }
+        emitAnchoredText(
+            text: text, font: NotationTextStyle.font(for: role, sp: CGFloat(sp)),
+            origin: CGPoint(x: originX, y: originY),
+            anchor: NotationTextStyle.anchorPoint(for: role), into: &out,
+        )
     }
 
     // MARK: - Rehearsal mark
@@ -1025,11 +1016,12 @@ extension LayoutBridge {
         // Measured at the weight it is DRAWN at. `.rehearsalMark`'s MuseScore default is bold
         // (`TextStyle.swift`), and the frame below is sized from this measurement — so measuring
         // regular while drawing bold puts the letters through the right-hand edge of their own box.
-        // That is the failure the weight-aware `FontMetricsTable.face(for:)` lookup exists for.
-        let styleFlags = styleFlags(for: .rehearsalMark, overrides: properties)
+        // That is the failure the weight-aware `FontMetricsTable.face(for:)` lookup exists for. The same font
+        // decides the `setTextStyle` bits `emitAnchoredText` wraps the letters in.
         let font: LayoutFont
         if properties.hasFontOverride {
-            // The authored size and style, measured in the face the device draws: the wire has no face.
+            // The authored size and style, measured in the face the device draws: a named face reaches the wire only
+            // as `.textRoman` (`TextFontMapping`), which every reader draws in Edwin.
             let resolved = properties.resolved(against: .rehearsalMark)
             font = LayoutFont(
                 face: "Edwin", pointSize: TextRoleStyle.fontSize(defaults: resolved, sp: CGFloat(sp)),
@@ -1043,13 +1035,11 @@ extension LayoutBridge {
             )
         }
         let origin = CGPoint(x: CGFloat(originX), y: CGFloat(originY))
-        withTextStyle(styleFlags, into: &out) { out in
-            emitAnchoredText(
-                text: text, font: font,
-                origin: CGPoint(x: CGFloat(originX + pad), y: CGFloat(originY - pad)),
-                anchor: CGPoint(x: 0, y: 1), into: &out,
-            )
-        }
+        emitAnchoredText(
+            text: text, font: font,
+            origin: CGPoint(x: CGFloat(originX + pad), y: CGFloat(originY - pad)),
+            anchor: CGPoint(x: 0, y: 1), into: &out,
+        )
         let shape = TextInkGeometry.rehearsalFrame(
             text: text, font: font, origin: origin, sp: CGFloat(sp), frame: frame,
         )

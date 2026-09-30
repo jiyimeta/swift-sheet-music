@@ -526,29 +526,30 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             out.append(.stroke(width: Double(thickness) * ptToMM))
 
         case let .beam(fromOrigin, toOrigin, direction, level, color):
-            // Each beam emit at a given level: shift Y by the level
-            // offset so secondaries stack inward from the primary,
-            // matching Apple BeamRenderer's geometry.
-            let dy = Double(BeamGeometry.levelOffsetDy(
-                level: level, stemDirection: direction, sp: CGFloat(sp),
-            ))
-            // Draw the center of the beam stroke at `dy + beamThickness/2`
-            // so the stroke's outer edge aligns with the chord's stem
-            // tip (matching Apple's filled-rectangle geometry).
+            // Apple's `drawBeam` quadrilateral, filled. The bar's inner edge sits the level offset off the stem-tip
+            // line (0 for the primary bar; each secondary stacks toward the noteheads) and its outer edge one beam
+            // thickness further, both along Y — so a sloped bar keeps vertical ends, which a stroked center line
+            // cannot (its end caps tilt with the slope).
+            guard level >= 1 else { break }
             let thickness = Double(BeamGeometry.beamThicknessSp) * sp
             let stackSign: Double = direction == .up ? 1 : -1
-            let centerDy = dy + (thickness / 2) * stackSign
+            let inner = Double(BeamGeometry.levelOffsetDy(
+                level: level, stemDirection: direction, sp: CGFloat(sp),
+            ))
+            let outer = inner + thickness * stackSign
             let fx = (mox + Double(fromOrigin.x)) * ptToMM
-            let fy = (moy + Double(fromOrigin.y) + centerDy) * ptToMM
             let tx = (mox + Double(toOrigin.x)) * ptToMM
-            let ty = (moy + Double(toOrigin.y) + centerDy) * ptToMM
+            let fy = moy + Double(fromOrigin.y)
+            let ty = moy + Double(toOrigin.y)
             // Beams honor the author beam <color> (matches Apple's
             // BeamRenderer); default ink otherwise.
             let beamARGB = color.flatMap(LayoutBridge.argb(from:))
             if let beamARGB { out.append(.setColor(argb: beamARGB)) }
-            out.append(.moveTo(x: fx, y: fy))
-            out.append(.lineTo(x: tx, y: ty))
-            out.append(.stroke(width: thickness * ptToMM))
+            out.append(.moveTo(x: fx, y: (fy + inner) * ptToMM))
+            out.append(.lineTo(x: tx, y: (ty + inner) * ptToMM))
+            out.append(.lineTo(x: tx, y: (ty + outer) * ptToMM))
+            out.append(.lineTo(x: fx, y: (fy + outer) * ptToMM))
+            out.append(.fillPath)
             if beamARGB != nil {
                 out.append(.setColor(argb: LayoutBridge.blackARGB))
             }
