@@ -134,16 +134,36 @@ extension WindowsPlaybackEngine {
         currentTimeSecondsContinuous
     }
 
-    /// `probeContinuousSeconds` and the seconds of audio rendered since the stream started, read under one lock: the
-    /// score's clock against the sample clock its players run on, with no render wake between the two readings.
+    /// Starts recording the score player's tick and `renderedFrames` after every chunk the running score player renders
+    /// — the score's clock against the sample clock its players run on, at the resolution both move at, which a poll
+    /// from another thread only samples. Stops by itself after `chunks` of them; its room is reserved here, so the
+    /// render thread never allocates for it. Replaces a trace in progress.
     @_spi(PlaybackProbe)
-    public var probeClocks: (score: TimeInterval, rendered: TimeInterval)? {
-        guard let derivation = loadedDerivation else { return nil }
-        let (tick, frames, sampleRate) = core.shared.withLock { shared in
-            (shared.foldedReportedScoreTick, shared.renderedFrames, shared.sampleRate)
+    public func probeStartClockTrace(chunks: Int) {
+        var trace: ClockTrace? = ClockTrace(limit: chunks)
+        // Swapped rather than assigned: the render thread's appends then find the storage uniquely referenced (no copy
+        // on that thread), and a replaced trace is freed here, outside the lock.
+        core.shared.withLock { swap(&$0.clockTrace, &trace) }
+    }
+
+    /// Ends the trace `probeStartClockTrace` began and answers it: per recorded chunk, the score's seconds at the
+    /// player's tick (`probeContinuousSeconds`' conversion, unfolded) and the seconds of audio rendered since the
+    /// stream started.
+    @_spi(PlaybackProbe)
+    public func probeTakeClockTrace() -> [(score: TimeInterval, rendered: TimeInterval)] {
+        var taken: ClockTrace?
+        let sampleRate = core.shared.withLock { shared -> Double in
+            swap(&shared.clockTrace, &taken)
+            return shared.sampleRate
         }
-        let score = derivation.timeline.seconds(atTick: derivation.unroll.notatedTick(fromUnrolled: Double(tick)))
-        return (score, Double(frames) / sampleRate)
+        guard let trace = taken, let derivation = loadedDerivation else { return [] }
+        return trace.entries.map { entry in
+            let notated = derivation.unroll.notatedTick(fromUnrolled: Double(entry.tick))
+            return (
+                score: derivation.timeline.seconds(atTick: notated),
+                rendered: Double(entry.renderedFrames) / sampleRate,
+            )
+        }
     }
 
     /// Makes the output's next buffer request fail with `AUDCLNT_E_DEVICE_INVALIDATED` once, as a device change
@@ -151,5 +171,28 @@ extension WindowsPlaybackEngine {
     @_spi(PlaybackProbe)
     public func probeInjectDeviceFault() {
         output?.requestFault()
+    }
+}
+
+/// The score player's tick and `renderedFrames` after each chunk it ran, recorded on the render thread for the probe
+/// (`WindowsPlaybackEngine.probeStartClockTrace`). Room for `limit` entries is reserved when it is made and recording
+/// stops there, so an append never reallocates.
+struct ClockTrace: Sendable {
+    struct Entry: Sendable {
+        let renderedFrames: Int64
+        let tick: Int
+    }
+
+    let limit: Int
+    private(set) var entries: [Entry] = []
+
+    init(limit: Int) {
+        self.limit = max(0, limit)
+        entries.reserveCapacity(self.limit)
+    }
+
+    mutating func record(renderedFrames: Int64, tick: Int) {
+        guard entries.count < limit else { return }
+        entries.append(Entry(renderedFrames: renderedFrames, tick: tick))
     }
 }

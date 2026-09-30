@@ -53,6 +53,8 @@ extension Shared {
                     awaitingWrapLanding = false
                     lastWrapLandingTick = session.scorePlayer.tick
                 }
+                // The probe's trace, when one is recording (the tick is not read otherwise).
+                clockTrace?.record(renderedFrames: renderedFrames, tick: session.scorePlayer.tick)
             }
             if let deferred = deferredSeek {
                 deferredSeek = nil

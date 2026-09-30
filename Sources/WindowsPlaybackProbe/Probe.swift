@@ -112,51 +112,88 @@ final class Probe { // swiftlint:disable:this type_body_length
     // MARK: play
 
     /// Ten seconds from the top: the tick's seconds against the wall clock, and against the audio rendered.
-    func play() {
+    func play() { // swiftlint:disable:this function_body_length
         let duration = min(10, engine.totalTimeSeconds - 1)
         guard duration > 2 else {
             report.note("play", "score too short (\(formatted(engine.totalTimeSeconds, 1)) s) to measure drift")
             return
         }
-        let underrunsBefore = engine.diagnostics.underruns
+        let diagnostics = engine.diagnostics
+        let underrunsBefore = diagnostics.underruns
+        // The drift's points: every 64-frame chunk of the first `duration − 0.5` s of audio the score renders.
+        let traceChunks = Int((duration - 0.5) * diagnostics.sampleRate) / 64
         engine.stop()
+        engine.probeStartClockTrace(chunks: traceChunks)
         engine.play(in: score)
         let start = clock.now
-        var samples: [(wall: Double, delta: Double, drift: Double)] = []
+        var samples: [(wall: Double, delta: Double)] = []
+        var misdated = 0
         while seconds(clock.now - start) < duration {
             wait(0.05)
-            let wall = seconds(clock.now - start)
-            guard let clocks = engine.probeClocks else { continue }
-            samples.append((wall, wall - clocks.score, clocks.score - clocks.rendered))
+            // Dated by the middle of a bracket around the read. A bracket over 2 ms means the probe was preempted, or
+            // waited out a render callback for the lock: its wall time is not the tick's, and read as the cursor's
+            // jitter it would be the probe's own. Dropped and counted instead.
+            let before = seconds(clock.now - start)
+            let tickSeconds = engine.probeContinuousSeconds
+            let after = seconds(clock.now - start)
+            guard after - before <= 0.002 else {
+                misdated += 1
+                continue
+            }
+            let wall = (before + after) / 2
+            samples.append((wall, wall - tickSeconds))
         }
+        let trace = engine.probeTakeClockTrace()
         engine.stop()
-        // The first half second holds the start-up (the first buffer fill): an offset, not drift.
+
+        // The first half second holds the start-up (the first buffer fill): an offset, not jitter. After it the tick
+        // moves once per render wake, a device period (~10 ms) at a time, so this reads about ±5 ms with nothing wrong
+        // and a render wake that comes late adds to it directly: the 10 ms leaves ~5 ms for that.
         let steady = samples.filter { $0.wall >= 0.5 }
-        guard steady.count > 2 else { return }
-        let mean = steady.map(\.delta).reduce(0, +) / Double(steady.count)
-        let deviation = steady.map { abs($0.delta - mean) }.max() ?? 0
-        report.check(
-            "play", "|Δ(wall − tick s) − mean|", deviation <= 0.010,
-            value: "\(formatted(deviation * 1000, 2)) ms (mean \(formatted(mean * 1000, 1)) ms)", limit: "≤ 10 ms",
-        )
+        if steady.count > 2 {
+            let mean = steady.map(\.delta).reduce(0, +) / Double(steady.count)
+            let deviation = steady.map { abs($0.delta - mean) }.max() ?? 0
+            report.check(
+                "play", "|Δ(wall − tick s) − mean|", deviation <= 0.010,
+                value: "\(formatted(deviation * 1000, 2)) ms (mean \(formatted(mean * 1000, 1)) ms, "
+                    + "\(steady.count) polls, \(misdated) dropped as misdated)",
+                limit: "≤ 10 ms",
+            )
+            // Against the wall clock the slope is the output device's crystal against QPC — ±50 ppm (±3 ms/min) is an
+            // ordinary tolerance, and the cursor has to follow the audio, not QPC — and the ~10 ms steps above let a
+            // 50 ms poll over 9.5 s resolve it only to ≈ ±5 ms/min (1σ = period / (√N · 9.5 s)): the first Windows run
+            // read 1.06 ms/min. So it is reported, not gated; the check above still fails a rate error from ~0.1 %.
+            let wallSlope = Self.slope(steady.map(\.wall), steady.map(\.delta)) * 60000
+            report.note(
+                "play",
+                "wall − tick slope \(formatted(wallSlope, 2)) ms/min (\(formatted(wallSlope * 1000 / 60, 1)) ppm): the "
+                    + "device's clock against QPC, within ±5 ms/min of poll resolution — not gated",
+            )
+        } else {
+            report.check(
+                "play", "|Δ(wall − tick s) − mean|", false,
+                value: "\(steady.count) polls kept, \(misdated) dropped as misdated", limit: "≤ 10 ms",
+            )
+        }
+
         // The spec's ≤ 1 ms/min is for drift this engine could accumulate itself — FluidSynth's player, the SMF's tempo
         // against the timeline's, the unroll — so it is taken on the score's clock against the audio rendered, which
-        // the players run on, both read under one lock: its only noise is the whole tick, ≈ 0.1 ms/min on the slope.
-        // Against the wall clock the slope is the output device's crystal against QPC — ±50 ppm (±3 ms/min) is an
-        // ordinary tolerance, and the cursor has to follow the audio, not QPC — and the tick moves one device period
-        // (~10 ms) per render wake, which a 50 ms poll over 9.5 s resolves only to ≈ ±5 ms/min (1σ = period / (√N ·
-        // 9.5 s)): the first Windows run read 1.06 ms/min there. So that slope is reported, not gated; the check above
-        // still fails any rate error from about 0.1 %.
-        let drift = Self.slope(steady.map(\.wall), steady.map(\.drift)) * 60000
+        // the players run on, and fitted over every chunk of the trace rather than over the polls. FluidSynth moves
+        // its player in whole milliseconds of the sample clock (`fluid_sample_timer_process` truncates) and in whole
+        // ticks (`fluid_player_callback` rounds), so tick s − rendered s is a sawtooth 1.7–2 ms peak to peak (σ 0.4 ms
+        // at 124 bpm, 480 ppq). A slope through 150–190 polls of it hangs on the polls' phase against that sawtooth: a
+        // model of FluidSynth's arithmetic gives σ 0.3–0.7 ms/min while the phase wanders, and 1.8 ms/min once
+        // Windows' default 15.6 ms timer rounds the 50 ms sleep up to 62.5 ms and the phase only creeps — so the gate
+        // at 1 ms/min read the scheduling, not the engine (two runs: 0.21, then 1.84 under a Defender scan). Every
+        // chunk is the same ~7,000 points each run however the threads are scheduled, so the fit depends on the score
+        // and the rate alone: the sawtooth's own slope, −0.045 ms/min at 48 or 44.1 kHz (of the order of 2 · 0.5 ms ·
+        // its 125 ms period / (9.5 s)² ≈ 0.08). A tempo event inside the window would re-anchor the player and step the
+        // sawtooth by up to half a tick, which a fit reads as up to ~5 ms/min: the sample score has one, at tick 0.
+        let drift = Self.slope(trace.map(\.rendered), trace.map { $0.score - $0.rendered }) * 60000
         report.check(
-            "play", "drift (tick s − rendered s)", abs(drift) <= 1, value: "\(formatted(drift, 3)) ms/min",
-            limit: "≤ 1 ms/min",
-        )
-        let wallSlope = Self.slope(steady.map(\.wall), steady.map(\.delta)) * 60000
-        report.note(
-            "play",
-            "wall − tick slope \(formatted(wallSlope, 2)) ms/min (\(formatted(wallSlope * 1000 / 60, 1)) ppm): the "
-                + "device's clock against QPC, within ±5 ms/min of poll resolution — not gated",
+            "play", "drift (tick s − rendered s)", trace.count == traceChunks && abs(drift) <= 1,
+            value: "\(formatted(drift, 3)) ms/min over \(trace.count) chunks",
+            limit: "≤ 1 ms/min over \(traceChunks) chunks",
         )
         let underruns = engine.diagnostics.underruns - underrunsBefore
         report.check("play", "underruns", underruns == 0, value: "\(underruns)", limit: "0")

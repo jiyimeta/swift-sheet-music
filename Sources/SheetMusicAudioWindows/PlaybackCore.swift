@@ -179,4 +179,6 @@ struct Shared: Sendable {
     var awaitingWrapLanding = false
     /// The largest sample magnitude leaving the output stage in the last callback that ran it (post-shaping).
     var lastOutputPeak: Float = 0
+    /// Recording while set: the probe's per-chunk clock trace (`WindowsPlaybackEngine.probeStartClockTrace`).
+    var clockTrace: ClockTrace?
 }
