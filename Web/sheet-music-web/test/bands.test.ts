@@ -118,6 +118,58 @@ describe("splitIntoBands", () => {
     }
   });
 
+  it("a path being filled is never split across bands", () => {
+    // The rects reach 71 mm; the path's points carry the extent past the 80 mm
+    // minimum while it is still open, so the only safe cut is after fillPath.
+    const commands: DrawCommand[] = [
+      ...rects(8),
+      { kind: "moveTo", x: 0, y: 75 },
+      { kind: "lineTo", x: 10, y: 75 },
+      { kind: "lineTo", x: 10, y: 90 },
+      { kind: "lineTo", x: 0, y: 90 },
+      { kind: "fillPath" },
+      ...rects(10, 100),
+    ];
+    const bands = splitIntoBands(page(...commands), 80);
+    expect(bands.length).toBeGreaterThan(1);
+    const withPath = bands.filter((band) =>
+      band.commands.some((command) => command.kind === "moveTo"),
+    );
+    expect(withPath).toHaveLength(1);
+    expect(
+      withPath[0]!.commands.filter(
+        (command) => command.kind === "lineTo" || command.kind === "fillPath",
+      ),
+    ).toHaveLength(4);
+    for (const band of bands) {
+      let open = false;
+      for (const command of band.commands) {
+        if (command.kind === "moveTo") open = true;
+        if (command.kind === "fillPath") {
+          expect(open).toBe(true);
+          open = false;
+        }
+        if (command.kind === "lineTo") expect(open).toBe(true);
+      }
+      expect(open).toBe(false);
+    }
+  });
+
+  it("a filled path's extent is its points', not widened like a stroke", () => {
+    const bands = splitIntoBands(
+      page(
+        { kind: "moveTo", x: 0, y: 10 },
+        { kind: "lineTo", x: 10, y: 10 },
+        { kind: "lineTo", x: 10, y: 20 },
+        { kind: "fillPath" },
+      ),
+      80,
+    );
+    expect(bands).toHaveLength(1);
+    expect(bands[0]!.topMM).toBeCloseTo(10, 9);
+    expect(bands[0]!.heightMM).toBeCloseTo(10, 9);
+  });
+
   it("a rotated run is never split across bands", () => {
     const commands: DrawCommand[] = [
       { kind: "setRotation", radians: 1.57, pivotX: 0, pivotY: 0 },

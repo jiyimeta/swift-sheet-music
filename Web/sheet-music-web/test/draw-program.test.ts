@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { decodeDrawProgram } from "../src/draw-program.js";
+import {
+  decodeDrawProgram,
+  FontId,
+  TEXT_STYLE_ITALIC,
+  TEXT_STYLE_SEMIBOLD,
+} from "../src/draw-program.js";
 
 /**
  * Bytes produced by the Swift encoder, not assembled here. Regenerate with
@@ -12,6 +17,35 @@ const fixture = new Uint8Array(
     fileURLToPath(new URL("./fixtures/all-opcodes.smdf", import.meta.url)),
   ),
 );
+
+/** opcode + 6 × f64 + stringIndex + integer + fontId. */
+const COMMAND_STRIDE = 64;
+/** Byte offset of the fontId field inside a command record. */
+const FONT_ID_FIELD = 60;
+
+/**
+ * Byte offset of the first page's command record `index`, found by walking the
+ * header and string table rather than hard-coded, so the tests survive a change
+ * to the fixture's strings.
+ */
+function recordOffset(bytes: Uint8Array, index: number): number {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const stringCount = view.getInt32(12, true);
+  let offset = 16;
+  for (let i = 0; i < stringCount; i += 1) {
+    offset += 4 + view.getInt32(offset, true);
+  }
+  // widthMM, heightMM, commandCount
+  offset += 8 + 8 + 4;
+  return offset + index * COMMAND_STRIDE;
+}
+
+/** A copy of the fixture with one little-endian i32 / u32 overwritten. */
+function withU32(offset: number, value: number): Uint8Array {
+  const bytes = fixture.slice();
+  new DataView(bytes.buffer).setUint32(offset, value >>> 0, true);
+  return bytes;
+}
 
 describe("decodeDrawProgram", () => {
   it("reads the page list", () => {
@@ -36,7 +70,10 @@ describe("decodeDrawProgram", () => {
       "stretchedGlyph",
       "setRotation",
       "setDash",
-      "italicText",
+      "setTextStyle",
+      "fillPath",
+      // Tail: a text in the system face, so every font id crosses the decoder.
+      "text",
     ]);
   });
 
@@ -62,6 +99,15 @@ describe("decodeDrawProgram", () => {
       pivotY: 26,
     });
     expect(commands[10]).toEqual({ kind: "setDash", onMM: 0.75, offMM: 0.25 });
+    expect(commands[12]).toEqual({ kind: "fillPath" });
+  });
+
+  it("reads text style flags, including the semibold bit", () => {
+    const commands = decodeDrawProgram(fixture)[0]!.commands;
+    expect(commands[11]).toEqual({
+      kind: "setTextStyle",
+      flags: TEXT_STYLE_SEMIBOLD | TEXT_STYLE_ITALIC,
+    });
   });
 
   it("reads strings from the side table", () => {
@@ -74,13 +120,13 @@ describe("decodeDrawProgram", () => {
       size: 14,
       fontId: 0,
     });
-    expect(commands[11]).toEqual({
-      kind: "italicText",
-      text: "3",
+    expect(commands[13]).toEqual({
+      kind: "text",
+      text: "12",
       x: 27,
       y: 28,
       size: 29,
-      fontId: 0,
+      fontId: FontId.system,
     });
   });
 
@@ -121,6 +167,27 @@ describe("decodeDrawProgram", () => {
     expect(() => decodeDrawProgram(bad)).toThrow(/version/i);
   });
 
+  /**
+   * v1 numbered `setTextStyle` 12 and had no `fillPath`; read as v2 it would
+   * decode without error and draw the wrong thing, so it must be refused.
+   */
+  it("rejects a version-1 stream", () => {
+    expect(() => decodeDrawProgram(withU32(4, 1))).toThrow(/version 1\b/);
+  });
+
+  it("rejects an opcode past fillPath", () => {
+    expect(() => decodeDrawProgram(withU32(recordOffset(fixture, 0), 13))).toThrow(
+      /unknown opcode 13\b/,
+    );
+  });
+
+  it("rejects a font id past system", () => {
+    // Record 4 is the Bravura glyph; its font id is the one being corrupted.
+    expect(decodeDrawProgram(fixture)[0]!.commands[4]!.kind).toBe("glyph");
+    const bad = withU32(recordOffset(fixture, 4) + FONT_ID_FIELD, 3);
+    expect(() => decodeDrawProgram(bad)).toThrow(/unknown fontId 3\b/);
+  });
+
   it("rejects truncation", () => {
     expect(() => decodeDrawProgram(fixture.slice(0, fixture.length - 1))).toThrow(
       /truncated/i,
@@ -132,6 +199,6 @@ describe("decodeDrawProgram", () => {
     const padded = new Uint8Array(fixture.length + 8);
     padded.set(fixture, 8);
     const view = padded.subarray(8);
-    expect(decodeDrawProgram(view)[0]!.commands).toHaveLength(12);
+    expect(decodeDrawProgram(view)[0]!.commands).toHaveLength(14);
   });
 });

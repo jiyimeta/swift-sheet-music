@@ -97,12 +97,16 @@ export function splitIntoBands(
         pathOpen = true;
         break;
       case "stroke":
+      case "fillPath":
         pathOpen = false;
         break;
     }
 
     buffer.push(command);
 
+    // A fill paints no further than its path's points, which already widened the
+    // extent, so `fillPath` adds nothing; a stroke's ink reaches half its width
+    // past them (padded here by the full width on each side).
     if (command.kind === "stroke") {
       if (minY <= maxY) {
         minY -= command.width;
@@ -174,7 +178,6 @@ function boxMM(command: DrawCommand): Box | null {
       return new Box(command.x, command.y, command.x + command.w, command.y + command.h);
     case "glyph":
     case "text":
-    case "italicText":
       return new Box(
         command.x,
         command.y - 2 * command.size,
@@ -188,8 +191,10 @@ function boxMM(command: DrawCommand): Box | null {
         command.rightEdgeX,
         command.bottomY,
       );
-    // State commands paint nothing themselves, so they contribute no box.
+    // State commands paint nothing themselves, so they contribute no box; nor do
+    // the path terminators, whose points have already contributed theirs.
     case "stroke":
+    case "fillPath":
     case "setColor":
     case "setDash":
     case "setRotation":

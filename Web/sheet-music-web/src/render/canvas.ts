@@ -43,11 +43,20 @@ export {
 const MIN_STROKE_PX = 1.5;
 
 /**
- * Legacy italicText / styled music glyph shear. Kept for those existing
- * commands; measured text styles use -0.25 below, matching Android's Y-down
- * textSkewX and the shipped Edwin italic outline records.
+ * Italic shear for a styled music glyph (Bravura). Measured text styles use
+ * -0.25 below instead, matching Android's Y-down textSkewX and the shipped Edwin
+ * italic outline records.
  */
 const ITALIC_SHEAR = 0.25;
+
+/**
+ * The style bits this renderer draws. Semibold is left out, so it draws regular:
+ * web ships no semibold face (nor metrics records for one) yet, and the portable
+ * layout normalizes semibold to regular before it measures, so its own streams
+ * never carry the bit. Only a stream laid out on Apple or Windows does, and that
+ * one was measured against a system face this renderer lacks either way.
+ */
+const DRAWN_TEXT_STYLE_FLAGS = TEXT_STYLE_BOLD | TEXT_STYLE_ITALIC;
 
 /** Packed ARGB (0xAARRGGBB) to a CSS colour. */
 function rgba(argb: number): string {
@@ -58,6 +67,10 @@ function rgba(argb: number): string {
   return `rgba(${r}, ${g}, ${b}, ${Math.round(a * 1000) / 1000})`;
 }
 
+/**
+ * `system` (the platform UI family on Apple and Windows) draws in the text face,
+ * as the Kotlin renderer does: web has no UI family of its own.
+ */
 function faceFor(fontId: number, fonts: ScoreFonts): string {
   return fontId === FontId.smufl ? fonts.smufl : fonts.textRoman;
 }
@@ -113,6 +126,9 @@ function drawCommandList(
     }
     ctx.save();
     if (textStyleFlags & TEXT_STYLE_ITALIC) {
+      // Shear about the baseline so the glyph's foot stays where the engraver
+      // put it and only the top leans. The `-shear * baselineY` translate is
+      // what moves the shear's fixed line from y = 0 to the baseline.
       const shear = styledMusicGlyph ? ITALIC_SHEAR : -0.25;
       ctx.transform(1, 0, shear, 1, -shear * baselineY, 0);
     }
@@ -153,6 +169,12 @@ function drawCommandList(
         ctx.stroke();
         ctx.beginPath();
         break;
+      case "fillPath":
+        // `fill()` defaults to nonzero and closes open subpaths itself; the
+        // dash pattern only applies to strokes. The fresh path mirrors `stroke`.
+        ctx.fill();
+        ctx.beginPath();
+        break;
       case "fillRect":
         ctx.fillRect(
           command.x * pxPerMM,
@@ -178,20 +200,8 @@ function drawCommandList(
         );
         break;
       case "setTextStyle":
-        textStyleFlags = command.flags;
+        textStyleFlags = command.flags & DRAWN_TEXT_STYLE_FLAGS;
         break;
-      case "italicText": {
-        ctx.font = `${command.size * pxPerMM}px "${faceFor(command.fontId, fonts)}"`;
-        const baselineY = command.y * pxPerMM;
-        ctx.save();
-        // Shear about the baseline so the glyph's foot stays where the engraver
-        // put it and only the top leans. The `-shear * baselineY` translate is
-        // what moves the shear's fixed line from y = 0 to the baseline.
-        ctx.transform(1, 0, ITALIC_SHEAR, 1, -ITALIC_SHEAR * baselineY, 0);
-        ctx.fillText(command.text, command.x * pxPerMM, baselineY);
-        ctx.restore();
-        break;
-      }
       case "setColor":
         currentArgb = command.argb;
         applyColor();

@@ -598,7 +598,11 @@ Text ink の table は Edwin の regular / bold / italic / bold italic を個別
 Web の bold は regular outline の fill と幅 1/32 em の round stroke、italic はその後の
 Y-down shear -0.25 です。`GenFontMetrics` も stroke → shear の順で outline を測ります。
 CSS synthetic bold の量は browser ごとに変わり得るため、この経路では使いません。
-Bravura と legacy `italicText` の style 処理は従来どおりです。
+Bravura の style 処理は従来どおりです。wire v8（SMDF v2）で `italicText` は消え、italic は
+`setTextStyle` だけが表します。font id `system`（Apple / Windows の UI family）は Edwin で描き、
+`setTextStyle` の semibold bit は無視して regular で描きます。web は semibold face を持たず、
+portable layout は semibold を regular に正規化して測るので、自分の stream にはこの bit が出ません。
+beam は `moveTo` / `lineTo` ×3 / `fillPath`（nonzero の `fill()`）で塗ります。
 `e2e/text-ink.spec.ts` は実 renderer の raster と shipped table の全辺を比較し、
 次の glyph / line と呼び出し元への Canvas state の復帰も確認します。
 

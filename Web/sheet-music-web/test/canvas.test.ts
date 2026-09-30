@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { DrawProgramPage } from "../src/draw-program.js";
+import {
+  FontId,
+  TEXT_STYLE_ITALIC,
+  TEXT_STYLE_SEMIBOLD,
+} from "../src/draw-program.js";
 import { drawPage, drawTile } from "../src/render/canvas.js";
 import type { ScoreBand } from "../src/render/bands.js";
 import type { ScoreFonts } from "../src/render/fonts.js";
@@ -250,14 +255,92 @@ describe("drawPage", () => {
     drawPage(
       ctx,
       pageWith([
-        { kind: "italicText", text: "3", x: 10, y: 20, size: 4, fontId: 0 },
+        { kind: "setTextStyle", flags: TEXT_STYLE_ITALIC },
+        { kind: "text", text: "3", x: 10, y: 20, size: 4, fontId: 0 },
       ]),
       1,
       fonts,
     );
-    expect(calls).toContainEqual(["transform", 1, 0, 0.25, 1, -5, 0]);
+    expect(calls).toContainEqual(["transform", 1, 0, -0.25, 1, 5, 0]);
     expect(calls).toContainEqual(["fillText", "3", 10, 20]);
     expect(nestedRestores(calls)).toBe(1);
+  });
+
+  it("draws the system face in the text face", () => {
+    const { ctx, calls, state } = fakeContext();
+    drawPage(
+      ctx,
+      pageWith([
+        { kind: "text", text: "12", x: 1, y: 2, size: 3, fontId: FontId.system },
+      ]),
+      1,
+      fonts,
+    );
+    expect(state.font).toBe('3px "Edwin"');
+    expect(calls).toContainEqual(["fillText", "12", 1, 2]);
+  });
+
+  it("draws semibold at regular weight", () => {
+    const { ctx, calls, state } = fakeContext();
+    drawPage(
+      ctx,
+      pageWith([
+        { kind: "setTextStyle", flags: TEXT_STYLE_SEMIBOLD },
+        { kind: "text", text: "12", x: 1, y: 2, size: 3, fontId: FontId.system },
+      ]),
+      1,
+      fonts,
+    );
+    expect(state.font).toBe('3px "Edwin"');
+    expect(calls).toContainEqual(["fillText", "12", 1, 2]);
+    expect(countOf(calls, "strokeText")).toBe(0);
+    expect(countOf(calls, "transform")).toBe(0);
+    expect(nestedRestores(calls)).toBe(0);
+  });
+
+  it("keeps the other style bits when semibold is set with them", () => {
+    const { ctx, calls } = fakeContext();
+    drawPage(
+      ctx,
+      pageWith([
+        { kind: "setTextStyle", flags: TEXT_STYLE_SEMIBOLD | TEXT_STYLE_ITALIC },
+        { kind: "text", text: "12", x: 10, y: 20, size: 4, fontId: FontId.system },
+      ]),
+      1,
+      fonts,
+    );
+    expect(calls).toContainEqual(["transform", 1, 0, -0.25, 1, 5, 0]);
+    expect(countOf(calls, "strokeText")).toBe(0);
+  });
+
+  it("fills a path in the current color, then starts a fresh one", () => {
+    const { ctx, calls } = fakeContext();
+    drawPage(
+      ctx,
+      pageWith([
+        { kind: "setColor", argb: 0xff007aff },
+        { kind: "moveTo", x: 0, y: 0 },
+        { kind: "lineTo", x: 4, y: 0 },
+        { kind: "lineTo", x: 4, y: 1 },
+        { kind: "lineTo", x: 0, y: 1 },
+        { kind: "fillPath" },
+      ]),
+      1,
+      fonts,
+    );
+    const fills = calls.filter(([name]) => name === "fill");
+    // No argument: nonzero winding, the Canvas2D default.
+    expect(fills).toEqual([["fill"]]);
+    const fillAt = calls.findIndex(([name]) => name === "fill");
+    const colorsBeforeFill = calls
+      .slice(0, fillAt)
+      .filter(([name]) => name === "set:fillStyle");
+    expect(colorsBeforeFill[colorsBeforeFill.length - 1]).toEqual([
+      "set:fillStyle",
+      "rgba(0, 122, 255, 1)",
+    ]);
+    expect(calls[fillAt + 1]).toEqual(["beginPath"]);
+    expect(countOf(calls, "stroke")).toBe(0);
   });
 
   it("places a stretched glyph against its measured ink box", () => {
@@ -315,7 +398,8 @@ describe("drawPage", () => {
       ctx,
       pageWith([
         { kind: "setRotation", radians: 1, pivotX: 0, pivotY: 0 },
-        { kind: "italicText", text: "3", x: 0, y: 0, size: 4, fontId: 0 },
+        { kind: "setTextStyle", flags: TEXT_STYLE_ITALIC },
+        { kind: "text", text: "3", x: 0, y: 0, size: 4, fontId: 0 },
       ]),
       1,
       fonts,

@@ -8,16 +8,24 @@
  * that a hand-written decoder can be correct, unlike one written against
  * `@WireFormat`'s tag/varint framing.
  *
- * Keep `SMDF_VERSION` in lockstep with `DrawProgramFlat.version`.
+ * Keep `SMDF_VERSION` in lockstep with `DrawProgramFlat.version`. Opcodes are
+ * `DrawCommand`'s declaration order, so removing or inserting a case renumbers
+ * every later one — which is why a version this decoder does not know throws
+ * rather than being read on trust.
  */
 
 const SMDF_MAGIC = 0x534d4446; // "SMDF"
-const SMDF_VERSION = 1;
+/** v2 follows DrawProgram v8: `italicText` gone, `setTextStyle` 11, `fillPath` 12. */
+const SMDF_VERSION = 2;
 /** opcode + 6 × f64 + stringIndex + integer + fontId. */
 const COMMAND_STRIDE = 4 + 6 * 8 + 4 + 4 + 4;
 
-/** `DrawProgram.FontID` — 0 body text (Edwin), 1 music glyphs (Bravura). */
-export const FontId = { textRoman: 0, smufl: 1 } as const;
+/**
+ * `DrawProgram.FontID` — 0 body text (Edwin), 1 music glyphs (Bravura), 2 the
+ * platform UI family (SF on Apple, Segoe UI on Windows). This renderer has no
+ * UI family and draws `system` in the text face.
+ */
+export const FontId = { textRoman: 0, smufl: 1, system: 2 } as const;
 export type FontId = (typeof FontId)[keyof typeof FontId];
 
 export type DrawCommand =
@@ -65,35 +73,39 @@ export type DrawCommand =
   | { kind: "setDash"; onMM: number; offMM: number }
   | {
       /**
-       * Superseded by `setTextStyle` and no longer emitted by the bridge.
-       * Still decoded so a stream that carries it renders.
-       */
-      kind: "italicText";
-      text: string;
-      x: number;
-      y: number;
-      size: number;
-      fontId: FontId;
-    }
-  | {
-      /**
        * Font style for every subsequent `text` and `glyph`, until the next
        * `setTextStyle`. A state command like `setColor` / `setDash` /
        * `setRotation`.
        *
-       * `flags` is a bitmask: bit 0 bold, bit 1 italic. MuseScore's own role
-       * defaults set tempo marks, rehearsal marks and instrument-change text
-       * bold; before this opcode the wire could not say so, and this renderer
-       * drew them at regular weight while the Apple one drew them bold.
+       * `flags` is a bitmask: bit 0 bold, bit 1 italic, bit 2 semibold.
+       * MuseScore's own role defaults set tempo marks, rehearsal marks and
+       * instrument-change text bold; before this opcode the wire could not say
+       * so, and this renderer drew them at regular weight while the Apple one
+       * drew them bold.
        */
       kind: "setTextStyle";
       flags: number;
+    }
+  | {
+      /**
+       * Fills the path built since the last `stroke` / `fillPath` — implicitly
+       * closed, nonzero winding, in the current `setColor`. `setDash` does not
+       * apply. The bridge emits beams as a four-corner `moveTo` / `lineTo` ×3 /
+       * `fillPath`, so a beam's thickness is vertical as the Apple renderer
+       * draws it rather than perpendicular to a stroked center line.
+       */
+      kind: "fillPath";
     };
 
 /** Bit positions in a `setTextStyle` mask. Mirrors Swift's `DrawCommand.TextStyleFlag`. */
 export const TEXT_STYLE_BOLD = 1;
 /** @see TEXT_STYLE_BOLD */
 export const TEXT_STYLE_ITALIC = 2;
+/**
+ * @see TEXT_STYLE_BOLD. Emitted for the Apple and Windows `system` face; this
+ * renderer draws it at regular weight (see `canvas.ts`).
+ */
+export const TEXT_STYLE_SEMIBOLD = 4;
 
 export interface DrawProgramPage {
   /** Page width in document millimetres. */
@@ -165,7 +177,7 @@ class Cursor {
 }
 
 function asFontId(raw: number): FontId {
-  if (raw !== FontId.textRoman && raw !== FontId.smufl) {
+  if (raw !== FontId.textRoman && raw !== FontId.smufl && raw !== FontId.system) {
     throw new Error(`draw program: unknown fontId ${raw}`);
   }
   return raw;
@@ -287,21 +299,15 @@ function readCommand(cursor: Cursor, strings: readonly string[]): DrawCommand {
     case 10:
       return { kind: "setDash", onMM: s[0]!, offMM: s[1]! };
     case 11:
-      return {
-        kind: "italicText",
-        text: str(),
-        x: s[0]!,
-        y: s[1]!,
-        size: s[2]!,
-        fontId: asFontId(fontIdRaw),
-      };
-    case 12:
       // Masked rather than range-checked: the encoder widens a u8 into the
       // record's u32 integer slot, so the high bytes are always zero, and a
       // stream where they are not is one this decoder cannot interpret anyway.
       // Refusing it would trade an unknown-but-inert style bit for a whole page
       // that does not draw.
       return { kind: "setTextStyle", flags: integer & 0xff };
+    case 12:
+      // No payload: every slot is zero, the string index and font id -1.
+      return { kind: "fillPath" };
     default:
       throw new Error(`draw program: unknown opcode ${opcode}`);
   }
