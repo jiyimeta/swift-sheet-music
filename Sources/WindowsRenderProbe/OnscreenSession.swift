@@ -125,6 +125,7 @@ final class OnscreenSession {
     func scroll(frames: Int, stepPx: Double) -> [Double] {
         var work: [Double] = []
         var tiles: [Int] = []
+        var readAhead: [Int] = []
         let stepMM = stepPx / pxPerMM(zoom: 1)
         let bottom = documentHeightMM - Double(height) / pxPerMM(zoom: 1)
         for _ in 0 ..< frames {
@@ -132,16 +133,22 @@ final class OnscreenSession {
             draw(zoom: 1, originY: originY)
             work.append(surface.lastDrawTiming.workMs)
             tiles.append(surface.lastDrawTiming.rasterizedTiles)
+            readAhead.append(surface.lastDrawTiming.prefetchedTiles)
         }
-        // The slowest frames with how many tiles each rasterized: a p99 over budget reads as "two tiles in one frame"
-        // or as "one tile got slower" only with this beside it.
+        // The slowest frames with how many tiles each rasterized, visible + read ahead: a p99 over budget reads as
+        // "two tiles in one frame" or as "one tile got slower" only with this beside it. A frame that rasterized more
+        // than one visible tile is a row the read-ahead did not reach in time.
         let slowest = work.indices.sorted { work[$0] > work[$1] }.prefix(8)
-        let listed = slowest.map { String(format: "%.2f ms/%d", work[$0], tiles[$0]) }.joined(separator: ", ")
+        let listed = slowest.map {
+            String(format: "%.2f ms/%d+%d", work[$0], tiles[$0] - readAhead[$0], readAhead[$0])
+        }.joined(separator: ", ")
         let rasterizing = zip(work, tiles).filter { $0.1 > 0 }
         let perTile = rasterizing.map { $0.0 / Double($0.1) }.sorted()
         let median = perTile.isEmpty ? 0 : perTile[perTile.count / 2]
+        let crowded = zip(tiles, readAhead).count(where: { $0.0 - $0.1 > 1 })
         print(
-            "scroll: slowest frames (work/tiles) \(listed); \(rasterizing.count) frames rasterized, "
+            "scroll: slowest frames (work/visible+read-ahead tiles) \(listed); \(rasterizing.count) frames rasterized, "
+                + "\(readAhead.reduce(0, +)) tiles read ahead, \(crowded) frames with more than one visible tile; "
                 + String(format: "median %.2f ms per tile", median),
         )
         return work

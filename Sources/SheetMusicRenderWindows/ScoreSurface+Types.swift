@@ -54,7 +54,10 @@ extension ScoreSurface {
     package struct DrawTiming {
         package var workMs = 0.0
         package var presentMs = 0.0
+        /// Tiles rasterized in the frame, visible ones and `prefetchedTiles` alike.
         package var rasterizedTiles = 0
+        /// Of `rasterizedTiles`, the one read ahead of the view: only on a frame whose visible tiles were all cached.
+        package var prefetchedTiles = 0
         /// Visible tiles the frame left to the background: while the scale moves, only one missing tile is
         /// rasterized per frame.
         package var deferredTiles = 0

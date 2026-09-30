@@ -125,8 +125,14 @@ struct TileLRU<Value> {
         entries[key] != nil
     }
 
+    /// Whether `extra` more bytes stay within the budget once everything outside `keep` has been evicted for them.
+    func fits(_ extra: Int, keeping keep: Set<TileKey>) -> Bool {
+        keep.reduce(extra) { $0 + (entries[$1]?.bytes ?? 0) } <= capacityBytes
+    }
+
     /// Inserts `value` and returns what had to go to stay within the budget — never the value just inserted, and
-    /// never a key in `keep` (the tiles on screen now), even if that leaves the cache over budget.
+    /// never a key in `keep` (the tiles on screen now, and for a read-ahead its band), even if that leaves the cache
+    /// over budget.
     mutating func insert(_ key: TileKey, _ value: Value, bytes: Int, keep: Set<TileKey> = []) -> [Value] {
         clock += 1
         var evicted: [Value] = []

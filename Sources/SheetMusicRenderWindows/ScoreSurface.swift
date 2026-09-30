@@ -7,10 +7,11 @@ import SheetMusicBridgeCore
 ///
 /// Pages are rasterized into tiles (`TileGrid`) by walking only the `SystemSpan`s that cross each tile, and kept in a
 /// least-recently-drawn cache; each frame blits the visible tiles and draws the overlays (cursor, selection frames)
-/// on top. Scrolling therefore costs a blit per frame plus, now and then, a new row of tiles. While a zoom gesture runs
-/// (`Frame.isGesture`), the tiles of the last settled scale are drawn scaled, and of the tiles the view uncovers only
-/// one per frame is rasterized, the background showing where the others go; 100 ms after the gesture's last frame the
-/// visible tiles are rasterized at the new scale, all of them in that one frame.
+/// on top. Scrolling therefore costs a blit per frame plus, on frames that needed no new tile, one tile read ahead of
+/// the view (`prefetch`), so a row arrives already cached rather than rasterized all in the frame it appears. While a
+/// zoom gesture runs (`Frame.isGesture`), the tiles of the last settled scale are drawn scaled, and of the tiles the
+/// view uncovers only one per frame is rasterized, the background showing where the others go; 100 ms after the
+/// gesture's last frame the visible tiles are rasterized at the new scale, all of them in that one frame.
 ///
 /// Use it on the thread that created it — the app's UI thread. Call `draw` from `CompositionTarget.Rendering` while
 /// something moves (playback, a gesture, and until 100 ms after one ends), and otherwise only when the view changed.
@@ -36,8 +37,6 @@ public final class ScoreSurface {
     /// What the last `draw` spent: rasterizing and composing the frame (`workMs`), then in `Present`, which waits for
     /// the display (`presentMs`); how many tiles it rasterized, and how many it left out.
     package private(set) var lastDrawTiming = DrawTiming()
-
-    private typealias VisibleTile = (key: TileKey, grid: TileGrid, screenX: Double, screenY: Double)
 
     /// Loads the font files (Bravura, the Edwin faces) every walk draws with.
     public init(fontFiles: [String]) throws {
@@ -193,21 +192,8 @@ public final class ScoreSurface {
         lastDrawTiming.isScaled = scaling
 
         // Which tiles show, rasterized first: a band cannot be drawn while a frame is open.
-        var visible: [VisibleTile] = []
-        for (index, page) in pages.enumerated() where index < frame.pageOrigins.count {
-            let grid = TileGrid(page: page, pxPerMM: rasterScale)
-            let (screenX, screenY) = Self.pageOffsetPx(index, frame)
-            // The screen, in the page's pixels at the raster scale.
-            let view = PixelRect(
-                x: Int((-screenX / stretch).rounded(.down)), y: Int((-screenY / stretch).rounded(.down)),
-                width: Int((Double(widthPx) / stretch).rounded(.up)) + 1,
-                height: Int((Double(heightPx) / stretch).rounded(.up)) + 1,
-            )
-            for tile in grid.tiles(intersecting: view) {
-                let key = TileKey(page: index, column: tile.column, row: tile.row, scale: TileKey.scaleKey(rasterScale))
-                visible.append((key, grid, screenX, screenY))
-            }
-        }
+        let placed = placedPages(frame, rasterScale: rasterScale)
+        let visible = TilePlacement.visible(pages: placed, widthPx: widthPx, heightPx: heightPx, stretch: stretch)
         let onScreen = Set(visible.map(\.key))
         // While the scale moves — a gesture, and the settle delay after it — the old scale's tiles are drawn
         // stretched, and zooming out uncovers a ring of them at once: rasterizing all of those in one frame is what
@@ -220,10 +206,14 @@ public final class ScoreSurface {
             missing = [nearest]
         }
         for tile in missing {
-            if let failure = rasterize(tile.key, grid: tile.grid, keep: onScreen) { return failure }
+            if let failure = rasterize(tile.key, grid: tile.page.grid, keep: onScreen) { return failure }
         }
-        // No read-ahead while scaled: it would be at the old scale, about to be replaced.
-        if !scaling, let failure = prefetch(frame: frame, visible: visible.map { ($0.key, $0.grid) }, keep: onScreen) {
+        // Read-ahead only on a frame whose visible tiles were all cached — whatever the frame before it rasterized —
+        // so a frame never pays for a tile it shows and one it does not. None while a gesture or its settle delay
+        // runs: the tile would be at a scale about to be replaced.
+        if missing.isEmpty, !frame.isGesture, !settling,
+           let failure = prefetch(frame: frame, placed: placed, stretch: stretch, onScreen: onScreen)
+        {
             return failure
         }
         lastOriginY = frame.originMM.y
@@ -232,10 +222,10 @@ public final class ScoreSurface {
         guard hresult == 0 else { return recover(hresult) }
         for tile in visible {
             guard let band = tiles.use(tile.key) else { continue }
-            let rect = tile.grid.rect(column: tile.key.column, row: tile.key.row)
+            let rect = tile.rect
             cd2d_frame_draw_band(
-                surface, band, Float(tile.screenX + Double(rect.x) * stretch),
-                Float(tile.screenY + Double(rect.y) * stretch), Float(stretch),
+                surface, band, Float(tile.page.screenX + Double(rect.x) * stretch),
+                Float(tile.page.screenY + Double(rect.y) * stretch), Float(stretch),
             )
         }
         if let canvas = cd2d_frame_canvas(surface) {
@@ -281,32 +271,48 @@ public final class ScoreSurface {
         return nil
     }
 
+    /// Every page the frame places, with its grid at `rasterScale` and its top-left on the surface.
+    private func placedPages(_ frame: Frame, rasterScale: Double) -> [PlacedPage] {
+        var placed: [PlacedPage] = []
+        for (index, page) in pages.enumerated() where index < frame.pageOrigins.count {
+            let (screenX, screenY) = Self.pageOffsetPx(index, frame)
+            let grid = TileGrid(page: page, pxPerMM: rasterScale)
+            placed.append(PlacedPage(index: index, grid: grid, screenX: screenX, screenY: screenY))
+        }
+        return placed
+    }
+
     /// The candidate whose center lies nearest the view's, on screen; nil when there is none.
-    private func nearestToCenter(_ candidates: [VisibleTile], stretch: Double) -> VisibleTile? {
+    private func nearestToCenter(_ candidates: [PlacedTile], stretch: Double) -> PlacedTile? {
         let centerX = Double(widthPx) / 2
         let centerY = Double(heightPx) / 2
-        func distance(_ tile: VisibleTile) -> Double {
-            let rect = tile.grid.rect(column: tile.key.column, row: tile.key.row)
-            let dx = tile.screenX + (Double(rect.x) + Double(rect.width) / 2) * stretch - centerX
-            let dy = tile.screenY + (Double(rect.y) + Double(rect.height) / 2) * stretch - centerY
+        func distance(_ tile: PlacedTile) -> Double {
+            let rect = tile.rect
+            let dx = tile.page.screenX + (Double(rect.x) + Double(rect.width) / 2) * stretch - centerX
+            let dy = tile.page.screenY + (Double(rect.y) + Double(rect.height) / 2) * stretch - centerY
             return dx * dx + dy * dy
         }
         return candidates.min { distance($0) < distance($1) }
     }
 
-    /// One tile beyond the view in the direction of the scroll, when the view needed none: spreads the cost of a new
-    /// row over frames that would otherwise be idle. Never while the scale moves (`draw` does not call it then).
+    /// Reads one tile ahead, so the cost of a row scrolling into view is spread over the frames before it instead of
+    /// landing whole — every column, and at a page's end the next page's first row too — on the frame it appears.
+    /// The tile is the first missing one of `TilePlacement.nextBand`: one tile height past the view's edge in the
+    /// scroll direction (down when the origin did not move), nearest that edge, then left to right. It evicts no tile
+    /// on screen or in that band, and is skipped when the cache could not hold it beside them within its cap. `draw`
+    /// calls this only on a frame that rasterized nothing visible, outside a gesture and its settle delay.
     private func prefetch(
-        frame: Frame, visible: [(key: TileKey, grid: TileGrid)], keep: Set<TileKey>,
+        frame: Frame, placed: [PlacedPage], stretch: Double, onScreen: Set<TileKey>,
     ) -> DrawOutcome? {
-        guard !frame.isGesture, let first = visible.first, let last = visible.last else { return nil }
         let downward = frame.originMM.y >= (lastOriginY ?? frame.originMM.y)
-        let edge = downward ? last : first
-        let row = edge.key.row + (downward ? 1 : -1)
-        guard row >= 0, row < edge.grid.rows else { return nil }
-        let key = TileKey(page: edge.key.page, column: edge.key.column, row: row, scale: edge.key.scale)
-        guard !tiles.contains(key) else { return nil }
-        return rasterize(key, grid: edge.grid, keep: keep)
+        let band = TilePlacement.nextBand(
+            pages: placed, widthPx: widthPx, heightPx: heightPx, stretch: stretch, downward: downward,
+        )
+        guard let next = band.first(where: { !tiles.contains($0.key) }) else { return nil }
+        let keep = onScreen.union(band.map(\.key))
+        guard tiles.fits(next.rect.width * next.rect.height * 4, keeping: keep) else { return nil }
+        lastDrawTiming.prefetchedTiles += 1
+        return rasterize(next.key, grid: next.page.grid, keep: keep)
     }
 
     private func drawOverlay(_ overlay: Overlay, frame: Frame, canvas: OpaquePointer) {

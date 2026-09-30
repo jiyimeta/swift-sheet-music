@@ -91,6 +91,17 @@ struct TileLRUTests {
         #expect(cache.bytes == 300)
     }
 
+    @Test("a tile fits when the budget holds it beside the kept tiles")
+    func fitsBesideKept() {
+        var cache = TileLRU<Int>(capacityBytes: 300)
+        _ = cache.insert(key(0), 0, bytes: 100)
+        _ = cache.insert(key(1), 1, bytes: 100)
+        #expect(cache.fits(100, keeping: [key(0), key(1)]))
+        #expect(!cache.fits(101, keeping: [key(0), key(1)]))
+        // What is not kept can be evicted, and a kept key not in the cache costs nothing.
+        #expect(cache.fits(200, keeping: [key(0), key(5)]))
+    }
+
     @Test("replacing a key hands back the old value")
     func replaces() {
         var cache = TileLRU<Int>(capacityBytes: 1000)
