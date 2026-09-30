@@ -37,16 +37,22 @@
     ///   SM_PARITY_MAX_MEAN   — exit 1 when the mean differing share (in percent) exceeds this budget
     ///   SM_PARITY_EXPORT     — `1` also writes each score's page as `<name>-page.bin` (a `DrawProgramCodec` payload)
     ///                          and its canvas as `<name>-page.txt` ("widthPx heightPx pxPerMM offsetX offsetY"),
-    ///                          which is what the Windows renderer's probe (`windows-render-probe`) draws from
-    ///   SM_PARITY_WINDOWS_MAX_MEAN — exit 1 when the Windows renders' mean differing share against the CoreGraphics
-    ///                          walk (in percent) exceeds this budget. The same stream through a second rasterizer
-    ///                          differs only at anti-aliased edges: 0.007% on the samples (2026-09-30), so 0.1 is
-    ///                          a budget a missing or misplaced command blows through.
+    ///                          which is what the Windows renderer's probe (`windows-render-probe`) draws from. The
+    ///                          exported page is the PORTABLE one — every `.text` in the `.system` face dropped, since
+    ///                          that face is SF here and Segoe UI there — and its walk is written as
+    ///                          `<name>-drawprogram-portable.png` (`DrawProgramParity+SystemFace.swift` says why)
+    ///   SM_PARITY_WINDOWS_MAX_MEAN — exit 1 when the Windows renders' mean differing share against the portable
+    ///                          CoreGraphics walk (in percent) exceeds this budget. The same stream through a second
+    ///                          rasterizer differs only at anti-aliased edges: 0.007% on the samples before their
+    ///                          labels became system-face text (2026-09-30), so 0.1 is a budget a missing or misplaced
+    ///                          command blows through.
     ///
     /// Writes `<name>-apple.png`, `<name>-drawprogram.png` and `<name>-diff.png` per score and prints one line per
-    /// score plus a summary: the share of pixels that differ, the mean and maximum channel delta. When the output
+    /// score plus a summary: the share of pixels that differ, the mean and maximum channel delta. The walk-vs-Apple
+    /// numbers always use the FULL walk; only the Windows comparison leaves the system face out. When the output
     /// directory holds a `<name>-windows.png` — the Windows renderer's drawing of the exported page, copied back —
-    /// it is diffed against both renders too (`<name>-windows-diff.png` against the CoreGraphics walk).
+    /// it is diffed against the portable walk (`<name>-windows-diff.png`) and against the Apple renderer with the
+    /// system-face text's pixels whited out of both (`<name>-systemmask.png` shows which).
     ///
     /// Usage:
     ///   SM_PARITY=samples swift run render-previews
@@ -80,6 +86,10 @@
             }
         }
 
+        /// One Windows render against the portable walk and against the Apple renderer, with the number of pixels the
+        /// system-face mask whited out of the latter.
+        typealias WindowsRow = (vsWalk: Row, vsApple: Row, masked: Int)
+
         static func run() throws {
             let env = ProcessInfo.processInfo.environment
             guard let target = env["SM_PARITY"] else { return }
@@ -111,7 +121,7 @@
 
             let exports = env["SM_PARITY_EXPORT"] == "1"
             var rows: [Row] = []
-            var windowsRows: [(vsWalk: Row, vsApple: Row)] = []
+            var windowsRows: [WindowsRow] = []
             for (name, score) in subjects {
                 let row = try compare(
                     name: name, score: score, width: width, threshold: threshold, nudge: nudge, outDir: outDir,
@@ -184,11 +194,12 @@
                 offsetPx: offset,
             )
             if exports {
-                // The same page and the same canvas the walk above drew with, for the Windows renderer to draw.
-                try DrawProgramCodec.encode(pages: [page])
-                    .write(to: outDir.appendingPathComponent("\(name)-page.bin"))
-                try "\(apple.width) \(apple.height) \(Double(scale / ptToMM)) \(Double(offset.x)) \(Double(offset.y))\n"
-                    .write(to: outDir.appendingPathComponent("\(name)-page.txt"), atomically: true, encoding: .utf8)
+                // The same page minus its system-face text, on the same canvas the walk above drew with, for the
+                // Windows renderer to draw.
+                try exportPortablePage(
+                    page, name: name, outDir: outDir,
+                    widthPx: apple.width, heightPx: apple.height, pxPerMM: scale / ptToMM, offsetPx: offset,
+                )
             }
 
             let result = try BitmapDiff.compare(apple, program, threshold: threshold)
@@ -203,32 +214,55 @@
 
         /// The Windows renders' summary, and the gate: exit 1 when their mean differing share against the walk is
         /// above `budget` percent.
-        static func reportWindows(_ rows: [(vsWalk: Row, vsApple: Row)], budget: Double?) {
+        static func reportWindows(_ rows: [WindowsRow], budget: Double?) {
             guard !rows.isEmpty else { return }
             let vsWalk = rows.reduce(0.0) { $0 + $1.vsWalk.share } / Double(rows.count)
             let vsApple = rows.reduce(0.0) { $0 + $1.vsApple.share } / Double(rows.count)
+            // Pooled over every score's pixels, not a mean of shares: how much of the whole comparison was excluded.
+            let pixels = rows.reduce(0) { $0 + $1.vsApple.total }
+            let masked = pixels == 0 ? 0 : Double(rows.reduce(0) { $0 + $1.masked }) / Double(pixels)
             print("")
             print("windows: \(rows.count) scores, mean differing \(String(format: "%.3f", vsWalk * 100))% "
-                + "vs the CoreGraphics walk, \(String(format: "%.3f", vsApple * 100))% vs the Apple renderer")
+                + "vs the portable CoreGraphics walk, \(String(format: "%.3f", vsApple * 100))% vs the Apple renderer "
+                + "(system-face text excluded: \(String(format: "%.3f", masked * 100))% of pixels)")
             if let budget, vsWalk * 100 > budget {
                 print("windows mean differing exceeds SM_PARITY_WINDOWS_MAX_MEAN=\(budget)")
                 exit(1)
             }
         }
 
-        /// The Windows renderer's `<name>-windows.png`, when there is one, against the CoreGraphics walk (the same
-        /// command stream, so the difference is the rasterizer's) and against the Apple renderer (what a user sees on
-        /// the Mac). `nil` when the file is absent.
+        /// The Windows renderer's `<name>-windows.png`, when there is one, against the portable CoreGraphics walk (the
+        /// same command stream, so the difference is the rasterizer's) and against the Apple renderer (what a user sees
+        /// on the Mac) with the system-face text whited out of both. `nil` when the file is absent.
+        ///
+        /// An export from before the portable page has no `<name>-drawprogram-portable.png`: its Windows render drew
+        /// the full page, so it is diffed against the full walk, and nothing is masked.
         static func compareWindows(
             name: String, threshold: UInt8, outDir: URL,
-        ) throws -> (vsWalk: Row, vsApple: Row)? {
+        ) throws -> WindowsRow? {
             let windowsURL = outDir.appendingPathComponent("\(name)-windows.png")
             guard FileManager.default.fileExists(atPath: windowsURL.path) else { return nil }
             let windows = try readPNG(windowsURL)
             let walk = try readPNG(outDir.appendingPathComponent("\(name)-drawprogram.png"))
             let apple = try readPNG(outDir.appendingPathComponent("\(name)-apple.png"))
-            let vsWalk = try BitmapDiff.compare(walk, windows, threshold: threshold)
-            let vsApple = try BitmapDiff.compare(apple, windows, threshold: threshold)
+            let portableURL = outDir.appendingPathComponent("\(name)-drawprogram-portable.png")
+            let portable = try FileManager.default.fileExists(atPath: portableURL.path) ? readPNG(portableURL) : nil
+            let vsWalk = try BitmapDiff.compare(portable ?? walk, windows, threshold: threshold)
+
+            // The mask is in the walks' coordinate space, which is the Apple render's and the Windows render's too:
+            // one canvas (`<name>-page.txt`) for all four. Both images are masked before the diff, so its best-shift
+            // search compares masked images as well.
+            var appleSide = apple
+            var windowsSide = windows
+            var masked = 0
+            if let portable {
+                let mask = try systemFaceMask(full: walk, portable: portable)
+                try writePNG(mask.image, to: outDir.appendingPathComponent("\(name)-systemmask.png"))
+                appleSide = try whitened(apple, mask: mask.bits)
+                windowsSide = try whitened(windows, mask: mask.bits)
+                masked = mask.count
+            }
+            let vsApple = try BitmapDiff.compare(appleSide, windowsSide, threshold: threshold)
             try writePNG(vsWalk.image, to: outDir.appendingPathComponent("\(name)-windows-diff.png"))
             func row(_ result: BitmapDiff.Result) -> Row {
                 Row(
@@ -236,7 +270,7 @@
                     meanDelta: result.meanDelta, maxDelta: result.maxDelta, bestShift: result.bestShift,
                 )
             }
-            return (row(vsWalk), row(vsApple))
+            return (row(vsWalk), row(vsApple), masked)
         }
 
         private static func readPNG(_ url: URL) throws -> CGImage {

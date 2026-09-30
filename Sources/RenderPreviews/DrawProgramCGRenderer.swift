@@ -374,7 +374,7 @@
 
         /// Redraws `image` into a fresh premultiplied-RGBA context so both inputs are read in one known layout,
         /// whatever backing store they were made with.
-        private static func rgba(of image: CGImage) throws -> [UInt8] {
+        static func rgba(of image: CGImage) throws -> [UInt8] {
             let width = image.width
             let height = image.height
             var bytes = [UInt8](repeating: 0, count: width * height * 4)
