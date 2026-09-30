@@ -19,6 +19,7 @@
 
         private static let bold = DrawCommand.TextStyleFlag.bold
         private static let italic = DrawCommand.TextStyleFlag.italic
+        private static let semibold = DrawCommand.TextStyleFlag.semibold
         private static let neutral = DrawCommand.TextStyleFlag.none
 
         private static func styleRuns(_ commands: [DrawCommand]) -> [UInt8] {
@@ -102,38 +103,23 @@
             #expect(Self.styleRuns(out) == [Self.bold, Self.neutral])
         }
 
-        /// The tuplet digit was the one place already drawing italic, through the superseded
-        /// `italicText` opcode. It moves to the state opcode so there is one style channel and not
-        /// two.
+        /// The tuplet digit is italic through the state opcode — the one style channel since v8
+        /// removed the separate italic text run.
         @Test
-        func theTupletLabelUsesTheStateOpcodeRatherThanItalicText() {
+        func theTupletLabelUsesTheStateOpcode() {
             var out: [DrawCommand] = []
             LayoutBridge.encodeTupletBracket(
                 fromX: 0, fromY: 0, toX: 40, toY: 0, text: "3", hasBracket: true, isAbove: true,
                 sp: 7, into: &out,
             )
             #expect(Self.styleRuns(out).contains(Self.italic))
-            #expect(!out.contains { if case .italicText = $0 { true } else { false } })
-        }
-
-        /// `italicText` stays in the enum for wire stability, but nothing emits it any more. A new
-        /// emit site belongs in `setTextStyle`.
-        @Test
-        func nothingEmitsTheSupersededItalicTextOpcode() {
-            var out: [DrawCommand] = []
-            for style in [TextStyleType.tempo, .dynamics, .staffText, .glissando] {
-                LayoutBridge.emitText(
-                    text: "x", style: style, originX: 0, originY: 0, sp: 7, into: &out,
-                )
-            }
-            #expect(!out.contains { if case .italicText = $0 { true } else { false } })
         }
 
         // MARK: - Wire
 
         @Test
-        func theVersionIsSeven() {
-            #expect(DrawProgram.version == 7)
+        func theVersionIsEight() {
+            #expect(DrawProgram.version == 8)
         }
 
         /// Both encodings — the `@WireFormatChoice` one the JNI bridge uses and the flat
@@ -167,11 +153,13 @@
             #expect(decoded == [page])
         }
 
-        /// The mask is a bitmask, not an enum: both traits can be live at once, and a third costs no
-        /// wire change.
+        /// The mask is a bitmask, not an enum: traits can be live at once, and v8's third (semibold)
+        /// took the next bit rather than a new opcode.
         @Test
-        func boldAndItalicCombine() {
+        func theStyleBitsCombine() {
             #expect(Self.bold | Self.italic == 3)
+            #expect(Self.semibold == 4)
+            #expect(Self.semibold & (Self.bold | Self.italic) == 0)
             #expect(Self.neutral == 0)
         }
 

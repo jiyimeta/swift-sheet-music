@@ -414,9 +414,8 @@ extension LayoutBridge {
             sp: CGFloat(sp),
         )
         let fontSize = Double(TupletBracketGeometry.labelFontSizeSp) * sp
-        // Label — centered Edwin italic, matching Apple's tuplet digits
-        // (`drawTuplet` uses `italic: true`). Emitted as a `.setTextStyle`-wrapped `.text` since v7;
-        // `.italicText` said the same thing in a second way and is no longer used.
+        // Label — centered Edwin italic, matching Apple's tuplet digits (`drawTuplet` uses `italic: true`), emitted as
+        // a `.setTextStyle`-wrapped `.text`.
         let labelFont = LayoutFont(
             face: "Edwin", pointSize: CGFloat(fontSize),
         )

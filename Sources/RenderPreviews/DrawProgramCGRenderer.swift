@@ -88,6 +88,10 @@
                 textStyleFlags & DrawCommand.TextStyleFlag.italic != 0
             }
 
+            var isSemibold: Bool {
+                textStyleFlags & DrawCommand.TextStyleFlag.semibold != 0
+            }
+
             // swiftlint:disable:next cyclomatic_complexity function_body_length
             mutating func paint(_ command: DrawCommand) {
                 switch command {
@@ -117,8 +121,9 @@
                     fillText(
                         text, at: CGPoint(x: px(x), y: px(y)), fontSize: px(size), fontId: fontId, italic: isItalic,
                     )
-                case let .italicText(text, x, y, size, fontId):
-                    fillText(text, at: CGPoint(x: px(x), y: px(y)), fontSize: px(size), fontId: fontId, italic: true)
+                case .fillPath:
+                    // Nonzero winding, closing each open subpath — what every reader of `fillPath` does.
+                    ctx.fillPath()
                 case let .setTextStyle(flags):
                     textStyleFlags = flags
                 case let .setColor(newARGB):
@@ -156,8 +161,17 @@
             // MARK: Fonts
 
             /// The Apple renderer's own resolution (`TextCTFontCache`): the named face, with bold / italic as
-            /// symbolic traits when a face has them. SMuFL glyphs always come from Bravura.
+            /// symbolic traits when a face has them. SMuFL glyphs always come from Bravura; the system face is the
+            /// Apple provider's `systemFont(for:)` — the weight from the style flags (bold before semibold).
             func font(fontId: DrawProgram.FontID, size: CGFloat, italic: Bool) -> CTFont {
+                if fontId == .system {
+                    let weight: NSFont.Weight = isBold ? .bold : isSemibold ? .semibold : .regular
+                    let base = NSFont.systemFont(ofSize: size, weight: weight)
+                    guard italic,
+                          let slanted = NSFont(descriptor: base.fontDescriptor.withSymbolicTraits(.italic), size: size)
+                    else { return base as CTFont }
+                    return slanted as CTFont
+                }
                 let face = fontId == .smufl ? BravuraFont.familyName : "Edwin"
                 let base = CTFontCreateWithName(face as CFString, size, nil)
                 var traits: CTFontSymbolicTraits = []

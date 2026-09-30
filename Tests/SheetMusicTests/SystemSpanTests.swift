@@ -147,6 +147,31 @@ struct SystemSpanTests {
         #expect(!a.intersects(DrawRect(x: 10, y: 0, width: 5, height: 5))) // touching edges
     }
 
+    /// A filled quadrilateral (a beam) is bounded by its corners, exactly as the same path stroked is — `fillPath`
+    /// adds nothing of its own.
+    @Test("a filled path's bound holds its corners and matches the stroked path's")
+    func filledPathBounds() throws {
+        let corners: [DrawCommand] = [
+            .moveTo(x: 10, y: 20), .lineTo(x: 40, y: 18), .lineTo(x: 40, y: 18.5), .lineTo(x: 10, y: 20.5),
+        ]
+        var filled = DrawCommandBounds()
+        var stroked = DrawCommandBounds()
+        for command in corners {
+            filled.add(command)
+            stroked.add(command)
+        }
+        filled.add(.fillPath)
+        stroked.add(.stroke(width: 0.5))
+        let bound = try #require(filled.bounds)
+        #expect(bound == stroked.bounds)
+        for case let .moveTo(x, y) in corners {
+            #expect(Self.contains(bound, (x, y)))
+        }
+        for case let .lineTo(x, y) in corners {
+            #expect(Self.contains(bound, (x, y)))
+        }
+    }
+
     // MARK: - Helpers
 
     /// The points a command certainly paints at — its own coordinates, not a guess at its ink.
@@ -156,9 +181,9 @@ struct SystemSpanTests {
         case let .cubicTo(_, _, _, _, x, y): [(x, y)]
         case let .fillRect(x, y, w, h): [(x, y), (x + w, y + h)]
         case let .glyph(_, x, y, _, _): [(x, y)]
-        case let .text(_, x, y, _, _), let .italicText(_, x, y, _, _): [(x, y)]
+        case let .text(_, x, y, _, _): [(x, y)]
         case let .stretchedGlyph(_, rightEdgeX, topY, bottomY, _, _, _): [(rightEdgeX, topY), (rightEdgeX, bottomY)]
-        case .stroke, .setColor, .setRotation, .setDash, .setTextStyle: []
+        case .stroke, .fillPath, .setColor, .setRotation, .setDash, .setTextStyle: []
         }
     }
 
@@ -178,7 +203,7 @@ private struct WalkState: Equatable {
     var pivotX = 0.0
     var pivotY = 0.0
     var textStyle: UInt8 = 0
-    /// A path begun with moveTo and not yet stroked: a span must not start inside one.
+    /// A path begun with moveTo and not yet stroked or filled: a span must not start inside one.
     var pathOpen = false
 
     static func states(_ commands: ArraySlice<DrawCommand>) -> [WalkState] {
@@ -194,7 +219,7 @@ private struct WalkState: Equatable {
                 (state.rotation, state.pivotX, state.pivotY) = (radians, pivotX, pivotY)
             case let .setTextStyle(flags): state.textStyle = flags
             case .moveTo: state.pathOpen = true
-            case .stroke: state.pathOpen = false
+            case .stroke, .fillPath: state.pathOpen = false
             default: break
             }
         }

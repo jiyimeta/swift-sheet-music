@@ -160,31 +160,67 @@
             }
         }
 
+        /// The payload-free terminator: a beam's four corners closed by `fillPath`, and a second
+        /// path after it so a decoder that swallowed the case's framing would shift what follows.
         @Test
-        func italicTextRoundTrips() throws {
+        func fillPathRoundTrips() throws {
+            let page = EncodablePage(
+                widthMM: 210, heightMM: 297,
+                commands: [
+                    .moveTo(x: 10, y: 20),
+                    .lineTo(x: 40, y: 18),
+                    .lineTo(x: 40, y: 18.5),
+                    .lineTo(x: 10, y: 20.5),
+                    .fillPath,
+                    .moveTo(x: 1, y: 2),
+                    .lineTo(x: 3, y: 4),
+                    .stroke(width: 0.25),
+                ],
+            )
+            let decoded = try DrawProgramCodec.decode(DrawProgramCodec.encode(pages: [page]))
+
+            #expect(decoded == [page])
+            #expect(decoded.first?.commands[4] == DrawCommand.fillPath)
+        }
+
+        @Test
+        func systemFontRoundTrips() throws {
             let page = EncodablePage(
                 widthMM: 100, heightMM: 100,
                 commands: [
-                    .italicText(
-                        text: "3",
-                        x: 10, y: 20,
-                        size: 9,
-                        fontId: .textRoman,
-                    ),
+                    .text(text: "12", x: 10, y: 20, size: 3, fontId: .system),
+                    .glyph(codepoint: 0x41, x: 1, y: 2, size: 3, fontId: .system),
                 ],
             )
-            let encoded = DrawProgramCodec.encode(pages: [page])
-            let decoded = try DrawProgramCodec.decode(encoded)
+            let decoded = try DrawProgramCodec.decode(DrawProgramCodec.encode(pages: [page]))
 
-            #expect(decoded.count == 1)
-            if case let .italicText(s, x, y, size, fontId) = decoded[0].commands[0] {
-                #expect(s == "3")
-                #expect(x == 10)
-                #expect(y == 20)
-                #expect(size == 9)
-                #expect(fontId == .textRoman)
+            #expect(decoded == [page])
+            if case let .text(_, _, _, _, fontId) = decoded.first?.commands[0] {
+                #expect(fontId == .system)
             } else {
-                Issue.record("expected italicText opcode at index 0")
+                Issue.record("expected text opcode at index 0")
+            }
+        }
+
+        @Test
+        func semiboldStyleRoundTrips() throws {
+            let semibold = DrawCommand.TextStyleFlag.semibold
+            let italic = DrawCommand.TextStyleFlag.italic
+            let page = EncodablePage(
+                widthMM: 100, heightMM: 100,
+                commands: [
+                    .setTextStyle(flags: semibold | italic),
+                    .text(text: "Vln.", x: 10, y: 20, size: 3, fontId: .system),
+                    .setTextStyle(flags: DrawCommand.TextStyleFlag.none),
+                ],
+            )
+            let decoded = try DrawProgramCodec.decode(DrawProgramCodec.encode(pages: [page]))
+
+            #expect(decoded == [page])
+            if case let .setTextStyle(flags) = decoded.first?.commands[0] {
+                #expect(flags == semibold | italic)
+            } else {
+                Issue.record("expected setTextStyle opcode at index 0")
             }
         }
 

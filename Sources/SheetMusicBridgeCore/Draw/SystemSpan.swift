@@ -106,7 +106,9 @@ package struct DrawCommandBounds {
             include(point: (cx1, cy1), margin: Self.strokeMargin)
             include(point: (cx2, cy2), margin: Self.strokeMargin)
             include(point: (x, y), margin: Self.strokeMargin)
-        case .stroke, .setColor, .setDash, .setTextStyle:
+        // A path's points were joined as it was built, widened by the stroke margin because the walker cannot know
+        // yet whether `stroke` or `fillPath` ends it; a fill paints within its points, so that bound already holds.
+        case .stroke, .fillPath, .setColor, .setDash, .setTextStyle:
             break
         case let .fillRect(x, y, w, h):
             include(DrawRect(x: min(x, x + w), y: min(y, y + h), width: abs(w), height: abs(h)))
@@ -122,7 +124,7 @@ package struct DrawCommandBounds {
             include(DrawRect(
                 x: rightEdgeX - width, y: min(topY, bottomY), width: width, height: abs(bottomY - topY),
             ).insetBy(-Self.strokeMargin))
-        case let .text(text, x, y, size, _), let .italicText(text, x, y, size, _):
+        case let .text(text, x, y, size, _):
             let length = Double(max(text.count, 1))
             include(DrawRect(x: x - size, y: y - 1.5 * size, width: size * (length + 1), height: 2.25 * size))
         case let .setRotation(radians, pivotX, pivotY):

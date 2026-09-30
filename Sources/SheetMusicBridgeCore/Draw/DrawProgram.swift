@@ -5,11 +5,11 @@ import Wirelet
 /// boundary. Little-endian throughout. Both the Swift encoder and the Kotlin
 /// decoder must agree on the magic + version; mismatches are fail-fast.
 ///
-/// ### Wire layout (v6)
+/// ### Wire layout (v8)
 ///
 /// ```text
 /// u32 magic       = 0x534D4450 ("SMDP")
-/// u32 version     = 6
+/// u32 version     = 8
 /// i32 pageCount
 /// [page] × pageCount:
 ///     f64 widthMM
@@ -33,30 +33,36 @@ import Wirelet
 /// at the left edge of each system — a non-uniformly stretched SMuFL glyph
 /// the uniform `glyph` command can't express.
 ///
-/// v6 appended three state/style opcodes (`setRotation`, `setDash`,
-/// `italicText`, discriminators 9…11) so the bridge can draw arpeggios,
-/// glissando labels, dashed ottava lines, and italic tuplet / rehearsal
-/// text. Appending at the tail keeps existing discriminators 0…8 stable,
-/// so older streams decode unchanged on a v6 reader; the version field
-/// still gates an older decoder against a newer stream (a new opcode
-/// would otherwise be an unknown discriminator).
+/// v6 appended three state/style opcodes (`setRotation`, `setDash` and an italic text run, discriminators 9…11) so
+/// the bridge can draw arpeggios, glissando labels, dashed ottava lines, and italic tuplet / rehearsal text. Appending
+/// at the tail keeps existing discriminators 0…8 stable, so older streams decode unchanged on a v6 reader; the version
+/// field still gates an older decoder against a newer stream (a new opcode would otherwise be an unknown
+/// discriminator).
 ///
-/// v7 appended `setTextStyle` (discriminator 12), a state opcode
-/// carrying a bold / italic bitmask. Before it the wire could not say
-/// "bold" at all, so every renderer but Apple's drew MuseScore's bold
-/// roles — tempo marks, rehearsal marks, instrument-change text — in
-/// regular weight, and sized their frames from regular-weight metrics.
-/// `italicText` (11) is superseded by it and no longer emitted; it stays
-/// in the enum because removing a case renumbers nothing but deleting a
-/// wire case is still a break for any decoder that handles it.
+/// v7 appended `setTextStyle` (discriminator 12), a state opcode carrying a bold / italic bitmask. Before it the wire
+/// could not say "bold" at all, so every renderer but Apple's drew MuseScore's bold roles — tempo marks, rehearsal
+/// marks, instrument-change text — in regular weight, and sized their frames from regular-weight metrics.
+///
+/// v8 removed the italic text run v7 had superseded, so `setTextStyle` moved from 12 to 11, and appended `fillPath`
+/// (12), the fill terminator beams are drawn with. It also added `FontID.system` and the `semibold` style bit, so a
+/// text command names the face the layout measured it in. Removing a case renumbers what follows it, so the version
+/// field is what keeps a v7 reader from taking v8's discriminators 11 and 12 for its own.
 public enum DrawProgram {
     public static let magic: UInt32 = 0x534D_4450 // "SMDP"
-    public static let version: UInt32 = 7
+    public static let version: UInt32 = 8
 
+    /// The face a `glyph` / `text` / `stretchedGlyph` command is drawn in — the face the layout measured it in, which
+    /// `TextFontMapping` derives from the resolved `LayoutFont`. Weight is not part of the id; it travels in
+    /// `setTextStyle`.
+    ///
+    /// The codecs carry the raw value, and the Kotlin `FontID` enums map it by ordinal, so declaration order must
+    /// match the raw values.
     @WireFormatEnum
     public enum FontID: UInt8, Sendable, CaseIterable, Equatable {
         case textRoman = 0x00 // body text (Edwin / system serif)
         case smufl = 0x01 // music glyphs (Bravura / Edwin SMuFL)
+        /// The platform UI family — SF on Apple, Segoe UI on Windows. A reader without one draws the text face.
+        case system = 0x02
     }
 }
 
@@ -76,10 +82,10 @@ public struct EncodablePage: Sendable, Equatable {
     }
 }
 
-/// One painter command. The encoded discriminator is the case's
-/// declaration order (`moveTo` = 0 … `italicText` = 11). Reorder with
-/// care: changes here are wire-breaking across the Kotlin boundary. Only
-/// ever *append* new cases at the tail so existing discriminators hold.
+/// One painter command. The encoded discriminator is the case's declaration order (`moveTo` = 0 … `setTextStyle` =
+/// 11, `fillPath` = 12), and `DrawProgramFlat`'s opcodes mirror it. Reorder with care: changes here are wire-breaking
+/// across the Kotlin and JavaScript boundaries. Only ever *append* new cases at the tail so existing discriminators
+/// hold; removing one renumbers everything after it and needs a version bump in both encodings.
 @WireFormatChoice
 public enum DrawCommand: Sendable, Equatable {
     case moveTo(x: Double, y: Double)
@@ -137,27 +143,12 @@ public enum DrawCommand: Sendable, Equatable {
     /// `(0, 0)` clears it (solid). State opcode; reset after the dashed
     /// stroke. Used for the ottava line.
     case setDash(onMM: Double, offMM: Double)
-    /// Italic text run — same payload as `text`, but the renderer slants
-    /// the glyphs.
-    ///
-    /// SUPERSEDED by `setTextStyle` in v7 and no longer emitted. Kept so
-    /// the discriminators after it do not move, and so a renderer that
-    /// still handles it keeps compiling. A new emit site belongs in
-    /// `setTextStyle` — one style channel, not two.
-    case italicText(
-        text: String,
-        x: Double,
-        y: Double,
-        size: Double,
-        fontId: DrawProgram.FontID,
-    )
     /// Font style for every subsequent `text` and `glyph`, until the next
     /// `setTextStyle`. A state opcode, like `setColor` / `setDash` /
     /// `setRotation`: emit the style, draw, then emit `setTextStyle(0)`.
     ///
-    /// `flags` is a bitmask — bit 0 bold, bit 1 italic — rather than two
-    /// booleans, so a third trait (MuseScore styles also carry underline
-    /// and strike) costs no wire change.
+    /// `flags` is a bitmask (`TextStyleFlag`: bit 0 bold, bit 1 italic, bit 2 semibold) rather than booleans, so a
+    /// further trait (MuseScore styles also carry underline and strike) costs no wire change.
     ///
     /// This exists because the wire had no way to say "bold" at all, and
     /// MuseScore's own defaults make tempo marks, rehearsal marks and
@@ -165,13 +156,22 @@ public enum DrawCommand: Sendable, Equatable {
     /// The Apple renderer has always applied them through
     /// `ResolvedTextStyle`; every other renderer drew regular weight.
     case setTextStyle(flags: UInt8)
+    /// Fill the path built since the last `moveTo` (by `lineTo` / `cubicTo`) and end it, as `stroke` does. The
+    /// path closes implicitly and fills with the nonzero winding rule in the current `setColor`; `setDash` does not
+    /// apply. No payload, so it fits the flat encoding's fixed record — a four-corner `fillQuad` would need eight
+    /// doubles against its six slots. Beams are drawn with it (`moveTo`, three `lineTo`, `fillPath`).
+    case fillPath
 }
 
 extension DrawCommand {
-    /// Bit positions in `setTextStyle`'s mask.
+    /// Bit positions in `setTextStyle`'s mask. A reader tests each bit on its own, so one that does not know a bit
+    /// ignores it and draws the rest.
     public enum TextStyleFlag {
         public static let bold: UInt8 = 1 << 0
         public static let italic: UInt8 = 1 << 1
+        /// Weight 600. Weight precedence is bold (700) over semibold (600) over regular (400), so a mask carrying
+        /// both draws bold. A reader that ignores the bit draws regular.
+        public static let semibold: UInt8 = 1 << 2
         /// The neutral style — what a renderer starts each page in, and what an emitter restores
         /// after a styled run.
         public static let none: UInt8 = 0

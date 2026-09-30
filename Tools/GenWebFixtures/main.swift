@@ -61,7 +61,10 @@ enum GenWebFixtures {
                 ),
                 .setRotation(radians: 1.5707963267948966, pivotX: 25, pivotY: 26),
                 .setDash(onMM: 0.75, offMM: 0.25),
-                .italicText(text: "3", x: 27, y: 28, size: 29, fontId: .textRoman),
+                .setTextStyle(flags: DrawCommand.TextStyleFlag.semibold | DrawCommand.TextStyleFlag.italic),
+                .fillPath,
+                // Tail: the system face, so every FontID crosses the encoder.
+                .text(text: "12", x: 27, y: 28, size: 29, fontId: .system),
             ],
         )
     }
