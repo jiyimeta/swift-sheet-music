@@ -51,6 +51,11 @@ internal open class FakeJniBridge(
         frameForCursorCalls += cursorBytes
         return frameForCursorResult
     }
+    /**
+     * Identity — the projection of a score without repeats, which is what every fixture here describes unless
+     * it overrides this with its own unroll table.
+     */
+    override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long = notatedTick
     override fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray = countInResult
     override fun staffParams(scoreHandle: Long): ByteArray = staffParamsResult
     override fun instrumentParams(scoreHandle: Long): ByteArray = instrumentParamsResult

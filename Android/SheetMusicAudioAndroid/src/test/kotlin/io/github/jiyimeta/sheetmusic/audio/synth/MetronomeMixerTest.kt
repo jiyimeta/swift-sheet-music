@@ -121,7 +121,7 @@ class MetronomeMixerTest {
     }
 
     @Test fun transportCallsNoOpWithoutASequence() {
-        // An older native library returns no metronome SMF; the mixer then has no transport and the
+        // A failed render returns no metronome SMF; the mixer then has no transport and the
         // metronome is simply silent rather than crashing on every transport call.
         val mixer = MetronomeMixer(FakeMetronomeSynth()) { null }
         mixer.loadSequence(byteArrayOf())

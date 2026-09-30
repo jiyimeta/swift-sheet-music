@@ -34,8 +34,8 @@ package io.github.jiyimeta.sheetmusic.audio.synth
 internal class MetronomeMixer(
     val synth: SynthDriver,
     /**
-     * Builds a transport over the given click sequence, or returns null if it cannot be loaded (an older
-     * native library that renders no metronome sequence, a score with no beats). With no transport every
+     * Builds a transport over the given click sequence, or returns null if it cannot be loaded (an empty
+     * sequence from a failed render, a score with no beats). With no transport every
      * call below no-ops and the metronome is simply silent — what the engine did before it had a click
      * track at all.
      */

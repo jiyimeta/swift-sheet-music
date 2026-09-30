@@ -336,7 +336,8 @@ extension LayoutOptionsWire {
         )
     }
 
-    /// Default for the legacy no-options LayoutBridge.compute path + tests.
+    /// The options `LayoutBridge.compute(score:pageWidthMM:pageHeightMM:)` (the no-options path) lays out with, and
+    /// the default wherever an options argument is optional.
     public static var verticalDefault: LayoutOptionsWire {
         LayoutOptionsWire(
             layoutMode: 0, staffSize: 28,

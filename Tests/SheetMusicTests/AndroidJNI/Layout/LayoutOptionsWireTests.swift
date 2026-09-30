@@ -160,9 +160,8 @@
             )
             let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(decoded.lyricsVisible)
-            // `verticalDefault` feeds the legacy no-options compute path, so a
-            // 0 there would silently strip lyrics from every caller that never
-            // asked about them.
+            // `verticalDefault` feeds the no-options compute path, so a 0 there would silently strip lyrics from every
+            // caller that never asked about them.
             #expect(LayoutOptionsWire.verticalDefault.lyricsVisible)
         }
 

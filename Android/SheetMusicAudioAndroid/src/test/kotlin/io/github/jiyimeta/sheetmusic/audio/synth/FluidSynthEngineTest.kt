@@ -223,7 +223,7 @@ class FluidSynthEngineTest {
         val synth = capturedSynth!!
         synth.calls.clear()
 
-        engine.previewNoteOn(staffIndex = 1, pitch = 60, velocity = 96)
+        engine.previewNoteOn(channel = 1, pitch = 60, velocity = 96)
 
         assertTrue(synth.calls.contains("noteOn(1,60,96)"))
     }
@@ -234,7 +234,7 @@ class FluidSynthEngineTest {
         val synth = capturedSynth!!
         synth.calls.clear()
 
-        engine.previewNoteOff(staffIndex = 0, pitch = 60)
+        engine.previewNoteOff(channel = 0, pitch = 60)
 
         assertTrue(synth.calls.contains("noteOff(0,60)"))
     }

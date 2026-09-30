@@ -1130,7 +1130,7 @@ class AndroidPlaybackEngineTest {
 
     @Test
     fun `prepare survives a bridge that returns no metronome sequence`() = runTest(testDispatcher) {
-        // An older native library has no `nativeRenderMetronomeMidi`; the engine must still play, just
+        // `nativeRenderMetronomeMidi` answers empty when its render fails; the engine must still play, just
         // without a metronome, rather than failing to prepare.
         val bindings = RecordingBindings()
         val engine = preparedEngine(playerBindings = bindings)

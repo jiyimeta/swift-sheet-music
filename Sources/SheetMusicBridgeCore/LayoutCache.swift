@@ -114,7 +114,8 @@ public enum LayoutDocumentCache {
         }
     }
 
-    /// The cached document for `handle` (back-compat accessor for callers that only need the layout).
+    /// The cached document for `handle` — the accessor for callers that only need the layout; `entry(for:)` also
+    /// returns the filter context it was computed with.
     public static func value(for handle: Int64) -> LayoutDocument? {
         lock.withLock { storage[handle]?.document }
     }

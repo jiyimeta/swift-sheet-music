@@ -116,8 +116,8 @@ class AndroidPlaybackEngine internal constructor(
 
         /**
          * Returns the metronome's own SMF — the score's tempo map plus the click track — for the second
-         * player the metronome runs on. Empty when the score has no beats or the native bridge predates
-         * this entry point; the engine then plays without a metronome.
+         * player the metronome runs on. Empty when the handle is unknown or the render fails; the engine
+         * then plays without a metronome.
          */
         fun renderMetronomeMidi(scoreHandle: Long): ByteArray
 
@@ -150,12 +150,10 @@ class AndroidPlaybackEngine internal constructor(
          * between them, and it is a genuine translation only on a score whose repeats or jumps make
          * the rendered SMF longer than the notated timeline.
          *
-         * Returns -1 when the handle is unknown, the tick is negative, or the native bridge predates
-         * this entry point. The default here returns the tick unchanged for exactly that last case —
-         * identity is what the engine did before this existed, and it stays correct for every score
-         * without a repeat.
+         * Returns -1 when the handle is unknown or the tick is negative; the engine then keeps the
+         * notated tick, which is correct for every score without a repeat.
          */
-        fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long = notatedTick
+        fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long
 
         /** Returns a serialized `CountInWire` for a pre-roll starting at [cursorBytes]. */
         fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
@@ -165,9 +163,9 @@ class AndroidPlaybackEngine internal constructor(
 
         /**
          * Returns a serialized instrument-params array — one entry per
-         * deduped (part × instrument) mixer strip. Empty on an older
-         * native bridge that predates this call; [prepare] falls back to
-         * one strip per staff in that case.
+         * deduped (part × instrument) mixer strip. Empty when the handle is
+         * unknown. [prepare] treats an empty answer as one strip per staff,
+         * which is what a test double that stubs only [staffParams] gets.
          */
         fun instrumentParams(scoreHandle: Long): ByteArray
 
@@ -403,8 +401,8 @@ class AndroidPlaybackEngine internal constructor(
      * space the FluidSynth player actually traverses. End-of-score detection
      * in the poll loop compares the player tick against THIS, not the shorter
      * notated [totalTicks], so a repeat's second pass or a D.C./D.S. jump does
-     * not stop playback early. Falls back to [totalTicks] for an older native
-     * bridge that doesn't report it.
+     * not stop playback early. Equals [totalTicks] when the summary carries
+     * no fourth element (see [prepareLocked]).
      */
     private var unrolledTotalTicks: Long = 0
     /** Ticks-per-beat from the prepared score's timeline; required by export. */
@@ -568,8 +566,11 @@ class AndroidPlaybackEngine internal constructor(
             totalTicks = summary[0]
             val totalSecs = summary[1] / 1_000_000.0
             ticksPerBeat = summary[2].toInt()
-            // Native bridge appends the unrolled length as summary[3];
-            // fall back to the notated total for an older bridge.
+            // The native bridge always reports the unrolled length as
+            // summary[3]. The three-element summary is kept for the unit
+            // tests' FakeJniBridge, whose default (and most tests) report
+            // only [total, micros, ticksPerBeat] — a score without repeats,
+            // where the notated total is the unrolled one.
             unrolledTotalTicks = if (summary.size > 3) summary[3] else totalTicks
 
             val staffBytes = jniBridge.staffParams(scoreHandle)
@@ -743,8 +744,8 @@ class AndroidPlaybackEngine internal constructor(
                     liveChannel = s.liveChannel,
                     // Shared Swift derivation (part label, plus the instrument in
                     // parens for a genuine secondary instrument), matching the
-                    // iOS mixer. Falls back to a generic label if an older
-                    // bridge / the synthesized fallback left it empty.
+                    // iOS mixer. Falls back to a generic label if the
+                    // per-staff fallback strip left it empty.
                     displayName = s.displayName.ifEmpty { "Part ${s.partIndex + 1}" },
                     volume = initialVolume,
                     defaultVolume = initialVolume,
@@ -1812,9 +1813,10 @@ class AndroidPlaybackEngine internal constructor(
 
     /**
      * Decodes the raw `[InstrumentParams]` bridge payload; empty when the
-     * bridge is older (a 0-byte payload has no outer length prefix to
-     * read, unlike an ENCODED empty array — `BinaryReader` would underflow
-     * on it, so this is checked before constructing the reader).
+     * bridge answered 0 bytes (an unknown handle, or a test double that
+     * stubs only `staffParams`). A 0-byte payload has no outer length prefix
+     * to read, unlike an ENCODED empty array — `BinaryReader` would underflow
+     * on it, so this is checked before constructing the reader.
      */
     private fun decodeInstrumentParams(scoreHandle: Long): List<InstrumentParams> {
         val bytes = jniBridge.instrumentParams(scoreHandle)
@@ -1836,9 +1838,10 @@ class AndroidPlaybackEngine internal constructor(
      * `StaffParams.partIndex`, which multiple unrelated staves may share —
      * e.g. every fixture in the test suite defaults it to 0) so
      * `(partIndex, ordinal)` stays uniquely addressable, and
-     * `liveChannel = staffIndex` reproduces the pre-strip routing exactly.
-     * Triggers for an older native bridge, or a test double that only
-     * stubs `staffParams`.
+     * `liveChannel = staffIndex` routes each staff to its own channel.
+     * The native bridge always answers a real strip list for a handle that
+     * got this far; this is kept for the unit tests' FakeJniBridge, whose
+     * default stubs only `staffParams` and which most engine tests rely on.
      */
     private fun stripsOrFallback(
         decoded: List<InstrumentParams>,

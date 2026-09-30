@@ -227,10 +227,6 @@ format is versioned, and `installFontMetrics` returns `false` for a table
 written for an older one rather than engraving off it — a copy pinned in a
 host's own asset pipeline is the way that happens.
 
-This file was called `bravura.smft` before SMFT v4, which added the measured
-Edwin metrics beside Bravura's; a host still fetching the old name gets a 404
-rather than a quietly stale table.
-
 Both fonts are SIL OFL 1.1 — see `assets/Bravura.LICENSE.txt` and
 `assets/Edwin.LICENSE.txt`.
 

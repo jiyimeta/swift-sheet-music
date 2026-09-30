@@ -131,7 +131,7 @@ class AudioExporterMetronomeTest {
 
     @Test
     fun exportSkipsTheMetronomeWhenTheScoreHasNoClickSequence() = runTest {
-        // An older native bridge (or a score with no beats) yields no metronome SMF; the export must
+        // A failed render (or a score with no beats) yields no metronome SMF; the export must
         // still run, just without clicks.
         val (synths, metronome) = runExport(
             snapshot(metronomeEnabled = true, smf = byteArrayOf()),

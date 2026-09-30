@@ -490,13 +490,8 @@ object SheetMusicJNI {
      * re-address against a staff set that doesn't match the cached layout.
      *
      * Returns a `ScoreItemID` wire payload, re-addressed against the full (unfiltered) score so it can be
-     * fed straight into an edit intent — or an empty array when the handle is unknown, the layout is not
-     * cached, or the tap hit no selectable item.
-     *
-     * Exception: a tuplet hit keeps its FILTERED staff address (a pre-existing gap in the shared Swift
-     * `engineCursorForFilteredTap` re-addressing helper, not specific to this call) — building a tuplet edit
-     * intent from this handle with a hidden staff ahead of it in the same part would target the wrong staff.
-     * Note/rest hits are unaffected.
+     * fed straight into an edit intent — tuplet hits included, like notes and rests — or an empty array when
+     * the handle is unknown, the layout is not cached, or the tap hit no selectable item.
      */
     fun nativeEditingHitTest(
         scoreHandle: Long,

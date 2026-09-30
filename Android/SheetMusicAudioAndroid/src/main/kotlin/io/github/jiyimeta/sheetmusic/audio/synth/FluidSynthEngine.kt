@@ -14,9 +14,8 @@ import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
  * dense `0 until count` range. Every method here therefore gates on whether
  * [staffLoadParams] has an entry for the given channel, not on `channel <
  * channelCount` — that bound was only ever correct for the dense case.
- * Parameters are still named `staffIndex` for source compatibility, but the
- * value passed is a raw MIDI channel number (`0...15`), not necessarily this
- * staff's own array position (maximum 16 channels, matching the MIDI limit).
+ * Every `channel` parameter is a raw MIDI channel number (`0...15`), not a
+ * staff's array position (maximum 16 channels, matching the MIDI limit).
  *
  * Per-channel volume / mute / solo is implemented via MIDI CC7 (channel
  * volume) on the shared synth, so the fluid_player's default channel routing
@@ -188,73 +187,73 @@ internal class FluidSynthEngine(
     }
 
     /**
-     * Sets MIDI CC7 (channel volume) on the channel for [staffIndex] (range 0..1).
+     * Sets MIDI CC7 (channel volume) on [channel] (range 0..1).
      * Records the value in [rememberedCC7] so it can be restored after unmute.
      * If the channel is currently muted, the CC7 write is deferred — the value
      * is still stored and will be applied by [unmuteChannel].
      */
-    fun setChannelVolume(staffIndex: Int, volume: Float) {
-        if (staffLoadParams.getOrNull(staffIndex) == null) return
+    fun setChannelVolume(channel: Int, volume: Float) {
+        if (staffLoadParams.getOrNull(channel) == null) return
         val cc = (volume.coerceIn(0f, 1f) * 127).toInt()
-        rememberedCC7[staffIndex] = cc
-        if (!channelMuted[staffIndex]) {
-            synth?.cc(channel = staffIndex, controller = 7, value = cc)
+        rememberedCC7[channel] = cc
+        if (!channelMuted[channel]) {
+            synth?.cc(channel = channel, controller = 7, value = cc)
         }
     }
 
     /**
-     * Silences channel [staffIndex] via CC7=0 + allNotesOff.
+     * Silences [channel] via CC7=0 + allNotesOff.
      *
      * Captures the channel's live CC7 from the driver before silencing it, so
      * SMF-emitted volume changes are round-tripped correctly on unmute. If
      * already muted, the live CC7 snapshot is skipped to avoid overwriting the
      * value captured at the first mute.
      */
-    fun muteChannel(staffIndex: Int) {
-        if (staffLoadParams.getOrNull(staffIndex) == null) return
+    fun muteChannel(channel: Int) {
+        if (staffLoadParams.getOrNull(channel) == null) return
         // Capture the current live CC7 (may have been updated by SMF events or
         // user slider) before we zero it.
-        if (!channelMuted[staffIndex]) {
-            val liveCC7 = synth?.getCC(staffIndex, 7) ?: -1
-            if (liveCC7 >= 0) rememberedCC7[staffIndex] = liveCC7
+        if (!channelMuted[channel]) {
+            val liveCC7 = synth?.getCC(channel, 7) ?: -1
+            if (liveCC7 >= 0) rememberedCC7[channel] = liveCC7
         }
-        channelMuted[staffIndex] = true
-        synth?.cc(channel = staffIndex, controller = 7, value = 0)
-        synth?.allNotesOff(staffIndex)
+        channelMuted[channel] = true
+        synth?.cc(channel = channel, controller = 7, value = 0)
+        synth?.allNotesOff(channel)
     }
 
     /**
-     * Restores channel [staffIndex] to its last-known CC7 value.
+     * Restores [channel] to its last-known CC7 value.
      *
      * The restored value is whatever CC7 was captured at the time of mute —
      * either the SMF-emitted volume or the user's slider value. This prevents
      * unmute from snapping the volume to 127 (the mixer slider default) when
      * the SMF had previously written a different CC7.
      */
-    fun unmuteChannel(staffIndex: Int) {
-        if (staffLoadParams.getOrNull(staffIndex) == null) return
-        channelMuted[staffIndex] = false
-        synth?.cc(channel = staffIndex, controller = 7, value = rememberedCC7[staffIndex])
+    fun unmuteChannel(channel: Int) {
+        if (staffLoadParams.getOrNull(channel) == null) return
+        channelMuted[channel] = false
+        synth?.cc(channel = channel, controller = 7, value = rememberedCC7[channel])
     }
 
     /**
-     * Changes the instrument program on [staffIndex]'s channel at runtime.
+     * Changes the instrument program on [channel] at runtime.
      *
      * Uses the soundfont id and bank captured during [setupStaves] so the caller
      * only needs to supply the new GM program number (0–127).
      * Out-of-range [program] values are clamped to [0, 127].
      * No-ops if [setupStaves] has not been called, if the sfid is invalid, or if
-     * [staffIndex] is a channel this instance never configured (see the
+     * [channel] is a channel this instance never configured (see the
      * class doc on why that is not the same as "outside `[0, channelCount)`").
      */
-    fun setStaffProgram(staffIndex: Int, program: Int) {
-        val params = staffLoadParams.getOrNull(staffIndex) ?: return
+    fun setStaffProgram(channel: Int, program: Int) {
+        val params = staffLoadParams.getOrNull(channel) ?: return
         if (loadedSfid < 0) return
         val s = synth ?: return
         val clamped = program.coerceIn(0, 127)
         s.programSelect(
             sfid = loadedSfid,
-            channel = staffIndex,
+            channel = channel,
             bank = params.effectiveBank,
             program = clamped,
         )
@@ -277,14 +276,14 @@ internal class FluidSynthEngine(
         }
     }
 
-    /** Fires noteOn on [staffIndex]'s channel. */
-    fun previewNoteOn(staffIndex: Int, pitch: Int, velocity: Int) {
-        synth?.noteOn(staffIndex, pitch, velocity)
+    /** Fires noteOn on [channel]. */
+    fun previewNoteOn(channel: Int, pitch: Int, velocity: Int) {
+        synth?.noteOn(channel, pitch, velocity)
     }
 
-    /** Fires noteOff on [staffIndex]'s channel. */
-    fun previewNoteOff(staffIndex: Int, pitch: Int) {
-        synth?.noteOff(staffIndex, pitch)
+    /** Fires noteOff on [channel]. */
+    fun previewNoteOff(channel: Int, pitch: Int) {
+        synth?.noteOff(channel, pitch)
     }
 
     /** Sends allNotesOff to every configured channel (may be sparse — see class doc). */
