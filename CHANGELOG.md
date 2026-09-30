@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-09-30
+
 ### Added
 
 - **`PDFExporter.export(document:sheets:score:options:)` prints pages the host already laid out.** A host whose
