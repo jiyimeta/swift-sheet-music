@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/jiyimeta/swift-sheet-music/actions/workflows/ci.yml/badge.svg)](https://github.com/jiyimeta/swift-sheet-music/actions/workflows/ci.yml)
 [![Swift](https://img.shields.io/badge/Swift-6.2%2B-orange.svg)](https://swift.org)
-[![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20Android-blue.svg)](#installation)
+[![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20Android%20%7C%20Windows-blue.svg)](#installation)
 [![SwiftPM](https://img.shields.io/badge/SwiftPM-compatible-brightgreen.svg)](#installation)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -16,7 +16,10 @@ Swift, with no direct runtime dependency on the MuseScore application.
 A subset of the package (parsing, model, MIDI, layout, audio types)
 cross-compiles to Android via the Swift 6.3 official Android SDK and
 is consumable from Kotlin through a Gradle module that ships as an
-`.aar`. See [Android](#android) below.
+`.aar`. See [Android](#android) below. The same subset builds natively
+on Windows (x64), where two Windows-only libraries draw a score with
+Direct2D and play it through FluidSynth and WASAPI. See
+[Windows](#windows).
 
 > **Status:** unofficial. Not affiliated with MuseScore Limited / Muse Group,
 > nor with Apple's `MusicKit` framework (which is for Apple Music integration).
@@ -25,32 +28,37 @@ is consumable from Kotlin through a Gradle module that ships as an
 
 The package is split into focused libraries; pick what you need. The
 "Android" column marks targets that cross-compile cleanly to the
-Swift Android SDK; the rest are Apple-only.
+Swift Android SDK, and the "Windows" column the targets that build on
+a Windows host. The two `…Windows` products at the end are
+Windows-only; every other unmarked target is Apple-only.
 
-| Product | Android | Contents |
-|---|:---:|---|
-| `SheetMusic` | ✓ | **Umbrella.** Re-exports `Core` + `MSCX` + `MusicXML` + `MIDI` + a small convenience façade. Most format-only consumers want this. |
-| `SheetMusicCore` | ✓ | Score data model (Score, Part, Measure, Voice, Note, Chord, …) and the shared `SheetMusicError`. No format I/O. |
-| `SheetMusicMSCX` | ✓ | MuseScore file I/O: `.mscx` / `.mscz` read + write, including brackets, harmony / chord symbols, articulations, ornaments, MS3-compatibility export (`MSCXEncoderOptions(targetVersion: .v3)`). |
-| `SheetMusicMusicXML` | ✓ | MusicXML import: `.musicxml` plain XML + `.mxl` zipped containers. |
-| `SheetMusicMIDI` | ✓ | In-memory MIDI model, score → MIDI rendering, Standard MIDI File read + write. |
-| `SheetMusicLoader` | ✓ | Single format-dispatch entry point: bytes → `Score` across `.mscx` / `.mscz` / `.musicxml` / `.mxl`. Exported so consumers that parse score files themselves (e.g. Android JNI libraries) never re-spell the format table. |
-| `SheetMusicLayout` | ✓ | Pure-geometry layout engine. Foundation-only, no Apple frameworks. Talks to glyphs through a `FontMetricsProvider` DI seam so Apple hosts can wire CoreText and Android hosts can install a Bravura-measured SMuFL metrics table. |
-| `SheetMusicAudioCore` | ✓ | Foundation-only audio value types (`PlaybackTimeline`, `MetronomeBeat`, `GMInstrument`, `MixerChannel`, `LoopRange`, `PlaybackState`, `AudioFileFormat`, …) shared between the Apple and Android playback engines. |
-| `SheetMusicEditWire` | ✓ | The one declaration of the edit wire: `EditIntentCodec` turns an `EditIntent` into TLV bytes and back, alongside the codecs for the identity and geometry types an intent names. For a host that has to put an edit on a wire rather than apply it locally — an Android mirror session, the browser bridge, a networked peer replicating an edit. The choice indices are append-only; see [Contributing](CONTRIBUTING.md). |
-| `SheetMusicZip` | ✓ | `ZipWriter` / `ZipReader` / `ZipCompressionMethod`, for a host that must write a zip which is not an `.mscz` and so has no `.mscx` to hand `MSCZWriter`. Apple uses `Compression`; Linux and Android link the system libz; the WebAssembly build uses a vendored raw-DEFLATE subset. |
-| `SheetMusicLayoutApple` |   | CoreText-backed `FontMetricsProvider` for `SheetMusicLayout`. Auto-installed by `SheetMusicUI` and `SheetMusicPDF`. |
-| `SheetMusicUI` |   | SwiftUI read-only notation viewer (iOS 17+ / macOS 14+ / tvOS 17+). Bundles Bravura SMuFL font (SIL OFL). |
-| `SheetMusicAudio` |   | Apple-only audio umbrella. Re-exports `SheetMusicAudioCore` + `SheetMusicAudioApple`. |
-| `SheetMusicAudioApple` |   | AVAudioEngine-backed `PlaybackEngine` + audio-file export. Two multi-timbral AUMIDISynth units (melodic + percussion) behind an injectable `SynthBackend` seam, `SoundfontResolver` protocol, single-note preview, timeline-driven playback with chord-by-chord cursor via `PlaybackEngine.currentCursor`. |
-| `SheetMusicAudioSwiftySynth` |   | Pure-Swift SoundFont2 `SynthBackend` (via [SwiftySynth](https://github.com/jiyimeta/swiftysynth)) — the default stealing-free synth for `PlaybackEngine`. |
-| `SheetMusicPDF` | ✓ | PDF import via a pure-Swift reader (all platforms, including Android) + PDF export (Apple-only, iOS 17+ / macOS 14+). Import reads the PDF's vector content; add `SheetMusicOMRModel` for scanned pages. Export reuses `SheetMusicUI`'s layout + drawing pipeline through an `ImageRenderer` → `CGPDFContext` bridge, so glyphs stay vector. |
-| `SheetMusicOMRModel` |   | The bundled optical music recognition model (~1.1 MB, compiled Core ML) that lets `SheetMusicPDF` read **scanned** (image-only) PDFs. Opt-in: `SheetMusicPDF` never depends on it, so a consumer that reads only typeset PDFs carries none of it. See [Scanned PDFs](#scanned-pdfs-omr). |
+| Product | Android | Windows | Contents |
+|---|:---:|:---:|---|
+| `SheetMusic` | ✓ | ✓ | **Umbrella.** Re-exports `Core` + `MSCX` + `MusicXML` + `MIDI` + a small convenience façade. Most format-only consumers want this. |
+| `SheetMusicCore` | ✓ | ✓ | Score data model (Score, Part, Measure, Voice, Note, Chord, …) and the shared `SheetMusicError`. No format I/O. |
+| `SheetMusicMSCX` | ✓ | ✓ | MuseScore file I/O: `.mscx` / `.mscz` read + write, including brackets, harmony / chord symbols, articulations, ornaments, MS3-compatibility export (`MSCXEncoderOptions(targetVersion: .v3)`). |
+| `SheetMusicMusicXML` | ✓ | ✓ | MusicXML import: `.musicxml` plain XML + `.mxl` zipped containers. |
+| `SheetMusicMIDI` | ✓ | ✓ | In-memory MIDI model, score → MIDI rendering, Standard MIDI File read + write. |
+| `SheetMusicLoader` | ✓ | ✓ | Single format-dispatch entry point: bytes → `Score` across `.mscx` / `.mscz` / `.musicxml` / `.mxl`. Exported so consumers that parse score files themselves (e.g. Android JNI libraries) never re-spell the format table. |
+| `SheetMusicLayout` | ✓ | ✓ | Pure-geometry layout engine. Foundation-only, no Apple frameworks. Talks to glyphs through a `FontMetricsProvider` DI seam so Apple hosts can wire CoreText, Android hosts can install a Bravura-measured SMuFL metrics table, and Windows hosts install the same table plus DirectWrite for the system face. |
+| `SheetMusicAudioCore` | ✓ | ✓ | Foundation-only audio value types (`PlaybackTimeline`, `MetronomeBeat`, `GMInstrument`, `MixerChannel`, `LoopRange`, `PlaybackState`, `AudioFileFormat`, `MixLevel`, `MasterOutputStage`, …) shared between the Apple, Android and Windows playback engines. |
+| `SheetMusicEditWire` | ✓ | ✓ | The one declaration of the edit wire: `EditIntentCodec` turns an `EditIntent` into TLV bytes and back, alongside the codecs for the identity and geometry types an intent names. For a host that has to put an edit on a wire rather than apply it locally — an Android mirror session, the browser bridge, a networked peer replicating an edit. The choice indices are append-only; see [Contributing](CONTRIBUTING.md). |
+| `SheetMusicZip` | ✓ | ✓ | `ZipWriter` / `ZipReader` / `ZipCompressionMethod`, for a host that must write a zip which is not an `.mscz` and so has no `.mscx` to hand `MSCZWriter`. Apple uses `Compression`; Linux and Android link the system libz; the WebAssembly and Windows builds use a vendored raw-DEFLATE subset. |
+| `SheetMusicLayoutApple` |   |   | CoreText-backed `FontMetricsProvider` for `SheetMusicLayout`. Auto-installed by `SheetMusicUI` and `SheetMusicPDF`. |
+| `SheetMusicUI` |   |   | SwiftUI read-only notation viewer (iOS 17+ / macOS 14+ / tvOS 17+). Bundles Bravura SMuFL font (SIL OFL). |
+| `SheetMusicAudio` |   |   | Apple-only audio umbrella. Re-exports `SheetMusicAudioCore` + `SheetMusicAudioApple`. |
+| `SheetMusicAudioApple` |   |   | AVAudioEngine-backed `PlaybackEngine` + audio-file export. Two multi-timbral AUMIDISynth units (melodic + percussion) behind an injectable `SynthBackend` seam, `SoundfontResolver` protocol, single-note preview, timeline-driven playback with chord-by-chord cursor via `PlaybackEngine.currentCursor`. |
+| `SheetMusicAudioSwiftySynth` |   |   | Pure-Swift SoundFont2 `SynthBackend` (via [SwiftySynth](https://github.com/jiyimeta/swiftysynth)) — the default stealing-free synth for `PlaybackEngine`. |
+| `SheetMusicPDF` | ✓ | ✓ | PDF import via a pure-Swift reader (all platforms, including Android and Windows) + PDF export (Apple-only, iOS 17+ / macOS 14+). Import reads the PDF's vector content; add `SheetMusicOMRModel` for scanned pages. Export reuses `SheetMusicUI`'s layout + drawing pipeline through an `ImageRenderer` → `CGPDFContext` bridge, so glyphs stay vector. |
+| `SheetMusicOMRModel` |   |   | The bundled optical music recognition model (~1.1 MB, compiled Core ML) that lets `SheetMusicPDF` read **scanned** (image-only) PDFs. Opt-in: `SheetMusicPDF` never depends on it, so a consumer that reads only typeset PDFs carries none of it. See [Scanned PDFs](#scanned-pdfs-omr). |
+| `SheetMusicRenderWindows` |   | ✓ | Windows-only. `ScorePages` lays a score out into pages and `ScoreSurface` draws them onto a composition swap chain for a XAML `SwapChainPanel` through Direct2D + DirectWrite; `installWindowsFontMetrics(tableBytes:)` sets up the layout's font metrics. See [Windows](#windows). |
+| `SheetMusicAudioWindows` |   | ✓ | Windows-only. `WindowsPlaybackEngine`: the Apple `PlaybackEngine`'s operations over FluidSynth + WASAPI, following the default output device. Links the FluidSynth DLL. See [Windows](#windows). |
 
 Android playback is delivered out-of-band as the
 `io.github.jiyimeta:sheet-music-audio-android` Kotlin Gradle module
 (`Android/SheetMusicAudioAndroid/`), which wraps FluidSynth + Oboe.
-See [Android](#android).
+See [Android](#android). Windows playback is `SheetMusicAudioWindows`
+above; see [Windows](#windows).
 
 ### SoundFonts
 
@@ -137,6 +145,7 @@ repository URL. Requires Swift 6.2+ / Xcode 16+.
 | tvOS | 17 | model, formats, MIDI, layout, SwiftUI, audio (no PDF) |
 | watchOS | 10 | model, formats, MIDI, layout (UI / audio / PDF are iOS / macOS / tvOS only) |
 | Android | API 28 | Foundation-only subset (Core / MSCX / MusicXML / MIDI / Loader / Layout / AudioCore / EditWire / PDF import of typeset PDFs; scanned-PDF reading is Apple-only) via the Swift Android SDK + Kotlin AAR — see [Android](#android) |
+| Windows | 10 (22H2) and later, x64 | the same Foundation-only subset as Android, plus on-screen drawing (`SheetMusicRenderWindows`) and playback (`SheetMusicAudioWindows`); no PDF export, audio-file export or scanned-PDF reading — see [Windows](#windows) |
 
 ## Example
 
@@ -449,6 +458,120 @@ and breath marks by about 1.2 staff spaces — the table carries each
 face's own ascent and descent, and the stub guesses them — and sizes
 every lyric, harmony and rehearsal-mark frame off bucket-average
 advances rather than the font's own.
+
+## Windows
+
+The Foundation-only subset Android builds (Core / MSCX / MusicXML /
+MIDI / Loader / Layout / AudioCore / EditWire / Zip / PDF import)
+builds natively on a Windows host. There is nothing to cross-compile
+and no environment variable to set: the manifest sees the host. Two
+Windows-only products add what a Windows app needs to show and play a
+score:
+
+| Product | Contents |
+|---|---|
+| `SheetMusicRenderWindows` | `ScorePages`: a score laid out per `ScorePageOptions` and cut into pages, and the same pages with a selection tinted. `ScoreSurface`: those pages on a composition swap chain, rasterized into tiles from each system's commands and blitted every frame with the app's overlays (cursor, selection) on top; rebuilt after a device loss. `installWindowsFontMetrics(tableBytes:)`. `Direct2DPageRenderer.renderPNG(pages:page:pxPerMM:fontFiles:to:)` for one page as a PNG. Direct2D + DirectWrite. |
+| `SheetMusicAudioWindows` | `WindowsPlaybackEngine`: the Apple `PlaybackEngine`'s operations under the same names — prepare / replace the score / reload the SoundFont, transport, loops, rate / transposition / tuning, the mixer with its metronome strip, master gain and output stage, level monitoring, note previews — plus events for the end of the score and a lost / recovered output device. FluidSynth + WASAPI; follows the default output device. |
+
+Not on Windows in 4.0.0: PDF export and scanned-PDF reading (Apple-only,
+as on Android), audio-file export, and arm64.
+
+### Requirements
+
+- **Windows 10 (22H2) or later on x64.** Releases are verified on Windows 10 Pro 22H2; Windows 11 is expected to work but is not what the gate runs on. arm64 has not been built or tested.
+- **The swift.org Swift 6.3.3 toolchain** for Windows
+  ([install](https://www.swift.org/install/windows/)), with the Visual
+  Studio components its installer asks for (the MSVC x64 build tools
+  and a Windows SDK). Direct2D, DirectWrite, Direct3D 11, WIC and
+  WASAPI come with the Windows SDK; drawing needs nothing else.
+- **FluidSynth**, for `SheetMusicAudioWindows` only — below.
+
+### FluidSynth
+
+`SheetMusicAudioWindows` links FluidSynth 2 dynamically, as the Android
+module does. Use the official Windows release zip in its `cpp11` flavor
+(x64, no glib; verified with 2.6.1), unpack it, and pass its `include`
+and `lib` directories to every build of a package that depends on
+`SheetMusicAudioWindows`:
+
+```powershell
+$fluidsynth = 'C:\fluidsynth'   # the unpacked release zip
+swift build -Xcc "-I$fluidsynth\include" -Xlinker "-L$fluidsynth\lib"
+```
+
+The target links the zip's import library, `libfluidsynth-3`. At run
+time `libfluidsynth-3.dll` and the DLLs it depends on from the zip's
+`bin` directory must sit beside your executable (or on `PATH`).
+FluidSynth is LGPL 2.1 and is linked as a DLL, never statically; ship
+its license text alongside it.
+
+### What the host does
+
+1. **Font metrics, once, before the first layout.** Call
+   `installWindowsFontMetrics(tableBytes:)` with the bytes of
+   `sheet-music.smft`, the table the web package ships
+   (`Web/sheet-music-web/assets/sheet-music.smft`, generated by
+   `Tools/GenFontMetrics`). It installs the table for Bravura and Edwin
+   and measures Segoe UI — the face notation labels are laid out and
+   drawn in on Windows — with DirectWrite, so a label ends where the
+   layout anchored it.
+2. **Layout.** `ScorePages.compute(score:pageWidthMM:pageHeightMM:options:)`
+   lays the score out per a `ScorePageOptions` — the mode (vertical,
+   horizontal or page), the staff size, hidden staves, clef overrides,
+   transposition and the rest of what the Android bridge takes,
+   typed, `nil` where it means "the engine's own" — and cuts it
+   into pages. It keeps the `LayoutDocument` and the filtered score it
+   laid out, and `tinted(argb:ids:)` gives the same pages with a
+   selection drawn in a color, without laying the score out again.
+   The pages' draw commands stay inside the package.
+3. **Drawing.** Create a `ScoreSurface(fontFiles:)` with `Bravura.otf`
+   and the four Edwin faces — roman, italic, bold and bold italic,
+   since bold and italic are never synthesized. All five are SIL OFL
+   and in this repository (`Sources/SheetMusicLayoutApple/Fonts/Resources/`,
+   `Examples/Apple/SheetMusicExample/Resources/Fonts/`); Segoe UI comes
+   from the system. `attach(widthDIP:heightDIP:compositionScaleX:compositionScaleY:)`
+   returns an `IDXGISwapChain1` holding a reference: pass it to your
+   `SwapChainPanel`'s `ISwapChainPanelNative::SetSwapChain`, then
+   release it. Forward `SizeChanged` and `CompositionScaleChanged` to
+   `resize(…)`, and hand the `ScorePages` to `setPages(_:)` — again
+   after an edit or a new tint: pages of the same count and sizes redraw
+   only the systems that changed. Call `draw(_:)` with a
+   `ScoreSurface.Frame` — `pxPerMM` (zoom × composition scale × 96 /
+   25.4), the document origin, each page's origin and overlays such as
+   the playback cursor (`.fillRect` / `.strokeRect` on a `PageRectMM`,
+   in the page's millimetres) — from `CompositionTarget.Rendering`
+   while something moves, and otherwise only when the view changes.
+   `.deviceRecreated(newSwapChain:)` means the device was lost and
+   rebuilt: attach the new swap chain the same way. Use a surface on
+   the UI thread that created it. The package itself does not depend
+   on the Windows App SDK.
+4. **Playback.** `WindowsPlaybackEngine(soundfontResolver:metronomeClickProvider:)`
+   takes the same calls as the Apple `PlaybackEngine` —
+   `prepare(score:)`, `play(from:in:countIn:)`, `seek(to:)`,
+   `setLoop(from:to:)`, `setRate(_:)`, the mixer — from one thread. The
+   score plays through the resolver's `defaultGMSoundfontURL`, one
+   General MIDI `.sf2`. `onEvent` (the end of the score, the output
+   device lost and recovered) and the level-monitoring handler run on
+   the audio thread: hop to the UI before touching anything.
+
+### How releases are verified
+
+There is no Windows CI. Before a release, a manual gate runs on a
+Windows machine (x64, 2-core Core i5):
+
+- the whole package's build and tests;
+- renderer parity against the Mac: the 30 sample scores drawn by
+  Direct2D and by the Mac's CoreGraphics walk of the same pages;
+- scripted playback checks (`windows-playback-probe`): drift against
+  the rendered audio, seeks, loops, rate, count-in, mixer read-backs
+  and a forced device loss;
+- the on-screen frame budget (`windows-render-probe --onscreen`): first
+  frame, scroll, zoom, a 60 fps playback cursor, memory at 200 %, the
+  tiled frame against an untiled render, and a forced device loss.
+
+The two probes are declared only when
+`SWIFT_SHEET_MUSIC_WINDOWS_PROBES=1` is set, so a package that depends
+on this one builds neither.
 
 ## Coverage
 

@@ -7,6 +7,227 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-10-01
+
+Windows joins the supported platforms, the draw program moves to wire v8, and the compatibility shims 3.x kept are
+gone. Every source change a host may need is under Changed and Removed, each with who it affects and what to do.
+
+### Added
+
+- **Windows (x64) is a supported platform.** On a Windows host with the swift.org Swift 6.3.3 toolchain the package
+  builds the Apple-free shape Android builds — Core, MSCX, MusicXML, MIDI, Loader, Layout, AudioCore, EditWire, Zip
+  and PDF import — and its tests pass there. Two Windows-only products draw and play a score:
+  `SheetMusicRenderWindows` (Direct2D + DirectWrite) and `SheetMusicAudioWindows` (FluidSynth + WASAPI). The manifest
+  recognizes a Windows host by itself; no environment variable is needed. The README's Windows section covers the
+  toolchain, the FluidSynth DLL and what a host calls.
+- **`ScoreSurface` draws draw-program pages on screen** (`SheetMusicRenderWindows`). Its `attach` creates a
+  composition swap chain for the app's XAML `SwapChainPanel` — the app hands it to
+  `ISwapChainPanelNative::SetSwapChain` — sized in physical pixels, so text and lines are not stretched at 150 % or
+  200 %, and `resize` follows the panel's size and composition scale. A score's `ScorePages` (`setPages(_:)`) are
+  rasterized into tiles by walking only the systems that cross each tile, and kept in a 64 MB least-recently-drawn
+  cache; each `draw(_:)` blits the visible tiles and draws the frame's overlays — a playback cursor, selection
+  frames: `.fillRect` / `.strokeRect` on a `PageRectMM` — on top. `setPages(_:)` with pages of the same count and
+  sizes as those shown (a selection tint, an edit that kept the pagination) drops only the tiles the changed systems
+  reach. While a zoom gesture runs (`Frame.isGesture`) the settled tiles are drawn scaled, and 100 ms after its last
+  frame they are rasterized at the new scale. When the device is lost the surface rebuilds it and its tiles, and
+  `draw(_:)` returns `.deviceRecreated(newSwapChain:)` for the app to attach again. Use a surface on the thread that
+  created it.
+  Measured in a release build on a 2-core Core i5 at a display scale of 2: first frame 21.6 ms, scroll p99 14.6 ms,
+  zoom-gesture p99 6.6 ms, settle 35.8 ms.
+- **`ScorePages.compute(score:pageWidthMM:pageHeightMM:options:)` lays a score out for `ScoreSurface`**
+  (`SheetMusicRenderWindows`), per a `ScorePageOptions`: the display options the Android bridge takes, typed —
+  the mode (`.vertical`, `.horizontal`, `.page`), the staff size, hidden staves and clef overrides by `StaffAddress`,
+  transposition, lyrics, the `LayoutBreakPolicy`, multi-measure rests, the `MeasureNumberPolicy`, the system gap,
+  the title block, the grace and small note sizes and the engraving spacing — with `nil` where those options mean
+  "the engine's own". `ScorePageOptions.default` is what the portable bridges lay out with when given no options. The
+  result keeps the `LayoutDocument` and the filtered score, and `tinted(argb:ids:)` re-encodes the same pages with a
+  selection drawn in a color, as Android's selection re-encode does. The pages' draw commands stay inside the
+  package: no public signature in `SheetMusicRenderWindows` names a type of `SheetMusicBridgeCore`, which is not a
+  product.
+- **`Direct2DPageRenderer.renderPNG(pages:page:pxPerMM:fontFiles:to:)` writes one page to a PNG** through the same
+  walker — a thumbnail, an image export. The same walk is how the parity gate compares Windows with the Mac: over
+  the 30 sample scores, the Direct2D pages differ from the Mac's CoreGraphics walk of the same pages by 0.004 % of
+  pixels on average.
+- **`installWindowsFontMetrics(tableBytes:)` installs the layout's font metrics on Windows.** It installs
+  `sheet-music.smft` (the measured Bravura and Edwin table the web and Android packages ship) and measures the
+  platform UI face — Segoe UI, which notation labels are laid out and drawn in on Windows — with DirectWrite, through
+  the same text layout the renderer draws with, so a right-aligned part label ends where the layout anchored it
+  (within 0.5 px, checked on Windows). Call it once, before the first layout. It throws when the bytes do not decode
+  or Segoe UI cannot be resolved.
+- **`WindowsPlaybackEngine` plays a score with the Apple `PlaybackEngine`'s operations, under the same names and
+  argument labels** (`SheetMusicAudioWindows`):
+  - preparing: `prepare(score:)`, `replaceScore(with:)`, `reloadSoundfont(resolver:)`, `teardown()`;
+  - transport: `play(from:in:countIn:)`, `pause()`, `stop()`, `seek(to:)`, `seek(toTimeSeconds:)`, `skip(by:)`;
+  - loops: `setLoop(from:to:)`, `setLoop(from:throughEndOf:)`, `clearLoop()`;
+  - speed and pitch: `setRate(_:)`, `setTranspose(semitones:)`, `setMasterTuning(cents:)`;
+  - mixer: `setVolume`, `setMuted`, `setSoloed` and `setProgram(forChannel:to:)` over `mixerChannels`, the metronome
+    strip included; `setMasterGain(_:)`, `setMasterOutputStage(_:)`, `startLevelMonitoring(_:)` /
+    `stopLevelMonitoring()`;
+  - previews: `playPreview(noteID:in:duration:velocity:)`, `previewNoteOn(pitch:onStaff:velocity:atTick:)`,
+    `previewNoteOff(pitch:)`;
+  - state: `state`, `currentCursor`, `currentTimeSeconds`, `totalTimeSeconds`, `loopRange`, `diagnostics`, and
+    `onEvent` for what happens without a call — the end of the score, the output device lost and recovered.
+
+  FluidSynth renders — the score and the metronome each on a synth driven by FluidSynth's own MIDI player, as on
+  Android — and WASAPI plays in shared mode. The count-in's handover, the loop's wrap, the end of the score and a
+  preview's note-off are decided on the audio thread between 64-frame chunks, so none of them waits on the UI thread.
+  The output follows the default device: a device change or loss reopens the stream on the current default at the
+  engine's rate, keeping the state and the position, and an engine made with no device at all works and stays silent
+  until one appears. The score plays through the resolver's `defaultGMSoundfontURL`, one General MIDI SoundFont.
+  Controls come from one thread; `onEvent` and the level handler run on the audio thread. On the Windows machine the
+  scripted playback checks — drift, seeks, loops, rate, count-in, mixer read-backs, a forced device loss — pass 52 of
+  52, with no underruns.
+- **The layout bridge returns each page's commands with a span per system** (`LayoutBridge.computePages`, in the
+  package-internal `SheetMusicBridgeCore`; what `ScorePages` is built on): the system's contiguous range of the
+  page's commands and a frame holding everything those commands paint, spanners that reach past the system included.
+  A renderer that draws a page in pieces walks only the systems crossing a piece, and a span walked alone from the
+  default state paints what the full walk paints there. `computeWithDocument`'s bytes are unchanged.
+- **`MasterTuning.effectiveCents(tuning:transposeSemitones:isPercussion:)`**: the cents a channel is retuned by — the
+  A4 calibration plus the transposition on a melodic channel, the calibration alone on percussion. The Apple and
+  Windows engines both call it.
+- **Draw program wire v8** (the format change itself is under Changed): `DrawCommand.fillPath`,
+  `DrawProgram.FontID.system` and `DrawCommand.TextStyleFlag.semibold`; on the web `fillPath`, `FontId.system` and
+  `TEXT_STYLE_SEMIBOLD`; in Kotlin `DrawCommand.FillPath`, `FontID.SYSTEM` and `TextStyleFlag.SEMIBOLD`. Every
+  draw-program reader — Direct2D, Compose, the web canvas and the Mac parity walk — now fills sloped beams with the
+  corners the Apple renderer uses, and the Windows renderer draws notation labels in Segoe UI Semibold where the
+  Apple renderer uses the system semibold. Over the 30 sample scores the Windows pages now differ from the Apple
+  renderer by 0.521 % of pixels on average, the notation labels' ink excluded since the two platforms' system faces
+  differ by design; with 3.x's wire it was 1.117 %.
+
+### Changed
+
+- **`MixLevel` and `MasterOutputStage` moved from `SheetMusicAudioApple` to `SheetMusicAudioCore`**, which the
+  Windows engine shares. Affects code that imports `SheetMusicAudioApple` directly and names either type; the
+  `SheetMusicAudio` umbrella re-exports both modules, so its users are unaffected. Migrate:
+  `import SheetMusicAudioCore`.
+- **`ScoreReplacementOutcome` moved from `SheetMusicAudioApple` to `SheetMusicAudioCore`** (the Windows engine's
+  `replaceScore(with:)` returns it too). Affects the same code as the entry above. Migrate:
+  `import SheetMusicAudioCore`.
+- **`WindowsPlaybackEngine` (Windows only) now mirrors the Apple `PlaybackEngine`'s operations**, and the surface it
+  had on the `windows-support` branch before this release is gone: `init(soundFontPath:)`, `load(_:)`, `play()`,
+  `position`, `totalPlayerSeconds`, `isAtEnd`, `isRunning` and `channelPrograms`. Affects anything written against
+  that probe-stage surface; no earlier release shipped it. Migrate: `init(soundfontResolver:metronomeClickProvider:)`,
+  `prepare(score:)`, `play(from:in:countIn:)`, `currentCursor`, `currentTimeSeconds`, `state`, `onEvent`.
+- **`SynthBackend` no longer supplies defaults for `play(afterCountInSeconds:)`, `setMetronomeVolume(_:)`,
+  `setUnrolledTimeMap(_:)` and `makeOfflineInstance(sampleRate:)`** — each default silently dropped a feature. The
+  `isReady`, `onReadyChanged` and `isAtEnd` defaults stay. Affects custom `SynthBackend` conformers, test doubles
+  included, that relied on any of the four; `SwiftySynthBackend` users are unaffected. Migrate: implement all four.
+  The old behavior, if it is really what the backend means: `play(afterCountInSeconds:)` calls `play()`, the two
+  setters do nothing, `makeOfflineInstance` returns `nil` (the export then falls back to AUMIDISynth). A time-based
+  transport that ignores `setUnrolledTimeMap` seeks into the wrong measure-play on any score with repeats.
+- **`PlaybackEngine.previewNoteOn(pitch:onStaff:velocity:atTick:)` and the Windows engine's twin no longer default
+  `atTick` to `0`.** Affects every caller of `previewNoteOn` that omitted `atTick`. Migrate: pass the tick of the
+  note's position (the caret or selection tick). The channel is resolved at that tick, so after a mid-score
+  instrument change only the right tick auditions the new instrument; `0` always sounds the part's opening one.
+- **`FontMetricsProvider` no longer supplies defaults for `textInkBounds(text:font:)` and `leading(font:)`**, so a new
+  provider cannot inherit the approximation without saying so (the `renderingTextFont(_:)` identity default stays).
+  Affects custom `FontMetricsProvider` conformers that relied on either; `AppleFontMetricsProvider`,
+  `StubFontMetricsProvider` and the metrics-table provider are unaffected. Migrate: implement both.
+  `StubFontMetricsProvider` shows the old approximation — each line's horizontal ink over an `ascent + descent` band,
+  and a `leading` of 0 — so delegate to one only if that is really what the provider means; one with glyph outlines
+  should bound its real ink.
+- **`LayoutSystem.init` no longer defaults `staffAddresses` and `staffGeometries` to `[]`** — the default through
+  which `LayoutEngine.stickyHeaderSystem` had been dropping the addresses (see Fixed). Affects code that constructs a
+  `LayoutSystem` directly, test fixtures mostly. Migrate: pass both. `[]` is still accepted, but it means no
+  `StaffAddress` → flat-index map (`flatIndex(for:)` answers `nil`) and every staff five-line. To change a laid-out
+  system, use `addingSpanners(_:)` / `movedBy(dy:)` rather than calling `init` again.
+- **`LayoutDocument.lyricLineY(at:verse:…)`, `lyricEntryOrigin(at:…)` and `textEntryOrigin(kind:at:text:…)` take
+  `placementStyle:`, `elementProperties:` and `textProperties:` without defaults, and the verse-0 `lyricLineY(at:)`
+  overload is gone.** Affects callers that omitted any of the three, or called `lyricLineY(at:)`. Migrate: pass the
+  score's `style.textPlacement`, the mark's element properties and its font — for a syllable
+  `LyricInputPlanner.lyric(at:in:)?.elementProperties ?? .default` and `….properties ?? TextProperties()`, for a text
+  annotation `SetElementPlacement.currentProperties(for:in:) ?? .default` and
+  `SetTextFont.current(_:in:) ?? TextProperties()`. The lyric functions still accept `placementStyle: nil`, which
+  keeps the old no-style answer. For verse 0,
+  `lyricLineY(at:verse: 0, placementStyle:elementProperties:textProperties:)`.
+- **Web: `LayoutOptions.honorLayoutBreaks` (`@jiyimeta/sheet-music-web`) is replaced by
+  `breakPolicy?: "honor" | "ignoreSystemBreaks" | "ignoreAll"`** (default `"honor"`); the raw wasm `LayoutOptions`
+  struct's `honorLayoutBreaks: Bool` is `breakPolicyRaw: Int`, numbered as `LayoutOptionsWire` numbers it. Affects
+  web hosts that pass `honorLayoutBreaks`. TypeScript flags it; plain JavaScript does not, and
+  `honorLayoutBreaks: false` is then ignored — breaks are honored. Migrate: `breakPolicy: "ignoreAll"` for
+  `honorLayoutBreaks: false`; drop `honorLayoutBreaks: true`.
+- **The font-metrics install is renamed**: wasm / web `installSMuFLMetrics` → `installFontMetrics`, JNI
+  `nativeInstallSMuFLMetrics` → `nativeInstallFontMetrics` (Kotlin `SheetMusicJNI` and the Swift entry point).
+  Affects every web and Android host — the install is required before layout. Migrate: rename the call. Same payload
+  (`sheet-music.smft` / `FontMetricsBuilder.buildTable`), same `Boolean` result.
+- **Draw program wire v8: `DrawProgram.version` 7 → 8 and the flat SMDF format 1 → 2.** `DrawCommand.italicText`
+  (superseded by `setTextStyle` in v7) is gone, so `setTextStyle` is discriminator / opcode 11; `fillPath` (12, no
+  payload) closes and fills the current path; `DrawProgram.FontID.system` (`0x02`) and
+  `DrawCommand.TextStyleFlag.semibold` (`1 << 2`) are new. Every decoder rejects a stream of the other version.
+  Affects hosts that decode the draw program themselves (a custom renderer, or a stored v7 stream), and code that
+  switches over `DrawCommand` / `FontID` exhaustively. The shipped readers — the Apple parity walk, Direct2D, Kotlin
+  (`SheetMusicComposeAndroid`), web — follow in this release. Migrate: re-encode stored streams with 4.0.0. A custom
+  reader: handle `fillPath` (nonzero fill, then start a new path — like `stroke`, it ends the path), treat `system`
+  as the platform UI face (the text face where there is none), weight 600 for `semibold` unless `bold` is also set;
+  drop `italicText` (italic is the `setTextStyle` bit).
+- **Sloped beams are filled quadrilaterals, and text carries the face the layout measured it in.** A beam is
+  `moveTo`, three `lineTo` and `fillPath` rather than a thick stroke along its center line. On the Apple provider,
+  notation labels (part names, measure numbers, staff names, jumps, marker text) are `system` + `semibold`; the
+  portable providers keep emitting `textRoman` regular. An unnamed part no longer emits an empty part-label text.
+  Affects snapshot / golden tests of draw-program bytes or rendered pages with beams or notation labels. Migrate:
+  re-record them; nothing else changes.
+
+### Removed
+
+- **`MasterOutputStage.peakLimiter` is gone, with the `AUPeakLimiter` node behind it** (live playback and export),
+  and so is Kotlin's `MasterOutputStage.PEAK_LIMITER`, which already behaved as `NONE`. Affects hosts that select the
+  peak limiter. Migrate: `.softClip` to keep a boost from clipping hard (loudness keeps rising with the gain, unlike
+  the limiter), or `.none`.
+- **Kotlin `AndroidPlaybackEngine.setMasterVolume(volume:)` is gone** (deprecated since the gain was uncapped).
+  Affects Android hosts still calling it. Migrate: `setMasterGain(gain)` — same value, same behavior.
+- **`Instrument.init` no longer takes `drumLineMap:`**; the `drumLineMap` property stays, readable and assignable.
+  Affects callers that built a drum kit from lines alone. Migrate: `drumset: GMDrumset.entries` for the GM kit (what
+  `drumLineMap: GMPercussion.drumLineMap` built), or the host's own `[Int: DrumsetEntry]`. For a custom line map,
+  `drumset:` with `GMDrumset.entry(forPitch:line:)` per pitch, or build the instrument and assign
+  `instrument.drumLineMap` — either gives each pitch the GM name, head and voice on the line asked for, as the
+  parameter did.
+- **`RehearsalMark.FrameKind` (a typealias) is gone.** Affects code that names it. Migrate: `TextFrameType`, the same
+  type.
+- **`BravuraFont.familyName` is gone** (`BravuraFont.register` stays). Affects Apple hosts that name it. Migrate:
+  `SMuFLFamily.bravura` from `SheetMusicLayout` — the same string, `"Bravura"`.
+- **`LayoutOptionsWire.honorLayoutBreaks` is gone — from the Swift init and from the generated Kotlin
+  `LayoutOptionsWire` — and `breakPolicyRaw = 0` now means `.honor` instead of deferring to it.** Its wire tag (3) is
+  reserved, so every other field keeps its tag and a blob that still carries it decodes. Affects hosts that build a
+  `LayoutOptionsWire`. One that sent `honorLayoutBreaks = 1` (every shipped host) only has to drop the argument.
+  **One that sent `0` and left `breakPolicyRaw` at `0` compiles once the argument is dropped and silently starts
+  honoring breaks.** Migrate: drop the argument. To ignore breaks, set `breakPolicyRaw`: `3` ignores line and page
+  breaks (what `honorLayoutBreaks = 0` meant), `2` ignores line breaks only, `1` or `0` honors both.
+- **Kotlin `SheetMusicJNI.nativeEditingHitTest` (and the Swift `nativeEditingHitTest` behind it) no longer takes
+  `optionsBytes`**, which was reserved and ignored. Affects Android callers of `nativeEditingHitTest`. Migrate: drop
+  the argument — `nativeEditingHitTest(scoreHandle, xMm, yMm, activeVoice)`. The hit is still re-addressed past the
+  hidden staves the cached layout was computed with.
+- **Kotlin `BravuraMetricsBuilder` is gone** (deprecated since the table began carrying the text face too). Affects
+  Android hosts still calling `BravuraMetricsBuilder.buildTable(assets)`. Migrate:
+  `FontMetricsBuilder.buildTable(assets)` — same signature, same bytes.
+- **Web: `assets/bravura.smft` is no longer in `@jiyimeta/sheet-music-web`.** It was the pre-2.5.0 name, shipped as
+  a byte copy of `assets/sheet-music.smft`. Affects web hosts that still fetch or bundle `bravura.smft`: the fetch now
+  404s, and a host that keeps serving an old copy gets `installFontMetrics` → `false` once the table format moves on.
+  Migrate: fetch `assets/sheet-music.smft` from the package version you load.
+
+### Fixed
+
+- **Android's `nativePageBreaks` and the web's `pageBreaks` honor `.ignoreSystemBreaks`.** They read the old
+  boolean instead of resolving the break policy through `LayoutOptionsWire.breakPolicy`, as the layout itself does,
+  so with `breakPolicyRaw = 2` (`.ignoreSystemBreaks`) and the boolean at `0` they reported one page where the draw
+  program honored the authored page breaks. The web can now ask for `.ignoreSystemBreaks` at all
+  (`breakPolicy: "ignoreSystemBreaks"`).
+- **`LayoutEngine.stickyHeaderSystem` keeps the template system's staff addresses.** It built its system through the
+  `staffAddresses: []` default, so on the sticky header `flatIndex(for:)` answered `nil` for every staff.
+
+### Not included in 4.0.0
+
+- **PDF export off Apple platforms.** `PDFExporter` draws through SwiftUI and CoreGraphics; Android and Windows import
+  PDFs but do not write them.
+- **Audio-file export on Windows.** `WindowsPlaybackEngine` has no `exportAudioFile`.
+- **Windows on arm64.** Nothing has been built or run there; x64 is the only verified architecture.
+- **Windows CI.** There is no hosted Windows runner; a release is checked on a Windows machine by a manual gate (see
+  the README's Windows section).
+- **Reading scanned PDFs (OMR) off Apple platforms.** The detector runs on Core ML (`SheetMusicOMRModel`).
+- **Semibold notation labels on Android and the web.** Their layout measures notation labels in Edwin regular and
+  draws them so; a stream from the Apple provider, which carries `system` + `semibold`, draws there in the text face
+  at regular weight. The wire already carries both, so a later minor release can add the face and its metrics
+  without a format change.
+
 ## [3.7.1] - 2026-09-30
 
 ### Fixed
