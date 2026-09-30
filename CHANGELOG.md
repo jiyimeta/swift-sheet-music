@@ -7,6 +7,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.7.1] - 2026-09-30
+
+### Fixed
+
+- **The Android build compiles again.** `PDFExporter+Sheets.swift` (new in 3.7.0) imports CoreGraphics and SwiftUI
+  but was missing from `SheetMusicPDF`'s Android exclude list, so the JNI cross-compile stopped at
+  `no such module 'CoreGraphics'` and 3.7.0's Android modules were never published.
+- **`SheetMusicAudioAndroid` compiles again.** The hand-written Kotlin `ScoreElementID` model lacked the `Swing`
+  case the generated codec decodes `ScoreElementIDWire.swing(anchor:)` into, which had broken the Kotlin compile
+  on every push since swing directives landed.
+
 ## [3.7.0] - 2026-09-30
 
 ### Added

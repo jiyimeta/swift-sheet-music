@@ -200,7 +200,7 @@ var targets: [Target] = [
             "PDFExporter.swift",
             // The sheet entry point (3.7.0) extends the exporter above and draws through SheetMusicLayoutApple /
             // SwiftUI, so it goes wherever the exporter goes. Left in, the Apple-free build stopped at "no such
-            // module 'SheetMusicLayoutApple'" (measured on the Android shape, 2026-09-30).
+            // module 'SheetMusicLayoutApple'" (3.7.0's Android CI; fixed on main in 3.7.1).
             "PDFExporter+Sheets.swift",
             "EngravingPage.swift",
             "Import/PDFImporter+ContentStream.swift",

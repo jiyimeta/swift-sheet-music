@@ -16,4 +16,5 @@ sealed class ScoreElementID {
     data class Jump(val staff: StaffAddress, val measureIndex: Int, val index: Int) : ScoreElementID()
     data class Marker(val staff: StaffAddress, val measureIndex: Int, val index: Int) : ScoreElementID()
     data class Glissando(val start: NoteID) : ScoreElementID()
+    data class Swing(val anchor: VoiceElementID) : ScoreElementID()
 }
