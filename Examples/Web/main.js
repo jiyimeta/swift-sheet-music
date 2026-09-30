@@ -115,8 +115,8 @@ async function boot() {
   if (!metrics.ok) {
     throw new Error(`could not fetch sheet-music.smft (${metrics.status})`);
   }
-  if (!sheetMusic.installSMuFLMetrics(new Uint8Array(await metrics.arrayBuffer()))) {
-    throw new Error("the Bravura metrics table failed to install");
+  if (!sheetMusic.installFontMetrics(new Uint8Array(await metrics.arrayBuffer()))) {
+    throw new Error("the font-metrics table failed to install");
   }
 
   fonts = await loadScoreFonts({

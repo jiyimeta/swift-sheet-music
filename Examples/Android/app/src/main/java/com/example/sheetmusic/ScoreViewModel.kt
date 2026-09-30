@@ -47,7 +47,7 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
 
             withContext(Dispatchers.Default) {
                 val table = FontMetricsBuilder.buildTable(app.assets)
-                SheetMusicJNI.nativeInstallSMuFLMetrics(table)
+                SheetMusicJNI.nativeInstallFontMetrics(table)
             }
 
             val bytes = try {
@@ -76,7 +76,6 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
                 LayoutOptionsWire(
                     layoutMode = 2u, // PAGE
                     staffSize = 28.0,
-                    honorLayoutBreaks = 1u,
                     collapseMultiMeasureRests = 0u,
                     showsInvisibleElements = 0u,
                     hiddenStaves = emptyList(),
@@ -89,6 +88,9 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
                     // syllables, hyphens and melisma rules — and shortens the
                     // engraved page accordingly.
                     showsLyrics = 1u,
+                    // breakPolicyRaw is left at its default 0, which honors the
+                    // score's authored line and page breaks (2 ignores only line
+                    // breaks, 3 ignores both).
                 ),
             )
             val programBytes = withContext(Dispatchers.Default) {

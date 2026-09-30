@@ -90,7 +90,7 @@ class ScoreCanvasGoldenTest {
         // rectangle approximations and the golden records those instead of the real engraving.
         assertTrue(
             "metrics table refused",
-            SheetMusicJNI.nativeInstallSMuFLMetrics(FontMetricsBuilder.buildTable(testAssets)),
+            SheetMusicJNI.nativeInstallFontMetrics(FontMetricsBuilder.buildTable(testAssets)),
         )
         fixture = testAssets.open(FIXTURE_ASSET).use { it.readBytes() }
     }
@@ -174,7 +174,6 @@ class ScoreCanvasGoldenTest {
                 LayoutOptionsWire(
                     layoutMode = 2u, // page
                     staffSize = 28.0,
-                    honorLayoutBreaks = 1u,
                     collapseMultiMeasureRests = 0u,
                     showsInvisibleElements = 0u,
                     hiddenStaves = emptyList(),

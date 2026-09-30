@@ -104,7 +104,7 @@ enum StemRenderer {
     private static func cachedBravuraFont(size: CGFloat) -> CTFont {
         if let font = cachedFont, cachedSize == size { return font }
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, size, nil,
+            SMuFLFamily.bravura as CFString, size, nil,
         )
         cachedFont = font
         cachedSize = size

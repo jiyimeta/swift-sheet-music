@@ -56,7 +56,7 @@ enum TextMarkRenderer {
         let resolved = context.resolve(
             Text(glyphString)
                 .foregroundColor(.primary)
-                .font(.custom(BravuraFont.familyName, size: glyphSize)),
+                .font(.custom(SMuFLFamily.bravura, size: glyphSize)),
         )
         // Anchor: glyph's baseline at `origin.y`; use SwiftUI
         // `.leading` (vertically centered) since callers position
@@ -115,10 +115,10 @@ enum TextMarkRenderer {
                 resolved = context.resolve(
                     Text(run.text)
                         .foregroundColor(color)
-                        .font(.custom(BravuraFont.familyName, size: glyphSize)),
+                        .font(.custom(SMuFLFamily.bravura, size: glyphSize)),
                 )
                 font = LayoutFont(
-                    face: BravuraFont.familyName, pointSize: glyphSize,
+                    face: SMuFLFamily.bravura, pointSize: glyphSize,
                 )
             case .text:
                 resolved = context.resolve(

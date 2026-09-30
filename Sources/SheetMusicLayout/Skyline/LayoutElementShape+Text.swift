@@ -356,7 +356,7 @@ extension LayoutElementShape {
 
     private static func rehearsalMarkRect(
         text: String, origin: CGPoint,
-        frame: RehearsalMark.FrameKind, properties: TextProperties, metrics: StaffMetrics,
+        frame: TextFrameType, properties: TextProperties, metrics: StaffMetrics,
     ) -> CGRect {
         let f = styleFont(.rehearsalMark, overrides: properties, sp: metrics.sp)
         let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)

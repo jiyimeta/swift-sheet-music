@@ -83,7 +83,7 @@
             try #require(BravuraFont.register)
             let provider = AppleFontMetricsProvider()
             for (faceName, codepoints) in [
-                (BravuraFont.familyName, Self.essentialGlyphs),
+                (SMuFLFamily.bravura, Self.essentialGlyphs),
                 (Self.textFace, Self.essentialTextGlyphs),
             ] {
                 let face = try #require(table.face(named: faceName))

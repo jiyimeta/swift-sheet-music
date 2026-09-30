@@ -80,7 +80,7 @@ things write or read them and move together: `FontMetricsTable.decode`,
 `Web/sheet-music-web/assets/sheet-music.smft` with a copy under
 `Tests/SheetMusicTests/Resources/` for WASI), and `FontMetricsBuilder.kt` (Android's,
 measured from `Paint.fontMetrics` at runtime). An older table is refused with
-`unsupportedVersion`, so a stale asset fails `installSMuFLMetrics` rather than
+`unsupportedVersion`, so a stale asset fails `installFontMetrics` rather than
 engraving 1.2 sp off.
 
 **Nothing in the parity run catches this class of bug, and the reason is

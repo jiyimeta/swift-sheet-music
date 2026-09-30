@@ -172,7 +172,7 @@
                     else { return base as CTFont }
                     return slanted as CTFont
                 }
-                let face = fontId == .smufl ? BravuraFont.familyName : "Edwin"
+                let face = fontId == .smufl ? SMuFLFamily.bravura : "Edwin"
                 let base = CTFontCreateWithName(face as CFString, size, nil)
                 var traits: CTFontSymbolicTraits = []
                 if isBold { traits.insert(.boldTrait) }

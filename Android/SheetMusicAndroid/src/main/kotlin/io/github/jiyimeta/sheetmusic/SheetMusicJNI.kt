@@ -122,16 +122,17 @@ object SheetMusicJNI {
     }
 
     /**
-     * Install a SMuFL glyph-metrics table on the Swift side. Returns
+     * Install the font-metrics table — Bravura's glyph geometry and the
+     * text face's metrics, in one payload — on the Swift side. Returns
      * `true` on success, `false` if the byte format is invalid — a table
      * written for an older format version included, since a stale one
      * would engrave centred glyphs off their baselines. Build it with
      * [FontMetricsBuilder.buildTable]; the wire format spec is on
      * `Sources/SheetMusicBridgeCore/FontMetricsTable.swift`.
      */
-    fun nativeInstallSMuFLMetrics(bytes: ByteArray): Boolean {
+    fun nativeInstallFontMetrics(bytes: ByteArray): Boolean {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
-        return SwiftJavaJNI.nativeInstallSMuFLMetrics(SwiftData.fromByteArray(bytes, arena))
+        return SwiftJavaJNI.nativeInstallFontMetrics(SwiftData.fromByteArray(bytes, arena))
     }
 
     /**
@@ -484,11 +485,9 @@ object SheetMusicJNI {
     /**
      * Editing hit-test at a tap ([xMm], [yMm], document/mm) within the cached (filtered) layout of
      * [scoreHandle], preferring [activeVoice] within the tap's slop box when the raw hit belongs to a
-     * different voice. [optionsBytes] is kept for signature parity with [nativeComputeLayout] but is
-     * **reserved and ignored**: the hidden-staves set used to re-address the hit against the full score comes
-     * from the cache entry the layout was actually computed from, not from this parameter — a caller passing
-     * a set that doesn't match what produced the cached layout must not be able to re-address against a
-     * mismatched staff set.
+     * different voice. Takes no layout options: the hidden-staves set used to re-address the hit against the
+     * full score comes from the cache entry the layout was actually computed from, so a caller can never
+     * re-address against a staff set that doesn't match the cached layout.
      *
      * Returns a `ScoreItemID` wire payload, re-addressed against the full (unfiltered) score so it can be
      * fed straight into an edit intent — or an empty array when the handle is unknown, the layout is not
@@ -504,7 +503,6 @@ object SheetMusicJNI {
         xMm: Double,
         yMm: Double,
         activeVoice: Int,
-        optionsBytes: ByteArray,
     ): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeEditingHitTest(
@@ -512,7 +510,6 @@ object SheetMusicJNI {
             xMm,
             yMm,
             activeVoice,
-            SwiftData.fromByteArray(optionsBytes, arena),
             arena,
         ).toByteArray()
     }

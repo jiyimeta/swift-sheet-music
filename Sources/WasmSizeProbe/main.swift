@@ -114,7 +114,7 @@ let wasmProgram = computeLayout(
     options: LayoutOptions(
         layoutMode: 0,
         staffSize: 28,
-        honorLayoutBreaks: true,
+        breakPolicyRaw: 0,
         collapseMultiMeasureRests: false,
         showsInvisibleElements: false,
         showsLyrics: true,
@@ -138,7 +138,7 @@ let editCaret = editingCaretRect(
     noteIndexInChord: 0,
     minimumWidthMM: 1,
 )
-_ = installSMuFLMetrics(bytes: JSUint8Array(length: 0))
+_ = installFontMetrics(bytes: JSUint8Array(length: 0))
 print(
     "wasm engine=\(engineVersionStamp()) handle=\(wasmHandle) "
         + "flat=\(wasmProgram.length)B breaks=\(wasmBreaks.count) "

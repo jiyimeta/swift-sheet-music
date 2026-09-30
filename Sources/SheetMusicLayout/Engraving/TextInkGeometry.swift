@@ -98,7 +98,7 @@ public enum TextInkGeometry {
     }
 
     private static func rehearsalRects(
-        text: String, origin: CGPoint, frame: RehearsalMark.FrameKind, properties: TextProperties,
+        text: String, origin: CGPoint, frame: TextFrameType, properties: TextProperties,
         metrics: StaffMetrics,
     ) -> [CGRect] {
         guard !text.isEmpty else { return [] }

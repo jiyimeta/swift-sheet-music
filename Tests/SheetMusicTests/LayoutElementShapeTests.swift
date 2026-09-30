@@ -237,7 +237,7 @@ struct LayoutElementAutoplacedShapeTests {
     /// The frame padding is included, so a framed mark is wider and
     /// taller than an unframed one with the same text.
     @Test func rehearsalMarkFrameAddsPadding() throws {
-        func box(_ frame: RehearsalMark.FrameKind) throws -> CGRect {
+        func box(_ frame: TextFrameType) throws -> CGRect {
             let el = LayoutElement.rehearsalMark(
                 text: "A", origin: CGPoint(x: 0, y: 0),
                 frame: frame, color: nil, measureIndex: 0,

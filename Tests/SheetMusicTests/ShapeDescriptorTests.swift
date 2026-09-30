@@ -6,6 +6,7 @@
 
     #if os(macOS)
         import CoreText
+        import SheetMusicLayout
         import SheetMusicLayoutApple
     #endif
 
@@ -66,7 +67,7 @@
             ) -> CGPath? {
                 guard #available(macOS 15.0, *), BravuraFont.register else { return nil }
                 let ctFont = CTFontCreateWithName(
-                    BravuraFont.familyName as CFString, size, nil,
+                    SMuFLFamily.bravura as CFString, size, nil,
                 )
                 var unichars: [UniChar] = [codepoint]
                 var glyphs: [CGGlyph] = [0]

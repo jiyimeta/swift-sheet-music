@@ -251,13 +251,11 @@
         ) -> StemDirection? {
             let measure = Measure(voices: voices)
             let staff = Staff(measures: [measure])
+            var instrument = Instrument(id: "drumset", useDrumset: true)
+            instrument.drumLineMap = drumLineMap
             let part = Part(
                 id: "drum",
-                instrument: Instrument(
-                    id: "drumset",
-                    useDrumset: true,
-                    drumLineMap: drumLineMap,
-                ),
+                instrument: instrument,
                 staves: [staff],
             )
             let score = Score(division: 480, parts: [part])

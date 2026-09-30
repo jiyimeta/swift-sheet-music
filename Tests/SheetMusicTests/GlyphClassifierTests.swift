@@ -3,6 +3,7 @@
     import CoreText
     import Foundation
     @testable import SheetMusicCore
+    import SheetMusicLayout
     import SheetMusicLayoutApple
     @testable import SheetMusicPDF
     import Testing
@@ -291,7 +292,7 @@
         /// descriptors), so this runs in CI.
         @Test func isLikelyMusicFontAcceptsTheBundledBravuraFont() {
             guard #available(macOS 15.0, *), BravuraFont.register else { return }
-            let ctFont = CTFontCreateWithName(BravuraFont.familyName as CFString, 1000, nil)
+            let ctFont = CTFontCreateWithName(SMuFLFamily.bravura as CFString, 1000, nil)
             #expect(GlyphClassifier.isLikelyMusicFont(ctFont: ctFont))
         }
 

@@ -162,7 +162,7 @@ to fonts through a `FontMetricsProvider` dependency-injection seam:
   provider (auto-installed transitively by `SheetMusicUI` / `SheetMusicPDF`).
 - On Android, the host installs a measured metrics table
   (`FontMetricsBuilder.buildTable` →
-  `SheetMusicJNI.nativeInstallSMuFLMetrics`); the browser installs the
+  `SheetMusicJNI.nativeInstallFontMetrics`); the browser installs the
   same format, generated from CoreText at build time by
   `Tools/GenFontMetrics` and served as `assets/sheet-music.smft`. One
   table carries both faces the library draws with — Bravura's glyph

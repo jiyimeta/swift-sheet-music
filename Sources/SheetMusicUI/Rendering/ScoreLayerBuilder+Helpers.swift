@@ -83,7 +83,7 @@ extension ScoreLayerBuilder {
         }
         _ = SheetMusicLayoutApple.install
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, size, nil,
+            SMuFLFamily.bravura as CFString, size, nil,
         )
         cachedBravura = font
         cachedBravuraSize = size
@@ -256,7 +256,7 @@ extension ScoreLayerBuilder {
         let advance = FontMetrics.provider.typographicWidth(
             text: text,
             font: LayoutFont(
-                face: BravuraFont.familyName, pointSize: size,
+                face: SMuFLFamily.bravura, pointSize: size,
             ),
         )
         return (fillLayer(path: transformed, height: height), advance)

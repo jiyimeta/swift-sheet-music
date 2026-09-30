@@ -3,6 +3,7 @@
     import CoreText
     import Foundation
     @testable import SheetMusicCore
+    import SheetMusicLayout
     @testable import SheetMusicLayoutApple
     @testable import SheetMusicPDF
     import Testing
@@ -191,7 +192,7 @@
         @Test func eachAliasIsNearestToTheExemplarItClaims() throws {
             guard #available(macOS 15.0, *), BravuraFont.register else { return }
             let font = CTFontCreateWithName(
-                BravuraFont.familyName as CFString, 1000, nil,
+                SMuFLFamily.bravura as CFString, 1000, nil,
             )
             try #require(CTFontCopyFamilyName(font) as String == "Bravura")
 

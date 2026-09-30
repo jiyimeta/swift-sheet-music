@@ -226,7 +226,7 @@ enum StaffRenderer {
     ) -> CGPath? {
         _ = SheetMusicLayoutApple.install
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, fontSize, nil,
+            SMuFLFamily.bravura as CFString, fontSize, nil,
         )
         var unichars: [UniChar] = [codepoint]
         var glyphs: [CGGlyph] = [0]
@@ -254,7 +254,7 @@ enum StaffRenderer {
     ) -> CGPath? {
         _ = SheetMusicLayoutApple.install
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, fontSize, nil,
+            SMuFLFamily.bravura as CFString, fontSize, nil,
         )
         var unichars: [UniChar] = [codepoint]
         var glyphs: [CGGlyph] = [0]

@@ -43,7 +43,7 @@ import java.nio.ByteOrder
  * Cost: each face's `cmap` is parsed once, and only the codepoints it actually
  * maps are measured — ~3.4k paths for Bravura and ~0.9k for Edwin. Build the
  * result once per process and hand it straight to
- * `SheetMusicJNI.nativeInstallSMuFLMetrics`.
+ * `SheetMusicJNI.nativeInstallFontMetrics`.
  */
 object FontMetricsBuilder {
 

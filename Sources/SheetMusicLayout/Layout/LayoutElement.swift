@@ -290,7 +290,7 @@ public enum LayoutElement: Sendable, Equatable {
     case rehearsalMark(
         text: String,
         origin: CGPoint,
-        frame: RehearsalMark.FrameKind,
+        frame: TextFrameType,
         color: ScoreColor?,
         measureIndex: Int,
         placement: TextPlacementMetadata? = nil,

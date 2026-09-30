@@ -9,11 +9,6 @@ import SheetMusicFoundation
 /// not serialized in MSCX and is omitted here; both are represented
 /// by the same struct.
 public struct RehearsalMark: Sendable, Equatable {
-    /// Frame kind alias kept for source compatibility. New code
-    /// should reach for `TextFrameType` directly or read it via
-    /// `properties.frameType` / `TextStyleType.rehearsalMark`.
-    public typealias FrameKind = TextFrameType
-
     public var text: String
     public var preservedTextMarkup: PreservedTextMarkup?
     /// Author-supplied X offset relative to the default placement,

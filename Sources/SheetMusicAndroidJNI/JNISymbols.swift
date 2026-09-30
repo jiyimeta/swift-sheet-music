@@ -84,16 +84,10 @@ public func nativePartsStaves(scoreHandle: Int64) -> Data {
 
 // MARK: - Font metrics (swift-java entry point)
 
-/// JNI entry point exposed via swift-java for the Kotlin
-/// `SheetMusicJNI.nativeInstallSMuFLMetrics(...)` call site. Returns
-/// `true` on success, `false` if the byte payload is empty or fails to
-/// decode.
-///
-/// The name kept its `SMuFL` since v3, when the table measured Bravura
-/// alone; v4 carries the text face too. Renaming a JNI entry point buys a
-/// tidier symbol and costs every host a source break, so the accurate name
-/// lives on the type (`FontMetricsTable`) instead.
-public func nativeInstallSMuFLMetrics(bytes: Data) -> Bool {
+/// JNI entry point exposed via swift-java for the Kotlin `SheetMusicJNI.nativeInstallFontMetrics(...)` call site.
+/// Installs a `FontMetricsTable` — Bravura's glyph geometry and the text face's metrics, in one payload. Returns
+/// `true` on success, `false` if the byte payload is empty or fails to decode.
+public func nativeInstallFontMetrics(bytes: Data) -> Bool {
     guard !bytes.isEmpty else { return false }
     do {
         let table = try FontMetricsTable.decode(bytes)
@@ -179,9 +173,8 @@ public func nativePageBreaks(scoreHandle: Int64, pageHeightMM: Double, optionsBy
     }
     let mmToPt = 72.0 / 25.4
     let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
-    let breakPolicy: LayoutBreakPolicy = optionsWire.honorLayoutBreaks == 1 ? .honor : .ignoreAll
     let ranges = LayoutPaginator.paginate(
-        systems: document.systems, pageHeight: pageHeightPt, policy: breakPolicy,
+        systems: document.systems, pageHeight: pageHeightPt, policy: optionsWire.breakPolicy,
     )
     guard !ranges.isEmpty else { return Data() }
     var offsetsMm: [Double] = []

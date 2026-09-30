@@ -40,17 +40,14 @@ import SheetMusicLayout
 /// into `LayoutDocument.editingHitTest(at:activeVoice:)` — see that method's doc comment for the hit-test
 /// policy (ladder, slop rescue, on-staff gate, voice preference).
 ///
-/// `optionsBytes` is a `LayoutOptionsWire` payload, kept for JNI signature parity with `nativeComputeLayout` /
-/// `nativeNearestCursor` — **reserved and ignored**: the hidden-staff set used for re-addressing comes from
-/// `LayoutDocumentCache.entry(for:).hiddenStaves` instead, the set the cached document was actually laid out
-/// from. Decoding it out of this parameter would let a caller pass a hidden-staff set that doesn't match what
-/// produced `entry.document` — the exact "re-read must replay what compute actually used" defect this bridge's
-/// two siblings (`nativeEditingCaretFrame`, `nativeEncodeDrawProgram`) were already careful to avoid, and whose
-/// consequence here is worse than theirs: this entry point's answer is a `ScoreItemID` fed straight into an
-/// edit intent, so a mismatched set would silently edit the wrong staff rather than merely mis-render one.
-/// Re-addressing the hit past `entry.hiddenStaves` reuses `Score.engineCursorForFilteredTap` (wrapping the item
-/// in a throwaway `ScoreCursor.item` and unwrapping the result) rather than writing a second implementation of
-/// that rule.
+/// Takes no layout options: the hidden-staff set used for re-addressing is
+/// `LayoutDocumentCache.entry(for:).hiddenStaves`, the set the cached document was actually laid out from. A
+/// caller-supplied set could disagree with what produced `entry.document` — the "re-read must replay what compute
+/// actually used" defect this bridge's two siblings (`nativeEditingCaretFrame`, `nativeEncodeDrawProgram`) avoid
+/// too, and a worse one here: this entry point's answer is a `ScoreItemID` fed straight into an edit intent, so a
+/// mismatched set would silently edit the wrong staff rather than merely mis-render one. Re-addressing the hit past
+/// `entry.hiddenStaves` reuses `Score.engineCursorForFilteredTap` (wrapping the item in a throwaway
+/// `ScoreCursor.item` and unwrapping the result) rather than writing a second implementation of that rule.
 ///
 /// Returns an empty `Data` when the score handle is unknown, the layout document is not cached, or the tap hit
 /// no selectable item. On a hit, returns the `ScoreItemIDCodec` encoding of the item — full-score-addressed by
@@ -65,7 +62,6 @@ public func nativeEditingHitTest(
     xMm: Double,
     yMm: Double,
     activeVoice: Int32,
-    optionsBytes: Data,
 ) -> Data {
     guard let score = scoreTable.value(for: scoreHandle),
           let entry = LayoutDocumentCache.entry(for: scoreHandle)

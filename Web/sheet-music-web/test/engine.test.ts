@@ -142,7 +142,7 @@ describe("PlaybackEngine", () => {
       bundleURL: new URL("../dist/", import.meta.url),
       platform: "node",
     });
-    expect(sheetMusic.installSMuFLMetrics(metricsBytes)).toBe(true);
+    expect(sheetMusic.installFontMetrics(metricsBytes)).toBe(true);
     score = sheetMusic.loadScore(
       new Uint8Array(readFileSync(fixturePath("repeat.mscz"))),
     );
@@ -394,7 +394,7 @@ describe("PlaybackEngine mixer", () => {
       bundleURL: new URL("../dist/", import.meta.url),
       platform: "node",
     });
-    expect(sheetMusic.installSMuFLMetrics(metricsBytes)).toBe(true);
+    expect(sheetMusic.installFontMetrics(metricsBytes)).toBe(true);
     score = sheetMusic.loadScore(
       new Uint8Array(readFileSync(fixturePath("mixer.mscz"))),
     );
@@ -612,7 +612,7 @@ describe("PlaybackEngine export", () => {
       bundleURL: new URL("../dist/", import.meta.url),
       platform: "node",
     });
-    expect(sheetMusic.installSMuFLMetrics(metricsBytes)).toBe(true);
+    expect(sheetMusic.installFontMetrics(metricsBytes)).toBe(true);
     score = sheetMusic.loadScore(
       new Uint8Array(readFileSync(fixturePath("repeat.mscz"))),
     );

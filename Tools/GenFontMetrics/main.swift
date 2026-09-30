@@ -1,5 +1,5 @@
 // Generates the font-metrics table the WebAssembly bridge installs through
-// `installSMuFLMetrics`.
+// `installFontMetrics`.
 //
 // macOS-only: measures the bundled outlines through CoreText. Text records use
 // tight path bounds. Web bold is an explicit 1/32 em round stroke applied before
@@ -217,7 +217,7 @@ enum GenFontMetrics {
         }
         return [
             measure(
-                face: BravuraFont.familyName,
+                face: SMuFLFamily.bravura,
                 candidates: smuflPUARange,
                 keepBlanks: false,
                 minimumGlyphs: 1000,

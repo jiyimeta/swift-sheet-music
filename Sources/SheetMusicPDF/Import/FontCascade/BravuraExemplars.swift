@@ -3,6 +3,7 @@
     import CoreText
 #endif
 import Foundation
+import SheetMusicLayout
 import SheetMusicLayoutApple
 
 /// Reference descriptors for Tier 4 nearest-neighbor classification, rendered
@@ -84,7 +85,7 @@ enum BravuraExemplars {
     private static func referenceFont() -> CTFont? {
         guard #available(macOS 15.0, *), BravuraFont.register else { return nil }
         return CTFontCreateWithName(
-            BravuraFont.familyName as CFString, 1000, nil,
+            SMuFLFamily.bravura as CFString, 1000, nil,
         )
     }
 }

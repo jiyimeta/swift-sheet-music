@@ -64,11 +64,15 @@ public struct EngravingSpacingWire {
 /// portable host already has the behaviour the option buys on Apple, by
 /// passing a width it chose. Adding the field would only give the same number
 /// a second way in.
-@WireFormat
+///
+/// **Tag 3 is retired.** It carried a `0`/`1` break boolean until 4.0.0, when `breakPolicyRaw` became the only
+/// break field. Reserving it keeps every later field on the tag it has always had — the implicit tags are assigned in
+/// declaration order, skipping reserved ones — and stops a future field from reading an old host's boolean as its
+/// own value. A blob that still carries tag 3 decodes; the reader skips it as an unknown field.
+@WireFormat(reservedTags: [3])
 public struct LayoutOptionsWire {
     public var layoutMode: UInt8 // 0 = vertical, 1 = horizontal, 2 = page
     public var staffSize: Double
-    public var honorLayoutBreaks: UInt8 // 0/1
     public var collapseMultiMeasureRests: UInt8 // 0/1
     public var showsInvisibleElements: UInt8 // 0/1
     public var hiddenStaves: [HiddenStaffWire]
@@ -108,15 +112,11 @@ public struct LayoutOptionsWire {
     // default only ever lives in one place — `ScoreViewOptions` — and a change there is not silently
     // pinned to an old value by this file.
 
-    /// `0` defers to `honorLayoutBreaks`; `1` = `.honor`, `2` = `.ignoreSystemBreaks`,
-    /// `3` = `.ignoreAll`.
+    /// `0` = no opinion (`.honor`, `ScoreViewOptions`' own default); `1` = `.honor`, `2` = `.ignoreSystemBreaks`
+    /// (ignore `<LayoutBreak>line` but still honor `page`), `3` = `.ignoreAll`. Any other value reads as `0`.
     ///
-    /// The deferral is why `0` is not `.honor`: `honorLayoutBreaks` is a boolean, and a host that
-    /// sends `honorLayoutBreaks = 0` today means `.ignoreAll`. Making `0` here mean `.honor` would
-    /// silently flip that host's layout the moment this field shipped.
-    ///
-    /// `.ignoreSystemBreaks` — ignore `<LayoutBreak>line` but still honor `page` — had no
-    /// representation at all in the boolean, which is the gap this field closes.
+    /// Read it through `breakPolicy`, never by comparing raw values: every entry point that lays out or paginates
+    /// has to agree on the policy, or the page boundaries a host is told about stop matching the pages it draws.
     public var breakPolicyRaw: UInt8 = 0
 
     /// Minimum consecutive rest measures before they collapse into one H-bar. Values below `2` are
@@ -164,7 +164,6 @@ public struct LayoutOptionsWire {
     public init(
         layoutMode: UInt8,
         staffSize: Double,
-        honorLayoutBreaks: UInt8,
         collapseMultiMeasureRests: UInt8,
         showsInvisibleElements: UInt8,
         hiddenStaves: [HiddenStaffWire],
@@ -183,7 +182,6 @@ public struct LayoutOptionsWire {
     ) {
         self.layoutMode = layoutMode
         self.staffSize = staffSize
-        self.honorLayoutBreaks = honorLayoutBreaks
         self.collapseMultiMeasureRests = collapseMultiMeasureRests
         self.showsInvisibleElements = showsInvisibleElements
         self.hiddenStaves = hiddenStaves
@@ -261,16 +259,17 @@ extension LayoutOptionsWire {
         showsLyrics != 0
     }
 
-    /// How to consume authored `<LayoutBreak>` markup.
+    /// How to consume authored `<LayoutBreak>` markup — the one resolution of `breakPolicyRaw`.
     ///
-    /// `breakPolicyRaw == 0` means the host has not spoken, so the older boolean answers — that
-    /// deferral is what keeps a host built before this field from having its layout flipped.
+    /// Every bridge entry point reads this: the layout itself (`LayoutBridge`), the page boundaries
+    /// (`nativePageBreaks`, wasm `pageBreaks`) and the break-indicator badges. A second reading anywhere is how
+    /// those two page-boundary entry points once paginated by an older boolean while the layout drew by this
+    /// policy, so `.ignoreSystemBreaks` could report one page where two were drawn.
     public var breakPolicy: LayoutBreakPolicy {
         switch breakPolicyRaw {
-        case 1: .honor
         case 2: .ignoreSystemBreaks
         case 3: .ignoreAll
-        default: honorLayoutBreaks == 1 ? .honor : .ignoreAll
+        default: .honor
         }
     }
 
@@ -341,7 +340,7 @@ extension LayoutOptionsWire {
     public static var verticalDefault: LayoutOptionsWire {
         LayoutOptionsWire(
             layoutMode: 0, staffSize: 28,
-            honorLayoutBreaks: 1, collapseMultiMeasureRests: 0, showsInvisibleElements: 0,
+            collapseMultiMeasureRests: 0, showsInvisibleElements: 0,
             hiddenStaves: [], clefOverrides: [], transposeSemitones: 0, showsLyrics: 1,
         )
     }

@@ -38,9 +38,4 @@ extension MidiImporter {
         default: 0
         }
     }
-
-    /// GM drum-kit pitch → percussion-staff line index. The table itself lives in `SheetMusicCore` as
-    /// `GMPercussion.drumLineMap` so an imported kit and one authored through `Score.blank(_:)` place the
-    /// same drum on the same line; this is the importer-local spelling of that one definition.
-    static let gmDrumLines: [Int: Int] = GMPercussion.drumLineMap
 }

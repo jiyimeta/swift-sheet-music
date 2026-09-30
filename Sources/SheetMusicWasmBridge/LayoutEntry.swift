@@ -16,20 +16,17 @@ import SheetMusicLayout
 /// Returns `false` on an empty or undecodable payload, which is also what a
 /// table written for an older format version gets.
 ///
-/// Android: `nativeInstallSMuFLMetrics`, fed by `FontMetricsBuilder.kt`
+/// Android: `nativeInstallFontMetrics`, fed by `FontMetricsBuilder.kt`
 /// measuring `Paint.getTextPath` at runtime. The browser has no equivalent
 /// geometric measurement — Canvas2D's `actualBoundingBox*` reports rasterized
 /// ink, the quantity the Android builder explicitly avoided — so the web host
 /// loads a table generated at build time from CoreText by
 /// `Tools/GenFontMetrics` and served as `assets/sheet-music.smft`.
 ///
-/// The name predates the text face and is kept for source compatibility with
-/// hosts; `FontMetricsTable` is what it actually installs.
-///
 /// Without a table the engraver falls back to `StubFontMetricsProvider`'s
 /// rectangle approximations and the spacing is visibly wrong, so a host that
 /// ignores the `false` will notice.
-@JS public func installSMuFLMetrics(bytes: JSUint8Array) -> Bool {
+@JS public func installFontMetrics(bytes: JSUint8Array) -> Bool {
     let data = bytes.bridgedData
     guard !data.isEmpty else { return false }
     do {
@@ -88,9 +85,8 @@ import SheetMusicLayout
     else { return [] }
     let mmToPt = 72.0 / 25.4
     let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
-    let breakPolicy: LayoutBreakPolicy = entry.options.honorLayoutBreaks == 1 ? .honor : .ignoreAll
     let ranges = LayoutPaginator.paginate(
-        systems: entry.document.systems, pageHeight: pageHeightPt, policy: breakPolicy,
+        systems: entry.document.systems, pageHeight: pageHeightPt, policy: entry.options.breakPolicy,
     )
     guard !ranges.isEmpty else { return [] }
     var offsetsMM: [Double] = []

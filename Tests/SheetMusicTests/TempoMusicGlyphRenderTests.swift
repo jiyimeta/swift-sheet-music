@@ -72,7 +72,7 @@
                 .tempo, metrics: doc.metrics,
             ).pointSize
             let bravura = CTFontCreateWithName(
-                BravuraFont.familyName as CFString, pointSize, nil,
+                SMuFLFamily.bravura as CFString, pointSize, nil,
             )
             let refBox = try #require(
                 Self.glyphBoundingBox(font: bravura, scalar: 0xE1D5),

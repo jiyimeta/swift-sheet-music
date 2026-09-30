@@ -17,7 +17,7 @@ extension GraphicsContext {
         anchor: UnitPoint = .center,
     ) {
         let text = Text(String(glyph))
-            .font(.custom(BravuraFont.familyName, size: size))
+            .font(.custom(SMuFLFamily.bravura, size: size))
             .foregroundColor(color)
         let resolved = resolve(text)
         draw(resolved, at: origin, anchor: anchor)

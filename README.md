@@ -441,7 +441,7 @@ Format support on Android matches Apple: `.mscz`, `.mscx`,
 `.musicxml`, `.mxl` all parse. Glyph rendering on Android is
 SMuFL-aware: `FontMetricsBuilder.buildTable` measures Bravura and Edwin
 on the Kotlin side and installs the pair via
-`SheetMusicJNI.nativeInstallSMuFLMetrics` (see
+`SheetMusicJNI.nativeInstallFontMetrics` (see
 [`Android/SheetMusicAndroid/README.md`](Android/SheetMusicAndroid/README.md)).
 Absent that install, layout falls back to a `StubFontMetricsProvider`
 rectangle approximation, which mis-centres articulations, fermatas

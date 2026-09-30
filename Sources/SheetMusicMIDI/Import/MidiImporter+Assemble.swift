@@ -336,7 +336,7 @@ extension MidiImporter {
                 id: "drumset",
                 longName: track.trackName ?? "Drumset",
                 useDrumset: true,
-                drumLineMap: gmDrumLines,
+                drumset: GMDrumset.entries,
             )
         } else {
             instrument = Instrument(

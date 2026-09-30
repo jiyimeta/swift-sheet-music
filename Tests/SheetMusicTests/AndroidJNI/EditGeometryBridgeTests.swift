@@ -251,9 +251,8 @@
         func hitTestFindsNotehead() throws {
             let handle = scoreTable.insert(Self.noteScore())
             defer { scoreTable.release(handle); LayoutDocumentCache.release(handle) }
-            let optionsBytes = Self.verticalOptionsBytes()
             let layoutBytes = nativeComputeLayout(
-                scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297, optionsBlob: optionsBytes,
+                scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297, optionsBlob: Self.verticalOptionsBytes(),
             )
             #expect(!layoutBytes.isEmpty)
 
@@ -265,7 +264,6 @@
                 xMm: Double(tapPoint.x) * Self.ptToMM,
                 yMm: Double(tapPoint.y) * Self.ptToMM,
                 activeVoice: 0,
-                optionsBytes: optionsBytes,
             )
             let decoded = try ScoreItemIDCodec.decode(result)
             #expect(decoded == .note(Self.noteScoreNoteID))
@@ -280,20 +278,17 @@
         func hitTestMiss() {
             let handle = scoreTable.insert(Self.noteScore())
             defer { scoreTable.release(handle); LayoutDocumentCache.release(handle) }
-            let optionsBytes = Self.verticalOptionsBytes()
-            _ = nativeComputeLayout(scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297, optionsBlob: optionsBytes)
-
-            let result = nativeEditingHitTest(
-                scoreHandle: handle, xMm: 0, yMm: -500 * Self.ptToMM, activeVoice: 0, optionsBytes: optionsBytes,
+            _ = nativeComputeLayout(
+                scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297, optionsBlob: Self.verticalOptionsBytes(),
             )
+
+            let result = nativeEditingHitTest(scoreHandle: handle, xMm: 0, yMm: -500 * Self.ptToMM, activeVoice: 0)
             #expect(result.isEmpty)
         }
 
         @Test("nativeEditingHitTest with an unknown handle returns empty Data")
         func hitTestUnknownHandle() {
-            let result = nativeEditingHitTest(
-                scoreHandle: 999_999, xMm: 0, yMm: 0, activeVoice: 0, optionsBytes: Self.verticalOptionsBytes(),
-            )
+            let result = nativeEditingHitTest(scoreHandle: 999_999, xMm: 0, yMm: 0, activeVoice: 0)
             #expect(result.isEmpty)
         }
 
@@ -301,55 +296,19 @@
         func hitTestBeforeComputeLayout() {
             let handle = scoreTable.insert(Self.noteScore())
             defer { scoreTable.release(handle) }
-            let result = nativeEditingHitTest(
-                scoreHandle: handle, xMm: 0, yMm: 0, activeVoice: 0, optionsBytes: Self.verticalOptionsBytes(),
-            )
+            let result = nativeEditingHitTest(scoreHandle: handle, xMm: 0, yMm: 0, activeVoice: 0)
             #expect(result.isEmpty)
         }
 
-        /// `optionsBytes` is reserved/ignored (Fix 2): the hidden-staves set now comes from
-        /// `LayoutDocumentCache.entry(for:).hiddenStaves`, not from decoding this parameter. Undecodable bytes
-        /// therefore no longer fail the call — proven here by a real, successful hit against the SAME known
-        /// notehead `hitTestFindsNotehead` above uses, with garbage `optionsBytes`. Before Fix 2 this threw
-        /// inside `LayoutOptionsCodec.decode` and returned empty `Data`; the notehead was never reached.
-        @Test("nativeEditingHitTest with undecodable options bytes still hits, because they're no longer read")
+        /// Proves `nativeEditingHitTest` re-addresses using the CACHED entry's `hiddenStaves` — the set the layout
+        /// was actually computed from, and the only set the call can see. `twoStaffScore()` is laid out with staff
+        /// 0 hidden (`hiddenStaff0OptionsBytes()`), so the filtered document has one staff — formerly staff 1's
+        /// content, the same fixture `caretFrameTranslatesPastHiddenStaff` uses. The tap resolves to the filtered
+        /// document's `staff0`; only re-addressing past the cached hidden set turns that into full-score `staff1`.
+        /// Without it the answer is the wrong staff, fed straight into an edit intent it was never meant for.
+        @Test("nativeEditingHitTest re-addresses a hit past the cache's hidden staves")
         @available(macOS 15.0, iOS 16.0, *)
-        func hitTestIgnoresGarbageOptionsBytes() throws {
-            let handle = scoreTable.insert(Self.noteScore())
-            defer { scoreTable.release(handle); LayoutDocumentCache.release(handle) }
-            _ = nativeComputeLayout(
-                scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297, optionsBlob: Self.verticalOptionsBytes(),
-            )
-            let document = try #require(LayoutDocumentCache.value(for: handle))
-            let tapPoint = try #require(Self.noteAnchor(in: document))
-
-            let result = nativeEditingHitTest(
-                scoreHandle: handle,
-                xMm: Double(tapPoint.x) * Self.ptToMM,
-                yMm: Double(tapPoint.y) * Self.ptToMM,
-                activeVoice: 0,
-                optionsBytes: Data([0xFF]),
-            )
-            let decoded = try ScoreItemIDCodec.decode(result)
-            #expect(decoded == .note(Self.noteScoreNoteID))
-        }
-
-        /// The real regression coverage for Fix 2: proves `nativeEditingHitTest` re-addresses using the CACHED
-        /// entry's `hiddenStaves` (the set the layout was actually computed from), not whatever `optionsBytes`
-        /// the caller happens to pass on this call. `twoStaffScore()` is laid out with staff 0 hidden
-        /// (`hiddenStaff0OptionsBytes()`), so the filtered document has one staff — formerly staff 1's content,
-        /// the same fixture `caretFrameTranslatesPastHiddenStaff` uses. This call then passes a DIFFERENT,
-        /// stale `optionsBytes` blob with an EMPTY hidden-staves set (`verticalOptionsBytes()`) — simulating a
-        /// caller whose options snapshot doesn't match what produced the cached layout.
-        ///
-        /// Before Fix 2: `hiddenStaves` was decoded from this call's `optionsBytes`, so `engineCursorForFilteredTap`
-        /// saw an EMPTY hidden set and returned the tap's FILTERED address unchanged — `staff0`, wrong staff, fed
-        /// straight into an edit intent it was never meant for. After Fix 2: `hiddenStaves` comes from
-        /// `entry.hiddenStaves` regardless of what this call's `optionsBytes` says, correctly re-addressing to
-        /// full-score `staff1`.
-        @Test("nativeEditingHitTest re-addresses using the cache's hidden staves, not a mismatched caller blob")
-        @available(macOS 15.0, iOS 16.0, *)
-        func hitTestUsesCachedHiddenStavesNotCallerOptions() throws {
+        func hitTestUsesCachedHiddenStaves() throws {
             let handle = scoreTable.insert(Self.twoStaffScore())
             defer { scoreTable.release(handle); LayoutDocumentCache.release(handle) }
             _ = nativeComputeLayout(
@@ -359,20 +318,17 @@
             let document = try #require(LayoutDocumentCache.value(for: handle))
             let tapPoint = try #require(Self.noteAnchor(in: document))
 
-            // Deliberately mismatched: this call's own `optionsBytes` claims no staff is hidden, unlike what
-            // `nativeComputeLayout` was actually called with above.
             let result = nativeEditingHitTest(
                 scoreHandle: handle,
                 xMm: Double(tapPoint.x) * Self.ptToMM,
                 yMm: Double(tapPoint.y) * Self.ptToMM,
                 activeVoice: 0,
-                optionsBytes: Self.verticalOptionsBytes(),
             )
             let decoded = try ScoreItemIDCodec.decode(result)
             #expect(decoded == .note(Self.twoStaffStaff1NoteID))
         }
 
-        /// Shared by `hitTestFindsNotehead` and the cache-authoritative regression tests below: the first
+        /// Shared by `hitTestFindsNotehead` and `hitTestUsesCachedHiddenStaves` above: the first
         /// chord's notehead anchor point (document coords) in `document`'s first system/measure.
         private static func noteAnchor(in document: LayoutDocument) -> CGPoint? {
             guard let system = document.systems.first, let measure = system.measures.first else { return nil }

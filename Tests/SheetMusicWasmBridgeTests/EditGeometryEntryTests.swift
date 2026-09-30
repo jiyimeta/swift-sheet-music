@@ -177,7 +177,7 @@ struct EditGeometryEntryTests {
         LayoutOptions(
             layoutMode: 0,
             staffSize: 28,
-            honorLayoutBreaks: true,
+            breakPolicyRaw: 0,
             collapseMultiMeasureRests: false,
             showsInvisibleElements: false,
             showsLyrics: true,

@@ -129,13 +129,13 @@
             let wire = LayoutOptionsWire(
                 layoutMode: 2,
                 staffSize: 12.0,
-                honorLayoutBreaks: 0,
                 collapseMultiMeasureRests: 0,
                 showsInvisibleElements: 0,
                 hiddenStaves: [],
                 clefOverrides: [],
                 transposeSemitones: 0,
                 showsLyrics: 1,
+                breakPolicyRaw: 3, // .ignoreAll
             )
             let options = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(options.mode == .page)

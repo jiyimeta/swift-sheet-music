@@ -7,7 +7,9 @@ struct SetDrumsetEntryTests {
         let staff = Staff(measures: [Measure(voices: [Voice(elements: [.rest(duration: .measure)])])])
         let part = Part(
             id: "1",
-            instrument: Instrument(id: "drumset", useDrumset: true, drumLineMap: [38: 2]),
+            instrument: Instrument(
+                id: "drumset", useDrumset: true, drumset: [38: GMDrumset.entry(forPitch: 38, line: 2)],
+            ),
             staves: [staff],
         )
         return Score(division: 480, parts: [part])

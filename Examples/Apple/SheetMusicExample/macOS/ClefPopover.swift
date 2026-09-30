@@ -172,7 +172,7 @@
         ) {
             let glyphY = midY + choice.staffOffsetSp * spatium
             let text = Text(String(choice.smuflGlyph))
-                .font(.custom(BravuraFont.familyName, size: glyphSize))
+                .font(.custom(SMuFLFamily.bravura, size: glyphSize))
                 .foregroundStyle(Color.primary)
             let resolved = context.resolve(text)
             context.draw(

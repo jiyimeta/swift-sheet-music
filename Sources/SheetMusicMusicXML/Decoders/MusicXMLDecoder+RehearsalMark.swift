@@ -30,7 +30,7 @@ enum MusicXMLRehearsalDecoder {
     /// when the importer doesn't see an explicit enclosure.
     private static func frameKind(
         forEnclosure raw: String?,
-    ) -> RehearsalMark.FrameKind {
+    ) -> TextFrameType {
         switch raw {
         case "circle": return .circle
         case "none": return .none

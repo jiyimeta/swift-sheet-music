@@ -24,7 +24,7 @@ enum HarmonyRenderer {
         let textColor: Color = lh.harmony.color.map(swiftUIColor)
             ?? .primary
         let glyphFont = CTFontCreateWithName(
-            BravuraFont.familyName as CFString,
+            SMuFLFamily.bravura as CFString,
             HarmonyRendering.glyphPointSize(
                 for: lh.harmony, metrics: metrics,
             ), nil,

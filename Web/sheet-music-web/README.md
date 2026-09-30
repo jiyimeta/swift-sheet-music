@@ -28,7 +28,7 @@ const sheetMusic = await loadSheetMusic({ bundleURL: "/sheet-music/" });
 // Edwin's text metrics, in one file. Not an optimization: without them the
 // spacing is visibly wrong, and nothing errors.
 const metrics = await fetch("/sheet-music/sheet-music.smft");
-sheetMusic.installSMuFLMetrics(new Uint8Array(await metrics.arrayBuffer()));
+sheetMusic.installFontMetrics(new Uint8Array(await metrics.arrayBuffer()));
 
 const fonts = await loadScoreFonts({
   bravura: "/sheet-music/bravura.woff2",
@@ -223,7 +223,7 @@ failure modes look nothing alike, which is useful when something renders oddly:
 | `edwin-roman.woff2` | Titles and text fall back to a system face. |
 
 Serve `sheet-music.smft` from the version of the package you load. The table's
-format is versioned, and `installSMuFLMetrics` returns `false` for a table
+format is versioned, and `installFontMetrics` returns `false` for a table
 written for an older one rather than engraving off it — a copy pinned in a
 host's own asset pipeline is the way that happens.
 

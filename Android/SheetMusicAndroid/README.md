@@ -135,7 +135,7 @@ import io.github.jiyimeta.sheetmusic.FontMetricsBuilder
 // versions: the format is versioned, and the install returns false for an
 // older table rather than engraving off it.
 val table = FontMetricsBuilder.buildTable(context.assets)
-SheetMusicJNI.nativeInstallSMuFLMetrics(table)
+SheetMusicJNI.nativeInstallFontMetrics(table)
 
 val bytes = context.assets.open("score.mscz").use { it.readBytes() }
 val handle = ScoreHandle.load(bytes)

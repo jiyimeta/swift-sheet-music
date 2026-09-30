@@ -29,7 +29,7 @@ public struct BlankScoreTemplate: Sendable, Equatable {
         public var transposeChromatic: Int
         /// GM program number written into the part's single `InstrumentChannel`.
         public var gmProgram: Int
-        /// A drum kit: `useDrumset` plus `GMPercussion.drumLineMap`. The encoder routes such a part to GM
+        /// A drum kit: `useDrumset` plus `GMDrumset.entries`. The encoder routes such a part to GM
         /// channel 10 off `useDrumset` alone, so nothing else needs setting here.
         public var isDrums: Bool
 
@@ -176,7 +176,7 @@ extension Part {
                 trackName: plan.longName,
                 channels: [InstrumentChannel(program: plan.gmProgram)],
                 useDrumset: plan.isDrums,
-                drumLineMap: plan.isDrums ? GMPercussion.drumLineMap : [:],
+                drumset: plan.isDrums ? GMDrumset.entries : [:],
                 transposeDiatonic: plan.transposeDiatonic,
                 transposeChromatic: plan.transposeChromatic,
             ),

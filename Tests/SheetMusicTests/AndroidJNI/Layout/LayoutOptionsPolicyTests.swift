@@ -27,7 +27,7 @@
         func theLegacyWireDecodesToTheOldHardCodedBehaviour() throws {
             let legacy = LayoutOptionsWire(
                 layoutMode: 0, staffSize: 28,
-                honorLayoutBreaks: 1, collapseMultiMeasureRests: 1, showsInvisibleElements: 0,
+                collapseMultiMeasureRests: 1, showsInvisibleElements: 0,
                 hiddenStaves: [], clefOverrides: [], transposeSemitones: 0,
             )
             let wire = try LayoutOptionsWire(decoding: legacy.encodeToData())
@@ -42,36 +42,38 @@
             #expect(wire.smallNoteMag == 0)
         }
 
-        /// The reason `breakPolicyRaw == 0` defers instead of meaning `.honor`: a host sending the
-        /// old boolean as `0` means `.ignoreAll`, and a new field that overrode it with `.honor`
-        /// would silently flip that host's layout the moment it shipped.
+        /// A host that never sets `breakPolicyRaw` keeps its authored breaks. `0` is "no opinion" and
+        /// resolves to `.honor`, which is also what every shipped host asked for through the break
+        /// boolean this field replaced — so dropping that boolean leaves their layout unchanged.
         @Test
-        func breakPolicyZeroDefersToTheOlderBoolean() {
-            var wire = LayoutOptionsWire.verticalDefault
-            wire.honorLayoutBreaks = 0
-            #expect(wire.breakPolicy == .ignoreAll)
-            wire.honorLayoutBreaks = 1
+        func anUnsetBreakPolicyRoundTripsAsHonor() throws {
+            let wire = try LayoutOptionsWire(decoding: LayoutOptionsWire.verticalDefault.encodeToData())
+            #expect(wire.breakPolicyRaw == 0)
             #expect(wire.breakPolicy == .honor)
         }
 
         // MARK: - New reach
 
-        /// The case the boolean could not express at all: ignore `<LayoutBreak>line`, still honor
+        /// The case a boolean could not express at all: ignore `<LayoutBreak>line`, still honor
         /// `page`.
         @Test
         func breakPolicyReachesIgnoreSystemBreaks() {
             var wire = LayoutOptionsWire.verticalDefault
-            wire.honorLayoutBreaks = 1
             wire.breakPolicyRaw = 2
             #expect(wire.breakPolicy == .ignoreSystemBreaks)
         }
 
-        /// An explicit raw value wins over the boolean in both directions, so a host that has moved
-        /// to the new field never has to keep the old one in sync.
-        @Test(arguments: [(UInt8(1), LayoutBreakPolicy.honor), (3, .ignoreAll)])
-        func anExplicitBreakPolicyOverridesTheBoolean(raw: UInt8, expected: LayoutBreakPolicy) {
+        /// Every raw value `breakPolicy` can meet. An undefined one reads as "no opinion" rather than
+        /// as some other policy, so a host that sends a value from a later version gets the default.
+        @Test(arguments: [
+            (UInt8(0), LayoutBreakPolicy.honor),
+            (1, .honor),
+            (2, .ignoreSystemBreaks),
+            (3, .ignoreAll),
+            (4, .honor),
+        ])
+        func eachRawBreakPolicyMapsToItsPolicy(raw: UInt8, expected: LayoutBreakPolicy) {
             var wire = LayoutOptionsWire.verticalDefault
-            wire.honorLayoutBreaks = raw == 1 ? 0 : 1 // deliberately the opposite of `expected`
             wire.breakPolicyRaw = raw
             #expect(wire.breakPolicy == expected)
         }

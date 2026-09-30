@@ -12,7 +12,6 @@
             let wire = LayoutOptionsWire(
                 layoutMode: 2,
                 staffSize: 18.5,
-                honorLayoutBreaks: 1,
                 collapseMultiMeasureRests: 0,
                 showsInvisibleElements: 1,
                 hiddenStaves: [HiddenStaffWire(partIndex: 1, staffIndexInPart: 0)],
@@ -75,11 +74,44 @@
             #expect(spacing.systemVerticalPadding == 2.7)
         }
 
+        /// Tag 3 carried the break boolean before 4.0.0 and is reserved now. Every other field has to keep the tag
+        /// it always had: the implicit tags follow declaration order, so deleting the field without reserving its
+        /// tag would have shifted all fifteen that follow it, and an encoder on one side of the change would feed
+        /// its layout mode into the other side's collapse flag. `verticalDefault` leaves `spacing` (tag 18) nil.
+        @Test func theRetiredBreakTagStaysEmptyAndLaterFieldsKeepTheirTags() throws {
+            var reader = WireFormatReader(data: LayoutOptionsWire.verticalDefault.encodeToData())
+            let tags = try reader.readLengthPrefixed { (payload: inout WireFormatReader) throws -> [UInt32] in
+                var tags: [UInt32] = []
+                while !payload.isAtEnd {
+                    let (tag, wireType) = try payload.readTag()
+                    tags.append(tag)
+                    try payload.skipUnknownField(wireType: wireType)
+                }
+                return tags
+            }
+            let expected: [UInt32] = [1, 2] + Array(4 ... 17)
+            #expect(tags == expected)
+        }
+
+        /// A blob that still carries tag 3 decodes: the reader skips it as an unknown field, so the boolean no
+        /// longer decides anything. Written as `0` ("ignore all") so a decoder that still read it would answer
+        /// `.ignoreAll` here; a host that wants that policy now sends `breakPolicyRaw = 3`.
+        @Test func aBlobCarryingTheRetiredBreakTagStillDecodes() throws {
+            var writer = WireFormatWriter()
+            writer.writeLengthPrefixed { payload in
+                LayoutOptionsWire.verticalDefault.encodePayload(into: &payload)
+                payload.writeTag(tag: 3, wireType: .varint)
+                payload.writeVarint(0)
+            }
+            let decoded = try LayoutOptionsCodec.decode(writer.data)
+            #expect(decoded.staffSize == 28)
+            #expect(decoded.breakPolicy == .honor)
+        }
+
         @Test func absentSpacingDecodesForBackwardCompatibility() throws {
             let wire = LayoutOptionsWire(
                 layoutMode: 0,
                 staffSize: 28,
-                honorLayoutBreaks: 1,
                 collapseMultiMeasureRests: 0,
                 showsInvisibleElements: 0,
                 hiddenStaves: [],
@@ -100,7 +132,7 @@
             func delta(_ semitones: Int32) -> Int {
                 LayoutOptionsWire(
                     layoutMode: 0, staffSize: 28,
-                    honorLayoutBreaks: 1, collapseMultiMeasureRests: 0, showsInvisibleElements: 0,
+                    collapseMultiMeasureRests: 0, showsInvisibleElements: 0,
                     hiddenStaves: [], clefOverrides: [], transposeSemitones: semitones, showsLyrics: 1,
                 ).transposeDelta
             }
@@ -119,7 +151,6 @@
             let wire = LayoutOptionsWire(
                 layoutMode: 0,
                 staffSize: 28,
-                honorLayoutBreaks: 1,
                 collapseMultiMeasureRests: 0,
                 showsInvisibleElements: 0,
                 hiddenStaves: [],
@@ -139,7 +170,6 @@
             let wire = LayoutOptionsWire(
                 layoutMode: 0,
                 staffSize: 12.0,
-                honorLayoutBreaks: 0,
                 collapseMultiMeasureRests: 1,
                 showsInvisibleElements: 0,
                 hiddenStaves: [],
@@ -158,7 +188,6 @@
             let wire = LayoutOptionsWire(
                 layoutMode: 1,
                 staffSize: 16.0,
-                honorLayoutBreaks: 0,
                 collapseMultiMeasureRests: 0,
                 showsInvisibleElements: 0,
                 hiddenStaves: [],

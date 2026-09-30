@@ -101,7 +101,10 @@ extension EngravingSpacingOptions {
     /// 0 = vertical, 1 = horizontal, 2 = page.
     public var layoutMode: Int
     public var staffSize: Double
-    public var honorLayoutBreaks: Bool
+    /// `LayoutOptionsWire.breakPolicyRaw`: 0 = no opinion (`.honor`), 1 = `.honor`, 2 = `.ignoreSystemBreaks`,
+    /// 3 = `.ignoreAll`. An integer, like `layoutMode`: the TypeScript resolver maps the public string union
+    /// (`LayoutOptions.breakPolicy`) onto it.
+    public var breakPolicyRaw: Int
     public var collapseMultiMeasureRests: Bool
     public var showsInvisibleElements: Bool
     public var showsLyrics: Bool
@@ -114,7 +117,7 @@ extension EngravingSpacingOptions {
     public init(
         layoutMode: Int,
         staffSize: Double,
-        honorLayoutBreaks: Bool,
+        breakPolicyRaw: Int,
         collapseMultiMeasureRests: Bool,
         showsInvisibleElements: Bool,
         showsLyrics: Bool,
@@ -125,7 +128,7 @@ extension EngravingSpacingOptions {
     ) {
         self.layoutMode = layoutMode
         self.staffSize = staffSize
-        self.honorLayoutBreaks = honorLayoutBreaks
+        self.breakPolicyRaw = breakPolicyRaw
         self.collapseMultiMeasureRests = collapseMultiMeasureRests
         self.showsInvisibleElements = showsInvisibleElements
         self.showsLyrics = showsLyrics
@@ -141,7 +144,6 @@ extension LayoutOptions {
         LayoutOptionsWire(
             layoutMode: UInt8(clamping: layoutMode),
             staffSize: staffSize,
-            honorLayoutBreaks: honorLayoutBreaks ? 1 : 0,
             collapseMultiMeasureRests: collapseMultiMeasureRests ? 1 : 0,
             showsInvisibleElements: showsInvisibleElements ? 1 : 0,
             hiddenStaves: hiddenStaves.map {
@@ -159,6 +161,7 @@ extension LayoutOptions {
             },
             transposeSemitones: Int32(transposeSemitones),
             showsLyrics: showsLyrics ? 1 : 0,
+            breakPolicyRaw: UInt8(clamping: breakPolicyRaw),
             spacing: EngravingSpacingWire(
                 minNoteDistance: spacing.minNoteDistance < 0 ? nil : spacing.minNoteDistance,
                 spacePerQuarter: spacing.spacePerQuarter < 0 ? nil : spacing.spacePerQuarter,

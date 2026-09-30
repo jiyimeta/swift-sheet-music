@@ -270,7 +270,7 @@ describe("editing facade", () => {
       bundleURL: new URL("../dist/", import.meta.url),
       platform: "node",
     });
-    expect(sheetMusic.installSMuFLMetrics(metricsBytes)).toBe(true);
+    expect(sheetMusic.installFontMetrics(metricsBytes)).toBe(true);
   });
 
   it.each(replayChains)(

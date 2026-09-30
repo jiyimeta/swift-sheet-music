@@ -80,7 +80,7 @@ describe("playback parity with the Apple build", () => {
       bundleURL: new URL("../dist/", import.meta.url),
       platform: "node",
     });
-    expect(sheetMusic.installSMuFLMetrics(metricsBytes)).toBe(true);
+    expect(sheetMusic.installFontMetrics(metricsBytes)).toBe(true);
     score = sheetMusic.loadScore(scoreBytes);
     // The cursor rects come off the cached document, so a layout has to exist —
     // and it has to be the same one the fixture generator laid out.

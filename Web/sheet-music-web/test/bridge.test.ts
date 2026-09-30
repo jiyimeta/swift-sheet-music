@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import { loadSheetMusic, splitIntoBands, type SheetMusic } from "../src/index.js";
+import {
+  loadSheetMusic,
+  splitIntoBands,
+  type LayoutBreakPolicy,
+  type SheetMusic,
+} from "../src/index.js";
 
 /**
  * Pins the WebAssembly build against the Apple one.
@@ -117,7 +122,7 @@ function digest(bytes: Uint8Array): number {
 const defaultLayoutOptions = {
   layoutMode: 0,
   staffSize: 28,
-  honorLayoutBreaks: true,
+  breakPolicyRaw: 0,
   collapseMultiMeasureRests: false,
   showsInvisibleElements: false,
   showsLyrics: true,
@@ -147,7 +152,7 @@ describe("wasm bridge parity with the Apple build", () => {
       bundleURL: new URL("../dist/", import.meta.url),
       platform: "node",
     });
-    expect(sheetMusic.installSMuFLMetrics(metricsBytes)).toBe(true);
+    expect(sheetMusic.installFontMetrics(metricsBytes)).toBe(true);
   });
 
   it("reports a non-empty engine stamp", () => {
@@ -233,16 +238,31 @@ describe("wasm bridge parity with the Apple build", () => {
       score.layout({
         pageWidthMM: 60,
         pageHeightMM: 297,
-        options: { honorLayoutBreaks: false },
+        options: { breakPolicy: "ignoreAll" },
       });
       expect(score.pageBreaks({ pageHeightMM: 10_000 })).toHaveLength(2);
 
       score.layout({
         pageWidthMM: 60,
         pageHeightMM: 297,
-        options: { honorLayoutBreaks: true },
+        options: { breakPolicy: "honor" },
       });
       expect(score.pageBreaks({ pageHeightMM: 10_000 }).length).toBeGreaterThan(2);
+    } finally {
+      score.release();
+    }
+  });
+
+  // `"ignoreSystemBreaks"` drops line breaks only, so the authored page breaks
+  // still start new pages; an omitted policy is `"honor"`.
+  it("keeps authored page breaks unless the policy ignores them all", () => {
+    const score = sheetMusic.loadScore(pageBreakScoreBytes);
+    try {
+      const policies: (LayoutBreakPolicy | undefined)[] = [undefined, "ignoreSystemBreaks"];
+      for (const breakPolicy of policies) {
+        score.layout({ pageWidthMM: 60, pageHeightMM: 297, options: { breakPolicy } });
+        expect(score.pageBreaks({ pageHeightMM: 10_000 }).length).toBeGreaterThan(2);
+      }
     } finally {
       score.release();
     }
@@ -461,7 +481,7 @@ describe("wasm bridge parity with the Apple build", () => {
     const { instantiate } = await import("../dist/instantiate.js");
     const { defaultNodeSetup } = await import("../dist/platforms/node.js");
     const { exports: bridge } = await instantiate(await defaultNodeSetup({}));
-    expect(bridge.installSMuFLMetrics(metricsBytes)).toBe(true);
+    expect(bridge.installFontMetrics(metricsBytes)).toBe(true);
     const handle = bridge.loadScore(scoreBytes);
     try {
       const raw = bridge.computeLayout(handle, 210, 297, defaultLayoutOptions);

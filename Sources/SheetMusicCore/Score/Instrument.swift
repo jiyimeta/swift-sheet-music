@@ -98,7 +98,6 @@ public struct Instrument: Sendable, Equatable {
         articulations: [InstrumentArticulation] = [],
         channels: [InstrumentChannel] = [InstrumentChannel()],
         useDrumset: Bool = false,
-        drumLineMap: [Int: Int] = [:],
         drumset: [Int: DrumsetEntry] = [:],
         stringData: StringData? = nil,
         transposeDiatonic: Int = 0,
@@ -116,15 +115,7 @@ public struct Instrument: Sendable, Equatable {
         self.articulations = articulations
         self.channels = channels.isEmpty ? [InstrumentChannel()] : channels
         self.useDrumset = useDrumset
-        // Two spellings of one kit, so the many existing callers that build one from lines alone keep working.
-        // An explicit `drumset` is the richer of the two and wins; `drumLineMap` is filled out from `GMDrumset`.
-        if !drumset.isEmpty {
-            self.drumset = drumset
-        } else {
-            self.drumset = drumLineMap.reduce(into: [:]) { result, pair in
-                result[pair.key] = GMDrumset.entry(forPitch: pair.key, line: pair.value)
-            }
-        }
+        self.drumset = drumset
         self.stringData = stringData
         self.transposeDiatonic = transposeDiatonic
         self.transposeChromatic = transposeChromatic

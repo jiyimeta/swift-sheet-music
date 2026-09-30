@@ -114,7 +114,7 @@ extension ScoreLayerBuilder {
             if let glyphString = DynamicSymbolMap.glyphString(for: text) {
                 let glyphSize = metrics.sp * 4
                 let bravura = CTFontCreateWithName(
-                    BravuraFont.familyName as CFString, glyphSize, nil,
+                    SMuFLFamily.bravura as CFString, glyphSize, nil,
                 )
                 if let layer = textLayer(
                     text: glyphString, at: shift(p),
@@ -324,7 +324,7 @@ extension ScoreLayerBuilder {
                 for: lh.harmony, metrics: metrics,
             )
             let bravura = CTFontCreateWithName(
-                BravuraFont.familyName as CFString,
+                SMuFLFamily.bravura as CFString,
                 glyphSize, nil,
             )
             let originPoint = shift(CGPoint(

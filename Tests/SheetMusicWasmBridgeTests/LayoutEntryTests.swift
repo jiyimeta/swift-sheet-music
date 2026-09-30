@@ -77,8 +77,17 @@ struct LayoutEntryTests {
         #expect(pages.count > 1)
     }
 
-    @Test("pageBreaks follows the cached layout break policy")
-    func pageBreaksFollowsCachedBreakPolicy() throws {
+    /// Raw values as `LayoutOptionsWire.breakPolicyRaw` defines them. `0` is what the TypeScript resolver sends
+    /// when a host leaves `breakPolicy` out, so it has to paginate like `.honor`.
+    ///
+    /// `2` (`.ignoreSystemBreaks`) is the row that matters: it still honors the authored page break, so a
+    /// `pageBreaks` that read anything but `LayoutOptionsWire.breakPolicy` — the way it once read a boolean the web
+    /// could only set to honor-all or ignore-all — reports one page where the layout drew two.
+    @Test(
+        "pageBreaks follows the cached layout break policy",
+        arguments: [(0, 3), (1, 3), (2, 3), (3, 2)],
+    )
+    func pageBreaksFollowsCachedBreakPolicy(breakPolicyRaw: Int, expectedBoundaries: Int) throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.pageBreakScore())))
         defer { releaseScore(handle: handle) }
 
@@ -86,17 +95,18 @@ struct LayoutEntryTests {
             handle: handle,
             pageWidthMM: 210,
             pageHeightMM: 297,
-            options: layoutOptions(honorLayoutBreaks: false),
+            options: layoutOptions(breakPolicyRaw: breakPolicyRaw),
         )
-        #expect(pageBreaks(handle: handle, pageHeightMM: 10000).count == 2)
+        #expect(pageBreaks(handle: handle, pageHeightMM: 10000).count == expectedBoundaries)
+    }
 
-        _ = computeLayout(
-            handle: handle,
-            pageWidthMM: 210,
-            pageHeightMM: 297,
-            options: layoutOptions(honorLayoutBreaks: true),
-        )
-        #expect(pageBreaks(handle: handle, pageHeightMM: 10000).count == 3)
+    /// The web's options reach the same resolution Android's do, so `.ignoreSystemBreaks` is not a policy one
+    /// platform can express and the other cannot.
+    @Test("breakPolicyRaw resolves through LayoutOptionsWire.breakPolicy")
+    func breakPolicyRawResolvesThroughTheWire() {
+        #expect(layoutOptions().wire.breakPolicy == .honor)
+        #expect(layoutOptions(breakPolicyRaw: 2).wire.breakPolicy == .ignoreSystemBreaks)
+        #expect(layoutOptions(breakPolicyRaw: 3).wire.breakPolicy == .ignoreAll)
     }
 
     @Test("transpose and hidden staves change flat bytes")
@@ -134,19 +144,19 @@ struct LayoutEntryTests {
         #expect(hiddenStaff != visibleStaves)
     }
 
-    @Test("installSMuFLMetrics rejects an empty payload")
+    @Test("installFontMetrics rejects an empty payload")
     func installRejectsEmpty() {
-        #expect(installSMuFLMetrics(bytes: jsBytes([])) == false)
+        #expect(installFontMetrics(bytes: jsBytes([])) == false)
     }
 
-    @Test("installSMuFLMetrics rejects garbage")
+    @Test("installFontMetrics rejects garbage")
     func installRejectsGarbage() {
-        #expect(installSMuFLMetrics(bytes: jsBytes([0xFF, 0xFF, 0xFF, 0xFF])) == false)
+        #expect(installFontMetrics(bytes: jsBytes([0xFF, 0xFF, 0xFF, 0xFF])) == false)
     }
 
-    @Test("installSMuFLMetrics accepts a well-formed table")
+    @Test("installFontMetrics accepts a well-formed table")
     func installAcceptsWellFormedTable() {
-        // `installSMuFLMetrics` mutates the process-wide `FontMetrics.provider`
+        // `installFontMetrics` mutates the process-wide `FontMetrics.provider`
         // — the same global `Tests/SheetMusicTests` suites read after installing
         // the real Bravura table through `TestSupport.installFontMetrics`. Both
         // test targets link into one merged wasm test binary/process (`swift
@@ -200,13 +210,13 @@ struct LayoutEntryTests {
         f32(-125)
         f32(295)
         f32(250)
-        #expect(installSMuFLMetrics(bytes: jsBytes(bytes)) == true)
+        #expect(installFontMetrics(bytes: jsBytes(bytes)) == true)
     }
 
     private func layoutOptions(
         layoutMode: Int = 0,
         staffSize: Double = 28,
-        honorLayoutBreaks: Bool = true,
+        breakPolicyRaw: Int = 0,
         collapseMultiMeasureRests: Bool = false,
         showsInvisibleElements: Bool = false,
         showsLyrics: Bool = true,
@@ -217,7 +227,7 @@ struct LayoutEntryTests {
         LayoutOptions(
             layoutMode: layoutMode,
             staffSize: staffSize,
-            honorLayoutBreaks: honorLayoutBreaks,
+            breakPolicyRaw: breakPolicyRaw,
             collapseMultiMeasureRests: collapseMultiMeasureRests,
             showsInvisibleElements: showsInvisibleElements,
             showsLyrics: showsLyrics,

@@ -85,6 +85,13 @@ export interface LayoutRequest {
 
 export type LayoutMode = "vertical" | "horizontal" | "page";
 
+/**
+ * How the layout consumes the score's authored breaks: `"honor"` keeps line
+ * and page breaks, `"ignoreSystemBreaks"` drops line breaks but keeps page
+ * breaks, `"ignoreAll"` drops both.
+ */
+export type LayoutBreakPolicy = "honor" | "ignoreSystemBreaks" | "ignoreAll";
+
 export interface HiddenStaff {
   readonly partIndex: number;
   readonly staffIndexInPart: number;
@@ -118,7 +125,8 @@ export interface EngravingSpacing {
 export interface LayoutOptions {
   readonly layoutMode?: LayoutMode;
   readonly staffSize?: number;
-  readonly honorLayoutBreaks?: boolean;
+  /** Defaults to `"honor"`. */
+  readonly breakPolicy?: LayoutBreakPolicy;
   readonly collapseMultiMeasureRests?: boolean;
   readonly showsInvisibleElements?: boolean;
   readonly showsLyrics?: boolean;
@@ -145,7 +153,8 @@ interface ResolvedEngravingSpacing {
 interface ResolvedLayoutOptions {
   readonly layoutMode: number;
   readonly staffSize: number;
-  readonly honorLayoutBreaks: boolean;
+  /** `LayoutOptionsWire.breakPolicyRaw`; see `resolveBreakPolicy`. */
+  readonly breakPolicyRaw: number;
   readonly collapseMultiMeasureRests: boolean;
   readonly showsInvisibleElements: boolean;
   readonly showsLyrics: boolean;
@@ -465,7 +474,7 @@ export interface BridgeExports {
   staffDescriptorCount(handle: number): number;
   staffDescriptor(handle: number, index: number): StaffDescriptor | null;
   scoreFingerprint(handle: number): string;
-  installSMuFLMetrics(bytes: Uint8Array): boolean;
+  installFontMetrics(bytes: Uint8Array): boolean;
   computeLayout(
     handle: number,
     pageWidthMM: number,
@@ -611,11 +620,29 @@ function resolveLayoutMode(mode: LayoutMode | undefined): number {
   }
 }
 
+/**
+ * `LayoutOptionsWire.breakPolicyRaw`: `0` is "no opinion", which the engine
+ * reads as `"honor"`, so an omitted policy and an explicit `"honor"` lay out
+ * the same.
+ */
+function resolveBreakPolicy(policy: LayoutBreakPolicy | undefined): number {
+  switch (policy) {
+    case undefined:
+      return 0;
+    case "honor":
+      return 1;
+    case "ignoreSystemBreaks":
+      return 2;
+    case "ignoreAll":
+      return 3;
+  }
+}
+
 function resolveOptions(options: LayoutOptions | undefined): ResolvedLayoutOptions {
   return {
     layoutMode: resolveLayoutMode(options?.layoutMode),
     staffSize: options?.staffSize ?? 28,
-    honorLayoutBreaks: options?.honorLayoutBreaks ?? true,
+    breakPolicyRaw: resolveBreakPolicy(options?.breakPolicy),
     collapseMultiMeasureRests: options?.collapseMultiMeasureRests ?? false,
     showsInvisibleElements: options?.showsInvisibleElements ?? false,
     showsLyrics: options?.showsLyrics ?? true,
@@ -1165,8 +1192,8 @@ export class SheetMusic {
    * ships as a byte copy, so an existing fetch keeps working. It is removed
    * in 3.0.0 — point at `sheet-music.smft` when convenient.
    */
-  installSMuFLMetrics(bytes: Uint8Array): boolean {
-    return this.bridge.installSMuFLMetrics(bytes);
+  installFontMetrics(bytes: Uint8Array): boolean {
+    return this.bridge.installFontMetrics(bytes);
   }
 
   /**

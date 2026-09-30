@@ -3,10 +3,12 @@ import Testing
 
 @Suite("Instrument.drumset")
 struct InstrumentDrumsetTests {
-    @Test("a kit built from a line map gets the GM head, name and voice for each pitch")
-    func lineMapInitFillsFromGM() {
-        let instrument = Instrument(id: "drumset", useDrumset: true, drumLineMap: [38: 2, 42: -1])
+    @Test("a line map assigned to an empty kit gets the GM head, name and voice for each pitch")
+    func lineMapAssignmentFillsFromGM() {
+        var instrument = Instrument(id: "drumset", useDrumset: true)
+        instrument.drumLineMap = [38: 2, 42: -1]
         #expect(instrument.drumset.count == 2)
+        #expect(instrument.drumset[38]?.line == 2)
         #expect(instrument.drumset[38]?.head == "normal")
         #expect(instrument.drumset[38]?.name == "Acoustic Snare")
         #expect(instrument.drumset[42]?.head == "cross")
@@ -15,7 +17,14 @@ struct InstrumentDrumsetTests {
 
     @Test("drumLineMap reads back the lines it was given")
     func lineMapRoundTrips() {
-        let instrument = Instrument(id: "drumset", useDrumset: true, drumLineMap: GMPercussion.drumLineMap)
+        var instrument = Instrument(id: "drumset", useDrumset: true)
+        instrument.drumLineMap = GMPercussion.drumLineMap
+        #expect(instrument.drumLineMap == GMPercussion.drumLineMap)
+    }
+
+    @Test("a kit built from GMDrumset reads back the GM lines")
+    func gmKitReadsBackGMLines() {
+        let instrument = Instrument(id: "drumset", useDrumset: true, drumset: GMDrumset.entries)
         #expect(instrument.drumLineMap == GMPercussion.drumLineMap)
     }
 
@@ -33,20 +42,12 @@ struct InstrumentDrumsetTests {
 
     @Test("assigning drumLineMap drops the pitches the new map does not name")
     func assigningReplacesWholesale() {
-        var instrument = Instrument(id: "drumset", useDrumset: true, drumLineMap: [38: 2, 42: -1])
+        var instrument = Instrument(id: "drumset", useDrumset: true, drumset: [
+            38: GMDrumset.entry(forPitch: 38, line: 2),
+            42: GMDrumset.entry(forPitch: 42, line: -1),
+        ])
         instrument.drumLineMap = [38: 2]
         #expect(Set(instrument.drumset.keys) == [38])
-    }
-
-    @Test("an explicit drumset wins over a line map passed alongside it")
-    func drumsetWinsOverLineMap() {
-        let instrument = Instrument(
-            id: "drumset", useDrumset: true,
-            drumLineMap: [38: 7],
-            drumset: [38: DrumsetEntry(name: "Snare", head: "cross", line: 2, voiceIndex: 0, stem: 1)],
-        )
-        #expect(instrument.drumLineMap == [38: 2])
-        #expect(instrument.drumset[38]?.head == "cross")
     }
 
     @Test("a pitched instrument has an empty kit")
