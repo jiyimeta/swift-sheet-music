@@ -43,6 +43,8 @@ public struct PDFPageView: View {
     /// `BreakIndicatorOverlay` so badges hide for breaks that the
     /// active policy ignored.
     let policy: LayoutBreakPolicy
+    /// Forwarded to `ScoreCanvasDrawing.drawSystem`; see its `drawsInvisibleElements`.
+    let drawsInvisibleElements: Bool
 
     public init(
         systems: [LayoutSystem],
@@ -54,6 +56,7 @@ public struct PDFPageView: View {
         renderScale: CGFloat = 1,
         breakIndicatorVisibility: BreakIndicatorVisibility = .none,
         policy: LayoutBreakPolicy = .honor,
+        drawsInvisibleElements: Bool = true,
     ) {
         self.systems = systems
         self.pageStartY = pageStartY
@@ -64,6 +67,7 @@ public struct PDFPageView: View {
         self.renderScale = renderScale
         self.breakIndicatorVisibility = breakIndicatorVisibility
         self.policy = policy
+        self.drawsInvisibleElements = drawsInvisibleElements
     }
 
     public var body: some View {
@@ -100,6 +104,7 @@ public struct PDFPageView: View {
                 for system in systems {
                     ScoreCanvasDrawing.drawSystem(
                         system, metrics: metrics, into: &local,
+                        drawsInvisibleElements: drawsInvisibleElements,
                     )
                 }
             }
