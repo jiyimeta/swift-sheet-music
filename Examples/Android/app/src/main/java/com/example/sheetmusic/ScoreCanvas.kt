@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -111,9 +112,18 @@ private fun DrawScope.drawPage(
         color = currentArgb
     }
 
+    // SYSTEM (the platform UI family) has no face here and draws Edwin, the
+    // face the portable metrics provider measured it in. Exhaustive, so a new
+    // FontID has to be mapped here before this compiles.
+    fun typefaceFor(fontId: FontID): Typeface = when (fontId) {
+        FontID.SMUFL -> bravura
+        FontID.TEXT_ROMAN, FontID.SYSTEM -> edwin
+    }
+
     // `isFakeBoldText` rather than a bold typeface: this app ships Edwin as a
     // single Roman face, and FontMetricsBuilder measures its `Edwin-Bold`
     // record with the same synthesis, so what was measured is what is painted.
+    // The SEMIBOLD bit is ignored (no semibold face ships), so it draws regular.
     fun applyTextStyle() {
         glyphPaint.isFakeBoldText =
             (textStyleFlags and DrawCommand.TextStyleFlag.BOLD) != 0u.toUByte()
@@ -163,6 +173,14 @@ private fun DrawScope.drawPage(
                 path.reset()
                 strokeStarted = false
             }
+            is DrawCommand.FillPath -> {
+                // `Fill` closes each contour implicitly, and the Path fills
+                // with its default NonZero rule — the wire's. No path effect,
+                // so SetDash does not apply. Ends the path as Stroke does.
+                drawPath(path = path, color = Color(currentArgb), style = Fill)
+                path.reset()
+                strokeStarted = false
+            }
             is DrawCommand.FillRect -> {
                 drawRect(
                     color = Color(currentArgb),
@@ -173,8 +191,7 @@ private fun DrawScope.drawPage(
                 )
             }
             is DrawCommand.Glyph -> {
-                glyphPaint.typeface =
-                    if (cmd.fontId == FontID.SMUFL) bravura else edwin
+                glyphPaint.typeface = typefaceFor(cmd.fontId)
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
                 val s = codepointToString(cmd.codepoint.toInt())
@@ -188,8 +205,7 @@ private fun DrawScope.drawPage(
                 }
             }
             is DrawCommand.Text -> {
-                glyphPaint.typeface =
-                    if (cmd.fontId == FontID.SMUFL) bravura else edwin
+                glyphPaint.typeface = typefaceFor(cmd.fontId)
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
                 applyTextStyle()
@@ -205,8 +221,7 @@ private fun DrawScope.drawPage(
                 glyphPaint.textSkewX = 0f
             }
             is DrawCommand.StretchedGlyph -> {
-                glyphPaint.typeface =
-                    if (cmd.fontId == FontID.SMUFL) bravura else edwin
+                glyphPaint.typeface = typefaceFor(cmd.fontId)
                 glyphPaint.textSize = cmd.fontSize.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
                 val s = codepointToString(cmd.codepoint.toInt())
@@ -257,22 +272,6 @@ private fun DrawScope.drawPage(
             is DrawCommand.SetDash -> {
                 dashOnPx = cmd.onMM.toFloat() * pxPerMM
                 dashOffPx = cmd.offMM.toFloat() * pxPerMM
-            }
-            is DrawCommand.ItalicText -> {
-                glyphPaint.typeface =
-                    if (cmd.fontId == FontID.SMUFL) bravura else edwin
-                glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
-                glyphPaint.color = currentArgb
-                glyphPaint.textSkewX = -0.25f
-                drawIntoCanvas { canvas ->
-                    canvas.nativeCanvas.drawText(
-                        cmd.text,
-                        cmd.x.toFloat() * pxPerMM,
-                        cmd.y.toFloat() * pxPerMM,
-                        glyphPaint
-                    )
-                }
-                glyphPaint.textSkewX = 0f
             }
             is DrawCommand.SetTextStyle -> {
                 textStyleFlags = cmd.flags

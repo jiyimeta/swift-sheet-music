@@ -40,8 +40,8 @@ private val INITIAL_ARGB: UInt = 0xFF00_0000u
  * Split this page's command stream into bands of at least [minBandHeightMM] painted height.
  *
  * A band closes at the first command boundary past that height where closing is SAFE, meaning no path is
- * mid-construction (a `MoveTo`/`LineTo`/`CubicTo` run that has not reached its `Stroke`) and no rotation
- * is open. Both are stateful across commands, so cutting inside one would strand geometry in the wrong
+ * mid-construction (a `MoveTo`/`LineTo`/`CubicTo` run that has not reached its `Stroke` or `FillPath`) and
+ * no rotation is open. Both are stateful across commands, so cutting inside one would strand geometry in the wrong
  * band. Colour and dash are state a band can simply restate at its start, which is what the prefix does.
  */
 fun EncodablePage.splitIntoBands(minBandHeightMM: Double = DEFAULT_BAND_HEIGHT_MM): List<ScoreBand> {
@@ -96,7 +96,9 @@ fun EncodablePage.splitIntoBands(minBandHeightMM: Double = DEFAULT_BAND_HEIGHT_M
             is DrawCommand.SetTextStyle -> textStyleFlags = cmd.flags
             is DrawCommand.SetRotation -> rotation = if (cmd.radians != 0.0) cmd else null
             is DrawCommand.MoveTo -> pathOpen = true
-            is DrawCommand.Stroke -> pathOpen = false
+            // A fill ends the path as a stroke does, but has no width to widen the band by: the path's own
+            // points already carry its whole extent, so it falls through to `boxMM`, which reports nothing.
+            is DrawCommand.Stroke, is DrawCommand.FillPath -> pathOpen = false
             else -> Unit
         }
 
@@ -143,8 +145,9 @@ private class Box(val minX: Double, val minY: Double, val maxX: Double, val maxY
 }
 
 /**
- * Bounds this command paints, or null for a state-only command (`Stroke` is handled by the caller, which
- * widens the band it has already accumulated).
+ * Bounds this command paints, or null for a state-only command or a path terminator. `Stroke` is handled by
+ * the caller, which widens the band it has already accumulated; `FillPath` paints exactly inside the points
+ * of the path it ends, which are already in the band.
  *
  * Deliberately generous: these bounds size the band's layer, so under-reporting would let a host cull a
  * band whose ink actually reaches into the viewport — a visible clip — while over-reporting only costs a
@@ -163,10 +166,10 @@ private fun DrawCommand.boxMM(): Box? = when (this) {
     // multiples here are the generous approximation described above.
     is DrawCommand.Glyph -> Box(x, y - 2.0 * size, x + 2.0 * size, y + size)
     is DrawCommand.Text -> Box(x, y - 2.0 * size, x + 2.0 * size, y + size)
-    is DrawCommand.ItalicText -> Box(x, y - 2.0 * size, x + 2.0 * size, y + size)
     is DrawCommand.StretchedGlyph -> Box(rightEdgeX - fontSize, topY, rightEdgeX, bottomY)
-    // State commands paint nothing themselves, so they contribute no box.
-    is DrawCommand.Stroke, is DrawCommand.SetColor, is DrawCommand.SetDash,
+    // State commands paint nothing themselves, and the path terminators paint what their path's points
+    // already reported, so none of them contributes a box.
+    is DrawCommand.Stroke, is DrawCommand.FillPath, is DrawCommand.SetColor, is DrawCommand.SetDash,
     is DrawCommand.SetRotation, is DrawCommand.SetTextStyle,
     -> null
 }

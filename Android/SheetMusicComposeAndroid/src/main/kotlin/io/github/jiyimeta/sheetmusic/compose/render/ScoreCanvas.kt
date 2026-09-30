@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -140,12 +141,25 @@ internal fun DrawScope.drawCommands(
     }
 
     /**
+     * The face a [FontID] draws in. [FontID.SYSTEM] — the platform UI family — has no face of its
+     * own here and draws the text face, which is what the portable metrics provider measured it in.
+     * Exhaustive on purpose, so a new id has to be mapped here before this compiles.
+     */
+    fun typefaceFor(fontId: FontID): android.graphics.Typeface = when (fontId) {
+        FontID.SMUFL -> smufl
+        FontID.TEXT_ROMAN, FontID.SYSTEM -> text
+    }
+
+    /**
      * Apply the active style to [glyphPaint] before a text draw.
      *
      * `isFakeBoldText` rather than a bold typeface: this library ships Edwin as a single Roman face,
      * and `FontMetricsBuilder` measures its `Edwin-Bold` record with the same synthesis — so what
      * the metrics table reports is what lands on the canvas. A rehearsal mark's frame is sized from
      * that measurement, so the two have to agree.
+     *
+     * The `SEMIBOLD` bit is ignored and draws regular: no semibold face ships here, and the
+     * portable metrics provider measured the text in regular.
      */
     fun applyTextStyle() {
         glyphPaint.isFakeBoldText = (textStyleFlags and DrawCommand.TextStyleFlag.BOLD) != 0u.toUByte()
@@ -189,6 +203,14 @@ internal fun DrawScope.drawCommands(
                 path.reset()
                 strokeStarted = false
             }
+            is DrawCommand.FillPath -> {
+                // `Fill` closes each contour implicitly, and a fresh Compose `Path` fills with
+                // `PathFillType.NonZero` (`reset` keeps the fill type) — the wire's nonzero rule. No
+                // path effect, so an active `SetDash` does not apply. Ends the path as `Stroke` does.
+                drawPath(path = path, color = Color(currentArgb), style = Fill)
+                path.reset()
+                strokeStarted = false
+            }
             is DrawCommand.FillRect -> {
                 drawRect(
                     color = Color(currentArgb),
@@ -197,7 +219,7 @@ internal fun DrawScope.drawCommands(
                 )
             }
             is DrawCommand.Glyph -> {
-                glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) smufl else text
+                glyphPaint.typeface = typefaceFor(cmd.fontId)
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
                 val s = String(intArrayOf(cmd.codepoint.toInt()), 0, 1)
@@ -208,7 +230,7 @@ internal fun DrawScope.drawCommands(
                 }
             }
             is DrawCommand.Text -> {
-                glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) smufl else text
+                glyphPaint.typeface = typefaceFor(cmd.fontId)
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
                 applyTextStyle()
@@ -221,7 +243,7 @@ internal fun DrawScope.drawCommands(
                 glyphPaint.textSkewX = 0f
             }
             is DrawCommand.StretchedGlyph -> {
-                glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) smufl else text
+                glyphPaint.typeface = typefaceFor(cmd.fontId)
                 glyphPaint.textSize = cmd.fontSize.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
                 val s = String(intArrayOf(cmd.codepoint.toInt()), 0, 1)
@@ -273,18 +295,6 @@ internal fun DrawScope.drawCommands(
                 dashOnPx = cmd.onMM.toFloat() * pxPerMM
                 dashOffPx = cmd.offMM.toFloat() * pxPerMM
             }
-            is DrawCommand.ItalicText -> {
-                glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) smufl else text
-                glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
-                glyphPaint.color = currentArgb
-                glyphPaint.textSkewX = ITALIC_SKEW
-                drawIntoCanvas { canvas ->
-                    canvas.nativeCanvas.drawText(
-                        cmd.text, cmd.x.toFloat() * pxPerMM, cmd.y.toFloat() * pxPerMM, glyphPaint,
-                    )
-                }
-                glyphPaint.textSkewX = 0f
-            }
             is DrawCommand.SetTextStyle -> {
                 textStyleFlags = cmd.flags
             }
@@ -293,8 +303,8 @@ internal fun DrawScope.drawCommands(
 }
 
 /**
- * Synthetic-italic slant, in x-per-y. `-0.25` is Android's own conventional value for oblique text
- * and matches what the superseded `ItalicText` command always used, so switching to the state
- * command did not change how a tuplet digit or a glissando label leans.
+ * Synthetic-italic slant, in x-per-y, for the `ITALIC` bit of `SetTextStyle`. `-0.25` is Android's
+ * own conventional value for oblique text, and the slant this renderer has always given a tuplet
+ * digit or a glissando label.
  */
 private const val ITALIC_SKEW = -0.25f

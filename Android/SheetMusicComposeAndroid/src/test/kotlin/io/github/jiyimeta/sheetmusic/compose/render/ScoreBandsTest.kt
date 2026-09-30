@@ -178,6 +178,40 @@ class ScoreBandsTest {
     }
 
     @Test
+    fun `a filled path straddling a band boundary stays in one band`() {
+        // A beam is MoveTo, three LineTo, FillPath. This one starts at 75 mm and reaches 90 mm, so it
+        // crosses the 80 mm cut: the walker must hold the band open until FillPath ends the path, then
+        // close it there — FillPath is a path terminator like Stroke. Were it not, the path would stay
+        // "open" forever and every later rect would pile into the same band.
+        val quad = listOf<DrawCommand>(
+            DrawCommand.MoveTo(0.0, 75.0),
+            DrawCommand.LineTo(10.0, 75.0),
+            DrawCommand.LineTo(10.0, 90.0),
+            DrawCommand.LineTo(0.0, 90.0),
+            DrawCommand.FillPath,
+        )
+        val commands = buildList<DrawCommand> {
+            add(rect(0.0))
+            add(rect(70.0))
+            addAll(quad)
+            repeat(40) { add(rect(100.0 + it * 10.0)) }
+        }
+        val bands = EncodablePage(210.0, 2000.0, commands).splitIntoBands(80.0)
+        assertTrue("expected a split after the fill, got ${bands.size} band(s)", bands.size > 1)
+
+        val holding = bands.filter { band -> band.commands.any { it is DrawCommand.MoveTo } }
+        assertEquals("the path landed in more than one band", 1, holding.size)
+        val band = holding.single()
+        val start = band.commands.indexOf(quad.first())
+        assertEquals("the path's commands were split up", quad, band.commands.subList(start, start + quad.size))
+
+        // A fill adds no stroke-width padding and no box of its own: the band ends exactly at the
+        // path's lowest point.
+        assertEquals(0.0, band.topMM, 1e-9)
+        assertEquals(90.0, band.topMM + band.heightMM, 1e-9)
+    }
+
+    @Test
     fun `a rotated run is never split across bands`() {
         val commands = buildList {
             add(DrawCommand.SetRotation(1.57, 0.0, 0.0))

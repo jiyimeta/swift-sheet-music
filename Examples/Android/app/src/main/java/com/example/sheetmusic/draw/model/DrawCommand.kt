@@ -3,9 +3,13 @@ package com.example.sheetmusic.draw.model
 /**
  * One painter command. Subclass declaration order must match the Swift
  * `@WireFormatChoice DrawCommand` cases in
- * `Sources/SheetMusicAndroidJNI/DrawProgram.swift` — the wire
+ * `Sources/SheetMusicBridgeCore/Draw/DrawProgram.swift` — the wire
  * discriminator is the declaration-order index emitted by the
  * macro-driven codec.
+ *
+ * The generated `DrawCommandCodec` constructs these by name: a case with a
+ * payload as `DrawCommand.X(label = …)`, a payload-free case as the bare
+ * `DrawCommand.X` — so a payload-free case must be an `object`.
  */
 sealed class DrawCommand {
     data class MoveTo(val x: Double, val y: Double) : DrawCommand()
@@ -73,33 +77,34 @@ sealed class DrawCommand {
         val offMM: Double,
     ) : DrawCommand()
     /**
-     * Italic text run — same payload as [Text], but the renderer slants the
-     * glyphs. Tuplet digits and rehearsal marks, which MuseScore sets in
-     * italic, use this.
-     */
-    data class ItalicText(
-        val text: String,
-        val x: Double,
-        val y: Double,
-        val size: Double,
-        val fontId: FontID,
-    ) : DrawCommand()
-
-    /**
      * Font style for every subsequent [Text] and [Glyph], until the next
      * [SetTextStyle]. A state command like [SetColor]; [flags] is the bitmask
      * in [TextStyleFlag].
      *
-     * Mirrors `DrawCommand.setTextStyle` (wire v7), which supersedes
-     * [ItalicText] — MuseScore's role defaults set tempo marks, rehearsal
-     * marks and instrument-change text bold, and the wire had no way to say so.
+     * Mirrors `DrawCommand.setTextStyle` (wire v7) — MuseScore's role
+     * defaults set tempo marks, rehearsal marks and instrument-change text
+     * bold, and before it the wire had no way to say so.
      */
     data class SetTextStyle(val flags: UByte) : DrawCommand()
+
+    /**
+     * Fill the path built since the last [MoveTo] (by [LineTo] / [CubicTo])
+     * and end it, as [Stroke] does. The path closes implicitly and fills with
+     * the nonzero winding rule in the current [SetColor]; [SetDash] does not
+     * apply. Beams are drawn with it: [MoveTo], three [LineTo], [FillPath].
+     *
+     * Payload-free, so it is an `object`: the generated codec decodes
+     * discriminator 12 to the bare `DrawCommand.FillPath`.
+     */
+    data object FillPath : DrawCommand()
 
     /** Bit positions in [SetTextStyle.flags]. Mirrors Swift's `DrawCommand.TextStyleFlag`. */
     object TextStyleFlag {
         const val BOLD: UByte = 1u
         const val ITALIC: UByte = 2u
+
+        /** Weight 600. Ignored here — this app ships no semibold face — so it draws regular. */
+        const val SEMIBOLD: UByte = 4u
         const val NONE: UByte = 0u
     }
 }

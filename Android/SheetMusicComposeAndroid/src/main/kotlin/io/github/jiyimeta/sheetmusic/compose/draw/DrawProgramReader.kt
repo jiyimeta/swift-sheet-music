@@ -10,12 +10,12 @@ import io.github.jiyimeta.sheetmusic.compose.draw.model.DrawProgram
  * rather than a silent mis-parse.
  *
  * Mirrors `DrawProgramCodec` in
- * `Sources/SheetMusicAndroidJNI/Draw/DrawProgram.swift`.
+ * `Sources/SheetMusicBridgeCore/Draw/DrawProgram.swift`.
  */
 object DrawProgramReader {
 
     private val MAGIC: UInt = 0x534D_4450u   // "SMDP"
-    private val VERSION: UInt = 7u
+    private val VERSION: UInt = 8u
 
     class BadMagicException(actual: UInt) :
         RuntimeException("bad draw-program magic: 0x${actual.toString(16)}")
