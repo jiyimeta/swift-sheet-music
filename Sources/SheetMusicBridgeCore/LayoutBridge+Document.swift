@@ -72,6 +72,19 @@ extension LayoutBridge {
         pageHeightMM: Double,
         options optionsWire: LayoutOptionsWire,
     ) -> (document: LayoutDocument, pages: [EncodablePage], filteredScore: Score) {
+        let laidOut = layoutForPages(score: score, pageWidthMM: pageWidthMM, options: optionsWire)
+        let pages = encodePages(
+            document: laidOut.document, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
+        )
+        return (laidOut.document, pages, laidOut.filteredScore)
+    }
+
+    /// The layout pass `computeWithPages` and `computePages` share, before any page is encoded.
+    private static func layoutForPages(
+        score: Score,
+        pageWidthMM: Double,
+        options optionsWire: LayoutOptionsWire,
+    ) -> (document: LayoutDocument, filteredScore: Score) {
         let mmToPt = 72.0 / 25.4
         let pageWidthPt = CGFloat(pageWidthMM * mmToPt)
 
@@ -96,10 +109,7 @@ extension LayoutBridge {
             layout = LayoutEngine.layout(score: prepared, options: opts, availableWidth: natural)
         }
 
-        let pages = encodePages(
-            document: layout, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
-        )
-        return (layout, pages, prepared)
+        return (layout, prepared)
     }
 
     /// Assembles the encoded pages for an already-laid-out `document`, per `options`' layout mode — the
@@ -127,22 +137,39 @@ extension LayoutBridge {
         pageHeightMM: Double,
         tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
     ) -> [EncodablePage] {
+        encodePagesWithSpans(
+            document: document, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM, tint: tint,
+        ).pages
+    }
+
+    /// `encodePages`, also returning each page's `SystemSpan`s — for a renderer that draws a page in pieces (the
+    /// Windows onscreen surface). The pages are the same either way. A span's `systemIndex` is the system's index in
+    /// `document`, also in `.page` mode, where each page is laid out from a slice of it.
+    public static func encodePagesWithSpans(
+        document: LayoutDocument,
+        options optionsWire: LayoutOptionsWire,
+        pageWidthMM: Double,
+        pageHeightMM: Double,
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
+    ) -> (pages: [EncodablePage], spans: [[SystemSpan]]) {
         let ptToMM = 25.4 / 72.0
 
         switch optionsWire.mode {
         case .vertical:
-            return [EncodablePage(
+            let built = buildCommandsWithSpans(layout: document, tint: tint)
+            return ([EncodablePage(
                 widthMM: pageWidthMM,
                 heightMM: Double(document.size.height) * ptToMM,
-                commands: buildCommands(layout: document, tint: tint),
-            )]
+                commands: built.commands,
+            )], [built.spans])
 
         case .horizontal:
-            return [EncodablePage(
+            let built = buildCommandsWithSpans(layout: document, tint: tint)
+            return ([EncodablePage(
                 widthMM: Double(document.size.width) * ptToMM,
                 heightMM: Double(document.size.height) * ptToMM,
-                commands: buildCommands(layout: document, tint: tint),
-            )]
+                commands: built.commands,
+            )], [built.spans])
 
         case .page:
             let mmToPt = 72.0 / 25.4
@@ -150,7 +177,9 @@ extension LayoutBridge {
             let ranges = LayoutPaginator.paginate(
                 systems: document.systems, pageHeight: pageHeightPt, policy: optionsWire.breakPolicy,
             )
-            return ranges.map { range in
+            var pages: [EncodablePage] = []
+            var spans: [[SystemSpan]] = []
+            for range in ranges {
                 // Lift each page's first system to y ≈ 0. The first page keeps
                 // y = 0 (so the title frame stays visible); later pages shift
                 // by the previous system's bottom so the gap above the new
@@ -170,13 +199,34 @@ extension LayoutBridge {
                         metrics: sub.metrics, titleFrame: document.titleFrame,
                     )
                     : sub
-                return EncodablePage(
-                    widthMM: pageWidthMM,
-                    heightMM: pageHeightMM,
-                    commands: buildCommands(layout: pageDoc, tint: tint),
-                )
+                let built = buildCommandsWithSpans(layout: pageDoc, tint: tint)
+                pages.append(EncodablePage(widthMM: pageWidthMM, heightMM: pageHeightMM, commands: built.commands))
+                spans.append(built.spans.map { span in
+                    var span = span
+                    span.systemIndex = span.systemIndex.map { $0 + range.lowerBound }
+                    return span
+                })
             }
+            return (pages, spans)
         }
+    }
+
+    /// Lay out `score` and return its pages with each system's `SystemSpan` — `computeWithDocument` for a renderer
+    /// that consumes commands rather than wire bytes (the Windows onscreen surface), so nothing is encoded and decoded
+    /// again. The layout, the pages and the filtered score are exactly `computeWithDocument`'s.
+    public static func computePages(
+        score: Score,
+        pageWidthMM: Double,
+        pageHeightMM: Double,
+        options optionsWire: LayoutOptionsWire,
+    ) -> LayoutPages {
+        let laidOut = layoutForPages(score: score, pageWidthMM: pageWidthMM, options: optionsWire)
+        let built = encodePagesWithSpans(
+            document: laidOut.document, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
+        )
+        return LayoutPages(
+            document: laidOut.document, pages: built.pages, spans: built.spans, filteredScore: laidOut.filteredScore,
+        )
     }
 
     /// Build the `ScoreViewOptions` for one layout pass from the wire options.

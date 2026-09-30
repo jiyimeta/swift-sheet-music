@@ -67,8 +67,16 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
 
     // MARK: - Command builder
 
-    // swiftlint:disable:next function_body_length
     static func buildCommands(
+        layout: LayoutDocument,
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
+    ) -> [DrawCommand] {
+        buildCommandsWithSpans(layout: layout, tint: tint).commands
+    }
+
+    /// `buildCommands`, also returning each system's run of commands (and the title block's) — see `SystemSpan`.
+    /// The commands are the same either way.
+    static func buildCommandsWithSpans( // swiftlint:disable:this function_body_length
         layout: LayoutDocument,
         // Selection re-encode: `nil` (the default) reproduces today's output byte-for-byte — every
         // `tintColor(for:tint:)` lookup below short-circuits to `nil` and no `.setColor` bracket is emitted
@@ -76,8 +84,21 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // `.setColor(argb: argb)` … `.setColor(argb: blackARGB)`. `ids` is expected to already be expanded
         // (see `LayoutBridge+Selection.swift`'s doc comment) — this function does no expansion of its own.
         tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
-    ) -> [DrawCommand] {
+    ) -> (commands: [DrawCommand], spans: [SystemSpan]) {
         var out: [DrawCommand] = []
+        var spans: [SystemSpan] = []
+        /// Closes the span that started at `start`: its frame is `frameMM` joined with its commands' bounds.
+        func closeSpan(systemIndex: Int?, from start: Int, frameMM: DrawRect) {
+            var bounds = DrawCommandBounds()
+            for command in out[start...] {
+                bounds.add(command)
+            }
+            spans.append(SystemSpan(
+                systemIndex: systemIndex,
+                commandRange: start ..< out.count,
+                frameMM: bounds.bounds.map { $0.union(frameMM) } ?? frameMM,
+            ))
+        }
         let metrics = layout.metrics
         let context = MetricsContext(
             sp: Double(metrics.sp),
@@ -92,10 +113,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // y = 0 … `titleFrame.height`; the systems below were already shifted
         // down by that height. Mirrors the Apple `TitleFrameView`.
         if let titleFrame = layout.titleFrame {
+            let start = out.count
             appendTitleFrame(titleFrame, into: &out)
+            closeSpan(systemIndex: nil, from: start, frameMM: DrawRect(
+                x: 0, y: 0, width: Double(layout.size.width) * ptToMM, height: Double(titleFrame.height) * ptToMM,
+            ))
         }
 
-        for system in layout.systems {
+        for (systemIndex, system) in layout.systems.enumerated() {
+            let spanStart = out.count
             let sysOriginX = Double(system.origin.x)
             let sysOriginY = Double(system.origin.y)
             // Clip at the terminal barline on a plain system end, or span
@@ -199,8 +225,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 tint: tint,
                 into: &out,
             )
+
+            closeSpan(systemIndex: systemIndex, from: spanStart, frameMM: DrawRect(
+                x: sysOriginX * ptToMM,
+                y: sysOriginY * ptToMM,
+                width: Double(system.size.width) * ptToMM,
+                height: Double(system.size.height) * ptToMM,
+            ))
         }
-        return out
+        return (out, spans)
     }
 
     /// Draw the system's invisible-container elements in MuseScore gray.
