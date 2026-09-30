@@ -38,7 +38,8 @@ package enum SoftClip {
             return sample < 0 ? -1 : 1
         }
         let headroom = 1 - knee
-        let shaped = knee + headroom * tanh((magnitude - knee) / headroom)
+        // `tanh` in Double: Windows' C runtime overlay has no Float overload, and the Double one serves everywhere.
+        let shaped = knee + headroom * Float(tanh(Double((magnitude - knee) / headroom)))
         return sample < 0 ? -shaped : shaped
     }
 }
