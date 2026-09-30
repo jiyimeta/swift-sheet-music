@@ -7,6 +7,11 @@
 // For every `<name>-page.bin` in <dir> (a `DrawProgramCodec` payload, written by `SM_PARITY_EXPORT=1`), reads the
 // canvas from `<name>-page.txt` — "widthPx heightPx pxPerMM offsetX offsetY", the numbers the Mac's CoreGraphics walk
 // drew with — and writes `<name>-windows.png` beside it. The font files are Bravura and the Edwin faces.
+//
+//     windows-render-probe --onscreen <out dir> <sheet-music.smft> <font file>...
+//
+// Measures the onscreen renderer (`ScoreSurface`) in a window on a generated 40-page score and checks the C spec's
+// gates (`OnscreenProbe`): prints one line per gate, writes `<out dir>/onscreen.json`, and exits 1 when any fails.
 
 import Foundation
 import SheetMusicBridgeCore
@@ -18,6 +23,21 @@ func fail(_ message: String) -> Never {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+if arguments.first == "--onscreen" {
+    guard arguments.count >= 4 else {
+        fail("usage: windows-render-probe --onscreen <out dir> <metrics> <font file>...")
+    }
+    let probe = OnscreenProbe(
+        outputDirectory: URL(fileURLWithPath: arguments[1], isDirectory: true), metricsPath: arguments[2],
+        fontFiles: Array(arguments.dropFirst(3)),
+    )
+    do {
+        try exit(probe.run() ? 0 : 1)
+    } catch {
+        fail("onscreen: \(error)")
+    }
+}
+
 guard arguments.count >= 2 else { fail("usage: windows-render-probe <dir> <font file>...") }
 let directory = URL(fileURLWithPath: arguments[0], isDirectory: true)
 let fontFiles = Array(arguments.dropFirst())
