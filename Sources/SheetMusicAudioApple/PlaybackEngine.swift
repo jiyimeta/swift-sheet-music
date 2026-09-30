@@ -6,19 +6,8 @@ import SheetMusicAudioCore
 import SheetMusicCore
 import SheetMusicMIDI
 
-/// Describes how `PlaybackEngine.replaceScore(with:)` handled a prepared score.
-public enum ScoreReplacementOutcome: Sendable, Equatable {
-    /// The score was swapped in place while keeping the synth, SoundFont,
-    /// audio graph, mixer channel state, rate, tuning, transpose, master gain,
-    /// and metronome state.
-    case swappedInPlace
-
-    /// The engine fell back to a full `prepare(score:)`.
-    case fullyPrepared
-
-    /// Nothing changed because an export was in flight.
-    case ignoredWhileExporting
-}
+// `ScoreReplacementOutcome`, which `replaceScore(with:)` returns, lives in SheetMusicAudioCore: the Windows engine
+// returns it too.
 
 /// Audio playback for `Score`s, backed by `AVAudioEngine` and two
 /// `AVAudioUnitMIDIInstrument` (AUMIDISynth) units: one for all
@@ -113,7 +102,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Per-flat-staff channel switches, ascending by tick. Precomputed
     /// beside the prepared score-derived layout. Empty for a staff whose
     /// part never changes instrument.
-    private var staffChannelSwitches: [Int: [(tick: Int, channel: UInt8)]] = [:]
+    private var staffChannelSwitches: [Int: [StaffChannelSwitch]] = [:]
     /// Synth, channel, and score-default mixer inputs used by the most
     /// recent full prepare. A prepared score can use the fast replacement
     /// path only when this layout is still installed unchanged.
@@ -542,18 +531,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// THERE, not the part's opening instrument — otherwise tapping a
     /// note after an instrument change sounds the wrong timbre.
     /// Falls back to the staff's tick-0 channel when the part has no
-    /// instrument changes.
+    /// instrument changes. The rule is `PreviewRouting`'s, shared with the
+    /// Windows engine.
     public func midiChannel(
         forStaff flatStaffIndex: Int, atTick tick: Int,
     ) -> UInt8? {
-        guard let switches = staffChannelSwitches[flatStaffIndex],
-              !switches.isEmpty
-        else { return midiChannel(forStaff: flatStaffIndex) }
-        var result = midiChannel(forStaff: flatStaffIndex)
-        for entry in switches {
-            if entry.tick <= tick { result = entry.channel } else { break }
-        }
-        return result
+        PreviewRouting.channel(
+            forStaff: flatStaffIndex, atTick: tick,
+            openingChannels: staffMIDIChannels, switches: staffChannelSwitches,
+        )
     }
 
     /// Live MIDI channel for a mixer strip identity. `nil` before the
@@ -881,9 +867,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         staffMIDIChannels = derivation.channelLayout.staffMIDIChannels
         staffIsDrum = derivation.channelLayout.staffIsDrum
         instrumentMIDIChannels = derivation.channelLayout.instrumentMIDIChannels
-        staffChannelSwitches = derivation.staffChannelSwitches.mapValues { switches in
-            switches.map { (tick: $0.tick, channel: $0.channel) }
-        }
+        staffChannelSwitches = derivation.staffChannelSwitches
         renderedMidiCache = renderedMidi.map { (score, $0) }
     }
 
@@ -1411,16 +1395,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Absolute tick of `noteID` within `score`, on the same plain
     /// (non-breath-budgeted) measure tick bases used to build
     /// `staffChannelSwitches` — see `PreparedPlayback`. `0` when
-    /// the id doesn't resolve to a measure index.
+    /// the id doesn't resolve to a measure index. Shared with the Windows
+    /// engine through `PreviewRouting`.
     private func absoluteTick(of noteID: NoteID, in score: Score) -> Int {
-        let inMeasure = score.resolveTickInMeasure(for: .note(noteID)) ?? 0
-        let durations = score.effectiveMeasureDurations()
-        guard durations.indices.contains(noteID.measureIndex) else { return inMeasure }
-        var base = 0
-        for i in 0 ..< noteID.measureIndex {
-            base += durations[i].ticks(division: score.division)
-        }
-        return base + inMeasure
+        PreviewRouting.tick(of: noteID, in: score)
     }
 
     // MARK: - Full playback
