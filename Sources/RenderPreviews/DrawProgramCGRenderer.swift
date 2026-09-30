@@ -220,10 +220,16 @@
 
             /// Fills text outlines at the baseline origin the way `ScoreLayerBuilder.textPath` does, so the
             /// draw-program parity renderer compares the same glyph geometry instead of CoreText rasterization.
+            ///
+            /// The line is shaped at the POINT size and the outlines scaled to pixels, as the Apple renderer's layers
+            /// are. Shaping at the pixel size is not the same thing for the system face: SF picks its optical size and
+            /// tracking from the size it is asked for, so a 20 px run of 10 pt text comes out narrower than the 10 pt
+            /// run scaled 2x, and the ink ends short of the anchor the layout measured.
             func fillText(
                 _ text: String, at origin: CGPoint, fontSize: CGFloat, fontId: DrawProgram.FontID, italic: Bool,
             ) {
-                let font = font(fontId: fontId, size: fontSize, italic: italic)
+                let scale = pxPerMM * 25.4 / 72
+                let font = font(fontId: fontId, size: fontSize / scale, italic: italic)
                 let attributedString = NSAttributedString(string: text, attributes: [.font: font])
                 let line = CTLineCreateWithAttributedString(attributedString)
                 let path = CGMutablePath()
@@ -251,9 +257,9 @@
                         guard let glyphPath = CTFontCreatePathForGlyph(runFont, glyphs[index], nil) else { continue }
                         let position = positions[index]
                         let transform = CGAffineTransform(
-                            a: 1, b: 0, c: 0, d: -1,
-                            tx: origin.x + position.x,
-                            ty: origin.y - position.y,
+                            a: scale, b: 0, c: 0, d: -scale,
+                            tx: origin.x + position.x * scale,
+                            ty: origin.y - position.y * scale,
                         )
                         path.addPath(glyphPath, transform: transform)
                     }
