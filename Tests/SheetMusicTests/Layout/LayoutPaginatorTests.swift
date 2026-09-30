@@ -42,6 +42,8 @@ struct LayoutPaginatorTests {
             size: CGSize(width: 100, height: height),
             measures: [measure],
             staffOrigins: [],
+            staffAddresses: [],
+            staffGeometries: [],
             partLabels: [],
             spanners: [],
             sp: 7,

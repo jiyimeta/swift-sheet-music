@@ -121,7 +121,7 @@ struct ScoreHitTesterElementLadderTests {
                     width: 200,
                     elements: [ElementHitFixtures.chord()],
                 ),
-            ], staffOrigins: [], partLabels: [], spanners: [], sp: 10,
+            ], staffOrigins: [], staffAddresses: [], staffGeometries: [], partLabels: [], spanners: [], sp: 10,
         )
         let tester = ScoreHitTester(document: LayoutDocument(
             size: system.size, systems: [system], metrics: ElementHitFixtures.metrics,
@@ -161,7 +161,7 @@ struct ScoreHitTesterElementLadderTests {
             measures: [
                 LayoutMeasure(measureIndex: 0, origin: .zero, width: 170, elements: [arc]),
                 LayoutMeasure(measureIndex: 1, origin: CGPoint(x: 100, y: 0), width: 200, elements: [element]),
-            ], staffOrigins: [], partLabels: [], spanners: [], sp: 10,
+            ], staffOrigins: [], staffAddresses: [], staffGeometries: [], partLabels: [], spanners: [], sp: 10,
         )
         let tester = ScoreHitTester(document: LayoutDocument(
             size: system.size, systems: [system], metrics: ElementHitFixtures.metrics,

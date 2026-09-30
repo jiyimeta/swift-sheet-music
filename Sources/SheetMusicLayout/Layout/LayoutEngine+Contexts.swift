@@ -364,8 +364,9 @@ extension LayoutEngine {
             ),
             measures: [measure],
             staffOrigins: staffOrigins,
-            // Same staves as the template, so the geometries stay
-            // parallel to the origins borrowed from it.
+            // Same staves as the template, so the addresses and geometries stay parallel to the origins borrowed
+            // from it — a header without the addresses cannot map a `StaffAddress` to its row.
+            staffAddresses: templateSystem.staffAddresses,
             staffGeometries: templateSystem.staffGeometries,
             // No left-side part labels: the sticky's instrument
             // names live ABOVE the staff (`.staffName` elements

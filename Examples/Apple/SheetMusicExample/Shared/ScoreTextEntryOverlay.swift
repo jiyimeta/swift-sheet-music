@@ -202,6 +202,8 @@ struct ScoreTextEntryOverlayHost: View {
                placementStyle: controller.score.style.textPlacement,
                elementProperties: LyricInputPlanner.lyric(at: cursor, in: controller.score)?
                    .elementProperties ?? .default,
+               textProperties: LyricInputPlanner.lyric(at: cursor, in: controller.score)?.properties
+                   ?? TextProperties(),
            )
         {
             ScoreTextEntryOverlay(

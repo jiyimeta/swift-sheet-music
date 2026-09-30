@@ -79,8 +79,13 @@
 
             // The origin the DOCUMENT reports, never the box under test — the same discipline
             // `ScoreHitTesterTextTests` documents.
+            let cursor = LyricInputPlanner.Cursor(location: Self.anchor, verse: 0)
+            let syllable = LyricInputPlanner.lyric(at: cursor, in: score)
             let origin = try #require(doc.lyricEntryOrigin(
-                at: LyricInputPlanner.Cursor(location: Self.anchor, verse: 0),
+                at: cursor,
+                placementStyle: score.style.textPlacement,
+                elementProperties: syllable?.elementProperties ?? .default,
+                textProperties: syllable?.properties ?? TextProperties(),
             ))
             #expect(rect.contains(origin))
             #expect(rect.width > 0 && rect.height > 0)

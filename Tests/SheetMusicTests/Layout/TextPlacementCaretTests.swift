@@ -24,11 +24,15 @@ struct TextPlacementCaretTests {
             staff: TextPlacementFixtures.address, measureIndex: 0, voiceIndex: 0, elementIndex: 0,
         )
         let empty = TextPlacementFixtures.layout(score)
+        // No annotation of `kind` exists yet, and the one typed below is written plain: no element properties, no
+        // font.
         let before = try #require(empty.textEntryOrigin(
             kind: kind,
             at: anchor,
             text: "",
             placementStyle: score.style.textPlacement,
+            elementProperties: .default,
+            textProperties: TextProperties(),
         ))
         var preview = score
         _ = try TextInputPlanner.command(kind, at: anchor, text: "A").apply(to: &preview)
@@ -40,6 +44,8 @@ struct TextPlacementCaretTests {
             at: mapped,
             text: "A",
             placementStyle: score.style.textPlacement,
+            elementProperties: .default,
+            textProperties: TextProperties(),
         ))
         let oldSystem = try #require(empty.systems.first)
         let newSystem = try #require(pending.systems.first)
@@ -51,23 +57,29 @@ struct TextPlacementCaretTests {
             #expect(before.y > oldStaffY + 4 * empty.metrics.sp)
             #expect(after.y > newStaffY + 4 * pending.metrics.sp)
         } else {
-            let role: TextStyleType
-            let baselineSp: CGFloat
-            switch kind {
-            case .staffText: (role, baselineSp) = (.staffText, -1)
-            case .systemText: (role, baselineSp) = (.systemText, -2)
-            case .chordSymbol: (role, baselineSp) = (.chordSymbolA, -2.5)
-            case .rehearsalMark: (role, baselineSp) = (.rehearsalMark, -2)
-            }
-            let font = TextInkGeometry.font(for: role, metrics: empty.metrics)
-            let provider = FontMetrics.provider
-            let shift = kind == .chordSymbol
-                ? -(provider.ascent(font: font) - provider.descent(font: font)) / 2
-                : provider.descent(font: font)
-            #expect(abs(before.y - oldStaffY - baselineSp * empty.metrics.sp - shift) < 0.001)
+            #expect(abs(before.y - oldStaffY - defaultBaselineOffset(kind, metrics: empty.metrics)) < 0.001)
             #expect(before.y < oldStaffY)
             #expect(after.y < newStaffY)
         }
+    }
+
+    /// Where a blank annotation of `kind` puts its baseline above the staff top under the default style: the role's
+    /// offset in sp, then a descent shift (half the ascent above the descent for chord symbols, which centre).
+    private func defaultBaselineOffset(_ kind: TextInputPlanner.Kind, metrics: StaffMetrics) -> CGFloat {
+        let role: TextStyleType
+        let baselineSp: CGFloat
+        switch kind {
+        case .staffText: (role, baselineSp) = (.staffText, -1)
+        case .systemText: (role, baselineSp) = (.systemText, -2)
+        case .chordSymbol: (role, baselineSp) = (.chordSymbolA, -2.5)
+        case .rehearsalMark: (role, baselineSp) = (.rehearsalMark, -2)
+        }
+        let font = TextInkGeometry.font(for: role, metrics: metrics)
+        let provider = FontMetrics.provider
+        let shift = kind == .chordSymbol
+            ? -(provider.ascent(font: font) - provider.descent(font: font)) / 2
+            : provider.descent(font: font)
+        return baselineSp * metrics.sp + shift
     }
 
     @Test func styledEmptyCaretAndFirstCharacterStayAboveOnFilteredStaff() throws {
@@ -96,9 +108,12 @@ struct TextPlacementCaretTests {
         let displayed = try #require(map.displayedItem(forFull: .text(.lyric(anchor: full, verse: 0)))?.textID?.anchor)
         #expect(displayed.staff == TextPlacementFixtures.address)
         let empty = TextPlacementFixtures.layout(score.filtered(hidingStaves: hidden))
+        // No syllable yet, and the one written below is a plain `Lyric(text:)`: no element properties, no font.
         let before = try #require(empty.lyricEntryOrigin(
             at: .init(location: displayed, verse: 0),
             placementStyle: score.style.textPlacement,
+            elementProperties: .default,
+            textProperties: TextProperties(),
         ))
         score.parts.updateValue(at: 1) { part in
             part.staves.updateValue(at: 1) { staff in
@@ -113,6 +128,8 @@ struct TextPlacementCaretTests {
         let after = try #require(pending.lyricEntryOrigin(
             at: .init(location: displayed, verse: 0),
             placementStyle: score.style.textPlacement,
+            elementProperties: .default,
+            textProperties: TextProperties(),
         ))
         let oldStaffY = try #require(empty.systems.first).origin.y + (empty.systems.first?.staffOrigins.first?.y ?? 0)
         let newStaffY = try #require(pending.systems.first).origin
@@ -124,16 +141,19 @@ struct TextPlacementCaretTests {
         #expect(pending.lyricEntryOrigin(
             at: .init(location: full, verse: 0),
             placementStyle: score.style.textPlacement,
+            elementProperties: .default,
+            textProperties: TextProperties(),
         ) == nil)
     }
 
     @Test func authoredOffsetUsesExactGlyphAnchor() throws {
-        let document = TextPlacementFixtures.layout(TextPlacementFixtures.score(
+        let score = TextPlacementFixtures.score(
             role: .lyrics,
             side: .above,
             autoplace: false,
             offset: ScoreOffset(x: 3, y: -2),
-        ))
+        )
+        let document = TextPlacementFixtures.layout(score)
         let mark = try #require(TextPlacementFixtures.mark(document))
         let system = try #require(document.systems.first)
         let measure = try #require(system.measures.first)
@@ -143,7 +163,14 @@ struct TextPlacementCaretTests {
             voiceIndex: 0,
             elementIndex: 0,
         )
-        let result = try #require(document.lyricEntryOrigin(at: .init(location: anchor, verse: 0)))
+        let cursor = LyricInputPlanner.Cursor(location: anchor, verse: 0)
+        let syllable = LyricInputPlanner.lyric(at: cursor, in: score)
+        let result = try #require(document.lyricEntryOrigin(
+            at: cursor,
+            placementStyle: score.style.textPlacement,
+            elementProperties: syllable?.elementProperties ?? .default,
+            textProperties: syllable?.properties ?? TextProperties(),
+        ))
         let origin = TextPlacementFixtures.origin(mark)
         #expect(result.x == system.origin.x + measure.origin.x + origin.x)
         #expect(result.y == system.origin.y + measure.origin.y + origin.y)
@@ -164,9 +191,9 @@ struct TextPlacementCaretTests {
             voiceIndex: 0,
             elementIndex: 0,
         )
-        let properties = try #require(SetElementPlacement.currentProperties(
-            for: .text(.staffText(anchor: anchor, style: .staffText)), in: committed,
-        ))
+        let textID = ScoreTextID.staffText(anchor: anchor, style: .staffText)
+        let properties = try #require(SetElementPlacement.currentProperties(for: .text(textID), in: committed))
+        let font = SetTextFont.current(textID, in: committed) ?? TextProperties()
         var emptyScore = committed
         _ = try TextInputPlanner.command(.staffText, at: anchor, text: nil).apply(to: &emptyScore)
         let empty = TextPlacementFixtures.layout(emptyScore)
@@ -174,7 +201,9 @@ struct TextPlacementCaretTests {
             kind: .staffText,
             at: anchor,
             text: "",
+            placementStyle: committed.style.textPlacement,
             elementProperties: properties,
+            textProperties: font,
         ))
         var typed = committed
         _ = try TextInputPlanner.command(.staffText, at: anchor, text: "A").apply(to: &typed)
@@ -183,7 +212,9 @@ struct TextPlacementCaretTests {
             kind: .staffText,
             at: anchor,
             text: "A",
+            placementStyle: committed.style.textPlacement,
             elementProperties: properties,
+            textProperties: font,
         ))
         let firstSystem = try #require(empty.systems.first)
         let lastSystem = try #require(document.systems.first)

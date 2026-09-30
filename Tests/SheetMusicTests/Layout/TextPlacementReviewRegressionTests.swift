@@ -31,7 +31,10 @@ struct TextPlacementReviewRegressionTests {
         )
         let cursor = LyricInputPlanner.Cursor(location: anchor(measure: 0, element: 0), verse: 0)
         let filled = TextPlacementFixtures.layout(score)
-        let before = try #require(filled.lyricEntryOrigin(at: cursor))
+        let before = try #require(filled.lyricEntryOrigin(
+            at: cursor, placementStyle: score.style.textPlacement, elementProperties: own.elementProperties,
+            textProperties: own.properties,
+        ))
         var preview = score
         let deletion = try #require(LyricInputPlanner.plan(typing: "", terminatedBy: .none, at: cursor, in: score)
             .command)
@@ -142,6 +145,7 @@ struct TextPlacementReviewRegressionTests {
                 placement: side,
                 autoplace: autoplace,
             ),
+            textProperties: TextProperties(),
         ))
         let font = TextInkGeometry.font(for: .lyricsOdd, metrics: document.metrics)
         let centerOffset = (FontMetrics.provider.ascent(font: font) - FontMetrics.provider.descent(font: font)) / 2

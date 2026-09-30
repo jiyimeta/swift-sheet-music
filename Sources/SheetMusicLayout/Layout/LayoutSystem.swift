@@ -15,15 +15,12 @@ public struct LayoutSystem: Sendable, Equatable {
     /// display order. Enables `StaffAddress → flat-index` conversion
     /// without re-visiting the originating `Score`.
     public let staffAddresses: [StaffAddress]
-    /// Per-staff line geometry, parallel to `staffOrigins`. Empty means
-    /// "every staff is standard five-line" — kept defaultable so the
-    /// initializer stays source-compatible.
+    /// Per-staff line geometry, parallel to `staffOrigins`. Empty means "every staff is standard five-line".
     ///
-    /// That default is not neutral, so a rebuild that forgets this
-    /// field silently reverts the system to five-line geometry rather
-    /// than failing. Rebuild an existing system with
-    /// `addingSpanners(_:)` / `movedBy(dy:)` instead of re-invoking
-    /// `init` — see `LayoutSystem+Rebuild.swift`.
+    /// The initializer takes this and `staffAddresses` without a default, because an empty value is not neutral:
+    /// a rebuild that dropped them would silently revert the system to five-line geometry and lose its
+    /// `StaffAddress → flat-index` map rather than failing. Rebuild an existing system with `addingSpanners(_:)` /
+    /// `movedBy(dy:)` instead of re-invoking `init` — see `LayoutSystem+Rebuild.swift`.
     public let staffGeometries: [StaffLineGeometry]
     /// Part labels at the left edge of this system (empty on continuation
     /// systems per MuseScore convention).
@@ -65,8 +62,8 @@ public struct LayoutSystem: Sendable, Equatable {
         size: CGSize,
         measures: [LayoutMeasure],
         staffOrigins: [CGPoint],
-        staffAddresses: [StaffAddress] = [],
-        staffGeometries: [StaffLineGeometry] = [],
+        staffAddresses: [StaffAddress],
+        staffGeometries: [StaffLineGeometry],
         partLabels: [LayoutPartLabel],
         brackets: [LayoutBracket] = [],
         spanners: [LayoutElement],

@@ -38,16 +38,20 @@ extension LayoutDocument {
         return nil
     }
 
-    /// Final lyric row Y. An existing syllable wins; an empty editor can supply style
-    /// and element properties without mixing a model address into the displayed document.
-    /// Omitting that context retains the default-style fallback for existing callers.
-    /// `textProperties` is the syllable's authored font: a syllable in its own font shares the row's baseline,
-    /// so its center — what this returns — sits off the row's by `LayoutEngine.lyricCenterShift`.
+    /// Final lyric row Y. An existing syllable wins; an empty editor supplies the score's style and the syllable's
+    /// element properties, so the displayed document never has to be mixed with a model address.
+    ///
+    /// `placementStyle` is the score's `style.textPlacement`. `nil` is a deliberate answer, not an omission: it
+    /// says the caller has no style, so an engraved row of the requested verse is taken from either side, and a
+    /// row nothing is engraved on falls back to the default style's placement. `elementProperties` is the
+    /// syllable's own (`.default` for one not yet written). `textProperties` is the syllable's authored font
+    /// (`TextProperties()` when it has none): a syllable in its own font shares the row's baseline, so its center —
+    /// what this returns — sits off the row's by `LayoutEngine.lyricCenterShift`.
     public func lyricLineY(
         at voiceElementID: VoiceElementID, verse: Int,
-        placementStyle: TextPlacementStyles? = nil,
-        elementProperties: ElementProperties = .default,
-        textProperties: TextProperties = TextProperties(),
+        placementStyle: TextPlacementStyles?,
+        elementProperties: ElementProperties,
+        textProperties: TextProperties,
     ) -> CGFloat? {
         let style = placementStyle ?? TextPlacementStyles()
         let side = style.side(for: .lyrics, element: elementProperties)
@@ -100,13 +104,5 @@ extension LayoutDocument {
             ).y
         }
         return nil
-    }
-
-    /// Y (in document coords) where verse-0 lyrics are drawn for the
-    /// chord at `voiceElementID`.
-    public func lyricLineY(
-        at voiceElementID: VoiceElementID,
-    ) -> CGFloat? {
-        lyricLineY(at: voiceElementID, verse: 0)
     }
 }

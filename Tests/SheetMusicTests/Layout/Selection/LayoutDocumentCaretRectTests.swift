@@ -175,6 +175,7 @@
                 origin: .zero, size: CGSize(width: 100, height: 100), measures: [measure],
                 staffOrigins: [CGPoint(x: 0, y: 0)], // only ONE staff's origin
                 staffAddresses: [presentStaff], // `absentStaff` is missing even though its rest is in `elements`
+                staffGeometries: [],
                 partLabels: [], spanners: [], sp: 7,
             )
             let doc = LayoutDocument(

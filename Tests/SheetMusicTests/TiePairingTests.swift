@@ -264,7 +264,8 @@
         private static func identitySystem(y: CGFloat, measures: [LayoutMeasure]) -> LayoutSystem {
             LayoutSystem(
                 origin: CGPoint(x: 0, y: y), size: .init(width: 100, height: 40), measures: measures,
-                staffOrigins: [.zero], staffAddresses: [tieStart.staff], partLabels: [], spanners: [], sp: 10,
+                staffOrigins: [.zero], staffAddresses: [tieStart.staff], staffGeometries: [], partLabels: [],
+                spanners: [], sp: 10,
             )
         }
     }

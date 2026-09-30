@@ -331,7 +331,8 @@
                 let systems: [LayoutSystem] = [CGFloat(0), 200].map { y in
                     LayoutSystem(
                         origin: CGPoint(x: 0, y: y), size: .init(width: 200, height: 100), measures: [],
-                        staffOrigins: [], partLabels: [], spanners: [], sp: 10,
+                        staffOrigins: [], staffAddresses: [], staffGeometries: [], partLabels: [], spanners: [],
+                        sp: 10,
                     )
                 }
                 let pairs: [LayoutEngine.TiePair] = [.init(

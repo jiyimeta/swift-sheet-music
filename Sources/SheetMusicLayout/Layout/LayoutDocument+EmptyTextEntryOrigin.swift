@@ -5,14 +5,18 @@ import SheetMusicCore
 import SheetMusicFoundation
 
 extension LayoutDocument {
-    /// Finds an engraved mark first, then resolves a blank editor through the same baseline
-    /// placement as engraving. All addresses belong to this displayed document; callers read
-    /// authored properties from their full score before passing the resulting value context.
+    /// Finds an engraved mark first, then resolves a blank editor through the same baseline placement as engraving.
+    /// All addresses belong to this displayed document; callers read authored properties from their full score before
+    /// passing the resulting value context.
+    ///
+    /// `placementStyle` is the score's `style.textPlacement`, `elementProperties` the mark's own (`.default` for one
+    /// not yet written), and `textProperties` its authored font (`TextProperties()` when it has none). A blank caret
+    /// placed without them sits where a default-styled mark would, not where this one will be engraved.
     public func textEntryOrigin(
         kind: TextInputPlanner.Kind, at anchor: VoiceElementID, text: String,
-        placementStyle: TextPlacementStyles = TextPlacementStyles(),
-        elementProperties: ElementProperties = .default,
-        textProperties: TextProperties = TextProperties(),
+        placementStyle: TextPlacementStyles,
+        elementProperties: ElementProperties,
+        textProperties: TextProperties,
     ) -> CGPoint? {
         let engraved: CGPoint?
         switch kind {

@@ -44,6 +44,19 @@
             )
         }
 
+        /// The verse-0 syllable's origin at `anchor` as the DOCUMENT reports it, asked with the context an editing
+        /// host passes: the score's placement style and the syllable's own element properties and font.
+        private func lyricOrigin(in doc: LayoutDocument, of score: Score) -> CGPoint? {
+            let cursor = LyricInputPlanner.Cursor(location: Self.anchor, verse: 0)
+            let syllable = LyricInputPlanner.lyric(at: cursor, in: score)
+            return doc.lyricEntryOrigin(
+                at: cursor,
+                placementStyle: score.style.textPlacement,
+                elementProperties: syllable?.elementProperties ?? .default,
+                textProperties: syllable?.properties ?? TextProperties(),
+            )
+        }
+
         // MARK: - Lyrics
 
         @Test("A point on an engraved syllable reports the lyric, its chord and its verse")
@@ -53,9 +66,7 @@
             _ = try SetLyric(at: Self.anchor, verse: 0, text: "glo").apply(to: &score)
 
             let doc = layout(score)
-            let origin = try #require(doc.lyricEntryOrigin(
-                at: LyricInputPlanner.Cursor(location: Self.anchor, verse: 0),
-            ))
+            let origin = try #require(lyricOrigin(in: doc, of: score))
             let tester = ScoreHitTester(document: doc)
 
             // A syllable is drawn centred on this origin, so a couple of points right of and above it is
@@ -137,9 +148,7 @@
             _ = try SetLyric(at: Self.anchor, verse: 0, text: "glo").apply(to: &score)
 
             let doc = layout(score)
-            let lyric = try #require(doc.lyricEntryOrigin(
-                at: LyricInputPlanner.Cursor(location: Self.anchor, verse: 0),
-            ))
+            let lyric = try #require(lyricOrigin(in: doc, of: score))
             let tester = ScoreHitTester(document: doc)
             // The syllable's own centre belongs to the syllable, and the notehead's own centre is not
             // inside the syllable's box at all.
@@ -174,9 +183,7 @@
             _ = try SetLyric(at: Self.anchor, verse: 0, text: "glo").apply(to: &score)
 
             let doc = layout(score)
-            let origin = try #require(doc.lyricEntryOrigin(
-                at: LyricInputPlanner.Cursor(location: Self.anchor, verse: 0),
-            ))
+            let origin = try #require(lyricOrigin(in: doc, of: score))
             let tester = ScoreHitTester(document: doc)
             #expect(tester.hitTest(at: CGPoint(x: origin.x, y: origin.y + 200)) == nil)
         }
@@ -188,9 +195,7 @@
             _ = try SetLyric(at: Self.anchor, verse: 0, text: "glo").apply(to: &score)
 
             let doc = layout(score)
-            let origin = try #require(doc.lyricEntryOrigin(
-                at: LyricInputPlanner.Cursor(location: Self.anchor, verse: 0),
-            ))
+            let origin = try #require(lyricOrigin(in: doc, of: score))
             let tester = ScoreHitTester(document: doc)
             // 200 pt to the left is still on the lyric line but far outside the one syllable's box, and no
             // other syllable is engraved — a hit here would mean the pass answers by proximity.
@@ -257,7 +262,7 @@
             let system = LayoutSystem(
                 origin: .zero, size: CGSize(width: 400, height: 100),
                 measures: [measure], staffOrigins: [CGPoint(x: 0, y: 40)],
-                staffAddresses: [EditingFixtures.staff0],
+                staffAddresses: [EditingFixtures.staff0], staffGeometries: [],
                 partLabels: [], spanners: [], sp: metrics.sp,
             )
             let doc = LayoutDocument(
@@ -458,9 +463,7 @@
             _ = try SetLyric(at: Self.anchor, verse: 0, text: "glo").apply(to: &score)
 
             let doc = layout(score)
-            let origin = try #require(doc.lyricEntryOrigin(
-                at: LyricInputPlanner.Cursor(location: Self.anchor, verse: 0),
-            ))
+            let origin = try #require(lyricOrigin(in: doc, of: score))
             // A real lyric hit stays text even when its new baseline is within the
             // note-selection rescue box. It must not be treated as a near miss.
             let point = CGPoint(x: origin.x + 2, y: origin.y - 2)

@@ -101,15 +101,12 @@
                 #expect(abs((five.dy - one.dy) - five.sp) < 0.001)
             }
 
-            /// Guards the copy initializers, not just `buildSystem`. Six
-            /// places rebuild a `LayoutSystem` field-by-field, and
-            /// `staffGeometries` is defaulted, so any of them can drop it with
-            /// no compile error — the staff silently degrades to five-line.
-            /// `LayoutEngine.shift` is unavoidable (`packSystems` builds every
-            /// system at y = 0 and shifts it into place), `attachTies` is
-            /// reached via the tie in the fixture, and `subdocument` — whose
-            /// production caller is the Android `LayoutBridge`, not
-            /// `LayoutEngine.layout` — is asserted separately below.
+            /// Guards the copy initializers, not just `buildSystem`. Several places rebuild a `LayoutSystem`
+            /// field-by-field, and any of them could pass `[]` for `staffGeometries` with no compile error — the
+            /// staff silently degrades to five-line. `LayoutEngine.shift` is unavoidable (`packSystems` builds every
+            /// system at y = 0 and shifts it into place), `attachTies` is reached via the tie in the fixture, and
+            /// `subdocument` — whose production caller is the Android `LayoutBridge`, not `LayoutEngine.layout` — is
+            /// asserted separately below.
             @Test("Geometry reaches the laid-out system")
             func systemCarriesPerStaffGeometry() throws {
                 guard #available(macOS 15.0, *) else { return }

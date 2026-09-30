@@ -22,6 +22,8 @@ import Testing
     private typealias CGFloat = SheetMusicLayout.CGFloat
 #endif
 
+/// Every query here passes `placementStyle: nil, elementProperties: .default, textProperties: TextProperties()`: the
+/// suite keeps only the laid-out document, and pins what `lyricLineY` answers a caller with no style context.
 @Suite("LayoutDocument lyric line Y")
 struct LayoutDocumentLyricLineYTests {
     private let _installFontMetrics = TestSupport.installFontMetrics
@@ -120,7 +122,8 @@ struct LayoutDocumentLyricLineYTests {
             in: document, measureIndex: 0,
         ).first)
         let verseZeroY = try #require(document.lyricLineY(
-            at: Self.elementID(), verse: 0,
+            at: Self.elementID(), verse: 0, placementStyle: nil, elementProperties: .default,
+            textProperties: TextProperties(),
         ))
         let stride = document.metrics.sp * 1.7
 
@@ -138,10 +141,12 @@ struct LayoutDocumentLyricLineYTests {
         let verseZeroMark = try #require(marks.first { $0.verse == 0 })
         let verseOneMark = try #require(marks.first { $0.verse == 1 })
         let verseZeroY = try #require(document.lyricLineY(
-            at: Self.elementID(), verse: 0,
+            at: Self.elementID(), verse: 0, placementStyle: nil, elementProperties: .default,
+            textProperties: TextProperties(),
         ))
         let verseOneY = try #require(document.lyricLineY(
-            at: Self.elementID(), verse: 1,
+            at: Self.elementID(), verse: 1, placementStyle: nil, elementProperties: .default,
+            textProperties: TextProperties(),
         ))
 
         #expect(abs(verseZeroY - verseZeroMark.y) < 0.001)
@@ -153,10 +158,12 @@ struct LayoutDocumentLyricLineYTests {
         let document = Self.layout([Self.measure()])
         let staffTop = try Self.staffTop(in: document, measureIndex: 0)
         let verseZeroY = try #require(document.lyricLineY(
-            at: Self.elementID(), verse: 0,
+            at: Self.elementID(), verse: 0, placementStyle: nil, elementProperties: .default,
+            textProperties: TextProperties(),
         ))
         let verseTwoY = try #require(document.lyricLineY(
-            at: Self.elementID(), verse: 2,
+            at: Self.elementID(), verse: 2, placementStyle: nil, elementProperties: .default,
+            textProperties: TextProperties(),
         ))
 
         let font = TextInkGeometry.font(for: .lyricsOdd, metrics: document.metrics)
@@ -198,7 +205,10 @@ struct LayoutDocumentLyricLineYTests {
         // including a measure whose syllables have no horizontal overlap.
         #expect(pairedMark.y - pairedStaffTop > aloneMark.y - aloneStaffTop)
         #expect(pairedMark.y > innerMark.y)
-        let caretY = try #require(besideDeepVerseZero.lyricLineY(at: Self.elementID(), verse: 1))
+        let caretY = try #require(besideDeepVerseZero.lyricLineY(
+            at: Self.elementID(), verse: 1, placementStyle: nil, elementProperties: .default,
+            textProperties: TextProperties(),
+        ))
         #expect(abs(caretY - pairedMark.y) < 0.001)
     }
 }

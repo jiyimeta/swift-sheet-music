@@ -153,9 +153,11 @@ struct TextPlacementLyricRowsTests {
     }
 
     @Test func caretUsesRequestedMixedSideVerse() throws {
-        let document = TextPlacementFixtures.layout(score([Measure(voices: [Voice(elements: [chord([
-            lyric("A", verse: 0, side: .above), lyric("B", verse: 1, side: .below),
-        ])])])]))
+        let requested = lyric("B", verse: 1, side: .below)
+        let laidOut = score([Measure(voices: [Voice(elements: [chord([
+            lyric("A", verse: 0, side: .above), requested,
+        ])])])])
+        let document = TextPlacementFixtures.layout(laidOut)
         let system = try #require(document.systems.first)
         let mark = try #require(system.measures.flatMap(\.elements).first { $0.textPlacement?.verse == 1 })
         let anchor = VoiceElementID(
@@ -164,7 +166,12 @@ struct TextPlacementLyricRowsTests {
             voiceIndex: 0,
             elementIndex: 0,
         )
-        #expect(document.lyricLineY(at: anchor, verse: 1) == system.origin.y + TextPlacementFixtures.origin(mark).y)
+        let caretY = document.lyricLineY(
+            at: anchor, verse: 1,
+            placementStyle: laidOut.style.textPlacement, elementProperties: requested.elementProperties,
+            textProperties: requested.properties,
+        )
+        #expect(caretY == system.origin.y + TextPlacementFixtures.origin(mark).y)
     }
 
     @Test(arguments: [false, true])

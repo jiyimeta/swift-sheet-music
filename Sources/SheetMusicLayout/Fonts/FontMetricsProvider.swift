@@ -71,50 +71,23 @@ public protocol FontMetricsProvider: Sendable {
         text: String, font: LayoutFont,
     ) -> CGFloat
     func inkBounds(text: String, font: LayoutFont) -> InkBounds
-    /// Actual ink relative to the first line's baseline, in Y-up points. Later lines
-    /// descend by ascent + descent + leading; empty lines still occupy a line. No ink is nil.
+    /// Actual ink relative to the first line's baseline, in Y-up points. Later lines descend by ascent + descent +
+    /// leading; empty lines still occupy a line. No ink is nil.
+    ///
+    /// Every provider answers this itself: a provider with glyph outlines bounds the drawn ink, and one without can
+    /// fall back to horizontal ink over a typographic vertical band, as `StubFontMetricsProvider` does.
     func textInkBounds(text: String, font: LayoutFont) -> CGRect?
     /// Font the host can actually draw. Table-backed hosts only expose bundled text faces.
     func renderingTextFont(_ font: LayoutFont) -> LayoutFont
-    /// Extra vertical space the face asks for BETWEEN consecutive lines,
-    /// on top of `ascent + descent`. Only multi-line text consults it —
-    /// see `LayoutElementShape.textRect`.
+    /// Extra vertical space the face asks for BETWEEN consecutive lines, on top of `ascent + descent`. Only
+    /// multi-line text consults it — see `LayoutElementShape.textRect`. A provider with no notion of line gap
+    /// answers 0, as `StubFontMetricsProvider` does, and its multi-line boxes stack at `ascent + descent`.
     func leading(font: LayoutFont) -> CGFloat
 }
 
 extension FontMetricsProvider {
     public func renderingTextFont(_ font: LayoutFont) -> LayoutFont {
         font
-    }
-
-    /// Source-compatible approximation for existing providers and the stub. Uses horizontal
-    /// ink and a typographic vertical band; providers with glyph paths should override it.
-    public func textInkBounds(text: String, font: LayoutFont) -> CGRect? {
-        let ascent = ascent(font: font)
-        let descent = descent(font: font)
-        let stride = ascent + descent + leading(font: font)
-        var result: CGRect?
-        for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-            guard line.contains(where: { !$0.isWhitespace }) else { continue }
-            let ink = inkBounds(text: String(line), font: font)
-            guard ink.width > 0 else { continue }
-            let box = CGRect(
-                x: ink.leftBearing, y: -descent - CGFloat(index) * stride,
-                width: ink.width, height: ascent + descent,
-            )
-            result = result.map { $0.union(box) } ?? box
-        }
-        return result
-    }
-
-    /// Providers that have no notion of line gap (the stub, and the
-    /// `FontMetricsTable`-backed provider Android and the browser install)
-    /// stack lines at `ascent + descent`. Their multi-line boxes come out
-    /// one leading per line tighter than Apple's — the same "text metrics
-    /// out of scope" boundary documented on
-    /// `LayoutElementShape.smuflRunRect`.
-    public func leading(font _: LayoutFont) -> CGFloat {
-        0
     }
 }
 
@@ -211,6 +184,33 @@ public struct StubFontMetricsProvider: FontMetricsProvider {
             leftBearing: 0,
             width: typographicWidth(text: text, font: font),
         )
+    }
+
+    /// Approximation for a provider with no glyph outlines: each non-blank line's horizontal ink over a typographic
+    /// vertical band (`-descent ... ascent`), lines stacked at ascent + descent + leading.
+    public func textInkBounds(text: String, font: LayoutFont) -> CGRect? {
+        let ascent = ascent(font: font)
+        let descent = descent(font: font)
+        let stride = ascent + descent + leading(font: font)
+        var result: CGRect?
+        for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            guard line.contains(where: { !$0.isWhitespace }) else { continue }
+            let ink = inkBounds(text: String(line), font: font)
+            guard ink.width > 0 else { continue }
+            let box = CGRect(
+                x: ink.leftBearing, y: -descent - CGFloat(index) * stride,
+                width: ink.width, height: ascent + descent,
+            )
+            result = result.map { $0.union(box) } ?? box
+        }
+        return result
+    }
+
+    /// The stub has no notion of line gap, so it stacks lines at `ascent + descent`. Its multi-line boxes come out
+    /// one leading per line tighter than Apple's — the same "text metrics out of scope" boundary documented on
+    /// `LayoutElementShape.smuflRunRect`.
+    public func leading(font _: LayoutFont) -> CGFloat {
+        0
     }
 
     /// True for code points conventionally typeset at ~1 em advance

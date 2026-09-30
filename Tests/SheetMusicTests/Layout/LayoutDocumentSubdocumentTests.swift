@@ -27,6 +27,8 @@ struct LayoutDocumentSubdocumentTests {
             size: CGSize(width: 100, height: height),
             measures: [],
             staffOrigins: [],
+            staffAddresses: [],
+            staffGeometries: [],
             partLabels: [],
             spanners: [],
             sp: 7,

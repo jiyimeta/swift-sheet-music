@@ -201,6 +201,8 @@
                 size: CGSize(width: 400, height: height),
                 measures: [],
                 staffOrigins: [.zero],
+                staffAddresses: [],
+                staffGeometries: [],
                 partLabels: [],
                 spanners: [],
                 sp: 7.0,

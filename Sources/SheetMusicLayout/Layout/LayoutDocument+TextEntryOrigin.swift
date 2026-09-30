@@ -4,14 +4,18 @@
 import SheetMusicCore
 
 extension LayoutDocument {
-    /// The final lyric ink anchor, including authored offsets. Empty rows resolve through
-    /// the supplied style context; the displayed cursor remains the only address used here.
-    /// `textProperties` is the syllable's authored font, read from the full score like `elementProperties`.
+    /// The final lyric ink anchor, including authored offsets. Empty rows resolve through the supplied style
+    /// context; the displayed cursor remains the only address used here.
+    ///
+    /// `placementStyle` is the score's `style.textPlacement` (`nil` means the caller has none — see
+    /// `lyricLineY(at:verse:placementStyle:elementProperties:textProperties:)`), and `elementProperties` the
+    /// syllable's own, `.default` for one not yet written. `textProperties` is the syllable's authored font, read
+    /// from the full score like `elementProperties` (`TextProperties()` when it has none).
     public func lyricEntryOrigin(
         at cursor: LyricInputPlanner.Cursor,
-        placementStyle: TextPlacementStyles? = nil,
-        elementProperties: ElementProperties = .default,
-        textProperties: TextProperties = TextProperties(),
+        placementStyle: TextPlacementStyles?,
+        elementProperties: ElementProperties,
+        textProperties: TextProperties,
     ) -> CGPoint? {
         for system in systems {
             for measure in system.measures where measure.measureIndex == cursor.location.measureIndex {

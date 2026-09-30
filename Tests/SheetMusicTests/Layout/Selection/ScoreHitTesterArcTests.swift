@@ -177,7 +177,7 @@ struct ScoreHitTesterArcTests {
     private static func system(y: CGFloat) -> LayoutSystem {
         LayoutSystem(
             origin: CGPoint(x: 0, y: y), size: .init(width: 102, height: 100), measures: [],
-            staffOrigins: [], partLabels: [], spanners: [], sp: 10,
+            staffOrigins: [], staffAddresses: [], staffGeometries: [], partLabels: [], spanners: [], sp: 10,
         )
     }
 }

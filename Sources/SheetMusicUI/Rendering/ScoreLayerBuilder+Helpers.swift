@@ -90,30 +90,6 @@ extension ScoreLayerBuilder {
         return font
     }
 
-    private nonisolated(unsafe) static var cachedLyricFont: CTFont?
-    private nonisolated(unsafe) static var cachedLyricFontSize: CGFloat = 0
-
-    /// System font at regular weight, sized for lyrics. Cached
-    /// because `CTFontCreate` is non-trivial in tight render
-    /// loops.
-    static func lyricFont(size: CGFloat) -> CTFont {
-        if let f = cachedLyricFont, cachedLyricFontSize == size {
-            return f
-        }
-        #if os(macOS)
-            let font = NSFont.systemFont(
-                ofSize: size, weight: .regular,
-            ) as CTFont
-        #else
-            let font = UIFont.systemFont(
-                ofSize: size, weight: .regular,
-            ) as CTFont
-        #endif
-        cachedLyricFont = font
-        cachedLyricFontSize = size
-        return font
-    }
-
     private nonisolated(unsafe) static var cachedSystemFont: CTFont?
     private nonisolated(unsafe) static var cachedSystemKey:
         (size: CGFloat, italic: Bool) = (0, false)
@@ -369,12 +345,8 @@ extension ScoreLayerBuilder {
         return composite.isEmpty ? nil : composite
     }
 
-    /// Legacy text-layer "kind" knob, kept for renderers that
-    /// haven't yet been migrated to `ResolvedTextStyle`. New code
-    /// should pass an explicit `font:` (a `CTFont` derived from a
-    /// `TextStyleType`) and ignore this enum.
-    enum TextLayerKind { case expression, lyrics }
-
+    /// A filled text layer. Pass an explicit `font:` (a `CTFont` resolved from a `TextStyleType` through
+    /// `ResolvedTextStyle`); without one the text is set in `systemFont(size:italic:)`.
     static func textLayer(
         text: String,
         at origin: CGPoint,
@@ -383,27 +355,11 @@ extension ScoreLayerBuilder {
         anchor: CGPoint = CGPoint(x: 0, y: 0.5),
         rotation: CGFloat = 0,
         color: CGColor = inkColor,
-        kind: TextLayerKind = .expression,
         font explicitFont: CTFont? = nil,
         height: CGFloat,
     ) -> CAShapeLayer? {
         guard !text.isEmpty else { return nil }
-        let font: CTFont
-        if let explicitFont {
-            font = explicitFont
-        } else {
-            switch kind {
-            case .expression:
-                font = systemFont(size: size, italic: italic)
-            case .lyrics:
-                // Fallback used by older call sites; the in-scope
-                // text styles (dynamics, tempo, rehearsalMark,
-                // staffText, lyrics, pedal) now go through
-                // `ResolvedTextStyle` and pass an explicit
-                // Edwin-based CTFont via the `font:` parameter.
-                font = lyricFont(size: size)
-            }
-        }
+        let font = explicitFont ?? systemFont(size: size, italic: italic)
         guard let path = anchoredTextPath(text, font: font, origin: origin, anchor: anchor, rotation: rotation)
         else { return nil }
         return fillLayer(path: path, height: height, color: color)

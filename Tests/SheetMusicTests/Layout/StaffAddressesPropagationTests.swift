@@ -6,8 +6,9 @@ import Testing
 
 /// `LayoutSystem.staffAddresses` is populated by `LayoutEngine+SystemBuild`, but the post-build passes that rebuild
 /// each system — vertical packing (`shift(_:byY:)`), `attachSpanners`, and `attachTies` — must carry it forward.
-/// A dropped `staffAddresses` silently breaks every consumer that maps a `StaffAddress` to a flat staff index
-/// (notably the Reader's tap-to-seek hit test), because the field defaults to `[]`.
+/// A rebuild that passes `[]` instead silently breaks every consumer that maps a `StaffAddress` to a flat staff index
+/// (notably the Reader's tap-to-seek hit test): the initializer requires the field, but cannot tell an empty array
+/// from a real one.
 @Suite("StaffAddressesPropagation")
 struct StaffAddressesPropagationTests {
     private let _installFontMetrics = TestSupport.installFontMetrics

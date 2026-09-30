@@ -339,7 +339,8 @@ extension LayoutSpannerIdentityTests {
     private static func segmentSystem(_ measures: [LayoutMeasure], y: CGFloat) -> LayoutSystem {
         LayoutSystem(
             origin: CGPoint(x: 0, y: y), size: .init(width: 100, height: 80), measures: measures,
-            staffOrigins: [.zero], staffAddresses: [slurOwner.staff], partLabels: [], spanners: [], sp: 10,
+            staffOrigins: [.zero], staffAddresses: [slurOwner.staff], staffGeometries: [], partLabels: [],
+            spanners: [], sp: 10,
         )
     }
 }

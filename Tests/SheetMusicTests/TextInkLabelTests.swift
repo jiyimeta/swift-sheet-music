@@ -63,6 +63,8 @@
                         elements: [shifted],
                     )],
                     staffOrigins: [],
+                    staffAddresses: [],
+                    staffGeometries: [],
                     partLabels: [],
                     spanners: [],
                     sp: metrics.sp,

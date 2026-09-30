@@ -193,7 +193,8 @@ enum ElementHitFixtures {
                 measureIndex: 0, origin: CGPoint(x: 20, y: 10), width: 240,
                 elements: elements, markers: markers, jumps: jumps, invisibleElements: invisibleElements,
             )],
-            staffOrigins: [], partLabels: [], spanners: spanners, sp: metrics.sp,
+            staffOrigins: [], staffAddresses: [], staffGeometries: [], partLabels: [], spanners: spanners,
+            sp: metrics.sp,
             invisibleSpanners: invisibleSpanners,
         )
         return LayoutDocument(size: CGSize(width: 400, height: 300), systems: [system], metrics: metrics)

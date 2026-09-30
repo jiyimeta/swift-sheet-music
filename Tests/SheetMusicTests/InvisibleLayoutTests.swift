@@ -1124,6 +1124,8 @@ struct InvisibleLayoutTests { // swiftlint:disable:this type_body_length
             size: CGSize(width: 10, height: 10),
             measures: [],
             staffOrigins: [],
+            staffAddresses: [],
+            staffGeometries: [],
             partLabels: [],
             spanners: [],
             sp: 4,
