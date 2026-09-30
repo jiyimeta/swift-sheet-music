@@ -20,13 +20,13 @@ namespace cd2d {
 
 using Microsoft::WRL::ComPtr;
 
-/// One resolved face per (family, bold, italic).
+/// One resolved face per (family, requested weight, italic).
 struct FaceKey {
     std::wstring family;
-    bool bold;
+    int weight;
     bool italic;
     bool operator<(const FaceKey &other) const {
-        return std::tie(family, bold, italic) < std::tie(other.family, other.bold, other.italic);
+        return std::tie(family, weight, italic) < std::tie(other.family, other.weight, other.italic);
     }
 };
 
@@ -76,6 +76,8 @@ struct cd2d_resources {
     cd2d::ComPtr<IWICImagingFactory> wic;
     cd2d::ComPtr<IDWriteFontSetBuilder1> fontBuilder;
     cd2d::ComPtr<IDWriteFontCollection1> fonts;
+    /// The installed fonts, fetched the first time a family is missing from `fonts` (the system face, Segoe UI).
+    cd2d::ComPtr<IDWriteFontCollection1> systemFonts;
     std::map<cd2d::FaceKey, cd2d::Face> faces;
     std::map<cd2d::GlyphKey, cd2d::ComPtr<ID2D1PathGeometry>> glyphs;
     std::map<cd2d::StrokeKey, cd2d::ComPtr<ID2D1StrokeStyle>> strokes;
@@ -102,6 +104,25 @@ namespace cd2d {
 
 /// A canvas over a target someone else owns and begins / ends drawing on (a band, a frame).
 void resetCanvas(cd2d_canvas *canvas, ID2D1RenderTarget *target, ID2D1SolidColorBrush *brush);
+
+/// The C API's weight (400 regular, 600 semibold, 700 bold) as DirectWrite's; zero or less is regular.
+DWRITE_FONT_WEIGHT fontWeight(int32_t weight);
+
+/// The collection `family` comes from: the private one when it has the family, else the installed fonts when they
+/// have it (the system face), else null.
+IDWriteFontCollection1 *familyCollection(cd2d_resources *resources, const wchar_t *family);
+
+/// The family's face for the requested weight and style, or its regular face when the family has no such face:
+/// DirectWrite would otherwise synthesize one, which CoreText (the Mac reference) does not. Null when no collection
+/// has the family.
+Face *resolveFace(cd2d_resources *resources, const wchar_t *family, DWRITE_FONT_WEIGHT weight, bool italic);
+
+/// `text` laid out the one way both `cd2d_fill_text` and `cd2d_measure_text` use — the resolved face's own weight and
+/// style, en-us, no wrapping — so what is measured is what is drawn, kerning and shaping included. `baseline` is the
+/// first line's baseline below the layout's top: the glyph runs arrive relative to that top.
+HRESULT layoutText(
+    cd2d_resources *resources, const wchar_t *family, const wchar_t *text, uint32_t length, float size,
+    DWRITE_FONT_WEIGHT weight, bool italic, IDWriteTextLayout **layout, float *baseline);
 
 }  // namespace cd2d
 

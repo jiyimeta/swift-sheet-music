@@ -51,6 +51,20 @@ HRESULT mapDeviceLoss(HRESULT hr) {
     return hr;
 }
 
+/// Copies the top-left of a mapped image `sourceWidth` x `sourceHeight` pixels (rows `pitch` bytes apart) into
+/// `pixels`, `width` x `height` with rows of `width * 4` bytes. What the image does not cover is left as it was.
+void copyRows(
+    uint8_t *pixels, uint32_t width, uint32_t height, const uint8_t *source, uint32_t pitch, uint32_t sourceWidth,
+    uint32_t sourceHeight) {
+    const uint32_t rows = sourceHeight < height ? sourceHeight : height;
+    const uint32_t columns = sourceWidth < width ? sourceWidth : width;
+    for (uint32_t row = 0; row < rows; ++row) {
+        std::memcpy(
+            pixels + static_cast<size_t>(row) * width * 4, source + static_cast<size_t>(row) * pitch,
+            static_cast<size_t>(columns) * 4);
+    }
+}
+
 /// Copies the back buffer (the frame just ended, before it is presented) into the probe's buffer.
 HRESULT readBackFrame(cd2d_surface *surface) {
     ComPtr<ID3D11Texture2D> buffer;
@@ -71,14 +85,9 @@ HRESULT readBackFrame(cd2d_surface *surface) {
     D3D11_MAPPED_SUBRESOURCE mapped;
     hr = immediate->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
     if (FAILED(hr)) return hr;
-    const uint32_t rows = desc.Height < surface->readBackHeight ? desc.Height : surface->readBackHeight;
-    const uint32_t columns = desc.Width < surface->readBackWidth ? desc.Width : surface->readBackWidth;
-    for (uint32_t row = 0; row < rows; ++row) {
-        std::memcpy(
-            surface->readBack + static_cast<size_t>(row) * surface->readBackWidth * 4,
-            static_cast<const uint8_t *>(mapped.pData) + static_cast<size_t>(row) * mapped.RowPitch,
-            static_cast<size_t>(columns) * 4);
-    }
+    copyRows(
+        surface->readBack, surface->readBackWidth, surface->readBackHeight, static_cast<const uint8_t *>(mapped.pData),
+        mapped.RowPitch, desc.Width, desc.Height);
     immediate->Unmap(staging.Get(), 0);
     return S_OK;
 }
@@ -160,8 +169,24 @@ void releaseDevice(cd2d_surface *surface) {
     surface->context.Reset();
     surface->device.Reset();
     surface->swapChain.Reset();
+    // A flip-model swap chain is destroyed lazily, and a window can own only one: until the immediate context lets go
+    // of it, CreateSwapChainForHwnd on the same window fails and the recreated surface has no swap chain at all.
+    if (surface->d3d) {
+        ComPtr<ID3D11DeviceContext> immediate;
+        surface->d3d->GetImmediateContext(&immediate);
+        if (immediate) {
+            immediate->ClearState();
+            immediate->Flush();
+        }
+    }
     surface->dxgiDevice.Reset();
     surface->d3d.Reset();
+}
+
+/// A surface whose last recreate failed has no device: every entry point that draws reports it as lost again, so the
+/// host's next frame retries the recreate instead of dereferencing what is not there.
+bool hasDevice(const cd2d_surface *surface) {
+    return surface->swapChain && surface->context && surface->brush;
 }
 
 HRESULT create(cd2d_surface **out, cd2d_resources *resources, HWND hwnd, uint32_t width, uint32_t height, float sx,
@@ -210,6 +235,8 @@ extern "C" int32_t cd2d_surface_resize(
     surface->height = height > 0 ? height : 1;
     surface->scaleX = scale_x > 0 ? scale_x : 1;
     surface->scaleY = scale_y > 0 ? scale_y : 1;
+    // The size is kept either way: a recreate builds the swap chain at it.
+    if (!hasDevice(surface)) return CD2D_E_RECREATE;
     // Every reference to a buffer has to go before ResizeBuffers.
     surface->context->SetTarget(nullptr);
     surface->backBuffer.Reset();
@@ -252,6 +279,7 @@ extern "C" int32_t cd2d_band_begin(
     cd2d_surface *surface, uint32_t width, uint32_t height, cd2d_band **out, cd2d_canvas **canvas) {
     *out = nullptr;
     *canvas = nullptr;
+    if (!hasDevice(surface)) return CD2D_E_RECREATE;
     auto band = new cd2d_band();
     band->width = width;
     band->height = height;
@@ -285,6 +313,27 @@ extern "C" int32_t cd2d_band_end(cd2d_surface *surface, cd2d_band *band) {
     return mapDeviceLoss(consumeFailNext(surface, hr));
 }
 
+extern "C" int32_t cd2d_band_read_back(
+    cd2d_surface *surface, cd2d_band *band, uint8_t *pixels, uint32_t width, uint32_t height) {
+    if (!band || band->generation != surface->generation || !hasDevice(surface)) return CD2D_E_RECREATE;
+    // A bitmap the CPU can map cannot be a target or drawn, only copied into: the band's own format, so the copy is
+    // byte for byte.
+    const D2D1_BITMAP_PROPERTIES1 properties = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_CPU_READ | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96.0f, 96.0f);
+    ComPtr<ID2D1Bitmap1> staging;
+    HRESULT hr = surface->context->CreateBitmap(
+        D2D1::SizeU(band->width, band->height), nullptr, 0, properties, &staging);
+    if (SUCCEEDED(hr)) hr = staging->CopyFromBitmap(nullptr, band->bitmap.Get(), nullptr);
+    if (FAILED(hr)) return mapDeviceLoss(hr);
+    D2D1_MAPPED_RECT mapped;
+    hr = staging->Map(D2D1_MAP_OPTIONS_READ, &mapped);
+    if (FAILED(hr)) return mapDeviceLoss(hr);
+    copyRows(pixels, width, height, mapped.bits, mapped.pitch, band->width, band->height);
+    staging->Unmap();
+    return S_OK;
+}
+
 extern "C" void cd2d_band_release(cd2d_surface *surface, cd2d_band *band) {
     if (!band) return;
     const uint64_t bytes = static_cast<uint64_t>(band->width) * band->height * 4;
@@ -295,6 +344,7 @@ extern "C" void cd2d_band_release(cd2d_surface *surface, cd2d_band *band) {
 // MARK: - Frames
 
 extern "C" int32_t cd2d_frame_begin(cd2d_surface *surface, uint32_t background_argb) {
+    if (!hasDevice(surface)) return CD2D_E_RECREATE;
     HRESULT hr = S_OK;
     if (!surface->backBuffer) {
         ComPtr<IDXGISurface> buffer;

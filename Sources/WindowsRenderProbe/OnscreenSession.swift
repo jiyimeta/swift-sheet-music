@@ -10,18 +10,25 @@ final class OnscreenSession {
         var gesture: [Double]
         var settleMs: Double
         var deltaMB: Double
+        /// Visible tiles left to the background, summed over every frame drawn scaled (the gestures and their settle
+        /// delays): a tile missing for three frames counts three times.
+        var deferredTiles: Int
     }
 
     struct Cursor {
         var work: [Double]
+        /// Infinite when the process's CPU time could not be read, or did not move (a failure is recorded).
         var cpuPercent: Double
     }
 
     struct Parity {
         var zoom: Double
-        /// Percentage of pixels whose color differs by more than 2 in any channel.
+        /// Percentage of pixels whose color differs by more than 2 in any of B, G, R from the untiled reference.
         var mean: Double
         var maxChannel: Int
+        /// Percentage of the beam centre-line samples (`beamSamples(pxPerMM:)`) that are dark in the frame.
+        var beamCoverage: Double
+        var beamSamples: Int
     }
 
     struct DeviceLoss {
@@ -35,7 +42,6 @@ final class OnscreenSession {
     /// `CD2D_E_RECREATE` (0x8899000C) as a signed HRESULT.
     private static let recreateHResult: Int32 = -2_003_238_900
 
-    private let fontFiles: [String]
     private let window: HWND
     private let surface: ScoreSurface
     private let pages: [EncodablePage]
@@ -81,7 +87,6 @@ final class OnscreenSession {
         try surface.attach(hwnd: UnsafeMutableRawPointer(window), widthPx: width, heightPx: height)
         surface.setPages(laidOut.pages, spans: laidOut.spans)
 
-        self.fontFiles = fontFiles
         baselineBytes = Self.privateBytes()
         layoutMs = elapsed
         pages = laidOut.pages
@@ -117,32 +122,50 @@ final class OnscreenSession {
     /// `frames` frames scrolling down `stepPx` pixels each; the surface's work per frame.
     func scroll(frames: Int, stepPx: Double) -> [Double] {
         var work: [Double] = []
+        var tiles: [Int] = []
         let stepMM = stepPx / pxPerMM(zoom: 1)
         let bottom = documentHeightMM - Double(height) / pxPerMM(zoom: 1)
         for _ in 0 ..< frames {
             originY = min(originY + stepMM, bottom)
             draw(zoom: 1, originY: originY)
             work.append(surface.lastDrawTiming.workMs)
+            tiles.append(surface.lastDrawTiming.rasterizedTiles)
         }
+        // The slowest frames with how many tiles each rasterized: a p99 over budget reads as "two tiles in one frame"
+        // or as "one tile got slower" only with this beside it.
+        let slowest = work.indices.sorted { work[$0] > work[$1] }.prefix(8)
+        let listed = slowest.map { String(format: "%.2f ms/%d", work[$0], tiles[$0]) }.joined(separator: ", ")
+        let rasterizing = zip(work, tiles).filter { $0.1 > 0 }
+        let perTile = rasterizing.map { $0.0 / Double($0.1) }.sorted()
+        let median = perTile.isEmpty ? 0 : perTile[perTile.count / 2]
+        print(
+            "scroll: slowest frames (work/tiles) \(listed); \(rasterizing.count) frames rasterized, "
+                + String(format: "median %.2f ms per tile", median),
+        )
         return work
     }
 
-    /// 100 → 200 → 100 % as two 30-frame gestures, each followed by frames at the new scale until the surface
-    /// rasterizes it (100 ms after the gesture's last frame).
+    /// 100 → 200 → 100 % as two 30-frame gestures, each followed by frames at the new scale until the surface draws
+    /// at it (100 ms after the gesture's last frame): that frame's work is the settle.
     func zoom() -> Zoom {
         var gesture: [Double] = []
         var settle: [Double] = []
+        var deferred = 0
         var zoomedBytes = baselineBytes
         for (from, to) in [(1.0, 2.0), (2.0, 1.0)] {
             for step in 1 ... 30 {
                 draw(zoom: from + (to - from) * Double(step) / 30, originY: originY, gesture: true)
                 gesture.append(surface.lastDrawTiming.workMs)
+                deferred += surface.lastDrawTiming.deferredTiles
             }
             let start = clock.now
             var settled = false
             while !settled, clock.now - start < .seconds(2) {
                 draw(zoom: to, originY: originY)
-                if surface.lastDrawTiming.rasterizedTiles > 0 {
+                deferred += surface.lastDrawTiming.deferredTiles
+                // Not "rasterized a tile": a frame in the settle delay may rasterize one at the old scale, and the
+                // settle itself may find every tile of the new scale still cached.
+                if !surface.lastDrawTiming.isScaled {
                     settle.append(surface.lastDrawTiming.workMs)
                     settled = true
                 }
@@ -150,15 +173,18 @@ final class OnscreenSession {
             if !settled { failures.append("zoom to \(to) never settled") }
             if to == 2 { zoomedBytes = Self.privateBytes() }
         }
+        print("zoom: \(deferred) visible tiles deferred to a later frame, summed over the scaled frames")
         return Zoom(
             gesture: gesture, settleMs: settle.max() ?? .infinity,
-            deltaMB: Double(zoomedBytes - baselineBytes) / 1_048_576,
+            deltaMB: Double(zoomedBytes - baselineBytes) / 1_048_576, deferredTiles: deferred,
         )
     }
 
-    /// A bar moving across the view, paced by the display, for `seconds`.
+    /// A bar moving across the view, paced by the display, for `seconds`. The CPU share fails rather than reads zero
+    /// when the process's CPU time cannot be read or does not move: a run of thousands of frames cannot cost nothing.
     func cursor(seconds: Int) -> Cursor {
         var work: [Double] = []
+        _ = Self.cyclesPerSecond // calibrate before the clock starts, not inside the measured run
         let cpuStart = Self.processCPUSeconds()
         let start = clock.now
         var tick = 0
@@ -172,21 +198,47 @@ final class OnscreenSession {
             tick += 1
         }
         let elapsed = Self.milliseconds(clock.now - start) / 1000
-        return Cursor(work: work, cpuPercent: (Self.processCPUSeconds() - cpuStart) / elapsed * 100)
+        let cpuEnd = Self.processCPUSeconds()
+        func describe(_ read: Result<Double, ProbeError>) -> String {
+            switch read {
+            case let .success(seconds): String(format: "%.6f s", seconds)
+            case let .failure(error): error.description
+            }
+        }
+        let wall = String(format: "%.3f", elapsed)
+        print(
+            "cursor: process CPU \(describe(cpuStart)) at the start, \(describe(cpuEnd)) at the end; "
+                + "\(wall) s wall, \(work.count) frames",
+        )
+        let cpuPercent: Double
+        switch (cpuStart, cpuEnd) {
+        case let (.success(from), .success(to)) where to > from:
+            cpuPercent = (to - from) / elapsed * 100
+        case (.success, .success):
+            failures.append("the process CPU time did not move over the cursor run")
+            cpuPercent = .infinity
+        case let (.failure(error), _), let (_, .failure(error)):
+            failures.append("reading the process CPU time: \(error)")
+            cpuPercent = .infinity
+        }
+        return Cursor(work: work, cpuPercent: cpuPercent)
     }
 
-    /// Page 1 at the top-left, the frame read back before it is presented, against the PNG path's pixels at the
-    /// same scale.
+    /// Page 1 at the top-left: the frame, read back before it is presented, against the same page rendered untiled
+    /// into one band on the surface's own device (`ScoreSurface.referencePixels`), placed from the same rounded page
+    /// offset. The rasterizer is the same on both sides, so a differing pixel is the tiling's — not the hardware
+    /// versus software antialiasing the PNG path's WIC render differs by along every edge.
     func parity(zoom: Double) throws -> Parity {
         var frame = [UInt8](repeating: 0, count: width * height * 4)
         frame.withUnsafeMutableBufferPointer { buffer in
             if let base = buffer.baseAddress { surface.readBackNext(into: base, width: width, height: height) }
             draw(zoom: zoom, originY: 0)
         }
-        let reference = try Direct2DPageRenderer.renderPixels(
-            pages[0].commands, widthPx: width, heightPx: height, pxPerMM: pxPerMM(zoom: zoom), offsetPx: (0, 0),
-            fontFiles: fontFiles,
-        )
+        // Both BGRA: the frame's alpha is ignored and the reference is opaque, so B, G and R are compared.
+        let reference = try surface.referencePixels(page: 0, frame: makeFrame(zoom: zoom, originY: 0))
+        guard reference.count == frame.count else {
+            throw ProbeError("the reference is \(reference.count) bytes, the frame \(frame.count)")
+        }
         var differing = 0
         var maxChannel = 0
         for pixel in 0 ..< width * height {
@@ -197,7 +249,49 @@ final class OnscreenSession {
             maxChannel = max(maxChannel, worst)
             if worst > 2 { differing += 1 }
         }
-        return Parity(zoom: zoom, mean: Double(differing) / Double(width * height) * 100, maxChannel: maxChannel)
+        let samples = beamSamples(pxPerMM: pxPerMM(zoom: zoom))
+        let dark = samples.count(where: { sample in
+            let offset = (sample.y * width + sample.x) * 4
+            return max(frame[offset], frame[offset + 1], frame[offset + 2]) < 128
+        })
+        return Parity(
+            zoom: zoom, mean: Double(differing) / Double(width * height) * 100, maxChannel: maxChannel,
+            beamCoverage: samples.isEmpty ? 0 : Double(dark) / Double(samples.count) * 100, beamSamples: samples.count,
+        )
+    }
+
+    /// Frame pixels on the centre line of page 1's beams — each a `moveTo`, three `lineTo` and a `fillPath`, its
+    /// corners inner-from, inner-to, outer-to, outer-from (`LayoutBridge`'s `.beam`) — at a quarter, half and three
+    /// quarters of its length, for the beams wholly on screen with page 1 at the top-left. Half a beam's thickness
+    /// from either edge, so a filled beam covers each sample fully at any zoom.
+    private func beamSamples(pxPerMM: Double) -> [(x: Int, y: Int)] {
+        let commands = pages[0].commands
+        var samples: [(x: Int, y: Int)] = []
+        var index = 0
+        while index + 4 < commands.count {
+            guard case let .moveTo(x0, y0) = commands[index],
+                  case let .lineTo(x1, y1) = commands[index + 1],
+                  case let .lineTo(x2, y2) = commands[index + 2],
+                  case let .lineTo(x3, y3) = commands[index + 3],
+                  case .fillPath = commands[index + 4]
+            else {
+                index += 1
+                continue
+            }
+            index += 5
+            let corners = [(x0, y0), (x1, y1), (x2, y2), (x3, y3)].map { ($0.0 * pxPerMM, $0.1 * pxPerMM) }
+            guard corners.allSatisfy({ $0.0 >= 0 && $0.0 < Double(width) && $0.1 >= 0 && $0.1 < Double(height) })
+            else { continue }
+            let from = ((corners[0].0 + corners[3].0) / 2, (corners[0].1 + corners[3].1) / 2)
+            let to = ((corners[1].0 + corners[2].0) / 2, (corners[1].1 + corners[2].1) / 2)
+            for t in [0.25, 0.5, 0.75] {
+                samples.append((
+                    x: Int((from.0 + (to.0 - from.0) * t).rounded(.down)),
+                    y: Int((from.1 + (to.1 - from.1) * t).rounded(.down)),
+                ))
+            }
+        }
+        return samples
     }
 
     /// A device loss mid-scroll through the debug hook, then parity at 100 % on the rebuilt device.
@@ -275,33 +369,5 @@ final class OnscreenSession {
             TranslateMessage(&message)
             DispatchMessageW(&message)
         }
-    }
-
-    private static func processCPUSeconds() -> Double {
-        var creation = FILETIME()
-        var exit = FILETIME()
-        var kernel = FILETIME()
-        var user = FILETIME()
-        guard GetProcessTimes(GetCurrentProcess(), &creation, &exit, &kernel, &user) else { return 0 }
-        func seconds(_ time: FILETIME) -> Double {
-            Double(UInt64(time.dwHighDateTime) << 32 | UInt64(time.dwLowDateTime)) / 10_000_000
-        }
-        return seconds(kernel) + seconds(user)
-    }
-
-    private static func privateBytes() -> Int {
-        var counters = PROCESS_MEMORY_COUNTERS_EX()
-        counters.cb = DWORD(MemoryLayout<PROCESS_MEMORY_COUNTERS_EX>.size)
-        let size = counters.cb
-        let read = withUnsafeMutablePointer(to: &counters) { pointer in
-            pointer.withMemoryRebound(to: PROCESS_MEMORY_COUNTERS.self, capacity: 1) {
-                K32GetProcessMemoryInfo(GetCurrentProcess(), $0, size)
-            }
-        }
-        return read ? Int(counters.PrivateUsage) : 0
-    }
-
-    private static func milliseconds(_ duration: Duration) -> Double {
-        Double(duration.components.seconds) * 1000 + Double(duration.components.attoseconds) / 1e15
     }
 }

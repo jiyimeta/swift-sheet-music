@@ -18,8 +18,9 @@ extern "C" {
 typedef struct cd2d_canvas cd2d_canvas;
 typedef struct cd2d_resources cd2d_resources;
 
-/// Device-independent resources: the Direct2D, DirectWrite and WIC factories, a private font collection, and the
-/// caches built on them (glyph outlines, stroke styles, text formats). Every canvas made from them shares the caches;
+/// Device-independent resources: the Direct2D, DirectWrite and WIC factories, a private font collection (with the
+/// installed fonts behind it for a family it lacks), and the caches built on them (glyph outlines, stroke styles, text
+/// formats). Every canvas made from them shares the caches;
 /// they must outlive those canvases. One thread at a time (the Direct2D factory is single-threaded).
 int32_t cd2d_resources_create(cd2d_resources **resources);
 /// Adds a font file (OpenType) to the private collection. Call before `cd2d_resources_fonts_ready`.
@@ -51,22 +52,52 @@ void cd2d_line_to(cd2d_canvas *canvas, float x, float y);
 void cd2d_cubic_to(cd2d_canvas *canvas, float c1x, float c1y, float c2x, float c2y, float x, float y);
 /// Strokes the path built since the last stroke and starts a new one. A dash with both lengths above zero dashes it.
 void cd2d_stroke(cd2d_canvas *canvas, float width, float dash_on, float dash_off);
+/// Fills the path built since the last stroke or fill — its open figure closed, nonzero winding, in the current
+/// color, never dashed — and starts a new one, as `cd2d_stroke` does. The draw program's `fillPath` (beams).
+void cd2d_fill_path(cd2d_canvas *canvas);
 void cd2d_fill_rect(cd2d_canvas *canvas, float x, float y, float width, float height);
 
-/// `family`: the font family name (L"Bravura", L"Edwin"). Bold / italic pick the family's own face when it has one
-/// and the regular face otherwise — never a synthesized one, like CoreText's symbolic traits.
+/// `family`: the font family name (L"Bravura", L"Edwin", L"Segoe UI"), looked up in the private collection first and
+/// in the installed fonts when the private one lacks it. `weight` is DirectWrite's (400 regular, 600 semibold, 700
+/// bold; zero or less is regular). Weight and italic pick the family's own face when it has one and the regular face
+/// otherwise — never a synthesized one, like CoreText's symbolic traits.
 void cd2d_fill_glyph(
-    cd2d_canvas *canvas, const uint16_t *family, uint32_t codepoint, float x, float y, float size, int32_t bold,
+    cd2d_canvas *canvas, const uint16_t *family, uint32_t codepoint, float x, float y, float size, int32_t weight,
     int32_t italic);
 /// The glyph's outline scaled so its bounding box spans [top_y, bottom_y] vertically, its x scaled by `x_scale`, its
 /// right edge at `right_edge_x` (`StaffRenderer.smuflGlyphPathStretched`).
 void cd2d_fill_stretched_glyph(
     cd2d_canvas *canvas, const uint16_t *family, uint32_t codepoint, float right_edge_x, float top_y, float bottom_y,
     float size, float x_scale);
-/// Laid-out text (DirectWrite shaping and kerning), its outline filled with the baseline at (x, y).
+/// Laid-out text (DirectWrite shaping and kerning), its outline filled with the baseline at (x, y). Family, weight
+/// and italic as in `cd2d_fill_glyph`.
 void cd2d_fill_text(
     cd2d_canvas *canvas, const uint16_t *family, const uint16_t *text, uint32_t length, float x, float y, float size,
-    int32_t bold, int32_t italic);
+    int32_t weight, int32_t italic);
+
+/// What `cd2d_measure_text` measured, in the units of its `size`. `ascent`, `descent` and `lineGap` are the face's
+/// (`DWRITE_FONT_METRICS`, descent positive). `advance` is the laid-out width including trailing whitespace (CoreText's
+/// typographic width). The ink rect bounds the glyph outlines `cd2d_fill_text` fills, relative to the baseline origin
+/// and Y-up like CoreText's bounds: (`inkX`, `inkY`) is its lower-left corner. No ink (empty or blank text) is all
+/// four zero.
+typedef struct cd2d_text_metrics {
+    float ascent;
+    float descent;
+    float lineGap;
+    float advance;
+    float inkX;
+    float inkY;
+    float inkW;
+    float inkH;
+} cd2d_text_metrics;
+
+/// Measures `text` exactly as `cd2d_fill_text` would draw it at `size` — the same face resolution (private collection,
+/// then the installed fonts) and the same `IDWriteTextLayout` — so a layout that anchors on these numbers lands where
+/// the drawing does. `length` may be zero: the face metrics only. Fails with DWRITE_E_NOFONT when no collection has
+/// the family. Uses the resources' caches: one thread at a time, like drawing.
+int32_t cd2d_measure_text(
+    cd2d_resources *resources, const uint16_t *family, float size, int32_t weight, int32_t italic,
+    const uint16_t *text, uint32_t length, cd2d_text_metrics *out);
 
 /// Ends drawing and writes a WIC canvas as a PNG.
 int32_t cd2d_write_png(cd2d_canvas *canvas, const uint16_t *path);
@@ -108,6 +139,11 @@ void cd2d_surface_destroy(cd2d_surface *surface);
 int32_t cd2d_band_begin(
     cd2d_surface *surface, uint32_t width, uint32_t height, cd2d_band **band, cd2d_canvas **canvas);
 int32_t cd2d_band_end(cd2d_surface *surface, cd2d_band *band);
+/// Probe aid: an ended band's pixels in `pixels` (BGRA premultiplied — opaque, since a band starts white — `width` x
+/// `height`, rows of `width * 4` bytes, top-down), copied on the surface's device through a CPU-readable bitmap. What
+/// the band does not cover is left as it was. A band from before a recreate fails with CD2D_E_RECREATE.
+int32_t cd2d_band_read_back(
+    cd2d_surface *surface, cd2d_band *band, uint8_t *pixels, uint32_t width, uint32_t height);
 void cd2d_band_release(cd2d_surface *surface, cd2d_band *band);
 
 /// Starts a frame on the back buffer, cleared to `background_argb`.

@@ -37,8 +37,9 @@ public enum Direct2DPageRenderer {
         try check(withWide(pngPath) { cd2d_write_png(canvas, $0) }, "writing \(pngPath)")
     }
 
-    /// `renderPNG`, returning the pixels (BGRA premultiplied, top-down) instead — how a probe compares the onscreen
-    /// surface's frame with this path.
+    /// `renderPNG`, returning the pixels (BGRA premultiplied, top-down) instead, for tests that read what this path
+    /// drew. With no font files only the installed fonts draw (the system face). The onscreen probe does not compare
+    /// against it: WIC rasterizes in software, so its antialiasing differs from the surface's hardware device.
     package static func renderPixels(
         _ commands: [DrawCommand], widthPx: Int, heightPx: Int, pxPerMM: Double, offsetPx: (x: Double, y: Double),
         fontFiles: [String],
@@ -50,7 +51,10 @@ public enum Direct2DPageRenderer {
         for file in fontFiles {
             try check(withWide(file) { cd2d_add_font_file(canvas, $0) }, "adding the font \(file)")
         }
-        try check(cd2d_fonts_ready(canvas), "building the font collection")
+        // No private collection at all rather than an empty one: a family then resolves in the installed fonts alone.
+        if !fontFiles.isEmpty {
+            try check(cd2d_fonts_ready(canvas), "building the font collection")
+        }
         var walker = DrawCommandWalker(canvas: canvas, pxPerMM: pxPerMM, offset: offsetPx)
         walker.paint(commands[...])
         var pixels = [UInt8](repeating: 0, count: widthPx * heightPx * 4)

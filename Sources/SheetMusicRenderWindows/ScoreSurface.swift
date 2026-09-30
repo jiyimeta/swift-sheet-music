@@ -8,8 +8,9 @@ import SheetMusicBridgeCore
 /// Pages are rasterized into tiles (`TileGrid`) by walking only the `SystemSpan`s that cross each tile, and kept in a
 /// least-recently-drawn cache; each frame blits the visible tiles and draws the overlays (cursor, selection frames)
 /// on top. Scrolling therefore costs a blit per frame plus, now and then, a new row of tiles. While a zoom gesture runs
-/// (`Frame.isGesture`), the tiles of the last settled scale are drawn scaled; 100 ms after the gesture's last frame the
-/// visible tiles are rasterized at the new scale.
+/// (`Frame.isGesture`), the tiles of the last settled scale are drawn scaled, and of the tiles the view uncovers only
+/// one per frame is rasterized, the background showing where the others go; 100 ms after the gesture's last frame the
+/// visible tiles are rasterized at the new scale, all of them in that one frame.
 ///
 /// Use it on the thread that created it — the app's UI thread. Call `draw` from `CompositionTarget.Rendering` while
 /// something moves (playback, a gesture, and until 100 ms after one ends), and otherwise only when the view changed.
@@ -19,28 +20,36 @@ public final class ScoreSurface {
     static let settleDelay: Duration = .milliseconds(100)
     static let cacheBytes = 64 << 20
 
-    private let resources: OpaquePointer
-    private var surface: OpaquePointer?
-    private var pages: [EncodablePage] = []
+    let resources: OpaquePointer
+    private(set) var surface: OpaquePointer?
+    private(set) var pages: [EncodablePage] = []
     private var spans: [[SystemSpan]] = []
-    private var tiles = TileLRU<OpaquePointer>(capacityBytes: ScoreSurface.cacheBytes)
+    private(set) var tiles = TileLRU<OpaquePointer>(capacityBytes: ScoreSurface.cacheBytes)
     /// The scale the tiles on screen were rasterized at, while a gesture (and its settle delay) runs.
     private var settledPxPerMM: Double?
     private var lastGestureFrame: ContinuousClock.Instant?
     private var lastOriginY: Double?
-    private var widthPx = 1
-    private var heightPx = 1
+    private(set) var widthPx = 1
+    private(set) var heightPx = 1
     private let clock = ContinuousClock()
 
     /// What the last `draw` spent: rasterizing and composing the frame (`workMs`), then in `Present`, which waits for
-    /// the display (`presentMs`), and how many tiles it rasterized.
+    /// the display (`presentMs`); how many tiles it rasterized, and how many it left out.
     package private(set) var lastDrawTiming = DrawTiming()
 
     package struct DrawTiming {
         package var workMs = 0.0
         package var presentMs = 0.0
         package var rasterizedTiles = 0
+        /// Visible tiles the frame left to the background: while the scale moves, only one missing tile is
+        /// rasterized per frame.
+        package var deferredTiles = 0
+        /// Whether the tiles were drawn stretched from another raster scale (a gesture, or the settle delay after
+        /// one) rather than rasterized at the frame's own.
+        package var isScaled = false
     }
+
+    private typealias VisibleTile = (key: TileKey, grid: TileGrid, screenX: Double, screenY: Double)
 
     /// Loads the font files (Bravura, the Edwin faces) every walk draws with.
     public init(fontFiles: [String]) throws {
@@ -175,13 +184,14 @@ public final class ScoreSurface {
             settledPxPerMM = rasterScale
         }
         let stretch = frame.pxPerMM / rasterScale
+        let scaling = rasterScale != frame.pxPerMM
+        lastDrawTiming.isScaled = scaling
 
         // Which tiles show, rasterized first: a band cannot be drawn while a frame is open.
-        var visible: [(key: TileKey, grid: TileGrid, screenX: Double, screenY: Double)] = []
+        var visible: [VisibleTile] = []
         for (index, page) in pages.enumerated() where index < frame.pageOrigins.count {
             let grid = TileGrid(page: page, pxPerMM: rasterScale)
-            let screenX = ((frame.pageOrigins[index].x - frame.originMM.x) * frame.pxPerMM).rounded()
-            let screenY = ((frame.pageOrigins[index].y - frame.originMM.y) * frame.pxPerMM).rounded()
+            let (screenX, screenY) = Self.pageOffsetPx(index, frame)
             // The screen, in the page's pixels at the raster scale.
             let view = PixelRect(
                 x: Int((-screenX / stretch).rounded(.down)), y: Int((-screenY / stretch).rounded(.down)),
@@ -194,10 +204,21 @@ public final class ScoreSurface {
             }
         }
         let onScreen = Set(visible.map(\.key))
-        for tile in visible where !tiles.contains(tile.key) {
+        // While the scale moves — a gesture, and the settle delay after it — the old scale's tiles are drawn
+        // stretched, and zooming out uncovers a ring of them at once: rasterizing all of those in one frame is what
+        // overran the gesture's frame budget. So a scaled frame rasterizes at most one missing tile, the one nearest
+        // the view's center, and leaves the rest to the background until a later frame or the settle. Every other
+        // frame (the first, a scroll, the settle itself) rasterizes all it shows, so it is always complete.
+        var missing = visible.filter { !tiles.contains($0.key) }
+        if scaling, let nearest = nearestToCenter(missing, stretch: stretch) {
+            lastDrawTiming.deferredTiles = missing.count - 1
+            missing = [nearest]
+        }
+        for tile in missing {
             if let failure = rasterize(tile.key, grid: tile.grid, keep: onScreen) { return failure }
         }
-        if let failure = prefetch(frame: frame, visible: visible.map { ($0.key, $0.grid) }, keep: onScreen) {
+        // No read-ahead while scaled: it would be at the old scale, about to be replaced.
+        if !scaling, let failure = prefetch(frame: frame, visible: visible.map { ($0.key, $0.grid) }, keep: onScreen) {
             return failure
         }
         lastOriginY = frame.originMM.y
@@ -222,30 +243,6 @@ public final class ScoreSurface {
         hresult = cd2d_frame_present(surface)
         lastDrawTiming.presentMs = Self.milliseconds(clock.now - presenting)
         return hresult == 0 ? .presented : recover(hresult)
-    }
-
-    // MARK: - For probes and tests
-
-    /// The next band end or present fails with `hresult` (the device-loss path without losing a device).
-    package func failNext(hresult: Int32) {
-        if let surface { cd2d_surface_debug_fail_next(surface, hresult) }
-    }
-
-    /// The next frame is also copied into `pixels` (BGRA, `width` x `height`, top-down) just before it is presented.
-    package func readBackNext(into pixels: UnsafeMutablePointer<UInt8>, width: Int, height: Int) {
-        if let surface { cd2d_surface_debug_read_back_next(surface, pixels, UInt32(width), UInt32(height)) }
-    }
-
-    package var tileCount: Int {
-        tiles.count
-    }
-
-    package var tileBytes: Int {
-        tiles.bytes
-    }
-
-    package var glyphCacheCount: Int {
-        Int(cd2d_resources_glyph_cache_count(resources))
     }
 
     // MARK: - Private
@@ -279,8 +276,21 @@ public final class ScoreSurface {
         return nil
     }
 
+    /// The candidate whose center lies nearest the view's, on screen; nil when there is none.
+    private func nearestToCenter(_ candidates: [VisibleTile], stretch: Double) -> VisibleTile? {
+        let centerX = Double(widthPx) / 2
+        let centerY = Double(heightPx) / 2
+        func distance(_ tile: VisibleTile) -> Double {
+            let rect = tile.grid.rect(column: tile.key.column, row: tile.key.row)
+            let dx = tile.screenX + (Double(rect.x) + Double(rect.width) / 2) * stretch - centerX
+            let dy = tile.screenY + (Double(rect.y) + Double(rect.height) / 2) * stretch - centerY
+            return dx * dx + dy * dy
+        }
+        return candidates.min { distance($0) < distance($1) }
+    }
+
     /// One tile beyond the view in the direction of the scroll, when the view needed none: spreads the cost of a new
-    /// row over frames that would otherwise be idle.
+    /// row over frames that would otherwise be idle. Never while the scale moves (`draw` does not call it then).
     private func prefetch(
         frame: Frame, visible: [(key: TileKey, grid: TileGrid)], keep: Set<TileKey>,
     ) -> DrawOutcome? {
@@ -300,11 +310,7 @@ public final class ScoreSurface {
         case let .fillRect(index, _, _), let .strokeRect(index, _, _, _), let .commands(index, _): page = index
         }
         guard frame.pageOrigins.indices.contains(page) else { return }
-        let offset = (
-            ((frame.pageOrigins[page].x - frame.originMM.x) * frame.pxPerMM).rounded(),
-            ((frame.pageOrigins[page].y - frame.originMM.y) * frame.pxPerMM).rounded(),
-        )
-        var walker = DrawCommandWalker(canvas: canvas, pxPerMM: frame.pxPerMM, offset: offset)
+        var walker = DrawCommandWalker(canvas: canvas, pxPerMM: frame.pxPerMM, offset: Self.pageOffsetPx(page, frame))
         switch overlay {
         case let .fillRect(_, rect, argb):
             walker.paint([.setColor(argb: argb), .fillRect(x: rect.x, y: rect.y, w: rect.width, h: rect.height)][...])
@@ -349,6 +355,15 @@ public final class ScoreSurface {
         }
     }
 
+    /// Where `frame` puts page `page`'s top-left on the surface, in whole pixels. The page's tiles, its overlays and
+    /// `referencePixels` all place it from this one rounding, so they share a pixel grid.
+    static func pageOffsetPx(_ page: Int, _ frame: Frame) -> (x: Double, y: Double) {
+        (
+            ((frame.pageOrigins[page].x - frame.originMM.x) * frame.pxPerMM).rounded(),
+            ((frame.pageOrigins[page].y - frame.originMM.y) * frame.pxPerMM).rounded(),
+        )
+    }
+
     private static func pixels(_ width: Double, _ height: Double, _ scaleX: Double, _ scaleY: Double) -> (Int, Int) {
         (max(1, Int((width * scaleX).rounded(.up))), max(1, Int((height * scaleY).rounded(.up))))
     }
@@ -357,7 +372,7 @@ public final class ScoreSurface {
         Double(duration.components.seconds) * 1000 + Double(duration.components.attoseconds) / 1e15
     }
 
-    private static func check(_ hresult: Int32, _ step: String) throws {
+    static func check(_ hresult: Int32, _ step: String) throws {
         guard hresult == 0 else { throw Failure(step: step, hresult: hresult) }
     }
 }

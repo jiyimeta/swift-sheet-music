@@ -8,8 +8,9 @@ import WinSDK
 /// `docs/superpowers/specs/2026-09-30-ssm-4-c-windows-onscreen-render-design.md` §10), and writes `onscreen.json`.
 ///
 /// Times are the surface's own work per frame — rasterizing tiles, composing, overlays — without the wait in `Present`,
-/// which only paces the loop to the display. Pixel parity reads the frame back before it is presented and compares it
-/// with the PNG path's render of the same page at the same scale, so it does not depend on the display being on.
+/// which only paces the loop to the display. Pixel parity reads the frame back before it is presented, so it does not
+/// depend on the display being on, and compares it with the same page rendered untiled on the same device: what it
+/// proves is that the tiles compose to the untiled page. (The Windows-versus-Mac parity is the PNG path's gate.)
 struct OnscreenProbe {
     let outputDirectory: URL
     let metricsPath: String
@@ -43,7 +44,8 @@ struct OnscreenProbe {
     func run() throws -> Bool {
         _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
         _ = SetThreadExecutionState(EXECUTION_STATE(ES_CONTINUOUS | ES_DISPLAY_REQUIRED))
-        try installFontMetricsTable(Data(contentsOf: URL(fileURLWithPath: metricsPath)))
+        // The table for Bravura and Edwin, DirectWrite for the system face the labels are drawn in.
+        try installWindowsFontMetrics(tableBytes: Data(contentsOf: URL(fileURLWithPath: metricsPath)))
         let session = try OnscreenSession(fontFiles: fontFiles)
         defer { session.close() }
 
@@ -98,29 +100,45 @@ struct OnscreenProbe {
                 name: "parity at \(Int(result.zoom * 100)) % <= 0.1 %",
                 value: "\(format(result.mean)) (max channel \(result.maxChannel))", passed: result.mean <= 0.1,
             ))
+            // A hollow figure strokes but fills nothing, silently, and parity cannot see it (both sides draw the same
+            // nothing). Filled beams darken every centre-line sample; hollow ones only those a stem happens to cross.
+            gates.append(Gate(
+                name: "beam coverage at \(Int(result.zoom * 100)) % >= 90 %",
+                value: "\(format(result.beamCoverage)) % of \(result.beamSamples) samples",
+                passed: result.beamSamples > 0 && result.beamCoverage >= 90,
+            ))
         }
         return gates
     }
 
     private func writeJSON(_ results: Results, passed: Bool) throws {
-        let parity = results.parity.map { "{\"zoom\": \($0.zoom), \"mean\": \(format($0.mean))}" }
+        let parity = results.parity.map {
+            "{\"zoom\": \($0.zoom), \"mean\": \(number($0.mean)), \"beamCoverage\": \(number($0.beamCoverage)), "
+                + "\"beamSamples\": \($0.beamSamples)}"
+        }
         let json = """
         {
-          "pages": \(results.pageCount), "layoutMs": \(format(results.layoutMs)), \
-        "firstFrameMs": \(format(results.firstFrameMs)),
-          "scroll": {"p50": \(format(percentile(results.scroll, 0.5))), \
-        "p99": \(format(percentile(results.scroll, 0.99)))},
-          "zoom": {"gestureP99": \(format(percentile(results.zoom.gesture, 0.99))), \
-        "settleMs": \(format(results.zoom.settleMs)), "privateBytesDeltaMB": \(format(results.zoom.deltaMB))},
-          "cursor": {"p99": \(format(percentile(results.cursor.work, 0.99))), \
-        "cpuPercentOfOneCore": \(format(results.cursor.cpuPercent))},
+          "pages": \(results.pageCount), "layoutMs": \(number(results.layoutMs)), \
+        "firstFrameMs": \(number(results.firstFrameMs)),
+          "scroll": {"p50": \(number(percentile(results.scroll, 0.5))), \
+        "p99": \(number(percentile(results.scroll, 0.99)))},
+          "zoom": {"gestureP99": \(number(percentile(results.zoom.gesture, 0.99))), \
+        "settleMs": \(number(results.zoom.settleMs)), "privateBytesDeltaMB": \(number(results.zoom.deltaMB)), \
+        "deferredTiles": \(results.zoom.deferredTiles)},
+          "cursor": {"p99": \(number(percentile(results.cursor.work, 0.99))), \
+        "cpuPercentOfOneCore": \(number(results.cursor.cpuPercent))},
           "parity": [\(parity.joined(separator: ", "))],
           "deviceLoss": {"recreated": \(results.deviceLoss.recreated), \
-        "afterMean": \(format(results.deviceLoss.parity.mean))},
+        "afterMean": \(number(results.deviceLoss.parity.mean))},
           "passed": \(passed)
         }
         """
         try json.write(to: outputDirectory.appendingPathComponent("onscreen.json"), atomically: true, encoding: .utf8)
+    }
+
+    /// `format` for the JSON, where a value that was not measured (infinite) has to be `null`: `inf` is not JSON.
+    private func number(_ value: Double) -> String {
+        value.isFinite ? format(value) : "null"
     }
 
     private func percentile(_ values: [Double], _ fraction: Double) -> Double {

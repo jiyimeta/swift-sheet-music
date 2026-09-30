@@ -669,16 +669,18 @@ if isWindows {
         ),
         .target(
             name: "SheetMusicRenderWindows",
-            dependencies: ["CDirect2D", "SheetMusicBridgeCore"],
+            // SheetMusicLayout: `WindowsFontMetricsProvider` is a `FontMetricsProvider`.
+            dependencies: ["CDirect2D", "SheetMusicBridgeCore", "SheetMusicLayout"],
         ),
         .executableTarget(
             name: "WindowsRenderProbe",
             dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore"],
         ),
-        // The onscreen renderer's pure geometry (tiles, the cache's eviction). Windows only, like the module.
+        // The onscreen renderer's pure geometry (tiles, the cache's eviction), and measured-equals-drawn for the
+        // system face (`LabelAnchorTests`). Windows only, like the module.
         .testTarget(
             name: "SheetMusicRenderWindowsTests",
-            dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore"],
+            dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore", "SheetMusicLayout"],
         ),
     ]
 }

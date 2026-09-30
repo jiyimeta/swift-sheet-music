@@ -11,43 +11,6 @@ void fillGeometry(cd2d_canvas *canvas, ID2D1Geometry *geometry, const D2D1::Matr
     canvas->target->SetTransform(canvas->transform);
 }
 
-/// The family's face for the requested weight and style, or its regular face when the family has no such face:
-/// DirectWrite would otherwise synthesize one, which CoreText (the Mac reference) does not.
-cd2d::Face *resolveFace(cd2d_resources *resources, const wchar_t *family, bool bold, bool italic) {
-    cd2d::FaceKey key{family, bold, italic};
-    auto found = resources->faces.find(key);
-    if (found != resources->faces.end()) {
-        return found->second.face ? &found->second : nullptr;
-    }
-    cd2d::Face resolved;
-    UINT32 index = 0;
-    BOOL exists = FALSE;
-    if (resources->fonts && SUCCEEDED(resources->fonts->FindFamilyName(family, &index, &exists)) && exists) {
-        // IDWriteFontFamily1: IDWriteFontCollection1's GetFontFamily hides the base overload that takes the older type.
-        ComPtr<IDWriteFontFamily1> fontFamily;
-        if (SUCCEEDED(resources->fonts->GetFontFamily(index, &fontFamily))) {
-            ComPtr<IDWriteFont> font;
-            auto match = [&](DWRITE_FONT_WEIGHT weight, DWRITE_FONT_STYLE style) {
-                font.Reset();
-                return SUCCEEDED(fontFamily->GetFirstMatchingFont(weight, DWRITE_FONT_STRETCH_NORMAL, style, &font));
-            };
-            bool found = match(
-                bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_NORMAL,
-                italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL);
-            if (found && font->GetSimulations() != DWRITE_FONT_SIMULATIONS_NONE) {
-                found = match(DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL);
-            }
-            if (found) {
-                resolved.weight = font->GetWeight();
-                resolved.style = font->GetStyle();
-                font->CreateFontFace(&resolved.face);
-            }
-        }
-    }
-    auto inserted = resources->faces.emplace(key, resolved);
-    return inserted.first->second.face ? &inserted.first->second : nullptr;
-}
-
 /// The outline of one glyph at `cd2d::kGlyphEm`, baseline origin at (0, 0), Y down — made once per face and codepoint.
 ID2D1PathGeometry *glyphOutline(cd2d_resources *resources, IDWriteFontFace *face, uint32_t codepoint) {
     cd2d::GlyphKey key{face, codepoint};
@@ -89,6 +52,8 @@ ID2D1StrokeStyle *strokeStyle(cd2d_resources *resources, float on, float off) {
     return inserted.first->second.Get();
 }
 
+/// The text format for the family in the collection it resolves in (`cd2d::familyCollection`), so a family the
+/// private collection lacks — the system face — is laid out in the installed fonts rather than in a fallback.
 IDWriteTextFormat *textFormat(
     cd2d_resources *resources, const wchar_t *family, DWRITE_FONT_WEIGHT weight, DWRITE_FONT_STYLE style, float size) {
     uint32_t sizeBits = 0;
@@ -98,9 +63,11 @@ IDWriteTextFormat *textFormat(
     if (found != resources->formats.end()) {
         return found->second.Get();
     }
+    IDWriteFontCollection1 *collection = cd2d::familyCollection(resources, family);
+    if (!collection) collection = resources->fonts.Get();
     ComPtr<IDWriteTextFormat> format;
     if (SUCCEEDED(resources->dwrite->CreateTextFormat(
-            family, resources->fonts.Get(), weight, style, DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", &format))) {
+            family, collection, weight, style, DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", &format))) {
         format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
     }
     auto inserted = resources->formats.emplace(key, format);
@@ -183,7 +150,8 @@ void endFigure(cd2d_canvas *canvas) {
     }
 }
 
-/// The path under construction, opened on first use.
+/// The path under construction, opened on first use. Nonzero winding, the draw program's fill rule (`fillPath`);
+/// a stroke does not depend on it.
 ID2D1GeometrySink *pathSink(cd2d_canvas *canvas) {
     if (!canvas->sink) {
         canvas->path.Reset();
@@ -193,6 +161,7 @@ ID2D1GeometrySink *pathSink(cd2d_canvas *canvas) {
             canvas->sink.Reset();
             return nullptr;
         }
+        canvas->sink->SetFillMode(D2D1_FILL_MODE_WINDING);
     }
     return canvas->sink.Get();
 }
@@ -200,6 +169,85 @@ ID2D1GeometrySink *pathSink(cd2d_canvas *canvas) {
 }  // namespace
 
 namespace cd2d {
+
+DWRITE_FONT_WEIGHT fontWeight(int32_t weight) {
+    return weight > 0 ? static_cast<DWRITE_FONT_WEIGHT>(weight) : DWRITE_FONT_WEIGHT_NORMAL;
+}
+
+IDWriteFontCollection1 *familyCollection(cd2d_resources *resources, const wchar_t *family) {
+    UINT32 index = 0;
+    BOOL exists = FALSE;
+    if (resources->fonts && SUCCEEDED(resources->fonts->FindFamilyName(family, &index, &exists)) && exists) {
+        return resources->fonts.Get();
+    }
+    if (!resources->systemFonts) {
+        // IDWriteFactory3's overload, which returns the IDWriteFontCollection1 that `fonts` is too.
+        resources->dwrite->GetSystemFontCollection(FALSE, &resources->systemFonts, FALSE);
+    }
+    exists = FALSE;
+    if (resources->systemFonts && SUCCEEDED(resources->systemFonts->FindFamilyName(family, &index, &exists))
+        && exists) {
+        return resources->systemFonts.Get();
+    }
+    return nullptr;
+}
+
+Face *resolveFace(cd2d_resources *resources, const wchar_t *family, DWRITE_FONT_WEIGHT weight, bool italic) {
+    FaceKey key{family, static_cast<int>(weight), italic};
+    auto cached = resources->faces.find(key);
+    if (cached != resources->faces.end()) {
+        return cached->second.face ? &cached->second : nullptr;
+    }
+    Face resolved;
+    IDWriteFontCollection1 *collection = familyCollection(resources, family);
+    UINT32 index = 0;
+    BOOL exists = FALSE;
+    if (collection && SUCCEEDED(collection->FindFamilyName(family, &index, &exists)) && exists) {
+        // IDWriteFontFamily1: IDWriteFontCollection1's GetFontFamily hides the base overload that takes the older type.
+        ComPtr<IDWriteFontFamily1> fontFamily;
+        if (SUCCEEDED(collection->GetFontFamily(index, &fontFamily))) {
+            ComPtr<IDWriteFont> font;
+            auto match = [&](DWRITE_FONT_WEIGHT matchWeight, DWRITE_FONT_STYLE matchStyle) {
+                font.Reset();
+                return SUCCEEDED(
+                    fontFamily->GetFirstMatchingFont(matchWeight, DWRITE_FONT_STRETCH_NORMAL, matchStyle, &font));
+            };
+            bool found = match(weight, italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL);
+            if (found && font->GetSimulations() != DWRITE_FONT_SIMULATIONS_NONE) {
+                found = match(DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL);
+            }
+            if (found) {
+                resolved.weight = font->GetWeight();
+                resolved.style = font->GetStyle();
+                font->CreateFontFace(&resolved.face);
+            }
+        }
+    }
+    auto inserted = resources->faces.emplace(key, resolved);
+    return inserted.first->second.face ? &inserted.first->second : nullptr;
+}
+
+HRESULT layoutText(
+    cd2d_resources *resources, const wchar_t *family, const wchar_t *text, uint32_t length, float size,
+    DWRITE_FONT_WEIGHT weight, bool italic, IDWriteTextLayout **layout, float *baseline) {
+    *layout = nullptr;
+    *baseline = 0;
+    Face *face = resolveFace(resources, family, weight, italic);
+    // The face already resolved says which weight and style the family really has, so the layout asks for exactly
+    // those and DirectWrite has nothing to synthesize.
+    IDWriteTextFormat *format = textFormat(
+        resources, family, face ? face->weight : DWRITE_FONT_WEIGHT_NORMAL,
+        face ? face->style : DWRITE_FONT_STYLE_NORMAL, size);
+    if (!format) return E_FAIL;
+    HRESULT hr = resources->dwrite->CreateTextLayout(text, length, format, 100000.0f, 100000.0f, layout);
+    if (FAILED(hr)) return hr;
+    DWRITE_LINE_METRICS line;
+    UINT32 lines = 0;
+    if (SUCCEEDED((*layout)->GetLineMetrics(&line, 1, &lines)) && lines > 0) {
+        *baseline = line.baseline;
+    }
+    return S_OK;
+}
 
 void resetCanvas(cd2d_canvas *canvas, ID2D1RenderTarget *target, ID2D1SolidColorBrush *brush) {
     canvas->target = target;
@@ -238,6 +286,10 @@ extern "C" int32_t cd2d_resources_create(cd2d_resources **out) {
         delete resources;
         return hr;
     }
+    // Loaded here rather than on the first `system` text: the first call builds the system collection (tens of ms on
+    // the 2-core probe machine), which otherwise lands inside the first frame that draws a notation label. Optional —
+    // `familyCollection` retries, and without it the system face just does not resolve.
+    resources->dwrite->GetSystemFontCollection(FALSE, &resources->systemFonts, FALSE);
     *out = resources;
     return S_OK;
 }
@@ -336,7 +388,9 @@ extern "C" void cd2d_move_to(cd2d_canvas *canvas, float x, float y) {
     ID2D1GeometrySink *sink = pathSink(canvas);
     if (!sink) return;
     endFigure(canvas);
-    sink->BeginFigure(D2D1::Point2F(x, y), D2D1_FIGURE_BEGIN_HOLLOW);
+    // Filled, not hollow: a hollow figure strokes the same but fills nothing, silently, and the same path may end in
+    // `cd2d_fill_path` (a beam) as well as in `cd2d_stroke`.
+    sink->BeginFigure(D2D1::Point2F(x, y), D2D1_FIGURE_BEGIN_FILLED);
     canvas->figureOpen = true;
 }
 
@@ -364,14 +418,27 @@ extern "C" void cd2d_stroke(cd2d_canvas *canvas, float width, float dash_on, flo
     canvas->path.Reset();
 }
 
+extern "C" void cd2d_fill_path(cd2d_canvas *canvas) {
+    if (!canvas->sink) return;
+    if (canvas->figureOpen) {
+        canvas->sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+        canvas->figureOpen = false;
+    }
+    canvas->sink->Close();
+    canvas->sink.Reset();
+    canvas->target->FillGeometry(canvas->path.Get(), canvas->brush.Get());
+    canvas->path.Reset();
+}
+
 extern "C" void cd2d_fill_rect(cd2d_canvas *canvas, float x, float y, float width, float height) {
     canvas->target->FillRectangle(D2D1::RectF(x, y, x + width, y + height), canvas->brush.Get());
 }
 
 extern "C" void cd2d_fill_glyph(
-    cd2d_canvas *canvas, const uint16_t *family, uint32_t codepoint, float x, float y, float size, int32_t bold,
+    cd2d_canvas *canvas, const uint16_t *family, uint32_t codepoint, float x, float y, float size, int32_t weight,
     int32_t italic) {
-    cd2d::Face *face = resolveFace(canvas->resources, reinterpret_cast<const wchar_t *>(family), bold != 0, italic != 0);
+    cd2d::Face *face = cd2d::resolveFace(
+        canvas->resources, reinterpret_cast<const wchar_t *>(family), cd2d::fontWeight(weight), italic != 0);
     if (!face) return;
     ID2D1PathGeometry *outline = glyphOutline(canvas->resources, face->face.Get(), codepoint);
     if (!outline) return;
@@ -382,7 +449,8 @@ extern "C" void cd2d_fill_glyph(
 extern "C" void cd2d_fill_stretched_glyph(
     cd2d_canvas *canvas, const uint16_t *family, uint32_t codepoint, float right_edge_x, float top_y, float bottom_y,
     float size, float x_scale) {
-    cd2d::Face *face = resolveFace(canvas->resources, reinterpret_cast<const wchar_t *>(family), false, false);
+    cd2d::Face *face = cd2d::resolveFace(
+        canvas->resources, reinterpret_cast<const wchar_t *>(family), DWRITE_FONT_WEIGHT_NORMAL, false);
     if (!face) return;
     ID2D1PathGeometry *outline = glyphOutline(canvas->resources, face->face.Get(), codepoint);
     if (!outline) return;
@@ -402,26 +470,14 @@ extern "C" void cd2d_fill_stretched_glyph(
 
 extern "C" void cd2d_fill_text(
     cd2d_canvas *canvas, const uint16_t *family, const uint16_t *text, uint32_t length, float x, float y, float size,
-    int32_t bold, int32_t italic) {
-    const wchar_t *name = reinterpret_cast<const wchar_t *>(family);
-    cd2d::Face *face = resolveFace(canvas->resources, name, bold != 0, italic != 0);
-    // The face already resolved says which weight and style the family really has, so the layout asks for exactly
-    // those and DirectWrite has nothing to synthesize.
-    IDWriteTextFormat *format = textFormat(
-        canvas->resources, name, face ? face->weight : DWRITE_FONT_WEIGHT_NORMAL,
-        face ? face->style : DWRITE_FONT_STYLE_NORMAL, size);
-    if (!format) return;
+    int32_t weight, int32_t italic) {
     ComPtr<IDWriteTextLayout> layout;
-    HRESULT hr = canvas->resources->dwrite->CreateTextLayout(
-        reinterpret_cast<const wchar_t *>(text), length, format, 100000.0f, 100000.0f, &layout);
-    if (FAILED(hr)) return;
-    DWRITE_LINE_METRICS line;
-    UINT32 lines = 0;
-    // The glyph runs arrive relative to the layout's top; the stream's y is the first line's baseline.
     float baseline = 0;
-    if (SUCCEEDED(layout->GetLineMetrics(&line, 1, &lines)) && lines > 0) {
-        baseline = line.baseline;
-    }
+    HRESULT hr = cd2d::layoutText(
+        canvas->resources, reinterpret_cast<const wchar_t *>(family), reinterpret_cast<const wchar_t *>(text), length,
+        size, cd2d::fontWeight(weight), italic != 0, &layout, &baseline);
+    if (FAILED(hr)) return;
+    // The glyph runs arrive relative to the layout's top; the stream's y is the first line's baseline.
     OutlineRenderer renderer(canvas, x, y - baseline);
     layout->Draw(nullptr, &renderer, 0, 0);
 }
