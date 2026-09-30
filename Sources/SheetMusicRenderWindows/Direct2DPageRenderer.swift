@@ -1,9 +1,9 @@
 import CDirect2D
 import SheetMusicBridgeCore
 
-/// One page of the draw program to a PNG, through Direct2D and DirectWrite — how the parity probe compares the Windows
-/// renderer with the Mac's pixel for pixel. The walk itself is `DrawCommandWalker`, the one `ScoreSurface` draws the
-/// screen with.
+/// One page to a PNG, through Direct2D and DirectWrite, in software (WIC): a thumbnail or an image export for a host,
+/// and how the parity probe compares the Windows renderer with the Mac's pixel for pixel. The walk itself is
+/// `DrawCommandWalker`, the one `ScoreSurface` draws the screen with.
 public enum Direct2DPageRenderer {
     /// The Kotlin renderer's `coerceAtLeast(1.5f)`, `canvas.ts`'s `MIN_STROKE_PX`, `DrawProgramCGRenderer.minStrokePx`.
     public static let minStrokePx = DrawCommandWalker.minStrokePx
@@ -17,9 +17,28 @@ public enum Direct2DPageRenderer {
         }
     }
 
-    /// Renders `commands` onto a white `widthPx` x `heightPx` canvas, offset by `offsetPx`, and writes it to
-    /// `pngPath`.
+    /// Renders page `page` of `pages` whole onto a white canvas at `pxPerMM` — the page's size in pixels, rounded up —
+    /// and writes it to `pngPath`. `fontFiles` are those `ScoreSurface(fontFiles:)` takes. A `.vertical` page is as
+    /// tall as the music, and so is its image. Throws for a page outside `pages`.
     public static func renderPNG(
+        pages: ScorePages, page: Int, pxPerMM: Double, fontFiles: [String], to pngPath: String,
+    ) throws {
+        guard pages.pages.indices.contains(page) else {
+            let invalidArgument = Int32(bitPattern: 0x8007_0057) // E_INVALIDARG
+            throw Failure(step: "rendering page \(page + 1) of \(pages.pageCount)", hresult: invalidArgument)
+        }
+        let size = pages.pageSizeMM(page)
+        try renderPNG(
+            pages.pages[page].commands,
+            widthPx: max(1, Int((size.width * pxPerMM).rounded(.up))),
+            heightPx: max(1, Int((size.height * pxPerMM).rounded(.up))),
+            pxPerMM: pxPerMM, offsetPx: (0, 0), fontFiles: fontFiles, to: pngPath,
+        )
+    }
+
+    /// Renders `commands` onto a white `widthPx` x `heightPx` canvas, offset by `offsetPx`, and writes it to
+    /// `pngPath` — the parity probe's canvas, which the Mac's walk chose.
+    package static func renderPNG(
         _ commands: [DrawCommand], widthPx: Int, heightPx: Int, pxPerMM: Double, offsetPx: (x: Double, y: Double),
         fontFiles: [String], to pngPath: String,
     ) throws {

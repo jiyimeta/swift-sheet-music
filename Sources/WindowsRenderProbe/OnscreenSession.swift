@@ -44,7 +44,7 @@ final class OnscreenSession {
 
     private let window: HWND
     private let surface: ScoreSurface
-    private let pages: [EncodablePage]
+    private let pages: ScorePages
     private let pageOrigins: [(x: Double, y: Double)]
     private let documentHeightMM: Double
     private let width: Int
@@ -60,19 +60,21 @@ final class OnscreenSession {
         // Locals first: `self` cannot be read until every stored property is set.
         let clock = ContinuousClock()
         let start = clock.now
+        // What a host does: load the score, lay it out through the public `ScorePages.compute`, hand the result to the
+        // surface. The command count below and the beam samples are all that read past that API.
         let score = try ScoreBridge.loadScore(bytes: Data(GeneratedScore.musicXML().utf8))
-        var options = LayoutOptionsWire.verticalDefault
-        options.layoutMode = LayoutOptionsWire.Mode.page.rawValue
-        let laidOut = LayoutBridge.computePages(score: score, pageWidthMM: 210, pageHeightMM: 297, options: options)
+        let laidOut = ScorePages.compute(
+            score: score, pageWidthMM: 210, pageHeightMM: 297, options: ScorePageOptions(mode: .page),
+        )
         let elapsed = Self.milliseconds(clock.now - start)
         let commands = laidOut.pages.map(\.commands.count).reduce(0, +)
-        print("layout: \(laidOut.pages.count) pages, \(commands) commands, \(elapsed) ms")
+        print("layout: \(laidOut.pageCount) pages, \(commands) commands, \(elapsed) ms")
 
         var origins: [(x: Double, y: Double)] = []
         var top = 0.0
-        for page in laidOut.pages {
+        for page in 0 ..< laidOut.pageCount {
             origins.append((0, top))
-            top += page.heightMM + Self.pageGapMM
+            top += laidOut.pageSizeMM(page).height + Self.pageGapMM
         }
 
         let window = try Self.createWindow()
@@ -85,11 +87,11 @@ final class OnscreenSession {
 
         let surface = try ScoreSurface(fontFiles: fontFiles)
         try surface.attach(hwnd: UnsafeMutableRawPointer(window), widthPx: width, heightPx: height)
-        surface.setPages(laidOut.pages, spans: laidOut.spans)
+        surface.setPages(laidOut)
 
         baselineBytes = Self.privateBytes()
         layoutMs = elapsed
-        pages = laidOut.pages
+        pages = laidOut
         pageOrigins = origins
         documentHeightMM = top
         self.window = window
@@ -100,7 +102,7 @@ final class OnscreenSession {
     }
 
     var pageCount: Int {
-        pages.count
+        pages.pageCount
     }
 
     var cacheSummary: String {
@@ -190,7 +192,7 @@ final class OnscreenSession {
         var tick = 0
         while clock.now - start < .seconds(seconds) {
             let bar = ScoreSurface.Overlay.fillRect(
-                page: 0, rect: DrawRect(x: 20 + Double(tick % 600) * 0.3, y: 20, width: 1.5, height: 60),
+                page: 0, rect: PageRectMM(x: 20 + Double(tick % 600) * 0.3, y: 20, width: 1.5, height: 60),
                 argb: 0xC000_7AFF,
             )
             draw(zoom: 1, originY: originY, overlays: [bar])
@@ -265,7 +267,7 @@ final class OnscreenSession {
     /// quarters of its length, for the beams wholly on screen with page 1 at the top-left. Half a beam's thickness
     /// from either edge, so a filled beam covers each sample fully at any zoom.
     private func beamSamples(pxPerMM: Double) -> [(x: Int, y: Int)] {
-        let commands = pages[0].commands
+        let commands = pages.pages[0].commands
         var samples: [(x: Int, y: Int)] = []
         var index = 0
         while index + 4 < commands.count {

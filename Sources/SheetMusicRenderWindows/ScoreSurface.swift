@@ -2,8 +2,8 @@ import CDirect2D
 import Foundation
 import SheetMusicBridgeCore
 
-/// Draws draw-program pages on screen on Windows: into a composition swap chain the app attaches to its XAML
-/// `SwapChainPanel` (`attach`), or into a window (`attach(hwnd:…)`, for probes).
+/// Draws a score's pages (`ScorePages`, via `setPages(_:)`) on screen on Windows: into a composition swap chain the app
+/// attaches to its XAML `SwapChainPanel` (`attach`), or into a window (`attach(hwnd:…)`, for probes).
 ///
 /// Pages are rasterized into tiles (`TileGrid`) by walking only the `SystemSpan`s that cross each tile, and kept in a
 /// least-recently-drawn cache; each frame blits the visible tiles and draws the overlays (cursor, selection frames)
@@ -36,18 +36,6 @@ public final class ScoreSurface {
     /// What the last `draw` spent: rasterizing and composing the frame (`workMs`), then in `Present`, which waits for
     /// the display (`presentMs`); how many tiles it rasterized, and how many it left out.
     package private(set) var lastDrawTiming = DrawTiming()
-
-    package struct DrawTiming {
-        package var workMs = 0.0
-        package var presentMs = 0.0
-        package var rasterizedTiles = 0
-        /// Visible tiles the frame left to the background: while the scale moves, only one missing tile is
-        /// rasterized per frame.
-        package var deferredTiles = 0
-        /// Whether the tiles were drawn stretched from another raster scale (a gesture, or the settle delay after
-        /// one) rather than rasterized at the frame's own.
-        package var isScaled = false
-    }
 
     private typealias VisibleTile = (key: TileKey, grid: TileGrid, screenX: Double, screenY: Double)
 
@@ -124,9 +112,26 @@ public final class ScoreSurface {
         )
     }
 
-    /// Replaces the document. `spans[i]` belongs to `pages[i]` (from `LayoutBridge.computePages`); a page without
-    /// spans is walked whole for every tile.
-    public func setPages(_ pages: [EncodablePage], spans: [[SystemSpan]]) {
+    /// Shows `pages`. When they have as many pages as those shown now, each the same size — a selection tint
+    /// (`ScorePages.tinted(argb:ids:)`), an edit that kept the pagination — only the tiles crossing a system whose
+    /// commands or frame changed are dropped and drawn again; otherwise every tile is.
+    public func setPages(_ pages: ScorePages) {
+        let sameShape = pages.pages.count == self.pages.count
+            && zip(pages.pages, self.pages).allSatisfy { $0.widthMM == $1.widthMM && $0.heightMM == $1.heightMM }
+        guard sameShape, !self.pages.isEmpty else {
+            setPages(pages.pages, spans: pages.spans)
+            return
+        }
+        for (index, page) in pages.pages.enumerated() {
+            let pageSpans = index < pages.spans.count ? pages.spans[index] : []
+            guard page != self.pages[index] || pageSpans != spans[index] else { continue }
+            replaceCommands(page: index, commands: page.commands, spans: pageSpans)
+        }
+    }
+
+    /// Replaces the document and drops every tile. `spans[i]` belongs to `pages[i]` (from `LayoutBridge.computePages`);
+    /// a page without spans is walked whole for every tile.
+    package func setPages(_ pages: [EncodablePage], spans: [[SystemSpan]]) {
         releaseAllTiles()
         self.pages = pages
         self.spans = pages.indices.map { $0 < spans.count ? spans[$0] : [] }
@@ -134,8 +139,8 @@ public final class ScoreSurface {
     }
 
     /// Replaces one page's commands (a selection tint, an edit) and drops only the tiles the change can reach: those
-    /// crossing a span whose commands or frame changed, before or after.
-    public func replaceCommands(page: Int, commands: [DrawCommand], spans newSpans: [SystemSpan]) {
+    /// crossing a span whose commands or frame changed, before or after. The page keeps its size.
+    package func replaceCommands(page: Int, commands: [DrawCommand], spans newSpans: [SystemSpan]) {
         guard pages.indices.contains(page) else { return }
         let old = pages[page]
         let oldSpans = spans[page]
@@ -307,7 +312,7 @@ public final class ScoreSurface {
     private func drawOverlay(_ overlay: Overlay, frame: Frame, canvas: OpaquePointer) {
         let page: Int
         switch overlay {
-        case let .fillRect(index, _, _), let .strokeRect(index, _, _, _), let .commands(index, _): page = index
+        case let .fillRect(index, _, _), let .strokeRect(index, _, _, _): page = index
         }
         guard frame.pageOrigins.indices.contains(page) else { return }
         var walker = DrawCommandWalker(canvas: canvas, pxPerMM: frame.pxPerMM, offset: Self.pageOffsetPx(page, frame))
@@ -320,8 +325,6 @@ public final class ScoreSurface {
                 .moveTo(x: rect.x, y: rect.y), .lineTo(x: rect.maxX, y: rect.y), .lineTo(x: rect.maxX, y: rect.maxY),
                 .lineTo(x: rect.x, y: rect.maxY), .lineTo(x: rect.x, y: rect.y), .stroke(width: widthMM),
             ][...])
-        case let .commands(_, commands):
-            walker.paint(commands[...])
         }
     }
 

@@ -56,6 +56,11 @@ if [[ "$run_apple" == 1 ]]; then
     step "Apple / SwiftPM: error-code gates"
     "$ROOT/Scripts/gate-error-codes.sh"
 
+    # The Windows modules only build on Windows, but their public surface can be read here: none of it may name a
+    # SheetMusicBridgeCore type, which is not a product (a host could not name it, and DrawCommand grows by cases).
+    step "Windows public API speaks product types only"
+    python3 "$ROOT/Scripts/check-windows-public-api.py"
+
     # Wider than swiftlint: .swiftlint.yml excludes Examples/Apple, but
     # the example app is formatter-clean and the pre-commit hook formats
     # it, so check it here too.

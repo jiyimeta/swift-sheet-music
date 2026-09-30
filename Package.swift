@@ -20,6 +20,10 @@ let isAndroid = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_ANDROID"]
 /// `WasmSizeProbe` executable that `Scripts/wasm-size.sh` measures. Kept behind
 /// a flag so the shipping package shape carries no extra product.
 let isWasm = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_WASM"] == "1"
+/// When SWIFT_SHEET_MUSIC_WINDOWS_PROBES=1 is exported on Windows, the manifest also offers the `windows-render-probe`
+/// and `windows-playback-probe` executables the Windows gate runs. Kept behind a flag for the same reason as
+/// `WasmSizeProbe`: a Windows host that depends on this package builds no probe.
+let wantsWindowsProbes = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_WINDOWS_PROBES"] == "1"
 // True when SwiftPM itself runs on Windows. No environment variable is needed: the manifest is compiled for the host,
 // and a Windows host builds for Windows. Windows takes the Apple-free shape Android takes (`isAppleFree`), except for
 // what is Android's alone — the JNI bridge and the swift-java tooling it pulls in, whose build-tool plugin SwiftPM
@@ -612,7 +616,6 @@ if isAndroid {
 if isWindows {
     products += [
         .library(name: "SheetMusicAudioWindows", targets: ["SheetMusicAudioWindows"]),
-        .executable(name: "windows-playback-probe", targets: ["WindowsPlaybackProbe"]),
     ]
     targets += [
         .systemLibrary(name: "CFluidSynth", path: "Sources/CFluidSynth"),
@@ -639,19 +642,12 @@ if isWindows {
                 .linkedLibrary("libfluidsynth-3"),
             ],
         ),
-        .executableTarget(
-            name: "WindowsPlaybackProbe",
-            dependencies: [
-                "SheetMusicAudioWindows", "SheetMusicAudioCore", "SheetMusicCore", "SheetMusicLoader", "SheetMusicMIDI",
-            ],
-        ),
     ]
 
     // Drawing the draw program on Windows: Direct2D + DirectWrite behind a C API (the WinSDK module has neither
     // header, and DirectWrite has no C interface), and the walk `DrawProgramCGRenderer` does on the Mac over it.
     products += [
         .library(name: "SheetMusicRenderWindows", targets: ["SheetMusicRenderWindows"]),
-        .executable(name: "windows-render-probe", targets: ["WindowsRenderProbe"]),
     ]
     targets += [
         .target(
@@ -669,20 +665,40 @@ if isWindows {
         ),
         .target(
             name: "SheetMusicRenderWindows",
-            // SheetMusicLayout: `WindowsFontMetricsProvider` is a `FontMetricsProvider`.
-            dependencies: ["CDirect2D", "SheetMusicBridgeCore", "SheetMusicLayout"],
+            // SheetMusicCore and SheetMusicLayout: the public API speaks their types (`Score`, `LayoutDocument`, the
+            // layout policies), and `WindowsFontMetricsProvider` is a `FontMetricsProvider`. SheetMusicBridgeCore is
+            // not a product, so none of its types may appear in a public signature here.
+            dependencies: ["CDirect2D", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
         ),
-        .executableTarget(
-            name: "WindowsRenderProbe",
-            dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore"],
-        ),
-        // The onscreen renderer's pure geometry (tiles, the cache's eviction), and measured-equals-drawn for the
-        // system face (`LabelAnchorTests`). Windows only, like the module.
+        // The onscreen renderer's pure geometry (tiles, the cache's eviction), measured-equals-drawn for the system
+        // face (`LabelAnchorTests`), and the host-facing options and pages against the bridge's. Windows only, like
+        // the module.
         .testTarget(
             name: "SheetMusicRenderWindowsTests",
-            dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore", "SheetMusicLayout"],
+            dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
         ),
     ]
+
+    // The Windows gate's probes: scripted playback checks, and the onscreen renderer's frame budget and parity.
+    if wantsWindowsProbes {
+        products += [
+            .executable(name: "windows-playback-probe", targets: ["WindowsPlaybackProbe"]),
+            .executable(name: "windows-render-probe", targets: ["WindowsRenderProbe"]),
+        ]
+        targets += [
+            .executableTarget(
+                name: "WindowsPlaybackProbe",
+                dependencies: [
+                    "SheetMusicAudioWindows", "SheetMusicAudioCore", "SheetMusicCore", "SheetMusicLoader",
+                    "SheetMusicMIDI",
+                ],
+            ),
+            .executableTarget(
+                name: "WindowsRenderProbe",
+                dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore"],
+            ),
+        ]
+    }
 }
 
 if vendorsZlib {

@@ -1,5 +1,4 @@
 import Foundation
-import SheetMusicBridgeCore
 import SheetMusicRenderWindows
 import WinSDK
 

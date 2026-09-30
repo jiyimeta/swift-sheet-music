@@ -1,5 +1,3 @@
-import SheetMusicBridgeCore
-
 extension ScoreSurface {
     /// What one frame shows.
     public struct Frame {
@@ -27,12 +25,12 @@ extension ScoreSurface {
         }
     }
 
-    /// Drawn over the pages each frame, in the page's millimetres.
-    public enum Overlay {
-        case fillRect(page: Int, rect: DrawRect, argb: UInt32)
-        case strokeRect(page: Int, rect: DrawRect, widthMM: Double, argb: UInt32)
-        /// Draw-program commands, walked from the default state.
-        case commands(page: Int, commands: [DrawCommand])
+    /// Drawn over the pages each frame — a playback cursor, selection frames — in page `page`'s millimetres, in the
+    /// order the frame lists them. Colors are 0xAARRGGBB.
+    public enum Overlay: Sendable, Equatable {
+        case fillRect(page: Int, rect: PageRectMM, argb: UInt32)
+        /// The rectangle's outline, `widthMM` wide and centered on its edges (at least 1.5 px on screen).
+        case strokeRect(page: Int, rect: PageRectMM, widthMM: Double, argb: UInt32)
     }
 
     public enum DrawOutcome {
@@ -50,5 +48,18 @@ extension ScoreSurface {
         public var description: String {
             "\(step) failed (HRESULT 0x\(String(UInt32(bitPattern: hresult), radix: 16, uppercase: true)))"
         }
+    }
+
+    /// `lastDrawTiming`'s shape.
+    package struct DrawTiming {
+        package var workMs = 0.0
+        package var presentMs = 0.0
+        package var rasterizedTiles = 0
+        /// Visible tiles the frame left to the background: while the scale moves, only one missing tile is
+        /// rasterized per frame.
+        package var deferredTiles = 0
+        /// Whether the tiles were drawn stretched from another raster scale (a gesture, or the settle delay after
+        /// one) rather than rasterized at the frame's own.
+        package var isScaled = false
     }
 }
