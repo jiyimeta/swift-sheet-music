@@ -182,6 +182,7 @@ var targets: [Target] = [
             "PDFPageLayerView.swift",
             "PDFPageView.swift",
             "PDFExporter.swift",
+            "PDFExporter+Sheets.swift",
             "EngravingPage.swift",
             "Import/PDFImporter+ContentStream.swift",
             "Import/PDFImporter+ContentStream+Operators.swift",
