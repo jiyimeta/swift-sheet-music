@@ -25,6 +25,37 @@ typedef struct {
 
 /// Opens the default render endpoint in shared, event-driven mode as 32-bit float stereo at the device's mix rate.
 int32_t cwasapi_open(cwasapi_stream **stream, cwasapi_format *format);
+/// `cwasapi_open` at `sample_rate` (0: the device's mix rate). Windows converts to the device's own rate — how an engine
+/// keeps its synth's rate when the default device changes to one that runs at another.
+int32_t cwasapi_open_at_rate(cwasapi_stream **stream, cwasapi_format *format, uint32_t sample_rate);
+
+/// Whether `hresult` says the endpoint went away or changed under the stream (AUDCLNT_E_DEVICE_INVALIDATED,
+/// AUDCLNT_E_RESOURCES_INVALIDATED): close the stream and open a new one on the current default. Returns 1 or 0.
+int32_t cwasapi_is_device_lost(int32_t hresult);
+/// Whether `hresult` says there is no render endpoint at all (E_NOTFOUND from the default-endpoint lookup). 1 or 0.
+int32_t cwasapi_is_no_device(int32_t hresult);
+/// Whether `stream` is on the current default render endpoint (eRender / eConsole): 1 or 0 (0 also when there is no
+/// default, or the ids cannot be read). A watcher's change flag covers every endpoint, capture ones included; this
+/// tells a change that concerns the stream from one that does not. Call on the stream's own thread.
+int32_t cwasapi_is_current_default(cwasapi_stream *stream);
+
+/// Fault injection for probes: with the environment variable SSM_WASAPI_FAIL_ONCE set to `invalidated` when the
+/// process starts, the first `cwasapi_writable_frames` after `cwasapi_arm_fault` returns
+/// AUDCLNT_E_DEVICE_INVALIDATED once. Does nothing without the variable.
+void cwasapi_arm_fault(void);
+
+/// Watches the endpoints for a change of the default render device or of a device's state, through an
+/// `IMMNotificationClient`. The callbacks arrive on a system thread; they only set a flag and signal an event.
+typedef struct cwasapi_watcher cwasapi_watcher;
+int32_t cwasapi_watch_create(cwasapi_watcher **watcher);
+/// 1 when the default render device or a device's state changed since the last call, and clears it; else 0.
+int32_t cwasapi_watch_take_change(cwasapi_watcher *watcher);
+/// An auto-reset event signaled on every change, for a thread waiting with no stream (no device).
+void *cwasapi_watch_event(cwasapi_watcher *watcher);
+/// Blocks until the watcher's event is signaled or `timeout_ms` passes: 0 when signaled, 1 on timeout. Leaves the
+/// flag `cwasapi_watch_take_change` reads alone.
+int32_t cwasapi_watch_wait(cwasapi_watcher *watcher, uint32_t timeout_ms);
+void cwasapi_watch_destroy(cwasapi_watcher *watcher);
 int32_t cwasapi_start(cwasapi_stream *stream);
 int32_t cwasapi_stop(cwasapi_stream *stream);
 /// Drops queued audio and zeroes the clock. Only while stopped.

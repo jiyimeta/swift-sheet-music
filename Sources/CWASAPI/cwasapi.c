@@ -34,6 +34,10 @@ struct cwasapi_stream {
 };
 
 int32_t cwasapi_open(cwasapi_stream **stream, cwasapi_format *format) {
+    return cwasapi_open_at_rate(stream, format, 0);
+}
+
+int32_t cwasapi_open_at_rate(cwasapi_stream **stream, cwasapi_format *format, uint32_t sample_rate) {
     *stream = NULL;
     cwasapi_stream *s = calloc(1, sizeof *s);
     if (s == NULL) {
@@ -63,7 +67,7 @@ int32_t cwasapi_open(cwasapi_stream **stream, cwasapi_format *format) {
     if (FAILED(hr)) {
         goto fail;
     }
-    DWORD rate = mix->nSamplesPerSec;
+    DWORD rate = sample_rate != 0 ? sample_rate : mix->nSamplesPerSec;
     CoTaskMemFree(mix);
 
     WAVEFORMATEXTENSIBLE wanted;
@@ -79,8 +83,8 @@ int32_t cwasapi_open(cwasapi_stream **stream, cwasapi_format *format) {
     wanted.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
     wanted.SubFormat = cwasapi_subtype_float;
 
-    // AUTOCONVERTPCM lets the stream be stereo float on a device whose mix format is something else (5.1, 24-bit);
-    // the rate is already the device's, so no resampling happens.
+    // AUTOCONVERTPCM lets the stream be stereo float on a device whose mix format is something else (5.1, 24-bit), and
+    // at a rate other than the device's (`cwasapi_open_at_rate`), which Windows then resamples.
     DWORD flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
         | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
     hr = IAudioClient_Initialize(
@@ -141,7 +145,45 @@ int32_t cwasapi_wait(cwasapi_stream *stream, uint32_t timeout_ms) {
     return WaitForSingleObject(stream->event, timeout_ms) == WAIT_OBJECT_0 ? 0 : 1;
 }
 
+static volatile LONG cwasapi_fault_armed = 0;
+
+void cwasapi_arm_fault(void) {
+    char value[32];
+    DWORD length = GetEnvironmentVariableA("SSM_WASAPI_FAIL_ONCE", value, sizeof value);
+    if (length > 0 && length < sizeof value && lstrcmpiA(value, "invalidated") == 0) {
+        InterlockedExchange(&cwasapi_fault_armed, 1);
+    }
+}
+
+int32_t cwasapi_is_device_lost(int32_t hresult) {
+    return hresult == (int32_t)AUDCLNT_E_DEVICE_INVALIDATED || hresult == (int32_t)AUDCLNT_E_RESOURCES_INVALIDATED;
+}
+
+int32_t cwasapi_is_no_device(int32_t hresult) {
+    return hresult == (int32_t)HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+}
+
+int32_t cwasapi_is_current_default(cwasapi_stream *stream) {
+    IMMDevice *current = NULL;
+    if (FAILED(IMMDeviceEnumerator_GetDefaultAudioEndpoint(stream->enumerator, eRender, eConsole, &current))) {
+        return 0;
+    }
+    LPWSTR current_id = NULL;
+    LPWSTR own_id = NULL;
+    int32_t same = 0;
+    if (SUCCEEDED(IMMDevice_GetId(current, &current_id)) && SUCCEEDED(IMMDevice_GetId(stream->device, &own_id))) {
+        same = lstrcmpW(current_id, own_id) == 0 ? 1 : 0;
+    }
+    CoTaskMemFree(current_id);
+    CoTaskMemFree(own_id);
+    IMMDevice_Release(current);
+    return same;
+}
+
 int32_t cwasapi_writable_frames(cwasapi_stream *stream, uint32_t *frames) {
+    if (InterlockedExchange(&cwasapi_fault_armed, 0) != 0) {
+        return (int32_t)AUDCLNT_E_DEVICE_INVALIDATED;
+    }
     UINT32 padding = 0;
     HRESULT hr = IAudioClient_GetCurrentPadding(stream->client, &padding);
     if (FAILED(hr)) {
@@ -219,4 +261,149 @@ void cwasapi_leave_pro_audio(void *handle) {
     if (handle != NULL) {
         AvRevertMmThreadCharacteristics(handle);
     }
+}
+
+// MARK: - Endpoint notifications
+
+// IMMNotificationClient by hand: C has no classes, so the object is its vtable pointer followed by its state.
+static const IID cwasapi_iid_unknown = {0x00000000, 0x0000, 0x0000, {0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}};
+static const IID cwasapi_iid_notification_client =
+    {0x7991EEC9, 0x7E89, 0x4D85, {0x83, 0x90, 0x6C, 0x70, 0x3C, 0xEC, 0x60, 0xC0}};
+
+struct cwasapi_watcher {
+    IMMNotificationClient client;  // first: the COM pointer is the struct's address
+    LONG references;
+    volatile LONG changed;
+    HANDLE event;
+    IMMDeviceEnumerator *enumerator;
+};
+
+static cwasapi_watcher *cwasapi_watcher_of(IMMNotificationClient *client) {
+    return (cwasapi_watcher *)client;
+}
+
+static void cwasapi_watcher_signal(IMMNotificationClient *client) {
+    cwasapi_watcher *watcher = cwasapi_watcher_of(client);
+    InterlockedExchange(&watcher->changed, 1);
+    SetEvent(watcher->event);
+}
+
+static HRESULT STDMETHODCALLTYPE cwasapi_watcher_query(IMMNotificationClient *client, REFIID riid, void **object) {
+    if (IsEqualIID(riid, &cwasapi_iid_unknown) || IsEqualIID(riid, &cwasapi_iid_notification_client)) {
+        *object = client;
+        InterlockedIncrement(&cwasapi_watcher_of(client)->references);
+        return S_OK;
+    }
+    *object = NULL;
+    return E_NOINTERFACE;
+}
+
+static ULONG STDMETHODCALLTYPE cwasapi_watcher_add_ref(IMMNotificationClient *client) {
+    return (ULONG)InterlockedIncrement(&cwasapi_watcher_of(client)->references);
+}
+
+// The watcher's memory is owned by `cwasapi_watch_destroy`, which unregisters first; the count only has to stay honest.
+static ULONG STDMETHODCALLTYPE cwasapi_watcher_release(IMMNotificationClient *client) {
+    return (ULONG)InterlockedDecrement(&cwasapi_watcher_of(client)->references);
+}
+
+static HRESULT STDMETHODCALLTYPE cwasapi_watcher_state_changed(IMMNotificationClient *client, LPCWSTR id, DWORD state) {
+    (void)id;
+    (void)state;
+    cwasapi_watcher_signal(client);
+    return S_OK;
+}
+
+static HRESULT STDMETHODCALLTYPE cwasapi_watcher_added(IMMNotificationClient *client, LPCWSTR id) {
+    (void)client;
+    (void)id;
+    return S_OK;
+}
+
+static HRESULT STDMETHODCALLTYPE cwasapi_watcher_removed(IMMNotificationClient *client, LPCWSTR id) {
+    (void)id;
+    cwasapi_watcher_signal(client);
+    return S_OK;
+}
+
+static HRESULT STDMETHODCALLTYPE cwasapi_watcher_default_changed(
+    IMMNotificationClient *client, EDataFlow flow, ERole role, LPCWSTR id) {
+    (void)id;
+    // The engine opens eRender / eConsole; the other roles change alongside it or not at all for playback.
+    if (flow == eRender && role == eConsole) {
+        cwasapi_watcher_signal(client);
+    }
+    return S_OK;
+}
+
+static HRESULT STDMETHODCALLTYPE cwasapi_watcher_property_changed(
+    IMMNotificationClient *client, LPCWSTR id, const PROPERTYKEY key) {
+    (void)client;
+    (void)id;
+    (void)key;
+    return S_OK;
+}
+
+static IMMNotificationClientVtbl cwasapi_watcher_vtable = {
+    cwasapi_watcher_query,
+    cwasapi_watcher_add_ref,
+    cwasapi_watcher_release,
+    cwasapi_watcher_state_changed,
+    cwasapi_watcher_added,
+    cwasapi_watcher_removed,
+    cwasapi_watcher_default_changed,
+    cwasapi_watcher_property_changed,
+};
+
+int32_t cwasapi_watch_create(cwasapi_watcher **out) {
+    *out = NULL;
+    cwasapi_watcher *watcher = calloc(1, sizeof *watcher);
+    if (watcher == NULL) {
+        return (int32_t)E_OUTOFMEMORY;
+    }
+    watcher->client.lpVtbl = &cwasapi_watcher_vtable;
+    watcher->references = 1;
+    watcher->event = CreateEventW(NULL, FALSE, FALSE, NULL);
+    HRESULT hr = watcher->event != NULL ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+    if (SUCCEEDED(hr)) {
+        hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+        if (hr == RPC_E_CHANGED_MODE || hr == S_FALSE) hr = S_OK;
+    }
+    if (SUCCEEDED(hr)) {
+        hr = CoCreateInstance(
+            &cwasapi_clsid_enumerator, NULL, CLSCTX_ALL, &cwasapi_iid_enumerator, (void **)&watcher->enumerator);
+    }
+    if (SUCCEEDED(hr)) {
+        hr = IMMDeviceEnumerator_RegisterEndpointNotificationCallback(watcher->enumerator, &watcher->client);
+    }
+    if (FAILED(hr)) {
+        if (watcher->enumerator != NULL) IMMDeviceEnumerator_Release(watcher->enumerator);
+        if (watcher->event != NULL) CloseHandle(watcher->event);
+        free(watcher);
+        return (int32_t)hr;
+    }
+    *out = watcher;
+    return 0;
+}
+
+int32_t cwasapi_watch_take_change(cwasapi_watcher *watcher) {
+    return InterlockedExchange(&watcher->changed, 0) != 0 ? 1 : 0;
+}
+
+void *cwasapi_watch_event(cwasapi_watcher *watcher) {
+    return watcher->event;
+}
+
+int32_t cwasapi_watch_wait(cwasapi_watcher *watcher, uint32_t timeout_ms) {
+    return WaitForSingleObject(watcher->event, timeout_ms) == WAIT_OBJECT_0 ? 0 : 1;
+}
+
+void cwasapi_watch_destroy(cwasapi_watcher *watcher) {
+    if (watcher == NULL) {
+        return;
+    }
+    IMMDeviceEnumerator_UnregisterEndpointNotificationCallback(watcher->enumerator, &watcher->client);
+    IMMDeviceEnumerator_Release(watcher->enumerator);
+    CloseHandle(watcher->event);
+    free(watcher);
 }
