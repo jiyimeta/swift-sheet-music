@@ -134,6 +134,18 @@ extension WindowsPlaybackEngine {
         currentTimeSecondsContinuous
     }
 
+    /// `probeContinuousSeconds` and the seconds of audio rendered since the stream started, read under one lock: the
+    /// score's clock against the sample clock its players run on, with no render wake between the two readings.
+    @_spi(PlaybackProbe)
+    public var probeClocks: (score: TimeInterval, rendered: TimeInterval)? {
+        guard let derivation = loadedDerivation else { return nil }
+        let (tick, frames, sampleRate) = core.shared.withLock { shared in
+            (shared.foldedReportedScoreTick, shared.renderedFrames, shared.sampleRate)
+        }
+        let score = derivation.timeline.seconds(atTick: derivation.unroll.notatedTick(fromUnrolled: Double(tick)))
+        return (score, Double(frames) / sampleRate)
+    }
+
     /// Makes the output's next buffer request fail with `AUDCLNT_E_DEVICE_INVALIDATED` once, as a device change
     /// would. Inert unless the process runs with `SSM_WASAPI_FAIL_ONCE=invalidated`.
     @_spi(PlaybackProbe)

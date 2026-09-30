@@ -183,9 +183,8 @@ final class AudioDeviceStream: @unchecked Sendable {
             close(first)
             return nil
         }
-        // Fault injection for the probe, armed once for the engine's life, so the first steady-state buffer request
-        // fails as a device change would. Inert without the environment variable.
-        cwasapi_arm_fault()
+        // The probe's fault hook is not armed here: only `requestFault()` arms it. Armed at start, it fired on the
+        // first wake after `prepare(score:)` and left the device closed for the 250 ms rebuild the probe then read.
         return first
     }
 
