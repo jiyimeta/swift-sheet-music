@@ -77,11 +77,12 @@ public struct LayoutPages: Sendable {
     public var filteredScore: Score
 }
 
-/// Conservative paint bounds of draw commands, in the commands' millimetres.
+/// Conservative paint bounds of draw commands, in the commands' millimetres. `package` for the Windows renderer, which
+/// culls commands a band cannot show with it.
 ///
 /// Conservative, not exact: glyph and text extents come from their size rather than from the font, so a bound is
 /// larger than the ink. Too large costs a renderer an unneeded walk; too small would clip ink at a piece's edge.
-struct DrawCommandBounds {
+package struct DrawCommandBounds {
     /// SMuFL glyphs are drawn at a font size of four staff spaces (one em). The widest single glyphs used here
     /// (ornaments, dynamics, clefs) stay within these multiples of the size around their origin.
     private static let glyphLeft = 0.5
@@ -92,9 +93,11 @@ struct DrawCommandBounds {
     private static let strokeMargin = 1.0
 
     private var rotation: (radians: Double, pivotX: Double, pivotY: Double) = (0, 0, 0)
-    private(set) var bounds: DrawRect?
+    package private(set) var bounds: DrawRect?
 
-    mutating func add(_ command: DrawCommand) {
+    package init() {}
+
+    package mutating func add(_ command: DrawCommand) {
         switch command {
         case let .moveTo(x, y), let .lineTo(x, y):
             include(point: (x, y), margin: Self.strokeMargin)
