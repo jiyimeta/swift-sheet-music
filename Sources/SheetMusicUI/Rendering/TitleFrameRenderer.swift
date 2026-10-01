@@ -1,13 +1,8 @@
 import CoreText
 import SheetMusicCore
 import SheetMusicLayout
+import SheetMusicLayoutApple
 import SwiftUI
-
-#if os(macOS)
-    import AppKit
-#else
-    import UIKit
-#endif
 
 /// Draws the texts of a `LayoutTitleFrame` (resolved positions +
 /// font sizes) into a `GraphicsContext`. Used by the PDF exporter,
@@ -74,28 +69,25 @@ public enum TitleFrameRenderer {
 
     // MARK: - Face
 
-    // MuseScore defaults all four title-block styles to
-    // `FontStyle::Normal` (no bold, no italic) — see
-    // `engraving/style/styledef.cpp`. Per-text overrides via
-    // `<Text>` inline markup aren't modelled yet.
+    // The face is `LayoutTitleFrame.font(size:)` — the system face,
+    // regular, MuseScore's `FontStyle::Normal` for all four title-block
+    // styles. Per-text overrides via `<Text>` inline markup aren't
+    // modelled yet.
 
+    /// `ctFont(size:)` as a SwiftUI font, so the PDF sets the title in
+    /// the very `CTFont` the screen's layer tree draws.
     private static func font(size: CGFloat) -> Font {
-        .system(size: size, weight: .regular)
+        Font(ctFont(size: size))
     }
 
-    /// The same face as `font(size:)`, for the CoreText side.
-    /// `Font.system(size:weight:)` resolves to exactly this — the
-    /// two have to agree or the screen and the PDF would set the
-    /// title in different type.
+    /// The title block's face at `size`, as CoreText resolves it —
+    /// `LayoutTitleFrame.font(size:)`, the font the draw-program
+    /// bridge measures and names a title line with, so the Apple
+    /// screen, the PDF and a reader of the draw program set the title
+    /// in the same type.
     static func ctFont(size: CGFloat) -> CTFont {
-        #if os(macOS)
-            return NSFont.systemFont(
-                ofSize: size, weight: .regular,
-            ) as CTFont
-        #else
-            return UIFont.systemFont(
-                ofSize: size, weight: .regular,
-            ) as CTFont
-        #endif
+        AppleFontMetricsProvider().renderingFont(
+            for: LayoutTitleFrame.font(size: size),
+        )
     }
 }

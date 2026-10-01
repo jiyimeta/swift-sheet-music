@@ -20,6 +20,10 @@ import SheetMusicLayout
 /// the baseline-leading corner, so anchoring is resolved here on the Swift
 /// side via `FontMetrics.provider` (advance width + ascent), the same approach
 /// every other label emitter in this bridge uses (`encodeNotationText`, …).
+///
+/// Each line is measured in the face the layout sets the title block in
+/// (`LayoutTitleFrame.font(size:)`, which the Apple renderers draw), as the
+/// provider resolves it, and its `.text` names that face (`TextFontMapping`).
 extension LayoutBridge {
     static func appendTitleFrame(
         _ frame: LayoutTitleFrame,
@@ -32,18 +36,20 @@ extension LayoutBridge {
 
     /// Emit one `LayoutFrameText`. Multi-line `<Text>` blocks (e.g. a three-line
     /// lyricist credit) are split on `\n` and stacked at `fontSize * 1.2`
-    /// per line, matching `TitleFrameRenderer.drawEntry` — SwiftUI's `Text`
+    /// per line, matching `LayoutTitleFrame.placedLines` — SwiftUI's `Text`
     /// resolves with the same ~1.2× system line-height factor.
     private static func appendTitleEntry(
         _ entry: LayoutFrameText,
         into out: inout [DrawCommand],
     ) {
-        // Apple draws title-block text in the system font; this bridge measures it in Edwin — the face MuseScore
-        // defaults the title styles to — so it is drawn in Edwin too, the face id naming the face each line was
-        // anchored with (`TextFontMapping`). `fontSize` is already resolved per style by the layout engine, so the
-        // style itself needs no remapping.
+        // The face the layout sets the title block in — the system face the Apple renderers draw — as this provider
+        // can measure it: the system face itself on the Apple and Windows providers, Edwin regular where a table
+        // provider normalizes it (Android, the web — the stream they read before v8, byte for byte). Width and ascent
+        // below are measured in this font, and the face id and style bits name it (`TextFontMapping`), so a reader
+        // draws each line in the face it was anchored with. `fontSize` is already resolved per style by the layout
+        // engine, so the style itself needs no remapping.
         let fontSize = Double(entry.fontSize)
-        let font = LayoutFont(face: "Edwin", pointSize: entry.fontSize)
+        let font = FontMetrics.provider.renderingTextFont(LayoutTitleFrame.font(size: entry.fontSize))
         let wire = TextFontMapping.wire(for: font)
         let ascent = Double(FontMetrics.provider.ascent(font: font))
 

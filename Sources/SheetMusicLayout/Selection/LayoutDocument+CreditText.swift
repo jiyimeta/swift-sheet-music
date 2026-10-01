@@ -26,9 +26,9 @@ public struct CreditTextLine: Sendable, Equatable {
     public let frame: CGRect
 
     /// The face the title block is drawn in. Title-block texts are set in the platform's system font at their
-    /// resolved size (`TitleFrameRenderer`), which `LayoutFont`'s empty face names.
+    /// resolved size (`LayoutTitleFrame.font(size:)`), which `LayoutFont`'s empty face names.
     public var font: LayoutFont {
-        LayoutFont(face: "", pointSize: fontSize)
+        LayoutTitleFrame.font(size: fontSize)
     }
 }
 
@@ -64,7 +64,7 @@ extension LayoutDocument {
     private static func creditTextLine(field: ScoreInfoWrite.Field, line: LayoutTitleFrame.PlacedLine)
         -> CreditTextLine
     {
-        let font = LayoutFont(face: "", pointSize: line.fontSize)
+        let font = LayoutTitleFrame.font(size: line.fontSize)
         let provider = FontMetrics.provider
         // The layer renderer aligns a title line on its INK box (`ScoreLayerBuilder.textLayer`), so the box is
         // measured the same way; an ink-less line (spaces only) falls back to its advance.

@@ -30,6 +30,18 @@ extension LayoutTitleFrame {
         fontSize * 1.2
     }
 
+    /// The font a title-block text of `size` points is set in: the platform UI face (`LayoutFont`'s empty face — SF
+    /// on Apple), regular and upright, since MuseScore defaults all four title-block styles to `FontStyle::Normal`
+    /// (`engraving/style/styledef.cpp`). `size` is the entry's `fontSize`, already resolved per style by the layout.
+    ///
+    /// **The one statement of WHICH face the title block is in.** The Apple renderers (`TitleFrameRenderer`, the
+    /// screen's layer tree and the PDF alike), the draw-program bridge and `CreditTextLine` all read it, so the face a
+    /// line is anchored with and the face it is drawn in cannot part. A measuring host resolves it first
+    /// (`FontMetricsProvider.renderingTextFont`): a table provider, which carries no system face, answers Edwin.
+    package static func font(size: CGFloat) -> LayoutFont {
+        LayoutFont(face: "", pointSize: size)
+    }
+
     /// Every line of every entry, in entry order, offset by `origin`.
     ///
     /// Multi-line `<Text>` blocks (e.g. test-platinum.mscx's three Lyricist lyric columns) are split on `\n` and each

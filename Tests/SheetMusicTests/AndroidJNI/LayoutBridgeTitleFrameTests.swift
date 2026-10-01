@@ -87,10 +87,12 @@
             func entry(_ style: FrameText.Style) throws -> LayoutFrameText {
                 try #require(frame.texts.first { $0.style == style })
             }
+            /// Measured in the face the bridge anchors with: the title block's own, as the installed provider
+            /// resolves it (the system face on the Apple provider this suite installs).
             func width(_ text: String, _ entry: LayoutFrameText) -> Double {
                 Double(FontMetrics.provider.typographicWidth(
                     text: text,
-                    font: LayoutFont(face: "Edwin", pointSize: entry.fontSize),
+                    font: FontMetrics.provider.renderingTextFont(LayoutTitleFrame.font(size: entry.fontSize)),
                 ))
             }
 
