@@ -94,10 +94,9 @@ struct PageMarginsTests {
         let printableHeightMM = Self.pageHeightMM - margins.top - margins.bottom
         for (index, (page, spans)) in zip(margined.pages, margined.spans).enumerated() {
             let label = "\(fixture) page \(index + 1)"
-            // Every point a command is anchored at lies right of the leading margin.
-            let leftmost = page.commands.flatMap { Self.anchorPoints(of: $0) }.map(\.x).min() ?? .infinity
-            #expect(leftmost >= margins.leading - Self.epsilon, "\(label): a command at x = \(leftmost)")
-
+            // Systems, not command anchors: some marks already draw a little left of a page's x = 0 without margins
+            // (a glyph anchored left of its ink, under the portable metrics on Windows), and the margins move them
+            // exactly as far as everything else — which the translation test above pins command by command.
             let systems = spans.compactMap(\.systemIndex)
             guard let first = systems.first else { continue }
             let pageStartY = first == 0
@@ -279,19 +278,6 @@ struct PageMarginsTests {
         let printableWidthPt = Double(CGFloat((pageWidthMM - margins.leading - margins.trailing) * mmToPt))
         guard musicRightPt > printableWidthPt else { return pageWidthMM }
         return max(pageWidthMM, musicRightPt * ptToMM + margins.leading + margins.trailing)
-    }
-
-    /// The points a command certainly paints at — its own coordinates, not a guess at its ink (`SystemSpanTests`').
-    private static func anchorPoints(of command: DrawCommand) -> [(x: Double, y: Double)] {
-        switch command {
-        case let .moveTo(x, y), let .lineTo(x, y): [(x, y)]
-        case let .cubicTo(_, _, _, _, x, y): [(x, y)]
-        case let .fillRect(x, y, w, h): [(x, y), (x + w, y + h)]
-        case let .glyph(_, x, y, _, _): [(x, y)]
-        case let .text(_, x, y, _, _): [(x, y)]
-        case let .stretchedGlyph(_, rightEdgeX, topY, bottomY, _, _, _): [(rightEdgeX, topY), (rightEdgeX, bottomY)]
-        case .stroke, .fillPath, .setColor, .setRotation, .setDash, .setTextStyle: []
-        }
     }
 
     /// One part of `measures` 4/4 measures of quarters. With `wideMeasure`, measure 2 is a 96/4 measure of 96
