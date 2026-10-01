@@ -43,7 +43,9 @@ gone. Every source change a host may need is under Changed and Removed, each wit
   result keeps the `LayoutDocument` and the filtered score, and `tinted(argb:ids:)` re-encodes the same pages with a
   selection drawn in a color, as Android's selection re-encode does. The pages' draw commands stay inside the
   package: no public signature in `SheetMusicRenderWindows` names a type of `SheetMusicBridgeCore`, which is not a
-  product.
+  product. In `.page` mode `ScorePageOptions.pageMarginsMM` (a `PageMarginsMM`, `.zero` by default) puts the pages on
+  paper as the Apple page deck does — engraved into the printable width, cut by the printable height and drawn inside
+  the margins, every page widened alike when the music overflows the printable width, as `pageSizeMM(_:)` reports.
 - **`Direct2DPageRenderer.renderPNG(pages:page:pxPerMM:fontFiles:to:)` writes one page to a PNG** through the same
   walker — a thumbnail, an image export. The same walk is how the parity gate compares Windows with the Mac: over
   the 30 sample scores, the Direct2D pages differ from the Mac's CoreGraphics walk of the same pages by 0.004 % of
@@ -54,6 +56,13 @@ gone. Every source change a host may need is under Changed and Removed, each wit
   the same text layout the renderer draws with, so a right-aligned part label ends where the layout anchored it
   (within 0.5 px, checked on Windows). Call it once, before the first layout. It throws when the bytes do not decode
   or Segoe UI cannot be resolved.
+- **`SheetMusicRenderWindows` bundles the fonts and the metrics table a Windows host needs**, so a host no longer
+  copies them out of this repository: `ScoreSurface()` draws with the bundled Bravura and four Edwin faces
+  (`ScoreSurface.bundledFontFiles` lists their paths), and `installWindowsFontMetrics()` installs the bundled
+  `sheet-music.smft`, which matches the package revision by construction. They are SwiftPM resources, so a deployed
+  app ships the `swift-sheet-music_SheetMusicRenderWindows.resources` folder beside its executable. The
+  `fontFiles:` / `tableBytes:` forms stay for a host that ships its own; a Mac test pins every bundled copy byte-equal
+  to its source.
 - **`WindowsPlaybackEngine` plays a score with the Apple `PlaybackEngine`'s operations, under the same names and
   argument labels** (`SheetMusicAudioWindows`):
   - preparing: `prepare(score:)`, `replaceScore(with:)`, `reloadSoundfont(resolver:)`, `teardown()`;

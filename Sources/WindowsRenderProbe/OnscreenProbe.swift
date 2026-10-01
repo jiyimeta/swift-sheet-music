@@ -12,7 +12,9 @@ import WinSDK
 /// proves is that the tiles compose to the untiled page. (The Windows-versus-Mac parity is the PNG path's gate.)
 struct OnscreenProbe {
     let outputDirectory: URL
-    let metricsPath: String
+    /// A `sheet-music.smft` to install; nil for the one bundled with SheetMusicRenderWindows.
+    let metricsPath: String?
+    /// The faces the surface draws with; empty for the ones bundled with SheetMusicRenderWindows.
     let fontFiles: [String]
 
     /// One gate: its name, the measured value, and whether it passed.
@@ -43,9 +45,16 @@ struct OnscreenProbe {
     func run() throws -> Bool {
         _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
         _ = SetThreadExecutionState(EXECUTION_STATE(ES_CONTINUOUS | ES_DISPLAY_REQUIRED))
-        // The table for Bravura and Edwin, DirectWrite for the system face the labels are drawn in.
-        try installWindowsFontMetrics(tableBytes: Data(contentsOf: URL(fileURLWithPath: metricsPath)))
-        let session = try OnscreenSession(fontFiles: fontFiles)
+        // The table for Bravura and Edwin, DirectWrite for the system face the labels are drawn in. Without overrides,
+        // the bundled table and faces, as a host that ships nothing of its own gets them.
+        if let metricsPath {
+            try installWindowsFontMetrics(tableBytes: Data(contentsOf: URL(fileURLWithPath: metricsPath)))
+        } else {
+            try installWindowsFontMetrics()
+        }
+        let fonts = fontFiles.isEmpty ? "bundled" : "\(fontFiles.count) given"
+        print("metrics: \(metricsPath ?? "bundled"); fonts: \(fonts)")
+        let session = try OnscreenSession(fontFiles: fontFiles.isEmpty ? nil : fontFiles)
         defer { session.close() }
 
         let firstFrameMs = session.firstFrame()

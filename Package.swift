@@ -669,6 +669,12 @@ if isWindows {
             // layout policies), and `WindowsFontMetricsProvider` is a `FontMetricsProvider`. SheetMusicBridgeCore is
             // not a product, so none of its types may appear in a public signature here.
             dependencies: ["CDirect2D", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
+            // The five faces the walker draws with and the metrics table the layout measures them by, with the fonts'
+            // licenses (`BundledResources.swift`). `.copy` of the folder rather than `.process`: nothing here has a
+            // build rule, and `.copy` keeps the folder and every file name verbatim — `Resources/Bravura.otf` in the
+            // bundle — where `.process` flattens it. `SheetMusicTests`' `WindowsBundledResourcesTests` pins each copy
+            // to its source in this repository.
+            resources: [.copy("Resources")],
         ),
         // The onscreen renderer's pure geometry (tiles, the cache's eviction), measured-equals-drawn for the system
         // face (`LabelAnchorTests`), and the host-facing options and pages against the bridge's. Windows only, like

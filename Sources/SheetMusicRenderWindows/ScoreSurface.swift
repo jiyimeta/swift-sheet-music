@@ -38,7 +38,8 @@ public final class ScoreSurface {
     /// the display (`presentMs`); how many tiles it rasterized, and how many it left out.
     package private(set) var lastDrawTiming = DrawTiming()
 
-    /// Loads the font files (Bravura, the Edwin faces) every walk draws with.
+    /// Loads the font files (Bravura, the Edwin faces) every walk draws with. `init()` loads the copies bundled with
+    /// this module (`bundledFontFiles`); this is for a host that ships its own.
     public init(fontFiles: [String]) throws {
         var created: OpaquePointer?
         try Self.check(cd2d_resources_create(&created), "creating the Direct2D resources")

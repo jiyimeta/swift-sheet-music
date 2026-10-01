@@ -56,7 +56,8 @@ final class OnscreenSession {
     let layoutMs: Double
     private(set) var failures: [String] = []
 
-    init(fontFiles: [String]) throws {
+    /// `fontFiles` nil draws with the faces bundled with SheetMusicRenderWindows (`ScoreSurface()`).
+    init(fontFiles: [String]?) throws {
         // Locals first: `self` cannot be read until every stored property is set.
         let clock = ContinuousClock()
         let start = clock.now
@@ -85,7 +86,12 @@ final class OnscreenSession {
         let displayScale = Double(GetDpiForWindow(window)) / 96
         print("window: \(width) x \(height) px, display scale \(displayScale)")
 
-        let surface = try ScoreSurface(fontFiles: fontFiles)
+        let surface: ScoreSurface
+        if let fontFiles {
+            surface = try ScoreSurface(fontFiles: fontFiles)
+        } else {
+            surface = try ScoreSurface()
+        }
         try surface.attach(hwnd: UnsafeMutableRawPointer(window), widthPx: width, heightPx: height)
         surface.setPages(laidOut)
 

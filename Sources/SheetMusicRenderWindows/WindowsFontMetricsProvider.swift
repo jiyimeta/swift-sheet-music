@@ -13,6 +13,7 @@ import Synchronization
 /// renderer draws in Segoe UI. Call it once, before the first layout, in place of `installFontMetricsTable`.
 ///
 /// Throws when the bytes do not decode or DirectWrite cannot resolve Segoe UI; the provider is left as it was.
+/// `installWindowsFontMetrics()` passes the table bundled with this module; this is for a host that ships its own.
 public func installWindowsFontMetrics(tableBytes: Data) throws {
     let table = try FontMetricsTable.decode(tableBytes)
     FontMetrics.provider = try WindowsFontMetricsProvider(base: makeFontMetricsTableProvider(table: table))

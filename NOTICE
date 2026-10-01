@@ -159,9 +159,17 @@ the SIL Open Font License, Version 1.1. See
 `Sources/SheetMusicLayoutApple/Fonts/Resources/Bravura.LICENSE.txt` for
 the full license text.
 
-Bravura is included in the `SheetMusicLayoutApple` library target only
-(auto-installed by `SheetMusicUI` / `SheetMusicPDF`); it is not a
-dependency of any other library product in this package.
+Bravura is included in the `SheetMusicLayoutApple` library target
+(auto-installed by `SheetMusicUI` / `SheetMusicPDF`) and, on Windows
+only, in `SheetMusicRenderWindows`; it is not a dependency of any other
+library product in this package.
+
+`SheetMusicRenderWindows` (declared on a Windows host only) bundles
+Bravura, the four Edwin faces (Roman, Italic, Bold, BdIta) and the
+metrics table generated from them in
+`Sources/SheetMusicRenderWindows/Resources/`, with
+`Bravura.LICENSE.txt` and `Edwin.LICENSE.txt` beside them. The fonts
+are unmodified copies; `Resources/README.md` names each source.
 
 The example apps and the Android modules additionally bundle the Edwin
 text font (© 2021 MuseScore Limited, SIL Open Font License 1.1); each

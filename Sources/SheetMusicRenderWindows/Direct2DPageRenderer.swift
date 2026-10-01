@@ -18,8 +18,9 @@ public enum Direct2DPageRenderer {
     }
 
     /// Renders page `page` of `pages` whole onto a white canvas at `pxPerMM` — the page's size in pixels, rounded up —
-    /// and writes it to `pngPath`. `fontFiles` are those `ScoreSurface(fontFiles:)` takes. A `.vertical` page is as
-    /// tall as the music, and so is its image. Throws for a page outside `pages`.
+    /// and writes it to `pngPath`. `fontFiles` are those `ScoreSurface(fontFiles:)` takes — the bundled ones are
+    /// `ScoreSurface.bundledFontFiles`. A `.vertical` page is as tall as the music, and so is its image. Throws for a
+    /// page outside `pages`.
     public static func renderPNG(
         pages: ScorePages, page: Int, pxPerMM: Double, fontFiles: [String], to pngPath: String,
     ) throws {
