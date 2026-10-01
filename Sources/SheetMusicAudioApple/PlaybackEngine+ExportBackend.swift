@@ -156,16 +156,14 @@ extension PlaybackEngine {
     /// `reassertBackendChannelState`, reading the snapshot rather than the live
     /// `mixerChannels` so a mix changed mid-export can't leak into the file.
     ///
-    /// Effective audibility follows the live rules: if any solo-bus channel is
-    /// soloed only soloed channels sound, otherwise muted channels are silenced.
-    /// The metronome is off the solo bus — whether it renders is carried by the
-    /// snapshot's own `metronomeEnabled`.
+    /// Each strip's CC 7 is `exportVolumeCC7(of:soloing:)` — playback's own
+    /// audibility rule, shared with the AUMIDISynth export.
     private static func applyMixerSnapshotToBackend(
         backend: any SynthBackend,
         channels: [MixerChannel],
         plan: LiveChannelPlan,
     ) {
-        let soloedExists = channels.contains { $0.isSoloable && $0.isSoloed }
+        let soloing = channels.isSoloing
         var midiChannels: [MixerChannel.Kind: UInt8] = [:]
         for strip in plan.strips {
             midiChannels[
@@ -179,11 +177,9 @@ extension PlaybackEngine {
             if let program = channel.program, midiCh != 9 {
                 backend.setProgram(channel: midiCh, program: program)
             }
-            let audible = soloedExists ? channel.isSoloed : !channel.isMuted
-            let gain: Float = audible ? channel.volume : 0
             backend.sendVolume(
                 channel: midiCh,
-                cc7: UInt8(clamping: Int((gain * 127).rounded())),
+                cc7: exportVolumeCC7(of: channel, soloing: soloing),
             )
         }
     }

@@ -493,28 +493,32 @@ extension PlaybackEngine {
         return s
     }
 
+    /// The CC 7 an export renders an instrument strip at — playback's own rule (`MixerChannel.isSilenced`, under
+    /// which mute wins over solo), so a strip the user hears silent is silent in the file. Both export pipelines read
+    /// it: `applyMixerSnapshot` below for AUMIDISynth, `applyMixerSnapshotToBackend` for an injected backend.
+    /// `soloing` is the snapshot's `isSoloing`, scoped to the solo bus — the metronome is off it, and whether the click
+    /// renders is carried by the snapshot's own `metronomeEnabled`.
+    nonisolated static func exportVolumeCC7(of channel: MixerChannel, soloing: Bool) -> UInt8 {
+        let gain: Float = channel.isSilenced(soloing: soloing) ? 0 : channel.volume
+        return UInt8(clamping: Int((gain * 127).rounded()))
+    }
+
     /// Push the mixer snapshot's volume / mute / solo onto the export
     /// synth's per-strip CC 7 state — every deduped (part × instrument)
-    /// channel, not just each staff's primary. Effective audibility
-    /// mirrors the live mixer rules: if any solo-bus channel is soloed,
-    /// only soloed channels are audible; otherwise muted channels are
-    /// silenced. "Any" is scoped to `MixerChannel.isSoloable` members —
-    /// the metronome is off the solo bus, and whether the click renders
-    /// is carried by the snapshot's own `metronomeEnabled`.
+    /// channel, not just each staff's primary, each at
+    /// `exportVolumeCC7(of:soloing:)`.
     private static func applyMixerSnapshot(
         scoreSynth: ScoreSynth,
         channels: [MixerChannel],
     ) {
-        let soloedExists = channels.contains { $0.isSoloable && $0.isSoloed }
+        let soloing = channels.isSoloing
         for chan in channels {
             guard case .instrument = chan.id,
                   let midiCh = scoreSynth.instrumentMIDIChannels[chan.id]
             else { continue }
             let unit = midiCh == 9
                 ? (scoreSynth.percussion ?? scoreSynth.melodic) : scoreSynth.melodic
-            let audible = soloedExists ? chan.isSoloed : !chan.isMuted
-            let gain = audible ? chan.volume : 0
-            let cc7 = UInt8(clamping: Int((gain * 127).rounded()))
+            let cc7 = exportVolumeCC7(of: chan, soloing: soloing)
             MIDISynthBuilder.sendControlChange(
                 into: unit, controller: 7, value: cc7, onChannel: midiCh,
             )

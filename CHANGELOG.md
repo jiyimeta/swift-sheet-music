@@ -172,9 +172,14 @@ gone. Every source change a host may need is under Changed and Removed, each wit
 - **Sloped beams are filled quadrilaterals, and text carries the face the layout measured it in.** A beam is
   `moveTo`, three `lineTo` and `fillPath` rather than a thick stroke along its center line. On the Apple provider,
   notation labels (part names, measure numbers, staff names, jumps, marker text) are `system` + `semibold`; the
-  portable providers keep emitting `textRoman` regular. An unnamed part no longer emits an empty part-label text.
-  Affects snapshot / golden tests of draw-program bytes or rendered pages with beams or notation labels. Migrate:
-  re-record them; nothing else changes.
+  portable providers keep emitting `textRoman` regular. The title block is included: its title, subtitle, composer
+  and lyricist lines used to be measured and named in Edwin whatever the provider, while the Apple renderer sets them
+  in the system face, so a reader of an Apple-produced stream drew a title that differed from the Apple screen. They
+  are now measured in the face the Apple renderer draws (one definition, which both read) and named for it —
+  `system` with no style bit on the Apple and Windows providers (Segoe UI on Windows), `textRoman` regular,
+  byte for byte as before, on the table providers. An unnamed part no longer emits an empty part-label text.
+  Affects snapshot / golden tests of draw-program bytes or rendered pages with beams, notation labels or a title
+  block. Migrate: re-record them; nothing else changes.
 
 ### Removed
 
@@ -222,6 +227,10 @@ gone. Every source change a host may need is under Changed and Removed, each wit
   (`breakPolicy: "ignoreSystemBreaks"`).
 - **`LayoutEngine.stickyHeaderSystem` keeps the template system's staff addresses.** It built its system through the
   `staffAddresses: []` default, so on the sticky header `flatIndex(for:)` answered `nil` for every staff.
+- **Audio export silences a channel exactly as playback does.** A channel both muted and soloed was silent in
+  playback but sounded in the exported file; export now uses playback's rule (mute wins), on both the AUMIDISynth
+  and the injected-backend export paths. On Android, playback and export now both follow the same rule as Apple:
+  a muted + soloed strip engages solo and stays silent.
 
 ### Not included in 4.0.0
 

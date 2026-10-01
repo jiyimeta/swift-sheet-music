@@ -30,6 +30,10 @@ data class MixerChannel(
     val defaultVolume: Float = 1.0f,
     val isMuted: Boolean = false,
     val isSoloed: Boolean = false,
+    /**
+     * Whether this strip is silent in playback, derived by the engine from every strip's [isMuted] / [isSoloed]
+     * through [MixAudibility] — the rule audio export reads too.
+     */
     val effectiveMute: Boolean = false,
     /**
      * Program (0..127) driving this staff's sampler, or `null` when the score

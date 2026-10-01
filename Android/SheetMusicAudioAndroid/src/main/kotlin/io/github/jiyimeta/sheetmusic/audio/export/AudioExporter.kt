@@ -7,6 +7,7 @@ import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
 import io.github.jiyimeta.sheetmusic.audio.model.MidiControlChange
+import io.github.jiyimeta.sheetmusic.audio.model.MixAudibility
 import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeMixer
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeSf2Loader
@@ -180,10 +181,12 @@ internal class AudioExporter(
                 val program = chan.program ?: programByChannel[chan.liveChannel] ?: 0
                 synth.programSelect(sfid, chan.liveChannel, effectiveBank, program.coerceIn(0, 127))
             }
-            val soloed = snapshot.mixerChannels.any { it.isSoloed }
+            // Live playback's own rule, so a strip the user hears silent is silent in the file: mute wins, and a
+            // strip both muted and soloed engages solo. Apple's export reads the same rule
+            // (`PlaybackEngine.exportVolumeCC7(of:soloing:)`).
+            val soloing = MixAudibility.isSoloing(snapshot.mixerChannels)
             for (chan in snapshot.mixerChannels) {
-                val audible = if (soloed) chan.isSoloed else !chan.isMuted
-                val gain = if (audible) chan.volume else 0f
+                val gain = if (MixAudibility.isSilenced(chan, soloing)) 0f else chan.volume
                 synth.cc(chan.liveChannel, 7, (gain * 127).toInt().coerceIn(0, 127))
             }
         }

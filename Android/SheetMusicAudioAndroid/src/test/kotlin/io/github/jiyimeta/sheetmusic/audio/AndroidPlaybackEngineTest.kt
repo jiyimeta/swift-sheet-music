@@ -1,5 +1,6 @@
 package io.github.jiyimeta.sheetmusic.audio
 
+import android.net.FakeUri
 import android.net.Uri
 import io.github.jiyimeta.sheetmusic.CountInBeatWire
 import io.github.jiyimeta.sheetmusic.CountInWire
@@ -15,6 +16,7 @@ import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
+import io.github.jiyimeta.sheetmusic.audio.model.MixAudibilityTable
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewPlan
@@ -64,6 +66,16 @@ private val testDispatcher = StandardTestDispatcher(testScheduler)
 private class StubSoundfontResolver : SoundfontResolver {
     override fun soundfontUriFor(bank: Int, program: Int, isDrums: Boolean): Uri? = null
     override val defaultGmSoundfontUri: Uri? = null
+}
+
+/**
+ * Resolves every request to a [FakeUri]. `AudioExporter` sets up programs and CC 7 only when it resolves a soundfont,
+ * so an export test that reads the mixer it applied needs this rather than [StubSoundfontResolver].
+ */
+private class FakeUriSoundfontResolver : SoundfontResolver {
+    private val uri: Uri = FakeUri()
+    override fun soundfontUriFor(bank: Int, program: Int, isDrums: Boolean): Uri = uri
+    override val defaultGmSoundfontUri: Uri = uri
 }
 
 // ── Helpers for constructing encoded payloads ──────────────────────────────
@@ -723,6 +735,77 @@ class AndroidPlaybackEngineTest {
         // Staff 0 is both muted AND soloed — mute wins.
         assertTrue(engine.mixerChannels.value[0].effectiveMute)
     }
+
+    /**
+     * Live playback and audio export silence the same strips, for every mute / solo combination on two strips — the
+     * table [MixAudibilityTable] writes out to match the Apple rule (the Swift side pins it in
+     * `PlaybackEngineExportMixTests`). Live audibility is read twice, as the mixer state
+     * ([io.github.jiyimeta.sheetmusic.audio.model.MixerChannel.effectiveMute]) and as the CC 7 the live synth last
+     * received; export audibility is the CC 7 the offline synth was set to.
+     *
+     * Regression: live let a muted + soloed strip leave solo disengaged, and export let it sound — so the two disagreed
+     * with each other, and both with Apple.
+     */
+    @Test
+    fun `live playback and export silence the same strips for every mute and solo combination`() = runTest {
+        for (row in MixAudibilityTable.rows) {
+            val bridge = FakeJniBridge(
+                timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+                staffParamsResult = encodeStaffParamsArray(
+                    (0 until 2).map { StaffParams(it, 0, 0, false, it.toLong()) },
+                ),
+                renderMidiResult = minimalSmf,
+                // An empty range, so the render loop never runs: only the mixer setup is under test.
+                resolveExportTickRangeResult = longArrayOf(0L, 0L),
+            )
+            val liveSynths = mutableListOf<FakeSynthDriver>()
+            val engine = tracked(bridge = bridge, fakeSynthDrivers = liveSynths)
+            engine.prepare(1L)
+            for ((partIndex, state) in listOf(0 to row.strip0, 1 to row.strip1)) {
+                engine.setStaffMuted(partIndex, 0, state.isMuted)
+                engine.setStaffSoloed(partIndex, 0, state.isSoloed)
+            }
+
+            val exportSynth = FakeSynthDriver()
+            val (player, _) = FakePlayerDriver.create()
+            val exporter = AudioExporter(
+                // Non-null, or the exporter skips its whole program / CC 7 block.
+                resolver = FakeUriSoundfontResolver(),
+                context = null,
+                synthFactory = { _ -> exportSynth },
+                playerFactory = { _ -> player },
+                encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
+                masterTuningControlChanges = MarkerMasterTuning::invoke,
+            )
+            engine.exportAudioFileWith(
+                outputFd = null,
+                scoreHandle = 1L,
+                format = AudioFileFormat.Wav(),
+                range = AudioExportRange.Full,
+                progress = null,
+                exporterFactory = { exporter },
+            )
+
+            val channels = engine.mixerChannels.value
+            assertEquals(2, channels.size)
+            for ((index, expectedSilent) in listOf(row.silent0, row.silent1).withIndex()) {
+                val label = "strip $index in $row"
+                val liveChannel = channels[index].liveChannel
+                assertEquals("live mixer state, $label", expectedSilent, channels[index].effectiveMute)
+                val live = checkNotNull(lastCC7(liveSynths.first(), liveChannel)) { "live CC 7 never sent, $label" }
+                assertEquals("live CC 7 ($live), $label", expectedSilent, live == 0)
+                val exported = checkNotNull(lastCC7(exportSynth, liveChannel)) { "export CC 7 never sent, $label" }
+                assertEquals("export CC 7 ($exported), $label", expectedSilent, exported == 0)
+            }
+        }
+    }
+
+    /** The value of the last CC 7 [synth] received on [channel], or `null` when it received none. */
+    private fun lastCC7(synth: FakeSynthDriver, channel: Int): Int? =
+        synth.calls.lastOrNull { it.startsWith("cc($channel,7,") }
+            ?.removePrefix("cc($channel,7,")
+            ?.removeSuffix(")")
+            ?.toInt()
 
     @Test
     fun `setMasterGain propagates to oboeStream`() = runTest {

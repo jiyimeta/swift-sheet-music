@@ -13,6 +13,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
 import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
 import io.github.jiyimeta.sheetmusic.audio.model.MasterOutputStage
+import io.github.jiyimeta.sheetmusic.audio.model.MixAudibility
 import io.github.jiyimeta.sheetmusic.audio.model.MixLevel
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
@@ -1459,9 +1460,10 @@ class AndroidPlaybackEngine internal constructor(
 
     /**
      * Solos or un-solos the strip identified by [partIndex] + [ordinal].
-     * When any strip is soloed, un-soloed strips are effectively muted.
-     * Recomputes [MixerChannel.effectiveMute] for all channels and
-     * propagates audibility changes to the synth via MIDI CC7.
+     * When any strip is soloed — muted or not — un-soloed strips are
+     * effectively muted ([MixAudibility]). Recomputes
+     * [MixerChannel.effectiveMute] for all channels and propagates
+     * audibility changes to the synth via MIDI CC7.
      */
     fun setStaffSoloed(partIndex: Int, ordinal: Int, soloed: Boolean) {
         val idx = channelIndex(partIndex, ordinal)
@@ -1876,12 +1878,13 @@ class AndroidPlaybackEngine internal constructor(
         }
     }
 
-    private fun recomputeEffectiveMutes(channels: MutableList<MixerChannel>): List<MixerChannel> {
-        val anySoloed = channels.any { it.isSoloed && !it.isMuted }
-        return channels.map { c ->
-            val effMute = c.isMuted || (anySoloed && !c.isSoloed)
-            c.copy(effectiveMute = effMute)
-        }
+    /**
+     * Derives every strip's [MixerChannel.effectiveMute] from [MixAudibility] — the rule the export path reads too,
+     * mirroring the Apple engine's `MixerChannel.isSilenced(soloing:)`. A strip both muted and soloed engages solo.
+     */
+    private fun recomputeEffectiveMutes(channels: List<MixerChannel>): List<MixerChannel> {
+        val soloing = MixAudibility.isSoloing(channels)
+        return channels.map { c -> c.copy(effectiveMute = MixAudibility.isSilenced(c, soloing)) }
     }
 
     /**

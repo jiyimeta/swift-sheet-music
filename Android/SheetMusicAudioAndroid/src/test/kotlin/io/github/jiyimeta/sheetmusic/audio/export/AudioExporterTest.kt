@@ -314,4 +314,77 @@ class AudioExporterTest {
             drivers.synth.calls.contains("programSelect(0,5,0,40)"),
         )
     }
+
+    // ── applyStripProgramsAndMixer: mute / solo ─────────────────────────
+    //
+    // Every combination is covered against live playback by AndroidPlaybackEngineTest; these two pin, by value, the
+    // cases the old export rule (solo wins) got wrong. Mirrors the Swift `mutedAndSoloedStripIsSilentInExport`.
+
+    private fun mixSnapshot(vararg strips: MixerChannel) = ExportEngineSnapshot(
+        mixerChannels = strips.toList(),
+        metronomeEnabled = false,
+        metronomeVolume = 1.0f,
+        metronomeSmfBytes = byteArrayOf(),
+        rate = 1.0f,
+        metronomeResolution = AndroidMetronomeClickResolver.Resolution.DefaultGm,
+    )
+
+    private val mixStrips = listOf(
+        InstrumentParams(
+            partIndex = 0, ordinal = 0, liveChannel = 0,
+            bankLSB = 0, program = 0, isDrums = false, displayName = "Staff 1",
+        ),
+        InstrumentParams(
+            partIndex = 1, ordinal = 0, liveChannel = 1,
+            bankLSB = 0, program = 40, isDrums = false, displayName = "Staff 2",
+        ),
+    )
+
+    private suspend fun exportedCC7s(snapshot: ExportEngineSnapshot): List<String> {
+        val drivers = makeDrivers()
+        makeExporter(drivers, FakeAudioFileEncoder(), resolver = NonNullUriResolver()).run(
+            outputFd = null,
+            smfBytes = ByteArray(16),
+            strips = mixStrips,
+            snapshot = snapshot,
+            startTick = 0,
+            endTick = 0,
+            ticksPerBeat = 480,
+            format = AudioFileFormat.Wav(),
+            sampleRate = 48000,
+            progress = null,
+        )
+        return drivers.synth.calls.filter { it.matches(Regex("""cc\(\d+,7,\d+\)""")) }
+    }
+
+    @Test
+    fun aStripBothMutedAndSoloedIsSilentInExport() = runTest {
+        // The other strip is soloed too, so the file is not silent across the board and only mute can account for
+        // the zero.
+        val cc7s = exportedCC7s(
+            mixSnapshot(
+                MixerChannel(
+                    partIndex = 0, ordinal = 0, liveChannel = 0, displayName = "Staff 1",
+                    isMuted = true, isSoloed = true,
+                ),
+                MixerChannel(partIndex = 1, ordinal = 0, liveChannel = 1, displayName = "Staff 2", isSoloed = true),
+            ),
+        )
+        assertEquals(listOf("cc(0,7,0)", "cc(1,7,127)"), cc7s)
+    }
+
+    @Test
+    fun aStripBothMutedAndSoloedStillEngagesSoloInExport() = runTest {
+        // Solo is engaged by the muted strip alone, so the plain strip is shut out with it.
+        val cc7s = exportedCC7s(
+            mixSnapshot(
+                MixerChannel(
+                    partIndex = 0, ordinal = 0, liveChannel = 0, displayName = "Staff 1",
+                    isMuted = true, isSoloed = true,
+                ),
+                MixerChannel(partIndex = 1, ordinal = 0, liveChannel = 1, displayName = "Staff 2"),
+            ),
+        )
+        assertEquals(listOf("cc(0,7,0)", "cc(1,7,0)"), cc7s)
+    }
 }
