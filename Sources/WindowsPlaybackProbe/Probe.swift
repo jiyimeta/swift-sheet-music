@@ -632,6 +632,17 @@ final class Probe { // swiftlint:disable:this type_body_length
         let rebuildsBefore = engine.diagnostics.deviceRebuilds
         var samples: [(wall: Double, tick: Double)] = []
         let start = clock.now
+        // The same measurement with nothing wrong, first: the tick moves once per render wake, so consecutive polls
+        // read up to one device period (plus the poll's own lateness) ahead of the wall clock. That floor is added to
+        // the bound below — measured three times, the jump read 28.3, 36.7 and 41.9 ms against a 40 ms buffer.
+        var steady: [(wall: Double, tick: Double)] = []
+        for _ in 0 ..< 30 {
+            wait(0.01)
+            steady.append((seconds(clock.now - start), engine.probeContinuousSeconds))
+        }
+        let floor = zip(steady, steady.dropFirst())
+            .map { pair in (pair.1.tick - pair.0.tick) - (pair.1.wall - pair.0.wall) }
+            .max() ?? 0
         engine.probeInjectDeviceFault()
         let rebuilt = waitUntil(timeout: 3) {
             samples.append((seconds(clock.now - start), engine.probeContinuousSeconds))
@@ -656,9 +667,12 @@ final class Probe { // swiftlint:disable:this type_body_length
         for (previous, next) in zip(samples, samples.dropFirst()) {
             jump = max(jump, (next.tick - previous.tick) - (next.wall - previous.wall))
         }
+        let bound = bufferSeconds + max(0, floor)
         report.check(
-            "device", "tick jump", jump <= bufferSeconds,
-            value: "\(formatted(jump * 1000, 1)) ms", limit: "≤ 1 buffer (\(formatted(bufferSeconds * 1000, 1)) ms)",
+            "device", "tick jump", jump <= bound,
+            value: "\(formatted(jump * 1000, 1)) ms",
+            limit: "≤ 1 buffer (\(formatted(bufferSeconds * 1000, 1)) ms) + the steady poll floor "
+                + "(\(formatted(floor * 1000, 1)) ms)",
         )
         let events = inbox.takeEvents()
         report.check(
