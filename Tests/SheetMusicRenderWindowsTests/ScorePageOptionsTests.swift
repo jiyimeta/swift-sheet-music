@@ -153,6 +153,18 @@ struct ScorePageOptionsTests {
         }
     }
 
+    @Test("page margins: zero by default, uniform on every side, and not on the wire")
+    func pageMargins() {
+        let defaultMargins = ScorePageOptions.default.pageMarginsMM
+        #expect(defaultMargins == .zero)
+        let uniform = PageMarginsMM.uniform(12.7)
+        #expect(uniform == PageMarginsMM(top: 12.7, leading: 12.7, bottom: 12.7, trailing: 12.7))
+        let bridged = PageMarginsMM(top: 1, leading: 2, bottom: 3, trailing: 4).bridge
+        #expect(bridged == LayoutBridge.PageMargins(top: 1, leading: 2, bottom: 3, trailing: 4))
+        // The Android bridge's options are unchanged by them: the margins travel beside the wire, not in it.
+        expectSame(wire { $0.pageMarginsMM = .uniform(12.7) }, ScorePageOptions.default.wire())
+    }
+
     // MARK: - Helpers
 
     /// The wire of the default options with `change` applied.

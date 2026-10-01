@@ -98,6 +98,10 @@ public struct ScorePageOptions: Sendable, Equatable {
     /// Scale of small and cue noteheads; `nil` (or a value ≤ 0) keeps the engine's default.
     public var smallNoteMag: Double?
     public var spacing: Spacing
+    /// The paper margins of a `.page`-mode page; every other mode ignores them. `.zero`, the default, is the
+    /// edge-to-edge page the Android reader draws. Not part of the options the Android bridge carries: `ScorePages`
+    /// hands them to the layout beside those.
+    public var pageMarginsMM: PageMarginsMM
 
     public init(
         mode: Mode = .vertical,
@@ -117,6 +121,7 @@ public struct ScorePageOptions: Sendable, Equatable {
         graceNoteMag: Double? = nil,
         smallNoteMag: Double? = nil,
         spacing: Spacing = Spacing(),
+        pageMarginsMM: PageMarginsMM = .zero,
     ) {
         self.mode = mode
         self.staffSize = staffSize
@@ -135,12 +140,50 @@ public struct ScorePageOptions: Sendable, Equatable {
         self.graceNoteMag = graceNoteMag
         self.smallNoteMag = smallNoteMag
         self.spacing = spacing
+        self.pageMarginsMM = pageMarginsMM
     }
 
     /// Vertical mode at a 28 pt staff with every other option at its default: what the portable bridges lay out with
     /// when a host passes no options.
     public static var `default`: ScorePageOptions {
         ScorePageOptions()
+    }
+}
+
+/// Paper margins around a `.page`-mode page, in millimetres, for `ScorePageOptions.pageMarginsMM`.
+///
+/// With margins a page is a sheet of paper, as the Apple page deck draws it: the score is engraved into the page width
+/// less `leading` and `trailing`, cut into pages by the page height less `top` and `bottom`, and drawn `leading` right
+/// of and `top` below each page's top-left corner. When the music comes out wider than that printable width (a measure
+/// wider than the line) every page widens to the widest system plus both side margins, so nothing is drawn off the
+/// paper; `ScorePages.pageSizeMM(_:)` reports the widened size. The height never changes. `.zero` is the edge-to-edge
+/// page: the full page width, the music from the top-left corner, and never widened.
+public struct PageMarginsMM: Sendable, Equatable {
+    public var top: Double
+    public var leading: Double
+    public var bottom: Double
+    public var trailing: Double
+
+    public init(top: Double, leading: Double, bottom: Double, trailing: Double) {
+        self.top = top
+        self.leading = leading
+        self.bottom = bottom
+        self.trailing = trailing
+    }
+
+    /// No margins: the edge-to-edge page.
+    public static let zero = PageMarginsMM(top: 0, leading: 0, bottom: 0, trailing: 0)
+
+    /// `margin` on every side. Apple's page deck uses half an inch, `uniform(12.7)`, on A4 (210 x 297).
+    public static func uniform(_ margin: Double) -> PageMarginsMM {
+        PageMarginsMM(top: margin, leading: margin, bottom: margin, trailing: margin)
+    }
+}
+
+extension PageMarginsMM {
+    /// These margins as the layout bridge takes them.
+    var bridge: LayoutBridge.PageMargins {
+        LayoutBridge.PageMargins(top: top, leading: leading, bottom: bottom, trailing: trailing)
     }
 }
 

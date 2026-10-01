@@ -129,7 +129,8 @@ extension LayoutBridge {
     ///   separate viewport concept — the document *is* the page.
     /// - `.page` — `document.systems` paginated by `LayoutPaginator` at `pageHeightMM`, each page a
     ///   `pageWidthMM` × `pageHeightMM` slice with its first system lifted to y ≈ 0 (mirrors the original
-    ///   inline implementation this was extracted from — see the two comments below for why).
+    ///   inline implementation this was extracted from — see the two comments below for why). No paper margins:
+    ///   those are `encodePagesWithSpans`'s, which no wire carries yet.
     package static func encodePages(
         document: LayoutDocument,
         options optionsWire: LayoutOptionsWire,
@@ -145,11 +146,18 @@ extension LayoutBridge {
     /// `encodePages`, also returning each page's `SystemSpan`s — for a renderer that draws a page in pieces (the
     /// Windows onscreen surface). The pages are the same either way. A span's `systemIndex` is the system's index in
     /// `document`, also in `.page` mode, where each page is laid out from a slice of it.
+    ///
+    /// In `.page` mode `margins` make each page a sheet of paper (`PageMargins`): the pages are cut by `pageHeightMM`
+    /// less the top and bottom margins, every command and span frame sits the leading margin right and the top margin
+    /// down, and every page is `margins.paperWidthMM(for:pageWidthMM:)` wide — `pageWidthMM` unless the music overflows
+    /// the printable width. `document` must have been engraved into the printable width, as `computePages` does.
+    /// `.zero` gives `encodePages`' pages byte for byte; the other modes ignore `margins`.
     public static func encodePagesWithSpans(
         document: LayoutDocument,
         options optionsWire: LayoutOptionsWire,
         pageWidthMM: Double,
         pageHeightMM: Double,
+        margins: PageMargins = .zero,
         tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
     ) -> (pages: [EncodablePage], spans: [[SystemSpan]]) {
         let ptToMM = 25.4 / 72.0
@@ -173,10 +181,14 @@ extension LayoutBridge {
 
         case .page:
             let mmToPt = 72.0 / 25.4
-            let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
+            // `.zero` subtracts nothing, so the edge-to-edge page is cut at `pageHeightMM` exactly as before.
+            let pageHeightPt = CGFloat(margins.printableHeightMM(pageHeightMM: pageHeightMM) * mmToPt)
             let ranges = LayoutPaginator.paginate(
                 systems: document.systems, pageHeight: pageHeightPt, policy: optionsWire.breakPolicy,
             )
+            // One width for every page, as Apple's sheets have: widened only when the music overflows the printable
+            // width, and never for `.zero`.
+            let paperWidthMM = margins.paperWidthMM(for: document, pageWidthMM: pageWidthMM)
             var pages: [EncodablePage] = []
             var spans: [[SystemSpan]] = []
             for range in ranges {
@@ -199,8 +211,9 @@ extension LayoutBridge {
                         metrics: sub.metrics, titleFrame: document.titleFrame,
                     )
                     : sub
-                let built = buildCommandsWithSpans(layout: pageDoc, tint: tint)
-                pages.append(EncodablePage(widthMM: pageWidthMM, heightMM: pageHeightMM, commands: built.commands))
+                // Onto the paper: the leading and top margins in. Untouched for `.zero`.
+                let built = margins.place(buildCommandsWithSpans(layout: pageDoc, tint: tint))
+                pages.append(EncodablePage(widthMM: paperWidthMM, heightMM: pageHeightMM, commands: built.commands))
                 spans.append(built.spans.map { span in
                     var span = span
                     span.systemIndex = span.systemIndex.map { $0 + range.lowerBound }
@@ -213,16 +226,26 @@ extension LayoutBridge {
 
     /// Lay out `score` and return its pages with each system's `SystemSpan` — `computeWithDocument` for a renderer
     /// that consumes commands rather than wire bytes (the Windows onscreen surface), so nothing is encoded and decoded
-    /// again. The layout, the pages and the filtered score are exactly `computeWithDocument`'s.
+    /// again. With `.zero` margins (the default) the layout, the pages and the filtered score are exactly
+    /// `computeWithDocument`'s.
+    ///
+    /// In `.page` mode, other margins engrave the score into `pageWidthMM` less the side margins and place it on
+    /// paper as `encodePagesWithSpans` describes. The returned document is then that narrower engraving — still the
+    /// continuous one, in its own coordinates, without the margins.
     public static func computePages(
         score: Score,
         pageWidthMM: Double,
         pageHeightMM: Double,
         options optionsWire: LayoutOptionsWire,
+        margins: PageMargins = .zero,
     ) -> LayoutPages {
-        let laidOut = layoutForPages(score: score, pageWidthMM: pageWidthMM, options: optionsWire)
+        let engravingWidthMM = optionsWire.mode == .page
+            ? margins.printableWidthMM(pageWidthMM: pageWidthMM)
+            : pageWidthMM
+        let laidOut = layoutForPages(score: score, pageWidthMM: engravingWidthMM, options: optionsWire)
         let built = encodePagesWithSpans(
             document: laidOut.document, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
+            margins: margins,
         )
         return LayoutPages(
             document: laidOut.document, pages: built.pages, spans: built.spans, filteredScore: laidOut.filteredScore,

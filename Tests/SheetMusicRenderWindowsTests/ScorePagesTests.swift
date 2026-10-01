@@ -32,6 +32,52 @@ struct ScorePagesTests {
         }
     }
 
+    @Test("page margins reach the bridge, the page sizes are its pages', and a tint keeps them")
+    func marginsPassThrough() throws {
+        try FontMetrics.$scopedProvider.withValue(StubFontMetricsProvider()) {
+            let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
+            let options = ScorePageOptions(mode: .page, pageMarginsMM: .uniform(12.7))
+            let pages = ScorePages.compute(score: score, pageWidthMM: 210, pageHeightMM: 297, options: options)
+            let direct = LayoutBridge.computePages(
+                score: score, pageWidthMM: 210, pageHeightMM: 297, options: options.wire(),
+                margins: LayoutBridge.PageMargins(top: 12.7, leading: 12.7, bottom: 12.7, trailing: 12.7),
+            )
+            let edgeToEdge = ScorePages.compute(
+                score: score, pageWidthMM: 210, pageHeightMM: 297, options: ScorePageOptions(mode: .page),
+            )
+            #expect(pages.pages == direct.pages)
+            #expect(pages.spans == direct.spans)
+            #expect(pages.pages != edgeToEdge.pages, "the margins never reached the layout")
+            #expect(pages.pageCount >= edgeToEdge.pageCount)
+            for page in 0 ..< pages.pageCount {
+                let size = pages.pageSizeMM(page)
+                let bridgePage = direct.pages[page]
+                let isBridgeSize = size.width == bridgePage.widthMM && size.height == bridgePage.heightMM
+                #expect(isBridgeSize, "page \(page + 1): \(size)")
+                // Four parts of plain quarters fit the printable width: A4, not widened.
+                #expect(size.width == 210 && size.height == 297, "page \(page + 1): \(size)")
+            }
+            let untinted = pages.tinted(argb: 0xFF33_66FF, ids: [])
+            #expect(untinted.pages == pages.pages)
+            #expect(untinted.spans == pages.spans)
+        }
+    }
+
+    @Test("page margins count only in page mode")
+    func marginsOnlyInPageMode() throws {
+        try FontMetrics.$scopedProvider.withValue(StubFontMetricsProvider()) {
+            let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
+            let margined = ScorePages.compute(
+                score: score, pageWidthMM: 180, pageHeightMM: 297,
+                options: ScorePageOptions(mode: .vertical, pageMarginsMM: .uniform(12.7)),
+            )
+            let plain = ScorePages.compute(score: score, pageWidthMM: 180, pageHeightMM: 297)
+            let marginedWidth = margined.pageSizeMM(0).width
+            #expect(margined.pages == plain.pages)
+            #expect(marginedWidth == 180)
+        }
+    }
+
     @Test("the default options lay out one vertical page of the given width")
     func verticalByDefault() throws {
         let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))

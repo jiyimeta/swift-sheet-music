@@ -10,7 +10,8 @@ import SheetMusicLayout
 /// with a selection drawn in a color.
 public struct ScorePages: Sendable {
     /// The full layout, in points. In `.page` mode the continuous one the pages were cut from, so its coordinates are
-    /// the document's, not a page's.
+    /// the document's, not a page's: a page shows it lifted by where that page starts and moved in by the leading and
+    /// top margins.
     public let document: LayoutDocument
     /// The score the layout was built from: clef overrides and transposition applied, hidden staves dropped. Its
     /// addresses are the document's.
@@ -27,12 +28,15 @@ public struct ScorePages: Sendable {
 
     /// Lays `score` out per `options` and cuts it into pages: in `.vertical` mode one page `pageWidthMM` wide and as
     /// tall as the music, in `.horizontal` one page the size of the music, in `.page` pages of `pageWidthMM` x
-    /// `pageHeightMM`. Install the font metrics (`installWindowsFontMetrics(tableBytes:)`) before the first call.
+    /// `pageHeightMM` with the music inside `options.pageMarginsMM` — every page widened alike when the music overflows
+    /// the printable width (`PageMarginsMM`), so lay the pages out by `pageSizeMM(_:)`. Install the font metrics
+    /// (`installWindowsFontMetrics(tableBytes:)`) before the first call.
     public static func compute(
         score: Score, pageWidthMM: Double, pageHeightMM: Double, options: ScorePageOptions = .default,
     ) -> ScorePages {
         let laidOut = LayoutBridge.computePages(
             score: score, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM, options: options.wire(),
+            margins: options.pageMarginsMM.bridge,
         )
         return ScorePages(
             document: laidOut.document, filteredScore: laidOut.filteredScore, pages: laidOut.pages,
@@ -45,7 +49,8 @@ public struct ScorePages: Sendable {
         pages.count
     }
 
-    /// Page `page`'s size in millimetres; `page` must be below `pageCount`.
+    /// Page `page`'s size in millimetres, as drawn — in `.page` mode the widened width when the music overflows the
+    /// printable width; `page` must be below `pageCount`.
     public func pageSizeMM(_ page: Int) -> (width: Double, height: Double) {
         (pages[page].widthMM, pages[page].heightMM)
     }
@@ -68,7 +73,7 @@ public struct ScorePages: Sendable {
         let tint: (argb: UInt32, ids: Set<ScoreItemID>)? = expanded.isEmpty ? nil : (argb: argb, ids: expanded)
         let built = LayoutBridge.encodePagesWithSpans(
             document: document, options: options.wire(), pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
-            tint: tint,
+            margins: options.pageMarginsMM.bridge, tint: tint,
         )
         return ScorePages(
             document: document, filteredScore: filteredScore, pages: built.pages, spans: built.spans, options: options,

@@ -1,7 +1,8 @@
 /// A rectangle on one page of a `ScorePages`, in that page's millimetres: the origin at the page's top-left, Y down.
 ///
 /// Page-local, which in `.page` mode is not the `LayoutDocument`'s own space: each page after the first is laid out
-/// from a slice of the continuous document lifted so its first system sits near the top.
+/// from a slice of the continuous document lifted so its first system sits near the top, and every page's content is
+/// shifted by the leading and top `ScorePageOptions.pageMarginsMM` (so a rect in page millimetres includes them).
 public struct PageRectMM: Sendable, Equatable {
     public var x: Double
     public var y: Double
