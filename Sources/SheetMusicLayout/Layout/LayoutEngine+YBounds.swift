@@ -74,11 +74,12 @@ extension LayoutEngine {
              let .multiMeasureRest(_, p),
              let .measureNumber(_, p),
              let .staffName(_, p),
-             let .staffText(_, p, _, _, _, _, _, _),
              let .rehearsalMark(_, p, _, _, _, _, _),
              let .rest(_, p, _, _, _),
              let .note(_, _, _, _, p, _, _, _):
             return [p.y]
+        case let .staffText(text, p, _, style, _, _, properties, _):
+            return staffTextYPoints(text: text, origin: p, style: style, properties: properties, sp: sp)
         case let .chord(notes, _, _, so, _, _, _, _, _, _, _):
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
@@ -128,6 +129,27 @@ extension LayoutEngine {
         case let .harmony(lh):
             return [CGFloat(lh.y)]
         }
+    }
+
+    /// Y extent of a staff or system text: its anchor, plus — for a multi-line text — the bottom of its first line.
+    ///
+    /// The anchor is the bottom of the whole stack (`textPlacementOrigin`), and the stack grows DOWN from the first
+    /// line's baseline, so for text above a staff every line after the first sits between the anchor and the staff
+    /// while the first line rises above it by the whole stack height. The per-staff skyline in `buildSystem` reads
+    /// only these points, and was tuned for a one-line text whose top the anchor alone under-reserves by one line;
+    /// reporting the first line's bottom keeps exactly that tuning for every line count. Without it a three-line
+    /// text above a lower staff overlapped the upper staff's lyrics and its own below text. A one-line text reports
+    /// the anchor twice, so nothing laid out before this changes. Callers that pass no `sp` only want a
+    /// representative Y and get the anchor alone.
+    private static func staffTextYPoints(
+        text: String, origin: CGPoint, style: TextStyleType, properties: TextProperties, sp: CGFloat?,
+    ) -> [CGFloat] {
+        guard let sp, text.contains("\n") else { return [origin.y] }
+        let font = TextInkGeometry.font(for: style, overrides: properties, metrics: StaffMetrics(staffSize: sp * 4))
+        let provider = FontMetrics.provider
+        let extra = TextInkGeometry.typographicSize(text: text, font: font).height
+            - provider.ascent(font: font) - provider.descent(font: font)
+        return [origin.y, origin.y - extra]
     }
 
     /// Y extent of a legacy bend: every piece's own points, plus the top
