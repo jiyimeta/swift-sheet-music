@@ -45,32 +45,62 @@ extension RangeCopySource {
     /// `init?(range:in:operation:)` for why there is no default operation name.
     init?(extent: Extent, in score: Score, operation: String) throws {
         let targets = score.voiceElements(staves: extent.staves, from: extent.lower, to: extent.upper)
-
-        // `voiceElements(staves:from:to:)` yields ids in staff order, so the staff of the first id is the first
-        // staff the material actually occupies — which is the axis the tick figures below are measured on.
-        var orderedStaves: [StaffAddress] = []
-        for target in targets where !orderedStaves.contains(target.staff) {
-            orderedStaves.append(target.staff)
-        }
-        guard let firstStaff = orderedStaves.first else { return nil }
-        staves = orderedStaves
-
-        let anchor = RangeCopyGeometry(staff: firstStaff, in: score)
-        guard let start = anchor.absolute(extent.lower), let end = anchor.absolute(extent.upper)
-        else { return nil }
-        startTick = start
-        lengthTicks = end - start
+        guard let axis = Axis(extent: extent, targets: targets, in: score) else { return nil }
+        staves = axis.staves
+        startTick = axis.start
+        lengthTicks = axis.end - axis.start
 
         texts = Self.makeTexts(
-            in: score, coveredStaves: extent.staves, geometry: anchor,
-            rangeStart: start, rangeEnd: end,
+            in: score, coveredStaves: extent.staves, geometry: axis.geometry,
+            rangeStart: axis.start, rangeEnd: axis.end,
         )
 
         streams = try Self.makeStreams(
-            from: targets, in: score, rangeStart: start, rangeEnd: end,
+            from: targets, in: score, rangeStart: axis.start, rangeEnd: axis.end,
             lowBound: extent.lowBound, highBound: extent.highBound, operation: operation,
         )
         guard !streams.isEmpty else { return nil }
+    }
+
+    /// The lane texts `extent` carries, resolved exactly as `init?(extent:in:operation:)` resolves them but without
+    /// building the voice streams, so it costs a walk rather than a copy and never refuses a cut tuplet. It is what
+    /// `Score.rangeTextIDs(for:)` lights a range's texts from, which a renderer asks for on every selection change.
+    ///
+    /// `nil` when the extent selects no chord or rest at all, which is when the copy answers `nil` too.
+    static func texts(for extent: Extent, in score: Score) -> [CopiedText]? {
+        let targets = score.voiceElements(staves: extent.staves, from: extent.lower, to: extent.upper)
+        guard let axis = Axis(extent: extent, targets: targets, in: score) else { return nil }
+        return makeTexts(
+            in: score, coveredStaves: extent.staves, geometry: axis.geometry,
+            rangeStart: axis.start, rangeEnd: axis.end,
+        )
+    }
+
+    /// The tick axis every figure of a copy is measured on: the first staff the material actually occupies, with the
+    /// extent's two edges made absolute on it. Shared by the copy and by `texts(for:in:)`, so the two can never
+    /// measure a text's beat against different staves.
+    private struct Axis {
+        let staves: [StaffAddress]
+        let geometry: RangeCopyGeometry
+        let start: Int
+        let end: Int
+
+        init?(extent: Extent, targets: [VoiceElementID], in score: Score) {
+            // `voiceElements(staves:from:to:)` yields ids in staff order, so the staff of the first id is the first
+            // staff the material actually occupies — which is the axis the tick figures are measured on.
+            var orderedStaves: [StaffAddress] = []
+            for target in targets where !orderedStaves.contains(target.staff) {
+                orderedStaves.append(target.staff)
+            }
+            guard let firstStaff = orderedStaves.first else { return nil }
+            let geometry = RangeCopyGeometry(staff: firstStaff, in: score)
+            guard let start = geometry.absolute(extent.lower), let end = geometry.absolute(extent.upper)
+            else { return nil }
+            staves = orderedStaves
+            self.geometry = geometry
+            self.start = start
+            self.end = end
+        }
     }
 
     /// Resolves the system-lane text subset once, alongside the voice streams. Flattening measure order and lane

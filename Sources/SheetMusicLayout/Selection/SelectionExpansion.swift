@@ -64,6 +64,10 @@ public enum SelectionExpansion {
     /// it (`TransposeRange`) — so a range that tinted every head but theirs looked as though it left them out
     /// (folino QA, 2026-09-24). Added here rather than in `items(inRangeFrom:to:)`, which is also the range the
     /// editing commands address and must keep naming notes and rests only.
+    ///
+    /// **A range lights its staff and system texts, for the same reason.** A range's copy and cut carry them
+    /// (`Score.rangeTextIDs(for:)`, which reads the copy's own text rule), and a range that tinted the notes but left
+    /// a "pizz." black hid that the text was about to travel with them (folino QA, 2026-10-02).
     public static func selectedIDs(
         for selection: ScoreSelection, in score: Score,
     ) -> Set<ScoreItemID> {
@@ -79,7 +83,8 @@ public enum SelectionExpansion {
             return expand(id, in: score)
         case let .range(anchor, target):
             let items = Set(score.items(inRangeFrom: anchor, to: target))
-            return items.union(graceNotes(ofChordsIn: items, in: score))
+            let texts = score.rangeTextIDs(inRangeFrom: anchor, to: target).map(ScoreItemID.text)
+            return items.union(graceNotes(ofChordsIn: items, in: score)).union(texts)
         case let .multi(ids):
             return ids.reduce(into: Set<ScoreItemID>()) {
                 $0.formUnion(expand($1, in: score))

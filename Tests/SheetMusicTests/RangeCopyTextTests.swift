@@ -219,6 +219,49 @@ struct RangeCopyTextTests {
         #expect(Self.named("outside", in: cut.score, measure: 0) != nil)
     }
 
+    /// What a range LIGHTS is what its copy carries: the same staves, the same half-open span, system text only with
+    /// the canonical staff covered. Each identity is anchored on the staff the layout draws the text on, which for a
+    /// system text is the canonical staff even when the range's other staves have an onset there too.
+    @Test("range text identities name exactly the texts the copy carries")
+    func rangeTextIDsNameTheCopiedTexts() {
+        var source = Self.score(staffCount: 3, measureCount: 2)
+        Self.add(Self.text("top beat 2"), to: &source, beat: 1, staff: Self.top)
+        Self.add(Self.text("middle beat 3"), to: &source, beat: 2, staff: Self.middle)
+        Self.add(Self.text("system beat 1", system: true), to: &source, beat: 0, staff: nil)
+        Self.add(Self.text("bottom beat 2"), to: &source, beat: 1, staff: Self.bottom)
+        Self.add(Self.text("top beat 4, past the end"), to: &source, beat: 3, staff: Self.top)
+        Self.add(Self.text("next bar"), to: &source, measure: 1, beat: 0, staff: Self.top)
+
+        let upper = source.rangeTextIDs(for: VoiceElementRange(
+            start: Self.slot(staff: Self.top, beat: 0), end: Self.slot(staff: Self.middle, beat: 2),
+        ))
+        #expect(upper == [
+            .staffText(anchor: Self.slot(staff: Self.top, beat: 1), style: .staffText),
+            .staffText(anchor: Self.slot(staff: Self.middle, beat: 2), style: .staffText),
+            .staffText(anchor: Self.slot(staff: Self.top, beat: 0), style: .systemText),
+        ])
+
+        // Without the canonical staff, the system text is not carried, so it is not lit either.
+        let lower = source.rangeTextIDs(for: VoiceElementRange(
+            start: Self.slot(staff: Self.middle, beat: 0), end: Self.slot(staff: Self.bottom, beat: 3),
+        ))
+        #expect(lower == [
+            .staffText(anchor: Self.slot(staff: Self.middle, beat: 2), style: .staffText),
+            .staffText(anchor: Self.slot(staff: Self.bottom, beat: 1), style: .staffText),
+        ])
+
+        func head(_ slot: VoiceElementID) -> ScoreItemID {
+            .note(NoteID(
+                staff: slot.staff, measureIndex: slot.measureIndex, voiceIndex: slot.voiceIndex,
+                elementIndex: slot.elementIndex, noteIndexInChord: 0,
+            ))
+        }
+        // The item-corner overload a selection uses answers the same set, given the corners in either order.
+        let later = head(Self.slot(staff: Self.middle, beat: 2))
+        let earlier = head(Self.slot(staff: Self.top, beat: 0))
+        #expect(source.rangeTextIDs(inRangeFrom: later, to: earlier) == upper)
+    }
+
     /// Two same-kind texts on one beat of one staff — routine in an imported file, where "pizz." and "espress." can
     /// share a beat. `SetStaffText`'s removal takes both at once and refuses when there is nothing left, so a removal
     /// per text refused the whole cut composite; and a placement that cleared its beat per text kept only the last.
