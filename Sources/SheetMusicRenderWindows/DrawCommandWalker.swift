@@ -100,6 +100,13 @@ struct DrawCommandWalker {
         cd2d_fill_path(canvas)
     }
 
+    /// Fills a shape `OverlayShapeCache` built once from `fillPath` figures — the per-frame path for ink, where
+    /// `fill(figures:argb:)` would build every outline again every frame.
+    mutating func fill(shape: OpaquePointer, argb: UInt32) {
+        cd2d_set_color(canvas, argb)
+        cd2d_fill_shape(canvas, shape, Float(pxPerMM))
+    }
+
     private func px(_ mm: Double) -> Float {
         Float(mm * pxPerMM)
     }

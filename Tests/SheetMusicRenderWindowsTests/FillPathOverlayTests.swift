@@ -39,6 +39,23 @@ struct FillPathOverlayTests {
         #expect(outside == [255, 255, 255, 255], "outside is not the white canvas: \(outside)")
     }
 
+    /// The surface's own path: a shape built once by id and filled again on the next frame — still one coverage where
+    /// the figures overlap, and still one shape for the one id.
+    @Test
+    func `a cached shape fills the same way and is built once`() throws {
+        let drawn = try Direct2DPageRenderer.renderOverlayShapePixels(
+            [.fillPath(page: 0, id: 1, figures: Self.squares, argb: 0x8000_00FF)],
+            widthPx: Self.sizePx, heightPx: Self.sizePx, pxPerMM: Self.pxPerMM,
+        )
+        let onlyFirst = Self.pixel(drawn.pixels, mmX: 7, mmY: 10)
+        let overlap = Self.pixel(drawn.pixels, mmX: 12, mmY: 10)
+        let outside = Self.pixel(drawn.pixels, mmX: 25, mmY: 25)
+        #expect(onlyFirst == overlap, "the overlap was painted more than the rest: \(overlap) vs \(onlyFirst)")
+        #expect(onlyFirst != outside, "nothing was painted: \(onlyFirst)")
+        #expect(outside == [255, 255, 255, 255], "outside is not the white canvas: \(outside)")
+        #expect(drawn.shapes == 1)
+    }
+
     @Test
     func `a figure without area draws nothing`() throws {
         let line = [PagePointMM(x: 5, y: 5), PagePointMM(x: 20, y: 20)]
