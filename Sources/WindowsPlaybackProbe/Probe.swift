@@ -559,6 +559,36 @@ final class Probe { // swiftlint:disable:this type_body_length
             "preview", "held note sounds, then stops", held > 0 && released,
             value: "\(held) voices held, released \(released)", limit: "> 0, then 0",
         )
+        previewRightAfterPause()
+    }
+
+    /// A held preview started in the same moment as a pause. The paused score player sends All Sound Off on its
+    /// channels in its next rendered block, which the preview's note-on must not be caught by (folino
+    /// docs/superpowers/specs/2026-10-03-ssm-windows-minor-design.md §4). Ten tries: a lost one depends on when the
+    /// next block comes, so one try passes by chance.
+    private func previewRightAfterPause() {
+        let trials = 10
+        var sounded = 0
+        var counts: [Int] = []
+        for _ in 0 ..< trials {
+            engine.play(in: score)
+            wait(0.5)
+            engine.pause()
+            engine.previewNoteOn(pitch: 72, onStaff: 0, atTick: 0)
+            wait(0.15)
+            let voices = engine.probeActiveVoices[0]
+            counts.append(voices)
+            if voices > 0 {
+                sounded += 1
+            }
+            engine.previewNoteOff(pitch: 72)
+            _ = waitUntil(timeout: 3) { engine.probeActiveVoices[0] == 0 }
+        }
+        engine.stop()
+        report.check(
+            "preview", "a preview right after a pause sounds", sounded == trials,
+            value: "\(sounded) of \(trials) (voices \(counts))", limit: "\(trials) of \(trials)",
+        )
     }
 
     private func firstNote(drums: Bool) -> NoteID? {
