@@ -64,7 +64,7 @@ extension LayoutBridge {
         }
         let ranges = pageRanges(document: document, options: optionsWire, pageHeightMM: pageHeightMM, margins: margins)
         return PagePlacement(
-            pageTopsPt: ranges.map { Double(pageTop(of: $0, in: document)) },
+            pageTopsPt: ranges.map { pageTop(of: $0, in: document) },
             contentOffsetXMM: margins.leading,
             contentOffsetYMM: margins.top,
         )
@@ -81,11 +81,13 @@ extension LayoutBridge {
         )
     }
 
-    /// Where a page's music starts in the document. The first page keeps y = 0 (so the title frame stays visible);
-    /// later pages start at the previous system's bottom, so the gap above the page's first system renders on it.
-    static func pageTop(of range: Range<Int>, in document: LayoutDocument) -> CGFloat {
+    /// Where a page's music starts in the document, in points. The first page keeps y = 0 (so the title frame stays
+    /// visible); later pages start at the previous system's bottom, so the gap above the page's first system renders
+    /// on it. `Double`, not `CGFloat`: off Apple this file's `CGFloat` is a private alias an internal signature cannot
+    /// name.
+    static func pageTop(of range: Range<Int>, in document: LayoutDocument) -> Double {
         guard range.lowerBound > 0 else { return 0 }
         let previous = document.systems[range.lowerBound - 1]
-        return previous.origin.y + previous.size.height
+        return Double(previous.origin.y + previous.size.height)
     }
 }

@@ -192,7 +192,7 @@ extension LayoutBridge {
             var spans: [[SystemSpan]] = []
             for range in ranges {
                 // Lift each page's first system to y ≈ 0 (`pageTop(of:in:)`).
-                let sub = document.subdocument(systems: range, yOffset: -pageTop(of: range, in: document))
+                let sub = document.subdocument(systems: range, yOffset: -CGFloat(pageTop(of: range, in: document)))
                 // `subdocument` drops the title frame; only the first page (at
                 // y = 0) carries it, so re-attach it there. Without this the
                 // title block never renders in `.page` mode — the systems were
