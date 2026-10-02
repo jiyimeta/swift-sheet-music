@@ -228,7 +228,9 @@ final class AudioDeviceStream: @unchecked Sendable {
         notify(.lost)
         // Gone, or only no longer the default? Asked at once, so a host that pauses on a removal can do so before the
         // reopen starts sound on the new default; and asked again after the settle if the device still looked
-        // present, since Windows can announce the new default before it marks the old device unplugged.
+        // present, since Windows can announce the new default before it marks the old device unplugged. A device
+        // marked gone later than the settle is not seen: that removal goes unreported and playback stays on the new
+        // default.
         var removed = Self.isGone(endpoint)
         if removed {
             notify(.removed)

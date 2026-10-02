@@ -177,7 +177,7 @@ extension Shared {
         _ = previewPolicy.silence()
         previewDeadline = nil
         sustainedPreview = nil
-        heldPreviewMessages.removeAll()
+        heldPreviewMessages.removeAll(keepingCapacity: true)
         scoreStopUnrendered = false
         session = new
         rewind(to: resume)
@@ -290,8 +290,10 @@ extension Shared {
 
     /// Forgets every preview, silencing what is sounding: for a stop of the synth it plays on.
     mutating func cancelPreviews() {
-        // Never sent, so nothing of them sounds.
-        heldPreviewMessages.removeAll()
+        // Never sent, so nothing of them sounds. Every caller deletes the stopped players next, so no All Sound Off
+        // is coming to wait for either.
+        heldPreviewMessages.removeAll(keepingCapacity: true)
+        scoreStopUnrendered = false
         let voice = previewPolicy.silence()
         previewDeadline = nil
         guard let synth = session?.score else {

@@ -197,8 +197,14 @@ struct Shared: Sendable {
     /// on every channel it played on (`PlayerHandle`): a preview sent before then is cut with the score's notes — a
     /// held preview started in the same moment as a pause, most of the time.
     var scoreStopUnrendered = false
-    /// The previews' messages sent while `scoreStopUnrendered`, in order; they go out right after that block.
-    var heldPreviewMessages: [HeldPreviewMessage] = []
+    /// The previews' messages sent while `scoreStopUnrendered`, in order; they go out right after that block. Room is
+    /// reserved up front and kept on every clear: the render thread can append one too (a tap's note-off due in the
+    /// chunk whose end-of-score stop set the hold), and must not allocate under the lock.
+    var heldPreviewMessages: [HeldPreviewMessage] = {
+        var messages: [HeldPreviewMessage] = []
+        messages.reserveCapacity(16)
+        return messages
+    }()
 
     // MARK: Counters (diagnostics and the probe)
 
