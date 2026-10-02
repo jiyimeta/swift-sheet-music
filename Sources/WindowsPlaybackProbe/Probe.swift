@@ -562,19 +562,27 @@ final class Probe { // swiftlint:disable:this type_body_length
         previewRightAfterPause()
     }
 
-    /// A held preview started in the same moment as a pause. The paused score player sends All Sound Off on its
-    /// channels in its next rendered block, which the preview's note-on must not be caught by (folino
-    /// docs/superpowers/specs/2026-10-03-ssm-windows-minor-design.md §4). Ten tries: a lost one depends on when the
-    /// next block comes, so one try passes by chance.
+    /// A held preview started in the same moment as a pause. The paused score player sends All Sound Off in its next
+    /// rendered block — on the channels it sent a note-on on, and only those (`fluid_player_callback`) — which the
+    /// preview's note-on must not be caught by (folino docs/superpowers/specs/2026-10-03-ssm-windows-minor-design.md
+    /// §4). So playback starts AT a note of the previewed staff: its channel is then one the player played on, as in
+    /// a reader paused mid-piece. Ten tries: a lost one depends on when the next block comes.
     private func previewRightAfterPause() {
+        guard let note = firstNote(drums: false),
+              let staff = score.allStaves.firstIndex(where: { $0.address == note.staff })
+        else {
+            report.check("preview", "a preview right after a pause sounds", false, value: "no pitched note", limit: "")
+            return
+        }
+        let tick = PreviewRouting.tick(of: note, in: score)
         let trials = 10
         var sounded = 0
         var counts: [Int] = []
         for _ in 0 ..< trials {
-            engine.play(in: score)
+            engine.play(from: .item(.note(note)), in: score)
             wait(0.5)
             engine.pause()
-            engine.previewNoteOn(pitch: 72, onStaff: 0, atTick: 0)
+            engine.previewNoteOn(pitch: 72, onStaff: staff, atTick: tick)
             wait(0.15)
             let voices = engine.probeActiveVoices[0]
             counts.append(voices)
