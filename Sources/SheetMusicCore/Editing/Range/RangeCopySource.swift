@@ -22,6 +22,14 @@ struct RangeCopySource {
     /// non-timed element, which has no duration to resolve), and the element itself.
     typealias CopiedElement = (absoluteTick: Int, lengthTicks: Int, element: VoiceElement)
 
+    /// A staff or system text carried beside the voice streams. System texts have no staff; staff texts carry
+    /// the resolved source staff even when their lane element used a nil `originalStaff` for the canonical one.
+    struct CopiedText {
+        let absoluteTick: Int
+        let staff: StaffAddress?
+        let text: StaffText
+    }
+
     struct Stream {
         let staff: StaffAddress
         let voiceIndex: Int
@@ -37,6 +45,7 @@ struct RangeCopySource {
     }
 
     let streams: [Stream]
+    let texts: [CopiedText]
     /// Absolute tick the range starts at, on the FIRST staff it covers.
     let startTick: Int
     /// Length of the range in ticks, measured on the first staff.
@@ -81,12 +90,15 @@ struct RangeCopySource {
         try self.init(extent: extent, in: score, operation: operation)
     }
 
-    /// The three payload facts a relocated copy has to restate. `RangeCopySource+Payload.swift` is the only
-    /// caller: `PasteRange` re-addresses a payload's streams onto the destination's staves, and every other
-    /// field of the resolved source — the material, the ticks, the tuplets, the spanners — carries over
-    /// untouched.
-    init(streams: [Stream], startTick: Int, lengthTicks: Int, staves: [StaffAddress]) {
+    /// The payload facts a relocated copy has to restate. `RangeCopySource+Payload.swift` is the only caller:
+    /// `PasteRange` re-addresses the streams and staff texts onto the destination's staves, while the remaining
+    /// material and tick values carry over untouched.
+    init(
+        streams: [Stream], startTick: Int, lengthTicks: Int, staves: [StaffAddress],
+        texts: [CopiedText] = [],
+    ) {
         self.streams = streams
+        self.texts = texts
         self.startTick = startTick
         self.lengthTicks = lengthTicks
         self.staves = staves

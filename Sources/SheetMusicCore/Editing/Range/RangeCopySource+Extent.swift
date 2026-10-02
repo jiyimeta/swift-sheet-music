@@ -61,11 +61,47 @@ extension RangeCopySource {
         startTick = start
         lengthTicks = end - start
 
+        texts = Self.makeTexts(
+            in: score, coveredStaves: extent.staves, geometry: anchor,
+            rangeStart: start, rangeEnd: end,
+        )
+
         streams = try Self.makeStreams(
             from: targets, in: score, rangeStart: start, rangeEnd: end,
             lowBound: extent.lowBound, highBound: extent.highBound, operation: operation,
         )
         guard !streams.isEmpty else { return nil }
+    }
+
+    /// Resolves the system-lane text subset once, alongside the voice streams. Flattening measure order and lane
+    /// order gives the required tick/lane ordering; the explicit ordinal keeps same-tick lane order stable.
+    private static func makeTexts(
+        in score: Score, coveredStaves: [StaffAddress], geometry: RangeCopyGeometry,
+        rangeStart: Int, rangeEnd: Int,
+    ) -> [CopiedText] {
+        var collected: [(ordinal: Int, copied: CopiedText)] = []
+        var ordinal = 0
+        for measureIndex in score.systemMeasures.indices {
+            guard geometry.measureStarts.indices.contains(measureIndex) else { continue }
+            for positioned in score.systemMeasures[measureIndex].elements {
+                defer { ordinal += 1 }
+                guard case let .staffText(text) = positioned.element else { continue }
+                let absoluteTick = geometry.measureStarts[measureIndex]
+                    + positioned.position.ticks(division: score.division)
+                guard absoluteTick >= rangeStart, absoluteTick < rangeEnd else { continue }
+                if text.isSystemText {
+                    guard coveredStaves.contains(Score.canonicalStaff) else { continue }
+                    collected.append((ordinal, CopiedText(absoluteTick: absoluteTick, staff: nil, text: text)))
+                } else {
+                    let staff = positioned.originalStaff ?? Score.canonicalStaff
+                    guard coveredStaves.contains(staff) else { continue }
+                    collected.append((ordinal, CopiedText(absoluteTick: absoluteTick, staff: staff, text: text)))
+                }
+            }
+        }
+        return collected.sorted {
+            ($0.copied.absoluteTick, $0.ordinal) < ($1.copied.absoluteTick, $1.ordinal)
+        }.map(\.copied)
     }
 }
 

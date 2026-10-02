@@ -138,8 +138,14 @@ extension RangeCopySource {
             guard let destination = mapped(staff) else { return nil }
             movedStaves.append(destination)
         }
+        let movedTexts = texts.compactMap { copied -> CopiedText? in
+            guard let staff = copied.staff else { return copied }
+            guard let destination = mapped(staff) else { return nil }
+            return CopiedText(absoluteTick: copied.absoluteTick, staff: destination, text: copied.text)
+        }
         return RangeCopySource(
             streams: movedStreams, startTick: startTick, lengthTicks: lengthTicks, staves: movedStaves,
+            texts: movedTexts,
         )
     }
 }

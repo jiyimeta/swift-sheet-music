@@ -36,13 +36,20 @@ enum RangeCopyPayload {
     /// `NotationInteraction::copySelection` asks `Selection::canCopy()` before writing anything and reports
     /// `SOURCE_PARTIAL_TUPLET` (`dom/select.cpp:1410, 1446, 1454`).
     ///
-    /// The resolved material itself is discarded. It is the copy side's own shaping — clamped lengths, cleared
-    /// outer ties, collected spanners — addressed against the SOURCE score's tick axis, while a payload is a
-    /// score of its own; the shaping is applied downstream, once, when the payload is landed. So the
-    /// resolution runs here only for its verdict, and the `operation` it would stamp a refusal with never
-    /// leaves this function.
+    /// The resolved voice material is discarded. Its copy-side shaping — clamped lengths, cleared outer ties,
+    /// collected spanners — is addressed against the SOURCE score's tick axis, while a payload is a score of its
+    /// own, so that shaping is applied downstream when the payload lands. Resolved system-lane texts are the
+    /// exception: they carry absolute ticks and staff ownership beside the streams, and are re-barred below.
     static func score(for extent: RangeCopySource.Extent, in score: Score) -> Score? {
-        guard (try? RangeCopySource(extent: extent, in: score, operation: "CopyRange")) != nil else { return nil }
+        let source: RangeCopySource
+        do {
+            guard let resolved = try RangeCopySource(extent: extent, in: score, operation: "CopyRange") else {
+                return nil
+            }
+            source = resolved
+        } catch {
+            return nil
+        }
 
         let low = extent.lower
         let high = extent.upper
@@ -50,6 +57,7 @@ enum RangeCopyPayload {
         let measureRange = low.measure ... high.measure
 
         var parts: [Part] = []
+        var payloadAddressBySource: [StaffAddress: StaffAddress] = [:]
         for partIndex in score.parts.indices {
             let part = score.parts[partIndex]
             var staves: [Staff] = []
@@ -61,6 +69,9 @@ enum RangeCopyPayload {
                           division: score.division,
                       )
                 else { continue }
+                payloadAddressBySource[address] = StaffAddress(
+                    partIndex: parts.count, staffIndexInPart: staves.count,
+                )
                 staves.append(copied)
             }
             guard !staves.isEmpty else { continue }
@@ -70,7 +81,47 @@ enum RangeCopyPayload {
             ))
         }
         guard !parts.isEmpty else { return nil }
-        return Score(division: score.division, parts: IdentifiedArray(parts))
+        var payload = Score(division: score.division, parts: IdentifiedArray(parts))
+        payload.systemMeasures = copiedSystemMeasures(
+            from: source, in: payload, measureCount: measureRange.count,
+            payloadAddressBySource: payloadAddressBySource,
+        )
+        return payload
+    }
+
+    /// Re-bars copied texts against the carved score's own measure geometry and re-addresses staff text onto the
+    /// payload's compact part/staff numbering. System text deliberately keeps a nil staff.
+    private static func copiedSystemMeasures(
+        from source: RangeCopySource, in payload: Score, measureCount: Int,
+        payloadAddressBySource: [StaffAddress: StaffAddress],
+    ) -> IdentifiedArray<SystemMeasure> {
+        let geometry = RangeCopyGeometry(staff: Score.canonicalStaff, in: payload)
+        var systemElements = (0 ..< measureCount).map { _ in [PositionedSystemElement]() }
+        for copied in source.texts {
+            let relativeTick = copied.absoluteTick - source.startTick
+            guard let destination = geometry.position(atAbsolute: relativeTick),
+                  systemElements.indices.contains(destination.measure)
+            else { continue }
+            let payloadStaff: StaffAddress?
+            if let sourceStaff = copied.staff {
+                guard let mapped = payloadAddressBySource[sourceStaff] else { continue }
+                payloadStaff = mapped
+            } else {
+                payloadStaff = nil
+            }
+            let positioned = PositionedSystemElement(
+                position: MeasurePosition(
+                    numerator: destination.tick, denominator: 4 * payload.division,
+                ),
+                element: .staffText(copied.text), originalStaff: payloadStaff,
+            )
+            let measure = SystemMeasure(elements: systemElements[destination.measure])
+            let insertion = SystemLaneSlot.insertionIndex(
+                in: measure, for: positioned.position,
+            )
+            systemElements[destination.measure].insert(positioned, at: insertion)
+        }
+        return IdentifiedArray(systemElements.map { SystemMeasure(elements: $0) })
     }
 
     /// One staff reduced to the copied measures, renumbered from zero: the boundary measures (first and last)
@@ -269,5 +320,60 @@ extension Score {
     /// pasteboard alone on `nil` and tell the user the selection cannot be copied; do not write an empty payload.
     public func clipboardDocument(for range: VoiceElementRange) -> Score? {
         RangeCopyPayload.score(for: range, in: self)
+    }
+
+    /// The `.setStaffText(anchor:text: nil, isSystemText:)` removals for every staff or system text a range copy
+    /// of `range` carries. Each removal is anchored at a chord or rest onset: on the text's own staff for staff
+    /// text, and on a covered staff (canonical first) for system text. Text with no such onset is omitted.
+    public func rangeTextRemovals(for range: VoiceElementRange) -> [EditIntent] {
+        guard let extent = RangeCopySource.Extent(range: range, in: self),
+              let source = try? RangeCopySource(extent: extent, in: self, operation: "CopyRange")
+        else { return [] }
+        return source.texts.compactMap { copied in
+            let candidateStaves: [StaffAddress]
+            if let staff = copied.staff {
+                candidateStaves = [staff]
+            } else {
+                candidateStaves = extent.staves.contains(Self.canonicalStaff)
+                    ? [Self.canonicalStaff] + extent.staves.filter { $0 != Self.canonicalStaff }
+                    : extent.staves
+            }
+            guard let anchor = candidateStaves.lazy.compactMap({ staff in
+                chordOrRest(at: copied.absoluteTick, on: staff)
+            }).first else { return nil }
+            return .setStaffText(
+                anchor: anchor, text: nil, isSystemText: copied.text.isSystemText,
+            )
+        }
+    }
+
+    /// The lowest-index voice's chord or rest at `absoluteTick` on `staff`, using the same cursor arithmetic as
+    /// `Score.onset(of:)`. A lane text between chord/rest onsets intentionally has no edit-intent anchor.
+    private func chordOrRest(at absoluteTick: Int, on staff: StaffAddress) -> VoiceElementID? {
+        guard let staffValue = self[staff] else { return nil }
+        let geometry = RangeCopyGeometry(staff: staff, in: self)
+        guard let destination = geometry.position(atAbsolute: absoluteTick),
+              staffValue.measures.indices.contains(destination.measure)
+        else { return nil }
+        let measure = staffValue.measures[destination.measure]
+        let durations = effectiveMeasureDurations(
+            partIndex: staff.partIndex, staffIndex: staff.staffIndexInPart,
+        )
+        guard durations.indices.contains(destination.measure) else { return nil }
+        for (voiceIndex, voice) in measure.voices.enumerated() {
+            var tick = geometry.measureStarts[destination.measure]
+            for (elementIndex, element) in voice.elements.enumerated() {
+                if tick == absoluteTick, case .chord = element {
+                    return VoiceElementID(
+                        staff: staff, measureIndex: destination.measure,
+                        voiceIndex: voiceIndex, elementIndex: elementIndex,
+                    )
+                }
+                tick += element.cursorAdvance(
+                    division: division, in: durations[destination.measure],
+                )
+            }
+        }
+        return nil
     }
 }

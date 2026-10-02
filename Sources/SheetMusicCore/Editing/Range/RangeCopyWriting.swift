@@ -70,6 +70,19 @@ extension RangeCopyWriting {
             source, at: destinationTick, in: &scratch, ids: &allocator, commands: &commands,
         )
         try RangeCopySpanners.restart(restarts, in: &scratch, ids: &allocator, commands: &commands)
+        if !source.texts.isEmpty, let destination = RangeCopyGeometry(staff: axis, in: scratch)
+            .position(atAbsolute: destinationTick)
+        {
+            let location = VoiceElementID(
+                staff: axis, measureIndex: destination.measure, voiceIndex: 0, elementIndex: 0,
+            )
+            let command = PlaceCopiedTexts(
+                texts: source.texts, destinationTick: destinationTick,
+                sourceStartTick: source.startTick, axis: axis, location: location,
+            )
+            _ = try command.apply(to: &scratch, ids: &allocator)
+            commands.append(command)
+        }
         return commands
     }
 
@@ -83,7 +96,9 @@ extension RangeCopyWriting {
     /// append pass honest about what each stream actually carries instead of asserting a length nothing in
     /// it fills.
     private func reach(of source: RangeCopySource) -> Int {
-        source.streams.map { $0.reach(from: source.startTick) }.max() ?? source.lengthTicks
+        let streamReach = source.streams.map { $0.reach(from: source.startTick) }.max() ?? source.lengthTicks
+        let textReach = source.texts.map { $0.absoluteTick - source.startTick + 1 }.max() ?? 0
+        return max(streamReach, textReach)
     }
 
     /// Refuses a copy whose staves do not lay their measures out identically over the span it touches.
