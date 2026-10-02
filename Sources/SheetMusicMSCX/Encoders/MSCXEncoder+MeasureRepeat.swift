@@ -38,15 +38,21 @@ extension MeasureRepeat {
         // (ChordRest*)`, whose own FIRST act is `writeItemProperties` — the
         // `<eid>` writer — before the duration tags that follow.
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
-        let resolved = duration.resolved(in: measureDuration)
-        if case let .fraction(f) = resolved {
+        // Keyed on the MODEL's spelling, not on `resolved(in:)`'s: that answers a bar's length in the decoder's
+        // spelling (`.whole` for 4/4), and the measure form below is owed to `.measure` whatever the bar's length.
+        let measureLength: Fraction? = switch duration {
+        case .measure: measureDuration
+        case let .fraction(f): f
+        default: nil
+        }
+        if let f = measureLength {
             children.append(XMLTreeNode(name: "durationType", text: "measure"))
             children.append(XMLTreeNode(
                 name: "duration",
                 text: "\(f.numerator)/\(f.denominator)",
             ))
         } else {
-            resolved.appendDurationXML(to: &children)
+            duration.appendDurationXML(to: &children)
         }
         return XMLTreeNode(name: elementName, children: children)
     }
