@@ -36,6 +36,10 @@ and this project adheres to
   with it — most of the time, since the next block is up to a device period away. The engine now holds a preview's
   messages until that block is rendered and sends them right after, at most one 64-frame block (1.3 ms at 48 kHz)
   late.
+- **A `.vertical` page is as wide as its widest system.** It was cut at the requested width, so a measure wider than
+  the line — which the engine gives a system of its own — ran off the page and was clipped by a renderer that clips
+  at the page (Windows, Android). The page now widens to that system's right edge, the rule `.page` sheets with
+  margins already follow; music that fits keeps the requested width, byte for byte.
 
 ## [4.1.0] - 2026-10-02
 

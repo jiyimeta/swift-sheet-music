@@ -124,7 +124,8 @@ extension LayoutBridge {
     /// passes no tint.
     ///
     /// - `.vertical` — one page, `pageWidthMM` wide (the caller's viewport — not `document.size.width`, which
-    ///   is the narrower rendered content extent) by the document's own laid-out height.
+    ///   is the narrower rendered content extent) by the document's own laid-out height. Wider only when a system
+    ///   runs past the viewport — a measure wider than the line — to that system's right edge, as `.page` widens.
     /// - `.horizontal` — one page sized to `document.size` (both dimensions), since horizontal layout has no
     ///   separate viewport concept — the document *is* the page.
     /// - `.page` — `document.systems` paginated by `LayoutPaginator` at `pageHeightMM`, each page a
@@ -165,8 +166,10 @@ extension LayoutBridge {
         switch optionsWire.mode {
         case .vertical:
             let built = buildCommandsWithSpans(layout: document, tint: tint)
+            // Widened to the music as page mode's sheets are, so a measure wider than the line is not cut by a
+            // renderer that clips at the page (Windows, Android).
             return ([EncodablePage(
-                widthMM: pageWidthMM,
+                widthMM: widenedPageWidthMM(pageWidthMM, fitting: document, lineWidthMM: pageWidthMM, sideMarginsMM: 0),
                 heightMM: Double(document.size.height) * ptToMM,
                 commands: built.commands,
             )], [built.spans])

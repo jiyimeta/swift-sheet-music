@@ -161,6 +161,33 @@ struct PageMarginsTests {
         #expect(widths == [Self.pageWidthMM], "music that fits leaves the page width as it is: \(widths)")
     }
 
+    @Test("a vertical page widens to its widest system's right edge, and music that fits keeps the requested width")
+    func wideMusicWidensTheVerticalPage() throws {
+        let wide = try ScoreBridge.loadScore(bytes: Data(Self.musicXML(measures: 40, wideMeasure: true).utf8))
+        let result = LayoutBridge.computePages(
+            score: wide, pageWidthMM: Self.pageWidthMM, pageHeightMM: Self.pageHeightMM,
+            options: Self.options(.vertical),
+        )
+        let musicRightPt = result.document.systems.map { Double($0.origin.x + $0.size.width) }.max() ?? 0
+        // Not vacuous: the 96-quarter measure has to come out wider than the line the engine was handed.
+        try #require(
+            musicRightPt > Double(CGFloat(Self.pageWidthMM * Self.mmToPt)),
+            "the wide measure fits the line: \(musicRightPt) pt",
+        )
+        let page = try #require(result.pages.first)
+        #expect(result.pages.count == 1)
+        let needed = musicRightPt * Self.ptToMM
+        #expect(abs(page.widthMM - needed) < 1e-9, "\(page.widthMM) mm, needed \(needed) mm")
+
+        // Music that fits leaves the page exactly as wide as asked, so its bytes do not change.
+        let narrow = try ScoreBridge.loadScore(bytes: Data(Self.musicXML(measures: 40, wideMeasure: false).utf8))
+        let widths = LayoutBridge.computePages(
+            score: narrow, pageWidthMM: Self.pageWidthMM, pageHeightMM: Self.pageHeightMM,
+            options: Self.options(.vertical),
+        ).pages.map(\.widthMM)
+        #expect(widths == [Self.pageWidthMM])
+    }
+
     @Test("margins count only in page mode")
     func marginsOnlyInPageMode() throws {
         let score = try Self.load("midi01")
