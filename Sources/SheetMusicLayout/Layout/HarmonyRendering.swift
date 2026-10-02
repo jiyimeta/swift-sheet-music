@@ -100,14 +100,14 @@ public enum HarmonyRendering {
 
     // MARK: - Internals
 
-    private enum Slice {
+    enum Slice {
         case text(String)
         case accidental(HarmonyAccidental)
     }
 
     /// Walks `name` once, emitting Slice values. Consecutive text
     /// characters are merged at append time.
-    private static func parseSlices(
+    static func parseSlices(
         name: String, harmonyType: HarmonyType,
     ) -> [Slice] {
         var out: [Slice] = []
@@ -218,20 +218,24 @@ public enum HarmonyRendering {
     /// `<leftParen/>` / `<rightParen/>` wrap the finished symbol —
     /// MuseScore draws both (`harmony.cpp:202,261`).
     static func displayedName(for harmony: Harmony) -> String {
-        var s: String
-        if let rootTpc = harmony.rootTpc {
-            s = cased(tpcToText(rootTpc), as: harmony.rootCase)
-            s += harmony.name
+        var s = displayedPrefix(for: harmony) + harmony.name
+        if harmony.rootTpc != nil {
             if let bassTpc = harmony.bassTpc {
                 s += "/"
                 s += cased(tpcToText(bassTpc), as: harmony.bassCase)
             }
-        } else {
-            s = harmony.name
         }
-        if harmony.leftParen { s = "(" + s }
         if harmony.rightParen { s += ")" }
         return s
+    }
+
+    /// Generated display characters before the editable name. Shared by display construction and caret mapping.
+    static func displayedPrefix(for harmony: Harmony) -> String {
+        var prefix = harmony.leftParen ? "(" : ""
+        if let rootTpc = harmony.rootTpc {
+            prefix += cased(tpcToText(rootTpc), as: harmony.rootCase)
+        }
+        return prefix
     }
 
     /// Apply a `NoteCase` to a `letter + ASCII accidental` spelling.

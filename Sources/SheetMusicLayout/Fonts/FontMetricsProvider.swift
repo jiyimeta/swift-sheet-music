@@ -70,6 +70,17 @@ public protocol FontMetricsProvider: Sendable {
     func typographicWidth(
         text: String, font: LayoutFont,
     ) -> CGFloat
+    /// Single-line baseline x offsets, indexed by UTF-16 boundary (`text.utf16.count + 1` entries).
+    /// Shaped providers preserve full-line kerning. Offsets may repeat or be nonmonotonic (ligatures/bidi);
+    /// this is not a bijective mapping. Entries inside a grapheme are not legal insertion positions.
+    func caretOffsets(text: String, font: LayoutFont) -> [CGFloat]
+    /// Visual selection fragments in single-line baseline coordinates for a logical UTF-16 range.
+    /// Shaped providers may return disjoint fragments for bidi text. Empty/out-of-bounds ranges return none;
+    /// callers should expand partial grapheme ranges before asking. Fragments are sorted and adjacent ones merged.
+    func selectionOffsets(text: String, font: LayoutFont, range: Range<Int>) -> [ClosedRange<CGFloat>]
+    /// The nearest grapheme boundary as a UTF-16 index. Considers all offsets, including nonmonotonic ones;
+    /// finite out-of-range positions choose the nearest visual edge. Ties choose the earlier logical index.
+    func characterIndex(forOffset offset: CGFloat, text: String, font: LayoutFont) -> Int
     func inkBounds(text: String, font: LayoutFont) -> InkBounds
     /// Actual ink relative to the first line's baseline, in Y-up points. Later lines descend by ascent + descent +
     /// leading; empty lines still occupy a line. No ink is nil.
