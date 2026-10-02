@@ -7,6 +7,43 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-10-02
+
+### Added
+
+- **A range copy, paste and repeat (`R`) carry the staff and system texts inside the range.** They live in the
+  system lane, which the range copy never walked, so ⌘C / ⌘V and `R` dropped every "pizz." in the range. A staff
+  text is carried when its staff is covered and a system text when the range covers the canonical staff (MuseScore
+  keeps system text on the top staff's track); the clipboard payload carries them through the `.mscx` round trip,
+  and a paste replaces a text of the same kind on the same beat and staff and leaves every other text alone, as
+  MuseScore's paste does. Two same-kind texts on one beat travel as two.
+- **`Score.rangeTextRemovals(for:)`** — the `.setStaffText(anchor:text: nil, isSystemText:)` removals a host composes
+  before `.deleteRange` to make a Cut take the range's texts with it, one per anchor and kind.
+- **A range selection lights the staff and system texts its copy carries.** `SelectionExpansion.selectedIDs(for:in:)`
+  adds them to a `.range`, so every renderer tints them through the layers a selected text already uses.
+  `Score.rangeTextIDs(for:)` and `Score.rangeTextIDs(inRangeFrom:to:)` name them as the layout does
+  (`LayoutElement.textID`), resolved by the copy's own rule, so what is lit and what is copied are one set.
+
+### Changed
+
+- **`SetStaffText` stores the text as given**, leading and trailing spaces and line breaks included, as MuseScore
+  does: a staff text ending in a line break keeps its empty last line, which a caret that has just broken the line
+  needs to see engraved. A text that is nothing but whitespace is still refused as `.emptyStaffText`. A host that
+  relied on the trimming should trim before writing.
+- **`NoteDuration.resolved(in:)` answers in the decoder's spelling**: the named case for an undotted base value
+  (`.whole` for a 4/4 bar, not `.fraction(1/1)`), a `.fraction` for anything else (`NoteDuration.canonical(_:)`). A
+  note typed into an empty bar is now `==` to itself after a save and load, with the same `stableFingerprint`.
+
+### Fixed
+
+- **MuseScore keeps a glissando this package wrote.** The begin side was written with a bare `<next/>` and the end
+  note carried nothing, so MuseScore's connector reader (3.6.2 and 4.x) discarded the spanner. Both notes now carry a
+  `<location>`, and a `.v3` target writes `<glissandoStyle>` in MuseScore 3's spelling (`whitekeys`, `blackkeys`,
+  `diatonic`, `portamento`), which the decoder now accepts too.
+- **A multi-line staff or system text above a staff pushes that staff down by all of its lines.** The staff spacing
+  read the text by its bottom anchor alone, so a three-line text above a lower staff rose into the lyrics of the
+  staff above it.
+
 ## [4.0.0] - 2026-10-01
 
 Windows joins the supported platforms, the draw program moves to wire v8, and the compatibility shims 3.x kept are
