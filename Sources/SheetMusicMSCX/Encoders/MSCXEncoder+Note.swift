@@ -6,7 +6,8 @@ extension Note {
     /// Build a `<Note>` element. Emits pitch / tpc / optional
     /// accidental / optional headType, plus `<Spanner type="Tie">`
     /// markers for `tieForward` / `tieBack`, a
-    /// `<Spanner type="Glissando">` block when `glissando` is set, and a
+    /// `<Spanner type="Glissando">` begin block when `glissando` is set plus
+    /// any reconstructed end blocks supplied by the owning chord, and a
     /// `<Spanner type="GuitarBend">` pair for `guitarBend` /
     /// `guitarBendBack` — see `guitarBendSpanners` — and a `<Bend>` for
     /// the pre-4.2 `legacyBend`.
@@ -29,12 +30,14 @@ extension Note {
     /// file it was read from used, and a partially-small chord always in the
     /// per-note spelling. That promotion is a real round-trip gap for the
     /// single-note case, recorded in `docs/musescore-model-parity.md` §5.2.
-    func encode(
+    func encode( // swiftlint:disable:this function_body_length
         eid: EID,
         tieForwardEndpoint: TieEndpoint? = nil,
         tieBackEndpoint: TieEndpoint? = nil,
         guitarBendForwardEndpoint: TieEndpoint? = nil,
         guitarBendBackEndpoint: TieEndpoint? = nil,
+        glissandoForwardEndpoint: TieEndpoint? = nil,
+        glissandoBackEndpoints: [TieEndpoint] = [],
         options: MSCXEncoderOptions = .init(),
         drumDefaultHead: String? = nil,
         chordLines: [ChordLine] = [],
@@ -83,9 +86,11 @@ extension Note {
                 side: "prev", endpoint: tieBackEndpoint,
             ))
         }
-        if let glissando {
-            children.append(glissandoSpanner(glissando, options: options))
-        }
+        children += glissandoSpanners(
+            forwardEndpoint: glissandoForwardEndpoint,
+            backEndpoints: glissandoBackEndpoints,
+            options: options,
+        )
         appendParentheses(into: &children, targetVersion: options.targetVersion)
         children.append(XMLTreeNode(name: "pitch", text: String(pitch)))
         children.append(XMLTreeNode(name: "tpc", text: String(tpc)))
@@ -248,9 +253,9 @@ extension Note {
         )
     }
 
-    /// Serialize one endpoint's `<location>`. Shared by ties and guitar
-    /// bends — MuseScore has a single `Location` reader/writer pair serving
-    /// every connector type, neither of which branches on the spanner.
+    /// Serialize one endpoint's `<location>`. Shared by ties, glissandi, and
+    /// guitar bends — MuseScore has a single `Location` reader/writer pair
+    /// serving every connector type, neither of which branches on the spanner.
     func locationElement(from endpoint: TieEndpoint) -> XMLTreeNode {
         // Element order matches MuseScore Studio's own writer:
         // `<measures>` precedes `<fractions>`, which precede `<grace>`,
@@ -370,22 +375,5 @@ extension Note {
                 ]))
             }
         }
-    }
-
-    private func glissandoSpanner(
-        _ glissando: Glissando,
-        options: MSCXEncoderOptions,
-    ) -> XMLTreeNode {
-        // Start-side only — the end note carries no model state, and
-        // the decoder ignores `<Spanner type="Glissando">` blocks
-        // without a `<Glissando>` payload child.
-        XMLTreeNode(
-            name: "Spanner",
-            attributes: ["type": "Glissando"],
-            children: [
-                glissando.encode(options: options),
-                XMLTreeNode(name: "next"),
-            ],
-        )
     }
 }

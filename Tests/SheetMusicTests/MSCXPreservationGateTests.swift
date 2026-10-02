@@ -279,9 +279,11 @@ enum MSCXPreservation {
         allow([
             "Style/Spatium",
         ], because: spatiumReason, into: &result)
+        // `Note/Spanner`, `Spanner/prev`, `location/fractions` and `next/location` used to sit here too: the only
+        // fixture that lost them was a glissando, whose begin side was written with a bare `<next/>` and whose end
+        // side was not written at all. Both sides now carry their `<location>`, so the entries would be stale.
         allow([
-            "Note/Spanner", "Spanner/prev", "location/fractions", "location/measures",
-            "next/location", "prev/location",
+            "location/measures", "prev/location",
         ], because: endpointReason, into: &result)
         allow([
             "location/voices",

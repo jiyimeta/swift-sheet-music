@@ -25,7 +25,7 @@ extension Chord {
     /// `slurEndMarkers` are the `<prev>` sides of chord-anchored spanners
     /// that *end* here; the voice walker computes them when it passes the
     /// begin chord (see `MSCXPendingSlurEnd`).
-    func encodeAsChord(
+    func encodeAsChord( // swiftlint:disable:this function_body_length
         eid: EID,
         tieForwardLocation: TieLocation? = nil,
         tieBackLocation: TieLocation? = nil,
@@ -125,6 +125,16 @@ extension Chord {
                     for: note,
                     neighbourChord: bendNeighbourBackward,
                     previousChordTrailingBendGrace: previousChordTrailingBendGrace,
+                ),
+                glissandoForwardEndpoint: glissandoForwardEndpoint(
+                    forNoteAt: noteIndex,
+                    neighbourChord: bendNeighbourForward,
+                    nextChordNotes: tieForwardPartnerNotes,
+                ),
+                glissandoBackEndpoints: glissandoBackEndpoints(
+                    forNoteAt: noteIndex,
+                    neighbourChord: bendNeighbourBackward,
+                    previousChordNotes: tieBackPartnerNotes,
                 ),
                 options: options,
                 drumDefaultHead: isPercussionV3 ? "normal" : nil,

@@ -398,8 +398,8 @@ extension Note {
         switch text.uppercased() {
         case "CHROMATIC": return .chromatic
         case "DIATONIC": return .diatonic
-        case "WHITE_KEYS": return .whiteKeys
-        case "BLACK_KEYS": return .blackKeys
+        case "WHITE_KEYS", "WHITEKEYS": return .whiteKeys
+        case "BLACK_KEYS", "BLACKKEYS": return .blackKeys
         case "PORTAMENTO": return .portamento
         default: return nil
         }

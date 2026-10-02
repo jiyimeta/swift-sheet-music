@@ -9,10 +9,9 @@ extension Note {
     /// them on the same note, and a note in the middle of a bend chain ends
     /// one bend and starts the next (`guitarbend_release_twice.mscx:207-228`).
     ///
-    /// Unlike `glissandoSpanner`, which writes a `<next/>` with no
-    /// `<location>` because nothing else in this project reads it, both sides
-    /// carry a real location. MuseScore Studio needs it on *both*: a `<next>`
-    /// or `<prev>` without a `<location>` leaves the endpoint at its
+    /// Like `glissandoSpanner`, both sides carry a real location. MuseScore
+    /// Studio needs it on *both*: a `<next>` or `<prev>` without a
+    /// `<location>` leaves the endpoint at its
     /// `measure == INT_MIN` sentinel, so `ConnectorInfo::hasNext()` /
     /// `hasPrevious()` (`dom/connector.h:69-70`) are false and the spanner is
     /// dropped on reload. See `TieLocation.graceZeroDelta` for the full trail.
