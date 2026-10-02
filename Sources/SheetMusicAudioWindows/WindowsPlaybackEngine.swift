@@ -37,7 +37,8 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         /// Apple engine's end-of-score `stop()`.
         case reachedEnd
         /// The output device went away or the default device changed. The stream is closed and being reopened on the
-        /// current default; `state` and the position are kept, and nothing sounds until `deviceRecovered`.
+        /// current default; `state` and the position are kept, and nothing sounds until `deviceRecovered`. Which of
+        /// the two it was: `onOutputDeviceRemoved`.
         case deviceLost
         /// Output resumed on the current default device.
         case deviceRecovered
@@ -180,6 +181,19 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
     public var onEvent: (@Sendable (Event) -> Void)? {
         get { core.shared.withLock { $0.onEvent } }
         set { core.shared.withLock { $0.onEvent = newValue } }
+    }
+
+    /// Called on the output thread when the device playback was going through went away — unplugged, disabled or
+    /// removed — as opposed to a new default taking over while it stays (headphones plugged in). Arrives between
+    /// `deviceLost` and `deviceRecovered`, at most once per loss, and usually before the stream reopens on the new
+    /// default, so a host that pauses here does so before the music reaches the speakers.
+    ///
+    /// The engine itself neither pauses nor stops: as on Apple platforms, where a host pauses on
+    /// `AVAudioSession.RouteChangeReason.oldDeviceUnavailable`, that is the host's call. A laptop whose speakers and
+    /// headphone jack are one endpoint switches inside its driver, and Windows reports nothing for it.
+    public var onOutputDeviceRemoved: (@Sendable () -> Void)? {
+        get { core.shared.withLock { $0.onOutputDeviceRemoved } }
+        set { core.shared.withLock { $0.onOutputDeviceRemoved = newValue } }
     }
 
     // MARK: Preparing
@@ -393,7 +407,7 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         let core = core
         let stream = AudioDeviceStream(
             render: { buffer, frames in core.render(into: buffer, frames: frames) },
-            notify: { notice in core.emit(notice == .lost ? .deviceLost : .deviceRecovered) },
+            notify: { notice in core.deliver(notice) },
         )
         stream.start()
         output = stream

@@ -55,6 +55,24 @@ final class PlaybackCore: @unchecked Sendable {
         let handler = shared.withLock { $0.onEvent }
         handler?(event)
     }
+
+    /// Calls the host's `onOutputDeviceRemoved`, on the calling thread.
+    func emitDeviceRemoved() {
+        let handler = shared.withLock { $0.onOutputDeviceRemoved }
+        handler?()
+    }
+
+    /// Routes one of the output's notices to the host.
+    func deliver(_ notice: AudioDeviceStream.Notice) {
+        switch notice {
+        case .lost:
+            emit(.deviceLost)
+        case .removed:
+            emitDeviceRemoved()
+        case .recovered:
+            emit(.deviceRecovered)
+        }
+    }
 }
 
 /// What one render callback leaves for the host, delivered once the lock is released.
@@ -161,6 +179,7 @@ struct Shared: Sendable {
     var outputStage: MasterOutputStage = .none
     var levelHandler: (@Sendable (MixLevel) -> Void)?
     var onEvent: (@Sendable (WindowsPlaybackEngine.Event) -> Void)?
+    var onOutputDeviceRemoved: (@Sendable () -> Void)?
 
     // MARK: Previews
 

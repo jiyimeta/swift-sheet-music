@@ -623,6 +623,7 @@ final class Probe { // swiftlint:disable:this type_body_length
             return
         }
         _ = inbox.takeEvents()
+        _ = inbox.takeRemovals()
         let bufferSeconds = Double(engine.diagnostics.bufferFrames) / engine.diagnostics.sampleRate
 
         // While playing.
@@ -679,6 +680,12 @@ final class Probe { // swiftlint:disable:this type_body_length
             "device", "events", events.contains(.deviceLost) && events.contains(.deviceRecovered),
             value: "\(events)", limit: "deviceLost, deviceRecovered",
         )
+        // The control for the removal below: the device is still there after this one.
+        let removalsOnInvalidation = inbox.takeRemovals()
+        report.check(
+            "device", "an invalidation with the device kept is no removal", removalsOnInvalidation == 0,
+            value: "\(removalsOnInvalidation) removals", limit: "0",
+        )
 
         // While paused: the position is kept, and the resume plays from it.
         engine.pause()
@@ -701,12 +708,37 @@ final class Probe { // swiftlint:disable:this type_body_length
             resumed >= pausedTick && Double(resumed - pausedTick) <= allowance,
             value: "tick \(resumed)", limit: "[\(pausedTick), \(pausedTick + Int(allowance))]",
         )
+        deviceRemoval()
         engine.stop()
+    }
+
+    /// An unplug as the stream sees one — the invalidation, then the device gone — while playing: reported once
+    /// through `onOutputDeviceRemoved`, and the engine plays on (pausing is the host's call).
+    private func deviceRemoval() {
+        _ = inbox.takeEvents()
+        _ = inbox.takeRemovals()
+        let rebuildsBefore = engine.diagnostics.deviceRebuilds
+        engine.probeInjectDeviceFault(removed: true)
+        let rebuilt = waitUntil(timeout: 3) { engine.diagnostics.deviceRebuilds > rebuildsBefore }
+        // `deviceRecovered` follows the rebuild count by a moment.
+        wait(0.1)
+        let removals = inbox.takeRemovals()
+        let events = inbox.takeEvents()
+        report.check(
+            "device", "a removal is reported once", rebuilt && removals == 1,
+            value: "\(removals) removals, rebuilt \(rebuilt)", limit: "1",
+        )
+        report.check(
+            "device", "after a removal the engine plays on, lost and recovered",
+            engine.state == .playing && events.contains(.deviceLost) && events.contains(.deviceRecovered),
+            value: "\(engine.state), \(events)", limit: "playing; deviceLost, deviceRecovered",
+        )
     }
 
     /// A real device switch: the operator changes the default output while this plays.
     func deviceReal() {
         _ = inbox.takeEvents()
+        _ = inbox.takeRemovals()
         let rebuildsBefore = engine.diagnostics.deviceRebuilds
         engine.stop()
         engine.play(in: score)
@@ -728,7 +760,7 @@ final class Probe { // swiftlint:disable:this type_body_length
             "device", "real switch rebuild time", rebuildSeconds <= 0.5,
             value: "\(formatted(rebuildSeconds * 1000, 1)) ms", limit: "≤ 500 ms",
         )
-        report.note("device", "events: \(inbox.takeEvents())")
+        report.note("device", "events: \(inbox.takeEvents()), removals: \(inbox.takeRemovals())")
         engine.stop()
     }
 }

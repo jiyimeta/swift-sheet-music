@@ -22,6 +22,12 @@ and this project adheres to
   per frame (`ink 300 strokes work p99 <= 16 ms`).
 - **Windows: `WindowsPlaybackEngine.currentTimeSecondsContinuous`** is public, as on the Apple engine: the score time
   continuous between frames, for a pitch bar.
+- **Windows: `WindowsPlaybackEngine.onOutputDeviceRemoved`** — called when the device playback was going through
+  went away (unplugged, disabled, removed), as opposed to a new default taking over while it stays, which
+  `deviceLost` / `deviceRecovered` report alike. Arrives between the two, at most once per loss, usually before the
+  stream reopens on the new default; the engine itself plays on, so pausing — what the Apple hosts do on
+  `.oldDeviceUnavailable` — is the host's call. A handler rather than a new `Event` case, so an exhaustive `switch`
+  over `Event` keeps compiling.
 
 ## [4.1.0] - 2026-10-02
 

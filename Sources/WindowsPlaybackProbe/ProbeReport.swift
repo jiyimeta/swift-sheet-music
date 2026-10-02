@@ -78,6 +78,7 @@ final class ProbeInbox: @unchecked Sendable {
     private var peak: Float = 0
     private var levelCount = 0
     private var events: [WindowsPlaybackEngine.Event] = []
+    private var removals = 0
 
     func record(_ level: MixLevel) {
         lock.lock()
@@ -91,6 +92,23 @@ final class ProbeInbox: @unchecked Sendable {
         events.append(event)
         lock.unlock()
         print("event \(event)")
+    }
+
+    func recordDeviceRemoved() {
+        lock.lock()
+        removals += 1
+        lock.unlock()
+        print("event outputDeviceRemoved")
+    }
+
+    /// `onOutputDeviceRemoved` calls since the last call, and resets the count.
+    func takeRemovals() -> Int {
+        lock.lock()
+        defer {
+            removals = 0
+            lock.unlock()
+        }
+        return removals
     }
 
     /// The largest pre-shaping peak and the number of readings since the last call, and resets both.
