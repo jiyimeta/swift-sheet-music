@@ -40,6 +40,10 @@ and this project adheres to
   the line — which the engine gives a system of its own — ran off the page and was clipped by a renderer that clips
   at the page (Windows, Android). The page now widens to that system's right edge, the rule `.page` sheets with
   margins already follow; music that fits keeps the requested width, byte for byte.
+- **A page whose music fits its line is no longer a rounding error wider.** A justified system can end an ulp past
+  the line in floating point — on Windows' portable metrics a 180 mm page came out 180.00000000000003 mm, and on the
+  Mac `.page` with margins widened `testVoltaDynamic`'s sheets to 210.00000000000006 mm. Only an overflow of more than
+  0.01 pt now widens a page, in both modes.
 
 ## [4.1.0] - 2026-10-02
 

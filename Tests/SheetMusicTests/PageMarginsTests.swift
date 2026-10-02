@@ -188,6 +188,29 @@ struct PageMarginsTests {
         #expect(widths == [Self.pageWidthMM])
     }
 
+    @Test("a system that ends a rounding error past the line widens no page; one a point past it does")
+    func roundingPastTheLineWidensNothing() throws {
+        let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML(measures: 40, wideMeasure: false).utf8))
+        let document = LayoutBridge.computePages(
+            score: score, pageWidthMM: Self.pageWidthMM, pageHeightMM: Self.pageHeightMM,
+            options: Self.options(.vertical),
+        ).document
+        let lineWidthPt = CGFloat(Self.pageWidthMM * Self.mmToPt)
+        // Where Windows' portable metrics put a justified system on 2026-10-03: an ulp past the line, which widened a
+        // 180 mm vertical page to 180.00000000000003 mm.
+        let rounded = Self.document(document, firstSystemEndingAt: lineWidthPt.nextUp)
+        #expect(LayoutBridge.widenedPageWidthMM(
+            Self.pageWidthMM, fitting: rounded, lineWidthMM: Self.pageWidthMM, sideMarginsMM: 0,
+        ) == Self.pageWidthMM)
+        #expect(Self.tenMM.paperWidthMM(for: rounded, pageWidthMM: Self.pageWidthMM + 20) == Self.pageWidthMM + 20)
+
+        let overflowing = Self.document(document, firstSystemEndingAt: lineWidthPt + 1)
+        let widened = LayoutBridge.widenedPageWidthMM(
+            Self.pageWidthMM, fitting: overflowing, lineWidthMM: Self.pageWidthMM, sideMarginsMM: 0,
+        )
+        #expect(abs(widened - Double(lineWidthPt + 1) * Self.ptToMM) < 1e-9)
+    }
+
     @Test("margins count only in page mode")
     func marginsOnlyInPageMode() throws {
         let score = try Self.load("midi01")
@@ -260,6 +283,22 @@ struct PageMarginsTests {
         return options
     }
 
+    /// `document` with its first system moved and sized so its right edge is at `rightPt`, everything else kept.
+    private static func document(_ document: LayoutDocument, firstSystemEndingAt rightPt: CGFloat) -> LayoutDocument {
+        var systems = document.systems
+        let first = systems[0]
+        systems[0] = LayoutSystem(
+            origin: CGPoint(x: 0, y: first.origin.y), size: CGSize(width: rightPt, height: first.size.height),
+            measures: first.measures, staffOrigins: first.staffOrigins, staffAddresses: first.staffAddresses,
+            staffGeometries: first.staffGeometries, partLabels: first.partLabels, brackets: first.brackets,
+            spanners: first.spanners, sp: first.sp, invisibleSpanners: first.invisibleSpanners,
+            showsInvisibleElements: first.showsInvisibleElements,
+        )
+        return LayoutDocument(
+            size: document.size, systems: systems, metrics: document.metrics, titleFrame: document.titleFrame,
+        )
+    }
+
     /// `score` in `.page` mode on an A4 page with `margins`.
     private static func pages(_ score: Score, margins: LayoutBridge.PageMargins) -> LayoutPages {
         LayoutBridge.computePages(
@@ -299,11 +338,12 @@ struct PageMarginsTests {
     }
 
     /// Apple's sheet width, restated (`MacPageDeckMetrics.pageSize(forDocumentWidth:)` in folino): the page width, or
-    /// the widest system's right edge plus both side margins when that edge passes the printable width.
+    /// the widest system's right edge plus both side margins when that edge passes the printable width — by more than
+    /// a rounding error (`LayoutBridge.lineOverflowTolerancePt`), which `testVoltaDynamic` ends an ulp past.
     private static func paperWidthMM(_ document: LayoutDocument, _ margins: LayoutBridge.PageMargins) -> Double {
         let musicRightPt = document.systems.map { Double($0.origin.x + $0.size.width) }.max() ?? 0
         let printableWidthPt = Double(CGFloat((pageWidthMM - margins.leading - margins.trailing) * mmToPt))
-        guard musicRightPt > printableWidthPt else { return pageWidthMM }
+        guard musicRightPt > printableWidthPt + Double(LayoutBridge.lineOverflowTolerancePt) else { return pageWidthMM }
         return max(pageWidthMM, musicRightPt * ptToMM + margins.leading + margins.trailing)
     }
 

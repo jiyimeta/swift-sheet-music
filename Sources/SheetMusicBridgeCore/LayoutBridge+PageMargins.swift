@@ -38,6 +38,13 @@ extension LayoutBridge {
 }
 
 extension LayoutBridge {
+    /// How far past the line a system may end before it counts as overflowing it. A justified system ends at the line,
+    /// but floating-point layout can leave its right edge a rounding error past it — Windows' portable metrics put a
+    /// 180 mm vertical page's system an ulp out, which widened the page to 180.00000000000003 mm (2026-10-03). A
+    /// measure wider than the line overflows by whole points; this is far above rounding and far below anything
+    /// visible (0.0035 mm).
+    static let lineOverflowTolerancePt: CGFloat = 0.01
+
     /// `pageWidthMM`, or — when `document`'s widest system runs past `lineWidthMM`, the width it was engraved into,
     /// which a single measure wider than the line makes it do — that system's right edge plus `sideMarginsMM`. The
     /// right edge is `origin.x + size.width`, not `document.size.width`, which carries the engine's trailing whitespace
@@ -49,7 +56,7 @@ extension LayoutBridge {
     ) -> Double {
         let musicRightPt = document.systems.map { $0.origin.x + $0.size.width }.max() ?? 0
         let lineWidthPt = CGFloat(lineWidthMM * (72.0 / 25.4))
-        guard musicRightPt > lineWidthPt else { return pageWidthMM }
+        guard musicRightPt > lineWidthPt + lineOverflowTolerancePt else { return pageWidthMM }
         return max(pageWidthMM, Double(musicRightPt) * (25.4 / 72.0) + sideMarginsMM)
     }
 }
