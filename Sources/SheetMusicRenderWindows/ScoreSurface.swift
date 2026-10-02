@@ -317,12 +317,16 @@ public final class ScoreSurface {
     }
 
     private func drawOverlay(_ overlay: Overlay, frame: Frame, canvas: OpaquePointer) {
-        let page: Int
-        switch overlay {
-        case let .fillRect(index, _, _), let .strokeRect(index, _, _, _): page = index
-        }
-        guard frame.pageOrigins.indices.contains(page) else { return }
-        var walker = DrawCommandWalker(canvas: canvas, pxPerMM: frame.pxPerMM, offset: Self.pageOffsetPx(page, frame))
+        guard frame.pageOrigins.indices.contains(overlay.page) else { return }
+        var walker = DrawCommandWalker(
+            canvas: canvas, pxPerMM: frame.pxPerMM, offset: Self.pageOffsetPx(overlay.page, frame),
+        )
+        Self.paint(overlay, with: &walker)
+    }
+
+    /// One overlay through `walker`, already placed at its page. Shared with
+    /// `Direct2DPageRenderer.renderOverlayPixels`, so a test reads what the surface draws.
+    static func paint(_ overlay: Overlay, with walker: inout DrawCommandWalker) {
         switch overlay {
         case let .fillRect(_, rect, argb):
             walker.paint([.setColor(argb: argb), .fillRect(x: rect.x, y: rect.y, w: rect.width, h: rect.height)][...])
@@ -332,6 +336,8 @@ public final class ScoreSurface {
                 .moveTo(x: rect.x, y: rect.y), .lineTo(x: rect.maxX, y: rect.y), .lineTo(x: rect.maxX, y: rect.maxY),
                 .lineTo(x: rect.x, y: rect.maxY), .lineTo(x: rect.x, y: rect.y), .stroke(width: widthMM),
             ][...])
+        case let .fillPath(_, _, figures, argb):
+            walker.fill(figures: figures, argb: argb)
         }
     }
 

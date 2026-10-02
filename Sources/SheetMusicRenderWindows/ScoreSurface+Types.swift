@@ -31,6 +31,18 @@ extension ScoreSurface {
         case fillRect(page: Int, rect: PageRectMM, argb: UInt32)
         /// The rectangle's outline, `widthMM` wide and centered on its edges (at least 1.5 px on screen).
         case strokeRect(page: Int, rect: PageRectMM, widthMM: Double, argb: UInt32)
+        /// A filled shape — ink, a highlighter band — as closed figures in page `page`'s millimetres, filled together
+        /// with the nonzero rule: where the figures overlap the color is laid down once, so a translucent stroke does
+        /// not darken where it crosses itself. A figure needs three points; fewer draw nothing. `id` names the shape
+        /// across frames, and the same id must mean the same figures — which is what lets a later release keep the
+        /// built geometry between frames without changing this case.
+        case fillPath(page: Int, id: Int, figures: [[PagePointMM]], argb: UInt32)
+
+        var page: Int {
+            switch self {
+            case let .fillRect(page, _, _), let .strokeRect(page, _, _, _), let .fillPath(page, _, _, _): page
+            }
+        }
     }
 
     public enum DrawOutcome {

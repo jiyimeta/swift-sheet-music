@@ -37,6 +37,7 @@ struct OnscreenProbe {
         var scroll: [Double]
         var zoom: OnscreenSession.Zoom
         var cursor: OnscreenSession.Cursor
+        var ink: (with: [Double], without: [Double])
         var parity: [OnscreenSession.Parity]
         var deviceLoss: OnscreenSession.DeviceLoss
         var failures: [String]
@@ -61,11 +62,12 @@ struct OnscreenProbe {
         let scroll = session.scroll(frames: 600, stepPx: 20)
         let zoom = session.zoom()
         let cursor = session.cursor(seconds: 60)
+        let ink = session.ink(frames: 300)
         let parity = try [1.0, 1.5, 2.0].map { try session.parity(zoom: $0) }
         let deviceLoss = try session.deviceLoss()
         let results = Results(
             pageCount: session.pageCount, layoutMs: session.layoutMs, firstFrameMs: firstFrameMs, scroll: scroll,
-            zoom: zoom, cursor: cursor, parity: parity, deviceLoss: deviceLoss, failures: session.failures,
+            zoom: zoom, cursor: cursor, ink: ink, parity: parity, deviceLoss: deviceLoss, failures: session.failures,
         )
 
         let gates = gates(for: results)
@@ -92,6 +94,9 @@ struct OnscreenProbe {
             Gate.atMost("zoom settle re-raster <= 150 ms", results.zoom.settleMs, 150),
             Gate.atMost("cursor work p99 <= 8 ms", percentile(results.cursor.work, 0.99), 8),
             Gate.atMost("cursor CPU <= 25 % of one core", results.cursor.cpuPercent, 25),
+            // A host's ink layer is redrawn every frame as overlays (folino spec 2026-10-02-windows-ink-design.md §9):
+            // 300 strokes have to fit a frame alongside everything else.
+            Gate.atMost("ink 300 strokes work p99 <= 16 ms", percentile(results.ink.with, 0.99), 16),
             Gate.atMost("private bytes at 200 % <= +150 MB", results.zoom.deltaMB, 150),
             Gate(
                 name: "device loss recreated the device", value: "\(results.deviceLoss.recreated)",
@@ -135,6 +140,9 @@ struct OnscreenProbe {
         "deferredTiles": \(results.zoom.deferredTiles)},
           "cursor": {"p99": \(number(percentile(results.cursor.work, 0.99))), \
         "cpuPercentOfOneCore": \(number(results.cursor.cpuPercent))},
+          "ink": {"p50": \(number(percentile(results.ink.with, 0.5))), \
+        "p99": \(number(percentile(results.ink.with, 0.99))), \
+        "withoutP50": \(number(percentile(results.ink.without, 0.5)))},
           "parity": [\(parity.joined(separator: ", "))],
           "deviceLoss": {"recreated": \(results.deviceLoss.recreated), \
         "afterMean": \(number(results.deviceLoss.parity.mean))},

@@ -7,6 +7,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`LayoutBridge.PagePlacement`** and `LayoutBridge.pagePlacement(document:options:pageHeightMM:margins:)`: where
+  `encodePagesWithSpans` draws a document's points — each page's top in document points and the margins it is moved
+  in by — with `page(containingDocumentY:)`, `pageMM(fromDocumentX:y:page:)` and its inverse. A host placing its own
+  marks (ink, a playback cursor) on `.page`-mode pages reads the numbers the drawing used; `.vertical` and
+  `.horizontal` are one unlifted page without margins. The page cut and lift are shared with the drawing, so the two
+  cannot drift.
+- **Windows: `ScorePages.placement`**, that mapping for the pages a surface draws.
+- **Windows: `ScoreSurface.Overlay.fillPath(page:id:figures:argb:)`** and `PagePointMM` — closed figures in page
+  millimetres filled as one nonzero shape, so a translucent ink stroke is laid down once where it crosses itself.
+  Drawn straight through Direct2D, without a draw command per vertex. The on-screen probe measures 300 such strokes
+  per frame (`ink 300 strokes work p99 <= 16 ms`).
+
 ## [4.1.0] - 2026-10-02
 
 ### Added

@@ -87,6 +87,29 @@ public enum Direct2DPageRenderer {
         return pixels
     }
 
+    /// `overlays` painted the way `ScoreSurface` paints them, all on one white canvas at `pxPerMM` with page 0's
+    /// top-left at the origin, returned as pixels (BGRA premultiplied, top-down) — what a test of an overlay reads.
+    package static func renderOverlayPixels(
+        _ overlays: [ScoreSurface.Overlay], widthPx: Int, heightPx: Int, pxPerMM: Double,
+    ) throws -> [UInt8] {
+        var created: OpaquePointer?
+        try check(cd2d_create(&created, UInt32(widthPx), UInt32(heightPx)), "creating the canvas")
+        guard let canvas = created else { throw Failure(step: "creating the canvas", hresult: -1) }
+        defer { cd2d_destroy(canvas) }
+        for overlay in overlays {
+            var walker = DrawCommandWalker(canvas: canvas, pxPerMM: pxPerMM, offset: (0, 0))
+            ScoreSurface.paint(overlay, with: &walker)
+        }
+        var pixels = [UInt8](repeating: 0, count: widthPx * heightPx * 4)
+        try check(
+            pixels.withUnsafeMutableBufferPointer {
+                cd2d_copy_pixels(canvas, $0.baseAddress, UInt32(widthPx), UInt32(heightPx))
+            },
+            "reading the pixels",
+        )
+        return pixels
+    }
+
     static func check(_ hresult: Int32, _ step: String) throws {
         guard hresult == 0 else { throw Failure(step: step, hresult: hresult) }
     }

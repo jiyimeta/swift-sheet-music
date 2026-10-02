@@ -24,3 +24,15 @@ public struct PageRectMM: Sendable, Equatable {
         y + height
     }
 }
+
+/// A point on one page of a `ScorePages`, in that page's millimetres (`PageRectMM`'s space): the origin at the page's
+/// top-left, Y down. `LayoutBridge.PagePlacement` maps document points to it.
+public struct PagePointMM: Sendable, Equatable {
+    public var x: Double
+    public var y: Double
+
+    public init(x: Double, y: Double) {
+        self.x = x
+        self.y = y
+    }
+}

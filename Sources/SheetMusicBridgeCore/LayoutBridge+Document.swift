@@ -180,11 +180,10 @@ extension LayoutBridge {
             )], [built.spans])
 
         case .page:
-            let mmToPt = 72.0 / 25.4
-            // `.zero` subtracts nothing, so the edge-to-edge page is cut at `pageHeightMM` exactly as before.
-            let pageHeightPt = CGFloat(margins.printableHeightMM(pageHeightMM: pageHeightMM) * mmToPt)
-            let ranges = LayoutPaginator.paginate(
-                systems: document.systems, pageHeight: pageHeightPt, policy: optionsWire.breakPolicy,
+            // The cut and each page's lift are `pagePlacement`'s, so a host placing its own marks on these pages
+            // reads the same numbers the drawing used.
+            let ranges = pageRanges(
+                document: document, options: optionsWire, pageHeightMM: pageHeightMM, margins: margins,
             )
             // One width for every page, as Apple's sheets have: widened only when the music overflows the printable
             // width, and never for `.zero`.
@@ -192,15 +191,8 @@ extension LayoutBridge {
             var pages: [EncodablePage] = []
             var spans: [[SystemSpan]] = []
             for range in ranges {
-                // Lift each page's first system to y ≈ 0. The first page keeps
-                // y = 0 (so the title frame stays visible); later pages shift
-                // by the previous system's bottom so the gap above the new
-                // page's first system renders on the new page.
-                let pageTop: CGFloat = range.lowerBound == 0
-                    ? 0
-                    : document.systems[range.lowerBound - 1].origin.y
-                    + document.systems[range.lowerBound - 1].size.height
-                let sub = document.subdocument(systems: range, yOffset: -pageTop)
+                // Lift each page's first system to y ≈ 0 (`pageTop(of:in:)`).
+                let sub = document.subdocument(systems: range, yOffset: -pageTop(of: range, in: document))
                 // `subdocument` drops the title frame; only the first page (at
                 // y = 0) carries it, so re-attach it there. Without this the
                 // title block never renders in `.page` mode — the systems were
