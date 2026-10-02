@@ -219,6 +219,31 @@ struct RangeCopyTextTests {
         #expect(Self.named("outside", in: cut.score, measure: 0) != nil)
     }
 
+    /// Two same-kind texts on one beat of one staff — routine in an imported file, where "pizz." and "espress." can
+    /// share a beat. `SetStaffText`'s removal takes both at once and refuses when there is nothing left, so a removal
+    /// per text refused the whole cut composite; and a placement that cleared its beat per text kept only the last.
+    @Test("two texts on one beat are cut by one removal and pasted as two")
+    func sameBeatTextsCutAndPasteTogether() {
+        var source = Self.score(staffCount: 1, measureCount: 2)
+        Self.add(Self.text("pizz."), to: &source, beat: 1, staff: Self.top)
+        Self.add(Self.text("espress."), to: &source, beat: 1, staff: Self.top)
+        let range = VoiceElementRange(
+            start: Self.slot(staff: Self.top, beat: 0),
+            end: Self.slot(staff: Self.top, beat: 3),
+        )
+
+        let removals = source.rangeTextRemovals(for: range)
+        #expect(removals.count == 1)
+        let cut = ScoreEditSession(score: source)
+        #expect(cut.apply(.composite(removals + [.deleteRange(over: range)])))
+        #expect(Self.texts(in: cut.score, measure: 0).isEmpty)
+
+        let repeated = ScoreEditSession(score: source)
+        #expect(repeated.apply(.duplicateRange(over: range)))
+        #expect(Self.named("pizz.", in: repeated.score, measure: 1) != nil)
+        #expect(Self.named("espress.", in: repeated.score, measure: 1) != nil)
+    }
+
     @Test("pasting a payload without texts leaves the destination system lane unchanged")
     func textlessPasteLeavesSystemLaneUntouched() throws {
         let source = Self.score(staffCount: 1, measureCount: 1)

@@ -329,6 +329,10 @@ extension Score {
         guard let extent = RangeCopySource.Extent(range: range, in: self),
               let source = try? RangeCopySource(extent: extent, in: self, operation: "CopyRange")
         else { return [] }
+        // One removal per (anchor, kind): `SetStaffText`'s removal drops EVERY match on that beat and refuses when
+        // there is none, so a second removal for a second "pizz." on the same beat — routine in an imported file —
+        // would refuse, and with it the whole composite the host's Cut is built from.
+        var removed: Set<RangeTextRemovalKey> = []
         return source.texts.compactMap { copied in
             let candidateStaves: [StaffAddress]
             if let staff = copied.staff {
@@ -340,7 +344,9 @@ extension Score {
             }
             guard let anchor = candidateStaves.lazy.compactMap({ staff in
                 chordOrRest(at: copied.absoluteTick, on: staff)
-            }).first else { return nil }
+            }).first,
+                removed.insert(RangeTextRemovalKey(anchor: anchor, isSystemText: copied.text.isSystemText)).inserted
+            else { return nil }
             return .setStaffText(
                 anchor: anchor, text: nil, isSystemText: copied.text.isSystemText,
             )
@@ -376,4 +382,10 @@ extension Score {
         }
         return nil
     }
+}
+
+/// What `Score.rangeTextRemovals(for:)` dedupes on: one removal per anchor and kind.
+private struct RangeTextRemovalKey: Hashable {
+    let anchor: VoiceElementID
+    let isSystemText: Bool
 }

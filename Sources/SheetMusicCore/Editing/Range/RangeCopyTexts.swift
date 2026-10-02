@@ -66,11 +66,18 @@ struct PlaceCopiedTexts: EditCommand {
         }
 
         RehearsalMarkLane.pad(&score, ids: &ids)
+        // Every destination text a copied one replaces is cleared FIRST, and only then are the copies inserted. Done
+        // per placement, the second of two same-kind texts a copy carries on one beat (routine in an imported file)
+        // would clear the first one just inserted, and the paste would silently keep one of the two.
         for placement in placements {
             score.systemMeasures.updateValue(at: placement.measureIndex) { measure in
                 measure.elements.removeAll {
                     $0.position == placement.position && Self.matches($0, copied: placement.copied)
                 }
+            }
+        }
+        for placement in placements {
+            score.systemMeasures.updateValue(at: placement.measureIndex) { measure in
                 let positioned = PositionedSystemElement(
                     position: placement.position,
                     element: .staffText(placement.copied.text),
