@@ -150,9 +150,9 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         loaded?.derivation.timeline.totalSeconds ?? 0
     }
 
-    /// Like `currentTimeSeconds`, but continuous between frames — the Apple engine's `currentTimeSecondsContinuous`
-    /// (public there; internal here until a host asks for it).
-    var currentTimeSecondsContinuous: TimeInterval {
+    /// Like `currentTimeSeconds`, but continuous between frames — the Apple engine's `currentTimeSecondsContinuous`,
+    /// for a pitch bar or anything else that moves between chords.
+    public var currentTimeSecondsContinuous: TimeInterval {
         guard let derivation = loaded?.derivation else { return 0 }
         let tick = core.shared.withLock { $0.foldedReportedScoreTick }
         return derivation.timeline.seconds(atTick: derivation.unroll.notatedTick(fromUnrolled: Double(tick)))

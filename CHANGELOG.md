@@ -20,6 +20,8 @@ and this project adheres to
   millimetres filled as one nonzero shape, so a translucent ink stroke is laid down once where it crosses itself.
   Drawn straight through Direct2D, without a draw command per vertex. The on-screen probe measures 300 such strokes
   per frame (`ink 300 strokes work p99 <= 16 ms`).
+- **Windows: `WindowsPlaybackEngine.currentTimeSecondsContinuous`** is public, as on the Apple engine: the score time
+  continuous between frames, for a pitch bar.
 
 ## [4.1.0] - 2026-10-02
 
