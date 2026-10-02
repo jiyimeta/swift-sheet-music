@@ -45,7 +45,9 @@ struct MarkPlanningTests {
         #expect(!session.apply(.setTempo(anchor: Self.slot(0, 1), marking: Self.allegro)))
         #expect(!session.apply(.setStaffText(anchor: Self.slot(0, 1), text: nil, isSystemText: true)))
         #expect(session.apply(.setStaffText(anchor: Self.slot(0, 1), text: "rit.", isSystemText: true)))
-        #expect(!session.apply(.setStaffText(anchor: Self.slot(0, 1), text: " rit. ", isSystemText: true)))
+        #expect(!session.apply(.setStaffText(anchor: Self.slot(0, 1), text: "rit.", isSystemText: true)))
+        // A staff text is stored as given, so surrounding whitespace is a change, not a restatement.
+        #expect(session.apply(.setStaffText(anchor: Self.slot(0, 1), text: " rit. ", isSystemText: true)))
         #expect(!session.apply(.setDynamic(at: Self.slot(0, 1), subtype: nil)))
         #expect(session.apply(.setDynamic(at: Self.slot(0, 1), subtype: "p")))
         #expect(!session.apply(.setDynamic(at: Self.slot(0, 2), subtype: "p")))

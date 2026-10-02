@@ -10,12 +10,15 @@ import SheetMusicFoundation
 /// happened to carry it under. A fresh staff text is stamped with the anchor's staff, a fresh system text with
 /// no staff, which is how the encoder decides which `<Staff>` to write it into.
 ///
-/// The text is trimmed; empty after trimming is refused as `.emptyStaffText`. A rename mutates the mark in
-/// place, so its color, offsets and font overrides survive, and collapses any second match; the removal drops
-/// every match and is refused when there is none. The inverse carries the pre-image lane (`SetTempo`'s idiom).
+/// The text is stored as given — leading and trailing spaces and line breaks included, as MuseScore keeps them: a
+/// staff text ending in a line break reserves its empty last line, which is what a caret that has just broken
+/// the line has to see engraved. Only a text that is NOTHING but whitespace is refused, as `.emptyStaffText`. A
+/// rename mutates the mark in place, so its color, offsets and font overrides survive, and collapses any second
+/// match; the removal drops every match and is refused when there is none. The inverse carries the pre-image lane
+/// (`SetTempo`'s idiom).
 public struct SetStaffText: EditCommand {
     public let anchor: VoiceElementID
-    /// The text to write, trimmed by `apply`; `nil` removes. Ignored on the restore path.
+    /// The text to write, as given; `nil` removes. Ignored on the restore path.
     public let text: String?
     public let isSystemText: Bool
     let restoredLane: IdentifiedArray<SystemMeasure>?
@@ -51,11 +54,10 @@ public struct SetStaffText: EditCommand {
             throw Self.refused(.targetNotFound(anchor))
         }
         if let text {
-            let trimmed = text.trimmingWhitespaceAndNewlines()
-            guard !trimmed.isEmpty else { throw Self.refused(.emptyStaffText) }
+            guard !text.trimmingWhitespaceAndNewlines().isEmpty else { throw Self.refused(.emptyStaffText) }
             RehearsalMarkLane.pad(&score, ids: &ids)
             score.systemMeasures.updateValue(at: anchor.measureIndex) {
-                write(trimmed, at: position, into: &$0, ids: &ids)
+                write(text, at: position, into: &$0, ids: &ids)
             }
         } else {
             guard Self.current(at: anchor, isSystemText: isSystemText, in: score) != nil else {
@@ -107,12 +109,12 @@ public struct SetStaffText: EditCommand {
     }
 
     private func write(
-        _ trimmed: String, at position: MeasurePosition, into measure: inout SystemMeasure, ids: inout EIDAllocator,
+        _ text: String, at position: MeasurePosition, into measure: inout SystemMeasure, ids: inout EIDAllocator,
     ) {
         if let index = SystemLaneSlot.firstIndex(in: measure, at: position, where: matches),
            case var .staffText(existing) = measure.elements[index].element
         {
-            existing.text = trimmed
+            existing.text = text
             measure.elements.updateValue(at: index) { $0.element = .staffText(existing) }
             for duplicate in measure.elements.indices.reversed() where duplicate > index {
                 let element = measure.elements[duplicate]
@@ -125,7 +127,7 @@ public struct SetStaffText: EditCommand {
         measure.elements.insert(
             PositionedSystemElement(
                 position: position,
-                element: .staffText(StaffText(text: trimmed, isSystemText: isSystemText)),
+                element: .staffText(StaffText(text: text, isSystemText: isSystemText)),
                 originalStaff: isSystemText ? nil : anchor.staff,
             ),
             at: SystemLaneSlot.insertionIndex(in: measure, for: position),

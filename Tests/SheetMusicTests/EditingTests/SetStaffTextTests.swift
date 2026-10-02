@@ -19,16 +19,26 @@ struct SetStaffTextTests {
         }
     }
 
-    @Test("staff text is written on the anchor's staff, trimmed, at the anchor's beat")
+    /// Stored as given — spaces and line breaks at either end included, as MuseScore keeps them: a caret that has
+    /// just broken the line has to see the empty last line engraved.
+    @Test("staff text is written on the anchor's staff, as given, at the anchor's beat")
     func writesStaffText() throws {
         var score = EditingFixtures.parityFixture()
-        _ = try SetStaffText(anchor: Self.slot(Self.flute, 0, 2), text: "  pizz. ", isSystemText: false)
+        _ = try SetStaffText(anchor: Self.slot(Self.flute, 0, 2), text: "  pizz.\n", isSystemText: false)
             .apply(to: &score)
-        #expect(Self.texts(score, 0).map(\.0) == ["pizz."])
+        #expect(Self.texts(score, 0).map(\.0) == ["  pizz.\n"])
         #expect(Self.texts(score, 0).first?.1 == false)
         #expect(Self.texts(score, 0).first?.2 == Self.flute)
         #expect(score.systemMeasures[0].elements.first?.position == MeasurePosition(numerator: 1, denominator: 4))
-        #expect(SetStaffText.current(at: Self.slot(Self.flute, 0, 2), isSystemText: false, in: score) == "pizz.")
+        #expect(SetStaffText.current(at: Self.slot(Self.flute, 0, 2), isSystemText: false, in: score) == "  pizz.\n")
+    }
+
+    @Test("a staff text of nothing but whitespace is refused")
+    func refusesWhitespaceOnly() {
+        var score = EditingFixtures.parityFixture()
+        #expect(throws: SheetMusicError.self) {
+            try SetStaffText(anchor: Self.slot(Self.flute, 0, 2), text: " \n ", isSystemText: false).apply(to: &score)
+        }
     }
 
     @Test("system text carries no staff, and does not collide with staff text at the same beat")
