@@ -29,6 +29,14 @@ and this project adheres to
   `.oldDeviceUnavailable` — is the host's call. A handler rather than a new `Event` case, so an exhaustive `switch`
   over `Event` keeps compiling.
 
+### Fixed
+
+- **Windows: a preview started in the same moment as a pause is no longer cut.** FluidSynth's stopped player sends
+  All Sound Off on its channels in its next rendered block, and a preview note-on that arrived before that block went
+  with it — most of the time, since the next block is up to a device period away. The engine now holds a preview's
+  messages until that block is rendered and sends them right after, at most one 64-frame block (1.3 ms at 48 kHz)
+  late.
+
 ## [4.1.0] - 2026-10-02
 
 ### Added

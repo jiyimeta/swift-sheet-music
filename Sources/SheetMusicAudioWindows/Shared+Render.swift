@@ -34,6 +34,11 @@ extension Shared {
     ) {
         let chunk = PlaybackCore.chunkFrames
         session.score.write(frames: Int32(chunk), into: out)
+        if scoreStopUnrendered {
+            // A stopped player's All Sound Off went out at the start of that block; the previews can sound now, from
+            // the next one.
+            releaseHeldPreviews(to: session.score)
+        }
         // Rendered even while silent, so the click transport keeps in step with the score's (the Apple backend keeps
         // its muted metronome transport running for the same reason: an unmute lands on the beat).
         session.metronome.write(frames: Int32(chunk), into: scratch)
@@ -73,7 +78,7 @@ extension Shared {
             if let voice = previewPolicy.end(generation: deadline.generation) {
                 // A note-off, as Android ends its previews: FluidSynth needs none of the CC 120 workarounds the
                 // AUMIDISynth path has, and the release rings out on a stream that never parks.
-                session.score.noteOff(channel: Int32(voice.channel), pitch: Int32(voice.pitch))
+                sendPreviewNoteOff(channel: Int32(voice.channel), pitch: Int32(voice.pitch))
             }
         }
     }

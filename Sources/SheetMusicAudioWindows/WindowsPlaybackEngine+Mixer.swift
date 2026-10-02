@@ -88,16 +88,16 @@ extension WindowsPlaybackEngine {
         let isDrum = loaded.derivation.channelLayout.staffIsDrum[resolved.staffIndex] ?? false
         let pitch = UInt8(clamping: resolved.pitch)
         core.shared.withLock { shared in
-            guard let synth = shared.session?.score else { return }
+            guard shared.session != nil else { return }
             let plan = shared.previewPolicy.begin(
                 voice: PreviewVoice(channel: channel, pitch: pitch), velocity: velocity, isDrum: isDrum,
                 ringMilliseconds: Int(duration * 1000),
             )
             // The superseded note by its own note-off, as Android does: FluidSynth needs no CC 120 workaround.
             if let previous = plan.supersedes {
-                synth.noteOff(channel: Int32(previous.channel), pitch: Int32(previous.pitch))
+                shared.sendPreviewNoteOff(channel: Int32(previous.channel), pitch: Int32(previous.pitch))
             }
-            synth.noteOn(channel: Int32(channel), pitch: Int32(pitch), velocity: Int32(velocity))
+            shared.sendPreviewNoteOn(channel: Int32(channel), pitch: Int32(pitch), velocity: Int32(velocity))
             let ringFrames = Int64((Double(plan.ringMilliseconds) * shared.sampleRate / 1000).rounded())
             shared.previewDeadline = PreviewDeadline(
                 generation: plan.generation, frame: shared.renderedFrames + ringFrames,
@@ -112,15 +112,15 @@ extension WindowsPlaybackEngine {
     public func previewNoteOn(pitch: UInt8, onStaff flatStaffIndex: Int, velocity: UInt8 = 96, atTick tick: Int) {
         guard let channel = midiChannel(forStaff: flatStaffIndex, atTick: tick) else { return }
         core.shared.withLock { shared in
-            guard let synth = shared.session?.score else { return }
+            guard shared.session != nil else { return }
             if let tap = shared.previewPolicy.silence() {
-                synth.noteOff(channel: Int32(tap.channel), pitch: Int32(tap.pitch))
+                shared.sendPreviewNoteOff(channel: Int32(tap.channel), pitch: Int32(tap.pitch))
             }
             shared.previewDeadline = nil
             if let held = shared.sustainedPreview {
-                synth.noteOff(channel: Int32(held.channel), pitch: Int32(held.pitch))
+                shared.sendPreviewNoteOff(channel: Int32(held.channel), pitch: Int32(held.pitch))
             }
-            synth.noteOn(channel: Int32(channel), pitch: Int32(pitch), velocity: Int32(velocity))
+            shared.sendPreviewNoteOn(channel: Int32(channel), pitch: Int32(pitch), velocity: Int32(velocity))
             shared.sustainedPreview = SustainedPreview(staff: flatStaffIndex, channel: channel, pitch: pitch)
         }
     }
@@ -129,7 +129,7 @@ extension WindowsPlaybackEngine {
     public func previewNoteOff(pitch: UInt8) {
         core.shared.withLock { shared in
             guard let held = shared.sustainedPreview, held.pitch == pitch else { return }
-            shared.session?.score.noteOff(channel: Int32(held.channel), pitch: Int32(held.pitch))
+            shared.sendPreviewNoteOff(channel: Int32(held.channel), pitch: Int32(held.pitch))
             shared.sustainedPreview = nil
         }
     }
