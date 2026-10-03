@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-10-04
+
 ### Added
 
 - **`LayoutDocument.editingMeasureHit(at:)`** — the bar a point falls in, for the tap that lands inside a bar but on
