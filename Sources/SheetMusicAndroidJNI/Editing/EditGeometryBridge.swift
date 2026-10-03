@@ -20,6 +20,8 @@ import SheetMusicLayout
 // Editing-geometry JNI bridge: the last three entry points spec §5.3 names — a tap-to-item hit-test, an
 // item's caret rect, and a selection-tinted re-encode of the already-cached draw program. All three read
 // `LayoutDocumentCache`, never write it; only `nativeComputeLayout` (`JNISymbols.swift`) populates the cache.
+// `nativeEditingMeasureHitTest`, added in 4.2.0, is the fourth: the bar a tap falls in, for a tap the first answered
+// nothing for.
 //
 // ## Addressing: full-score in, filtered-document out and back in
 //
@@ -87,6 +89,30 @@ public func nativeEditingHitTest(
     }
 
     return ScoreItemIDCodec.encode(fullItem)
+}
+
+/// JNI entry point exposed via swift-java for the Kotlin `SheetMusicJNI.nativeEditingMeasureHitTest(...)` call site:
+/// the bar a tap falls in (`LayoutDocument.editingMeasureHit(at:)`), for a tap `nativeEditingHitTest` answered
+/// nothing for. Ask that one first. This one answers for every point inside a bar, so asking it first would select a
+/// whole bar for every near miss of a note.
+///
+/// Re-addressed like `nativeEditingHitTest`, and for the same reason it takes no layout options: the staff the cached
+/// (filtered) document names is moved to its full-score address with `Score.unfilterStaffAddress` and the cache
+/// entry's own hidden set. Measure indices need no translation, because hiding a staff renumbers staves and never
+/// bars.
+///
+/// Empty `Data` when the handle is unknown, nothing is cached, or the point is in no bar: between staves, above or
+/// below the music, past a system's last bar. On a hit, an `EditMeasureHitCodec` payload.
+public func nativeEditingMeasureHitTest(scoreHandle: Int64, xMm: Double, yMm: Double) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle),
+          let entry = LayoutDocumentCache.entry(for: scoreHandle)
+    else { return Data() }
+    let mmToPt = 72.0 / 25.4
+    let point = CGPoint(x: CGFloat(xMm * mmToPt), y: CGFloat(yMm * mmToPt))
+    guard let hit = entry.document.editingMeasureHit(at: point),
+          let staff = score.unfilterStaffAddress(hit.staff, hidingStaves: entry.hiddenStaves)
+    else { return Data() }
+    return EditMeasureHitCodec.encode(staff: staff, measures: hit.measures)
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin `SheetMusicJNI.nativeEditingCaretFrame(...)` call

@@ -550,6 +550,29 @@ object SheetMusicJNI {
     }
 
     /**
+     * The bar a tap at ([xMm], [yMm], document/mm) falls in, for a tap [nativeEditingHitTest] answered nothing for.
+     * Ask that one first: this one answers for every point inside a bar. The staff is re-addressed against the
+     * full (unfiltered) score through the cached layout's own hidden staves, like [nativeEditingHitTest].
+     *
+     * Returns an `EditMeasureHitWire` payload (decode with the generated `EditMeasureHitCodec`;
+     * `firstMeasureIndex..lastMeasureIndex` is a collapsed multi-measure rest's whole run, or one bar), or an empty
+     * array when the handle is unknown, no layout is cached, or the point is in no bar.
+     */
+    fun nativeEditingMeasureHitTest(
+        scoreHandle: Long,
+        xMm: Double,
+        yMm: Double,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEditingMeasureHitTest(
+            scoreHandle,
+            xMm,
+            yMm,
+            arena,
+        ).toByteArray()
+    }
+
+    /**
      * Where to draw the authoring badges that mark measures carrying an
      * explicit `<LayoutBreak>`.
      *

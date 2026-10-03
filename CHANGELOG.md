@@ -13,6 +13,10 @@ and this project adheres to
   none of its elements: a staff owns its own lines ±1 staff space, bars are half-open in x, and a collapsed
   multi-measure rest answers its whole run (`EditingMeasureHit.measures`). Ask `editingHitTest` first; this one answers
   for every point inside a bar. Moved from folino so Apple and Android editors run one rule.
+- **`nativeEditingMeasureHitTest`** (Android) and **`EditMeasureHitCodec` / `EditMeasureHitWire`**
+  (`SheetMusicEditWire`) — `LayoutDocument.editingMeasureHit(at:)` across the JNI boundary, full-score addressed
+  through the cached layout's hidden staves like `nativeEditingHitTest`. The Kotlin model and codec
+  (`EditMeasureHit`, `EditMeasureHitCodec`) are generated beside `EditCaretFrame`.
 - **`nativeResolveFullScoreAnchor` / `nativeFullScoreAnchorReferencePoint`** (Android) — the anchor primitives in
   full-score addressing, for a host that stores anchors and lets the reader hide staves. A layout with staves hidden
   numbers its staves after the filter, so the existing pair stamps a captured stroke with the filtered staff and draws

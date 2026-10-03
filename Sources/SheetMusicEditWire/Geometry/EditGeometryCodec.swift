@@ -98,3 +98,39 @@ public struct EditCaretFrameWire: Equatable {
     public var widthMm: Double
     public var heightMm: Double
 }
+
+/// Codec for the bar a point falls in, which `nativeEditingMeasureHitTest` answers. The staff is full-score
+/// addressed, like every editing answer that crosses the JNI boundary. `firstMeasureIndex ... lastMeasureIndex` is
+/// the run a collapsed multi-measure rest stands for; the two are equal for an ordinary bar.
+///
+/// Wire layout (Wirelet's TLV scheme; see `EditIntentCodec.swift`'s doc comment for the tag-and-varint format this
+/// describes):
+/// ```
+/// varint(payloadLength) + payload, where payload is:
+/// tag 1: partIndex          i32, varint
+/// tag 2: staffIndexInPart   i32, varint
+/// tag 3: firstMeasureIndex  i32, varint
+/// tag 4: lastMeasureIndex   i32, varint
+/// ```
+public enum EditMeasureHitCodec {
+    public static func encode(staff: StaffAddress, measures: ClosedRange<Int>) -> Data {
+        EditMeasureHitWire(
+            partIndex: Int32(staff.partIndex),
+            staffIndexInPart: Int32(staff.staffIndexInPart),
+            firstMeasureIndex: Int32(measures.lowerBound),
+            lastMeasureIndex: Int32(measures.upperBound),
+        ).encodeToData()
+    }
+
+    public static func decode(_ data: Data) throws -> EditMeasureHitWire {
+        try EditMeasureHitWire(decoding: data)
+    }
+}
+
+@WireFormat
+public struct EditMeasureHitWire: Equatable {
+    public var partIndex: Int32
+    public var staffIndexInPart: Int32
+    public var firstMeasureIndex: Int32
+    public var lastMeasureIndex: Int32
+}
