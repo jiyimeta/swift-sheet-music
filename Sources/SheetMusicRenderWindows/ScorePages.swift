@@ -14,9 +14,8 @@ public struct ScorePages: Sendable {
     /// top margins.
     public let document: LayoutDocument
     /// The score the layout was built from: clef overrides and transposition applied, hidden staves dropped. Its
-    /// addresses are the document's. Never the written-pitch view: `ScorePageOptions` leaves
-    /// `LayoutOptionsWire.writtenPitch` off, because a Windows host draws written pitch by transforming the score it
-    /// passes in.
+    /// addresses are the document's. Never the written-pitch view: `ScorePageOptions` leaves the bridge's written-pitch
+    /// step off, because a Windows host draws written pitch by transforming the score it passes in.
     public let filteredScore: Score
 
     /// `spans[i]` belongs to `pages[i]`.
