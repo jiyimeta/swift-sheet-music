@@ -30,6 +30,9 @@ and this project adheres to
   off by default, so every existing host keeps concert pitch, and it is opt-in because a host that transforms the score
   itself before handing it over (a Windows host feeding `ScorePages`) would otherwise move a transposing part twice.
   Appended as wire tag 19 with a default; the generated Kotlin `LayoutOptionsWire` gains `writtenPitch: UByte = 0u`.
+  The flag lives on `LayoutOptionsWire` only (Android, and direct `LayoutBridge` / `computePages` callers): the
+  browser's `LayoutOptions` and Windows' `ScorePageOptions` do not expose it. `LayoutOptionsWire` also gains a public
+  `drawsWrittenPitch` accessor.
 - **Caret geometry for engraved text and harmony names.** `FontMetricsProvider.caretOffsets(text:font:)`
   returns single-line UTF-16 boundary positions; `characterIndex(forOffset:text:font:)` chooses a legal
   grapheme boundary. `selectionOffsets(text:font:range:)` returns visual selection fragments, including

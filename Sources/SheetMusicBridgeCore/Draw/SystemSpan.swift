@@ -73,7 +73,8 @@ public struct LayoutPages: Sendable {
     public var pages: [EncodablePage]
     /// `spans[i]` belongs to `pages[i]`: in command order, covering its commands exactly.
     public var spans: [[SystemSpan]]
-    /// The score the layout was built from, with clef overrides, transposition and hidden staves applied.
+    /// The score the layout was built from: clef overrides, the written-pitch view when the options asked for it,
+    /// the transpose, then hidden staves dropped.
     public var filteredScore: Score
 }
 

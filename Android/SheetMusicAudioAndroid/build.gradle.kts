@@ -146,17 +146,18 @@ wirelet {
             modelPackage.set("io.github.jiyimeta.sheetmusic.audio.model")
             stripNameSuffix.set("Wire")
         }
-        // The two payloads a host exchanges with the editing-geometry JNI entry points:
-        // `SelectionTintWire` (what `nativeEncodeDrawProgram` tints with) and
-        // `EditCaretFrameWire` (what `nativeEditingCaretFrame` answers). A Kotlin host cannot
-        // reach either without a codec, and hand-writing one would put a second spelling of a
+        // The payloads a host exchanges with the editing-geometry JNI entry points:
+        // `SelectionTintWire` (what `nativeEncodeDrawProgram` tints with),
+        // `EditCaretFrameWire` (what `nativeEditingCaretFrame` answers) and `EditMeasureHitWire`
+        // (the measure-hit answer). A Kotlin host cannot
+        // reach any of them without a codec, and hand-writing one would put a second spelling of a
         // frozen schema in a second language — the thing one shared wire product exists to
         // prevent. They sit in their own directory rather than beside the edit intent because a
         // schemaPaths entry must resolve to exactly one directory and the intent vocabulary must
         // NOT be emitted here (see the note above).
         //
-        // emitModels IS set, unlike the two source sets above: `SelectionTint` and
-        // `EditCaretFrame` have no hand-written Kotlin counterparts under audio/model/, so the
+        // emitModels IS set, unlike the two source sets above: `SelectionTint`, `EditCaretFrame` and
+        // `EditMeasureHit` have no hand-written Kotlin counterparts under audio/model/, so the
         // generator has to supply them. `SelectionTint.items` resolves to the hand-written
         // `ScoreItemID` in the same modelPackage.
         register("editGeometry") {

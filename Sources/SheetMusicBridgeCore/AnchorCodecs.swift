@@ -7,8 +7,9 @@ import Wirelet
 // — no ink, no bake — so ssm stays Folino-agnostic. `@WireFormat` generates the
 // matching Kotlin codecs via the wirelet Gradle task.
 
-/// Output of `nativeResolveAnchor`: a musical position resolved from a
-/// document-mm point, in the addressing the verb that produced it names: the cached layout's for
+/// Output of both resolve verbs (`nativeResolveAnchor`, `nativeResolveFullScoreAnchor`):
+/// a musical position resolved from a document-mm point, in the addressing the verb that produced it names:
+/// the cached layout's for
 /// `nativeResolveAnchor`, the full score's for `nativeResolveFullScoreAnchor`. The six
 /// fields map 1:1 to Domain's `MusicalAnchor` and to `SheetMusicLayout`'s
 /// `ResolvedAnchor`. `dxSp` / `verticalOffsetSp` are unit-neutral sp-multiples
@@ -35,7 +36,8 @@ public struct ResolvedAnchorWire: Equatable {
     }
 }
 
-/// One element of `nativeAnchorReferencePoint`'s input array: the identity part
+/// One element of the input array of `nativeAnchorReferencePoint` (cached layout's addressing) and
+/// `nativeFullScoreAnchorReferencePoint` (full-score addressing): the identity part
 /// of a stored anchor (no sp offsets — the caller composes those). A strict
 /// subset of `ResolvedAnchorWire`'s identity fields.
 @WireFormat
@@ -53,7 +55,8 @@ public struct AnchorIdentityWire: Equatable {
     }
 }
 
-/// One element of `nativeAnchorReferencePoint`'s output array: the anchor's
+/// One element of the output array of `nativeAnchorReferencePoint` and
+/// `nativeFullScoreAnchorReferencePoint`: the anchor's
 /// document reference point + staff-space, in millimetres (both are lengths, so
 /// converted pt→mm at the bridge). `spMm > 0` when resolved; `spMm == 0` is the
 /// sentinel for an anchor that did not resolve in this layout (out-of-range

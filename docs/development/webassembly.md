@@ -47,7 +47,8 @@ points, `editSessionState`, and the mixer surface, none of which Android needs â
 its host authors intents in a second Swift image and reads its own session
 directly. Android still has `nativeAnchorReferencePoint` / `nativeResolveAnchor` and the full-score pair
 `nativeFullScoreAnchorReferencePoint` / `nativeResolveFullScoreAnchor` for freehand-ink anchoring in a specific
-integration.
+integration. The written-pitch view (`LayoutOptionsWire.writtenPitch`) is likewise Android-side only: the browser's
+`LayoutOptions` does not expose it.
 
 ## Glyph centring, and why a green parity run could not see it
 

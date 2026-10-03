@@ -94,10 +94,9 @@
                 let ids = Self.identities([
                     StaffAddress(partIndex: 0, staffIndexInPart: 0), StaffAddress(partIndex: 0, staffIndexInPart: 1),
                 ])
-                #expect(
-                    nativeFullScoreAnchorReferencePoint(scoreHandle: handle, anchorsBytes: ids)
-                        == nativeAnchorReferencePoint(scoreHandle: handle, anchorsBytes: ids),
-                )
+                let fullScoreRefs = nativeFullScoreAnchorReferencePoint(scoreHandle: handle, anchorsBytes: ids)
+                #expect(!fullScoreRefs.isEmpty)
+                #expect(fullScoreRefs == nativeAnchorReferencePoint(scoreHandle: handle, anchorsBytes: ids))
             }
 
             /// Staff 1 is the only staff the filtered layout has, numbered 0 there. A stroke drawn on it has to be

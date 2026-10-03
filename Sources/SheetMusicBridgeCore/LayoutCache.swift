@@ -22,9 +22,9 @@ public enum LayoutDocumentCache {
         public let document: LayoutDocument
         /// The score the layout was built from: clef overrides, the written-pitch view when the options asked for it,
         /// the transpose, then hidden staves dropped. Its addresses match the document's keys, so cursor `.beat`
-        /// interpolation snaps onto the surviving visible columns. Read it for geometry only. Never encode or play
-        /// it: with the written view on, a transposing part's keys and tpcs are already shifted, and an encoder
-        /// applies the part's offset again.
+        /// interpolation snaps onto the surviving visible columns. Read it for geometry only, and never hand it to an
+        /// audio or playback encoder (display encoders such as the sticky header want it): with the written view on,
+        /// a transposing part's keys and tpcs are already shifted, and a playback encoder applies the offset again.
         public let filteredScore: Score
         /// The hidden-staff set used for this layout; drives the full→filtered cursor translation.
         public let hiddenStaves: Set<StaffAddress>

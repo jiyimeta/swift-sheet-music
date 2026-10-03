@@ -98,8 +98,9 @@
             #expect(tags == expected)
         }
 
-        /// A host built before `writtenPitch` existed sends no tag 19, and its default is concert pitch, which is what
-        /// every earlier release drew.
+        /// `writtenPitch` defaults to 0 (concert pitch, what every earlier release drew) when a host constructs options
+        /// without it. Codec and engine ship in lockstep, so no blob lacking tag 19 reaches this decoder (the wirelet
+        /// decoder throws `unknownTag` for a missing non-optional field whatever its default).
         @Test func writtenPitchDefaultsToConcert() throws {
             let decoded = try LayoutOptionsCodec.decode(LayoutOptionsWire.verticalDefault.encodeToData())
             #expect(decoded.writtenPitch == 0)
