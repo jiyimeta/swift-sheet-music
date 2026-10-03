@@ -26,7 +26,7 @@ public struct PageRectMM: Sendable, Equatable {
 }
 
 /// A point on one page of a `ScorePages`, in that page's millimetres (`PageRectMM`'s space): the origin at the page's
-/// top-left, Y down. `LayoutBridge.PagePlacement` maps document points to it.
+/// top-left, Y down. `ScorePagePlacement` maps document points to it.
 public struct PagePointMM: Sendable, Equatable {
     public var x: Double
     public var y: Double

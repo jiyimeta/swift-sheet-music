@@ -63,6 +63,32 @@ struct ScorePagesTests {
         }
     }
 
+    @Test("the placement is the bridge's, through product types, and maps a point onto its page and back")
+    func placementIsTheBridges() throws {
+        try FontMetrics.$scopedProvider.withValue(StubFontMetricsProvider()) {
+            let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
+            let options = ScorePageOptions(mode: .page, pageMarginsMM: .uniform(12.7))
+            let pages = ScorePages.compute(score: score, pageWidthMM: 210, pageHeightMM: 297, options: options)
+            let bridge = LayoutBridge.pagePlacement(
+                document: pages.document, options: options.wire(), pageHeightMM: 297,
+                margins: LayoutBridge.PageMargins(top: 12.7, leading: 12.7, bottom: 12.7, trailing: 12.7),
+            )
+            let placement = pages.placement
+            #expect(placement.pageTopsPt == bridge.pageTopsPt)
+            #expect(placement.pageCount == pages.pageCount)
+            #expect(placement.contentOffsetMM == PagePointMM(x: 12.7, y: 12.7))
+            // A point on the last page: past its top, so a placement that ignored the lift would put it elsewhere.
+            let lastPage = try #require(placement.pageCount > 1 ? placement.pageCount - 1 : nil)
+            let documentY = placement.pageTopsPt[lastPage] + 20
+            #expect(placement.page(containingDocumentY: documentY) == lastPage)
+            let onPage = placement.pageMM(fromDocumentX: 30, y: documentY, page: lastPage)
+            let expected = bridge.pageMM(fromDocumentX: 30, y: documentY, page: lastPage)
+            #expect(onPage == PagePointMM(x: expected.x, y: expected.y))
+            let back = placement.documentPoint(fromPage: lastPage, onPage)
+            #expect(abs(back.x - 30) < 1e-9 && abs(back.y - documentY) < 1e-9)
+        }
+    }
+
     @Test("page margins count only in page mode")
     func marginsOnlyInPageMode() throws {
         try FontMetrics.$scopedProvider.withValue(StubFontMetricsProvider()) {

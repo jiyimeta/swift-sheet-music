@@ -46,7 +46,8 @@ and this project adheres to
   marks (ink, a playback cursor) on `.page`-mode pages reads the numbers the drawing used; `.vertical` and
   `.horizontal` are one unlifted page without margins. The page cut and lift are shared with the drawing, so the two
   cannot drift.
-- **Windows: `ScorePages.placement`**, that mapping for the pages a surface draws.
+- **Windows: `ScorePages.placement`**, a `ScorePagePlacement`: that mapping for the pages a surface draws, in the
+  module's own types (`PagePointMM`), since `LayoutBridge` is not a product.
 - **Windows: `ScoreSurface.Overlay.fillPath(page:id:figures:argb:)`** and `PagePointMM` — closed figures in page
   millimetres filled as one nonzero shape, so a translucent ink stroke is laid down once where it crosses itself.
   Drawn straight through Direct2D, without a draw command per vertex. The on-screen probe measures 300 such strokes
