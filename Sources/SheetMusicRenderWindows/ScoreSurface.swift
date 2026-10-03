@@ -26,6 +26,8 @@ public final class ScoreSurface {
     private(set) var pages: [EncodablePage] = []
     private var spans: [[SystemSpan]] = []
     private(set) var tiles = TileLRU<OpaquePointer>(capacityBytes: ScoreSurface.cacheBytes)
+    /// The `fillPath` overlays' shapes, by overlay id.
+    var shapes = OverlayShapeCache()
     /// The scale the tiles on screen were rasterized at, while a gesture (and its settle delay) runs.
     private var settledPxPerMM: Double?
     private var lastGestureFrame: ContinuousClock.Instant?
@@ -53,6 +55,7 @@ public final class ScoreSurface {
 
     deinit {
         releaseAllTiles()
+        shapes.releaseAll()
         if let surface { cd2d_surface_destroy(surface) }
         cd2d_resources_destroy(resources)
     }
@@ -234,6 +237,7 @@ public final class ScoreSurface {
                 drawOverlay(overlay, frame: frame, canvas: canvas)
             }
         }
+        shapes.endFrame()
         let presenting = clock.now
         lastDrawTiming.workMs = Self.milliseconds(presenting - now)
         hresult = cd2d_frame_present(surface)
@@ -314,25 +318,6 @@ public final class ScoreSurface {
         guard tiles.fits(next.rect.width * next.rect.height * 4, keeping: keep) else { return nil }
         lastDrawTiming.prefetchedTiles += 1
         return rasterize(next.key, grid: next.page.grid, keep: keep)
-    }
-
-    private func drawOverlay(_ overlay: Overlay, frame: Frame, canvas: OpaquePointer) {
-        let page: Int
-        switch overlay {
-        case let .fillRect(index, _, _), let .strokeRect(index, _, _, _): page = index
-        }
-        guard frame.pageOrigins.indices.contains(page) else { return }
-        var walker = DrawCommandWalker(canvas: canvas, pxPerMM: frame.pxPerMM, offset: Self.pageOffsetPx(page, frame))
-        switch overlay {
-        case let .fillRect(_, rect, argb):
-            walker.paint([.setColor(argb: argb), .fillRect(x: rect.x, y: rect.y, w: rect.width, h: rect.height)][...])
-        case let .strokeRect(_, rect, widthMM, argb):
-            walker.paint([
-                .setColor(argb: argb),
-                .moveTo(x: rect.x, y: rect.y), .lineTo(x: rect.maxX, y: rect.y), .lineTo(x: rect.maxX, y: rect.maxY),
-                .lineTo(x: rect.x, y: rect.maxY), .lineTo(x: rect.x, y: rect.y), .stroke(width: widthMM),
-            ][...])
-        }
     }
 
     /// After a failed draw: on device loss, a new device and swap chain, and every tile dropped.

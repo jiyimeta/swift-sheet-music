@@ -568,8 +568,10 @@ the process: SwiftPM's generated accessor calls `fatalError`.
    `setLoop(from:to:)`, `setRate(_:)`, the mixer — from one thread. The
    score plays through the resolver's `defaultGMSoundfontURL`, one
    General MIDI `.sf2`. `onEvent` (the end of the score, the output
-   device lost and recovered) and the level-monitoring handler run on
-   the audio thread: hop to the UI before touching anything.
+   device lost and recovered), `onOutputDeviceRemoved` (the device
+   went away rather than a new default taking over — where the Apple
+   hosts pause) and the level-monitoring handler run on the audio
+   thread: hop to the UI before touching anything.
 
 ### How releases are verified
 
@@ -580,8 +582,8 @@ Windows machine (x64, 2-core Core i5):
 - renderer parity against the Mac: the 30 sample scores drawn by
   Direct2D and by the Mac's CoreGraphics walk of the same pages;
 - scripted playback checks (`windows-playback-probe`): drift against
-  the rendered audio, seeks, loops, rate, count-in, mixer read-backs
-  and a forced device loss;
+  the rendered audio, seeks, loops, rate, count-in, mixer read-backs,
+  a preview right after a pause, and a forced device loss and removal;
 - the on-screen frame budget (`windows-render-probe --onscreen`): first
   frame, scroll, zoom, a 60 fps playback cursor, memory at 200 %, the
   tiled frame against an untiled render, and a forced device loss.

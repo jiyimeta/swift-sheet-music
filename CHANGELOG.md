@@ -16,6 +16,41 @@ and this project adheres to
   default to cumulative grapheme advances and a conservative selection span.
   `HarmonyRendering.caretOffsets(for:metrics:)` follows rendered text and accidental runs,
   including generated root/bass/parenthesis placement, without adding indices outside `Harmony.name`.
+- **`LayoutBridge.PagePlacement`** and `LayoutBridge.pagePlacement(document:options:pageHeightMM:margins:)`: where
+  `encodePagesWithSpans` draws a document's points — each page's top in document points and the margins it is moved
+  in by — with `page(containingDocumentY:)`, `pageMM(fromDocumentX:y:page:)` and its inverse. A host placing its own
+  marks (ink, a playback cursor) on `.page`-mode pages reads the numbers the drawing used; `.vertical` and
+  `.horizontal` are one unlifted page without margins. The page cut and lift are shared with the drawing, so the two
+  cannot drift.
+- **Windows: `ScorePages.placement`**, that mapping for the pages a surface draws.
+- **Windows: `ScoreSurface.Overlay.fillPath(page:id:figures:argb:)`** and `PagePointMM` — closed figures in page
+  millimetres filled as one nonzero shape, so a translucent ink stroke is laid down once where it crosses itself.
+  Drawn straight through Direct2D, without a draw command per vertex. The on-screen probe measures 300 such strokes
+  per frame (`ink 300 strokes work p99 <= 16 ms`).
+- **Windows: `WindowsPlaybackEngine.currentTimeSecondsContinuous`** is public, as on the Apple engine: the score time
+  continuous between frames, for a pitch bar.
+- **Windows: `WindowsPlaybackEngine.onOutputDeviceRemoved`** — called when the device playback was going through
+  went away (unplugged, disabled, removed), as opposed to a new default taking over while it stays, which
+  `deviceLost` / `deviceRecovered` report alike. Arrives between the two, at most once per loss, usually before the
+  stream reopens on the new default; the engine itself plays on, so pausing — what the Apple hosts do on
+  `.oldDeviceUnavailable` — is the host's call. A handler rather than a new `Event` case, so an exhaustive `switch`
+  over `Event` keeps compiling.
+
+### Fixed
+
+- **Windows: a preview started in the same moment as a pause is no longer cut.** FluidSynth's stopped player sends
+  All Sound Off on its channels in its next rendered block, and a preview note-on that arrived before that block went
+  with it — most of the time, since the next block is up to a device period away. The engine now holds a preview's
+  messages until that block is rendered and sends them right after, at most one 64-frame block (1.3 ms at 48 kHz)
+  late.
+- **A `.vertical` page is as wide as its widest system.** It was cut at the requested width, so a measure wider than
+  the line — which the engine gives a system of its own — ran off the page and was clipped by a renderer that clips
+  at the page (Windows, Android). The page now widens to that system's right edge, the rule `.page` sheets with
+  margins already follow; music that fits keeps the requested width, byte for byte.
+- **A page whose music fits its line is no longer a rounding error wider.** A justified system can end an ulp past
+  the line in floating point — on Windows' portable metrics a 180 mm page came out 180.00000000000003 mm, and on the
+  Mac `.page` with margins widened `testVoltaDynamic`'s sheets to 210.00000000000006 mm. Only an overflow of more than
+  0.01 pt now widens a page, in both modes.
 
 ## [4.1.0] - 2026-10-02
 

@@ -146,12 +146,36 @@ int32_t cwasapi_wait(cwasapi_stream *stream, uint32_t timeout_ms) {
 }
 
 static volatile LONG cwasapi_fault_armed = 0;
+static volatile LONG cwasapi_fault_removed = 0;
 
-void cwasapi_arm_fault(void) {
+void cwasapi_arm_fault(int32_t device_removed) {
     char value[32];
     DWORD length = GetEnvironmentVariableA("SSM_WASAPI_FAIL_ONCE", value, sizeof value);
     if (length > 0 && length < sizeof value && lstrcmpiA(value, "invalidated") == 0) {
+        InterlockedExchange(&cwasapi_fault_removed, device_removed != 0 ? 1 : 0);
         InterlockedExchange(&cwasapi_fault_armed, 1);
+    }
+}
+
+cwasapi_endpoint *cwasapi_stream_endpoint(cwasapi_stream *stream) {
+    IMMDevice_AddRef(stream->device);
+    return (cwasapi_endpoint *)stream->device;
+}
+
+int32_t cwasapi_endpoint_is_active(cwasapi_endpoint *endpoint) {
+    if (InterlockedExchange(&cwasapi_fault_removed, 0) != 0) {
+        return 0;
+    }
+    DWORD state = 0;
+    if (FAILED(IMMDevice_GetState((IMMDevice *)endpoint, &state))) {
+        return 0;
+    }
+    return state == DEVICE_STATE_ACTIVE ? 1 : 0;
+}
+
+void cwasapi_endpoint_release(cwasapi_endpoint *endpoint) {
+    if (endpoint != NULL) {
+        IMMDevice_Release((IMMDevice *)endpoint);
     }
 }
 

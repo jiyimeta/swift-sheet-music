@@ -39,10 +39,23 @@ int32_t cwasapi_is_no_device(int32_t hresult);
 /// tells a change that concerns the stream from one that does not. Call on the stream's own thread.
 int32_t cwasapi_is_current_default(cwasapi_stream *stream);
 
+/// The endpoint a stream plays through (an `IMMDevice`), held by its own reference so it outlives `cwasapi_close`: how
+/// the stream asks, after closing on a change, whether its device went away or only stopped being the default.
+typedef struct cwasapi_endpoint cwasapi_endpoint;
+/// `stream`'s endpoint, with a reference for the caller (release with `cwasapi_endpoint_release`). Never NULL for an
+/// open stream.
+cwasapi_endpoint *cwasapi_stream_endpoint(cwasapi_stream *stream);
+/// Whether `endpoint` is still present and enabled (DEVICE_STATE_ACTIVE): 1 or 0. 0 when it was unplugged, disabled
+/// or removed — and when its state cannot be read.
+int32_t cwasapi_endpoint_is_active(cwasapi_endpoint *endpoint);
+void cwasapi_endpoint_release(cwasapi_endpoint *endpoint);
+
 /// Fault injection for probes: with the environment variable SSM_WASAPI_FAIL_ONCE set to `invalidated` when the
 /// process starts, the first `cwasapi_writable_frames` after `cwasapi_arm_fault` returns
-/// AUDCLNT_E_DEVICE_INVALIDATED once. Does nothing without the variable.
-void cwasapi_arm_fault(void);
+/// AUDCLNT_E_DEVICE_INVALIDATED once. With `device_removed` nonzero, the next `cwasapi_endpoint_is_active` also
+/// answers 0 once, as for an unplugged device; with 0 the device stays (a default change, a driver reset). Does
+/// nothing without the variable.
+void cwasapi_arm_fault(int32_t device_removed);
 
 /// Watches the endpoints for a change of the default render device or of a device's state, through an
 /// `IMMNotificationClient`. The callbacks arrive on a system thread; they only set a flag and signal an event.

@@ -55,6 +55,24 @@ final class PlaybackCore: @unchecked Sendable {
         let handler = shared.withLock { $0.onEvent }
         handler?(event)
     }
+
+    /// Calls the host's `onOutputDeviceRemoved`, on the calling thread.
+    func emitDeviceRemoved() {
+        let handler = shared.withLock { $0.onOutputDeviceRemoved }
+        handler?()
+    }
+
+    /// Routes one of the output's notices to the host.
+    func deliver(_ notice: AudioDeviceStream.Notice) {
+        switch notice {
+        case .lost:
+            emit(.deviceLost)
+        case .removed:
+            emitDeviceRemoved()
+        case .recovered:
+            emit(.deviceRecovered)
+        }
+    }
 }
 
 /// What one render callback leaves for the host, delivered once the lock is released.
@@ -111,6 +129,13 @@ struct SustainedPreview: Sendable {
     let pitch: UInt8
 }
 
+/// A preview's MIDI message kept back until a stopped score player has rendered its block
+/// (`Shared.scoreStopUnrendered`).
+enum HeldPreviewMessage: Sendable {
+    case noteOn(channel: Int32, pitch: Int32, velocity: Int32)
+    case noteOff(channel: Int32, pitch: Int32)
+}
+
 /// Everything behind `PlaybackCore.shared`. Every method here runs under that lock.
 struct Shared: Sendable {
     // MARK: Synths and players
@@ -161,12 +186,25 @@ struct Shared: Sendable {
     var outputStage: MasterOutputStage = .none
     var levelHandler: (@Sendable (MixLevel) -> Void)?
     var onEvent: (@Sendable (WindowsPlaybackEngine.Event) -> Void)?
+    var onOutputDeviceRemoved: (@Sendable () -> Void)?
 
     // MARK: Previews
 
     var previewPolicy = NotePreviewPolicy()
     var previewDeadline: PreviewDeadline?
     var sustainedPreview: SustainedPreview?
+    /// A score player stopped while playing has yet to render its next block, in which FluidSynth sends All Sound Off
+    /// on every channel it played on (`PlayerHandle`): a preview sent before then is cut with the score's notes — a
+    /// held preview started in the same moment as a pause, most of the time.
+    var scoreStopUnrendered = false
+    /// The previews' messages sent while `scoreStopUnrendered`, in order; they go out right after that block. Room is
+    /// reserved up front and kept on every clear: the render thread can append one too (a tap's note-off due in the
+    /// chunk whose end-of-score stop set the hold), and must not allocate under the lock.
+    var heldPreviewMessages: [HeldPreviewMessage] = {
+        var messages: [HeldPreviewMessage] = []
+        messages.reserveCapacity(16)
+        return messages
+    }()
 
     // MARK: Counters (diagnostics and the probe)
 

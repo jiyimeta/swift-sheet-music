@@ -16,6 +16,9 @@ public struct ScorePages: Sendable {
     /// The score the layout was built from: clef overrides and transposition applied, hidden staves dropped. Its
     /// addresses are the document's.
     public let filteredScore: Score
+    /// Where each page shows the document: a document point's page and its position there in millimetres, and back —
+    /// how a host puts its own marks (ink, a playback cursor) on the pages as overlays.
+    public let placement: LayoutBridge.PagePlacement
 
     /// `spans[i]` belongs to `pages[i]`.
     package let pages: [EncodablePage]
@@ -38,10 +41,14 @@ public struct ScorePages: Sendable {
             score: score, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM, options: options.wire(),
             margins: options.pageMarginsMM.bridge,
         )
+        let placement = LayoutBridge.pagePlacement(
+            document: laidOut.document, options: options.wire(), pageHeightMM: pageHeightMM,
+            margins: options.pageMarginsMM.bridge,
+        )
         return ScorePages(
-            document: laidOut.document, filteredScore: laidOut.filteredScore, pages: laidOut.pages,
-            spans: laidOut.spans, options: options, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
-            sourceScore: score,
+            document: laidOut.document, filteredScore: laidOut.filteredScore, placement: placement,
+            pages: laidOut.pages, spans: laidOut.spans, options: options, pageWidthMM: pageWidthMM,
+            pageHeightMM: pageHeightMM, sourceScore: score,
         )
     }
 
@@ -76,8 +83,9 @@ public struct ScorePages: Sendable {
             margins: options.pageMarginsMM.bridge, tint: tint,
         )
         return ScorePages(
-            document: document, filteredScore: filteredScore, pages: built.pages, spans: built.spans, options: options,
-            pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM, sourceScore: sourceScore,
+            document: document, filteredScore: filteredScore, placement: placement, pages: built.pages,
+            spans: built.spans, options: options, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
+            sourceScore: sourceScore,
         )
     }
 }

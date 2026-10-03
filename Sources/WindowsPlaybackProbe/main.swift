@@ -69,6 +69,7 @@ let report = ProbeReport()
 let inbox = ProbeInbox()
 let engine = WindowsPlaybackEngine(soundfontResolver: FileResolver(url: soundFontCopy))
 engine.onEvent = { [inbox] event in inbox.record(event) }
+engine.onOutputDeviceRemoved = { [inbox] in inbox.recordDeviceRemoved() }
 do {
     try engine.prepare(score: score)
 } catch {

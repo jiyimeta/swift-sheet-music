@@ -167,10 +167,11 @@ extension WindowsPlaybackEngine {
     }
 
     /// Makes the output's next buffer request fail with `AUDCLNT_E_DEVICE_INVALIDATED` once, as a device change
-    /// would. Inert unless the process runs with `SSM_WASAPI_FAIL_ONCE=invalidated`.
+    /// would — and with `removed`, makes the stream find its device gone, as an unplug would
+    /// (`onOutputDeviceRemoved`). Inert unless the process runs with `SSM_WASAPI_FAIL_ONCE=invalidated`.
     @_spi(PlaybackProbe)
-    public func probeInjectDeviceFault() {
-        output?.requestFault()
+    public func probeInjectDeviceFault(removed: Bool = false) {
+        output?.requestFault(removesDevice: removed)
     }
 }
 

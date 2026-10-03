@@ -16,14 +16,18 @@ import Synchronization
 /// with — and opens the default device as it now is, at the rate the stream first opened at (`cwasapi_open_at_rate`:
 /// Windows converts to the new device's own). Nothing upstream is rebuilt: the synths, their players and their ticks
 /// simply do not advance while nothing renders, so playback resumes where it was and the gap is the reopen alone.
-/// With no endpoint at all (`E_NOTFOUND`) the thread renders nothing and tries again on the next notification, or
-/// every two seconds.
+/// Whether the closed stream's device went away or only stopped being the default is reported too (`Notice.removed`,
+/// from `IMMDevice::GetState`): a host pauses on the first and plays on through the second. With no endpoint at all
+/// (`E_NOTFOUND`) the thread renders nothing and tries again on the next notification, or every two seconds.
 final class AudioDeviceStream: @unchecked Sendable {
     typealias Render = @Sendable (UnsafeMutablePointer<Float>, Int) -> Void
 
     enum Notice: Sendable {
         /// The stream was closed: the device went away or the default changed.
         case lost
+        /// The device the closed stream played through went away (unplugged, disabled, removed) rather than only
+        /// stopping being the default. At most once per `lost`, before its `recovered`.
+        case removed
         /// A stream is open again on the current default device.
         case recovered
     }
@@ -59,6 +63,7 @@ final class AudioDeviceStream: @unchecked Sendable {
     private struct Control {
         var exitRequested = false
         var faultRequested = false
+        var faultRemovesDevice = false
         var started = false
         var finished = false
     }
@@ -116,9 +121,13 @@ final class AudioDeviceStream: @unchecked Sendable {
     }
 
     /// Makes the next buffer request fail with `AUDCLNT_E_DEVICE_INVALIDATED` once — only when the process runs with
-    /// `SSM_WASAPI_FAIL_ONCE=invalidated` (`cwasapi_arm_fault`). For the playback probe.
-    func requestFault() {
-        control.withLock { $0.faultRequested = true }
+    /// `SSM_WASAPI_FAIL_ONCE=invalidated` (`cwasapi_arm_fault`). With `removesDevice` the stream then also finds its
+    /// device gone, as when it is unplugged. For the playback probe.
+    func requestFault(removesDevice: Bool = false) {
+        control.withLock { control in
+            control.faultRequested = true
+            control.faultRemovesDevice = removesDevice
+        }
     }
 
     private var exitRequested: Bool {
@@ -193,12 +202,12 @@ final class AudioDeviceStream: @unchecked Sendable {
     private func service(_ stream: OpenStream, _ supervision: inout Supervision) -> OpenStream? {
         _ = cwasapi_wait(stream.stream, 200)
         if exitRequested { return stream }
-        let faultRequested = control.withLock { control -> Bool in
+        let fault = control.withLock { control -> (requested: Bool, removesDevice: Bool) in
             defer { control.faultRequested = false }
-            return control.faultRequested
+            return (control.faultRequested, control.faultRemovesDevice)
         }
-        if faultRequested {
-            cwasapi_arm_fault()
+        if fault.requested {
+            cwasapi_arm_fault(fault.removesDevice ? 1 : 0)
         }
 
         // The watcher's flag covers every endpoint, capture ones and other outputs included: only a new default is this
@@ -214,9 +223,24 @@ final class AudioDeviceStream: @unchecked Sendable {
         guard lost else { return stream }
 
         let began = supervision.clock.now
+        let endpoint = cwasapi_stream_endpoint(stream.stream)
         close(stream)
         notify(.lost)
+        // Gone, or only no longer the default? Asked at once, so a host that pauses on a removal can do so before the
+        // reopen starts sound on the new default; and asked again after the settle if the device still looked
+        // present, since Windows can announce the new default before it marks the old device unplugged. A device
+        // marked gone later than the settle is not seen: that removal goes unreported and playback stays on the new
+        // default.
+        var removed = Self.isGone(endpoint)
+        if removed {
+            notify(.removed)
+        }
         Thread.sleep(forTimeInterval: Self.rebuildDelay)
+        if !removed, Self.isGone(endpoint) {
+            removed = true
+            notify(.removed)
+        }
+        cwasapi_endpoint_release(endpoint)
         if let watcher = supervision.watcher {
             _ = cwasapi_watch_take_change(watcher)
         }
@@ -224,6 +248,13 @@ final class AudioDeviceStream: @unchecked Sendable {
         supervision.lastAttempt = supervision.clock.now
         if exitRequested { return nil }
         return reopen(rate: supervision.rate, lostAt: began, clock: supervision.clock)
+    }
+
+    /// Whether the device a closed stream played through is gone. One whose state cannot be read counts as gone: a
+    /// pause nobody needed costs a click, music from the wrong speakers costs more.
+    private static func isGone(_ endpoint: OpaquePointer?) -> Bool {
+        guard let endpoint else { return true }
+        return cwasapi_endpoint_is_active(endpoint) == 0
     }
 
     /// One wake without a stream: wait for an endpoint to appear or the default to change, then try again — and every
