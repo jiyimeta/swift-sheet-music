@@ -9,6 +9,10 @@ and this project adheres to
 
 ### Added
 
+- **`LayoutDocument.editingMeasureHit(at:)`** — the bar a point falls in, for the tap that lands inside a bar but on
+  none of its elements: a staff owns its own lines ±1 staff space, bars are half-open in x, and a collapsed
+  multi-measure rest answers its whole run (`EditingMeasureHit.measures`). Ask `editingHitTest` first; this one answers
+  for every point inside a bar. Moved from folino so Apple and Android editors run one rule.
 - **`nativeResolveFullScoreAnchor` / `nativeFullScoreAnchorReferencePoint`** (Android) — the anchor primitives in
   full-score addressing, for a host that stores anchors and lets the reader hide staves. A layout with staves hidden
   numbers its staves after the filter, so the existing pair stamps a captured stroke with the filtered staff and draws

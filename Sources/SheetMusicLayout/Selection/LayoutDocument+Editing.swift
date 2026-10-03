@@ -15,7 +15,8 @@ extension LayoutDocument {
     /// on empty paper must mean, so the editing pad can be put away without leaving edit mode.
     ///
     /// The caller still owns re-addressing: this answers in the RENDERED document's addressing, which may be a
-    /// staff-filtered rendition of the score being edited.
+    /// staff-filtered rendition of the score being edited. When this answers `nil` for a point inside a bar,
+    /// `editingMeasureHit(at:)` names the bar.
     ///
     /// 1. `ScoreHitTester.hitTest(at:)` ladder (notehead → rest → beam → flag → stem → tuplet → clef).
     ///    `.stem`/`.flag`/`.beam` resolve to their first `NoteID`; `.clef` is ignored in v1 (no clef editing UI).
