@@ -244,6 +244,7 @@ object SheetMusicJNI {
      * [scoreHandle] — the inverse of [nativeAnchorReferencePoint]. Empty array on
      * any miss. Folino's shared anchoring core turns the bytes into a Domain
      * MusicalAnchor and bakes the stroke; no math happens in Kotlin.
+     * Hosts that hide staves and store the anchor: see [nativeResolveFullScoreAnchor].
      */
     fun nativeResolveAnchor(
         scoreHandle: Long,
@@ -266,6 +267,7 @@ object SheetMusicJNI {
      * resolve, so the array stays positionally aligned with the input). One call
      * resolves a whole annotation layer on the reflow/display path. Empty array
      * when the layout is not cached.
+     * Hosts that hide staves and store the anchor: see [nativeFullScoreAnchorReferencePoint].
      */
     fun nativeAnchorReferencePoint(
         scoreHandle: Long,
@@ -273,6 +275,44 @@ object SheetMusicJNI {
     ): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeAnchorReferencePoint(
+            scoreHandle,
+            SwiftData.fromByteArray(anchorsBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * [nativeResolveAnchor], answered in FULL-SCORE addressing (the staves the score declares, hidden ones
+     * included) instead of the cached, staff-filtered layout's. Use it for any anchor that is stored: a stored
+     * anchor in display addressing names a different staff as soon as the hidden set changes. The hidden set
+     * comes from the cached layout itself (the one [nativeComputeLayout] last laid out with), so there is nothing
+     * else to pass. Same `ResolvedAnchorWire` bytes; empty on any miss.
+     */
+    fun nativeResolveFullScoreAnchor(
+        scoreHandle: Long,
+        xMm: Double,
+        yMm: Double,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeResolveFullScoreAnchor(
+            scoreHandle,
+            xMm,
+            yMm,
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * [nativeAnchorReferencePoint] for FULL-SCORE identities, as [nativeResolveFullScoreAnchor] produces them.
+     * An identity on a hidden staff answers the `spMm == 0` sentinel in its own slot: drop that stroke from the
+     * drawing, keep it in the layer. Empty array when there is no cached layout or the input does not decode.
+     */
+    fun nativeFullScoreAnchorReferencePoint(
+        scoreHandle: Long,
+        anchorsBytes: ByteArray,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeFullScoreAnchorReferencePoint(
             scoreHandle,
             SwiftData.fromByteArray(anchorsBytes, arena),
             arena,

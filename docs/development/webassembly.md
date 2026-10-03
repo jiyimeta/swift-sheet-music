@@ -45,8 +45,9 @@ track name, instrument long name, and staff group — is instead carried by
 **Present only on one side.** wasm has the thirteen scalar edit-intent entry
 points, `editSessionState`, and the mixer surface, none of which Android needs —
 its host authors intents in a second Swift image and reads its own session
-directly. Android still has `nativeAnchorReferencePoint` / `nativeResolveAnchor`
-for freehand-ink anchoring in a specific integration.
+directly. Android still has `nativeAnchorReferencePoint` / `nativeResolveAnchor` and the full-score pair
+`nativeFullScoreAnchorReferencePoint` / `nativeResolveFullScoreAnchor` for freehand-ink anchoring in a specific
+integration.
 
 ## Glyph centring, and why a green parity run could not see it
 

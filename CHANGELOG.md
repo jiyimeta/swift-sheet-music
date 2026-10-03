@@ -9,6 +9,12 @@ and this project adheres to
 
 ### Added
 
+- **`nativeResolveFullScoreAnchor` / `nativeFullScoreAnchorReferencePoint`** (Android) — the anchor primitives in
+  full-score addressing, for a host that stores anchors and lets the reader hide staves. A layout with staves hidden
+  numbers its staves after the filter, so the existing pair stamps a captured stroke with the filtered staff and draws
+  a stored one against it. The new pair translates both ways through the hidden set the cached layout was computed
+  from, the rule `nativeEditingHitTest` follows, and an identity on a hidden staff answers the `spMm == 0` sentinel.
+  Same wires; with nothing hidden, the same bytes. The existing pair is unchanged.
 - **`LayoutOptionsWire.writtenPitch`** — set it to draw each transposing part at the pitch its player reads
   (`Score.writtenPitchView()`), applied after the clef overrides and before `transposeSemitones`, Apple's order. It is
   off by default, so every existing host keeps concert pitch, and it is opt-in because a host that transforms the score

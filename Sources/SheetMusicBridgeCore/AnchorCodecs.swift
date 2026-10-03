@@ -8,7 +8,8 @@ import Wirelet
 // matching Kotlin codecs via the wirelet Gradle task.
 
 /// Output of `nativeResolveAnchor`: a musical position resolved from a
-/// document-mm point, in the cached (filtered) layout's address space. The six
+/// document-mm point, in the addressing the verb that produced it names: the cached layout's for
+/// `nativeResolveAnchor`, the full score's for `nativeResolveFullScoreAnchor`. The six
 /// fields map 1:1 to Domain's `MusicalAnchor` and to `SheetMusicLayout`'s
 /// `ResolvedAnchor`. `dxSp` / `verticalOffsetSp` are unit-neutral sp-multiples
 /// (a pt/pt ratio == the same mm/mm ratio), so they need no mm conversion.
