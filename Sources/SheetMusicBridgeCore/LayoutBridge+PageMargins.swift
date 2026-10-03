@@ -37,6 +37,31 @@ extension LayoutBridge {
     }
 }
 
+extension LayoutBridge {
+    /// How far past the line a system may end before it counts as overflowing it. A justified system ends at the line,
+    /// but floating-point layout can leave its right edge a rounding error past it — Windows' portable metrics put a
+    /// 180 mm vertical page's system an ulp out, which widened the page to 180.00000000000003 mm (2026-10-03). A
+    /// measure wider than the line overflows by whole points; this is far above rounding and far below anything
+    /// visible (0.0035 mm). A `Double`: off Apple `CGFloat` is this file's private alias, which an internal member
+    /// cannot carry.
+    static let lineOverflowTolerancePt = 0.01
+
+    /// `pageWidthMM`, or — when `document`'s widest system runs past `lineWidthMM`, the width it was engraved into,
+    /// which a single measure wider than the line makes it do — that system's right edge plus `sideMarginsMM`. The
+    /// right edge is `origin.x + size.width`, not `document.size.width`, which carries the engine's trailing whitespace
+    /// and would widen the page of a score that fits. Compared in points against the very width the engine was
+    /// handed, so music that fits the line exactly does not widen the page by the last bit of a millimetre-to-point
+    /// round trip, and `pageWidthMM` comes back untouched.
+    static func widenedPageWidthMM(
+        _ pageWidthMM: Double, fitting document: LayoutDocument, lineWidthMM: Double, sideMarginsMM: Double,
+    ) -> Double {
+        let musicRightPt = document.systems.map { $0.origin.x + $0.size.width }.max() ?? 0
+        let lineWidthPt = CGFloat(lineWidthMM * (72.0 / 25.4))
+        guard Double(musicRightPt) > Double(lineWidthPt) + lineOverflowTolerancePt else { return pageWidthMM }
+        return max(pageWidthMM, Double(musicRightPt) * (25.4 / 72.0) + sideMarginsMM)
+    }
+}
+
 extension LayoutBridge.PageMargins {
     /// The width the score is engraved into. Margins that leave no printable width are the caller's error.
     func printableWidthMM(pageWidthMM: Double) -> Double {
@@ -59,12 +84,10 @@ extension LayoutBridge.PageMargins {
     /// that fits. The height is never widened.
     func paperWidthMM(for document: LayoutDocument, pageWidthMM: Double) -> Double {
         guard self != .zero else { return pageWidthMM }
-        let musicRightPt = document.systems.map { $0.origin.x + $0.size.width }.max() ?? 0
-        // Compared in points against the very width the engine was handed, so music that fits the line exactly does
-        // not widen the page by the last bit of a millimetre-to-point round trip.
-        let printableWidthPt = CGFloat(printableWidthMM(pageWidthMM: pageWidthMM) * (72.0 / 25.4))
-        guard musicRightPt > printableWidthPt else { return pageWidthMM }
-        return max(pageWidthMM, Double(musicRightPt) * (25.4 / 72.0) + leading + trailing)
+        return LayoutBridge.widenedPageWidthMM(
+            pageWidthMM, fitting: document, lineWidthMM: printableWidthMM(pageWidthMM: pageWidthMM),
+            sideMarginsMM: leading + trailing,
+        )
     }
 
     /// One page's commands and spans as `LayoutBridge.buildCommandsWithSpans` emits them — the music from the page's

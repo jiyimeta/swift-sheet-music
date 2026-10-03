@@ -57,6 +57,18 @@ void cd2d_stroke(cd2d_canvas *canvas, float width, float dash_on, float dash_off
 void cd2d_fill_path(cd2d_canvas *canvas);
 void cd2d_fill_rect(cd2d_canvas *canvas, float x, float y, float width, float height);
 
+/// A filled shape built once and filled every frame — an ink stroke's outline: closed figures in millimetres, nonzero
+/// winding. A path geometry of the canvas's factory, which a device loss does not invalidate.
+typedef struct cd2d_shape cd2d_shape;
+/// `xy` holds every figure's points in order, x then y; `counts` the number of points in each of `figure_count`
+/// figures. A figure of fewer than three points is skipped. Release the result with `cd2d_shape_release`.
+int32_t cd2d_shape_create(
+    cd2d_canvas *canvas, const float *xy, const uint32_t *counts, uint32_t figure_count, cd2d_shape **out);
+/// Fills `shape` in the current color, its millimetres scaled by `scale` (pixels per millimetre) under the canvas
+/// transform — where `cd2d_move_to` and friends take points already in pixels.
+void cd2d_fill_shape(cd2d_canvas *canvas, cd2d_shape *shape, float scale);
+void cd2d_shape_release(cd2d_shape *shape);
+
 /// `family`: the font family name (L"Bravura", L"Edwin", L"Segoe UI"), looked up in the private collection first and
 /// in the installed fonts when the private one lacks it. `weight` is DirectWrite's (400 regular, 600 semibold, 700
 /// bold; zero or less is regular). Weight and italic pick the family's own face when it has one and the regular face

@@ -43,7 +43,7 @@ final class OnscreenSession {
     private static let recreateHResult: Int32 = -2_003_238_900
 
     private let window: HWND
-    private let surface: ScoreSurface
+    let surface: ScoreSurface
     private let pages: ScorePages
     private let pageOrigins: [(x: Double, y: Double)]
     private let documentHeightMM: Double
@@ -52,7 +52,7 @@ final class OnscreenSession {
     private let displayScale: Double
     private let baselineBytes: Int
     private let clock = ContinuousClock()
-    private var originY = 0.0
+    private(set) var originY = 0.0
     let layoutMs: Double
     private(set) var failures: [String] = []
 
@@ -337,7 +337,7 @@ final class OnscreenSession {
         )
     }
 
-    private func draw(zoom: Double, originY: Double, gesture: Bool = false, overlays: [ScoreSurface.Overlay] = []) {
+    func draw(zoom: Double, originY: Double, gesture: Bool = false, overlays: [ScoreSurface.Overlay] = []) {
         Self.pump()
         switch surface.draw(makeFrame(zoom: zoom, originY: originY, gesture: gesture, overlays: overlays)) {
         case .presented: break

@@ -430,6 +430,46 @@ extern "C" void cd2d_fill_path(cd2d_canvas *canvas) {
     canvas->path.Reset();
 }
 
+struct cd2d_shape {
+    ComPtr<ID2D1PathGeometry> geometry;
+};
+
+extern "C" int32_t cd2d_shape_create(
+    cd2d_canvas *canvas, const float *xy, const uint32_t *counts, uint32_t figure_count, cd2d_shape **out) {
+    *out = nullptr;
+    ComPtr<ID2D1PathGeometry> geometry;
+    HRESULT hr = canvas->resources->d2d->CreatePathGeometry(&geometry);
+    if (FAILED(hr)) return hr;
+    ComPtr<ID2D1GeometrySink> sink;
+    hr = geometry->Open(&sink);
+    if (FAILED(hr)) return hr;
+    sink->SetFillMode(D2D1_FILL_MODE_WINDING);
+    size_t first = 0;
+    for (uint32_t figure = 0; figure < figure_count; ++figure) {
+        const uint32_t count = counts[figure];
+        if (count >= 3) {
+            sink->BeginFigure(D2D1::Point2F(xy[first * 2], xy[first * 2 + 1]), D2D1_FIGURE_BEGIN_FILLED);
+            for (uint32_t point = 1; point < count; ++point) {
+                sink->AddLine(D2D1::Point2F(xy[(first + point) * 2], xy[(first + point) * 2 + 1]));
+            }
+            sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+        }
+        first += count;
+    }
+    hr = sink->Close();
+    if (FAILED(hr)) return hr;
+    *out = new cd2d_shape{geometry};
+    return S_OK;
+}
+
+extern "C" void cd2d_fill_shape(cd2d_canvas *canvas, cd2d_shape *shape, float scale) {
+    fillGeometry(canvas, shape->geometry.Get(), D2D1::Matrix3x2F::Scale(scale, scale));
+}
+
+extern "C" void cd2d_shape_release(cd2d_shape *shape) {
+    delete shape;
+}
+
 extern "C" void cd2d_fill_rect(cd2d_canvas *canvas, float x, float y, float width, float height) {
     canvas->target->FillRectangle(D2D1::RectF(x, y, x + width, y + height), canvas->brush.Get());
 }

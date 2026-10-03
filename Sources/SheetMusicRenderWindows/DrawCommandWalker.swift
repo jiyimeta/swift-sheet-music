@@ -85,6 +85,28 @@ struct DrawCommandWalker {
         }
     }
 
+    /// Fills `figures` as one nonzero path in `argb` — the `fillPath` overlay. Straight to Direct2D rather than through
+    /// a `DrawCommand` per vertex: an ink layer is thousands of vertices redrawn every frame. A figure of fewer than
+    /// three points has no area and is skipped; with none left nothing is drawn.
+    mutating func fill(figures: [[PagePointMM]], argb: UInt32) {
+        guard figures.contains(where: { $0.count >= 3 }) else { return }
+        cd2d_set_color(canvas, argb)
+        for figure in figures where figure.count >= 3 {
+            cd2d_move_to(canvas, px(figure[0].x), px(figure[0].y))
+            for point in figure.dropFirst() {
+                cd2d_line_to(canvas, px(point.x), px(point.y))
+            }
+        }
+        cd2d_fill_path(canvas)
+    }
+
+    /// Fills a shape `OverlayShapeCache` built once from `fillPath` figures — the per-frame path for ink, where
+    /// `fill(figures:argb:)` would build every outline again every frame.
+    mutating func fill(shape: OpaquePointer, argb: UInt32) {
+        cd2d_set_color(canvas, argb)
+        cd2d_fill_shape(canvas, shape, Float(pxPerMM))
+    }
+
     private func px(_ mm: Double) -> Float {
         Float(mm * pxPerMM)
     }

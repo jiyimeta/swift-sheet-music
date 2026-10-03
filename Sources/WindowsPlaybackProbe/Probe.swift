@@ -559,6 +559,44 @@ final class Probe { // swiftlint:disable:this type_body_length
             "preview", "held note sounds, then stops", held > 0 && released,
             value: "\(held) voices held, released \(released)", limit: "> 0, then 0",
         )
+        previewRightAfterPause()
+    }
+
+    /// A held preview started in the same moment as a pause. The paused score player sends All Sound Off in its next
+    /// rendered block — on the channels it sent a note-on on, and only those (`fluid_player_callback`) — which the
+    /// preview's note-on must not be caught by (folino docs/superpowers/specs/2026-10-03-ssm-windows-minor-design.md
+    /// §4). So playback starts AT a note of the previewed staff: its channel is then one the player played on, as in
+    /// a reader paused mid-piece. Ten tries: a lost one depends on when the next block comes.
+    private func previewRightAfterPause() {
+        guard let note = firstNote(drums: false),
+              let staff = score.allStaves.firstIndex(where: { $0.address == note.staff })
+        else {
+            report.check("preview", "a preview right after a pause sounds", false, value: "no pitched note", limit: "")
+            return
+        }
+        let tick = PreviewRouting.tick(of: note, in: score)
+        let trials = 10
+        var sounded = 0
+        var counts: [Int] = []
+        for _ in 0 ..< trials {
+            engine.play(from: .item(.note(note)), in: score)
+            wait(0.5)
+            engine.pause()
+            engine.previewNoteOn(pitch: 72, onStaff: staff, atTick: tick)
+            wait(0.15)
+            let voices = engine.probeActiveVoices[0]
+            counts.append(voices)
+            if voices > 0 {
+                sounded += 1
+            }
+            engine.previewNoteOff(pitch: 72)
+            _ = waitUntil(timeout: 3) { engine.probeActiveVoices[0] == 0 }
+        }
+        engine.stop()
+        report.check(
+            "preview", "a preview right after a pause sounds", sounded == trials,
+            value: "\(sounded) of \(trials) (voices \(counts))", limit: "\(trials) of \(trials)",
+        )
     }
 
     private func firstNote(drums: Bool) -> NoteID? {
@@ -623,6 +661,7 @@ final class Probe { // swiftlint:disable:this type_body_length
             return
         }
         _ = inbox.takeEvents()
+        _ = inbox.takeRemovals()
         let bufferSeconds = Double(engine.diagnostics.bufferFrames) / engine.diagnostics.sampleRate
 
         // While playing.
@@ -679,6 +718,12 @@ final class Probe { // swiftlint:disable:this type_body_length
             "device", "events", events.contains(.deviceLost) && events.contains(.deviceRecovered),
             value: "\(events)", limit: "deviceLost, deviceRecovered",
         )
+        // The control for the removal below: the device is still there after this one.
+        let removalsOnInvalidation = inbox.takeRemovals()
+        report.check(
+            "device", "an invalidation with the device kept is no removal", removalsOnInvalidation == 0,
+            value: "\(removalsOnInvalidation) removals", limit: "0",
+        )
 
         // While paused: the position is kept, and the resume plays from it.
         engine.pause()
@@ -701,12 +746,37 @@ final class Probe { // swiftlint:disable:this type_body_length
             resumed >= pausedTick && Double(resumed - pausedTick) <= allowance,
             value: "tick \(resumed)", limit: "[\(pausedTick), \(pausedTick + Int(allowance))]",
         )
+        deviceRemoval()
         engine.stop()
+    }
+
+    /// An unplug as the stream sees one — the invalidation, then the device gone — while playing: reported once
+    /// through `onOutputDeviceRemoved`, and the engine plays on (pausing is the host's call).
+    private func deviceRemoval() {
+        _ = inbox.takeEvents()
+        _ = inbox.takeRemovals()
+        let rebuildsBefore = engine.diagnostics.deviceRebuilds
+        engine.probeInjectDeviceFault(removed: true)
+        let rebuilt = waitUntil(timeout: 3) { engine.diagnostics.deviceRebuilds > rebuildsBefore }
+        // `deviceRecovered` follows the rebuild count by a moment.
+        wait(0.1)
+        let removals = inbox.takeRemovals()
+        let events = inbox.takeEvents()
+        report.check(
+            "device", "a removal is reported once", rebuilt && removals == 1,
+            value: "\(removals) removals, rebuilt \(rebuilt)", limit: "1",
+        )
+        report.check(
+            "device", "after a removal the engine plays on, lost and recovered",
+            engine.state == .playing && events.contains(.deviceLost) && events.contains(.deviceRecovered),
+            value: "\(engine.state), \(events)", limit: "playing; deviceLost, deviceRecovered",
+        )
     }
 
     /// A real device switch: the operator changes the default output while this plays.
     func deviceReal() {
         _ = inbox.takeEvents()
+        _ = inbox.takeRemovals()
         let rebuildsBefore = engine.diagnostics.deviceRebuilds
         engine.stop()
         engine.play(in: score)
@@ -728,7 +798,7 @@ final class Probe { // swiftlint:disable:this type_body_length
             "device", "real switch rebuild time", rebuildSeconds <= 0.5,
             value: "\(formatted(rebuildSeconds * 1000, 1)) ms", limit: "≤ 500 ms",
         )
-        report.note("device", "events: \(inbox.takeEvents())")
+        report.note("device", "events: \(inbox.takeEvents()), removals: \(inbox.takeRemovals())")
         engine.stop()
     }
 }
