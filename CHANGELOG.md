@@ -30,6 +30,13 @@ and this project adheres to
   off by default, so every existing host keeps concert pitch, and it is opt-in because a host that transforms the score
   itself before handing it over (a Windows host feeding `ScorePages`) would otherwise move a transposing part twice.
   Appended as wire tag 19 with a default; the generated Kotlin `LayoutOptionsWire` gains `writtenPitch: UByte = 0u`.
+- **Caret geometry for engraved text and harmony names.** `FontMetricsProvider.caretOffsets(text:font:)`
+  returns single-line UTF-16 boundary positions; `characterIndex(forOffset:text:font:)` chooses a legal
+  grapheme boundary. `selectionOffsets(text:font:range:)` returns visual selection fragments, including
+  disjoint spans for mixed-direction text on Apple. Apple uses full CoreText shaping; portable providers
+  default to cumulative grapheme advances and a conservative selection span.
+  `HarmonyRendering.caretOffsets(for:metrics:)` follows rendered text and accidental runs,
+  including generated root/bass/parenthesis placement, without adding indices outside `Harmony.name`.
 
 ## [4.1.0] - 2026-10-02
 

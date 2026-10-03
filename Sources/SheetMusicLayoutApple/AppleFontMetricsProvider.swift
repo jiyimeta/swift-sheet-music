@@ -68,6 +68,23 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
         }
     }
 
+    public func caretOffsets(text: String, font: LayoutFont) -> [CGFloat] {
+        guard !text.isEmpty else { return [0] }
+        return Lock.shared.with {
+            let line = ctLine(text: text, font: font)
+            return (0 ... text.utf16.count).map { CTLineGetOffsetForStringIndex(line, $0, nil) }
+        }
+    }
+
+    public func selectionOffsets(text: String, font: LayoutFont, range: Range<Int>) -> [ClosedRange<CGFloat>] {
+        let lower = max(0, range.lowerBound)
+        let upper = min(text.utf16.count, range.upperBound)
+        guard lower < upper else { return [] }
+        return Lock.shared.with {
+            CoreTextSelectionOffsets.fragments(in: ctLine(text: text, font: font), range: lower ..< upper)
+        }
+    }
+
     public func inkBounds(text: String, font: LayoutFont) -> InkBounds {
         guard !text.isEmpty else { return InkBounds(leftBearing: 0, width: 0) }
         return Lock.shared.with {
