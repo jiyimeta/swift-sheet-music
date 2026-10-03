@@ -17,6 +17,8 @@ and this project adheres to
   (`SheetMusicEditWire`) — `LayoutDocument.editingMeasureHit(at:)` across the JNI boundary, full-score addressed
   through the cached layout's hidden staves like `nativeEditingHitTest`. The Kotlin model and codec
   (`EditMeasureHit`, `EditMeasureHitCodec`) are generated beside `EditCaretFrame`.
+- **`editingMeasureHit`** (WebAssembly) — the browser twin of `nativeEditingMeasureHitTest`, lowered to scalars
+  (`EditMeasureHit`) like `editingHitTest`.
 - **`nativeResolveFullScoreAnchor` / `nativeFullScoreAnchorReferencePoint`** (Android) — the anchor primitives in
   full-score addressing, for a host that stores anchors and lets the reader hide staves. A layout with staves hidden
   numbers its staves after the filter, so the existing pair stamps a captured stroke with the filtered staff and draws

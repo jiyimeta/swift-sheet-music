@@ -144,6 +144,44 @@ import SheetMusicLayout
     )
 }
 
+/// The bar a point falls in, full-score addressed. `firstMeasureIndex ... lastMeasureIndex` is the run a collapsed
+/// multi-measure rest stands for, and a single bar when the two are equal.
+@JS public struct EditMeasureHit {
+    public var partIndex: Int
+    public var staffIndexInPart: Int
+    public var firstMeasureIndex: Int
+    public var lastMeasureIndex: Int
+
+    public init(partIndex: Int, staffIndexInPart: Int, firstMeasureIndex: Int, lastMeasureIndex: Int) {
+        self.partIndex = partIndex
+        self.staffIndexInPart = staffIndexInPart
+        self.firstMeasureIndex = firstMeasureIndex
+        self.lastMeasureIndex = lastMeasureIndex
+    }
+}
+
+/// Android: `nativeEditingMeasureHitTest`.
+///
+/// The bar `xMM` / `yMM` (document millimetres) falls in, for a point `editingHitTest` answered `nil` for. Ask that
+/// one first, because this one answers for every point inside a bar. The staff is re-addressed from the cached
+/// filtered layout to the full score through `LayoutDocumentCache.entry(for:)`'s hidden set, as `editingHitTest`'s
+/// answer is. `nil` on empty paper: between staves, above or below the music, past a system's last bar.
+@JS public func editingMeasureHit(handle: Int, xMM: Double, yMM: Double) -> EditMeasureHit? {
+    let scoreHandle = Int64(handle)
+    guard let score = scoreTable.value(for: scoreHandle),
+          let entry = LayoutDocumentCache.entry(for: scoreHandle)
+    else { return nil }
+    let mmToPt = 72.0 / 25.4
+    let point = CGPoint(x: CGFloat(xMM * mmToPt), y: CGFloat(yMM * mmToPt))
+    guard let hit = entry.document.editingMeasureHit(at: point),
+          let staff = score.unfilterStaffAddress(hit.staff, hidingStaves: entry.hiddenStaves)
+    else { return nil }
+    return EditMeasureHit(
+        partIndex: staff.partIndex, staffIndexInPart: staff.staffIndexInPart,
+        firstMeasureIndex: hit.measures.lowerBound, lastMeasureIndex: hit.measures.upperBound,
+    )
+}
+
 private func editHitItem(from item: ScoreItemID, in score: Score) -> EditHitItem? {
     switch item {
     case let .note(id):

@@ -138,6 +138,7 @@ let editCaret = editingCaretRect(
     noteIndexInChord: 0,
     minimumWidthMM: 1,
 )
+let measureHit = editingMeasureHit(handle: wasmHandle, xMM: 30, yMM: 40)
 _ = installFontMetrics(bytes: JSUint8Array(length: 0))
 print(
     "wasm engine=\(engineVersionStamp()) handle=\(wasmHandle) "
@@ -293,7 +294,10 @@ print(
         + "staves=\(staffCount) firstStaff=\(firstStaff?.defaultClefRawType ?? "-") "
         + "measureRect=\(measureRect.count)",
 )
-print("edit geometry hit=\(editHit?.kind ?? "-") caret=\(editCaret?.heightMM ?? -1)")
+print(
+    "edit geometry hit=\(editHit?.kind ?? "-") caret=\(editCaret?.heightMM ?? -1) "
+        + "bar=\(measureHit?.firstMeasureIndex ?? -1)",
+)
 print("mixer strips=\(stripCount) first=\(firstStrip?.displayName ?? "-")")
 print("mixer gm=\(gmNames.count)/\(gmFamilies.count) tuning=\(tuning.count) click=\(clickBank.length)B")
 print(
