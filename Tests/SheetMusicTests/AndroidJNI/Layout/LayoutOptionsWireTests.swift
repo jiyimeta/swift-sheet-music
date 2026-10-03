@@ -8,6 +8,7 @@
     import Wirelet
 
     struct LayoutOptionsWireTests {
+        // swiftlint:disable:next function_body_length
         @Test func roundTripsAllFields() throws {
             let wire = LayoutOptionsWire(
                 layoutMode: 2,
@@ -39,6 +40,7 @@
                     minStaffGap: 1.25,
                     systemVerticalPadding: 2.7,
                 ),
+                writtenPitch: 1,
             )
             let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(decoded.staffSize == 18.5)
@@ -60,6 +62,8 @@
             #expect(decoded.breakIndicatorVisibilityRaw == 2)
             #expect(decoded.graceNoteMag == 0.55)
             #expect(decoded.smallNoteMag == 0.65)
+            #expect(decoded.writtenPitch == 1)
+            #expect(decoded.drawsWrittenPitch)
             let spacing = try #require(decoded.spacing)
             #expect(spacing.minNoteDistance == 0.3)
             #expect(spacing.spacePerQuarter == 2.1)
@@ -78,6 +82,7 @@
         /// it always had: the implicit tags follow declaration order, so deleting the field without reserving its
         /// tag would have shifted all fifteen that follow it, and an encoder on one side of the change would feed
         /// its layout mode into the other side's collapse flag. `verticalDefault` leaves `spacing` (tag 18) nil.
+        /// `writtenPitch` (tag 19) is non-optional, so it is always written; `spacing` (tag 18) stays nil.
         @Test func theRetiredBreakTagStaysEmptyAndLaterFieldsKeepTheirTags() throws {
             var reader = WireFormatReader(data: LayoutOptionsWire.verticalDefault.encodeToData())
             let tags = try reader.readLengthPrefixed { (payload: inout WireFormatReader) throws -> [UInt32] in
@@ -89,8 +94,16 @@
                 }
                 return tags
             }
-            let expected: [UInt32] = [1, 2] + Array(4 ... 17)
+            let expected: [UInt32] = [1, 2] + Array(4 ... 17) + [19]
             #expect(tags == expected)
+        }
+
+        /// A host built before `writtenPitch` existed sends no tag 19, and its default is concert pitch, which is what
+        /// every earlier release drew.
+        @Test func writtenPitchDefaultsToConcert() throws {
+            let decoded = try LayoutOptionsCodec.decode(LayoutOptionsWire.verticalDefault.encodeToData())
+            #expect(decoded.writtenPitch == 0)
+            #expect(!decoded.drawsWrittenPitch)
         }
 
         /// A blob that still carries tag 3 decodes: the reader skips it as an unknown field, so the boolean no

@@ -26,7 +26,8 @@ extension LayoutBridge {
     ///   system to y ≈ 0 so the Kotlin renderer paints page-local coords.
     ///
     /// Clef overrides are applied BEFORE hiding staves because the override
-    /// map is keyed on pre-filter staff addresses.
+    /// map is keyed on pre-filter staff addresses. With `writtenPitch` set, the
+    /// written-pitch view runs between them and before the transpose.
     ///
     /// - Parameters:
     ///   - score: The parsed score.
@@ -36,7 +37,9 @@ extension LayoutBridge {
     ///   - optionsWire: Decoded display options from the Android Reader.
     /// - Returns: Tuple of the `LayoutDocument`, the encoded draw-program
     ///   bytes, and the *filtered* score the layout was built from (clef
-    ///   overrides applied, hidden staves dropped) — its addresses match the
+    ///   overrides applied, the written-pitch view when `writtenPitch` asks for
+    ///   it, the transpose applied, hidden staves dropped). It is for geometry
+    ///   only. Its addresses match the
     ///   document's keys, which the cursor bridge needs to resolve a
     ///   translated `.beat` cursor against the surviving visible columns. In
     ///   `.page` mode the returned document is the full continuous layout (so
@@ -88,13 +91,14 @@ extension LayoutBridge {
         let mmToPt = 72.0 / 25.4
         let pageWidthPt = CGFloat(pageWidthMM * mmToPt)
 
-        // Clef overrides BEFORE hiding staves (override map keyed on the
-        // pre-filter address). Transposition sits between the two, matching the
-        // Apple Reader's `recomputeVisibleScore`: it re-spells pitches without
-        // touching note IDs or ticks, so the cursor bridge's lookups against the
-        // resulting document are unaffected either way.
-        let prepared = score
-            .applying(clefOverrides: optionsWire.clefOverrideMap)
+        // Apple's display order (Folino's `ReaderDisplayTransforms`). Clef overrides first: their map is keyed on
+        // the pre-filter address. Then the written-pitch view when the host asks for it, a per-part shift that has
+        // to run while every part is still addressable and before the global transpose adds a second offset. Then
+        // the transpose. Hidden staves last, the only step that renumbers. Every step re-spells pitches without
+        // touching note IDs, ticks or element order, so the cursor and hit-test bridges' lookups against the
+        // resulting document are unaffected.
+        let overridden = score.applying(clefOverrides: optionsWire.clefOverrideMap)
+        let prepared = (optionsWire.drawsWrittenPitch ? overridden.writtenPitchView() : overridden)
             .transposed(bySemitones: optionsWire.transposeDelta)
             .filtered(hidingStaves: optionsWire.hiddenStaffAddresses)
 

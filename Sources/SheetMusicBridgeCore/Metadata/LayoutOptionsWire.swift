@@ -160,6 +160,19 @@ public struct LayoutOptionsWire {
     /// Optional engraving-spacing overrides. `nil` preserves the engine defaults.
     public var spacing: EngravingSpacingWire?
 
+    /// Whether each transposing part is drawn at its WRITTEN pitch (the notes, key signatures and chord symbols a
+    /// player of that instrument reads) instead of the concert pitch the score stores. `0`, the default, draws
+    /// concert pitch, as every release before this field did. Anything else applies `Score.writtenPitchView()` after
+    /// the clef overrides and before `transposeSemitones`, the order Apple hosts use.
+    ///
+    /// Opt-in rather than always on, because a host may apply the written view itself before handing the score over.
+    /// A Windows host that runs its own display chain into `ScorePages` does, and applying the view twice moves a
+    /// transposing part by its interval twice. Display only: the view never reaches playback or an encoder.
+    ///
+    /// Appended with a default for the same reason as `showsLyrics`: the generated Kotlin constructor keeps
+    /// compiling for every host built before it.
+    public var writtenPitch: UInt8 = 0
+
     // swiftlint:disable:next function_default_parameter_at_end
     public init(
         layoutMode: UInt8,
@@ -179,6 +192,7 @@ public struct LayoutOptionsWire {
         graceNoteMag: Double = 0,
         smallNoteMag: Double = 0,
         spacing: EngravingSpacingWire? = nil,
+        writtenPitch: UInt8 = 0,
     ) {
         self.layoutMode = layoutMode
         self.staffSize = staffSize
@@ -197,6 +211,7 @@ public struct LayoutOptionsWire {
         self.graceNoteMag = graceNoteMag
         self.smallNoteMag = smallNoteMag
         self.spacing = spacing
+        self.writtenPitch = writtenPitch
     }
 }
 
@@ -257,6 +272,11 @@ extension LayoutOptionsWire {
     /// so the safe direction for a host that has not been updated is the pre-existing behaviour.
     public var lyricsVisible: Bool {
         showsLyrics != 0
+    }
+
+    /// Whether the layout draws transposing parts at written pitch. Anything other than `0` turns it on.
+    public var drawsWrittenPitch: Bool {
+        writtenPitch != 0
     }
 
     /// How to consume authored `<LayoutBreak>` markup — the one resolution of `breakPolicyRaw`.

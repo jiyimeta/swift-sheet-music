@@ -7,6 +7,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`LayoutOptionsWire.writtenPitch`** — set it to draw each transposing part at the pitch its player reads
+  (`Score.writtenPitchView()`), applied after the clef overrides and before `transposeSemitones`, Apple's order. It is
+  off by default, so every existing host keeps concert pitch, and it is opt-in because a host that transforms the score
+  itself before handing it over (a Windows host feeding `ScorePages`) would otherwise move a transposing part twice.
+  Appended as wire tag 19 with a default; the generated Kotlin `LayoutOptionsWire` gains `writtenPitch: UByte = 0u`.
+
 ## [4.1.0] - 2026-10-02
 
 ### Added

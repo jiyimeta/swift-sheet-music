@@ -197,6 +197,7 @@ struct ScorePageOptionsTests {
         #expect(actual.breakIndicatorVisibilityRaw == expected.breakIndicatorVisibilityRaw)
         #expect(actual.graceNoteMag == expected.graceNoteMag)
         #expect(actual.smallNoteMag == expected.smallNoteMag)
+        #expect(actual.writtenPitch == expected.writtenPitch)
         #expect(spacing.0 == spacing.1, "one side sends spacing, the other does not")
     }
 }
