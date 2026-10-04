@@ -7,41 +7,6 @@ and this project adheres to
 
 ## [Unreleased]
 
-### Added
-
-- **Tenuto-staccato (louré).** `ChordArticulation.Kind.tenutoStaccato` reads and writes MuseScore's
-  `articTenutoStaccatoAbove` / `…Below`, draws SMuFL U+E4B2 / U+E4B3 clear of the staff (MuseScore's
-  `isDouble()` placement), and plays from the instrument's "portato" preset, 67% when it names none. It decoded
-  as `.unknown` before, so a part marked this way showed and played nothing. `LayoutElement.ArticulationKind`
-  and `ScoreArticulationKindWire` (appended, choice 8) gain the same case, and so does the Kotlin
-  `ScoreArticulationKind` model.
-- **`Clef.writtenClefType`** — the clef a reader sees with Concert Pitch off: `transposingClefType`, else the
-  concert type.
-
-### Fixed
-
-- **`writtenPitchView()` draws each clef's transposing type**, as MuseScore does whenever Concert Pitch is off.
-  It drew the concert clef over written-pitch notes, so a bass part saved with F 8vb (concert) / F 8va
-  (transposing) read two octaves away from where it sits. `clefInForce(at:)`, `authoredClef(at:)` and the
-  clef intent's no-op check read `writtenClefType` to match.
-- **A transposed note keeps the accidental its bar calls for.** `writtenPitchView()` and `transposed(bySemitones:)`
-  re-derived every glyph from the key signature alone, so an A♭ that cancels an A♮ earlier in the bar lost its ♭.
-  A note now shows a glyph exactly when the stored one did, spelling its new alteration; a microtonal glyph
-  passes through.
-- **MIDI import keeps notes shorter than half a grid step.** Both ends snapped to the same grid point and the
-  note was dropped — which emptied whole drum parts written as fixed blips (a 10-tick hit at 480 PPQ). Such a
-  note now keeps one step, MuseScore's `findQuantizedNoteOffTime` rule, and a drum note is lengthened to the next
-  hit in its voice, the end of its beat or the barline (MuseScore's `minimizeNumberOfRests`), so an eighth-note
-  hi-hat reads as eighths.
-- **MIDI import measures bars by the conductor track's meter.** The bar timeline read time signatures from the
-  note-bearing tracks only, so a Format 1 file — meter on track 0, which carries no notes — imported a 3/4 piece in
-  4/4 bars under a 3/4 signature. Every track's time signatures count now, as in MuseScore's `createMTrackList`.
-- **A clef always writes `<transposingClefType>`.** A `<Clef>` naming only its concert type reads back in MuseScore
-  with the transposing type at G (`TRead::read(Clef*)`), and MuseScore shows the transposing type by default — so a
-  bass clef set in folino opened in MuseScore as a treble clef. The decoder folds a transposing type equal to the
-  concert one to `nil`, so such a clef still reads back equal to itself; the MusicXML decoder spells its one clef the
-  same way.
-
 ## [4.2.0] - 2026-10-04
 
 ### Added
@@ -97,6 +62,14 @@ and this project adheres to
   stream reopens on the new default; the engine itself plays on, so pausing — what the Apple hosts do on
   `.oldDeviceUnavailable` — is the host's call. A handler rather than a new `Event` case, so an exhaustive `switch`
   over `Event` keeps compiling.
+- **Tenuto-staccato (louré).** `ChordArticulation.Kind.tenutoStaccato` reads and writes MuseScore's
+  `articTenutoStaccatoAbove` / `…Below`, draws SMuFL U+E4B2 / U+E4B3 clear of the staff (MuseScore's
+  `isDouble()` placement), and plays from the instrument's "portato" preset, 67% when it names none. It decoded
+  as `.unknown` before, so a part marked this way showed and played nothing. `LayoutElement.ArticulationKind`
+  and `ScoreArticulationKindWire` (appended, choice 8) gain the same case, and so does the Kotlin
+  `ScoreArticulationKind` model.
+- **`Clef.writtenClefType`** — the clef a reader sees with Concert Pitch off: `transposingClefType`, else the
+  concert type.
 
 ### Fixed
 
@@ -113,6 +86,27 @@ and this project adheres to
   the line in floating point — on Windows' portable metrics a 180 mm page came out 180.00000000000003 mm, and on the
   Mac `.page` with margins widened `testVoltaDynamic`'s sheets to 210.00000000000006 mm. Only an overflow of more than
   0.01 pt now widens a page, in both modes.
+- **`writtenPitchView()` draws each clef's transposing type**, as MuseScore does whenever Concert Pitch is off.
+  It drew the concert clef over written-pitch notes, so a bass part saved with F 8vb (concert) / F 8va
+  (transposing) read two octaves away from where it sits. `clefInForce(at:)`, `authoredClef(at:)` and the
+  clef intent's no-op check read `writtenClefType` to match.
+- **A transposed note keeps the accidental its bar calls for.** `writtenPitchView()` and `transposed(bySemitones:)`
+  re-derived every glyph from the key signature alone, so an A♭ that cancels an A♮ earlier in the bar lost its ♭.
+  A note now shows a glyph exactly when the stored one did, spelling its new alteration; a microtonal glyph
+  passes through.
+- **MIDI import keeps notes shorter than half a grid step.** Both ends snapped to the same grid point and the
+  note was dropped — which emptied whole drum parts written as fixed blips (a 10-tick hit at 480 PPQ). Such a
+  note now keeps one step, MuseScore's `findQuantizedNoteOffTime` rule, and a drum note is lengthened to the next
+  hit in its voice, the end of its beat or the barline (MuseScore's `minimizeNumberOfRests`), so an eighth-note
+  hi-hat reads as eighths.
+- **MIDI import measures bars by the conductor track's meter.** The bar timeline read time signatures from the
+  note-bearing tracks only, so a Format 1 file — meter on track 0, which carries no notes — imported a 3/4 piece in
+  4/4 bars under a 3/4 signature. Every track's time signatures count now, as in MuseScore's `createMTrackList`.
+- **A clef always writes `<transposingClefType>`.** A `<Clef>` naming only its concert type reads back in MuseScore
+  with the transposing type at G (`TRead::read(Clef*)`), and MuseScore shows the transposing type by default — so a
+  bass clef set in folino opened in MuseScore as a treble clef. The decoder folds a transposing type equal to the
+  concert one to `nil`, so such a clef still reads back equal to itself; the MusicXML decoder spells its one clef the
+  same way.
 
 ## [4.1.0] - 2026-10-02
 
