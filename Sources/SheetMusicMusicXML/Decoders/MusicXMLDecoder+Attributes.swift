@@ -101,12 +101,11 @@ enum AttributesDecoder {
             let staffIndex = max(0, min(staffCount - 1, number - 1))
             let prior = previous.clefByStaff[staffIndex]
             if isFirstMeasure || prior != concert {
+                // One clef for both views — MuseScore's MusicXML import sets both types alike, which the model
+                // spells as no transposing type (the MSCX decoder folds an equal pair the same way).
                 output.append(Emission(
                     staffIndex: staffIndex,
-                    element: .clef(Clef(
-                        concertClefType: concert,
-                        transposingClefType: concert,
-                    )),
+                    element: .clef(Clef(concertClefType: concert)),
                 ))
                 previous.clefByStaff[staffIndex] = concert
             }

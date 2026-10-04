@@ -6,11 +6,10 @@ extension Clef {
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         children.append(XMLTreeNode(name: "concertClefType", text: concertClefType))
-        if let transposingClefType {
-            children.append(XMLTreeNode(
-                name: "transposingClefType", text: transposingClefType,
-            ))
-        }
+        // Always written, as MuseScore always writes it: a `<Clef>` naming only the concert type reads back in
+        // MuseScore with the transposing one at `ClefTypeList`'s default, G (`TRead::read(Clef*)`), and the
+        // transposing type is what MuseScore shows by default — so a bass clef written without it opened as treble.
+        children.append(XMLTreeNode(name: "transposingClefType", text: writtenClefType))
         // `<eid>` sits here, not first: `TWrite::write(const Clef*, ...)`
         // (`rw/write/twrite.cpp:1247-1262`) writes the concert/transposing
         // clef type (and `isHeader`/`isCourtesy`/etc., unmodeled here)
