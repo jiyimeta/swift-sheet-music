@@ -204,21 +204,6 @@ struct ChordOrnamentDecodeTests {
         #expect(!chord.preservedMarkup.map(\.name).contains("Ornament"))
     }
 
-    @Test func museScore3OrnamentArticulationsAreStillArticulations() throws {
-        // MuseScore 3 wrote ornaments as <Articulation> with an ornament SymId.
-        // Converting them here would change the element shape a round trip
-        // produces; compat migration is a separate concern from parity.
-        let chord = try parseChord("""
-        <durationType>quarter</durationType>
-        <Articulation><subtype>ornamentTrill</subtype></Articulation>
-        <Note><pitch>60</pitch><tpc>14</tpc></Note>
-        """)
-        #expect(chord.ornaments.isEmpty)
-        #expect(chord.articulations == [
-            ChordArticulation(kind: .unknown(subtype: "ornamentTrill")),
-        ])
-    }
-
     @Test func hiddenOrnamentKeepsItsVisibility() throws {
         let chord = try parseChord("""
         <durationType>quarter</durationType>

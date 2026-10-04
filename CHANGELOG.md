@@ -94,6 +94,16 @@ and this project adheres to
 - **`Clef.writtenClefType`** — the clef a reader sees with Concert Pitch off: `transposingClefType`, else the
   concert type.
 
+### Changed
+
+- **MuseScore 3's ornaments decode as ornaments.** MuseScore 3 (and 4.0) wrote a trill, mordent or turn as an
+  `<Articulation>` with an ornament SymId; it decoded as an `.unknown` articulation. It now lands in
+  `Chord.ornaments` as the `ChordOrnament` it names, with its `ornamentStyle` and `play`, as MuseScore 4.1 converts it
+  on load (`CompatUtils::replaceOldWithNewOrnaments`) — every ornament kind this package models, while
+  `brassMuteClosed` stays an articulation. A v4 encode writes it as `<Ornament>`; a v3 encode writes the
+  `<Articulation>` back. The engraver and the MIDI renderer still read no ornament, MuseScore 4's or 3's, so nothing
+  draws or sounds differently yet: the change puts both spellings in the one place that work will read.
+
 ### Fixed
 
 - **Windows: a preview started in the same moment as a pause is no longer cut.** FluidSynth's stopped player sends

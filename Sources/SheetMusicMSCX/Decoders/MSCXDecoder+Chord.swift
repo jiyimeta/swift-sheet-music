@@ -40,9 +40,20 @@ extension Chord {
             arpeggio?.elementProperties = ElementProperties(decodingMSCXChildrenOf: arpeggioNode)
         }
 
-        let articulations = node.all("Articulation").map { artNode -> ChordArticulation in
+        // MuseScore 3 (and 4.0) wrote an ornament as an `<Articulation>` with an ornament SymId; MuseScore 4.1 turns
+        // each into an `<Ornament>` on load (`CompatUtils::replaceOldWithNewOrnaments`), and so does this decoder —
+        // left an articulation, it decoded as `.unknown` and was neither drawn nor played. Every ornament kind this
+        // package models moves: MuseScore's list, less `brassMuteClosed` (an articulation here, as in MuseScore 4's
+        // Articulations palette), plus the two up-turns and the Haydn, which MuseScore leaves as articulation symbols.
+        var articulations: [ChordArticulation] = []
+        var legacyOrnaments: [ChordOrnament] = []
+        for artNode in node.all("Articulation") {
             let subtype = artNode.first("subtype")?.text ?? ""
-            return ChordArticulation.fromSubtypeXML(subtype)
+            if ChordOrnament.Kind(mscxToken: subtype) != nil {
+                legacyOrnaments.append(ChordOrnament.decode(artNode))
+            } else {
+                articulations.append(ChordArticulation.fromSubtypeXML(subtype))
+            }
         }
 
         // MS3 emits `<Tremolo>`; MS4 split it into `<TremoloSingleChord>`
@@ -67,7 +78,7 @@ extension Chord {
             arpeggio: arpeggio, bracket: ChordBracket.decode(inChord: node),
             lyrics: decodeLyrics(node),
             articulations: articulations,
-            ornaments: ChordOrnament.decodeAll(inChord: node),
+            ornaments: ChordOrnament.decodeAll(inChord: node) + legacyOrnaments,
             tremolo: tremolo,
             chordLines: ChordLine.decodeAll(inChord: node),
             stemVisible: stemVisible,
