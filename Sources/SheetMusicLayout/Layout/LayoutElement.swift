@@ -448,6 +448,7 @@ public enum LayoutElement: Sendable, Equatable {
         case marcato
         case accentStaccato
         case marcatoStaccato
+        case tenutoStaccato
     }
 
     public enum TextMarkKind: Sendable, Equatable {

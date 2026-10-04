@@ -9,6 +9,12 @@ and this project adheres to
 
 ### Added
 
+- **Tenuto-staccato (louré).** `ChordArticulation.Kind.tenutoStaccato` reads and writes MuseScore's
+  `articTenutoStaccatoAbove` / `…Below`, draws SMuFL U+E4B2 / U+E4B3 clear of the staff (MuseScore's
+  `isDouble()` placement), and plays from the instrument's "portato" preset, 67% when it names none. It decoded
+  as `.unknown` before, so a part marked this way showed and played nothing. `LayoutElement.ArticulationKind`
+  and `ScoreArticulationKindWire` (appended, choice 8) gain the same case, and so does the Kotlin
+  `ScoreArticulationKind` model.
 - **`Clef.writtenClefType`** — the clef a reader sees with Concert Pitch off: `transposingClefType`, else the
   concert type.
 

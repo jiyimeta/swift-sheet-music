@@ -223,6 +223,7 @@ struct FNV1a {
         case let .unknown(subtype):
             combine(7)
             combine(subtype)
+        case .tenutoStaccato: combine(8)
         }
         guard let anchor = articulation.anchor else {
             combine(-1)

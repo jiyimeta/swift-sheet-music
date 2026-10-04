@@ -513,14 +513,11 @@ extension MidiRenderer {
         instrument.articulations.first(where: { $0.name == nil })?.gateTime ?? 100
     }
 
-    /// Per-chord gateTime lookup. Filters `chord.articulations` to the
-    /// in-scope duration-shaping kinds (staccato / staccatissimo /
-    /// tenuto), looks each up in the instrument preset table, and
-    /// returns the **minimum** gateTime% among the candidates (matches
-    /// MuseScore's `MidiArticulation::aggregateOf` — most-shortening
-    /// wins). When no in-scope articulation is present, falls through
-    /// to `defaultArticulationGateTime(for:)` so existing behavior is
-    /// preserved. C++:
+    /// Per-chord gateTime lookup. Filters `chord.articulations` to the in-scope duration-shaping kinds (staccato /
+    /// staccatissimo / tenuto / tenuto-staccato, which MuseScore plays from its "portato" preset), looks each up in
+    /// the instrument preset table, and returns the **minimum** gateTime% among the candidates (matches MuseScore's
+    /// `MidiArticulation::aggregateOf` — most-shortening wins). When no in-scope articulation is present, falls
+    /// through to `defaultArticulationGateTime(for:)` so existing behavior is preserved. C++:
     ///   engraving/compat/midi/compatmidirender.cpp
     ///   `CompatMidiRender::collectMeasureEvents` — `articulationGateTime`.
     static func effectiveGateTime(for chord: Chord, instrument: Instrument) -> Int {
@@ -531,6 +528,9 @@ extension MidiRenderer {
             case .staccato: presetName = "staccato"; hardcodedDefault = 50
             case .staccatissimo: presetName = "staccatissimo"; hardcodedDefault = 33
             case .tenuto: presetName = "tenuto"; hardcodedDefault = 100
+            // `Articulation::symId2ArticulationName` names the louré "portato"; `s_builtInArticulationsValues`
+            // gives it 67%.
+            case .tenutoStaccato: presetName = "portato"; hardcodedDefault = 67
             case .accentStaccato, .marcatoStaccato:
                 presetName = "staccato"; hardcodedDefault = 50
             case .accent, .marcato, .unknown:
@@ -566,7 +566,7 @@ extension MidiRenderer {
                 presetName = "accent"; hardcodedDefault = 120
             case .marcato, .marcatoStaccato:
                 presetName = "marcato"; hardcodedDefault = 120
-            case .staccato, .staccatissimo, .tenuto, .unknown:
+            case .staccato, .staccatissimo, .tenuto, .tenutoStaccato, .unknown:
                 return nil
             }
             return instrument.articulations

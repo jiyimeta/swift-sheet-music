@@ -2,9 +2,9 @@ import SheetMusicFoundation
 
 /// Per-chord articulation marking. C++: `mu::engraving::Articulation`.
 ///
-/// The duration-shaping family (staccato / staccatissimo / tenuto) and
-/// velocity-shaping family (accent / marcato / accentStaccato /
-/// marcatoStaccato) are consumed by the MIDI renderer. Any other subtype
+/// The duration-shaping family (staccato / staccatissimo / tenuto /
+/// tenutoStaccato) and velocity-shaping family (accent / marcato /
+/// accentStaccato / marcatoStaccato) are consumed by the MIDI renderer. Any other subtype
 /// decoded from mscx is preserved as `.unknown(subtype:)` so the encoder
 /// can emit the same XML back, but the renderer ignores it.
 public struct ChordArticulation: Sendable, Equatable {
@@ -28,6 +28,9 @@ public struct ChordArticulation: Sendable, Equatable {
         case marcato // articMarcatoAbove/Below
         case accentStaccato // articAccentStaccatoAbove/Below
         case marcatoStaccato // articMarcatoStaccatoAbove/Below
+        /// Louré: the tenuto line over the staccato dot (articTenutoStaccatoAbove/Below). MuseScore calls it
+        /// "portato" when it picks the instrument's playback preset.
+        case tenutoStaccato
         /// Any subtype outside the in-scope set above. The raw MS4
         /// SymId (e.g. `articSoftAccentAbove`) is preserved verbatim.
         case unknown(subtype: String)
@@ -48,11 +51,12 @@ public struct ChordArticulation: Sendable, Equatable {
             case .marcato: "articMarcato"
             case .accentStaccato: "articAccentStaccato"
             case .marcatoStaccato: "articMarcatoStaccato"
+            case .tenutoStaccato: "articTenutoStaccato"
             case let .unknown(subtype): subtype
             }
         }
 
-        /// Reverse of `mscxToken` for the seven in-scope kinds. `nil` for anything else — including an
+        /// Reverse of `mscxToken` for the eight in-scope kinds. `nil` for anything else — including an
         /// anchor-bearing string, since callers strip the anchor first. Never returns `.unknown`: a caller that
         /// wants the round-trip-preserving fallback builds it itself, so that "this is a kind I model" and "this
         /// is a string I keep" stay two different answers.
@@ -65,6 +69,7 @@ public struct ChordArticulation: Sendable, Equatable {
             case "articMarcato": self = .marcato
             case "articAccentStaccato": self = .accentStaccato
             case "articMarcatoStaccato": self = .marcatoStaccato
+            case "articTenutoStaccato": self = .tenutoStaccato
             default: return nil
             }
         }

@@ -123,6 +123,9 @@ public enum SMuFLCodepoint {
     public static let articMarcatoBelow: UInt32 = 0xE4AD
     public static let articAccentStaccatoAbove: UInt32 = 0xE4B0
     public static let articAccentStaccatoBelow: UInt32 = 0xE4B1
+    /// Louré (tenuto-staccato), MuseScore's "portato".
+    public static let articTenutoStaccatoAbove: UInt32 = 0xE4B2
+    public static let articTenutoStaccatoBelow: UInt32 = 0xE4B3
     public static let articMarcatoStaccatoAbove: UInt32 = 0xE4AE
     public static let articMarcatoStaccatoBelow: UInt32 = 0xE4AF
 

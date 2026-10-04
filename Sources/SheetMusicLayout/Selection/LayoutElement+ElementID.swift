@@ -60,6 +60,7 @@ extension LayoutElement.ArticulationKind {
         case .marcato: .marcato
         case .accentStaccato: .accentStaccato
         case .marcatoStaccato: .marcatoStaccato
+        case .tenutoStaccato: .tenutoStaccato
         }
     }
 }

@@ -10,4 +10,5 @@ sealed class ScoreArticulationKind {
     object AccentStaccato : ScoreArticulationKind()
     object MarcatoStaccato : ScoreArticulationKind()
     data class Unknown(val arg0: String) : ScoreArticulationKind()
+    object TenutoStaccato : ScoreArticulationKind()
 }

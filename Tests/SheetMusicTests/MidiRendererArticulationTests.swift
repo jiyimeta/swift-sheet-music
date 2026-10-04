@@ -59,6 +59,20 @@ struct MidiRendererArticulationTests {
         #expect(gate == 100)
     }
 
+    /// MuseScore plays the louré from the instrument's "portato" preset (`symId2ArticulationName`), 67% when the
+    /// instrument names none (`s_builtInArticulationsValues`).
+    @Test func tenutoStaccatoPlaysThePortatoPreset() {
+        #expect(MidiRenderer.effectiveGateTime(for: chord([.tenutoStaccato]), instrument: bareInstrument) == 67)
+        let bass = Instrument(
+            id: "test",
+            articulations: [
+                InstrumentArticulation(name: nil, velocity: 100, gateTime: 100),
+                InstrumentArticulation(name: "portato", velocity: 100, gateTime: 60),
+            ],
+        )
+        #expect(MidiRenderer.effectiveGateTime(for: chord([.tenutoStaccato]), instrument: bass) == 60)
+    }
+
     @Test func multipleInScopeArticulationsTakeMinimumGate() {
         // staccato (50) + tenuto (100) → 50 wins. Mirrors
         // MuseScore's MidiArticulation::aggregateOf behavior.

@@ -10,6 +10,7 @@ struct ArticulationTokenTests {
         (.staccato, "articStaccato"), (.staccatissimo, "articStaccatissimo"), (.tenuto, "articTenuto"),
         (.accent, "articAccent"), (.marcato, "articMarcato"),
         (.accentStaccato, "articAccentStaccato"), (.marcatoStaccato, "articMarcatoStaccato"),
+        (.tenutoStaccato, "articTenutoStaccato"),
     ]
 
     @Test("each known kind spells its MuseScore SymId base, and reads back", arguments: known)
@@ -27,6 +28,7 @@ struct ArticulationTokenTests {
     @Test("the decoder still strips the anchor and keeps the FULL string for an unknown", arguments: [
         ("articStaccatoAbove", ChordArticulation(kind: .staccato, anchor: .above)),
         ("articTenutoBelow", ChordArticulation(kind: .tenuto, anchor: .below)),
+        ("articTenutoStaccatoBelow", ChordArticulation(kind: .tenutoStaccato, anchor: .below)),
         ("articAccent", ChordArticulation(kind: .accent, anchor: nil)),
         ("articSoftAccentAbove", ChordArticulation(kind: .unknown(subtype: "articSoftAccentAbove"))),
     ])

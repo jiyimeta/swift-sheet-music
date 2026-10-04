@@ -1,8 +1,8 @@
 import SheetMusicFoundation
 
 /// SMuFL codepoint selector for chord-articulation glyphs (staccato,
-/// staccatissimo, tenuto, accent, marcato, plus the accent+staccato
-/// and marcato+staccato combined variants).
+/// staccatissimo, tenuto, accent, marcato, plus the accent+staccato,
+/// marcato+staccato and tenuto+staccato combined variants).
 ///
 /// MuseScore stores each articulation with an explicit anchor side;
 /// the above/below pairs share a shape mirrored across the baseline,
@@ -31,6 +31,10 @@ public enum ArticulationGlyph {
             return SMuFLCodepoint.articMarcatoStaccatoAbove
         case (.marcatoStaccato, false):
             return SMuFLCodepoint.articMarcatoStaccatoBelow
+        case (.tenutoStaccato, true):
+            return SMuFLCodepoint.articTenutoStaccatoAbove
+        case (.tenutoStaccato, false):
+            return SMuFLCodepoint.articTenutoStaccatoBelow
         }
     }
 }

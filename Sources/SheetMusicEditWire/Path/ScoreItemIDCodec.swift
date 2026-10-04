@@ -279,6 +279,7 @@ public enum ScoreArticulationKindWire {
     case accentStaccato
     case marcatoStaccato
     case unknown(String)
+    case tenutoStaccato
 
     public init(from value: ChordArticulation.Kind) {
         switch value {
@@ -290,6 +291,7 @@ public enum ScoreArticulationKindWire {
         case .accentStaccato: self = .accentStaccato
         case .marcatoStaccato: self = .marcatoStaccato
         case let .unknown(subtype): self = .unknown(subtype)
+        case .tenutoStaccato: self = .tenutoStaccato
         }
     }
 
@@ -303,6 +305,7 @@ public enum ScoreArticulationKindWire {
         case .accentStaccato: return .accentStaccato
         case .marcatoStaccato: return .marcatoStaccato
         case let .unknown(subtype): return .unknown(subtype: subtype)
+        case .tenutoStaccato: return .tenutoStaccato
         }
     }
 }

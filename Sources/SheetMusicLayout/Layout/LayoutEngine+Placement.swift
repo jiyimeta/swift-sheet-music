@@ -2424,6 +2424,7 @@ extension LayoutEngine {
         case .marcato: .marcato
         case .accentStaccato: .accentStaccato
         case .marcatoStaccato: .marcatoStaccato
+        case .tenutoStaccato: .tenutoStaccato
         case .unknown: nil
         }
     }
@@ -2433,13 +2434,14 @@ extension LayoutEngine {
     ///
     /// Mirrors MuseScore's `Articulation::layoutCloseToNote()`: the single
     /// staccato dot, staccatissimo wedge, and tenuto line hug the note; accent,
-    /// marcato, and the combined forms sit outside the staff.
+    /// marcato, and the combined forms (`isDouble()`, which counts the
+    /// tenuto-staccato louré) sit outside the staff.
     static func articulationHugsNote(
         _ kind: LayoutElement.ArticulationKind,
     ) -> Bool {
         switch kind {
         case .staccato, .staccatissimo, .tenuto: true
-        case .accent, .marcato, .accentStaccato, .marcatoStaccato: false
+        case .accent, .marcato, .accentStaccato, .marcatoStaccato, .tenutoStaccato: false
         }
     }
 
@@ -2452,7 +2454,7 @@ extension LayoutEngine {
     ) -> Bool {
         switch kind {
         case .marcato, .marcatoStaccato: true
-        case .staccato, .staccatissimo, .tenuto, .accent, .accentStaccato: false
+        case .staccato, .staccatissimo, .tenuto, .accent, .accentStaccato, .tenutoStaccato: false
         }
     }
 
