@@ -73,6 +73,20 @@ struct MidiRendererArticulationTests {
         #expect(MidiRenderer.effectiveGateTime(for: chord([.tenutoStaccato]), instrument: bass) == 60)
     }
 
+    /// A combined mark plays from its duration-shaping half's preset and its accent half's velocity, the way
+    /// `accentStaccato` always has; the stroke and wedge are staccatissimos (`symId2ArticulationName`). The marks
+    /// that shape neither play as written.
+    @Test("each mark plays its halves' presets", arguments: [
+        (ChordArticulation.Kind.tenutoAccent, 100, 120), (.marcatoTenuto, 100, 120),
+        (.staccatissimoStroke, 33, 100), (.staccatissimoWedge, 33, 100),
+        (.softAccentStaccato, 50, 100), (.softAccentTenuto, 100, 100), (.softAccentTenutoStaccato, 67, 100),
+        (.stress, 95, 100), (.unstress, 95, 100), (.softAccent, 95, 100), (.upBow, 95, 100), (.harmonic, 95, 100),
+    ] as [(ChordArticulation.Kind, Int, Int)])
+    func combinedMarksPlayTheirHalves(kind: ChordArticulation.Kind, gate: Int, velocity: Int) {
+        #expect(MidiRenderer.effectiveGateTime(for: chord([kind]), instrument: bareInstrument) == gate)
+        #expect(MidiRenderer.effectiveVelocityScale(for: chord([kind]), instrument: bareInstrument) == velocity)
+    }
+
     @Test func multipleInScopeArticulationsTakeMinimumGate() {
         // staccato (50) + tenuto (100) → 50 wins. Mirrors
         // MuseScore's MidiArticulation::aggregateOf behavior.

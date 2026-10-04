@@ -6,11 +6,19 @@ import Testing
 /// and encode paths call it, so this suite is what pins that the move changed no string.
 @Suite("ChordArticulation.Kind mscx tokens")
 struct ArticulationTokenTests {
+    /// Every modeled kind and the MuseScore SymId base it spells — MuseScore's Articulations palette, default and
+    /// master lists (`PaletteCreator::newArticulationsPalette`).
     private static let known: [(ChordArticulation.Kind, String)] = [
         (.staccato, "articStaccato"), (.staccatissimo, "articStaccatissimo"), (.tenuto, "articTenuto"),
         (.accent, "articAccent"), (.marcato, "articMarcato"),
         (.accentStaccato, "articAccentStaccato"), (.marcatoStaccato, "articMarcatoStaccato"),
-        (.tenutoStaccato, "articTenutoStaccato"),
+        (.tenutoStaccato, "articTenutoStaccato"), (.tenutoAccent, "articTenutoAccent"),
+        (.marcatoTenuto, "articMarcatoTenuto"), (.staccatissimoStroke, "articStaccatissimoStroke"),
+        (.staccatissimoWedge, "articStaccatissimoWedge"), (.stress, "articStress"), (.unstress, "articUnstress"),
+        (.softAccent, "articSoftAccent"), (.softAccentStaccato, "articSoftAccentStaccato"),
+        (.softAccentTenuto, "articSoftAccentTenuto"), (.softAccentTenutoStaccato, "articSoftAccentTenutoStaccato"),
+        (.muteOpen, "brassMuteOpen"), (.muteClosed, "brassMuteClosed"), (.harmonic, "stringsHarmonic"),
+        (.upBow, "stringsUpBow"), (.downBow, "stringsDownBow"),
     ]
 
     @Test("each known kind spells its MuseScore SymId base, and reads back", arguments: known)
@@ -19,18 +27,29 @@ struct ArticulationTokenTests {
         #expect(ChordArticulation.Kind(mscxToken: token) == kind)
     }
 
+    @Test("the table names every modeled kind once")
+    func tableCoversEveryModeledKind() {
+        #expect(Self.known.map(\.0) == ChordArticulation.Kind.modeled)
+    }
+
     @Test("an unknown token has no known kind, and an unknown kind spells its raw string back")
     func unknown() {
-        #expect(ChordArticulation.Kind(mscxToken: "articSoftAccentAbove") == nil)
-        #expect(ChordArticulation.Kind.unknown(subtype: "articSoftAccentAbove").mscxToken == "articSoftAccentAbove")
+        #expect(ChordArticulation.Kind(mscxToken: "articLaissezVibrerAbove") == nil)
+        #expect(
+            ChordArticulation.Kind.unknown(subtype: "articLaissezVibrerAbove").mscxToken == "articLaissezVibrerAbove",
+        )
     }
 
     @Test("the decoder still strips the anchor and keeps the FULL string for an unknown", arguments: [
         ("articStaccatoAbove", ChordArticulation(kind: .staccato, anchor: .above)),
         ("articTenutoBelow", ChordArticulation(kind: .tenuto, anchor: .below)),
         ("articTenutoStaccatoBelow", ChordArticulation(kind: .tenutoStaccato, anchor: .below)),
+        ("articStressBelow", ChordArticulation(kind: .stress, anchor: .below)),
+        ("articSoftAccentTenutoStaccatoAbove", ChordArticulation(kind: .softAccentTenutoStaccato, anchor: .above)),
+        ("stringsUpBow", ChordArticulation(kind: .upBow, anchor: nil)),
+        ("brassMuteClosed", ChordArticulation(kind: .muteClosed, anchor: nil)),
         ("articAccent", ChordArticulation(kind: .accent, anchor: nil)),
-        ("articSoftAccentAbove", ChordArticulation(kind: .unknown(subtype: "articSoftAccentAbove"))),
+        ("articLaissezVibrerAbove", ChordArticulation(kind: .unknown(subtype: "articLaissezVibrerAbove"))),
     ])
     func decodeIsUnchanged(subtype: String, expected: ChordArticulation) {
         #expect(ChordArticulation.fromSubtypeXML(subtype) == expected)
@@ -38,12 +57,24 @@ struct ArticulationTokenTests {
 
     @Test("encode is the inverse for every known kind and both anchors, and verbatim for an unknown")
     func encodeIsUnchanged() {
-        for (kind, token) in Self.known {
+        for (kind, token) in Self.known where kind.hasPlacementVariants {
             #expect(ChordArticulation(kind: kind, anchor: .above).subtypeXML() == token + "Above")
             #expect(ChordArticulation(kind: kind, anchor: .below).subtypeXML() == token + "Below")
             #expect(ChordArticulation(kind: kind, anchor: nil).subtypeXML() == token + "Above")
         }
         #expect(ChordArticulation(kind: .unknown(subtype: "x"), anchor: .below).subtypeXML() == "x")
+    }
+
+    /// The brass mutes, the harmonic and the bow marks are one SymId each — `stringsUpBow`, not
+    /// `stringsUpBowAbove`, which MuseScore would not read — so they go out bare whatever the anchor says.
+    @Test("a kind with no Above / Below pair writes its token bare")
+    func singleFormKindsWriteBare() {
+        let bare: [ChordArticulation.Kind] = [.muteOpen, .muteClosed, .harmonic, .upBow, .downBow]
+        #expect(Self.known.filter { !$0.0.hasPlacementVariants }.map(\.0) == bare)
+        for kind in bare {
+            #expect(ChordArticulation(kind: kind, anchor: nil).subtypeXML() == kind.mscxToken)
+            #expect(ChordArticulation(kind: kind, anchor: .below).subtypeXML() == kind.mscxToken)
+        }
     }
 
     /// MuseScore's `ARPEGGIO_TYPES` is `0 NORMAL, 1 UP, 2 DOWN, 3 BRACKET, 4 UP_STRAIGHT, 5 DOWN_STRAIGHT`

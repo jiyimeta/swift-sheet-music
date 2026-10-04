@@ -68,6 +68,19 @@ and this project adheres to
   as `.unknown` before, so a part marked this way showed and played nothing. `LayoutElement.ArticulationKind`
   and `ScoreArticulationKindWire` (appended, choice 8) gain the same case, and so does the Kotlin
   `ScoreArticulationKind` model.
+- **The rest of MuseScore's Articulations palette.** `ChordArticulation.Kind` gains `tenutoAccent`,
+  `marcatoTenuto`, `staccatissimoStroke`, `staccatissimoWedge`, `stress`, `unstress`, `softAccent`,
+  `softAccentStaccato`, `softAccentTenuto`, `softAccentTenutoStaccato`, `muteOpen` / `muteClosed`
+  (`brassMuteOpen` / `brassMuteClosed`), `harmonic` (`stringsHarmonic`) and `upBow` / `downBow`
+  (`stringsUpBow` / `stringsDownBow`), with `ChordArticulation.Kind.modeled` listing every known kind. Each reads
+  and writes its MuseScore subtype — the five technique marks bare, since they have no `Above` / `Below` pair
+  (`hasPlacementVariants`) — and draws its SMuFL glyph: the technique marks and the marcato range above the staff
+  (MuseScore's `AnchorGroup::OTHER` and forced-up marcato), the combined forms clear of it. Playback follows each
+  mark's halves the way `accentStaccato` always has: the stroke and wedge play as staccatissimo, the soft-accent
+  forms from their staccato / tenuto / portato half, `tenutoAccent` and `marcatoTenuto` at full length with the
+  accent velocity. These decoded as `.unknown` before and showed and played nothing. `LayoutElement.ArticulationKind`,
+  `ScoreArticulationKindWire` (appended, choices 9–23) and the Kotlin `ScoreArticulationKind` model gain the same
+  cases.
 - **`Clef.writtenClefType`** — the clef a reader sees with Concert Pitch off: `transposingClefType`, else the
   concert type.
 

@@ -1,40 +1,50 @@
 import SheetMusicFoundation
 
-/// SMuFL codepoint selector for chord-articulation glyphs (staccato,
-/// staccatissimo, tenuto, accent, marcato, plus the accent+staccato,
-/// marcato+staccato and tenuto+staccato combined variants).
+/// SMuFL codepoint selector for chord-articulation glyphs: the staccato,
+/// staccatissimo (plain, stroke, wedge), tenuto, accent, marcato, stress and
+/// soft-accent families with their combined forms, plus the technique marks
+/// MuseScore files under Articulations (brass mutes, harmonic, bow marks).
 ///
 /// MuseScore stores each articulation with an explicit anchor side;
 /// the above/below pairs share a shape mirrored across the baseline,
 /// so the renderer just picks the variant with the matching anchor
-/// and renders at the placement-supplied `origin`.
+/// and renders at the placement-supplied `origin`. A technique mark has
+/// one form and always sits above, so both sides name the same glyph.
 public enum ArticulationGlyph {
     public static func codepoint(
         kind: LayoutElement.ArticulationKind, isAbove: Bool,
     ) -> UInt32 {
-        switch (kind, isAbove) {
-        case (.staccato, true): return SMuFLCodepoint.articStaccatoAbove
-        case (.staccato, false): return SMuFLCodepoint.articStaccatoBelow
-        case (.staccatissimo, true): return SMuFLCodepoint.articStaccatissimoAbove
-        case (.staccatissimo, false): return SMuFLCodepoint.articStaccatissimoBelow
-        case (.tenuto, true): return SMuFLCodepoint.articTenutoAbove
-        case (.tenuto, false): return SMuFLCodepoint.articTenutoBelow
-        case (.accent, true): return SMuFLCodepoint.articAccentAbove
-        case (.accent, false): return SMuFLCodepoint.articAccentBelow
-        case (.marcato, true): return SMuFLCodepoint.articMarcatoAbove
-        case (.marcato, false): return SMuFLCodepoint.articMarcatoBelow
-        case (.accentStaccato, true):
-            return SMuFLCodepoint.articAccentStaccatoAbove
-        case (.accentStaccato, false):
-            return SMuFLCodepoint.articAccentStaccatoBelow
-        case (.marcatoStaccato, true):
-            return SMuFLCodepoint.articMarcatoStaccatoAbove
-        case (.marcatoStaccato, false):
-            return SMuFLCodepoint.articMarcatoStaccatoBelow
-        case (.tenutoStaccato, true):
-            return SMuFLCodepoint.articTenutoStaccatoAbove
-        case (.tenutoStaccato, false):
-            return SMuFLCodepoint.articTenutoStaccatoBelow
+        let (above, below) = pair(for: kind)
+        return isAbove ? above : below
+    }
+
+    private typealias C = SMuFLCodepoint
+
+    private static func pair(for kind: LayoutElement.ArticulationKind) -> (UInt32, UInt32) {
+        switch kind {
+        case .staccato: (C.articStaccatoAbove, C.articStaccatoBelow)
+        case .staccatissimo: (C.articStaccatissimoAbove, C.articStaccatissimoBelow)
+        case .tenuto: (C.articTenutoAbove, C.articTenutoBelow)
+        case .accent: (C.articAccentAbove, C.articAccentBelow)
+        case .marcato: (C.articMarcatoAbove, C.articMarcatoBelow)
+        case .accentStaccato: (C.articAccentStaccatoAbove, C.articAccentStaccatoBelow)
+        case .marcatoStaccato: (C.articMarcatoStaccatoAbove, C.articMarcatoStaccatoBelow)
+        case .tenutoStaccato: (C.articTenutoStaccatoAbove, C.articTenutoStaccatoBelow)
+        case .tenutoAccent: (C.articTenutoAccentAbove, C.articTenutoAccentBelow)
+        case .marcatoTenuto: (C.articMarcatoTenutoAbove, C.articMarcatoTenutoBelow)
+        case .staccatissimoStroke: (C.articStaccatissimoStrokeAbove, C.articStaccatissimoStrokeBelow)
+        case .staccatissimoWedge: (C.articStaccatissimoWedgeAbove, C.articStaccatissimoWedgeBelow)
+        case .stress: (C.articStressAbove, C.articStressBelow)
+        case .unstress: (C.articUnstressAbove, C.articUnstressBelow)
+        case .softAccent: (C.articSoftAccentAbove, C.articSoftAccentBelow)
+        case .softAccentStaccato: (C.articSoftAccentStaccatoAbove, C.articSoftAccentStaccatoBelow)
+        case .softAccentTenuto: (C.articSoftAccentTenutoAbove, C.articSoftAccentTenutoBelow)
+        case .softAccentTenutoStaccato: (C.articSoftAccentTenutoStaccatoAbove, C.articSoftAccentTenutoStaccatoBelow)
+        case .muteOpen: (C.brassMuteOpen, C.brassMuteOpen)
+        case .muteClosed: (C.brassMuteClosed, C.brassMuteClosed)
+        case .harmonic: (C.stringsHarmonic, C.stringsHarmonic)
+        case .upBow: (C.stringsUpBow, C.stringsUpBow)
+        case .downBow: (C.stringsDownBow, C.stringsDownBow)
         }
     }
 }

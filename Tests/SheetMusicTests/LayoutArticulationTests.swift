@@ -21,7 +21,7 @@ struct LayoutArticulationTests {
     /// `pitch` controls staff position (60 = middle C, treble; 71 = B
     /// just above the middle line). `tpc` should spell `pitch` correctly
     /// so the note lands on its real staff line (default 14 = C natural).
-    private static func score(
+    static func score(
         pitch: Int = 60,
         tpc: Int = 14,
         articulations: [ChordArticulation] = [],
@@ -45,7 +45,7 @@ struct LayoutArticulationTests {
     }
 
     @available(macOS 15.0, iOS 16.0, *)
-    private static func laidOut(_ s: Score) -> LayoutDocument {
+    static func laidOut(_ s: Score) -> LayoutDocument {
         let opts = ScoreViewOptions(
             staffSize: 28, systemGap: 40, wrapToViewWidth: false,
         )
@@ -58,7 +58,7 @@ struct LayoutArticulationTests {
     /// Pull the single articulation + chord from a single-measure
     /// single-staff document. Returns `nil` if not exactly one of each.
     @available(macOS 15.0, iOS 16.0, *)
-    private static func soleArtAndChord(
+    static func soleArtAndChord(
         _ doc: LayoutDocument,
     ) -> (LayoutElement, LayoutElement)? {
         guard let measure = doc.systems.first?.measures.first
@@ -348,30 +348,5 @@ struct LayoutArticulationTests {
             else { Issue.record("not articulation"); return }
             #expect(kind == expected)
         }
-    }
-
-    /// The louré (tenuto over staccato) drawn with its own SMuFL glyph and, being one of MuseScore's `isDouble()`
-    /// articulations, pushed clear of the staff like the other combined forms rather than hugging the note. A bass
-    /// part marked this way on every note used to show nothing at all: the subtype decoded as `.unknown`.
-    @Test("Tenuto-staccato draws the louré glyph outside the staff")
-    func tenutoStaccatoIsDrawn() throws {
-        guard #available(macOS 15.0, iOS 16.0, *) else { return }
-        let doc = Self.laidOut(Self.score(
-            pitch: 67, tpc: 15, // G4, below the middle line → stem up → below
-            articulations: [.init(kind: .tenutoStaccato, anchor: .below)],
-        ))
-        let (art, _) = try #require(Self.soleArtAndChord(doc))
-        guard case let .articulation(kind, origin, isAbove, _) = art
-        else { Issue.record("not articulation"); return }
-        #expect(kind == .tenutoStaccato)
-        #expect(isAbove == false)
-        #expect(ArticulationGlyph.codepoint(kind: kind, isAbove: isAbove) == 0xE4B3)
-        #expect(ArticulationGlyph.codepoint(kind: kind, isAbove: true) == 0xE4B2)
-        guard let system = doc.systems.first,
-              let staffOriginY = system.staffOrigins.first?.y
-        else { Issue.record("no staff origin"); return }
-        let sp = doc.metrics.sp
-        let staffBottomY = staffOriginY + doc.metrics.staffHeight / 2 + sp * 2
-        #expect(origin.y >= staffBottomY + sp * 0.5 - 0.001)
     }
 }

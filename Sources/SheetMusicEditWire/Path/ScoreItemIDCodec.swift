@@ -280,6 +280,21 @@ public enum ScoreArticulationKindWire {
     case marcatoStaccato
     case unknown(String)
     case tenutoStaccato
+    case tenutoAccent
+    case marcatoTenuto
+    case staccatissimoStroke
+    case staccatissimoWedge
+    case stress
+    case unstress
+    case softAccent
+    case softAccentStaccato
+    case softAccentTenuto
+    case softAccentTenutoStaccato
+    case muteOpen
+    case muteClosed
+    case harmonic
+    case upBow
+    case downBow
 
     public init(from value: ChordArticulation.Kind) {
         switch value {
@@ -292,20 +307,50 @@ public enum ScoreArticulationKindWire {
         case .marcatoStaccato: self = .marcatoStaccato
         case let .unknown(subtype): self = .unknown(subtype)
         case .tenutoStaccato: self = .tenutoStaccato
+        case .tenutoAccent: self = .tenutoAccent
+        case .marcatoTenuto: self = .marcatoTenuto
+        case .staccatissimoStroke: self = .staccatissimoStroke
+        case .staccatissimoWedge: self = .staccatissimoWedge
+        case .stress: self = .stress
+        case .unstress: self = .unstress
+        case .softAccent: self = .softAccent
+        case .softAccentStaccato: self = .softAccentStaccato
+        case .softAccentTenuto: self = .softAccentTenuto
+        case .softAccentTenutoStaccato: self = .softAccentTenutoStaccato
+        case .muteOpen: self = .muteOpen
+        case .muteClosed: self = .muteClosed
+        case .harmonic: self = .harmonic
+        case .upBow: self = .upBow
+        case .downBow: self = .downBow
         }
     }
 
     public func decoded() -> ChordArticulation.Kind {
         switch self {
-        case .staccato: return .staccato
-        case .staccatissimo: return .staccatissimo
-        case .tenuto: return .tenuto
-        case .accent: return .accent
-        case .marcato: return .marcato
-        case .accentStaccato: return .accentStaccato
-        case .marcatoStaccato: return .marcatoStaccato
-        case let .unknown(subtype): return .unknown(subtype: subtype)
-        case .tenutoStaccato: return .tenutoStaccato
+        case .staccato: .staccato
+        case .staccatissimo: .staccatissimo
+        case .tenuto: .tenuto
+        case .accent: .accent
+        case .marcato: .marcato
+        case .accentStaccato: .accentStaccato
+        case .marcatoStaccato: .marcatoStaccato
+        case let .unknown(subtype): .unknown(subtype: subtype)
+        case .tenutoStaccato: .tenutoStaccato
+        case .tenutoAccent: .tenutoAccent
+        case .marcatoTenuto: .marcatoTenuto
+        case .staccatissimoStroke: .staccatissimoStroke
+        case .staccatissimoWedge: .staccatissimoWedge
+        case .stress: .stress
+        case .unstress: .unstress
+        case .softAccent: .softAccent
+        case .softAccentStaccato: .softAccentStaccato
+        case .softAccentTenuto: .softAccentTenuto
+        case .softAccentTenutoStaccato: .softAccentTenutoStaccato
+        case .muteOpen: .muteOpen
+        case .muteClosed: .muteClosed
+        case .harmonic: .harmonic
+        case .upBow: .upBow
+        case .downBow: .downBow
         }
     }
 }

@@ -61,6 +61,21 @@ extension LayoutElement.ArticulationKind {
         case .accentStaccato: .accentStaccato
         case .marcatoStaccato: .marcatoStaccato
         case .tenutoStaccato: .tenutoStaccato
+        case .tenutoAccent: .tenutoAccent
+        case .marcatoTenuto: .marcatoTenuto
+        case .staccatissimoStroke: .staccatissimoStroke
+        case .staccatissimoWedge: .staccatissimoWedge
+        case .stress: .stress
+        case .unstress: .unstress
+        case .softAccent: .softAccent
+        case .softAccentStaccato: .softAccentStaccato
+        case .softAccentTenuto: .softAccentTenuto
+        case .softAccentTenutoStaccato: .softAccentTenutoStaccato
+        case .muteOpen: .muteOpen
+        case .muteClosed: .muteClosed
+        case .harmonic: .harmonic
+        case .upBow: .upBow
+        case .downBow: .downBow
         }
     }
 }

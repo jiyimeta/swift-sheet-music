@@ -212,18 +212,13 @@ struct FNV1a {
     }
 
     mutating func combine(_ articulation: ChordArticulation) {
-        switch articulation.kind {
-        case .staccato: combine(0)
-        case .staccatissimo: combine(1)
-        case .tenuto: combine(2)
-        case .accent: combine(3)
-        case .marcato: combine(4)
-        case .accentStaccato: combine(5)
-        case .marcatoStaccato: combine(6)
-        case let .unknown(subtype):
+        // Tags 0…6 and 8 are the original modeled kinds and 7 is `.unknown`; every kind added since takes the next
+        // free tag after them, in `Kind.modeled` order.
+        if case let .unknown(subtype) = articulation.kind {
             combine(7)
             combine(subtype)
-        case .tenutoStaccato: combine(8)
+        } else if let index = ChordArticulation.Kind.modeled.firstIndex(of: articulation.kind) {
+            combine(index < 7 ? index : index + 1)
         }
         guard let anchor = articulation.anchor else {
             combine(-1)

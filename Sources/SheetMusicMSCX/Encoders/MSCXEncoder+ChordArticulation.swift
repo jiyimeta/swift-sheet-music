@@ -15,13 +15,15 @@ extension ChordArticulation {
     }
 
     /// Build the `<subtype>` payload. `unknown` writes the raw string
-    /// verbatim (anchor ignored). Known kinds default `nil` anchor to
-    /// `Above`, matching MuseScore's default for newly created
-    /// articulations.
+    /// verbatim (anchor ignored), and so does a kind MuseScore spells
+    /// without an `Above` / `Below` pair (`stringsUpBow`). Other known
+    /// kinds default `nil` anchor to `Above`, matching MuseScore's
+    /// default for newly created articulations.
     func subtypeXML() -> String {
         if case let .unknown(raw) = kind {
             return raw
         }
+        guard kind.hasPlacementVariants else { return kind.mscxToken }
         let suffix: String
         switch anchor {
         case .below: suffix = "Below"

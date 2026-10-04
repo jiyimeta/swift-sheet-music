@@ -522,20 +522,7 @@ extension MidiRenderer {
     ///   `CompatMidiRender::collectMeasureEvents` — `articulationGateTime`.
     static func effectiveGateTime(for chord: Chord, instrument: Instrument) -> Int {
         let gates = chord.articulations.compactMap { art -> Int? in
-            let presetName: String
-            let hardcodedDefault: Int
-            switch art.kind {
-            case .staccato: presetName = "staccato"; hardcodedDefault = 50
-            case .staccatissimo: presetName = "staccatissimo"; hardcodedDefault = 33
-            case .tenuto: presetName = "tenuto"; hardcodedDefault = 100
-            // `Articulation::symId2ArticulationName` names the louré "portato"; `s_builtInArticulationsValues`
-            // gives it 67%.
-            case .tenutoStaccato: presetName = "portato"; hardcodedDefault = 67
-            case .accentStaccato, .marcatoStaccato:
-                presetName = "staccato"; hardcodedDefault = 50
-            case .accent, .marcato, .unknown:
-                return nil
-            }
+            guard let (presetName, hardcodedDefault) = gatePreset(for: art.kind) else { return nil }
             return instrument.articulations
                 .first(where: { $0.name == presetName })?
                 .gateTime ?? hardcodedDefault
@@ -546,9 +533,38 @@ extension MidiRenderer {
         return defaultArticulationGateTime(for: instrument)
     }
 
+    /// The instrument preset a kind shortens its notes by, and the gate% used when the instrument names none.
+    /// A combined mark takes its duration-shaping half's preset, the way `accentStaccato` always has; the stroke and
+    /// wedge staccatissimos are "staccatissimo" (`symId2ArticulationName`), and the louré is "portato", 67%
+    /// (`s_builtInArticulationsValues`). `nil` for a mark that does not shape duration.
+    private static func gatePreset(for kind: ChordArticulation.Kind) -> (String, Int)? {
+        switch kind {
+        case .staccato, .accentStaccato, .marcatoStaccato, .softAccentStaccato: ("staccato", 50)
+        case .staccatissimo, .staccatissimoStroke, .staccatissimoWedge: ("staccatissimo", 33)
+        case .tenuto, .tenutoAccent, .marcatoTenuto, .softAccentTenuto: ("tenuto", 100)
+        case .tenutoStaccato, .softAccentTenutoStaccato: ("portato", 67)
+        case .accent, .marcato, .stress, .unstress, .softAccent, .muteOpen, .muteClosed, .harmonic, .upBow,
+             .downBow, .unknown:
+            nil
+        }
+    }
+
+    /// The instrument preset a kind scales velocity by, and the % used when the instrument names none — the accent
+    /// or marcato half of a combined mark. `nil` for a mark that does not shape velocity.
+    private static func velocityPreset(for kind: ChordArticulation.Kind) -> (String, Int)? {
+        switch kind {
+        case .accent, .accentStaccato, .tenutoAccent: ("accent", 120)
+        case .marcato, .marcatoStaccato, .marcatoTenuto: ("marcato", 120)
+        case .staccato, .staccatissimo, .tenuto, .tenutoStaccato, .staccatissimoStroke, .staccatissimoWedge,
+             .stress, .unstress, .softAccent, .softAccentStaccato, .softAccentTenuto, .softAccentTenutoStaccato,
+             .muteOpen, .muteClosed, .harmonic, .upBow, .downBow, .unknown:
+            nil
+        }
+    }
+
     /// Per-chord velocity-scale lookup. Filters `chord.articulations`
-    /// to the in-scope velocity-shaping kinds (accent / marcato /
-    /// accentStaccato / marcatoStaccato), looks each up in the
+    /// to the in-scope velocity-shaping kinds (accent / marcato and the
+    /// combined forms carrying one, `velocityPreset(for:)`), looks each up in the
     /// instrument preset table, and returns the **maximum** velocity %
     /// among the candidates (matches MuseScore's
     /// `MidiArticulation::aggregateOf` — loudest wins). When no
@@ -559,16 +575,7 @@ extension MidiRenderer {
     ///   `CompatMidiRender::collectMeasureEvents` — articulation velocity.
     static func effectiveVelocityScale(for chord: Chord, instrument: Instrument) -> Int {
         let scales = chord.articulations.compactMap { art -> Int? in
-            let presetName: String
-            let hardcodedDefault: Int
-            switch art.kind {
-            case .accent, .accentStaccato:
-                presetName = "accent"; hardcodedDefault = 120
-            case .marcato, .marcatoStaccato:
-                presetName = "marcato"; hardcodedDefault = 120
-            case .staccato, .staccatissimo, .tenuto, .tenutoStaccato, .unknown:
-                return nil
-            }
+            guard let (presetName, hardcodedDefault) = velocityPreset(for: art.kind) else { return nil }
             return instrument.articulations
                 .first(where: { $0.name == presetName })?
                 .velocity ?? hardcodedDefault

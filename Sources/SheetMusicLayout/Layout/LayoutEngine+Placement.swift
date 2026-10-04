@@ -2425,6 +2425,21 @@ extension LayoutEngine {
         case .accentStaccato: .accentStaccato
         case .marcatoStaccato: .marcatoStaccato
         case .tenutoStaccato: .tenutoStaccato
+        case .tenutoAccent: .tenutoAccent
+        case .marcatoTenuto: .marcatoTenuto
+        case .staccatissimoStroke: .staccatissimoStroke
+        case .staccatissimoWedge: .staccatissimoWedge
+        case .stress: .stress
+        case .unstress: .unstress
+        case .softAccent: .softAccent
+        case .softAccentStaccato: .softAccentStaccato
+        case .softAccentTenuto: .softAccentTenuto
+        case .softAccentTenutoStaccato: .softAccentTenutoStaccato
+        case .muteOpen: .muteOpen
+        case .muteClosed: .muteClosed
+        case .harmonic: .harmonic
+        case .upBow: .upBow
+        case .downBow: .downBow
         case .unknown: nil
         }
     }
@@ -2435,26 +2450,36 @@ extension LayoutEngine {
     /// Mirrors MuseScore's `Articulation::layoutCloseToNote()`: the single
     /// staccato dot, staccatissimo wedge, and tenuto line hug the note; accent,
     /// marcato, and the combined forms (`isDouble()`, which counts the
-    /// tenuto-staccato louré) sit outside the staff.
+    /// tenuto-staccato louré, tenuto-accent and marcato-tenuto) sit outside the
+    /// staff. So does every mark MuseScore puts in no staccato or tenuto
+    /// category: the stroke and wedge staccatissimos, stress, unstress, the soft
+    /// accents and the technique marks.
     static func articulationHugsNote(
         _ kind: LayoutElement.ArticulationKind,
     ) -> Bool {
         switch kind {
         case .staccato, .staccatissimo, .tenuto: true
-        case .accent, .marcato, .accentStaccato, .marcatoStaccato, .tenutoStaccato: false
+        case .accent, .marcato, .accentStaccato, .marcatoStaccato, .tenutoStaccato, .tenutoAccent, .marcatoTenuto,
+             .staccatissimoStroke, .staccatissimoWedge, .stress, .unstress, .softAccent, .softAccentStaccato,
+             .softAccentTenuto, .softAccentTenutoStaccato, .muteOpen, .muteClosed, .harmonic, .upBow, .downBow:
+            false
         }
     }
 
-    /// Marcato-family glyphs that always sit above the staff regardless of
-    /// stem direction (Gould p.117 — "strong accents above the staff"),
-    /// mirroring MuseScore's `Chord::layoutArticulations` special case for
-    /// `articMarcato…` SymIds.
+    /// Glyphs that always sit above the staff regardless of stem direction:
+    /// the marcato family (Gould p.117 — "strong accents above the staff"),
+    /// MuseScore's `articMarcatoAbove … articMarcatoTenutoBelow` range in
+    /// `ChordLayout::layoutArticulations`, and the marks MuseScore anchors
+    /// `TOP` (`AnchorGroup::OTHER`): brass mutes, the harmonic, bow marks.
     static func articulationForcesAbove(
         _ kind: LayoutElement.ArticulationKind,
     ) -> Bool {
         switch kind {
-        case .marcato, .marcatoStaccato: true
-        case .staccato, .staccatissimo, .tenuto, .accent, .accentStaccato, .tenutoStaccato: false
+        case .marcato, .marcatoStaccato, .marcatoTenuto, .muteOpen, .muteClosed, .harmonic, .upBow, .downBow: true
+        case .staccato, .staccatissimo, .tenuto, .accent, .accentStaccato, .tenutoStaccato, .tenutoAccent,
+             .staccatissimoStroke, .staccatissimoWedge, .stress, .unstress, .softAccent, .softAccentStaccato,
+             .softAccentTenuto, .softAccentTenutoStaccato:
+            false
         }
     }
 

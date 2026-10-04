@@ -128,6 +128,33 @@ public enum SMuFLCodepoint {
     public static let articTenutoStaccatoBelow: UInt32 = 0xE4B3
     public static let articMarcatoStaccatoAbove: UInt32 = 0xE4AE
     public static let articMarcatoStaccatoBelow: UInt32 = 0xE4AF
+    public static let articTenutoAccentAbove: UInt32 = 0xE4B4
+    public static let articTenutoAccentBelow: UInt32 = 0xE4B5
+    public static let articMarcatoTenutoAbove: UInt32 = 0xE4BC
+    public static let articMarcatoTenutoBelow: UInt32 = 0xE4BD
+    public static let articStaccatissimoStrokeAbove: UInt32 = 0xE4AA
+    public static let articStaccatissimoStrokeBelow: UInt32 = 0xE4AB
+    public static let articStaccatissimoWedgeAbove: UInt32 = 0xE4A8
+    public static let articStaccatissimoWedgeBelow: UInt32 = 0xE4A9
+    public static let articStressAbove: UInt32 = 0xE4B6
+    public static let articStressBelow: UInt32 = 0xE4B7
+    public static let articUnstressAbove: UInt32 = 0xE4B8
+    public static let articUnstressBelow: UInt32 = 0xE4B9
+    /// The soft accents are SMuFL 1.4 additions (Bravura carries them from 1.392).
+    public static let articSoftAccentAbove: UInt32 = 0xED40
+    public static let articSoftAccentBelow: UInt32 = 0xED41
+    public static let articSoftAccentStaccatoAbove: UInt32 = 0xED42
+    public static let articSoftAccentStaccatoBelow: UInt32 = 0xED43
+    public static let articSoftAccentTenutoAbove: UInt32 = 0xED44
+    public static let articSoftAccentTenutoBelow: UInt32 = 0xED45
+    public static let articSoftAccentTenutoStaccatoAbove: UInt32 = 0xED46
+    public static let articSoftAccentTenutoStaccatoBelow: UInt32 = 0xED47
+    /// One symbol each, no below form: MuseScore anchors them above the staff.
+    public static let brassMuteOpen: UInt32 = 0xE5E7
+    public static let brassMuteClosed: UInt32 = 0xE5E5
+    public static let stringsHarmonic: UInt32 = 0xE614
+    public static let stringsUpBow: UInt32 = 0xE612
+    public static let stringsDownBow: UInt32 = 0xE610
 
     // MARK: - Brackets + braces
 
