@@ -28,7 +28,10 @@ extension MidiImporter {
         mergeCarryIns(into: &notes, measure: measure)
         mergeCarryOuts(into: &notes, measure: measure)
 
-        notes = snapVoiceNotesToGrid(notes, quantized: quantized)
+        notes = snapVoiceNotesToGrid(notes, quantized: quantized, measureEndTick: measure.endTick)
+        if isDrumTrack {
+            notes = lengthenedDrumNotes(notes, quantized: quantized, measure: measure, division: division)
+        }
 
         // Include tuplet range edges so the chord-emission walk
         // never spans a tuplet boundary. Without these, a held note

@@ -28,6 +28,11 @@ and this project adheres to
   re-derived every glyph from the key signature alone, so an A♭ that cancels an A♮ earlier in the bar lost its ♭.
   A note now shows a glyph exactly when the stored one did, spelling its new alteration; a microtonal glyph
   passes through.
+- **MIDI import keeps notes shorter than half a grid step.** Both ends snapped to the same grid point and the
+  note was dropped — which emptied whole drum parts written as fixed blips (a 10-tick hit at 480 PPQ). Such a
+  note now keeps one step, MuseScore's `findQuantizedNoteOffTime` rule, and a drum note is lengthened to the next
+  hit in its voice, the end of its beat or the barline (MuseScore's `minimizeNumberOfRests`), so an eighth-note
+  hi-hat reads as eighths.
 
 ## [4.2.0] - 2026-10-04
 

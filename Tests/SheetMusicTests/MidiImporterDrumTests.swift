@@ -194,4 +194,77 @@ struct MidiImporterDrumTests {
             #expect(crash < 0)
         }
     }
+
+    // MARK: - Notes shorter than half a grid step
+
+    /// One 4/4 bar at 480 PPQ: every note listed lasts `length` ticks. A second track holds a whole note on
+    /// channel 0 so the bar is a full 1920 ticks whatever the hits are: the bar timeline is measured off the
+    /// note-bearing tracks, and a drum slice carries no `endOfTrack` of its own.
+    private static func oneBar(channel: Int, hits: [(tick: Int, pitch: Int)], length: Int) throws -> Score {
+        let bed = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Bed"))),
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 0, pitch: 48, velocity: 80)),
+            TimedMidiEvent(tick: 1920, event: .noteOff(channel: 0, pitch: 48, velocity: 0)),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        var events: [TimedMidiEvent] = [TimedMidiEvent(tick: 0, event: .meta(.trackName("Hits")))]
+        for hit in hits {
+            events.append(TimedMidiEvent(
+                tick: hit.tick, event: .noteOn(channel: channel, pitch: hit.pitch, velocity: 100),
+            ))
+            events.append(TimedMidiEvent(
+                tick: hit.tick + length, event: .noteOff(channel: channel, pitch: hit.pitch, velocity: 0),
+            ))
+        }
+        events.sort { $0.tick < $1.tick }
+        events.append(TimedMidiEvent(tick: 1920, event: .endOfTrack))
+        let file = MidiFile(division: 480, format: 1, tracks: [bed, MidiTrack(events: events)])
+        return try MidiImporter.parse(MidiWriter.write(file))
+    }
+
+    /// `(pitches, ticks)` of every chord in one voice; a rest is an empty pitch list.
+    private static func shape(_ voice: Voice) -> [([Int], Int)] {
+        voice.elements.compactMap { element in
+            guard case let .chord(chord) = element else { return nil }
+            return (chord.notes.map(\.pitch).sorted(), chord.duration.ticks(division: 480))
+        }
+    }
+
+    /// A sequencer that writes every drum hit as a fixed 10-tick blip (1/48 of a beat) — common, since a drum
+    /// note's length means nothing to a GM kit. Both ends of such a note snap to the same sixteenth, and dropping
+    /// the zero-length result emptied the whole drum part: 171 bars of rests, nothing drawn, nothing played.
+    ///
+    /// MuseScore keeps every hit and, because a drum's duration is not musical, lengthens each one to the next hit
+    /// in its voice, the end of its beat or the barline (`Simplify::minimizeNumberOfRests` → `lengthenNote`): an
+    /// eighth-note hi-hat reads as eighths, and a kick on beats 1 and 3 as a quarter and a quarter rest each.
+    @Test func blipLengthDrumHitsReadAsTheirRhythm() throws {
+        let hats = (0 ..< 8).map { (tick: $0 * 240, pitch: 42) }
+        let kicks = [(tick: 0, pitch: 36), (tick: 960, pitch: 36)]
+        let score = try Self.oneBar(channel: 9, hits: hats + kicks, length: 10)
+        guard let drums = score.parts.first(where: { $0.instrument.useDrumset }) else {
+            Issue.record("expected a drumset part"); return
+        }
+        let voices = drums.staves[0].measures[0].voices
+        #expect(voices.count == 2)
+        let hands = Self.shape(voices[0])
+        #expect(hands.map(\.0) == Array(repeating: [42], count: 8))
+        #expect(hands.map(\.1) == Array(repeating: 240, count: 8))
+        let feet = Self.shape(voices[1])
+        #expect(feet.map(\.0) == [[36], [], [36], []])
+        #expect(feet.map(\.1) == [480, 480, 480, 480])
+    }
+
+    /// The same blip on a pitched track is still a note that was played: it keeps one grid step (MuseScore's
+    /// `findQuantizedNoteOffTime`: an off time that quantizes onto its on time moves one quantum later) rather than
+    /// vanishing. A pitched note's length IS musical, so it is not stretched any further.
+    @Test func blipLengthPitchedNotesKeepOneGridStep() throws {
+        let score = try Self.oneBar(channel: 0, hits: (0 ..< 4).map { (tick: $0 * 480, pitch: 60) }, length: 10)
+        guard let hits = score.parts.first(where: { $0.trackName == "Hits" }) else {
+            Issue.record("expected the Hits part"); return
+        }
+        let shape = Self.shape(hits.staves[0].measures[0].voices[0])
+        #expect(shape.map(\.1).reduce(0, +) == 1920)
+        #expect(shape.filter { !$0.0.isEmpty }.count == 4)
+        #expect(shape.filter { !$0.0.isEmpty }.allSatisfy { $0.1 == 120 })
+    }
 }
