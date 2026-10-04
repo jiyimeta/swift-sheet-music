@@ -2449,21 +2449,21 @@ extension LayoutEngine {
     /// inside the staff) rather than pushed clear of the staff.
     ///
     /// Mirrors MuseScore's `Articulation::layoutCloseToNote()`: the single
-    /// staccato dot, staccatissimo wedge, and tenuto line hug the note; accent,
-    /// marcato, and the combined forms (`isDouble()`, which counts the
-    /// tenuto-staccato louré, tenuto-accent and marcato-tenuto) sit outside the
-    /// staff. So does every mark MuseScore puts in no staccato or tenuto
-    /// category: the stroke and wedge staccatissimos, stress, unstress, the soft
-    /// accents, the technique marks and the laissez vibrer.
+    /// staccato dot and tenuto line hug the note; accent, marcato, and the
+    /// combined forms (`isDouble()`, which counts the tenuto-staccato louré,
+    /// tenuto-accent and marcato-tenuto) sit outside the staff. So does every
+    /// mark MuseScore puts in no staccato or tenuto category
+    /// (`computeCategories()`): all three staccatissimos, stress, unstress, the
+    /// soft accents, the technique marks and the laissez vibrer.
     static func articulationHugsNote(
         _ kind: LayoutElement.ArticulationKind,
     ) -> Bool {
         switch kind {
-        case .staccato, .staccatissimo, .tenuto: true
-        case .accent, .marcato, .accentStaccato, .marcatoStaccato, .tenutoStaccato, .tenutoAccent, .marcatoTenuto,
-             .staccatissimoStroke, .staccatissimoWedge, .stress, .unstress, .softAccent, .softAccentStaccato,
-             .softAccentTenuto, .softAccentTenutoStaccato, .muteOpen, .muteClosed, .harmonic, .upBow, .downBow,
-             .laissezVibrer:
+        case .staccato, .tenuto: true
+        case .staccatissimo, .accent, .marcato, .accentStaccato, .marcatoStaccato, .tenutoStaccato, .tenutoAccent,
+             .marcatoTenuto, .staccatissimoStroke, .staccatissimoWedge, .stress, .unstress, .softAccent,
+             .softAccentStaccato, .softAccentTenuto, .softAccentTenutoStaccato, .muteOpen, .muteClosed, .harmonic,
+             .upBow, .downBow, .laissezVibrer:
             false
         }
     }
@@ -2497,7 +2497,7 @@ extension LayoutEngine {
     /// sit above. Because beaming can flip a chord's stem after the first
     /// placement pass, the beam pass re-invokes this with the group direction.
     ///
-    /// Distance, close-to-note glyphs (staccato / staccatissimo / tenuto):
+    /// Distance, close-to-note glyphs (staccato / tenuto):
     /// staff-line aware — 1 sp into a space, 1.5 sp when the note is on a staff
     /// line, and 1 sp once the note reaches the outer staff line or beyond. The
     /// reference Y is then shifted by the glyph's ink-center offset so the

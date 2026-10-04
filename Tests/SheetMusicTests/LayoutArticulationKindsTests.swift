@@ -49,6 +49,25 @@ struct LayoutArticulationKindsTests {
         #expect(isAbove)
     }
 
+    /// MuseScore 4 counts only the staccato and tenuto categories as close-to-note (`layoutCloseToNote()`), and the
+    /// staccatissimo is in neither, so it clears the staff like an accent. A staccato on the same note stays inside.
+    @Test("A staccatissimo clears the staff where a staccato hugs the note", arguments: [
+        (ChordArticulation.Kind.staccatissimo, false), (.staccato, true),
+    ])
+    func staccatissimoClearsTheStaff(kind: ChordArticulation.Kind, staysInside: Bool) throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let doc = LayoutArticulationTests.laidOut(LayoutArticulationTests.score(
+            pitch: 72, tpc: 14, // C5, above the middle line → stem down → above, a staccato in the E5 space
+            articulations: [.init(kind: kind)],
+        ))
+        let (art, _) = try #require(LayoutArticulationTests.soleArtAndChord(doc))
+        guard case let .articulation(_, origin, isAbove, _) = art else { Issue.record("not articulation"); return }
+        #expect(isAbove)
+        let staffOriginY = try #require(doc.systems.first?.staffOrigins.first?.y)
+        let staffTopY = staffOriginY + doc.metrics.staffHeight / 2 - doc.metrics.sp * 2
+        #expect((origin.y > staffTopY) == staysInside, "origin \(origin.y), top line \(staffTopY)")
+    }
+
     /// The louré (tenuto over staccato) drawn with its own SMuFL glyph and, being one of MuseScore's `isDouble()`
     /// articulations, pushed clear of the staff like the other combined forms rather than hugging the note. A bass
     /// part marked this way on every note used to show nothing at all: the subtype decoded as `.unknown`.

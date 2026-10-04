@@ -128,6 +128,9 @@ and this project adheres to
 - **MIDI import ends on a whole bar.** The last bar stopped at the final note's release whenever that fell inside
   the bar — always, for a file whose only notes are drum hits, since a drum slice carries no `endOfTrack`. MuseScore
   rounds the end up to the barline (`createMeasures`), and so does the importer now.
+- **A staccatissimo clears the staff.** It hugged the note like a staccato dot, but MuseScore puts it in neither the
+  staccato nor the tenuto category (`Articulation::computeCategories`), so `layoutCloseToNote()` is false and it sits
+  outside the staff like an accent. A staccatissimo on a note inside the staff moves out.
 - **A clef always writes `<transposingClefType>`.** A `<Clef>` naming only its concert type reads back in MuseScore
   with the transposing type at G (`TRead::read(Clef*)`), and MuseScore shows the transposing type by default — so a
   bass clef set in folino opened in MuseScore as a treble clef. The decoder folds a transposing type equal to the
