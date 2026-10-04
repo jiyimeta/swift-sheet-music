@@ -192,4 +192,93 @@ struct WrittenPitchViewTests {
         #expect(note?.pitch == 76)
         #expect(note?.tpc == 18)
     }
+
+    // MARK: - Clefs and accidentals a player reads
+
+    /// One electric-bass measure (sounds an octave below written, `writtenFifthsOffset` 0) under concert E♭ major:
+    /// `elements[0]` is `clef`, `[1]` the key signature, then one eighth-note chord per note.
+    private func bass(clef: Clef, notes: [Note], instrumentID: String = "electric-bass") -> Score {
+        let elements: [VoiceElement] = [.clef(clef), .keySignature(KeySignature(concertKey: -3))]
+            + notes.map { .chord(Chord(duration: .eighth, notes: ChordNotes([$0]))) }
+        let staff = Staff(group: "pitched", defaultClefType: "F", measures: [
+            Measure(voices: [Voice(elements: elements)]),
+        ])
+        let instrument = Instrument(id: instrumentID, transposeDiatonic: -7, transposeChromatic: -12)
+        return Score(division: 480, parts: [Part(id: "p0", instrument: instrument, staves: [staff])])
+    }
+
+    private func clef(_ score: Score, part: Int = 0, measure: Int = 0, element: Int = 0) -> Clef? {
+        guard case let .clef(c) = score.parts[part].staves[0].measures[measure].voices[0].elements[element]
+        else { return nil }
+        return c
+    }
+
+    /// MuseScore shows `<transposingClefType>` whenever Concert Pitch is off, which is the view this is. A bass
+    /// part saved with an F 8va transposing clef over an F 8vb concert one must read F 8va: drawing the concert
+    /// clef over written-pitch notes puts every note two octaves away from where the player expects it.
+    @Test func showsTheTransposingClef() {
+        let score = bass(
+            clef: Clef(concertClefType: "F8vb", transposingClefType: "F8va"),
+            notes: [Note(pitch: 41, tpc: 13)],
+        )
+        #expect(clef(score.writtenPitchView())?.concertClefType == "F8va")
+        // The stored score keeps both, so a save writes back exactly what was read.
+        #expect(clef(score)?.concertClefType == "F8vb")
+    }
+
+    /// A clef with no transposing type (every clef folino writes itself) shows its concert type.
+    @Test func clefWithoutATransposingTypeShowsItsConcertType() {
+        let score = bass(clef: Clef(concertClefType: "F8vb"), notes: [Note(pitch: 41, tpc: 13)])
+        #expect(clef(score.writtenPitchView())?.concertClefType == "F8vb")
+    }
+
+    /// The transposing clef is a property of the view, not of the instrument: a concert-pitch part whose clef
+    /// carries a different transposing type reads that type too, and keeps the fast path's identity otherwise.
+    @Test func concertPartShowsItsTransposingClefToo() {
+        var score = bass(clef: Clef(concertClefType: "G", transposingClefType: "G8vb"), notes: [])
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.instrument.transposeDiatonic = 0
+            partValue.instrument.transposeChromatic = 0
+        }
+        #expect(clef(score.writtenPitchView())?.concertClefType == "G8vb")
+    }
+
+    /// An accidental the BAR asks for, not the key: under E♭ major an A♮ earlier in the bar means the A♭ after it
+    /// needs its ♭ back. The file stores that ♭; the view must keep it rather than re-derive the glyph from the key
+    /// signature alone, which says A♭ needs nothing.
+    @Test func keepsAnAccidentalTheBarCallsFor() {
+        let score = bass(
+            clef: Clef(concertClefType: "F8vb", transposingClefType: "F8va"),
+            notes: [
+                Note(pitch: 45, tpc: 17, accidental: .natural), // A♮
+                Note(pitch: 44, tpc: 10, accidental: .flat), // A♭, cancelling the ♮
+                Note(pitch: 44, tpc: 10), // A♭ again — the ♭ is already in force
+            ],
+        )
+        let written = score.writtenPitchView()
+        #expect(chord(written, part: 0, measure: 0, element: 2)?.notes.first?.accidental == .natural)
+        #expect(chord(written, part: 0, measure: 0, element: 3)?.notes.first?.accidental == .flat)
+        #expect(chord(written, part: 0, measure: 0, element: 4)?.notes.first?.accidental == nil)
+    }
+
+    /// The same bar on a part that moves along the line of fifths: a B♭ clarinet reads concert E♭ major as F
+    /// major, so the ♮ lands on B and the cancelling ♭ comes back as B♭ — a glyph its key signature would drop.
+    @Test func cancellingAccidentalSurvivesAFifthsShift() {
+        var score = bass(
+            clef: Clef(concertClefType: "G"),
+            notes: [
+                Note(pitch: 69, tpc: 17, accidental: .natural), // A♮4
+                Note(pitch: 68, tpc: 10, accidental: .flat), // A♭4
+                Note(pitch: 68, tpc: 10), // A♭4, covered
+            ],
+        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.instrument.transposeDiatonic = -1
+            partValue.instrument.transposeChromatic = -2
+        }
+        let written = score.writtenPitchView()
+        let notes = (2 ... 4).map { chord(written, part: 0, measure: 0, element: $0)?.notes.first }
+        #expect(notes.map { $0?.tpc } == [19, 12, 12]) // B♮, B♭, B♭
+        #expect(notes.map { $0?.accidental } == [.natural, .flat, nil])
+    }
 }

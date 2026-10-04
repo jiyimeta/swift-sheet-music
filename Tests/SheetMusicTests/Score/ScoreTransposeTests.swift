@@ -87,7 +87,7 @@ struct ScoreTransposeTests {
         // B♭ (tpc 12, pitch 70) in G major (key +1), transposed +1 semitone.
         // The key becomes A♭ major (-4) and the note must stay a *lowered*
         // scale degree → C♭ (tpc 7, flat), NOT B♮ (tpc 13).
-        let note = Note(pitch: 70, tpc: 12)
+        let note = Note(pitch: 70, tpc: 12, accidental: .flat)
         let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
         let voice = Voice(elements: [
             .keySignature(KeySignature(concertKey: 1)),
@@ -118,7 +118,7 @@ struct ScoreTransposeTests {
         // A♭ (tpc 10, pitch 68) in G major (key +1), transposed +1 semitone.
         // It must stay a *doubly-lowered* scale degree → B𝄫 (tpc 5,
         // double-flat) in A♭ major, NOT A♮ (tpc 17).
-        let note = Note(pitch: 68, tpc: 10)
+        let note = Note(pitch: 68, tpc: 10, accidental: .flat)
         let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
         let voice = Voice(elements: [
             .keySignature(KeySignature(concertKey: 1)),
@@ -140,6 +140,33 @@ struct ScoreTransposeTests {
         #expect(n.pitch == 69)
         #expect(n.tpc == 5) // B𝄫, not A♮ (tpc 17)
         #expect(n.accidental == .doubleFlat)
+    }
+
+    /// Which notes carry a glyph is decided by the BAR, not the key alone, and a transposition moves every note
+    /// and the key by the same interval — so the set of notes that need one does not change. Under E♭ major an
+    /// A♮ followed by an A♭ needs the ♭ back; transposed +2 into F major that is B♮ then B♭, and the B♭ still
+    /// needs its ♭ even though F major's signature spells it. Re-deriving the glyph from the key drops it.
+    @Test func transposeKeepsAnAccidentalTheBarCallsFor() {
+        let notes = [
+            Note(pitch: 69, tpc: 17, accidental: .natural), // A♮4
+            Note(pitch: 68, tpc: 10, accidental: .flat), // A♭4, cancelling the ♮
+            Note(pitch: 68, tpc: 10), // A♭4, already in force
+        ]
+        let voice = Voice(elements: [.keySignature(KeySignature(concertKey: -3))]
+            + notes.map { .chord(Chord(duration: .quarter, notes: ChordNotes([$0]))) })
+        let staff = Staff(group: "pitched", measures: [Measure(voices: [voice])])
+        let score = Score(division: 480, parts: [
+            Part(id: "p0", instrument: Instrument(id: "i", longName: "i"), staves: [staff]),
+        ])
+        let out = score.transposed(bySemitones: 2)
+        let transposed = (1 ... 3).map { index -> Note? in
+            guard case let .chord(c) = out.parts[0].staves[0].measures[0].voices[0].elements[index] else {
+                return nil
+            }
+            return c.notes.first
+        }
+        #expect(transposed.map { $0?.tpc } == [19, 12, 12]) // B♮, B♭, B♭
+        #expect(transposed.map { $0?.accidental } == [.natural, .flat, nil])
     }
 
     @Test func transposePreservesTieMetadata() {

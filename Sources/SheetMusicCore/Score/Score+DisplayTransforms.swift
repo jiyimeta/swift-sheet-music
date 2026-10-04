@@ -84,11 +84,17 @@ extension Score {
     /// A note whose written pitch would leave the MIDI range `0…127` keeps its concert pitch and spelling under
     /// a key signature that DID move, so it reads wrong on the page — inherited from the shared note transform,
     /// only reachable at the extremes of the range, and no part is rejected for it.
+    ///
+    /// Clefs switch to their `writtenClefType` on EVERY staff, transposing part or not: which clef MuseScore draws
+    /// is a property of the Concert Pitch view, not of the instrument (`Clef::clefType()`). The view writes it into
+    /// `concertClefType`, the field layout reads, and leaves `transposingClefType` alone.
     public func writtenPitchView() -> Score {
-        guard parts.contains(where: { $0.instrument.isTransposing && !$0.instrument.useDrumset }) else {
-            return self
-        }
+        let shiftsNotes = parts.contains(where: { $0.instrument.isTransposing && !$0.instrument.useDrumset })
+        let switchesClefs = containsClefWithADistinctWrittenType()
+        guard shiftsNotes || switchesClefs else { return self }
         var copy = self
+        if switchesClefs { copy.showWrittenClefs() }
+        guard shiftsNotes else { return copy }
         for partIndex in copy.parts.indices {
             let instrument = parts[partIndex].instrument
             guard instrument.isTransposing, !instrument.useDrumset else { continue }
@@ -265,8 +271,8 @@ extension Score {
     /// Transpose a single note by `semitones`, preserving its spelling relative to the key: the tonal pitch class
     /// shifts by `fifthsDelta` (= newKey − oldKey on the line of fifths), so a chromatic raise / lower of a scale
     /// degree stays a raise / lower of the transposed degree (e.g. B♭ in G major → C♭ in A♭ major at `+1`, never B♮).
-    /// The displayed accidental is recomputed against `key`. Returns the note unchanged if the shifted pitch would
-    /// leave the MIDI range `0…127`.
+    /// The accidental follows `transposedAccidental`. Returns the note unchanged if the shifted pitch would leave
+    /// the MIDI range `0…127`.
     private static func transposedNote(
         _ note: Note, semitones: Int, fifthsDelta: Int, key: Int,
     ) -> Note {
@@ -275,22 +281,8 @@ extension Score {
         var n = note
         n.pitch = newPitch
         n.tpc = note.tpc + fifthsDelta
-        n.accidental = PitchSpelling.displayedAccidental(forTpc: n.tpc, in: key)
+        n.accidental = transposedAccidental(note.accidental, tpc: n.tpc, key: key)
         return n
-    }
-
-    /// Authored opening clef rawType for the staff at `address`: the explicit measure-0 clef when one exists, otherwise
-    /// the staff's `defaultClefType`. Returns nil when the address points outside the score or the staff declares no
-    /// default. Callers (e.g. the Reader's clef-override picker) layer their own fallback on top. Shared by iOS and the
-    /// Android JNI parts/staves descriptor so both surface the same "current clef".
-    public func authoredClef(at address: StaffAddress) -> String? {
-        guard let staff = self[address] else { return nil }
-        if let first = staff.measures.first?.voices.first?.elements.first,
-           case let .clef(c) = first
-        {
-            return c.concertClefType
-        }
-        return staff.defaultClefType
     }
 
     /// Returns a copy of the score with the staves at the given addresses removed from each `Part.staves`. Parts left

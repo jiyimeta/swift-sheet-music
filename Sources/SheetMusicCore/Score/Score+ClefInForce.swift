@@ -13,6 +13,9 @@ extension Score {
     /// scanned whatever voice `location` names. A clef placed at element index `i` governs the elements from `i`
     /// onward — `SetClef(before:)`'s meaning — so a clef sharing the location's index counts, and one after it does
     /// not. Falls back to `.treble`, which is `NotatedClef(rawType:)`'s own answer for anything it cannot parse.
+    ///
+    /// A clef is read by its `writtenClefType` — the one on the page — so this answers the same on the stored
+    /// score and on its `writtenPitchView()`.
     public func clefInForce(at location: VoiceElementID) -> NotatedClef {
         guard let staff = self[location.staff] else { return .treble }
         var rawType = staff.defaultClefType
@@ -23,7 +26,7 @@ extension Score {
             for (elementIndex, element) in elements.enumerated() {
                 // Past the caret in its own bar: a clef the user has not reached yet does not spell what they type.
                 if measureIndex == location.measureIndex, elementIndex > location.elementIndex { break }
-                if case let .clef(clef) = element { rawType = clef.concertClefType }
+                if case let .clef(clef) = element { rawType = clef.writtenClefType }
             }
         }
         return NotatedClef(rawType: rawType ?? "")

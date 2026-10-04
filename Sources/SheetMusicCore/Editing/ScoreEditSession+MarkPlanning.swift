@@ -16,7 +16,9 @@ extension ScoreEditSession {
                 if case .clef = $0 { true } else { false }
             }.flatMap { index -> String? in
                 guard case let .clef(current)? = score[target.withElementIndex(index)] else { return nil }
-                return current.concertClefType
+                // The clef the user is looking at: a stored transposing type is what the page shows, and
+                // `SetClef` drops it, so asking for the shown clef is the only request that changes nothing.
+                return current.writtenClefType
             }
             return existing == clef.rawType ? nil : SetClef(before: target, clef: clef)
         case let .removeClef(location):

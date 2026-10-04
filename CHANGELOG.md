@@ -7,6 +7,22 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`Clef.writtenClefType`** — the clef a reader sees with Concert Pitch off: `transposingClefType`, else the
+  concert type.
+
+### Fixed
+
+- **`writtenPitchView()` draws each clef's transposing type**, as MuseScore does whenever Concert Pitch is off.
+  It drew the concert clef over written-pitch notes, so a bass part saved with F 8vb (concert) / F 8va
+  (transposing) read two octaves away from where it sits. `clefInForce(at:)`, `authoredClef(at:)` and the
+  clef intent's no-op check read `writtenClefType` to match.
+- **A transposed note keeps the accidental its bar calls for.** `writtenPitchView()` and `transposed(bySemitones:)`
+  re-derived every glyph from the key signature alone, so an A♭ that cancels an A♮ earlier in the bar lost its ♭.
+  A note now shows a glyph exactly when the stored one did, spelling its new alteration; a microtonal glyph
+  passes through.
+
 ## [4.2.0] - 2026-10-04
 
 ### Added

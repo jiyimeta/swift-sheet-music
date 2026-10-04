@@ -30,4 +30,14 @@ public struct Clef: Sendable, Equatable {
         self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }
+
+    /// The clef a reader sees with Concert Pitch off — MuseScore's default view, and the one
+    /// `Score.writtenPitchView()` draws: `transposingClefType` when the file names one, otherwise the concert type.
+    ///
+    /// C++: `Clef::clefType()`, which answers `transposingClef` whenever `concertPitch()` is false. A bass guitar
+    /// saved with a concert F 8vb over a transposing F 8va reads F 8va on the page, and drawing the concert one
+    /// over written-pitch notes puts every note two octaves from where the player expects it.
+    public var writtenClefType: String {
+        transposingClefType ?? concertClefType
+    }
 }

@@ -155,6 +155,36 @@ public enum PitchSpelling {
         default: return nil
         }
     }
+
+    /// The glyph that spells `tpc`'s own alteration, whatever the key: ♮ for a natural letter, ♯ / ♭ for one step,
+    /// the double and triple glyphs beyond. `nil` past a triple, which no single glyph spells.
+    ///
+    /// For a caller that already knows the note shows a glyph and only needs to know which one.
+    static func accidental(spellingAlterationOf tpc: Int) -> Accidental? {
+        let centered = tpc - 13
+        let alteration = (centered - ((centered % 7) + 7) % 7) / 7
+        switch alteration {
+        case 0: return .natural
+        case 1: return .sharp
+        case -1: return .flat
+        case 2: return .doubleSharp
+        case -2: return .doubleFlat
+        case 3: return .tripleSharp
+        case -3: return .tripleFlat
+        default: return nil
+        }
+    }
+}
+
+extension Accidental {
+    /// Whether this glyph says nothing the tpc does not: one of the plain ♮ ♯ ♭ and their doubles and triples.
+    /// Microtonal and courtesy-combination glyphs say more, so nothing derived from a tpc may replace them.
+    var isSpelledByTpc: Bool {
+        switch self {
+        case .flat, .natural, .sharp, .doubleFlat, .doubleSharp, .tripleFlat, .tripleSharp: true
+        default: false
+        }
+    }
 }
 
 extension Note {
