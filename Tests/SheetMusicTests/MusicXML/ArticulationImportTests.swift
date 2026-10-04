@@ -74,6 +74,8 @@ struct ArticulationImportTests {
         ("<technical><stopped/></technical>", .muteClosed),
         ("<technical><open/></technical>", .muteOpen),
         ("<technical><open-string/></technical>", .muteOpen),
+        ("<technical><harmonic/></technical>", .harmonic),
+        ("<technical><harmonic><natural/></harmonic></technical>", .harmonic),
     ] as [(String, ChordArticulation.Kind)])
     func mapsEachMark(notations: String, kind: ChordArticulation.Kind) throws {
         let score = try Self.score(notations: notations)
@@ -107,9 +109,13 @@ struct ArticulationImportTests {
         #expect(Self.articulations(of: score).map(\.kind) == [.staccato, .accent])
     }
 
-    @Test("a technical element that is not a mark leaves the chord bare")
+    /// An artificial harmonic is a sounding-pitch notation MuseScore does not support either (`harmonic()` logs it
+    /// and drops the symbol).
+    @Test("a technical element that is not a mark, or an artificial harmonic, leaves the chord bare")
     func otherTechnicalIsIgnored() throws {
-        let score = try Self.score(notations: "<technical><fingering>2</fingering><harmonic/></technical>")
+        let score = try Self.score(notations: """
+        <technical><fingering>2</fingering><harmonic><artificial/><touching-pitch/></harmonic></technical>
+        """)
         #expect(Self.articulations(of: score).isEmpty)
     }
 }

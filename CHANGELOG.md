@@ -86,9 +86,10 @@ and this project adheres to
   clear of the staff. It plays as written. It decoded as `.unknown` and showed nothing before. MuseScore 4.5's own
   form, a `<LaissezVib>` tie on the note, is not modeled and still rides through as preserved markup.
   `ScoreArticulationKindWire` (appended, choice 24) and the Kotlin model gain the case.
-- **MusicXML import reads articulations.** `<notations><articulations>` and the bow, stopped and open marks under
-  `<technical>` become `Chord.articulations` by MuseScore's table (`convertArticulationToSymId`): `strong-accent` is
-  marcato, `spiccato` the staccatissimo stroke, `detached-legato` the louré, `stopped` / `open` the brass mutes.
+- **MusicXML import reads articulations.** `<notations><articulations>` and the bow, stopped, open and harmonic marks
+  under `<technical>` become `Chord.articulations` by MuseScore's table (`convertArticulationToSymId`):
+  `strong-accent` is marcato, `spiccato` the staccatissimo stroke, `detached-legato` the louré, `stopped` / `open` the
+  brass mutes, a natural `harmonic` the string harmonic.
   `placement` sets the side, as does a `strong-accent`'s `type` when no placement is given. A `<chord/>` tone's
   marks join the host chord, each kind once. They were dropped before.
 - **`Clef.writtenClefType`** — the clef a reader sees with Concert Pitch off: `transposingClefType`, else the
