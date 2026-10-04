@@ -93,10 +93,10 @@ dependencies {
     // Oboe (Apache-2.0) — low-latency PCM output
     api("com.google.oboe:oboe:1.9.0")
 
-    api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
 
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test:runner:1.5.2")
