@@ -20,6 +20,11 @@ extension MidiImporter {
     /// reading the slices alone cut a 3/4 piece into 4/4 bars. MuseScore builds its map from every track's meta
     /// events the same way (`createMTrackList`), a later track's signature replacing an earlier one at the same
     /// tick. The timeline's extent still comes from `imports` alone.
+    ///
+    /// The last bar is always a whole bar, the music's end rounded up to the barline (MuseScore's
+    /// `createMeasures`). A drum slice carries no `endOfTrack`, so a file whose only notes are drum hits used to end
+    /// its last bar at the final hit's release. Only the final segment rounds: a bar cut by a later time-signature
+    /// change keeps the cut.
     static func buildBarTimeline(
         imports: [ImportTrack], division: Int, fileEvents: [TimedMidiEvent] = [],
     ) -> BarTimeline {
@@ -44,14 +49,17 @@ extension MidiImporter {
         var bars: [BarTimeline.Bar] = []
         var measureIndex = 0
         for (i, change) in changes.enumerated() {
-            let segmentEnd = i + 1 < changes.count ? changes[i + 1].tick : lastTick
+            let isFinalSegment = i + 1 == changes.count
+            let segmentEnd = isFinalSegment ? lastTick : changes[i + 1].tick
             let barLen = barTicks(sig: change.sig, division: division)
             var t = change.tick
             while t < segmentEnd {
+                let wholeBarEnd = t + barLen
+                let endTick = isFinalSegment ? wholeBarEnd : min(wholeBarEnd, segmentEnd)
                 bars.append(BarTimeline.Bar(
                     index: measureIndex,
                     startTick: t,
-                    endTick: min(t + barLen, segmentEnd),
+                    endTick: endTick,
                     timeSignature: change.sig,
                 ))
                 measureIndex += 1

@@ -74,6 +74,22 @@ struct MidiImporterBarTests {
         #expect(measures[0][1].carryIns[0].pitch == 60)
     }
 
+    /// The last bar is a whole bar even when the music stops inside it. A drum slice carries no `endOfTrack`, so a
+    /// file whose only notes are drum hits ends its timeline at the last hit's release — and the last bar came out
+    /// 1690 ticks long. MuseScore rounds the end up to the barline (`createMeasures`).
+    @Test func lastBarIsAWholeBar() {
+        let imports = [ImportTrack(
+            trackIndex: 1, channel: 9, trackName: "Drums", isDrums: true,
+            programChange: nil,
+            events: [
+                TimedMidiEvent(tick: 1680, event: .noteOn(channel: 9, pitch: 42, velocity: 80)),
+                TimedMidiEvent(tick: 1690, event: .noteOff(channel: 9, pitch: 42, velocity: 0)),
+            ],
+        )]
+        let timeline = MidiImporter.buildBarTimeline(imports: imports, division: 480)
+        #expect(timeline.bars.map(\.endTick) == [1920])
+    }
+
     @Test func emptyImportProducesSingleDefaultBar() {
         let measures = MidiImporter.segmentBars(imports: [], division: 480)
         #expect(measures.isEmpty)

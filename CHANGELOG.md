@@ -102,6 +102,9 @@ and this project adheres to
 - **MIDI import measures bars by the conductor track's meter.** The bar timeline read time signatures from the
   note-bearing tracks only, so a Format 1 file — meter on track 0, which carries no notes — imported a 3/4 piece in
   4/4 bars under a 3/4 signature. Every track's time signatures count now, as in MuseScore's `createMTrackList`.
+- **MIDI import ends on a whole bar.** The last bar stopped at the final note's release whenever that fell inside
+  the bar — always, for a file whose only notes are drum hits, since a drum slice carries no `endOfTrack`. MuseScore
+  rounds the end up to the barline (`createMeasures`), and so does the importer now.
 - **A clef always writes `<transposingClefType>`.** A `<Clef>` naming only its concert type reads back in MuseScore
   with the transposing type at G (`TRead::read(Clef*)`), and MuseScore shows the transposing type by default — so a
   bass clef set in folino opened in MuseScore as a treble clef. The decoder folds a transposing type equal to the
