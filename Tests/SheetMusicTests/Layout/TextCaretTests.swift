@@ -8,6 +8,12 @@
 
     @Suite("TextCaret")
     struct TextCaretTests {
+        /// Registers Edwin before anything here measures it. `AppleFontMetricsProvider` caches one `CTFont` per
+        /// `LayoutFont` for the whole process, so on a runner without Edwin installed, measuring "Edwin" first would
+        /// cache the system-font fallback under the key the text-ink suites read (Edwin 20 pt is staff text at
+        /// staff size 40) and put them a point or two off the renderer whenever this suite ran first.
+        private let _installApple = TestSupport.installApple
+
         @available(macOS 15.0, *)
         @Test func coreTextPositionsIncludeKerningAndTraits() throws {
             let provider = AppleFontMetricsProvider()
