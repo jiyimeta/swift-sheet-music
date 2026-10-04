@@ -464,6 +464,7 @@ public enum LayoutElement: Sendable, Equatable {
         case harmonic
         case upBow
         case downBow
+        case laissezVibrer
     }
 
     public enum TextMarkKind: Sendable, Equatable {

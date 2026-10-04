@@ -81,6 +81,11 @@ and this project adheres to
   accent velocity. These decoded as `.unknown` before and showed and played nothing. `LayoutElement.ArticulationKind`,
   `ScoreArticulationKindWire` (appended, choices 9–23) and the Kotlin `ScoreArticulationKind` model gain the same
   cases.
+- **Laissez vibrer as an articulation.** `ChordArticulation.Kind.laissezVibrer` reads and writes
+  `articLaissezVibrerAbove` / `…Below` — how MuseScore before 4.5 stored the mark — and draws SMuFL U+E4BA / U+E4BB
+  clear of the staff. It plays as written. It decoded as `.unknown` and showed nothing before. MuseScore 4.5's own
+  form, a `<LaissezVib>` tie on the note, is not modeled and still rides through as preserved markup.
+  `ScoreArticulationKindWire` (appended, choice 24) and the Kotlin model gain the case.
 - **MusicXML import reads articulations.** `<notations><articulations>` and the bow, stopped and open marks under
   `<technical>` become `Chord.articulations` by MuseScore's table (`convertArticulationToSymId`): `strong-accent` is
   marcato, `spiccato` the staccatissimo stroke, `detached-legato` the louré, `stopped` / `open` the brass mutes.

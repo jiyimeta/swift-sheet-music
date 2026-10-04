@@ -18,7 +18,7 @@ struct ArticulationTokenTests {
         (.softAccent, "articSoftAccent"), (.softAccentStaccato, "articSoftAccentStaccato"),
         (.softAccentTenuto, "articSoftAccentTenuto"), (.softAccentTenutoStaccato, "articSoftAccentTenutoStaccato"),
         (.muteOpen, "brassMuteOpen"), (.muteClosed, "brassMuteClosed"), (.harmonic, "stringsHarmonic"),
-        (.upBow, "stringsUpBow"), (.downBow, "stringsDownBow"),
+        (.upBow, "stringsUpBow"), (.downBow, "stringsDownBow"), (.laissezVibrer, "articLaissezVibrer"),
     ]
 
     @Test("each known kind spells its MuseScore SymId base, and reads back", arguments: known)
@@ -34,9 +34,9 @@ struct ArticulationTokenTests {
 
     @Test("an unknown token has no known kind, and an unknown kind spells its raw string back")
     func unknown() {
-        #expect(ChordArticulation.Kind(mscxToken: "articLaissezVibrerAbove") == nil)
+        #expect(ChordArticulation.Kind(mscxToken: "handbellsMartellato") == nil)
         #expect(
-            ChordArticulation.Kind.unknown(subtype: "articLaissezVibrerAbove").mscxToken == "articLaissezVibrerAbove",
+            ChordArticulation.Kind.unknown(subtype: "handbellsMartellato").mscxToken == "handbellsMartellato",
         )
     }
 
@@ -48,8 +48,9 @@ struct ArticulationTokenTests {
         ("articSoftAccentTenutoStaccatoAbove", ChordArticulation(kind: .softAccentTenutoStaccato, anchor: .above)),
         ("stringsUpBow", ChordArticulation(kind: .upBow, anchor: nil)),
         ("brassMuteClosed", ChordArticulation(kind: .muteClosed, anchor: nil)),
+        ("articLaissezVibrerBelow", ChordArticulation(kind: .laissezVibrer, anchor: .below)),
         ("articAccent", ChordArticulation(kind: .accent, anchor: nil)),
-        ("articLaissezVibrerAbove", ChordArticulation(kind: .unknown(subtype: "articLaissezVibrerAbove"))),
+        ("handbellsMartellato", ChordArticulation(kind: .unknown(subtype: "handbellsMartellato"))),
     ])
     func decodeIsUnchanged(subtype: String, expected: ChordArticulation) {
         #expect(ChordArticulation.fromSubtypeXML(subtype) == expected)

@@ -75,11 +75,11 @@ struct ChordArticulationTests {
     @Test func decodesUnknownSubtypeAsUnknownVariant() throws {
         let chord = try parseChord("""
         <durationType>quarter</durationType>
-        <Articulation><subtype>articLaissezVibrerAbove</subtype></Articulation>
+        <Articulation><subtype>handbellsMartellato</subtype></Articulation>
         <Note><pitch>60</pitch><tpc>14</tpc></Note>
         """)
         #expect(chord.articulations == [
-            ChordArticulation(kind: .unknown(subtype: "articLaissezVibrerAbove")),
+            ChordArticulation(kind: .unknown(subtype: "handbellsMartellato")),
         ])
     }
 
@@ -120,8 +120,8 @@ struct ChordArticulationTests {
     @Test func encodesUnknownVerbatim() {
         // Unknown round-trips its raw string and ignores anchor.
         #expect(
-            encodedSubtypes([.init(kind: .unknown(subtype: "articLaissezVibrerAbove"))])
-                == ["articLaissezVibrerAbove"],
+            encodedSubtypes([.init(kind: .unknown(subtype: "handbellsMartellato"))])
+                == ["handbellsMartellato"],
         )
     }
 
@@ -148,7 +148,7 @@ struct ChordArticulationTests {
                 .init(kind: .staccato, anchor: .above),
                 .init(kind: .staccatissimo, anchor: .below),
                 .init(kind: .tenuto, anchor: .above),
-                .init(kind: .unknown(subtype: "articLaissezVibrerAbove")),
+                .init(kind: .unknown(subtype: "handbellsMartellato")),
                 .init(kind: .softAccentTenuto, anchor: .below),
                 .init(kind: .upBow),
             ],

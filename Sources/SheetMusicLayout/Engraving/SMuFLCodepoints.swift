@@ -149,6 +149,8 @@ public enum SMuFLCodepoint {
     public static let articSoftAccentTenutoBelow: UInt32 = 0xED45
     public static let articSoftAccentTenutoStaccatoAbove: UInt32 = 0xED46
     public static let articSoftAccentTenutoStaccatoBelow: UInt32 = 0xED47
+    public static let articLaissezVibrerAbove: UInt32 = 0xE4BA
+    public static let articLaissezVibrerBelow: UInt32 = 0xE4BB
     /// One symbol each, no below form: MuseScore anchors them above the staff.
     public static let brassMuteOpen: UInt32 = 0xE5E7
     public static let brassMuteClosed: UInt32 = 0xE5E5

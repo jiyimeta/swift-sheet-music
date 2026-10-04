@@ -45,6 +45,7 @@ public enum ArticulationGlyph {
         case .harmonic: (C.stringsHarmonic, C.stringsHarmonic)
         case .upBow: (C.stringsUpBow, C.stringsUpBow)
         case .downBow: (C.stringsDownBow, C.stringsDownBow)
+        case .laissezVibrer: (C.articLaissezVibrerAbove, C.articLaissezVibrerBelow)
         }
     }
 }

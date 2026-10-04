@@ -21,8 +21,8 @@ public struct ChordArticulation: Sendable, Equatable {
         self.anchor = anchor
     }
 
-    /// Every case but `.unknown` is one of MuseScore's Articulations palette entries (`newArticulationsPalette`,
-    /// default and master lists), named after its SymId.
+    /// Every case but `.unknown` and `.laissezVibrer` is one of MuseScore's Articulations palette entries
+    /// (`newArticulationsPalette`, default and master lists), named after its SymId.
     public enum Kind: Sendable, Hashable {
         case staccato
         case staccatissimo
@@ -49,8 +49,12 @@ public struct ChordArticulation: Sendable, Equatable {
         case harmonic // stringsHarmonic
         case upBow // stringsUpBow
         case downBow // stringsDownBow
+        /// articLaissezVibrerAbove/Below — how MuseScore before 4.5 stored a laissez vibrer, as an articulation. 4.5
+        /// turns it into a `<LaissezVib>` tie on the note (`CompatUtils::convertLaissezVibArticToTie`), which this
+        /// package does not model; the articulation form is drawn as its SMuFL symbol and plays as written.
+        case laissezVibrer
         /// Any subtype outside the in-scope set above. The raw MS4
-        /// SymId (e.g. `articLaissezVibrerAbove`) is preserved verbatim.
+        /// SymId (e.g. `handbellsMartellato`) is preserved verbatim.
         case unknown(subtype: String)
 
         /// Every modeled kind, in declaration order — what `init?(mscxToken:)` searches.
@@ -58,7 +62,7 @@ public struct ChordArticulation: Sendable, Equatable {
             .staccato, .staccatissimo, .tenuto, .accent, .marcato, .accentStaccato, .marcatoStaccato,
             .tenutoStaccato, .tenutoAccent, .marcatoTenuto, .staccatissimoStroke, .staccatissimoWedge, .stress,
             .unstress, .softAccent, .softAccentStaccato, .softAccentTenuto, .softAccentTenutoStaccato, .muteOpen,
-            .muteClosed, .harmonic, .upBow, .downBow,
+            .muteClosed, .harmonic, .upBow, .downBow, .laissezVibrer,
         ]
 
         /// The MuseScore SymId base this kind spells, with no `Above` / `Below` anchor suffix — the string the
@@ -93,6 +97,7 @@ public struct ChordArticulation: Sendable, Equatable {
             case .harmonic: "stringsHarmonic"
             case .upBow: "stringsUpBow"
             case .downBow: "stringsDownBow"
+            case .laissezVibrer: "articLaissezVibrer"
             case let .unknown(subtype): subtype
             }
         }

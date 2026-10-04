@@ -19,6 +19,7 @@ struct LayoutArticulationKindsTests {
         (.softAccentStaccato, 0xED42, 0xED43), (.softAccentTenuto, 0xED44, 0xED45),
         (.softAccentTenutoStaccato, 0xED46, 0xED47), (.muteOpen, 0xE5E7, 0xE5E7), (.muteClosed, 0xE5E5, 0xE5E5),
         (.harmonic, 0xE614, 0xE614), (.upBow, 0xE612, 0xE612), (.downBow, 0xE610, 0xE610),
+        (.laissezVibrer, 0xE4BA, 0xE4BB),
     ] as [(ChordArticulation.Kind, UInt32, UInt32)])
     func everyKindIsDrawn(kind: ChordArticulation.Kind, above: UInt32, below: UInt32) throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }

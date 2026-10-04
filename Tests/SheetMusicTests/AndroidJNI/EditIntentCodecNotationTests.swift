@@ -148,7 +148,7 @@ struct EditIntentCodecNotationTests {
     /// does not model is still toggleable. Pinned so a later "tighten the decoder" change has to argue with it.
     @Test func `an unknown articulation token decodes to unknown rather than throwing`() throws {
         let intent = EditIntent.setArticulation(
-            at: Self.slot, kind: .unknown(subtype: "articLaissezVibrerAbove"), anchor: nil, present: true,
+            at: Self.slot, kind: .unknown(subtype: "handbellsMartellato"), anchor: nil, present: true,
         )
         #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
     }

@@ -2440,6 +2440,7 @@ extension LayoutEngine {
         case .harmonic: .harmonic
         case .upBow: .upBow
         case .downBow: .downBow
+        case .laissezVibrer: .laissezVibrer
         case .unknown: nil
         }
     }
@@ -2453,7 +2454,7 @@ extension LayoutEngine {
     /// tenuto-staccato louré, tenuto-accent and marcato-tenuto) sit outside the
     /// staff. So does every mark MuseScore puts in no staccato or tenuto
     /// category: the stroke and wedge staccatissimos, stress, unstress, the soft
-    /// accents and the technique marks.
+    /// accents, the technique marks and the laissez vibrer.
     static func articulationHugsNote(
         _ kind: LayoutElement.ArticulationKind,
     ) -> Bool {
@@ -2461,7 +2462,8 @@ extension LayoutEngine {
         case .staccato, .staccatissimo, .tenuto: true
         case .accent, .marcato, .accentStaccato, .marcatoStaccato, .tenutoStaccato, .tenutoAccent, .marcatoTenuto,
              .staccatissimoStroke, .staccatissimoWedge, .stress, .unstress, .softAccent, .softAccentStaccato,
-             .softAccentTenuto, .softAccentTenutoStaccato, .muteOpen, .muteClosed, .harmonic, .upBow, .downBow:
+             .softAccentTenuto, .softAccentTenutoStaccato, .muteOpen, .muteClosed, .harmonic, .upBow, .downBow,
+             .laissezVibrer:
             false
         }
     }
@@ -2478,7 +2480,7 @@ extension LayoutEngine {
         case .marcato, .marcatoStaccato, .marcatoTenuto, .muteOpen, .muteClosed, .harmonic, .upBow, .downBow: true
         case .staccato, .staccatissimo, .tenuto, .accent, .accentStaccato, .tenutoStaccato, .tenutoAccent,
              .staccatissimoStroke, .staccatissimoWedge, .stress, .unstress, .softAccent, .softAccentStaccato,
-             .softAccentTenuto, .softAccentTenutoStaccato:
+             .softAccentTenuto, .softAccentTenutoStaccato, .laissezVibrer:
             false
         }
     }

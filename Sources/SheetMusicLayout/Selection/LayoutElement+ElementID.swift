@@ -76,6 +76,7 @@ extension LayoutElement.ArticulationKind {
         case .harmonic: .harmonic
         case .upBow: .upBow
         case .downBow: .downBow
+        case .laissezVibrer: .laissezVibrer
         }
     }
 }

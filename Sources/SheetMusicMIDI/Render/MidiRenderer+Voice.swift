@@ -544,7 +544,7 @@ extension MidiRenderer {
         case .tenuto, .tenutoAccent, .marcatoTenuto, .softAccentTenuto: ("tenuto", 100)
         case .tenutoStaccato, .softAccentTenutoStaccato: ("portato", 67)
         case .accent, .marcato, .stress, .unstress, .softAccent, .muteOpen, .muteClosed, .harmonic, .upBow,
-             .downBow, .unknown:
+             .downBow, .laissezVibrer, .unknown:
             nil
         }
     }
@@ -557,7 +557,7 @@ extension MidiRenderer {
         case .marcato, .marcatoStaccato, .marcatoTenuto: ("marcato", 120)
         case .staccato, .staccatissimo, .tenuto, .tenutoStaccato, .staccatissimoStroke, .staccatissimoWedge,
              .stress, .unstress, .softAccent, .softAccentStaccato, .softAccentTenuto, .softAccentTenutoStaccato,
-             .muteOpen, .muteClosed, .harmonic, .upBow, .downBow, .unknown:
+             .muteOpen, .muteClosed, .harmonic, .upBow, .downBow, .laissezVibrer, .unknown:
             nil
         }
     }

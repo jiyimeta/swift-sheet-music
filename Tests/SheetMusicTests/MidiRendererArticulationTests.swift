@@ -81,6 +81,7 @@ struct MidiRendererArticulationTests {
         (.staccatissimoStroke, 33, 100), (.staccatissimoWedge, 33, 100),
         (.softAccentStaccato, 50, 100), (.softAccentTenuto, 100, 100), (.softAccentTenutoStaccato, 67, 100),
         (.stress, 95, 100), (.unstress, 95, 100), (.softAccent, 95, 100), (.upBow, 95, 100), (.harmonic, 95, 100),
+        (.laissezVibrer, 95, 100),
     ] as [(ChordArticulation.Kind, Int, Int)])
     func combinedMarksPlayTheirHalves(kind: ChordArticulation.Kind, gate: Int, velocity: Int) {
         #expect(MidiRenderer.effectiveGateTime(for: chord([kind]), instrument: bareInstrument) == gate)

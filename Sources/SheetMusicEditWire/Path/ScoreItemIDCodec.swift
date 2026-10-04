@@ -295,6 +295,7 @@ public enum ScoreArticulationKindWire {
     case harmonic
     case upBow
     case downBow
+    case laissezVibrer
 
     public init(from value: ChordArticulation.Kind) {
         switch value {
@@ -322,6 +323,7 @@ public enum ScoreArticulationKindWire {
         case .harmonic: self = .harmonic
         case .upBow: self = .upBow
         case .downBow: self = .downBow
+        case .laissezVibrer: self = .laissezVibrer
         }
     }
 
@@ -351,6 +353,7 @@ public enum ScoreArticulationKindWire {
         case .harmonic: .harmonic
         case .upBow: .upBow
         case .downBow: .downBow
+        case .laissezVibrer: .laissezVibrer
         }
     }
 }
