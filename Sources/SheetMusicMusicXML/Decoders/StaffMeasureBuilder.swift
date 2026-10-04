@@ -84,14 +84,21 @@ struct StaffMeasureBuilder {
         voiceIndex[voiceId]
     }
 
-    mutating func foldIntoLastChord(voice voiceId: String, note: Note, duration: NoteDuration) {
+    /// Fold a `<chord/>` tone into the voice's last chord. Its articulations join the chord's, each kind once —
+    /// a chord's tones commonly repeat the chord's marks, and MuseScore drops a duplicate the same way
+    /// (`Chord::hasArticulation` in `addArticulationToChord`).
+    mutating func foldIntoLastChord(
+        voice voiceId: String, note: Note, duration: NoteDuration, articulations: [ChordArticulation] = [],
+    ) {
         let idx = internVoice(voiceId)
         var elements = voices[idx]
         if let last = elements.last, case var .chord(chord) = last {
             chord.notes = ChordNotes(Array(chord.notes) + [note])
+            let present = Set(chord.articulations.map(\.kind))
+            chord.articulations += articulations.filter { !present.contains($0.kind) }
             elements[elements.count - 1] = .chord(chord)
         } else {
-            elements.append(.chord(Chord(duration: duration, notes: [note])))
+            elements.append(.chord(Chord(duration: duration, notes: [note], articulations: articulations)))
         }
         voices[idx] = elements
     }

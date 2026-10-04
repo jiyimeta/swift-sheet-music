@@ -17,8 +17,9 @@ enum MusicXMLNoteDecoder {
         case new([VoiceElement])
         /// The note's pitch is folded into the previous chord. Trailing
         /// breaths (if any) are appended to the same voice after the fold,
-        /// since the host chord remains the previous one.
-        case foldIntoLastChord(Note, NoteDuration, trailingBreaths: [Breath])
+        /// since the host chord remains the previous one, and the note's
+        /// articulations join the host chord's.
+        case foldIntoLastChord(Note, NoteDuration, trailingBreaths: [Breath], articulations: [ChordArticulation])
     }
 
     static func decodeNote(
@@ -83,15 +84,16 @@ enum MusicXMLNoteDecoder {
             userVelocity: decodeUserVelocity(node),
         )
 
+        let articulations = decodeArticulations(node)
         if isChord {
-            return .foldIntoLastChord(note, duration, trailingBreaths: breaths)
+            return .foldIntoLastChord(note, duration, trailingBreaths: breaths, articulations: articulations)
         }
 
         let arpeggio = decodeArpeggio(node)
         let lyrics = decodeLyrics(node)
         let chord = Chord(
             duration: duration, notes: [note],
-            arpeggio: arpeggio, lyrics: lyrics,
+            arpeggio: arpeggio, lyrics: lyrics, articulations: articulations,
         )
         _ = existingVoiceElements // reserved for future use (e.g. tie backrefs)
         return .new(prefix + [.chord(chord)] + suffix)

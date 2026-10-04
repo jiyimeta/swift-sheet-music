@@ -81,6 +81,11 @@ and this project adheres to
   accent velocity. These decoded as `.unknown` before and showed and played nothing. `LayoutElement.ArticulationKind`,
   `ScoreArticulationKindWire` (appended, choices 9–23) and the Kotlin `ScoreArticulationKind` model gain the same
   cases.
+- **MusicXML import reads articulations.** `<notations><articulations>` and the bow, stopped and open marks under
+  `<technical>` become `Chord.articulations` by MuseScore's table (`convertArticulationToSymId`): `strong-accent` is
+  marcato, `spiccato` the staccatissimo stroke, `detached-legato` the louré, `stopped` / `open` the brass mutes.
+  `placement` sets the side, as does a `strong-accent`'s `type` when no placement is given. A `<chord/>` tone's
+  marks join the host chord, each kind once. They were dropped before.
 - **`Clef.writtenClefType`** — the clef a reader sees with Concert Pitch off: `transposingClefType`, else the
   concert type.
 
