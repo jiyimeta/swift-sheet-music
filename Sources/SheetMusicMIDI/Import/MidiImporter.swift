@@ -42,7 +42,9 @@ public enum MidiImporter {
         sourceFilename: String?,
     ) throws -> Score {
         let imports = partition(file)
-        let timeline = buildBarTimeline(imports: imports, division: file.division)
+        let timeline = buildBarTimeline(
+            imports: imports, division: file.division, fileEvents: file.tracks.flatMap(\.events),
+        )
         let swung = imports.map { track -> ImportTrack in
             guard let resolve = options.resolveSwing else { return track }
             return analyzeSwing(
@@ -67,7 +69,9 @@ public enum MidiImporter {
             )
         }
         let imports = partition(file)
-        let timeline = buildBarTimeline(imports: imports, division: file.division)
+        let timeline = buildBarTimeline(
+            imports: imports, division: file.division, fileEvents: file.tracks.flatMap(\.events),
+        )
         var swung: [ImportTrack] = []
         for track in imports {
             if let resolveAsync = options.resolveSwingAsync {

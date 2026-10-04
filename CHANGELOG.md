@@ -33,6 +33,9 @@ and this project adheres to
   note now keeps one step, MuseScore's `findQuantizedNoteOffTime` rule, and a drum note is lengthened to the next
   hit in its voice, the end of its beat or the barline (MuseScore's `minimizeNumberOfRests`), so an eighth-note
   hi-hat reads as eighths.
+- **MIDI import measures bars by the conductor track's meter.** The bar timeline read time signatures from the
+  note-bearing tracks only, so a Format 1 file — meter on track 0, which carries no notes — imported a 3/4 piece in
+  4/4 bars under a 3/4 signature. Every track's time signatures count now, as in MuseScore's `createMTrackList`.
 
 ## [4.2.0] - 2026-10-04
 

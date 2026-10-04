@@ -78,4 +78,22 @@ struct MidiImporterBarTests {
         let measures = MidiImporter.segmentBars(imports: [], division: 480)
         #expect(measures.isEmpty)
     }
+
+    /// A Format 1 file keeps its meter on the conductor track — track 0, meta events only — which yields no
+    /// `ImportTrack` of its own. The bar lengths still have to follow it: MuseScore builds its time-signature map from
+    /// every track's meta events (`createMTrackList`). Reading only the note tracks cut a 3/4 piece into 4/4 bars
+    /// (1920 + 960 ticks for two bars of 3/4) under a "3/4" signature.
+    @Test func conductorTrackMeterSetsTheBarLength() throws {
+        let conductor = MidiTrack(events: [ts(0, 3, 4), TimedMidiEvent(tick: 2880, event: .endOfTrack)])
+        let piano = MidiTrack(events: [
+            nOn(0, 60), nOff(1440, 60), nOn(1440, 62), nOff(2880, 62),
+            TimedMidiEvent(tick: 2880, event: .endOfTrack),
+        ])
+        let file = MidiFile(division: 480, format: 1, tracks: [conductor, piano])
+        let score = try MidiImporter.parse(MidiWriter.write(file))
+        let lengths = score.parts[0].staves[0].measures.map { measure in
+            measure.voices[0].elements.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        }
+        #expect(lengths == [1440, 1440])
+    }
 }

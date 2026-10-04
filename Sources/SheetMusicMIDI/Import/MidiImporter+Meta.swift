@@ -14,19 +14,23 @@ extension MidiImporter {
     }
 
     /// Public for testing.
-    static func buildBarTimeline(imports: [ImportTrack], division: Int) -> BarTimeline {
+    ///
+    /// The meter comes from `imports` AND `fileEvents` — every track of the file, the conductor included. A
+    /// Format 1 file keeps its time signatures on track 0, which carries no notes and so yields no `ImportTrack`;
+    /// reading the slices alone cut a 3/4 piece into 4/4 bars. MuseScore builds its map from every track's meta
+    /// events the same way (`createMTrackList`), a later track's signature replacing an earlier one at the same
+    /// tick. The timeline's extent still comes from `imports` alone.
+    static func buildBarTimeline(
+        imports: [ImportTrack], division: Int, fileEvents: [TimedMidiEvent] = [],
+    ) -> BarTimeline {
         struct Change { var tick: Int; var sig: TimeSignature }
-        var changes: [Change] = []
-        for track in imports {
-            for ev in track.events {
-                if case let .meta(.timeSignature(n, d, _, _)) = ev.event {
-                    changes.append(Change(
-                        tick: ev.tick,
-                        sig: TimeSignature(numerator: n, denominator: d),
-                    ))
-                }
+        var signatureAt: [Int: TimeSignature] = [:]
+        for ev in imports.flatMap(\.events) + fileEvents {
+            if case let .meta(.timeSignature(n, d, _, _)) = ev.event {
+                signatureAt[ev.tick] = TimeSignature(numerator: n, denominator: d)
             }
         }
+        var changes = signatureAt.map { Change(tick: $0.key, sig: $0.value) }
         changes.sort { $0.tick < $1.tick }
         if changes.first?.tick != 0 {
             changes.insert(
