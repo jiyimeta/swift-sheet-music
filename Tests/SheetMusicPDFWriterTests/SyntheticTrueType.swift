@@ -1,17 +1,21 @@
 import Foundation
 
-/// A TrueType-flavored OpenType file built in memory, with just the tables `OpenTypeFont` reads — the shape of the
-/// platform UI face (Segoe UI) a Windows host hands the writer, without shipping one. No outlines: what the tests check
-/// is how the file is read and embedded, not how it draws.
+/// A TrueType-flavored OpenType file built in memory, with the tables `OpenTypeFont` reads and `TrueTypeSubset` cuts —
+/// the shape of the platform UI face (Segoe UI) or a CJK fallback a Windows host hands the writer, without shipping
+/// one. The outlines are placeholders: each glyph a one-point contour of its own bytes, so a test can tell which
+/// glyph's bytes a subset kept.
 enum SyntheticTrueType {
     /// `scalars` map to glyphs 1, 2, … in sorted order, each `advance` font units wide on a 1000-unit em; glyph 0 is
-    /// `.notdef`.
+    /// `.notdef`. Each `composites` entry adds a glyph after them built from the given glyph ids, mapped from its
+    /// scalar.
     static func make(
         postScriptName: String = "Synthetic-Semibold", fsType: UInt16 = 0x0008, italicAngle: Int16 = 0,
-        scalars: [UInt16] = Array("ALabelPiano 12".utf16), advance: UInt16 = 600,
+        scalars: [UInt16] = Array("ALabelPiano 12".utf16), composites: [(scalar: UInt16, components: [UInt16])] = [],
+        advance: UInt16 = 600,
     ) -> Data {
-        let unique = Array(Set(scalars)).sorted()
-        let glyphCount = UInt16(unique.count + 1)
+        let simple = Array(Set(scalars)).sorted()
+        let mapped = simple + composites.map(\.scalar)
+        let glyphCount = UInt16(mapped.count + 1)
         var os2 = [UInt8](repeating: 0, count: 78)
         os2.put16(fsType, at: 8)
         var post = [UInt8](repeating: 0, count: 32)
@@ -22,10 +26,77 @@ enum SyntheticTrueType {
             hmtx.append16(advance)
             hmtx.append16(0)
         }
-        return file([
+        let outlines = glyf(simpleCount: simple.count, composites: composites.map(\.components))
+        return Data(file([
             ("head", head()), ("hhea", hhea(glyphCount: glyphCount)), ("maxp", maxp(glyphCount: glyphCount)),
-            ("hmtx", hmtx), ("cmap", cmap(unique)), ("OS/2", os2), ("post", post), ("name", name(postScriptName)),
-        ])
+            ("hmtx", hmtx), ("cmap", cmap(mapped)), ("OS/2", os2), ("post", post), ("name", name(postScriptName)),
+            ("glyf", outlines.glyf), ("loca", outlines.loca),
+        ]))
+    }
+
+    /// `fonts` as one collection (`ttcf`), each table copied after the header with its offset rewritten.
+    static func collection(_ fonts: [Data]) -> Data {
+        var header: [UInt8] = Array("ttcf".utf8)
+        header.append32(0x0001_0000)
+        header.append32(UInt32(fonts.count))
+        var offset = header.count + 4 * fonts.count
+        var bodies: [UInt8] = []
+        for font in fonts {
+            header.append32(UInt32(offset))
+            var bytes = [UInt8](font)
+            let tableCount = Int(bytes[4]) << 8 | Int(bytes[5])
+            for index in 0 ..< tableCount {
+                let record = 12 + 16 * index + 8
+                let old = Int(bytes[record]) << 24 | Int(bytes[record + 1]) << 16 | Int(bytes[record + 2]) << 8
+                    | Int(bytes[record + 3])
+                bytes.put32(UInt32(old + offset), at: record)
+            }
+            bodies += bytes
+            offset += bytes.count
+        }
+        return Data(header + bodies)
+    }
+
+    /// Glyph `n`'s placeholder outline: a one-contour glyph whose single point is (n, n).
+    static func simpleOutline(_ glyph: Int) -> [UInt8] {
+        var bytes: [UInt8] = []
+        for value in [1, 0, 0, 0, 0, 0, 0] as [UInt16] {
+            bytes.append16(value)
+        }
+        bytes.append(0x01) // on curve, coordinates as words
+        bytes.append16(UInt16(glyph))
+        bytes.append16(UInt16(glyph))
+        return bytes
+    }
+
+    private static func glyf(simpleCount: Int, composites: [[UInt16]]) -> (glyf: [UInt8], loca: [UInt8]) {
+        var glyf: [UInt8] = []
+        var loca: [UInt8] = []
+        func add(_ outline: [UInt8]) {
+            loca.append32(UInt32(glyf.count))
+            glyf += outline
+            while glyf.count % 4 != 0 {
+                glyf.append(0)
+            }
+        }
+        add(simpleOutline(0))
+        for glyph in 1 ... max(simpleCount, 1) where glyph <= simpleCount {
+            add(simpleOutline(glyph))
+        }
+        for components in composites {
+            var outline: [UInt8] = []
+            for value in [UInt16(bitPattern: -1), 0, 0, 0, 0] {
+                outline.append16(value)
+            }
+            for (index, component) in components.enumerated() {
+                outline.append16(index < components.count - 1 ? 0x0020 : 0) // MORE_COMPONENTS; byte arguments
+                outline.append16(component)
+                outline.append16(0)
+            }
+            add(outline)
+        }
+        loca.append32(UInt32(glyf.count))
+        return (glyf, loca)
     }
 
     private static func head() -> [UInt8] {
@@ -35,6 +106,7 @@ enum SyntheticTrueType {
         head.put16(UInt16(bitPattern: -100), at: 38) // yMin
         head.put16(900, at: 40) // xMax
         head.put16(800, at: 42) // yMax
+        head.put16(1, at: 50) // indexToLocFormat: long
         return head
     }
 
@@ -84,7 +156,7 @@ enum SyntheticTrueType {
     }
 
     /// The table directory and the tables, each at a four-byte boundary.
-    private static func file(_ tables: [(tag: String, data: [UInt8])]) -> Data {
+    private static func file(_ tables: [(tag: String, data: [UInt8])]) -> [UInt8] {
         var file: [UInt8] = []
         file.append32(0x0001_0000)
         for value in [UInt16(tables.count), 0, 0, 0] {
@@ -104,7 +176,33 @@ enum SyntheticTrueType {
             bodies += padded
             offset += padded.count
         }
-        return Data(file + bodies)
+        return file + bodies
+    }
+}
+
+/// An `sfnt`'s tables by tag, read back from its directory: what a subset kept, for the tests to look at.
+enum SFNTTables {
+    static func read(_ data: Data) -> [String: [UInt8]] {
+        let bytes = [UInt8](data)
+        func u32(_ at: Int) -> Int {
+            Int(bytes[at]) << 24 | Int(bytes[at + 1]) << 16 | Int(bytes[at + 2]) << 8 | Int(bytes[at + 3])
+        }
+        var tables: [String: [UInt8]] = [:]
+        for index in 0 ..< (Int(bytes[4]) << 8 | Int(bytes[5])) {
+            let record = 12 + 16 * index
+            let tag = String(bytes[record ..< record + 4].map { Character(Unicode.Scalar($0)) })
+            tables[tag] = Array(bytes[u32(record + 8) ..< u32(record + 8) + u32(record + 12)])
+        }
+        return tables
+    }
+
+    /// Glyph `glyph`'s bytes through a long-format `loca`.
+    static func glyph(_ glyph: Int, in tables: [String: [UInt8]]) -> [UInt8] {
+        guard let loca = tables["loca"], let glyf = tables["glyf"] else { return [] }
+        func u32(_ at: Int) -> Int {
+            Int(loca[at]) << 24 | Int(loca[at + 1]) << 16 | Int(loca[at + 2]) << 8 | Int(loca[at + 3])
+        }
+        return Array(glyf[u32(4 * glyph) ..< u32(4 * glyph + 4)])
     }
 }
 

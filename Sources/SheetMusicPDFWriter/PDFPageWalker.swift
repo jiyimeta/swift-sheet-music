@@ -10,8 +10,9 @@ import SheetMusicLayout
 ///
 /// Text sits where the layout measured it: each character at the offset the installed `FontMetrics.provider` gives
 /// for it — the provider the pages were laid out with — never at the font's own kerning. A character the face does
-/// not have (Edwin has no Japanese) draws nothing but stays in the text, as invisible text with its own code, so the
-/// PDF can still be searched for it.
+/// not have (neither Edwin nor Segoe UI has Japanese) draws in the font the host's text engine falls back to for it
+/// (`ScorePDFFonts(fallback:)`); with none, it draws nothing but stays in the text, as invisible text with its own
+/// code, so the PDF can still be searched for it.
 ///
 /// A walker starts in the draw program's default state (black, opaque, solid, unrotated, no text style).
 struct PDFPageWalker {
@@ -120,22 +121,36 @@ struct PDFPageWalker {
             + "<\(PDFString.hex4(UInt16(glyph)))> Tj ET")
     }
 
-    /// Each line from `y` down by the face's line height, each character at the provider's offset for it.
+    /// Each line from `y` down by the face's line height, each character at the provider's offset for it — in the
+    /// line's face, or for a character it lacks in the font the host falls back to for that part of the line.
     private mutating func text(_ text: String, x: Double, y: Double, size: Double, fontId: DrawProgram.FontID) {
         let font = resources.font(fontId, style: textStyle)
         let measured = layoutFont(fontId, size: size)
         let provider = FontMetrics.provider
         let lineHeight = Double(provider.ascent(font: measured) + provider.descent(font: measured)
             + provider.leading(font: measured))
-        var shown = "BT /\(font.resourceName) \(Self.number(size * Self.pointsPerMM)) Tf"
+        let fontSize = Self.number(size * Self.pointsPerMM)
+        var current = font
+        var shown = "BT /\(font.resourceName) \(fontSize) Tf"
         for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
             let offsets = provider.caretOffsets(text: String(line), font: measured).map { Double($0) }
+            let fallbacks = resources.fallbacks(String(line), drawnIn: font, fontId: fontId, style: textStyle)
             var unit = 0
             for scalar in line.unicodeScalars {
                 let dx = unit < offsets.count ? offsets[unit] : 0
+                var face = font
+                if font.font.glyph(for: scalar.value) == 0, let fallback = fallbacks.first(where: {
+                    $0.range.contains(unit) && $0.font.font.glyph(for: scalar.value) != 0
+                }) {
+                    face = fallback.font
+                }
                 unit += scalar.utf16.count
+                if face !== current {
+                    shown += " /\(face.resourceName) \(fontSize) Tf"
+                    current = face
+                }
                 let lineY = y + Double(index) * lineHeight
-                let code = font.code(for: scalar.value)
+                let code = face.code(for: scalar.value)
                 shown += " 1 0 0 1 \(point(x + dx, lineY)) Tm"
                 shown += code.isMissing ? " 3 Tr <\(code.hex)> Tj 0 Tr" : " <\(code.hex)> Tj"
             }

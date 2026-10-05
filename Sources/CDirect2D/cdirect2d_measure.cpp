@@ -164,21 +164,17 @@ extern "C" int32_t cd2d_measure_carets(
     return S_OK;
 }
 
-extern "C" int32_t cd2d_font_file_path(
-    cd2d_resources *resources, const uint16_t *family, int32_t weight, int32_t italic, uint16_t *path,
-    uint32_t capacity, uint32_t *length) {
+namespace {
+
+/// The path of the one file `face` comes from, and its length without the NUL even when `path` is too short.
+HRESULT facePath(IDWriteFontFace *face, uint16_t *path, uint32_t capacity, uint32_t *length) {
     *length = 0;
-    cd2d::Face *face = cd2d::resolveFace(
-        resources, reinterpret_cast<const wchar_t *>(family), cd2d::fontWeight(weight), italic != 0);
-    if (!face) return DWRITE_E_NOFONT;
-    // A face out of a collection is not a file a document can carry as it stands.
-    if (face->face->GetType() == DWRITE_FONT_FACE_TYPE_OPENTYPE_COLLECTION) return E_NOTIMPL;
     UINT32 count = 0;
-    HRESULT hr = face->face->GetFiles(&count, nullptr);
+    HRESULT hr = face->GetFiles(&count, nullptr);
     if (FAILED(hr)) return hr;
     if (count != 1) return E_NOTIMPL;
     ComPtr<IDWriteFontFile> file;
-    hr = face->face->GetFiles(&count, &file);
+    hr = face->GetFiles(&count, &file);
     const void *key = nullptr;
     UINT32 keySize = 0;
     if (SUCCEEDED(hr)) hr = file->GetReferenceKey(&key, &keySize);
@@ -193,4 +189,100 @@ extern "C" int32_t cd2d_font_file_path(
     *length = needed;
     if (needed + 1 > capacity) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
     return local->GetFilePathFromKey(key, keySize, reinterpret_cast<wchar_t *>(path), capacity);
+}
+
+/// Receives the glyph runs of a laid-out text and records, for each, the text it covers and the file of the face it
+/// was drawn in — the family's own, or the one the system fallback chose.
+class RunCollector final : public IDWriteTextRenderer {
+public:
+    RunCollector(cd2d_font_run *runs, uint32_t capacity) : runs_(runs), capacity_(capacity) {}
+
+    uint32_t count = 0;
+
+    // IUnknown. Lives on the stack for one Draw call, so reference counting is a formality.
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **object) override {
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IDWritePixelSnapping)
+            || riid == __uuidof(IDWriteTextRenderer)) {
+            *object = static_cast<IDWriteTextRenderer *>(this);
+            return S_OK;
+        }
+        *object = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
+    ULONG STDMETHODCALLTYPE Release() override { return 1; }
+
+    HRESULT STDMETHODCALLTYPE IsPixelSnappingDisabled(void *, BOOL *disabled) override {
+        *disabled = TRUE;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetCurrentTransform(void *, DWRITE_MATRIX *matrix) override {
+        *matrix = DWRITE_MATRIX{1, 0, 0, 1, 0, 0};
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetPixelsPerDip(void *, FLOAT *pixels) override {
+        *pixels = 1;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DrawGlyphRun(
+        void *, FLOAT, FLOAT, DWRITE_MEASURING_MODE, const DWRITE_GLYPH_RUN *run,
+        const DWRITE_GLYPH_RUN_DESCRIPTION *description, IUnknown *) override {
+        if (count >= capacity_ || !description) return S_OK;
+        cd2d_font_run &out = runs_[count++];
+        out = cd2d_font_run{};
+        out.start = description->textPosition;
+        out.length = description->stringLength;
+        out.faceIndex = run->fontFace->GetIndex();
+        uint32_t length = 0;
+        // A face without a path on disk, or with a path longer than the field, is left with an empty one.
+        if (FAILED(facePath(run->fontFace, out.path, sizeof out.path / sizeof out.path[0], &length))) out.path[0] = 0;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE DrawUnderline(void *, FLOAT, FLOAT, const DWRITE_UNDERLINE *, IUnknown *) override {
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE DrawStrikethrough(
+        void *, FLOAT, FLOAT, const DWRITE_STRIKETHROUGH *, IUnknown *) override {
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE DrawInlineObject(
+        void *, FLOAT, FLOAT, IDWriteInlineObject *, BOOL, BOOL, IUnknown *) override {
+        return S_OK;
+    }
+
+private:
+    cd2d_font_run *runs_;
+    uint32_t capacity_;
+};
+
+}  // namespace
+
+extern "C" int32_t cd2d_font_file_path(
+    cd2d_resources *resources, const uint16_t *family, int32_t weight, int32_t italic, uint16_t *path,
+    uint32_t capacity, uint32_t *length, uint32_t *face_index) {
+    *length = 0;
+    *face_index = 0;
+    cd2d::Face *face = cd2d::resolveFace(
+        resources, reinterpret_cast<const wchar_t *>(family), cd2d::fontWeight(weight), italic != 0);
+    if (!face) return DWRITE_E_NOFONT;
+    *face_index = face->face->GetIndex();
+    return facePath(face->face.Get(), path, capacity, length);
+}
+
+extern "C" int32_t cd2d_text_font_runs(
+    cd2d_resources *resources, const uint16_t *family, int32_t weight, int32_t italic, const uint16_t *text,
+    uint32_t length, cd2d_font_run *runs, uint32_t capacity, uint32_t *count) {
+    *count = 0;
+    if (length == 0) return S_OK;
+    ComPtr<IDWriteTextLayout> layout;
+    float baseline = 0;
+    HRESULT hr = cd2d::layoutText(
+        resources, reinterpret_cast<const wchar_t *>(family), reinterpret_cast<const wchar_t *>(text), length, 12,
+        cd2d::fontWeight(weight), italic != 0, &layout, &baseline);
+    if (FAILED(hr)) return hr;
+    RunCollector collector(runs, capacity);
+    hr = layout->Draw(nullptr, &collector, 0, 0);
+    *count = collector.count;
+    return hr;
 }

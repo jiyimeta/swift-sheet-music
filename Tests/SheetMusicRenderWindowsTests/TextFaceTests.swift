@@ -1,6 +1,7 @@
 import Foundation
 @testable import SheetMusicBridgeCore
 import SheetMusicLayout
+@testable import SheetMusicPDFWriter
 @testable import SheetMusicRenderWindows
 import Testing
 
@@ -56,13 +57,42 @@ struct TextFaceTests {
 
     @Test("the system face's file is a TrueType font, its own for each weight")
     func systemFileIsTheDrawnFace() throws {
-        let regular = try #require(windowsSystemFontFile(weight: .regular, isItalic: false))
-        let semibold = try #require(windowsSystemFontFile(weight: .semibold, isItalic: false))
-        let boldItalic = try #require(windowsSystemFontFile(weight: .bold, isItalic: true))
+        let text = try WindowsTextFonts(fontFiles: ScoreSurface.bundledFontFiles)
+        let regular = try #require(text.systemFace(weight: .regular, isItalic: false))
+        let semibold = try #require(text.systemFace(weight: .semibold, isItalic: false))
+        let boldItalic = try #require(text.systemFace(weight: .bold, isItalic: true))
 
         for file in [regular, semibold, boldItalic] {
-            #expect(file.prefix(4) == Data([0, 1, 0, 0]))
+            #expect(file.data.prefix(4) == Data([0, 1, 0, 0]), "\(file.key)")
+            #expect(try OpenTypeFont(file.data, faceIndex: file.faceIndex).isEmbeddable, "\(file.key)")
         }
-        #expect(Set([regular, semibold, boldItalic]).count == 3)
+        #expect(Set([regular.key, semibold.key, boldItalic.key]).count == 3)
+    }
+
+    /// The fonts DirectWrite falls back to for Japanese, which a PDF embeds so the text the screen shows is there: the
+    /// runs cover the Japanese and only it, and each run's font has the glyphs.
+    @Test("a line's Japanese falls back to a font that has it, and only the Japanese does", arguments: [true, false])
+    func japaneseFallsBack(isSystemFace: Bool) throws {
+        let text = try WindowsTextFonts(fontFiles: ScoreSurface.bundledFontFiles)
+        let line = "Lead 余白計画 ソプラノ"
+        let spans = text.fallback(ScorePDFTextLine(
+            text: line, isSystemFace: isSystemFace, weight: isSystemFace ? .semibold : .regular, isItalic: false,
+        ))
+        let units = Array(line.utf16)
+        let covered = Set(spans.flatMap(\.utf16Range))
+
+        #expect(!spans.isEmpty)
+        // A space between Japanese words may ride along in the fallback's run; the Latin letters never do.
+        for (offset, unit) in units.enumerated() where unit != 0x20 {
+            #expect(covered.contains(offset) == (unit > 0x2FFF), "U+\(String(unit, radix: 16)) at \(offset)")
+        }
+        for span in spans {
+            let font = try OpenTypeFont(span.font.data, faceIndex: span.font.faceIndex)
+            for unit in units[span.utf16Range] where unit > 0x2FFF {
+                #expect(font.glyph(for: UInt32(unit)) != 0, "\(span.font.key) lacks U+\(String(unit, radix: 16))")
+            }
+        }
+        #expect(text.fallback(ScorePDFTextLine(text: "Piano", isSystemFace: true, weight: .regular, isItalic: false))
+            .isEmpty)
     }
 }

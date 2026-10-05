@@ -1,13 +1,13 @@
 import SheetMusicFoundation
 
-/// One font a PDF draws with, embedded whole: a Type0 font over a CIDFont whose program is the font file itself — an
-/// OpenType file with CFF outlines as `FontFile3 /OpenType` under `CIDFontType0`, one with TrueType outlines (the
-/// platform UI face) as `FontFile2` under `CIDFontType2` — glyphs addressed by id through `Identity-H` (two bytes a
-/// glyph in a `Tj`), and a `ToUnicode` map from each glyph used back to the text it stands for, so the PDF's text can
-/// be searched and copied.
+/// One font a PDF draws with: a Type0 font over a CIDFont whose program is the font file — an OpenType file with CFF
+/// outlines embedded whole as `FontFile3 /OpenType` under `CIDFontType0`, one with TrueType outlines (the platform UI
+/// face, a CJK fallback) cut to the glyphs drawn (`TrueTypeSubset`) as `FontFile2` under `CIDFontType2` — glyphs
+/// addressed by id through `Identity-H` (two bytes a glyph in a `Tj`), and a `ToUnicode` map from each glyph used back
+/// to the text it stands for, so the PDF's text can be searched and copied.
 ///
-/// Whole rather than subset: Bravura and Edwin are SIL OFL, which allows it, and a subsetter is a CFF compiler of its
-/// own. One embedding per face for the whole document, however many pages use it.
+/// CFF whole rather than subset: Bravura and Edwin are SIL OFL, which allows it, and a CFF subsetter is a compiler of
+/// its own. One embedding per face for the whole document, however many pages use it.
 final class PDFFontEmbedding {
     /// What a content stream shows for one character: its two-byte code, and whether the face lacks it — then the
     /// code is one past the font's glyphs, shown as invisible text so the `ToUnicode` map can still name it.
@@ -65,17 +65,20 @@ final class PDFFontEmbedding {
         let program = writer.reserve()
         let toUnicode = writer.reserve()
         let glyphs = used.keys.sorted()
+        // A subset is named with a tag of its own, as ISO 32000-1 §9.6.4 requires, so a reader never takes it for the
+        // whole font — or for another document's subset of it.
+        let name = font.hasCFFOutlines ? baseName : "\(Self.subsetTag(glyphs))+\(baseName)"
         // A missing character's code is no glyph of the font's: a full em, for a reader that selects the text.
         let widths = glyphs.map { "\($0) [\($0 < font.glyphCount ? font.width(of: $0) : 1000)]" }
             .joined(separator: " ")
         writer.object(
             type0,
-            "<< /Type /Font /Subtype /Type0 /BaseFont /\(baseName) /Encoding /Identity-H "
+            "<< /Type /Font /Subtype /Type0 /BaseFont /\(name) /Encoding /Identity-H "
                 + "/DescendantFonts [\(cidFont) 0 R] /ToUnicode \(toUnicode) 0 R >>",
         )
         writer.object(
             cidFont,
-            "<< /Type /Font /Subtype /\(font.hasCFFOutlines ? "CIDFontType0" : "CIDFontType2") /BaseFont /\(baseName) "
+            "<< /Type /Font /Subtype /\(font.hasCFFOutlines ? "CIDFontType0" : "CIDFontType2") /BaseFont /\(name) "
                 + "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> "
                 + "/FontDescriptor \(descriptor) 0 R /DW 0 /W [\(widths)]"
                 + (font.hasCFFOutlines ? "" : " /CIDToGIDMap /Identity") + " >>",
@@ -85,20 +88,37 @@ final class PDFFontEmbedding {
         let flags = (symbolic ? 4 : 32) | (font.italicAngle != 0 ? 64 : 0)
         writer.object(
             descriptor,
-            "<< /Type /FontDescriptor /FontName /\(baseName) /Flags \(flags) "
+            "<< /Type /FontDescriptor /FontName /\(name) /Flags \(flags) "
                 + "/FontBBox [\(font.thousandths(box.minX)) \(font.thousandths(box.minY)) "
                 + "\(font.thousandths(box.maxX)) \(font.thousandths(box.maxY))] "
                 + "/ItalicAngle \(PDFPageWalker.number(font.italicAngle)) /Ascent \(font.thousandths(font.ascender)) "
                 + "/Descent \(font.thousandths(font.descender)) /CapHeight \(font.thousandths(font.ascender)) "
                 + "/StemV 80 /\(font.hasCFFOutlines ? "FontFile3" : "FontFile2") \(program) 0 R >>",
         )
-        // `Length1` is the uncompressed length a TrueType program's stream must state.
-        try writer.stream(
-            program, dictionary: font.hasCFFOutlines ? "/Subtype /OpenType" : "/Length1 \(font.data.count)",
-            data: font.data, compress: true,
-        )
+        if font.hasCFFOutlines {
+            try writer.stream(program, dictionary: "/Subtype /OpenType", data: font.data, compress: true)
+        } else {
+            // Only the glyphs drawn; `Length1` is the uncompressed length a TrueType program's stream must state.
+            let subset = try TrueTypeSubset.subset(font, keeping: Set(glyphs))
+            try writer.stream(program, dictionary: "/Length1 \(subset.count)", data: subset, compress: true)
+        }
         try writer.stream(toUnicode, dictionary: "", data: Data(toUnicodeMap(glyphs).utf8), compress: true)
         return type0
+    }
+
+    /// Six uppercase letters from the glyphs a subset keeps (FNV-1a over their ids): the same subset is always named
+    /// the same, and two different ones almost never are.
+    static func subsetTag(_ glyphs: [Int]) -> String {
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for glyph in glyphs {
+            hash = (hash ^ UInt64(glyph)) &* 0x0100_0000_01B3
+        }
+        var tag = ""
+        for _ in 0 ..< 6 {
+            tag.append(Character(Unicode.Scalar(UInt8(65 + hash % 26))))
+            hash /= 26
+        }
+        return tag
     }
 
     /// The `ToUnicode` CMap (ISO 32000-1 §9.10.3): two-byte glyph ids to UTF-16BE, a hundred `bfchar` entries a block

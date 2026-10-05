@@ -1,36 +1,6 @@
 import SheetMusicBridgeCore
 import SheetMusicFoundation
-import SheetMusicLayout
 import SheetMusicPages
-
-/// The faces a score PDF embeds, as OpenType files: Bravura for the music, Edwin's four for text, and the platform UI
-/// face for the notation labels the layout measured in it. A Windows host passes the ones `SheetMusicRenderWindows`
-/// bundles (`ScoreSurface.bundledFontFiles`) and Segoe UI's (`windowsSystemFontFile`), so the PDF draws in exactly the
-/// faces the screen does.
-public struct ScorePDFFonts: Sendable {
-    let smufl: Data
-    let roman: Data
-    let bold: Data
-    let italic: Data
-    let boldItalic: Data
-    let system: @Sendable (FontWeight, Bool) -> Data?
-
-    /// - Parameter system: the file the platform UI face draws from at a weight and slant — the face of
-    ///   `DrawProgram.FontID.system` text: part labels, measure numbers, staff names, jumps — asked once for each pair
-    ///   the pages use. Nil, the default, or a file whose license does not allow embedding draws that text in Edwin
-    ///   instead, at the positions the layout measured in the UI face.
-    public init(
-        smufl: Data, roman: Data, bold: Data, italic: Data, boldItalic: Data,
-        system: @escaping @Sendable (_ weight: FontWeight, _ isItalic: Bool) -> Data? = { _, _ in nil },
-    ) {
-        self.smufl = smufl
-        self.roman = roman
-        self.bold = bold
-        self.italic = italic
-        self.boldItalic = boldItalic
-        self.system = system
-    }
-}
 
 /// Writes a score's pages as a vector PDF, in Swift alone: each page's draw-program commands as a content stream,
 /// the faces embedded whole and each only once, the text searchable. What the PDF shows is what the Windows renderer

@@ -26,11 +26,13 @@ and this project adheres to
   vector PDF in Swift alone, each face embedded once and whole (Type0 / CIDFontType0 over `FontFile3 /OpenType`,
   Identity-H, a `ToUnicode` map), text placed at the installed metrics provider's offsets, a character the face lacks
   kept as invisible text so the PDF can still be searched. `ScorePDFFonts` takes the five faces (Bravura and Edwin's
-  four), which the Windows renderer bundles, and through `system:` the platform UI face the notation labels were
-  measured in — embedded as TrueType (`CIDFontType2`, `FontFile2`) when its license allows, the labels in Edwin
-  otherwise. Its output reads back as music through `SheetMusicPDF`'s Swift reader.
-- **`windowsSystemFontFile(weight:isItalic:)`** (Windows) — the Segoe UI file DirectWrite draws the notation labels
-  from, for `ScorePDFFonts(system:)`, so a PDF's labels are the screen's.
+  four), which the Windows renderer bundles; through `system:` the platform UI face the notation labels were measured
+  in; and through `fallback:` the fonts the host's text engine draws a line's other characters in (Japanese, most
+  often) — host files (`ScorePDFFontFile`, a collection's face included) embedded as TrueType (`CIDFontType2`,
+  `FontFile2`) cut to the glyphs drawn, when their license allows. Its output reads back as music through
+  `SheetMusicPDF`'s Swift reader.
+- **`ScorePDFFonts.windows()`** (Windows) — the screen's faces for a PDF: the bundled ones, the Segoe UI file
+  DirectWrite draws the notation labels from, and the fonts DirectWrite falls back to for characters neither has.
 - **`windows-render-probe --pdf` / `--write-pdf`** (Windows probes) — the PDF surface's timings, cache and parity, and
   the writer's output drawn by Windows against the same pages drawn by Direct2D.
 - **`LayoutSystem.rangeBoxRect(selectedIDs:metrics:)`** and **`StaffMetrics.rangeBoxLineWidth`** — the range
