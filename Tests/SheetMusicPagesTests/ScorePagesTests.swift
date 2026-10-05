@@ -11,9 +11,21 @@ import Testing
 /// the global provider, so two layouts a moment apart could otherwise measure with different fonts.
 @Suite("ScorePages")
 struct ScorePagesTests {
+    /// The portable hosts' measured table. Any real provider would do — each test compares `ScorePages` with the
+    /// bridge under the same one — but not the stub, which a debug build on a CoreText platform refuses to lay out
+    /// with (`LayoutEngine.layout`'s assertion), stopping the whole test process on the Mac.
+    private static func provider() throws -> any FontMetricsProvider {
+        let table = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // Tests/SheetMusicPagesTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // repository root
+            .appendingPathComponent("Web/sheet-music-web/assets/sheet-music.smft")
+        return try makeFontMetricsTableProvider(table: FontMetricsTable.decode(Data(contentsOf: table)))
+    }
+
     @Test("compute gives the bridge's pages and spans for the same options")
     func computeMatchesTheBridge() throws {
-        try FontMetrics.$scopedProvider.withValue(StubFontMetricsProvider()) {
+        try FontMetrics.$scopedProvider.withValue(Self.provider()) {
             let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
             let options = ScorePageOptions(mode: .page)
             let pages = ScorePages.compute(score: score, pageWidthMM: 210, pageHeightMM: 297, options: options)
@@ -34,7 +46,7 @@ struct ScorePagesTests {
 
     @Test("page margins reach the bridge, the page sizes are its pages', and a tint keeps them")
     func marginsPassThrough() throws {
-        try FontMetrics.$scopedProvider.withValue(StubFontMetricsProvider()) {
+        try FontMetrics.$scopedProvider.withValue(Self.provider()) {
             let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
             let options = ScorePageOptions(mode: .page, pageMarginsMM: .uniform(12.7))
             let pages = ScorePages.compute(score: score, pageWidthMM: 210, pageHeightMM: 297, options: options)
@@ -65,7 +77,7 @@ struct ScorePagesTests {
 
     @Test("the placement is the bridge's, through product types, and maps a point onto its page and back")
     func placementIsTheBridges() throws {
-        try FontMetrics.$scopedProvider.withValue(StubFontMetricsProvider()) {
+        try FontMetrics.$scopedProvider.withValue(Self.provider()) {
             let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
             let options = ScorePageOptions(mode: .page, pageMarginsMM: .uniform(12.7))
             let pages = ScorePages.compute(score: score, pageWidthMM: 210, pageHeightMM: 297, options: options)
@@ -91,7 +103,7 @@ struct ScorePagesTests {
 
     @Test("page margins count only in page mode")
     func marginsOnlyInPageMode() throws {
-        try FontMetrics.$scopedProvider.withValue(StubFontMetricsProvider()) {
+        try FontMetrics.$scopedProvider.withValue(Self.provider()) {
             let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
             let margined = ScorePages.compute(
                 score: score, pageWidthMM: 180, pageHeightMM: 297,
@@ -106,16 +118,18 @@ struct ScorePagesTests {
 
     @Test("the default options lay out one vertical page of the given width")
     func verticalByDefault() throws {
-        let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
-        let pages = ScorePages.compute(score: score, pageWidthMM: 180, pageHeightMM: 297)
-        #expect(pages.pageCount == 1)
-        #expect(pages.pageSizeMM(0).width == 180)
-        #expect(pages.pageSizeMM(0).height > 297)
+        try FontMetrics.$scopedProvider.withValue(Self.provider()) {
+            let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
+            let pages = ScorePages.compute(score: score, pageWidthMM: 180, pageHeightMM: 297)
+            #expect(pages.pageCount == 1)
+            #expect(pages.pageSizeMM(0).width == 180)
+            #expect(pages.pageSizeMM(0).height > 297)
+        }
     }
 
     @Test("tinted draws the selection in its color on its own page, and no selection gives the pages back")
     func tinted() throws {
-        try FontMetrics.$scopedProvider.withValue(StubFontMetricsProvider()) {
+        try FontMetrics.$scopedProvider.withValue(Self.provider()) {
             let score = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
             let pages = ScorePages.compute(
                 score: score, pageWidthMM: 210, pageHeightMM: 297, options: ScorePageOptions(mode: .page),

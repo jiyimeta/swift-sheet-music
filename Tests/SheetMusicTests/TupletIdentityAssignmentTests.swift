@@ -23,7 +23,7 @@ struct TupletIdentityAssignmentTests {
         #expect(voice.tuplets.eid(at: 0) == EID(first: 42, second: 9))
         #expect(voice.tuplets[0].first == .element(EID(first: 42, second: 3)))
         #expect(voice.tuplets[0].last == .element(EID(first: 42, second: 7)))
-        #expect(score.systemMeasures.eid(at: 0) == EID(first: 42, second: 10))
+        #expect(score.systemMeasures.eid(at: 0) == EID(first: .max - 1, second: 0))
         #expect(ids.counter == 10)
         #expect(!score.hasUnassignedIDs)
     }

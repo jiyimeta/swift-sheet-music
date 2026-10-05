@@ -40,6 +40,17 @@ and this project adheres to
   draws it as an overlay). `ScoreLayerBuilder.drawRangeBoxes` now strokes this rectangle, so Apple's box is unchanged:
   the time the selection occupies rather than its ink, and the end staves' own line spans. Moved from SheetMusicUI.
 
+### Changed
+
+- Missing score-column IDs now derive from their source index using reserved actor `UInt64.max - 1`. If a partial
+  file already uses that candidate, ascending missing columns take the first unused counter from reserved actor
+  `UInt64.max - 2`, starting at one. Both actors are excluded from random allocation. The same input bytes produce
+  the same column IDs across parses and devices; existing IDs and all other elements' allocation remain unchanged.
+  An edited v4 save persists these IDs. Hosts sharing annotations must deploy this rule on all platforms together.
+- Annotation anchor primitives divide collapsed multi-measure rests into equal-width source-measure slots.
+  `resolveAnchor(at:)` returns the slot's measure and tick zero with a slot-relative offset; `anchorReferencePoint`
+  resolves interior measures to their slot's left edge. Non-collapsed layouts retain their existing behavior.
+
 ### Fixed
 
 - **Bold and italic text on Windows is as wide as the layout measured it.** The Windows renderer draws Edwin's own

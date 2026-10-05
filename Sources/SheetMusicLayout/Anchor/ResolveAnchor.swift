@@ -43,6 +43,18 @@ extension LayoutDocument {
         let verticalOffsetSp = sp > 0 ? (point.y - staffTopY) / sp : 0
         guard let measure = Self.chooseMeasure(forX: point.x, system: system) else { return nil }
         let localX = point.x - system.origin.x - measure.origin.x
+        if let count = measure.multiMeasureRest, count > 0, measure.width > 0 {
+            let slotWidth = measure.width / CGFloat(count)
+            let slot = Int(max(0, min(CGFloat(count - 1), localX / slotWidth)))
+            return ResolvedAnchor(
+                measureIndex: measure.measureIndex + slot,
+                tickInMeasure: 0,
+                partIndex: address.partIndex,
+                staffIndexInPart: address.staffIndexInPart,
+                dxSp: sp > 0 ? (localX - CGFloat(slot) * slotWidth) / sp : 0,
+                verticalOffsetSp: verticalOffsetSp,
+            )
+        }
         let (tick, columnX) = Self.nearestTickColumn(toLocalX: localX, in: measure)
         let dxSp = sp > 0 ? (localX - columnX) / sp : 0
         return ResolvedAnchor(

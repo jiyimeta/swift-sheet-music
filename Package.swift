@@ -299,10 +299,6 @@ var targets: [Target] = [
         name: "SheetMusicPages",
         dependencies: ["SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
     ),
-    .testTarget(
-        name: "SheetMusicPagesTests",
-        dependencies: ["SheetMusicPages", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
-    ),
     // A PDF of a score's pages, written in Swift: the fonts embedded whole, each page's draw-program commands as a
     // content stream. Portable — Windows exports with it, and Android can in place of its Kotlin walk.
     .target(
@@ -312,17 +308,28 @@ var targets: [Target] = [
             "SheetMusicZip",
         ],
     ),
-    // Reads the bundled fonts from `Sources/SheetMusicRenderWindows/Resources` by path, and the writer's output back
-    // through `SheetMusicPDF`'s Swift reader.
-    .testTarget(
-        name: "SheetMusicPDFWriterTests",
-        dependencies: ["SheetMusicPDFWriter", "SheetMusicBridgeCore", "SheetMusicPages", "SheetMusicPDF"],
-    ),
     .testTarget(
         name: "SheetMusicAudioCoreTests",
         dependencies: ["SheetMusicAudioCore", "SheetMusicCore"],
     ),
 ]
+
+// The pages' and the PDF writer's tests read files of this repository through `#filePath` — the metrics table, and
+// the bundled fonts from `Sources/SheetMusicRenderWindows/Resources` — which a WASI test host cannot reach, so they
+// stay out of the wasm shape (`swift package … js test` builds every declared test target). The writer's read its
+// output back through `SheetMusicPDF`'s Swift reader.
+if !isWasm {
+    targets += [
+        .testTarget(
+            name: "SheetMusicPagesTests",
+            dependencies: ["SheetMusicPages", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
+        ),
+        .testTarget(
+            name: "SheetMusicPDFWriterTests",
+            dependencies: ["SheetMusicPDFWriter", "SheetMusicBridgeCore", "SheetMusicPages", "SheetMusicPDF"],
+        ),
+    ]
+}
 
 // `SheetMusicAudioCoreTests` above cross-builds for WebAssembly as it stands —
 // its only dependencies are AudioCore and Core, both portable. The wasm

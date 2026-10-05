@@ -5,6 +5,25 @@ import Testing
 
 @Suite("PasteRange")
 struct PasteRangeTests {
+    @Test func crossScorePasteMintsFreshColumnIDs() throws {
+        let bytes = try MSCXEncoder.encode(
+            RangeCopyPayloadTests.threeBarsOfQuarters(), options: .init(targetVersion: .v3),
+        )
+        let source = try MSCXParser.parse(bytes)
+        var destination = try MSCXParser.parse(bytes)
+        let original = destination.systemMeasures.indices.map { destination.systemMeasures.eid(at: $0) }
+        let text = try Self.payloadText(
+            VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(1, 3)), in: source,
+        )
+        _ = try Self.paste(text, at: Self.slot(2, 3)).apply(to: &destination)
+        let after = destination.systemMeasures.indices.map { destination.systemMeasures.eid(at: $0) }
+        #expect(after.count > original.count)
+        #expect(Array(after.prefix(original.count)) == original)
+        #expect(Set(after).count == after.count)
+        let sourceIDs = Set(source.systemMeasures.indices.map { source.systemMeasures.eid(at: $0) })
+        #expect(after.dropFirst(original.count).allSatisfy { !sourceIDs.contains($0) })
+    }
+
     private static let flute = StaffAddress(partIndex: 0, staffIndexInPart: 0)
     private static let cello = StaffAddress(partIndex: 1, staffIndexInPart: 0)
 
