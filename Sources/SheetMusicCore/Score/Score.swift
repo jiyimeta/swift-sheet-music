@@ -129,7 +129,7 @@ public struct Score: Sendable, Equatable {
                 }
             }
         }
-        systemMeasures.assignMissingIDs(using: &ids)
+        systemMeasures.assignMissingColumnIDs(using: &ids)
         for index in systemMeasures.indices {
             systemMeasures.updateValue(at: index) { $0.elements.assignMissingIDs(using: &ids) }
         }

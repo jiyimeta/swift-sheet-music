@@ -16,7 +16,7 @@ struct TupletIdentityMalformedLiteralTests {
     @Test func editorDropsUnusableLiteralTupletsBeforeMinting() throws {
         let editor = ScoreEditor(score: literal)
         try expectValidTupletOnly(editor.score)
-        // Part + staff + three (element, own note) pairs + one valid tuplet + column = ten mints.
+        // Part + staff + three (element, own note) pairs + one valid tuplet + column = ten allocator advances.
         #expect(editor.idAllocator.counter == 10)
     }
 
@@ -39,7 +39,7 @@ struct TupletIdentityMalformedLiteralTests {
         #expect(voice.tuplets[0] == Tuplet(
             normalNotes: 2, actualNotes: 3, first: memberIDs[0], last: memberIDs[2],
         ), sourceLocation: sourceLocation)
-        #expect(score.systemMeasures.eid(at: 0) == EID(first: actor, second: 10), sourceLocation: sourceLocation)
+        #expect(score.systemMeasures.eid(at: 0) == EID(first: .max - 1, second: 0), sourceLocation: sourceLocation)
         #expect(!score.hasUnassignedIDs, sourceLocation: sourceLocation)
     }
 }

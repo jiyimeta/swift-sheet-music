@@ -107,23 +107,20 @@ struct ScoreProducerIdentityTests {
         #expect(editor.lastAffectedLocation == nil)
     }
 
-    /// Catches a fixed deterministic allocator reused from its initial value for each load.
-    /// Does not catch a shared allocator: its advancing counter also produces disjoint sets.
-    /// D4's ban on shared allocators is enforced by review, not by this test.
-    ///
-    /// Fixture is `multiPartMixedStaves`, not `midi01`: it carries no `<eid>` of its own on
-    /// any part, staff declaration, or measure, so every identifier `identifiers(_:)` collects
-    /// is chokepoint-minted rather than file-persisted. `midi01.mscx` would no longer work here
-    /// since Task 3 of the P4 plan made its staff declaration (`C_C`) and first-measure column
-    /// (`D_D`) round-trip — those decode to the *same* identifiers on every load by design, which
-    /// is the feature, not a regression, but it would make this disjointness assertion fail for
-    /// the wrong reason.
-    @Test func repeatedLoadsHaveDisjointIdentifiers() throws {
+    /// This fixture has no file-borne IDs: columns must be stable across loads, while part and staff IDs still
+    /// come from a fresh allocator. A fixed allocator for non-columns would make the intersection too large.
+    @Test func repeatedLoadsShareOnlyColumnIdentifiers() throws {
         let data = try bytes("multiPartMixedStaves", "mscx")
-        let first = try identifiers(ScoreLoader.loadScore(bytes: data))
-        let second = try identifiers(ScoreLoader.loadScore(bytes: data))
+        let firstScore = try ScoreLoader.loadScore(bytes: data)
+        let secondScore = try ScoreLoader.loadScore(bytes: data)
+        let first = identifiers(firstScore)
+        let second = identifiers(secondScore)
+        let firstColumns = firstScore.systemMeasures.indices.map { firstScore.systemMeasures.eid(at: $0) }
+        let secondColumns = secondScore.systemMeasures.indices.map { secondScore.systemMeasures.eid(at: $0) }
         #expect(!first.isEmpty)
         #expect(!second.isEmpty)
-        #expect(first.isDisjoint(with: second))
+        #expect(!firstColumns.isEmpty)
+        #expect(firstColumns == secondColumns)
+        #expect(first.intersection(second) == Set(firstColumns))
     }
 }

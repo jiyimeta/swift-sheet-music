@@ -38,7 +38,7 @@ struct GraceIdentityAssignmentTests {
         #expect(voice.tuplets.eid(at: 0) == eid(16))
         #expect(voice.tuplets[0].first == .element(eid(3)))
         #expect(voice.tuplets[0].last == .element(eid(15)))
-        #expect(score.systemMeasures.eid(at: 0) == eid(17))
+        #expect(score.systemMeasures.eid(at: 0) == EID(first: .max - 1, second: 0))
         #expect(ids.counter == 17)
         #expect(!score.hasUnassignedIDs)
         let assigned = score

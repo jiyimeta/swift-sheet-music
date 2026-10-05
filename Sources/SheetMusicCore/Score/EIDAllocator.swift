@@ -37,11 +37,9 @@ public struct EIDAllocator: Sendable, Equatable {
         self.counter = counter
     }
 
-    /// Draws a random actor, excluding `0` and `UInt64.max` so a minted
-    /// identifier can never be mistaken for the invalid sentinel or for an
-    /// unset field.
+    /// Draws a random actor, excluding zero, the invalid sentinel's actor, and the two permanent column actors.
     public init() {
-        self.init(actor: UInt64.random(in: 1 ... (.max - 1)))
+        self.init(actor: UInt64.random(in: 1 ... (.max - 3)))
     }
 
     public mutating func next() -> EID {
