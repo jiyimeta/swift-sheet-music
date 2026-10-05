@@ -30,8 +30,11 @@
             WindowsBundledCopy(name: "Edwin-Bold.otf", source: "\(exampleFonts)/Edwin-Bold.otf"),
             WindowsBundledCopy(name: "Edwin-BdIta.otf", source: "\(exampleFonts)/Edwin-BdIta.otf"),
             WindowsBundledCopy(name: "Edwin.LICENSE.txt", source: "\(exampleFonts)/LICENSE.txt"),
-            WindowsBundledCopy(name: "sheet-music.smft", source: "Web/sheet-music-web/assets/sheet-music.smft"),
         ]
+
+        /// Bundled files that are generated rather than copied, each pinned by a suite of its own:
+        /// `sheet-music.smft` by `WindowsMetricsTableTests`.
+        static let generated: Set = ["sheet-music.smft"]
     }
 
     /// Pins the files `SheetMusicRenderWindows` bundles (`ScoreSurface.init()`, `installWindowsFontMetrics()`)
@@ -69,7 +72,7 @@
         func folderHoldsExactlyThePinnedFiles() throws {
             let listed = try FileManager.default.contentsOfDirectory(atPath: Self.url(WindowsBundledCopy.folder).path)
             let shipped = Set(listed.filter { !$0.hasPrefix(".") && $0 != "README.md" })
-            #expect(shipped == Set(WindowsBundledCopy.all.map(\.name)))
+            #expect(shipped == Set(WindowsBundledCopy.all.map(\.name)).union(WindowsBundledCopy.generated))
         }
     }
 #endif

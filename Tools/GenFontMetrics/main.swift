@@ -1,5 +1,5 @@
-// Generates the font-metrics table the WebAssembly bridge installs through
-// `installFontMetrics`.
+// Generates the font-metrics tables the WebAssembly bridge installs through
+// `installFontMetrics` and the Windows renderer through `installWindowsFontMetrics`.
 //
 // macOS-only: measures the bundled outlines through CoreText. Text records use
 // tight path bounds. Web bold is an explicit 1/32 em round stroke applied before
@@ -7,11 +7,15 @@
 // control-polygon bounds used by the glyph anchor contract.
 // Android builds a separate table from its actual Paint outlines at runtime.
 //
-// The output is committed to `Web/sheet-music-web/assets/sheet-music.smft`, so
-// a normal build never runs this. Re-run it when either bundled face is
-// replaced:
+// Windows draws Edwin's own bold, italic and bold-italic faces (`DrawCommandWalker`), so its table measures those
+// files for the styled records (`--family-styles`): their advances and outlines, not the regular ones stroked and
+// sheared. Its Bravura and regular Edwin records are the web table's, byte for byte.
+//
+// The outputs are committed, so a normal build never runs this. Re-run both when
+// a bundled face is replaced:
 //
 //     swift run GenFontMetrics Web/sheet-music-web/assets/sheet-music.smft
+//     swift run GenFontMetrics --family-styles Sources/SheetMusicRenderWindows/Resources/sheet-music.smft
 //
 // Byte layout: see `SheetMusicBridgeCore/FontMetricsTable.swift`. SMFT v4,
 // little-endian, values in points at a 1000 pt reference size.
@@ -59,6 +63,20 @@ enum GenFontMetrics {
         .appendingPathComponent(
             "Android/SheetMusicComposeAndroid/src/main/assets/fonts/Edwin-Roman.otf",
         )
+
+    /// Edwin's styled faces, which `SheetMusicRenderWindows` bundles copies of: each record's name and its file.
+    static let edwinStyleFiles: [(record: String, url: URL)] = {
+        let folder = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // Tools/GenFontMetrics
+            .deletingLastPathComponent() // Tools
+            .deletingLastPathComponent() // repo root
+            .appendingPathComponent("Examples/Apple/SheetMusicExample/Resources/Fonts")
+        return [
+            ("Edwin-Bold", folder.appendingPathComponent("Edwin-Bold.otf")),
+            ("Edwin-Italic", folder.appendingPathComponent("Edwin-Italic.otf")),
+            ("Edwin-BoldItalic", folder.appendingPathComponent("Edwin-BdIta.otf")),
+        ]
+    }()
 
     struct Entry {
         let codepoint: UInt32
@@ -185,6 +203,45 @@ enum GenFontMetrics {
         )
     }
 
+    /// One of a family's own faces, read straight from its file rather than resolved through the family name, so the
+    /// record measures exactly that file: advances as a one-character line, tight outline bounds, and the face's own
+    /// vertical metrics — what `measure` takes from the registered regular face.
+    static func measureFile(
+        _ url: URL, recordName: String, candidates: ClosedRange<UInt32>, minimumGlyphs: Int,
+    ) -> MeasuredFace {
+        guard let data = CGDataProvider(url: url as CFURL), let graphics = CGFont(data) else {
+            fail("cannot read \(url.path)", code: 3)
+        }
+        let ct = CTFontCreateWithGraphicsFont(graphics, referenceSize, nil, nil)
+        var entries: [Entry] = []
+        for codepoint in candidates {
+            guard let scalar = Unicode.Scalar(codepoint), mappedGlyph(codepoint, in: ct) != nil else { continue }
+            let text = NSAttributedString(
+                string: String(scalar), attributes: [NSAttributedString.Key(kCTFontAttributeName as String): ct],
+            )
+            let line = CTLineCreateWithAttributedString(text)
+            let advance = Double(CTLineGetTypographicBounds(line, nil, nil, nil))
+            let bbox = textGlyphBounds(codepoint, font: ct, bold: false, italic: false)
+            guard advance > 0 || (bbox?.width ?? 0) > 0 else { continue }
+            let inked = bbox.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
+            entries.append(Entry(
+                codepoint: codepoint, advance: advance,
+                x: inked.map { Double($0.minX) } ?? 0, y: inked.map { Double($0.minY) } ?? 0,
+                w: inked.map { Double($0.width) } ?? 0, h: inked.map { Double($0.height) } ?? 0,
+            ))
+        }
+        guard entries.count >= minimumGlyphs else {
+            fail("only \(entries.count) glyphs measured for \(url.lastPathComponent)", code: 4)
+        }
+        return MeasuredFace(
+            name: recordName,
+            ascent: Double(CTFontGetAscent(ct)),
+            descent: Double(CTFontGetDescent(ct)),
+            leading: Double(CTFontGetLeading(ct)),
+            entries: entries,
+        )
+    }
+
     static func textGlyphBounds(_ codepoint: UInt32, font: CTFont, bold: Bool, italic: Bool) -> CGRect? {
         guard let glyph = mappedGlyph(codepoint, in: font),
               let path = CTFontCreatePathForGlyph(font, glyph, nil), !path.isEmpty else { return nil }
@@ -204,8 +261,10 @@ enum GenFontMetrics {
         return outline.copy(using: &transform)?.boundingBoxOfPath
     }
 
+    /// - Parameter familyStyles: the styled Edwin records from the family's own files (`measureFile`) rather than from
+    ///   the regular outlines stroked and sheared as the browser draws them.
     @available(macOS 15.0, *)
-    static func measureAll() -> [MeasuredFace] {
+    static func measureAll(familyStyles: Bool) -> [MeasuredFace] {
         guard BravuraFont.register else {
             fail("Bravura failed to register with CoreText", code: 3)
         }
@@ -215,7 +274,7 @@ enum GenFontMetrics {
         guard !SheetMusicFonts.register(urls: [edwinFontURL]).isEmpty else {
             fail("Edwin failed to register with CoreText", code: 3)
         }
-        return [
+        let regular = [
             measure(
                 face: SMuFLFamily.bravura,
                 candidates: smuflPUARange,
@@ -228,6 +287,13 @@ enum GenFontMetrics {
                 keepBlanks: true,
                 minimumGlyphs: 500,
             ),
+        ]
+        if familyStyles {
+            return regular + edwinStyleFiles.map { style in
+                measureFile(style.url, recordName: style.record, candidates: textRange, minimumGlyphs: 500)
+            }
+        }
+        return regular + [
             measure(
                 face: edwinFamilyName,
                 candidates: textRange,
@@ -302,15 +368,18 @@ enum GenFontMetrics {
     }
 
     static func run() {
-        guard CommandLine.arguments.count == 2 else {
-            FileHandle.standardError.write(Data("usage: GenFontMetrics <output.smft>\n".utf8))
+        var arguments = Array(CommandLine.arguments.dropFirst())
+        let familyStyles = arguments.first == "--family-styles"
+        if familyStyles { arguments.removeFirst() }
+        guard arguments.count == 1 else {
+            FileHandle.standardError.write(Data("usage: GenFontMetrics [--family-styles] <output.smft>\n".utf8))
             exit(2)
         }
         guard #available(macOS 15.0, *) else {
             fail("macOS 15 or newer required", code: 1)
         }
-        let outputURL = URL(fileURLWithPath: CommandLine.arguments[1])
-        let faces = measureAll()
+        let outputURL = URL(fileURLWithPath: arguments[0])
+        let faces = measureAll(familyStyles: familyStyles)
         let out = encode(faces)
         do {
             try out.write(to: outputURL)

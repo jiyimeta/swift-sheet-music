@@ -33,11 +33,14 @@ struct OpenTypeFontTests {
     }
 
     /// The cmap and `hmtx` read right across a whole repertoire: every advance the metrics table measured for these
-    /// faces is the font's own, to a thousandth of an em. Two kinds of character are measured differently on purpose
-    /// and left out: a combining mark, which the font gives no advance and CoreText measured standing alone, and the
-    /// soft hyphen, which CoreText does not draw. (Edwin-Bold is not compared: the table's `edwin-bold` record was
-    /// measured as CoreText's synthesized bold of Edwin, not from Edwin-Bold.otf, so its advances are not that font's.)
-    @Test(arguments: [("Bravura.otf", "bravura"), ("Edwin-Roman.otf", "edwin")])
+    /// faces is the font's own, to a thousandth of an em — the styled faces too, which the Windows table measures from
+    /// these same files. Two kinds of character are measured differently on purpose and left out: a combining mark,
+    /// which the font gives no advance and CoreText measured standing alone, and the soft hyphen, which CoreText does
+    /// not draw.
+    @Test(arguments: [
+        ("Bravura.otf", "bravura"), ("Edwin-Roman.otf", "edwin"), ("Edwin-Bold.otf", "edwin-bold"),
+        ("Edwin-Italic.otf", "edwin-italic"), ("Edwin-BdIta.otf", "edwin-bolditalic"),
+    ])
     func `every advance the table carries is the font's own`(file: String, face: String) throws {
         let font = try BundledFonts.font(file)
         let table = try FontMetricsTable.decode(BundledFonts.data("sheet-music.smft"))
