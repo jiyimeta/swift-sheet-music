@@ -661,6 +661,9 @@ if isWindows {
                 .linkedLibrary("windowscodecs"),
                 .linkedLibrary("ole32"),
                 .linkedLibrary("uuid"),
+                // PDF pages: `PdfCreateRenderer` (the Direct2D interop) and the WinRT activation that loads a document.
+                .linkedLibrary("windows.data.pdf"),
+                .linkedLibrary("runtimeobject"),
             ],
         ),
         .target(

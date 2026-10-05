@@ -5,6 +5,7 @@
 
 #include <d3d11.h>
 #include <dxgi1_3.h>
+#include <windows.data.pdf.interop.h>
 
 using cd2d::ComPtr;
 
@@ -31,6 +32,9 @@ struct cd2d_surface {
     ComPtr<ID2D1DeviceContext> context;
     ComPtr<ID2D1SolidColorBrush> brush;
     ComPtr<ID2D1Bitmap1> backBuffer;
+    /// The OS's PDF renderer, bound to this device (`PdfCreateRenderer`): made on the first PDF draw, dropped with the
+    /// device.
+    ComPtr<IPdfRendererNative> pdfRenderer;
 
     cd2d_canvas frameCanvas;
     uint64_t generation = 1;
@@ -164,6 +168,7 @@ HRESULT createSwapChain(cd2d_surface *surface) {
 
 void releaseDevice(cd2d_surface *surface) {
     if (surface->context) surface->context->SetTarget(nullptr);
+    surface->pdfRenderer.Reset();
     surface->backBuffer.Reset();
     surface->brush.Reset();
     surface->context.Reset();
@@ -339,6 +344,24 @@ extern "C" void cd2d_band_release(cd2d_surface *surface, cd2d_band *band) {
     const uint64_t bytes = static_cast<uint64_t>(band->width) * band->height * 4;
     surface->bandBytes = surface->bandBytes >= bytes ? surface->bandBytes - bytes : 0;
     delete band;
+}
+
+extern "C" int32_t cd2d_band_draw_pdf(
+    cd2d_surface *surface, cd2d_pdf *pdf, uint32_t page, float scale, float offset_x, float offset_y) {
+    if (!hasDevice(surface)) return CD2D_E_RECREATE;
+    HRESULT hr = S_OK;
+    if (!surface->pdfRenderer) hr = PdfCreateRenderer(surface->dxgiDevice.Get(), &surface->pdfRenderer);
+    ComPtr<IUnknown> pdfPage;
+    if (SUCCEEDED(hr)) hr = cd2d::pdfPage(pdf, page, &pdfPage);
+    if (FAILED(hr)) return mapDeviceLoss(hr);
+    // The page draws in DIPs under the context's transform, and the context is at 96 DPI: one DIP is one pixel here.
+    D2D1_MATRIX_3X2_F previous;
+    surface->context->GetTransform(&previous);
+    surface->context->SetTransform(
+        D2D1::Matrix3x2F::Scale(scale, scale) * D2D1::Matrix3x2F::Translation(-offset_x, -offset_y));
+    hr = surface->pdfRenderer->RenderPageToDeviceContext(pdfPage.Get(), surface->context.Get(), nullptr);
+    surface->context->SetTransform(previous);
+    return mapDeviceLoss(hr);
 }
 
 // MARK: - Frames

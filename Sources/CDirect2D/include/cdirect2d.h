@@ -175,6 +175,28 @@ void cd2d_surface_debug_read_back_next(cd2d_surface *surface, uint8_t *pixels, u
 /// Probe aid: a WIC canvas's pixels (BGRA premultiplied, rows of `width * 4` bytes), after ending its drawing.
 int32_t cd2d_copy_pixels(cd2d_canvas *canvas, uint8_t *pixels, uint32_t width, uint32_t height);
 
+// MARK: PDF pages, drawn by the OS's own renderer (Windows.Data.Pdf and its Direct2D interop)
+
+typedef struct cd2d_pdf cd2d_pdf;
+
+/// Loads the PDF at `path` (UTF-16, NUL-terminated) and gives its page count. Call it off the UI thread: the load is a
+/// WinRT async operation this waits on, and the thread is joined to the multithreaded apartment if it has none.
+int32_t cd2d_pdf_open(const uint16_t *path, cd2d_pdf **pdf, uint32_t *page_count);
+void cd2d_pdf_close(cd2d_pdf *pdf);
+/// Page `page`'s size in DIPs (1/96 inch).
+int32_t cd2d_pdf_page_size(cd2d_pdf *pdf, uint32_t page, float *width, float *height);
+/// Draws page `page` into the band being drawn (between `cd2d_band_begin` and `cd2d_band_end`), `scale` pixels per
+/// DIP, moved by (-`offset_x`, -`offset_y`) pixels. The surface makes its PDF renderer from its own device on first use
+/// and again after a recreate. Device loss reports CD2D_E_RECREATE, as every band draw does.
+int32_t cd2d_band_draw_pdf(
+    cd2d_surface *surface, cd2d_pdf *pdf, uint32_t page, float scale, float offset_x, float offset_y);
+/// Page `page` drawn whole on white at `scale` pixels per DIP, on a device of its own (hardware, or WARP), into
+/// `pixels` (BGRA premultiplied, `width` x `height`, rows of `width * 4` bytes) — tests and thumbnails.
+int32_t cd2d_pdf_render_pixels(
+    cd2d_pdf *pdf, uint32_t page, float scale, uint8_t *pixels, uint32_t width, uint32_t height);
+/// `cd2d_pdf_render_pixels`, written as PNG to `path` (UTF-16, NUL-terminated).
+int32_t cd2d_pdf_write_png(cd2d_pdf *pdf, uint32_t page, float scale, const uint16_t *path);
+
 #ifdef __cplusplus
 }
 #endif

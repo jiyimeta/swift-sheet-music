@@ -20,6 +20,9 @@ namespace cd2d {
 
 using Microsoft::WRL::ComPtr;
 
+/// The page `index` of `pdf` as the `IUnknown` the PDF interop's renderer takes (cdirect2d_pdf.cpp).
+HRESULT pdfPage(cd2d_pdf *pdf, uint32_t index, IUnknown **page);
+
 /// One resolved face per (family, requested weight, italic).
 struct FaceKey {
     std::wstring family;
