@@ -2,9 +2,9 @@ import Foundation
 
 /// The files a Windows host needs beside the code: the five faces the renderer draws with (Bravura, and Edwin's
 /// roman, italic, bold and bold italic — bold and italic are never synthesized) and the metrics table the layout
-/// measures them by (`sheet-music.smft`), shipped with this module so they always match its revision.
-/// `Resources/README.md` says where each comes from; `SheetMusicTests`' `WindowsBundledResourcesTests` pins each to its
-/// source on every Mac run.
+/// measures them by (`sheet-music.smft`, whose styled records measure those same bold and italic files), shipped with
+/// this module so they always match its revision. `Resources/README.md` says where each comes from;
+/// `SheetMusicTests`' `WindowsBundledResourcesTests` and `WindowsMetricsTableTests` pin them on every Mac run.
 ///
 /// They sit in SwiftPM's resource bundle for this target, the folder
 /// `swift-sheet-music_SheetMusicRenderWindows.resources` that `swift build` writes beside the executable. **A deployed

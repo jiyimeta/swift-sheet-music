@@ -56,7 +56,8 @@ import SheetMusicLayout
 /// `"<face>-Bold"` and falls back to the plain one — see `face(for:)`. Both
 /// producers now write `"Edwin-Bold"` beside `"Edwin"`, measured with the same
 /// synthesis their renderer paints with (`Paint.isFakeBoldText` on Android,
-/// CoreText's `.boldTrait` for the browser). This needed NO version bump: faces
+/// CoreText's `.boldTrait` for the browser; Windows, which draws Edwin's own
+/// styled faces, measures those files). This needed NO version bump: faces
 /// are a name-keyed dictionary, so a v4 table written before the convention
 /// existed simply has no bold record and answers with the regular one, which is
 /// what every consumer got when nothing could ask for bold at all.

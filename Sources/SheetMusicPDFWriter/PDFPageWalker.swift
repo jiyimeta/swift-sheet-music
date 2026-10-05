@@ -3,9 +3,10 @@ import SheetMusicFoundation
 import SheetMusicLayout
 
 /// Walks one page's draw commands into a PDF content stream — the walk `DrawCommandWalker` does onto Direct2D, read the
-/// same way: commands in document millimetres with y down, glyphs and text in the score's bundled faces, the weight and
-/// slant from the text style. The page becomes PDF points with y up (72 / 25.4 points a millimetre, from the page's
-/// bottom edge), and strokes keep their own width: a PDF is vector, so the screen's 1.5 px floor does not apply.
+/// same way: commands in document millimetres with y down, glyphs and text in the score's bundled faces (the platform
+/// UI face's labels in that face when the host gave its file), the weight and slant from the text style. The page
+/// becomes PDF points with y up (72 / 25.4 points a millimetre, from the page's bottom edge), and strokes keep their
+/// own width: a PDF is vector, so the screen's 1.5 px floor does not apply.
 ///
 /// Text sits where the layout measured it: each character at the offset the installed `FontMetrics.provider` gives
 /// for it — the provider the pages were laid out with — never at the font's own kerning. A character the face does
@@ -166,16 +167,21 @@ struct PDFPageWalker {
             + "<\(PDFString.hex4(UInt16(glyph)))> Tj ET")
     }
 
-    /// The face the layout measured a font id in, at `size` millimetres (the provider's answers scale with it).
+    /// The face the layout measured a font id in, at `size` millimetres (the provider's answers scale with it): the
+    /// platform UI face (`face: ""`) at the style's weight for `.system` text, which only a provider that measures it
+    /// ever emits — whichever face the PDF then draws it in.
     private func layoutFont(_ fontId: DrawProgram.FontID, size: Double) -> LayoutFont {
         let bold = textStyle & DrawCommand.TextStyleFlag.bold != 0
         let italic = textStyle & DrawCommand.TextStyleFlag.italic != 0
         switch fontId {
         case .smufl: return LayoutFont(face: SMuFLFamily.bravura, pointSize: CGFloat(size))
-        case .textRoman, .system:
+        case .textRoman:
             return LayoutFont(
                 face: "Edwin", pointSize: CGFloat(size), weight: bold ? .bold : .regular, isItalic: italic,
             )
+        case .system:
+            let style = PDFResources.SystemStyle(style: textStyle)
+            return LayoutFont(face: "", pointSize: CGFloat(size), weight: style.weight, isItalic: style.isItalic)
         }
     }
 

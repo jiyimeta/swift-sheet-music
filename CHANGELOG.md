@@ -9,10 +9,52 @@ and this project adheres to
 
 ### Added
 
+- **`ScorePDF`** (Windows, `SheetMusicRenderWindows`) — a PDF opened by Windows' own PDF engine
+  (`Windows.Data.Pdf`, reached through WRL in `CDirect2D`): its page count, each page's size in millimetres, and
+  `writePNG(page:pxPerMM:to:)` for a thumbnail. `Sendable`, so a host opens it off the UI thread; a path may separate
+  with `/` as `URL.path` does on Windows. Throws for a file Windows cannot read.
+- **`ScoreSurface.setPDF(_:)`** (Windows) — the surface shows a PDF's pages where `setPages(_:)` shows a score's: the
+  same `Frame`, page placement (millimetres from each paper's top-left) and overlays. A PDF page costs what its content
+  costs however little of it is drawn, so pages are cached a page at a time — whole up to a 4096 px side, past that the
+  part around the view — and drawn on a worker thread of their own, never in a frame. **`isDrawingPDFPages`** says a
+  host should keep drawing frames until the pages it asked for arrive; **`unreadablePDFPages`** names the pages Windows
+  could not draw, which show blank and are not retried.
+- **`SheetMusicPages`** — a portable product with `ScorePages`, `ScorePageOptions`, `ScorePagePlacement`,
+  `PageRectMM` and `PagePointMM`, moved out of `SheetMusicRenderWindows` (which re-exports it, so a Windows host's
+  imports are unchanged): a score laid out and cut into pages, for any host that draws or writes them.
+- **`SheetMusicPDFWriter`** — a portable PDF writer: `ScorePDFWriter.write(_:fonts:title:)` writes `ScorePages` as a
+  vector PDF in Swift alone, each face embedded once and whole (Type0 / CIDFontType0 over `FontFile3 /OpenType`,
+  Identity-H, a `ToUnicode` map), text placed at the installed metrics provider's offsets, a character the face lacks
+  kept as invisible text so the PDF can still be searched. `ScorePDFFonts` takes the five faces (Bravura and Edwin's
+  four), which the Windows renderer bundles, and through `system:` the platform UI face the notation labels were
+  measured in — embedded as TrueType (`CIDFontType2`, `FontFile2`) when its license allows, the labels in Edwin
+  otherwise. Its output reads back as music through `SheetMusicPDF`'s Swift reader.
+- **`windowsSystemFontFile(weight:isItalic:)`** (Windows) — the Segoe UI file DirectWrite draws the notation labels
+  from, for `ScorePDFFonts(system:)`, so a PDF's labels are the screen's.
+- **`windows-render-probe --pdf` / `--write-pdf`** (Windows probes) — the PDF surface's timings, cache and parity, and
+  the writer's output drawn by Windows against the same pages drawn by Direct2D.
 - **`LayoutSystem.rangeBoxRect(selectedIDs:metrics:)`** and **`StaffMetrics.rangeBoxLineWidth`** — the range
   selection's outline on a system, in system coordinates, for a renderer without Core Animation (a Windows reader
   draws it as an overlay). `ScoreLayerBuilder.drawRangeBoxes` now strokes this rectangle, so Apple's box is unchanged:
   the time the selection occupies rather than its ink, and the end staves' own line spans. Moved from SheetMusicUI.
+
+### Fixed
+
+- **Bold and italic text on Windows is as wide as the layout measured it.** The Windows renderer draws Edwin's own
+  bold, italic and bold-italic faces, but laid them out by the web's metrics table, whose styled records keep the
+  regular face's advances (the browser strokes and shears the regular outlines). A bold title or tempo mark therefore
+  drew wider than its measured box. `SheetMusicRenderWindows` now bundles a table of its own
+  (`GenFontMetrics --family-styles`): the web's Bravura and regular Edwin, and styled records measured from the styled
+  files. Web and Android are unchanged.
+- **The system face's caret offsets on Windows include kerning.** `WindowsFontMetricsProvider` measured the system
+  face's widths and ink through DirectWrite's laid-out text but answered its caret offsets with lone advances; it now
+  answers them from the same layout, so a character placed at its offset — as the PDF writer places them — sits where
+  the screen draws it.
+- **The Swift PDF reader reads compressed streams on Windows and WebAssembly.** `PDFFlate` asked zlib for
+  `windowBits` 47 (zlib or gzip, detected); the zlib vendored there is built with `NO_GZIP`, which refuses 47, so every
+  `/FlateDecode` stream failed to inflate and every PDF read as one without content (`pdf.content.empty`). A
+  `/FlateDecode` stream is always the zlib format, so the reader now asks for exactly that (15). Apple's path
+  (Compression) and Android's system zlib are unaffected.
 
 ## [4.2.0] - 2026-10-04
 
