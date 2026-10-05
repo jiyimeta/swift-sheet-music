@@ -6,7 +6,8 @@ extension LayoutDocument {
     /// column (looked up / interpolated in the measure's `tickColumns`) at the y of the staff's top line, plus the
     /// layout's `sp`. The caller adds the anchor's `dxSp` / `verticalOffsetSp` (× `sp`) to reach the final ink origin.
     /// Returns `nil` when the measure or the staff is absent from this layout (out-of-range index, hidden staff) — the
-    /// caller drops anchors that fail to resolve. Inverse: `resolveAnchor(at:)`.
+    /// caller can retain anchors that fail to resolve. A collapsed rest represents equal-width source-measure slots.
+    /// Inverse: `resolveAnchor(at:)`.
     public func anchorReferencePoint(
         measureIndex: Int,
         tickInMeasure: Int,
@@ -14,19 +15,27 @@ extension LayoutDocument {
         staffIndexInPart: Int,
     ) -> (point: CGPoint, sp: CGFloat)? {
         let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndexInPart)
-        for system in systems {
-            guard let measure = system.measures.first(where: { $0.measureIndex == measureIndex }) else {
-                continue
+        // Prefer an exact measure anywhere in the document before considering a collapsed run.
+        for exact in [true, false] {
+            for system in systems {
+                guard let measure = system.measures.first(where: { measure in
+                    if exact { return measure.measureIndex == measureIndex }
+                    guard let count = measure.multiMeasureRest else { return false }
+                    return measureIndex > measure.measureIndex && measureIndex - measure.measureIndex < count
+                }) else { continue }
+                guard let flat = system.flatIndex(for: address), flat < system.staffOrigins.count else {
+                    return nil
+                }
+                let localX = exact
+                    ? Self.measureLocalX(forTick: tickInMeasure, in: measure)
+                    : CGFloat(measureIndex - measure.measureIndex) * measure.width
+                    / CGFloat(measure.multiMeasureRest ?? 1)
+                let point = CGPoint(
+                    x: system.origin.x + measure.origin.x + localX,
+                    y: system.origin.y + system.staffOrigins[flat].y,
+                )
+                return (point, system.sp)
             }
-            guard let flat = system.flatIndex(for: address), flat < system.staffOrigins.count else {
-                return nil
-            }
-            let localX = Self.measureLocalX(forTick: tickInMeasure, in: measure)
-            let point = CGPoint(
-                x: system.origin.x + measure.origin.x + localX,
-                y: system.origin.y + system.staffOrigins[flat].y,
-            )
-            return (point, system.sp)
         }
         return nil
     }
