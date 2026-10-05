@@ -59,6 +59,17 @@ struct ScorePDFTests {
         #expect(pixel(atMM: 150, 200) == [255, 255, 255, 255])
     }
 
+    /// What a host does: open it on a background task, draw it on another thread.
+    @Test func `a PDF opened on a background task draws on another thread`() async throws {
+        let path = try Self.squarePDF()
+        let pdf = try await Task.detached { try ScorePDF(path: path) }.value
+
+        let drawn = try await Task.detached { try pdf.pixels(page: 0, pxPerMM: 1) }.value
+
+        #expect(drawn.width == 210)
+        #expect(drawn.bgra.contains(0))
+    }
+
     @Test func `a page that is not there throws rather than drawing`() throws {
         let pdf = try ScorePDF(path: Self.squarePDF())
 

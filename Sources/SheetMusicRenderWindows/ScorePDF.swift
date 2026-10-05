@@ -8,7 +8,11 @@ import Foundation
 /// Load it off the UI thread: opening waits on a WinRT async operation. Measured on folino's QA machine (2-core, 2017):
 /// opening takes 15–100 ms; drawing a page costs what its content costs — 4–75 ms for most pages at 4× the screen's
 /// scale, up to 300 ms for a dense MuseScore page — whatever part of the page is drawn.
-public final class ScorePDF {
+///
+/// Sendable so a host can open it on a background task and hand it to the UI thread: nothing in it changes after
+/// `init`, and the document it holds is a WinRT `PdfDocument`, which is agile (callable from any apartment). Use it
+/// from one thread at a time — the surface that shows it, or a thumbnail's `writePNG` — not from two at once.
+public final class ScorePDF: @unchecked Sendable {
     let handle: OpaquePointer
     /// Each page's size in millimetres, read when the file is opened.
     private let sizesMM: [(width: Double, height: Double)]
