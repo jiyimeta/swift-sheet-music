@@ -738,7 +738,7 @@ if isWindows {
             ),
             .executableTarget(
                 name: "WindowsRenderProbe",
-                dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore"],
+                dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore", "SheetMusicPDFWriter"],
             ),
         ]
     }

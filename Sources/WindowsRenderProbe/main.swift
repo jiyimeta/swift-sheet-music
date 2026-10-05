@@ -20,6 +20,11 @@
 //
 // Measures `ScoreSurface` showing a PDF's pages (`PDFProbe`): prints its timings and checks, writes
 // `<out dir>/pdf.json`, and exits 1 when a check fails.
+//
+//     windows-render-probe --write-pdf <score file> <out dir>
+//
+// Writes the score as a PDF with `ScorePDFWriter` and compares Windows' drawing of it with Direct2D's drawing of the
+// same pages (`PDFWriteProbe`); exits 1 when either lacks the other's ink.
 
 import Foundation
 import SheetMusicBridgeCore
@@ -38,6 +43,18 @@ if arguments.first == "--pdf" {
         try exit(probe.run() ? 0 : 1)
     } catch {
         fail("pdf: \(error)")
+    }
+}
+
+if arguments.first == "--write-pdf" {
+    guard arguments.count == 3 else { fail("usage: windows-render-probe --write-pdf <score file> <out dir>") }
+    let probe = PDFWriteProbe(
+        scorePath: arguments[1], outputDirectory: URL(fileURLWithPath: arguments[2], isDirectory: true),
+    )
+    do {
+        try exit(probe.run() ? 0 : 1)
+    } catch {
+        fail("write-pdf: \(error)")
     }
 }
 
