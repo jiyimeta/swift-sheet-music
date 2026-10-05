@@ -7,6 +7,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`LayoutSystem.rangeBoxRect(selectedIDs:metrics:)`** and **`StaffMetrics.rangeBoxLineWidth`** — the range
+  selection's outline on a system, in system coordinates, for a renderer without Core Animation (a Windows reader
+  draws it as an overlay). `ScoreLayerBuilder.drawRangeBoxes` now strokes this rectangle, so Apple's box is unchanged:
+  the time the selection occupies rather than its ink, and the end staves' own line spans. Moved from SheetMusicUI.
+
 ## [4.2.0] - 2026-10-04
 
 ### Added

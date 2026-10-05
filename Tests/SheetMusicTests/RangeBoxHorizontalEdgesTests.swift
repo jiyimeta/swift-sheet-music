@@ -163,5 +163,39 @@
             )
             #expect(box.minX < restX - doc.metrics.sp * 4)
         }
+
+        /// The portable rectangle is the box the Apple layer strokes —
+        /// the geometry a renderer without Core Animation draws — and
+        /// a selection with nothing on the system draws no box at all.
+        @Test("rangeBoxRect is the box drawRangeBoxes strokes")
+        func portableRectMatchesTheLayer() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let doc = Self.document()
+            let system = try #require(doc.systems.first)
+            let ids: Set<ScoreItemID> = [
+                Self.note(elementIndex: 3),
+                .rest(RestID(
+                    staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                    measureIndex: 1, voiceIndex: 0, elementIndex: 0,
+                )),
+            ]
+            let rect = try #require(
+                system.rangeBoxRect(selectedIDs: ids, metrics: doc.metrics),
+            )
+            // `height: 0` turns the macOS flip into a negation of Y.
+            let drawn = try Self.box(for: ids, in: doc)
+            #expect(abs(rect.minX - drawn.minX) < 0.001)
+            #expect(abs(rect.maxX - drawn.maxX) < 0.001)
+            #expect(abs(rect.minY + drawn.maxY) < 0.001)
+            #expect(abs(rect.maxY + drawn.minY) < 0.001)
+            #expect(doc.metrics.rangeBoxLineWidth == doc.metrics.staffLineThickness * 2)
+
+            #expect(system.rangeBoxRect(selectedIDs: [], metrics: doc.metrics) == nil)
+            let elsewhere = ScoreItemID.note(NoteID(
+                staff: StaffAddress(partIndex: 3, staffIndexInPart: 0),
+                measureIndex: 0, voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0,
+            ))
+            #expect(system.rangeBoxRect(selectedIDs: [elsewhere], metrics: doc.metrics) == nil)
+        }
     }
 #endif

@@ -1,0 +1,137 @@
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
+import SheetMusicCore
+
+extension LayoutSystem {
+    /// The outline a range selection draws on this system, in system coordinates (Y down): one rectangle around every
+    /// staff × time region holding a selected note or rest, or `nil` when none of `selectedIDs` is on this system.
+    /// Portable so a renderer without Core Animation draws the same box — `ScoreLayerBuilder.drawRangeBoxes` strokes
+    /// this rectangle on Apple, a Windows reader its own overlay — at `StaffMetrics.rangeBoxLineWidth`.
+    ///
+    /// **Horizontally the box covers the TIME the selection occupies, not the ink it happens to be drawn with.** Both
+    /// edges are read off `LayoutMeasure.tickColumns` — the cross-staff tick → x map placement already produced —
+    /// rather than from notehead origins alone:
+    ///
+    /// - The right edge runs to just before the next onset column, or to the measure's trailing barline when the last
+    ///   selected element ends the bar. Stopping at the last notehead's own x drew a box that ended in the middle of
+    ///   the note it was supposed to contain, and said nothing about that note's duration.
+    /// - A whole-measure rest (`NoteDuration.measure`) contributes the bar's FIRST beat as its left edge, not its own
+    ///   origin: placement centers that glyph in the measure (`LayoutEngine+Placement.swift`), so a box measured from
+    ///   the ink started halfway through a bar the selection covers whole. Its right edge is the barline for the same
+    ///   reason.
+    ///
+    /// Both edges are floored by what the old ink-only measurement produced (`maxX + xPad`), so the box can only ever
+    /// grow: a notehead nudged right of its own column — a second, an accidental's chord shift — can never pull an edge
+    /// in past the glyph it is drawn around.
+    ///
+    /// Both vertical edges come from the end staves' own `StaffLineGeometry.barLineSpanY(sp:)`, the way the system's
+    /// left-edge barline does. `StaffMetrics.staffHeight` is the five-line reference height every staff reports, so
+    /// measuring the bottom with it overshot a three-line staff by 2 sp and left a one-line staff's box hanging
+    /// entirely below its single line.
+    public func rangeBoxRect(selectedIDs: Set<ScoreItemID>, metrics: StaffMetrics) -> CGRect? {
+        let span = rangeSpan(selectedIDs: selectedIDs)
+        guard !span.staves.isEmpty else { return nil }
+
+        // Each involved staff's own origin AND line geometry: the end staves' spans are what the box's two edges are
+        // measured from, so the flat index has to survive the min/max rather than being discarded with it.
+        let staves = span.staves.compactMap { address -> (y: CGFloat, geometry: StaffLineGeometry)? in
+            guard let index = flatIndex(for: address) else { return nil }
+            return (staffOrigins[index].y, geometry(atFlatIndex: index))
+        }
+        guard let top = staves.min(by: { $0.y < $1.y }),
+              let bottom = staves.max(by: { $0.y < $1.y })
+        else { return nil }
+
+        let xPad = metrics.sp * 1.4
+        let yPad = metrics.sp
+        let topEdge = top.y + top.geometry.barLineSpanY(sp: metrics.sp).top - yPad
+        let bottomEdge = bottom.y + bottom.geometry.barLineSpanY(sp: metrics.sp).bottom + yPad
+        let leftEdge = span.minX - xPad
+        let rightEdge = max(span.maxEndX - xPad, span.maxX + xPad)
+        return CGRect(x: leftEdge, y: topEdge, width: max(0, rightEdge - leftEdge), height: bottomEdge - topEdge)
+    }
+
+    /// What the selected elements of this system span horizontally, and which staves they sit on.
+    ///
+    /// `minX` / `maxX` are the selected INK's own bounds — the pair the box was once measured from, and now only the
+    /// floor under `maxEndX`, which is where the selection's last element stops being sounded.
+    private func rangeSpan(
+        selectedIDs: Set<ScoreItemID>,
+    ) -> (minX: CGFloat, maxX: CGFloat, maxEndX: CGFloat, staves: Set<StaffAddress>) {
+        var minX = CGFloat.infinity
+        var maxX = -CGFloat.infinity
+        var maxEndX = -CGFloat.infinity
+        var staves: Set<StaffAddress> = []
+        for measure in measures {
+            for element in measure.elements {
+                switch element {
+                case let .chord(notes, _, _, _, _, _, _, _, _, _, _):
+                    for note in notes where selectedIDs.contains(.note(note.noteID)) {
+                        let x = measure.origin.x + note.origin.x
+                        minX = min(minX, x)
+                        maxX = max(maxX, x)
+                        maxEndX = max(maxEndX, Self.nextOnsetX(after: note.origin.x, in: measure))
+                        staves.insert(note.noteID.staff)
+                    }
+                case let .rest(duration, origin, _, restID, _) where selectedIDs.contains(.rest(restID)):
+                    let x = measure.origin.x + origin.x
+                    let isMeasureRest = duration == .measure
+                    minX = min(minX, isMeasureRest ? Self.firstBeatX(of: measure) ?? x : x)
+                    maxX = max(maxX, x)
+                    maxEndX = max(
+                        maxEndX,
+                        isMeasureRest
+                            ? Self.trailingBarLineX(of: measure)
+                            : Self.nextOnsetX(after: origin.x, in: measure),
+                    )
+                    staves.insert(restID.staff)
+                default:
+                    break
+                }
+            }
+        }
+        return (minX, maxX, maxEndX, staves)
+    }
+
+    /// Where the measure's first beat sits, in system coordinates — `tickColumns`' tick-0 entry, which placement puts
+    /// at `contentStartX + sp` whatever the bar happens to contain.
+    ///
+    /// `nil` only for a measure with no timed content at all (`tickColumns` is empty for those, and for a
+    /// multi-measure rest), which the caller answers by falling back to the ink.
+    private static func firstBeatX(of measure: LayoutMeasure) -> CGFloat? {
+        guard let first = measure.tickColumns[0] ?? measure.tickColumns.values.min() else { return nil }
+        return measure.origin.x + first
+    }
+
+    /// The next onset column strictly right of `localX` (a measure-local x), in system coordinates — or the measure's
+    /// trailing barline when nothing onsets after it.
+    ///
+    /// `tickColumns` is cross-staff aggregated, so this stops at the next thing that starts anywhere in the system,
+    /// which is what makes it a segment boundary rather than one voice's next note.
+    private static func nextOnsetX(after localX: CGFloat, in measure: LayoutMeasure) -> CGFloat {
+        guard let next = measure.tickColumns.values.filter({ $0 > localX }).min() else {
+            return trailingBarLineX(of: measure)
+        }
+        return measure.origin.x + next
+    }
+
+    /// The measure's closing barline, in system coordinates. Read off the rightmost `.barLine` element rather than
+    /// computed as `origin.x + width` so the box lands on the drawn line — and so a bar that opens with a start-repeat
+    /// barline is not measured from that one. Falls back to the measure's right edge when no barline was emitted.
+    private static func trailingBarLineX(of measure: LayoutMeasure) -> CGFloat {
+        var localX: CGFloat?
+        for case let .barLine(_, origin, _, _, _) in measure.elements {
+            localX = max(localX ?? origin.x, origin.x)
+        }
+        return measure.origin.x + (localX ?? measure.width)
+    }
+}
+
+extension StaffMetrics {
+    /// The range box's stroke: twice a staff line, the weight `ScoreLayerBuilder.drawRangeBoxes` has always drawn it
+    /// at.
+    public var rangeBoxLineWidth: CGFloat {
+        staffLineThickness * 2
+    }
+}
