@@ -15,9 +15,12 @@ import Foundation
 /// bytes are streamed into a buffer that grows in 64 KiB chunks. Apple uses
 /// the `Compression` framework (`COMPRESSION_ZLIB` = raw DEFLATE, so the
 /// 2-byte zlib header is stripped and the trailing Adler-32 is ignored);
-/// Android uses system `zlib` with `windowBits = 47` (auto-detect the
-/// zlib/gzip header). Mirrors `SheetMusicZip`'s `DeflateApple` /
-/// `DeflateZLib` back-ends.
+/// everywhere else uses `zlib` with `windowBits = 15`, the zlib format a
+/// `/FlateDecode` stream always is. Not 47 (zlib or gzip, detected): the
+/// zlib vendored for Windows and WebAssembly is built with `NO_GZIP`,
+/// which rejects 47 at `inflateInit2` — every stream then failed to
+/// inflate there, and every PDF read as one with no content. Mirrors
+/// `SheetMusicZip`'s `DeflateApple` / `DeflateZLib` back-ends.
 enum PDFFlate {
     private static let chunkSize = 64 * 1024
 
@@ -100,7 +103,7 @@ enum PDFFlate {
             }
             var stream = z_stream()
             var ret = inflateInit2_(
-                &stream, 47, // 47 = auto-detect zlib/gzip header
+                &stream, 15, // the zlib header; see the type's comment for why not 47
                 ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size),
             )
             guard ret == Z_OK else {
