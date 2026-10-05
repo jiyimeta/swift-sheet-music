@@ -7,6 +7,37 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`ScorePDF`** (Windows, `SheetMusicRenderWindows`) — a PDF opened by Windows' own PDF engine
+  (`Windows.Data.Pdf`, reached through WRL in `CDirect2D`): its page count, each page's size in millimetres, and
+  `writePNG(page:pxPerMM:to:)` for a thumbnail. `Sendable`, so a host opens it off the UI thread; a path may separate
+  with `/` as `URL.path` does on Windows. Throws for a file Windows cannot read.
+- **`ScoreSurface.setPDF(_:)`** (Windows) — the surface shows a PDF's pages where `setPages(_:)` shows a score's: the
+  same `Frame`, page placement (millimetres from each paper's top-left) and overlays. A PDF page costs what its content
+  costs however little of it is drawn, so pages are cached a page at a time — whole up to a 4096 px side, past that the
+  part around the view — and drawn on a worker thread of their own, never in a frame. **`isDrawingPDFPages`** says a
+  host should keep drawing frames until the pages it asked for arrive; **`unreadablePDFPages`** names the pages Windows
+  could not draw, which show blank and are not retried.
+- **`SheetMusicPages`** — a portable product with `ScorePages`, `ScorePageOptions`, `ScorePagePlacement`,
+  `PageRectMM` and `PagePointMM`, moved out of `SheetMusicRenderWindows` (which re-exports it, so a Windows host's
+  imports are unchanged): a score laid out and cut into pages, for any host that draws or writes them.
+- **`SheetMusicPDFWriter`** — a portable PDF writer: `ScorePDFWriter.write(_:fonts:title:)` writes `ScorePages` as a
+  vector PDF in Swift alone, each face embedded once and whole (Type0 / CIDFontType0 over `FontFile3 /OpenType`,
+  Identity-H, a `ToUnicode` map), text placed at the installed metrics provider's offsets, a character the face lacks
+  kept as invisible text so the PDF can still be searched. `ScorePDFFonts` takes the five faces (Bravura and Edwin's
+  four); the Windows renderer bundles them. Its output reads back as music through `SheetMusicPDF`'s Swift reader.
+- **`windows-render-probe --pdf` / `--write-pdf`** (Windows probes) — the PDF surface's timings, cache and parity, and
+  the writer's output drawn by Windows against the same pages drawn by Direct2D.
+
+### Fixed
+
+- **The Swift PDF reader reads compressed streams on Windows and WebAssembly.** `PDFFlate` asked zlib for
+  `windowBits` 47 (zlib or gzip, detected); the zlib vendored there is built with `NO_GZIP`, which refuses 47, so every
+  `/FlateDecode` stream failed to inflate and every PDF read as one without content (`pdf.content.empty`). A
+  `/FlateDecode` stream is always the zlib format, so the reader now asks for exactly that (15). Apple's path
+  (Compression) and Android's system zlib are unaffected.
+
 ## [4.2.0] - 2026-10-04
 
 ### Added
