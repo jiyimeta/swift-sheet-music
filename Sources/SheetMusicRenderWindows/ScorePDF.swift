@@ -10,27 +10,43 @@ import Foundation
 /// scale, up to 300 ms for a dense MuseScore page — whatever part of the page is drawn.
 public final class ScorePDF {
     let handle: OpaquePointer
-    /// The number of pages.
-    public let pageCount: Int
+    /// Each page's size in millimetres, read when the file is opened.
+    private let sizesMM: [(width: Double, height: Double)]
 
-    /// Opens the PDF at `path`. Throws when Windows cannot read it (not a PDF, damaged, password-protected).
+    /// Opens the PDF at `path` and reads its pages' sizes. Throws when Windows cannot read it (not a PDF, damaged,
+    /// password-protected).
     public init(path: String) throws {
         var created: OpaquePointer?
         var count: UInt32 = 0
         try Direct2DPageRenderer.check(withWide(path) { cd2d_pdf_open($0, &created, &count) }, "opening \(path)")
         guard let created else { throw Direct2DPageRenderer.Failure(step: "opening \(path)", hresult: -1) }
+        var sizes: [(width: Double, height: Double)] = []
+        for page in 0 ..< UInt32(count) {
+            var width: Float = 0
+            var height: Float = 0
+            let hresult = cd2d_pdf_page_size(created, page, &width, &height)
+            guard hresult == 0 else {
+                cd2d_pdf_close(created)
+                throw Direct2DPageRenderer.Failure(step: "page \(page + 1) of \(path)", hresult: hresult)
+            }
+            sizes.append((Double(width) * Self.mmPerDIP, Double(height) * Self.mmPerDIP))
+        }
         handle = created
-        pageCount = Int(count)
+        sizesMM = sizes
     }
 
     deinit {
         cd2d_pdf_close(handle)
     }
 
-    /// Page `page`'s size in millimetres — the PDF reports DIPs, 1/96 inch.
-    public func pageSizeMM(_ page: Int) throws -> (width: Double, height: Double) {
-        let dip = try pageSizeDIP(page)
-        return (Double(dip.width) * Self.mmPerDIP, Double(dip.height) * Self.mmPerDIP)
+    /// The number of pages.
+    public var pageCount: Int {
+        sizesMM.count
+    }
+
+    /// Page `page`'s size in millimetres, from the DIPs (1/96 inch) the PDF reports; `page` must be below `pageCount`.
+    public func pageSizeMM(_ page: Int) -> (width: Double, height: Double) {
+        sizesMM[page]
     }
 
     /// Draws page `page` whole on white at `pxPerMM` and writes it as PNG to `pngPath` — a thumbnail.
@@ -44,7 +60,8 @@ public final class ScorePDF {
 
     /// Page `page` drawn whole on white at `pxPerMM`: its pixel size and its pixels (BGRA premultiplied, top-down).
     package func pixels(page: Int, pxPerMM: Double) throws -> (width: Int, height: Int, bgra: [UInt8]) {
-        let size = try pageSizeMM(page)
+        try checkPage(page)
+        let size = pageSizeMM(page)
         let width = Self.pixels(size.width * pxPerMM)
         let height = Self.pixels(size.height * pxPerMM)
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
@@ -67,14 +84,6 @@ public final class ScorePDF {
     /// that is a whole number of pixels (an A4 width at 2 px/mm reads 420.00002).
     static func pixels(_ extent: Double) -> Int {
         max(1, Int(extent + 0.999))
-    }
-
-    func pageSizeDIP(_ page: Int) throws -> (width: Float, height: Float) {
-        try checkPage(page)
-        var width: Float = 0
-        var height: Float = 0
-        try Direct2DPageRenderer.check(cd2d_pdf_page_size(handle, UInt32(page), &width, &height), "page \(page + 1)")
-        return (width, height)
     }
 
     private func checkPage(_ page: Int) throws {

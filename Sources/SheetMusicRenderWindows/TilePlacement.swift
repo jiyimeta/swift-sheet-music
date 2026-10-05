@@ -18,6 +18,22 @@ struct PlacedTile {
     }
 }
 
+/// A cached band and where a frame draws it: its top-left on the surface, scaled by `scale`.
+struct Blit {
+    var band: OpaquePointer
+    var x: Double
+    var y: Double
+    var scale: Double
+
+    /// The band holding `rect` of `page`'s pixels at the raster scale, drawn at `stretch` times its size.
+    init(band: OpaquePointer, page: PlacedPage, rect: PixelRect, stretch: Double) {
+        self.band = band
+        x = page.screenX + Double(rect.x) * stretch
+        y = page.screenY + Double(rect.y) * stretch
+        scale = stretch
+    }
+}
+
 /// Which tiles of the placed pages a surface shows, and which lie just beyond it: the geometry `ScoreSurface.draw` and
 /// its read-ahead work from, free of Direct2D so it can be tested on its own. Every page is mapped through the same
 /// per-page view, so a rectangle that runs off one page's end lands on the next page's grid by its own origin.
@@ -60,7 +76,7 @@ enum TilePlacement {
     }
 
     /// The surface in the page's pixels at the raster scale, one pixel wider and taller to cover the rounding.
-    private static func surfaceRect(on page: PlacedPage, widthPx: Int, heightPx: Int, stretch: Double) -> PixelRect {
+    static func surfaceRect(on page: PlacedPage, widthPx: Int, heightPx: Int, stretch: Double) -> PixelRect {
         PixelRect(
             x: Int((-page.screenX / stretch).rounded(.down)), y: Int((-page.screenY / stretch).rounded(.down)),
             width: Int((Double(widthPx) / stretch).rounded(.up)) + 1,

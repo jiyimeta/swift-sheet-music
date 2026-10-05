@@ -348,7 +348,8 @@ final class OnscreenSession {
 
     // MARK: - Win32
 
-    private static func createWindow() throws -> HWND {
+    /// A visible window of `clientWidth` x `clientHeight` px in front, its messages pumped.
+    static func createWindow() throws -> HWND {
         let instance = GetModuleHandleW(nil)
         let className = "SheetMusicOnscreenProbe"
         let registered = className.withCString(encodedAs: UTF16.self) { name -> ATOM in
@@ -378,7 +379,7 @@ final class OnscreenSession {
         return window
     }
 
-    private static func pump() {
+    static func pump() {
         var message = MSG()
         while PeekMessageW(&message, nil, 0, 0, UINT(PM_REMOVE)) {
             TranslateMessage(&message)

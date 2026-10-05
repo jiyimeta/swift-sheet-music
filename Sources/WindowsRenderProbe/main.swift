@@ -15,6 +15,11 @@
 // gates (`OnscreenProbe`): prints one line per gate, writes `<out dir>/onscreen.json`, and exits 1 when any fails.
 // Without a table it installs the bundled one (`installWindowsFontMetrics()`), and without font files the surface
 // loads the bundled faces (`ScoreSurface()`) — what a host that ships nothing of its own does.
+//
+//     windows-render-probe --pdf <file.pdf> <out dir>
+//
+// Measures `ScoreSurface` showing a PDF's pages (`PDFProbe`): prints its timings and checks, writes
+// `<out dir>/pdf.json`, and exits 1 when a check fails.
 
 import Foundation
 import SheetMusicBridgeCore
@@ -26,6 +31,16 @@ func fail(_ message: String) -> Never {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+if arguments.first == "--pdf" {
+    guard arguments.count == 3 else { fail("usage: windows-render-probe --pdf <file.pdf> <out dir>") }
+    let probe = PDFProbe(pdfPath: arguments[1], outputDirectory: URL(fileURLWithPath: arguments[2], isDirectory: true))
+    do {
+        try exit(probe.run() ? 0 : 1)
+    } catch {
+        fail("pdf: \(error)")
+    }
+}
+
 if arguments.first == "--onscreen" {
     guard arguments.count >= 2 else {
         fail("usage: windows-render-probe --onscreen <out dir> [<metrics> [<font file>...]]")

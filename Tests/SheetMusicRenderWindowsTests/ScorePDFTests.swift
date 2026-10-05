@@ -35,7 +35,7 @@ struct ScorePDFTests {
     @Test func `a page reads as one A4 page in millimetres`() throws {
         let pdf = try ScorePDF(path: Self.squarePDF())
 
-        let size = try pdf.pageSizeMM(0)
+        let size = pdf.pageSizeMM(0)
 
         #expect(pdf.pageCount == 1)
         #expect(abs(size.width - 210) < 0.1)
@@ -63,7 +63,10 @@ struct ScorePDFTests {
         let pdf = try ScorePDF(path: Self.squarePDF())
 
         #expect(throws: Direct2DPageRenderer.Failure.self) {
-            try pdf.pageSizeMM(1)
+            try pdf.pixels(page: 1, pxPerMM: 1)
+        }
+        #expect(throws: Direct2DPageRenderer.Failure.self) {
+            try pdf.writePNG(page: -1, pxPerMM: 1, to: "unused.png")
         }
     }
 
