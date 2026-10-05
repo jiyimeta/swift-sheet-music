@@ -1,8 +1,10 @@
 import SheetMusicFoundation
 
-/// One font a PDF draws with, embedded whole: a Type0 font over a CIDFont whose program is the OpenType file itself
-/// (`FontFile3 /OpenType`), glyphs addressed by id through `Identity-H` — two bytes a glyph in a `Tj` — and a
-/// `ToUnicode` map from each glyph used back to the text it stands for, so the PDF's text can be searched and copied.
+/// One font a PDF draws with, embedded whole: a Type0 font over a CIDFont whose program is the font file itself — an
+/// OpenType file with CFF outlines as `FontFile3 /OpenType` under `CIDFontType0`, one with TrueType outlines (the
+/// platform UI face) as `FontFile2` under `CIDFontType2` — glyphs addressed by id through `Identity-H` (two bytes a
+/// glyph in a `Tj`), and a `ToUnicode` map from each glyph used back to the text it stands for, so the PDF's text can
+/// be searched and copied.
 ///
 /// Whole rather than subset: Bravura and Edwin are SIL OFL, which allows it, and a subsetter is a CFF compiler of its
 /// own. One embedding per face for the whole document, however many pages use it.
@@ -79,16 +81,22 @@ final class PDFFontEmbedding {
                 + (font.hasCFFOutlines ? "" : " /CIDToGIDMap /Identity") + " >>",
         )
         let box = font.bbox
+        // Symbolic or nonsymbolic, and italic when the face leans.
+        let flags = (symbolic ? 4 : 32) | (font.italicAngle != 0 ? 64 : 0)
         writer.object(
             descriptor,
-            "<< /Type /FontDescriptor /FontName /\(baseName) /Flags \(symbolic ? 4 : 32) "
+            "<< /Type /FontDescriptor /FontName /\(baseName) /Flags \(flags) "
                 + "/FontBBox [\(font.thousandths(box.minX)) \(font.thousandths(box.minY)) "
                 + "\(font.thousandths(box.maxX)) \(font.thousandths(box.maxY))] "
-                + "/ItalicAngle 0 /Ascent \(font.thousandths(font.ascender)) "
+                + "/ItalicAngle \(PDFPageWalker.number(font.italicAngle)) /Ascent \(font.thousandths(font.ascender)) "
                 + "/Descent \(font.thousandths(font.descender)) /CapHeight \(font.thousandths(font.ascender)) "
-                + "/StemV 80 /FontFile3 \(program) 0 R >>",
+                + "/StemV 80 /\(font.hasCFFOutlines ? "FontFile3" : "FontFile2") \(program) 0 R >>",
         )
-        try writer.stream(program, dictionary: "/Subtype /OpenType", data: font.data, compress: true)
+        // `Length1` is the uncompressed length a TrueType program's stream must state.
+        try writer.stream(
+            program, dictionary: font.hasCFFOutlines ? "/Subtype /OpenType" : "/Length1 \(font.data.count)",
+            data: font.data, compress: true,
+        )
         try writer.stream(toUnicode, dictionary: "", data: Data(toUnicodeMap(glyphs).utf8), compress: true)
         return type0
     }

@@ -8,9 +8,10 @@ import Synchronization
 // ones `FontMetricsProvider` speaks. Every CG name in this file is spelled `SheetMusicLayout.…` so none resolves to
 // Foundation's (`CGTypes+Android.swift` has the details). Its `CGFloat` is `Double`.
 
-/// Installs the layout's font metrics on Windows: the measured table (`sheet-music.smft`, as `installFontMetricsTable`
-/// installs it for the portable hosts) for every face it carries, and DirectWrite for the platform UI face, which the
-/// renderer draws in Segoe UI. Call it once, before the first layout, in place of `installFontMetricsTable`.
+/// Installs the layout's font metrics on Windows: the measured table (`sheet-music.smft` — the portable hosts' table,
+/// except that Edwin's bold and italic records measure the family's own styled faces, which this renderer draws) for
+/// every face it carries, and DirectWrite for the platform UI face, which the renderer draws in Segoe UI. Call it once,
+/// before the first layout, in place of `installFontMetricsTable`.
 ///
 /// Throws when the bytes do not decode or DirectWrite cannot resolve Segoe UI; the provider is left as it was.
 /// `installWindowsFontMetrics()` passes the table bundled with this module; this is for a host that ships its own.
@@ -77,6 +78,16 @@ struct WindowsFontMetricsProvider: FontMetricsProvider {
         base.glyphPathBoundingBox(font: font, codepoint: codepoint)
     }
 
+    /// `CTLineGetOffsetForStringIndex` on the Mac: where the drawn layout puts each UTF-16 position, kerning included —
+    /// what a PDF places the system face's characters at, so its labels sit where the screen's do. The protocol's
+    /// default sums each character's advance alone, which the kerned layout does not.
+    func caretOffsets(text: String, font: LayoutFont) -> [SheetMusicLayout.CGFloat] {
+        guard font.face.isEmpty else { return base.caretOffsets(text: text, font: font) }
+        guard !text.isEmpty else { return [0] }
+        guard let offsets = measurer.carets(text, font: font) else { return base.caretOffsets(text: text, font: font) }
+        return offsets.map { SheetMusicLayout.CGFloat($0) }
+    }
+
     /// `CTLineGetTypographicBounds`' width on the Mac: the laid-out advance, trailing whitespace included.
     func typographicWidth(text: String, font: LayoutFont) -> SheetMusicLayout.CGFloat {
         guard font.face.isEmpty else { return base.typographicWidth(text: text, font: font) }
@@ -114,7 +125,7 @@ struct WindowsFontMetricsProvider: FontMetricsProvider {
     }
 }
 
-/// `cd2d_measure_text` behind a lock and a cache.
+/// `cd2d_measure_text` and `cd2d_measure_carets` behind a lock and a cache.
 ///
 /// The layout may measure from several threads at once (Swift Testing runs suites in parallel; a host may lay out off
 /// its UI thread). The resources' face and format caches, and their single-threaded Direct2D factory, allow one thread
@@ -143,15 +154,33 @@ final class DirectWriteTextMeasurer: @unchecked Sendable {
     private let family: [UInt16]
     /// Touched only under `cache`'s lock.
     private let resources: OpaquePointer
-    private let cache = Mutex<[Key: TextMeasurement]>([:])
+    private let cache = Mutex<Caches>(Caches())
 
-    init(family: String) throws {
+    private struct Caches {
+        var measurements: [Key: TextMeasurement] = [:]
+        var carets: [Key: [Float]] = [:]
+    }
+
+    /// - Parameter fontFiles: font files to measure in before the installed fonts, as a surface draws with its bundled
+    ///   faces; none for the system face, which the installed fonts supply.
+    init(family: String, fontFiles: [String] = []) throws {
         var created: OpaquePointer?
         let hresult = cd2d_resources_create(&created)
         guard hresult == 0, let created else {
             throw Direct2DPageRenderer.Failure(
                 step: "creating the DirectWrite resources", hresult: hresult == 0 ? -1 : hresult,
             )
+        }
+        if !fontFiles.isEmpty {
+            var added: Int32 = 0
+            for file in fontFiles where added == 0 {
+                added = withWide(file) { cd2d_resources_add_font_file(created, $0) }
+            }
+            if added == 0 { added = cd2d_resources_fonts_ready(created) }
+            guard added == 0 else {
+                cd2d_resources_destroy(created)
+                throw Direct2DPageRenderer.Failure(step: "adding the font files", hresult: added)
+            }
         }
         let units = Array(family.utf16) + [0]
         // The face metrics of a regular 12 pt run: fails here, with DirectWrite's reason, when the family is missing.
@@ -180,10 +209,37 @@ final class DirectWriteTextMeasurer: @unchecked Sendable {
             italic: font.isItalic, text: text,
         )
         return cache.withLock { cache in
-            if let cached = cache[key] { return cached }
+            if let cached = cache.measurements[key] { return cached }
             guard let measured = measureUncached(key) else { return nil }
-            cache[key] = measured
+            cache.measurements[key] = measured
             return measured
+        }
+    }
+
+    /// `cd2d_measure_carets` for `text` in `font`: `text.utf16.count + 1` offsets in points; nil when DirectWrite
+    /// fails.
+    func carets(_ text: String, font: LayoutFont) -> [Float]? {
+        let key = Key(
+            pointSize: Double(font.pointSize), weight: WindowsFontMetricsProvider.directWriteWeight(font.weight),
+            italic: font.isItalic, text: text,
+        )
+        return cache.withLock { cache in
+            if let cached = cache.carets[key] { return cached }
+            let units = Array(text.utf16)
+            var offsets = [Float](repeating: 0, count: units.count + 1)
+            let hresult = family.withUnsafeBufferPointer { family in
+                units.withUnsafeBufferPointer { text in
+                    offsets.withUnsafeMutableBufferPointer { offsets in
+                        cd2d_measure_carets(
+                            resources, family.baseAddress, Float(key.pointSize), key.weight, key.italic ? 1 : 0,
+                            text.baseAddress, UInt32(text.count), offsets.baseAddress,
+                        )
+                    }
+                }
+            }
+            guard hresult == 0 else { return nil }
+            cache.carets[key] = offsets
+            return offsets
         }
     }
 

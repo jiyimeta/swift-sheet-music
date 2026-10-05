@@ -139,3 +139,58 @@ extern "C" int32_t cd2d_measure_text(
     }
     return S_OK;
 }
+
+extern "C" int32_t cd2d_measure_carets(
+    cd2d_resources *resources, const uint16_t *family, float size, int32_t weight, int32_t italic,
+    const uint16_t *text, uint32_t length, float *offsets) {
+    offsets[0] = 0;
+    if (length == 0) return S_OK;
+    ComPtr<IDWriteTextLayout> layout;
+    float baseline = 0;
+    HRESULT hr = cd2d::layoutText(
+        resources, reinterpret_cast<const wchar_t *>(family), reinterpret_cast<const wchar_t *>(text), length, size,
+        cd2d::fontWeight(weight), italic != 0, &layout, &baseline);
+    if (FAILED(hr)) return hr;
+    for (uint32_t index = 0; index <= length; ++index) {
+        // The leading edge of each position's cluster, and past the last one the trailing edge of the text.
+        const bool end = index == length;
+        FLOAT x = 0;
+        FLOAT y = 0;
+        DWRITE_HIT_TEST_METRICS metrics;
+        hr = layout->HitTestTextPosition(end ? length - 1 : index, end ? TRUE : FALSE, &x, &y, &metrics);
+        if (FAILED(hr)) return hr;
+        offsets[index] = x;
+    }
+    return S_OK;
+}
+
+extern "C" int32_t cd2d_font_file_path(
+    cd2d_resources *resources, const uint16_t *family, int32_t weight, int32_t italic, uint16_t *path,
+    uint32_t capacity, uint32_t *length) {
+    *length = 0;
+    cd2d::Face *face = cd2d::resolveFace(
+        resources, reinterpret_cast<const wchar_t *>(family), cd2d::fontWeight(weight), italic != 0);
+    if (!face) return DWRITE_E_NOFONT;
+    // A face out of a collection is not a file a document can carry as it stands.
+    if (face->face->GetType() == DWRITE_FONT_FACE_TYPE_OPENTYPE_COLLECTION) return E_NOTIMPL;
+    UINT32 count = 0;
+    HRESULT hr = face->face->GetFiles(&count, nullptr);
+    if (FAILED(hr)) return hr;
+    if (count != 1) return E_NOTIMPL;
+    ComPtr<IDWriteFontFile> file;
+    hr = face->face->GetFiles(&count, &file);
+    const void *key = nullptr;
+    UINT32 keySize = 0;
+    if (SUCCEEDED(hr)) hr = file->GetReferenceKey(&key, &keySize);
+    ComPtr<IDWriteFontFileLoader> loader;
+    if (SUCCEEDED(hr)) hr = file->GetLoader(&loader);
+    // Only a font on disk has a path; one from memory or the network answers E_NOINTERFACE.
+    ComPtr<IDWriteLocalFontFileLoader> local;
+    if (SUCCEEDED(hr)) hr = loader.As(&local);
+    UINT32 needed = 0;
+    if (SUCCEEDED(hr)) hr = local->GetFilePathLengthFromKey(key, keySize, &needed);
+    if (FAILED(hr)) return hr;
+    *length = needed;
+    if (needed + 1 > capacity) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+    return local->GetFilePathFromKey(key, keySize, reinterpret_cast<wchar_t *>(path), capacity);
+}

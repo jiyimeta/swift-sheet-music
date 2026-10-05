@@ -3,7 +3,9 @@ import SheetMusicFoundation
 /// The parts of an OpenType font a PDF needs to embed it whole and place its glyphs: the em, the bounding box, the
 /// vertical metrics, each glyph's advance, and the Unicode `cmap` — read from the table directory and `head`, `hhea`,
 /// `maxp`, `hmtx` and `cmap` (format 12 when the font has one, which Bravura's private-use repertoire needs, else
-/// format 4). Every read is bounds-checked: a font that does not hold together throws `Malformed` rather than trapping.
+/// format 4) — and, from the optional `OS/2`, `post` and `name`, whether its license lets it be embedded, its slant and
+/// its PostScript name. Every read is bounds-checked: a font that does not hold together throws `Malformed` rather
+/// than trapping.
 struct OpenTypeFont {
     struct Malformed: Error, Equatable {
         let reason: String
@@ -17,6 +19,12 @@ struct OpenTypeFont {
     let descender: Int
     /// Whether the outlines are CFF (`OTTO`) rather than TrueType: which CIDFont subtype a PDF embeds it as.
     let hasCFFOutlines: Bool
+    /// `OS/2`'s embedding permissions (`fsType`); 0, installable, for a font without the table.
+    let fsType: Int
+    /// `post`'s italic angle in degrees, counter-clockwise from vertical: negative for a face that leans right.
+    let italicAngle: Double
+    /// `name` id 6, which a PDF names the font by; nil when the font has none it can read.
+    let postScriptName: String?
     private let advances: [Int]
     private let cmap: [UInt32: Int]
 
@@ -51,12 +59,22 @@ struct OpenTypeFont {
         advances = try (0 ..< glyphCount).map { try read.u16(hmtx + 4 * min($0, metricCount - 1)) }
         cmap = try Self.unicodeMap(read, table: table("cmap"))
         hasCFFOutlines = version == 0x4F54_544F
+        fsType = try tables["OS/2"].map { try read.u16($0 + 8) } ?? 0
+        italicAngle = try tables["post"].map { try Double(read.i16($0 + 4)) + Double(read.u16($0 + 6)) / 65536 } ?? 0
+        postScriptName = try tables["name"].flatMap { try Self.postScriptName(read, table: $0) }
         self.data = data
     }
 
     /// How many glyphs the font has; ids run from 0 (`.notdef`) below it.
     var glyphCount: Int {
         advances.count
+    }
+
+    /// Whether the license lets a document carry the font (`fsType`): not when it is restricted-license only (bit 1
+    /// with neither the preview-and-print nor the editable bit, which would lift it) or bitmap-only (bit 9), since a
+    /// PDF embeds the outlines.
+    var isEmbeddable: Bool {
+        fsType & 0x000E != 0x0002 && fsType & 0x0200 == 0
     }
 
     /// The glyph `scalar` maps to; 0 (`.notdef`) when the font has none.
@@ -77,6 +95,29 @@ struct OpenTypeFont {
     /// A length in font units in thousandths of an em.
     func thousandths(_ units: Int) -> Int {
         Int((Double(units) * 1000 / Double(unitsPerEm)).rounded())
+    }
+
+    // MARK: - name
+
+    /// Name id 6 from a Windows (UTF-16BE) or Unicode record, else a Macintosh (Roman) one, kept only if it is
+    /// printable ASCII without a PDF delimiter — what a PostScript name is, and what a PDF name carries unescaped.
+    private static func postScriptName(_ read: BigEndianReader, table: Int) throws -> String? {
+        let storage = try table + read.u16(table + 4)
+        var found: [Int: String] = [:]
+        for index in try 0 ..< read.u16(table + 2) {
+            let record = table + 6 + 12 * index
+            let platform = try read.u16(record)
+            guard try read.u16(record + 6) == 6, found[platform] == nil else { continue }
+            let bytes = try read.slice(storage + read.u16(record + 10), read.u16(record + 8))
+            // UTF-16BE keeps only units whose high byte is zero; anything else fails the ASCII check below.
+            let pairs = stride(from: bytes.startIndex, to: bytes.endIndex - 1, by: 2)
+            let scalars: [UInt8] = platform == 1 ? Array(bytes) : pairs.map { bytes[$0] == 0 ? bytes[$0 + 1] : 0 }
+            let delimiters = Array("()<>[]{}/%#".utf8)
+            guard !scalars.isEmpty, scalars.allSatisfy({ (0x21 ... 0x7E).contains($0) && !delimiters.contains($0) })
+            else { continue }
+            found[platform] = String(scalars.map { Character(Unicode.Scalar($0)) })
+        }
+        return found[3] ?? found[0] ?? found[1]
     }
 
     // MARK: - cmap

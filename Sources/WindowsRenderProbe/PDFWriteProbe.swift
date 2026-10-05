@@ -32,6 +32,12 @@ struct PDFWriteProbe {
         let fonts = try ScorePDFFonts(
             smufl: font("Bravura.otf"), roman: font("Edwin-Roman.otf"), bold: font("Edwin-Bold.otf"),
             italic: font("Edwin-Italic.otf"), boldItalic: font("Edwin-BdIta.otf"),
+            system: { weight, isItalic in
+                let file = windowsSystemFontFile(weight: weight, isItalic: isItalic)
+                let size = file.map { "\($0.count) bytes" } ?? "none"
+                print("system face \(weight)\(isItalic ? " italic" : ""): \(size)")
+                return file
+            },
         )
         let clock = ContinuousClock()
         let start = clock.now

@@ -111,6 +111,21 @@ int32_t cd2d_measure_text(
     cd2d_resources *resources, const uint16_t *family, float size, int32_t weight, int32_t italic,
     const uint16_t *text, uint32_t length, cd2d_text_metrics *out);
 
+/// Where `cd2d_fill_text` puts each caret position of `text`, in the units of `size` from the text's start: `offsets`
+/// holds `length + 1` floats, the leading edge of the cluster at each UTF-16 position (a position inside a cluster
+/// gets the cluster's) and last the text's trailing edge. The same layout as `cd2d_measure_text`, kerning included.
+int32_t cd2d_measure_carets(
+    cd2d_resources *resources, const uint16_t *family, float size, int32_t weight, int32_t italic,
+    const uint16_t *text, uint32_t length, float *offsets);
+
+/// The path of the font file `cd2d_fill_text` draws `family` from at `weight` and slant — the face it resolves, as
+/// `cd2d_fill_glyph` describes — into `path` (`capacity` UTF-16 units, NUL included), and its length without the NUL
+/// into `length` even when `path` is too short (ERROR_INSUFFICIENT_BUFFER). E_NOTIMPL when the face is not one file of
+/// its own (a collection's member, or several files); E_NOINTERFACE when the file is not on disk.
+int32_t cd2d_font_file_path(
+    cd2d_resources *resources, const uint16_t *family, int32_t weight, int32_t italic, uint16_t *path,
+    uint32_t capacity, uint32_t *length);
+
 /// Ends drawing and writes a WIC canvas as a PNG.
 int32_t cd2d_write_png(cd2d_canvas *canvas, const uint16_t *path);
 void cd2d_destroy(cd2d_canvas *canvas);
