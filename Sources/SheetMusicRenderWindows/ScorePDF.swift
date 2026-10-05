@@ -18,11 +18,13 @@ public final class ScorePDF: @unchecked Sendable {
     private let sizesMM: [(width: Double, height: Double)]
 
     /// Opens the PDF at `path` and reads its pages' sizes. Throws when Windows cannot read it (not a PDF, damaged,
-    /// password-protected).
+    /// password-protected). `path` may separate with `/`, as `URL.path` does on Windows: the WinRT file API takes
+    /// only `\` (anything else is `ERROR_BAD_PATHNAME`), so the separators are turned before it sees them.
     public init(path: String) throws {
         var created: OpaquePointer?
         var count: UInt32 = 0
-        try Direct2DPageRenderer.check(withWide(path) { cd2d_pdf_open($0, &created, &count) }, "opening \(path)")
+        let native = String(path.map { $0 == "/" ? "\\" : $0 })
+        try Direct2DPageRenderer.check(withWide(native) { cd2d_pdf_open($0, &created, &count) }, "opening \(path)")
         guard let created else { throw Direct2DPageRenderer.Failure(step: "opening \(path)", hresult: -1) }
         var sizes: [(width: Double, height: Double)] = []
         for page in 0 ..< UInt32(count) {

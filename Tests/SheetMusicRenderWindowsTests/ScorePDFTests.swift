@@ -59,6 +59,16 @@ struct ScorePDFTests {
         #expect(pixel(atMM: 150, 200) == [255, 255, 255, 255])
     }
 
+    /// `URL.path` on Windows separates with `/`, which the WinRT file API refuses on its own.
+    @Test func `a path written with forward slashes opens`() throws {
+        let native = try Self.squarePDF()
+        let forward = String(native.map { $0 == "\\" ? "/" : $0 })
+
+        let pdf = try ScorePDF(path: forward)
+
+        #expect(pdf.pageCount == 1)
+    }
+
     /// What a host does: open it on a background task, draw it on another thread.
     @Test func `a PDF opened on a background task draws on another thread`() async throws {
         let path = try Self.squarePDF()
