@@ -98,6 +98,9 @@ var products: [Product] = [
     // the product was Android-gated, `SheetMusicEditWire` and `SheetMusicUI` could not resolve in one
     // evaluation of this manifest, so an iOS host could not link the wire at all.
     .library(name: "SheetMusicEditWire", targets: ["SheetMusicEditWire"]),
+    // A score cut into pages for a host that draws or writes them (`ScorePages.compute`, its options, the page
+    // geometry). Portable: the Windows surface re-exports it, and a PDF writer reads the same pages.
+    .library(name: "SheetMusicPages", targets: ["SheetMusicPages"]),
 ]
 
 var targets: [Target] = [
@@ -287,6 +290,16 @@ var targets: [Target] = [
         swiftSettings: [
             .swiftLanguageMode(.v5),
         ],
+    ),
+    // Moved out of SheetMusicRenderWindows, which never needed Direct2D for them: the layout cut into pages, in the
+    // bridge's draw-program commands (folino spec 2026-10-05-windows-phase4-import-export-pdf-design §6).
+    .target(
+        name: "SheetMusicPages",
+        dependencies: ["SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
+    ),
+    .testTarget(
+        name: "SheetMusicPagesTests",
+        dependencies: ["SheetMusicPages", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
     ),
     .testTarget(
         name: "SheetMusicAudioCoreTests",
@@ -671,7 +684,9 @@ if isWindows {
             // SheetMusicCore and SheetMusicLayout: the public API speaks their types (`Score`, `LayoutDocument`, the
             // layout policies), and `WindowsFontMetricsProvider` is a `FontMetricsProvider`. SheetMusicBridgeCore is
             // not a product, so none of its types may appear in a public signature here.
-            dependencies: ["CDirect2D", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
+            dependencies: [
+                "CDirect2D", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout", "SheetMusicPages",
+            ],
             // The five faces the walker draws with and the metrics table the layout measures them by, with the fonts'
             // licenses (`BundledResources.swift`). `.copy` of the folder rather than `.process`: nothing here has a
             // build rule, and `.copy` keeps the folder and every file name verbatim — `Resources/Bravura.otf` in the
@@ -679,12 +694,14 @@ if isWindows {
             // to its source in this repository.
             resources: [.copy("Resources")],
         ),
-        // The onscreen renderer's pure geometry (tiles, the cache's eviction), measured-equals-drawn for the system
-        // face (`LabelAnchorTests`), and the host-facing options and pages against the bridge's. Windows only, like
-        // the module.
+        // The onscreen renderer's pure geometry (tiles, the cache's eviction, a PDF page's part), measured-equals-drawn
+        // for the system face (`LabelAnchorTests`), and the PDF pages. Windows only, like the module.
         .testTarget(
             name: "SheetMusicRenderWindowsTests",
-            dependencies: ["SheetMusicRenderWindows", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
+            dependencies: [
+                "SheetMusicRenderWindows", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout",
+                "SheetMusicPages",
+            ],
         ),
     ]
 

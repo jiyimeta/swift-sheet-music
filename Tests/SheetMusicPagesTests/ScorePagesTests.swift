@@ -2,7 +2,7 @@ import Foundation
 @testable import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicLayout
-@testable import SheetMusicRenderWindows
+@testable import SheetMusicPages
 import Testing
 
 /// `ScorePages` is `LayoutBridge.computePages` behind the host-facing API: the same pages and spans for the same

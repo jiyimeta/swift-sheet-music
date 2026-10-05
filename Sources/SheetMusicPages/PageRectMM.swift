@@ -16,11 +16,11 @@ public struct PageRectMM: Sendable, Equatable {
         self.height = height
     }
 
-    var maxX: Double {
+    package var maxX: Double {
         x + width
     }
 
-    var maxY: Double {
+    package var maxY: Double {
         y + height
     }
 }

@@ -1,7 +1,7 @@
 @testable import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicLayout
-@testable import SheetMusicRenderWindows
+@testable import SheetMusicPages
 import Testing
 
 /// `ScorePageOptions` is the typed twin of `LayoutOptionsWire`: its default has to be the wire's `verticalDefault`, and

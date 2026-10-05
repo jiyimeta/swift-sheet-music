@@ -2,8 +2,8 @@ import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicLayout
 
-/// A score laid out and cut into pages for `ScoreSurface.setPages(_:)`: what a Windows host hands the surface, with
-/// the layout it came from.
+/// A score laid out and cut into pages, with the layout it came from: what a Windows host hands its surface
+/// (`ScoreSurface.setPages(_:)`), and what a PDF writer writes.
 ///
 /// The pages themselves stay inside the package — they are draw-program commands, a format that grows with every
 /// release — so a host holds this value and passes it on. Make one with `compute`; `tinted(argb:ids:)` re-encodes it
@@ -34,7 +34,8 @@ public struct ScorePages: Sendable {
     /// tall as the music, in `.horizontal` one page the size of the music, in `.page` pages of `pageWidthMM` x
     /// `pageHeightMM` with the music inside `options.pageMarginsMM` — every page widened alike when the music overflows
     /// the printable width (`PageMarginsMM`), so lay the pages out by `pageSizeMM(_:)`. Install the font metrics
-    /// (`installWindowsFontMetrics(tableBytes:)`) before the first call.
+    /// (`installWindowsFontMetrics(tableBytes:)` on Windows, `installFontMetricsTable(_:)` elsewhere) before the first
+    /// call.
     public static func compute(
         score: Score, pageWidthMM: Double, pageHeightMM: Double, options: ScorePageOptions = .default,
     ) -> ScorePages {
