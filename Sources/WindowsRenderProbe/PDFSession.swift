@@ -7,9 +7,10 @@ import WinSDK
 final class PDFSession {
     struct Scroll {
         var work: [Double]
-        /// Pages drawn over the scroll, visible and read ahead alike, and of those the ones read ahead.
+        /// Pages uploaded over the scroll (the worker drew them).
         var drawn: Int
-        var readAhead: Int
+        /// Frames that showed a page whose drawing at the frame's scale had not arrived.
+        var late: Int
         var maxCacheBytes: Int
         var privateDeltaMB: Double
     }
@@ -74,18 +75,31 @@ final class PDFSession {
         DestroyWindow(window)
     }
 
-    /// The first frame, from nothing drawn: wall time, `Present` included.
+    /// The first frame, from nothing drawn, until the pages it shows have arrived from the worker: wall time.
     func firstFrame() -> Double {
         let start = clock.now
-        draw(zoom: 1, originMM: (0, 0))
+        complete(zoom: 1, originMM: (0, 0))
         return OnscreenSession.milliseconds(clock.now - start)
     }
 
-    /// From the top of the first page to the bottom of the last, `stepPx` per frame at 100 %; the surface's work per
-    /// frame, and the most the cache held.
+    /// Frames at `zoom` with the view at `originMM` until no page they show is still being drawn — 10 s at most, past
+    /// which the run fails.
+    private func complete(zoom: Double, originMM: (x: Double, y: Double)) {
+        let start = clock.now
+        repeat {
+            draw(zoom: zoom, originMM: originMM)
+        } while surface.isDrawingPDFPages && clock.now - start < .seconds(10)
+        if surface.isDrawingPDFPages {
+            failures.append("pages still drawing after 10 s at \(zoom), \(originMM)")
+        }
+    }
+
+    /// From the top of the first page to the bottom of the last, `stepPx` per frame at 100 %: the surface's work per
+    /// frame — uploads and blits, the pages are drawn on the worker — how many frames showed a page still being drawn,
+    /// and the most the cache held.
     func scroll(stepPx: Double) -> Scroll {
-        var result = Scroll(work: [], drawn: 0, readAhead: 0, maxCacheBytes: 0, privateDeltaMB: 0)
-        var perFrame: [(inView: Int, ahead: Int)] = []
+        var result = Scroll(work: [], drawn: 0, late: 0, maxCacheBytes: 0, privateDeltaMB: 0)
+        var uploads: [Int] = []
         var maxPrivate = baselineBytes
         let stepMM = stepPx / pxPerMM(zoom: 1)
         let bottom = documentHeightMM - Double(height) / pxPerMM(zoom: 1)
@@ -96,21 +110,18 @@ final class PDFSession {
             let timing = surface.lastDrawTiming
             result.work.append(timing.workMs)
             result.drawn += timing.rasterizedTiles
-            result.readAhead += timing.prefetchedTiles
-            perFrame.append((timing.rasterizedTiles - timing.prefetchedTiles, timing.prefetchedTiles))
+            uploads.append(timing.rasterizedTiles)
+            if timing.deferredTiles > 0 { result.late += 1 }
             result.maxCacheBytes = max(result.maxCacheBytes, surface.tileBytes)
             maxPrivate = max(maxPrivate, OnscreenSession.privateBytes())
         }
         result.privateDeltaMB = Double(maxPrivate - baselineBytes) / 1_048_576
-        // The slowest frames with how many pages each drew in view and ahead of it: a slow frame that drew a page in
-        // view is one the read-ahead did not reach in time.
         let slowest = result.work.indices.sorted { result.work[$0] > result.work[$1] }.prefix(8)
-        let listed = slowest.map {
-            String(format: "%.1f ms/%d+%d", result.work[$0], perFrame[$0].inView, perFrame[$0].ahead)
-        }.joined(separator: ", ")
+        let listed = slowest.map { String(format: "%.1f ms/%d", result.work[$0], uploads[$0]) }
+            .joined(separator: ", ")
         print(
-            "scroll: \(result.work.count) frames; slowest (work/pages drawn in view+ahead) \(listed); "
-                + "\(result.drawn) pages drawn, \(result.readAhead) of them read ahead; "
+            "scroll: \(result.work.count) frames; slowest (work/pages uploaded) \(listed); "
+                + "\(result.drawn) pages uploaded, \(result.late) frames showed a page still being drawn; "
                 + "cache at most \(result.maxCacheBytes / 1_048_576) MB, private bytes +"
                 + String(format: "%.1f MB", result.privateDeltaMB),
         )
@@ -118,7 +129,7 @@ final class PDFSession {
     }
 
     /// 100 → 200 → 100 % as two 30-frame gestures at the top of the first page, each followed by frames at the new
-    /// scale until the surface draws at it: that frame's work is the settle.
+    /// scale until its pages have arrived: that wall time is the settle.
     func zoom() -> OnscreenSession.Zoom {
         var gesture: [Double] = []
         var settle: [Double] = []
@@ -130,22 +141,19 @@ final class PDFSession {
                 deferred += surface.lastDrawTiming.deferredTiles
             }
             let start = clock.now
-            var settled = false
-            while !settled, clock.now - start < .seconds(5) {
+            repeat {
                 draw(zoom: to, originMM: (0, 0))
-                deferred += surface.lastDrawTiming.deferredTiles
-                if !surface.lastDrawTiming.isScaled {
-                    settle.append(surface.lastDrawTiming.workMs)
-                    settled = true
-                }
+            } while (surface.lastDrawTiming.isScaled || surface.isDrawingPDFPages) && clock.now - start < .seconds(10)
+            if surface.lastDrawTiming.isScaled || surface.isDrawingPDFPages {
+                failures.append("zoom to \(to) never settled")
             }
-            if !settled { failures.append("zoom to \(to) never settled") }
+            settle.append(OnscreenSession.milliseconds(clock.now - start))
         }
         let p99 = gesture.sorted()[Int(Double(gesture.count - 1) * 0.99)]
         print(
-            "zoom: gesture work p99 \(String(format: "%.1f", p99)) ms, settles "
-                + settle.map { String(format: "%.1f ms", $0) }.joined(separator: " and ")
-                + ", \(deferred) pages left to a later frame",
+            "zoom: gesture work p99 \(String(format: "%.1f", p99)) ms, settled with its pages after "
+                + settle.map { String(format: "%.0f ms", $0) }.joined(separator: " and ")
+                + ", \(deferred) page-frames shown before their page arrived",
         )
         return OnscreenSession.Zoom(
             gesture: gesture, settleMs: settle.max() ?? .infinity, deltaMB: 0, deferredTiles: deferred,
@@ -154,11 +162,9 @@ final class PDFSession {
 
     /// The frame at `zoom` with the view's top-left at `originMM` on page 1, read back before it is presented, against
     /// page 1 drawn straight at the frame's scale into one band on the surface's own device
-    /// (`ScoreSurface.referencePixels`). Each frame is drawn twice first, so the one read back is a settled frame drawn
-    /// from the cache.
+    /// (`ScoreSurface.referencePixels`). The frame read back is one drawn after the pages arrived, from the cache.
     func parity(zoom: Double, originMM: (x: Double, y: Double)) throws -> OnscreenSession.Parity {
-        draw(zoom: zoom, originMM: originMM)
-        draw(zoom: zoom, originMM: originMM)
+        complete(zoom: zoom, originMM: originMM)
         var frame = [UInt8](repeating: 0, count: width * height * 4)
         frame.withUnsafeMutableBufferPointer { buffer in
             if let base = buffer.baseAddress { surface.readBackNext(into: base, width: width, height: height) }

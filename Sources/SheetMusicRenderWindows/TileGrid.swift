@@ -72,7 +72,7 @@ struct TileGrid {
 }
 
 /// A rectangle in whole pixels.
-struct PixelRect: Equatable {
+struct PixelRect: Hashable {
     var x: Int
     var y: Int
     var width: Int
@@ -123,6 +123,11 @@ struct TileLRU<Value> {
 
     func contains(_ key: TileKey) -> Bool {
         entries[key] != nil
+    }
+
+    /// The most recently used entry whose key matches, left unmarked; nil when none does.
+    func latest(where matches: (TileKey) -> Bool) -> (key: TileKey, value: Value)? {
+        entries.filter { matches($0.key) }.max { $0.value.lastUse < $1.value.lastUse }.map { ($0.key, $0.value.value) }
     }
 
     /// Whether `extra` more bytes stay within the budget once everything outside `keep` has been evicted for them.

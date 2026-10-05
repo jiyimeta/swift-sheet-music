@@ -73,13 +73,21 @@ struct OffscreenDevice {
     }
 };
 
-/// Page `index` drawn whole on white at `scale` px per DIP into `pixels` (BGRA premultiplied, rows of `width * 4`).
+/// Device loss, whichever API reported it, as the one code the caller handles.
+HRESULT mapLoss(HRESULT hr) {
+    if (hr == D2DERR_RECREATE_TARGET || hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
+        return CD2D_E_RECREATE;
+    }
+    return hr;
+}
+
+/// `width` x `height` pixels of page `index` on white at `scale` px per DIP, starting (`offsetX`, `offsetY`) pixels
+/// into the page, drawn on `offscreen` into `pixels` (BGRA premultiplied, rows of `width * 4`).
 HRESULT renderPixels(
-    cd2d_pdf *pdf, uint32_t index, float scale, uint8_t *pixels, uint32_t width, uint32_t height) {
-    OffscreenDevice offscreen;
-    HRESULT hr = offscreen.create();
+    OffscreenDevice &offscreen, cd2d_pdf *pdf, uint32_t index, float scale, float offsetX, float offsetY,
+    uint8_t *pixels, uint32_t width, uint32_t height) {
     ComPtr<IUnknown> page;
-    if (SUCCEEDED(hr)) hr = cd2d::pdfPage(pdf, index, &page);
+    HRESULT hr = cd2d::pdfPage(pdf, index, &page);
     if (FAILED(hr)) return hr;
     const D2D1_PIXEL_FORMAT format = D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED);
     ComPtr<ID2D1Bitmap1> target;
@@ -92,11 +100,12 @@ HRESULT renderPixels(
     if (SUCCEEDED(hr)) {
         hr = offscreen.context->CreateBitmap(D2D1::SizeU(width, height), nullptr, 0, readbackProperties, &readback);
     }
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr)) return mapLoss(hr);
     offscreen.context->SetTarget(target.Get());
     offscreen.context->BeginDraw();
     offscreen.context->Clear(D2D1::ColorF(1, 1, 1, 1));
-    offscreen.context->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale));
+    offscreen.context->SetTransform(
+        D2D1::Matrix3x2F::Scale(scale, scale) * D2D1::Matrix3x2F::Translation(-offsetX, -offsetY));
     hr = offscreen.renderer->RenderPageToDeviceContext(page.Get(), offscreen.context.Get(), nullptr);
     const HRESULT ended = offscreen.context->EndDraw();
     if (SUCCEEDED(hr)) hr = ended;
@@ -104,7 +113,7 @@ HRESULT renderPixels(
     if (SUCCEEDED(hr)) hr = readback->CopyFromBitmap(nullptr, target.Get(), nullptr);
     D2D1_MAPPED_RECT mapped = {};
     if (SUCCEEDED(hr)) hr = readback->Map(D2D1_MAP_OPTIONS_READ, &mapped);
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr)) return mapLoss(hr);
     for (uint32_t row = 0; row < height; ++row) {
         std::memcpy(pixels + static_cast<size_t>(row) * width * 4, mapped.bits + static_cast<size_t>(row) * mapped.pitch,
                     static_cast<size_t>(width) * 4);
@@ -176,7 +185,40 @@ extern "C" int32_t cd2d_pdf_page_size(cd2d_pdf *pdf, uint32_t index, float *widt
 
 extern "C" int32_t cd2d_pdf_render_pixels(
     cd2d_pdf *pdf, uint32_t page, float scale, uint8_t *pixels, uint32_t width, uint32_t height) {
-    return renderPixels(pdf, page, scale, pixels, width, height);
+    OffscreenDevice offscreen;
+    const HRESULT hr = offscreen.create();
+    if (FAILED(hr)) return hr;
+    return renderPixels(offscreen, pdf, page, scale, 0, 0, pixels, width, height);
+}
+
+struct cd2d_pdf_renderer {
+    OffscreenDevice device;
+};
+
+extern "C" int32_t cd2d_pdf_renderer_create(cd2d_pdf_renderer **out) {
+    *out = nullptr;
+    // A thread with no apartment joins the multithreaded one; the page objects are WinRT's.
+    HRESULT hr = RoInitialize(RO_INIT_MULTITHREADED);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) return hr;
+    auto renderer = new cd2d_pdf_renderer();
+    hr = renderer->device.create();
+    if (FAILED(hr)) {
+        delete renderer;
+        return hr;
+    }
+    *out = renderer;
+    return S_OK;
+}
+
+extern "C" void cd2d_pdf_renderer_destroy(cd2d_pdf_renderer *renderer) {
+    delete renderer;
+}
+
+extern "C" int32_t cd2d_pdf_renderer_draw(
+    cd2d_pdf_renderer *renderer, cd2d_pdf *pdf, uint32_t page, float scale, float offset_x, float offset_y,
+    uint8_t *pixels, uint32_t width, uint32_t height) {
+    if (width == 0 || height == 0) return E_INVALIDARG;
+    return renderPixels(renderer->device, pdf, page, scale, offset_x, offset_y, pixels, width, height);
 }
 
 extern "C" int32_t cd2d_pdf_write_png(cd2d_pdf *pdf, uint32_t page, float scale, const uint16_t *path) {
@@ -188,7 +230,7 @@ extern "C" int32_t cd2d_pdf_write_png(cd2d_pdf *pdf, uint32_t page, float scale,
     const uint32_t height = static_cast<uint32_t>(heightDIP * scale + 0.999f);
     if (width == 0 || height == 0) return E_INVALIDARG;
     std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4);
-    hr = renderPixels(pdf, page, scale, pixels.data(), width, height);
+    hr = cd2d_pdf_render_pixels(pdf, page, scale, pixels.data(), width, height);
     if (FAILED(hr)) return hr;
     ComPtr<IWICImagingFactory> wic;
     hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic));

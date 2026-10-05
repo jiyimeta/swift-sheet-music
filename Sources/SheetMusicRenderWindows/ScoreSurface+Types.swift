@@ -1,4 +1,17 @@
 extension ScoreSurface {
+    /// A panel's size in whole pixels at its composition scale, rounded up.
+    static func pixels(_ width: Double, _ height: Double, _ scaleX: Double, _ scaleY: Double) -> (Int, Int) {
+        (max(1, Int((width * scaleX).rounded(.up))), max(1, Int((height * scaleY).rounded(.up))))
+    }
+
+    static func milliseconds(_ duration: Duration) -> Double {
+        Double(duration.components.seconds) * 1000 + Double(duration.components.attoseconds) / 1e15
+    }
+
+    static func check(_ hresult: Int32, _ step: String) throws {
+        guard hresult == 0 else { throw Failure(step: step, hresult: hresult) }
+    }
+
     /// What one frame shows.
     public struct Frame {
         /// Pixels per document millimetre on the swap chain: zoom × composition scale × 96 / 25.4.

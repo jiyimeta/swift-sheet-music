@@ -197,6 +197,24 @@ int32_t cd2d_pdf_render_pixels(
 /// `cd2d_pdf_render_pixels`, written as PNG to `path` (UTF-16, NUL-terminated).
 int32_t cd2d_pdf_write_png(cd2d_pdf *pdf, uint32_t page, float scale, const uint16_t *path);
 
+typedef struct cd2d_pdf_renderer cd2d_pdf_renderer;
+
+/// A device of its own for drawing PDF pages away from the UI thread: hardware, or WARP where there is none. Create it,
+/// draw with it and destroy it on one thread, which it joins to the multithreaded apartment if that thread has none.
+int32_t cd2d_pdf_renderer_create(cd2d_pdf_renderer **renderer);
+void cd2d_pdf_renderer_destroy(cd2d_pdf_renderer *renderer);
+/// `width` x `height` pixels of page `page` at `scale` pixels per DIP, starting (`offset_x`, `offset_y`) pixels into
+/// the page, drawn on white into `pixels` (BGRA premultiplied, rows of `width * 4` bytes). A lost device reports
+/// CD2D_E_RECREATE: destroy the renderer and make another.
+int32_t cd2d_pdf_renderer_draw(
+    cd2d_pdf_renderer *renderer, cd2d_pdf *pdf, uint32_t page, float scale, float offset_x, float offset_y,
+    uint8_t *pixels, uint32_t width, uint32_t height);
+/// A band holding `pixels` (BGRA premultiplied, `width` x `height`, rows of `width * 4` bytes) on the surface's device,
+/// ready to blit — a page drawn on another thread. Release it with `cd2d_band_release`. Device loss reports
+/// CD2D_E_RECREATE.
+int32_t cd2d_band_from_pixels(
+    cd2d_surface *surface, uint32_t width, uint32_t height, const uint8_t *pixels, cd2d_band **band);
+
 #ifdef __cplusplus
 }
 #endif

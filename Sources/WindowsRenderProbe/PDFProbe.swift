@@ -8,9 +8,11 @@ import WinSDK
 /// back against the page drawn straight at 100, 200 and 800 % — the last past the page cap, where a stretched bitmap
 /// would show — and after a device loss.
 ///
-/// Times are reported, not gated: a PDF page costs what its content costs, so they say what this file costs. The checks
-/// are the ones a wrong cache would fail: parity, the cache staying within its budget through the scroll, the device
-/// coming back, and no frame failing. Writes `<out dir>/pdf.json` and exits 1 when a check fails.
+/// The pages are drawn on the surface's worker thread, so what is gated of the time is a frame's own work (uploads and
+/// blits) through the scroll and the gesture; how long the pages take to arrive — the first frame, the settles — is
+/// reported, since a PDF page costs what its content costs. The other checks are the ones a wrong cache would fail:
+/// parity, the cache staying within its budget, the device coming back, and no frame failing. Writes
+/// `<out dir>/pdf.json` and exits 1 when a check fails.
 struct PDFProbe {
     let pdfPath: String
     let outputDirectory: URL
@@ -23,7 +25,7 @@ struct PDFProbe {
         print("pdf: \(session.pageCount) pages, opened in \(format(session.openMs)) ms")
 
         let firstFrameMs = session.firstFrame()
-        print("first frame: \(format(firstFrameMs)) ms")
+        print("first frame with its pages: \(format(firstFrameMs)) ms")
         let scroll = session.scroll(stepPx: 60)
         let zoom = session.zoom()
         let parity = try [(1.0, 0.0, 0.0), (2.0, 40.0, 60.0), (8.0, 70.0, 120.0)].map {
@@ -35,6 +37,9 @@ struct PDFProbe {
             OnscreenProbe.Gate.atMost(
                 "cache through the scroll <= 64 MB", Double(scroll.maxCacheBytes) / 1_048_576, 64,
             ),
+            // The pages are drawn on the worker: a frame only uploads and blits, so the scroll keeps the frame rate.
+            OnscreenProbe.Gate.atMost("scroll work p99 <= 16.7 ms", percentile(scroll.work, 0.99), 16.7),
+            OnscreenProbe.Gate.atMost("zoom gesture work p99 <= 16.7 ms", percentile(zoom.gesture, 0.99), 16.7),
             OnscreenProbe.Gate(
                 name: "device loss recreated the device", value: "\(deviceLoss.recreated)",
                 passed: deviceLoss.recreated,
@@ -61,7 +66,7 @@ struct PDFProbe {
           "pages": \(session.pageCount), "openMs": \(format(session.openMs)), "firstFrameMs": \(format(firstFrameMs)),
           "scroll": {"frames": \(scroll.work.count), "p50": \(format(percentile(scroll.work, 0.5))), \
         "p99": \(format(percentile(scroll.work, 0.99))), "max": \(format(scroll.work.max() ?? 0)), \
-        "pagesDrawn": \(scroll.drawn), "readAhead": \(scroll.readAhead), \
+        "pagesUploaded": \(scroll.drawn), "lateFrames": \(scroll.late), \
         "maxCacheMB": \(format(Double(scroll.maxCacheBytes) / 1_048_576)), \
         "privateBytesDeltaMB": \(format(scroll.privateDeltaMB))},
           "zoom": {"gestureP99": \(format(percentile(zoom.gesture, 0.99))), "settleMs": \(format(zoom.settleMs)), \

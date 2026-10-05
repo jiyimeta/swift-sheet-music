@@ -33,6 +33,10 @@ public final class ScoreSurface {
     /// (column and row 0). Only one of `tiles` and `pdfRasters` holds anything, so they share the one budget.
     var pdf: ScorePDF?
     var pdfRasters = TileLRU<PDFRaster>(capacityBytes: ScoreSurface.cacheBytes)
+    /// Draws the PDF's pages off this thread (`ScoreSurface+PDF.swift`).
+    var pdfWorker: PDFPageWorker?
+    /// The PDF's pages Windows could not draw (damaged content): shown blank, not asked for again until `setPDF`.
+    public internal(set) var unreadablePDFPages: Set<Int> = []
     /// The `fillPath` overlays' shapes, by overlay id.
     var shapes = OverlayShapeCache()
     /// The scale the tiles on screen were rasterized at, while a gesture (and its settle delay) runs.
@@ -61,6 +65,7 @@ public final class ScoreSurface {
     }
 
     deinit {
+        pdfWorker?.stop()
         releaseAllTiles()
         shapes.releaseAll()
         if let surface { cd2d_surface_destroy(surface) }
@@ -143,7 +148,10 @@ public final class ScoreSurface {
     /// a page without spans is walked whole for every tile.
     package func setPages(_ pages: [EncodablePage], spans: [[SystemSpan]]) {
         releaseAllTiles()
+        pdfWorker?.stop()
+        pdfWorker = nil
         pdf = nil
+        unreadablePDFPages = []
         self.pages = pages
         self.spans = pages.indices.map { $0 < spans.count ? spans[$0] : [] }
         settledPxPerMM = nil
@@ -384,17 +392,5 @@ public final class ScoreSurface {
             ((frame.pageOrigins[page].x - frame.originMM.x) * frame.pxPerMM).rounded(),
             ((frame.pageOrigins[page].y - frame.originMM.y) * frame.pxPerMM).rounded(),
         )
-    }
-
-    private static func pixels(_ width: Double, _ height: Double, _ scaleX: Double, _ scaleY: Double) -> (Int, Int) {
-        (max(1, Int((width * scaleX).rounded(.up))), max(1, Int((height * scaleY).rounded(.up))))
-    }
-
-    private static func milliseconds(_ duration: Duration) -> Double {
-        Double(duration.components.seconds) * 1000 + Double(duration.components.attoseconds) / 1e15
-    }
-
-    static func check(_ hresult: Int32, _ step: String) throws {
-        guard hresult == 0 else { throw Failure(step: step, hresult: hresult) }
     }
 }

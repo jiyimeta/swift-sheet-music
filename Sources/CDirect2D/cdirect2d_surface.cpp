@@ -309,6 +309,30 @@ extern "C" int32_t cd2d_band_begin(
     return S_OK;
 }
 
+extern "C" int32_t cd2d_band_from_pixels(
+    cd2d_surface *surface, uint32_t width, uint32_t height, const uint8_t *pixels, cd2d_band **out) {
+    *out = nullptr;
+    if (!hasDevice(surface)) return CD2D_E_RECREATE;
+    auto band = new cd2d_band();
+    band->width = width;
+    band->height = height;
+    band->generation = surface->generation;
+    band->canvas.resources = surface->resources;
+    // Not a target: nothing draws into it after the upload, only the frame draws it.
+    const D2D1_BITMAP_PROPERTIES1 properties = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_NONE, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+        96.0f, 96.0f);
+    const HRESULT hr =
+        surface->context->CreateBitmap(D2D1::SizeU(width, height), pixels, width * 4, properties, &band->bitmap);
+    if (FAILED(hr)) {
+        delete band;
+        return mapDeviceLoss(hr);
+    }
+    surface->bandBytes += static_cast<uint64_t>(width) * height * 4;
+    *out = band;
+    return S_OK;
+}
+
 extern "C" int32_t cd2d_band_end(cd2d_surface *surface, cd2d_band *band) {
     band->canvas.drawing = false;
     HRESULT hr = surface->context->EndDraw();
