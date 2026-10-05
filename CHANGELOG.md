@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-10-05
+
 ### Added
 
 - **`ScorePDF`** (Windows, `SheetMusicRenderWindows`) — a PDF opened by Windows' own PDF engine
