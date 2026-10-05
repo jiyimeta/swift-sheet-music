@@ -6,14 +6,17 @@ import SheetMusicLayout
 
 /// What the writer tests share: the bundled fonts, the metrics table's provider, and one page walked under it.
 enum WriterFixtures {
-    /// - Parameter system: the platform UI face's files, as a Windows host hands them over; none by default.
+    /// - Parameters:
+    ///   - system: the platform UI face's files, as a Windows host hands them over; none by default.
+    ///   - fallback: the host's fallback spans for a line; none by default.
     static func fonts(
-        system: @escaping @Sendable (FontWeight, Bool) -> Data? = { _, _ in nil },
+        system: @escaping @Sendable (FontWeight, Bool) -> ScorePDFFontFile? = { _, _ in nil },
+        fallback: @escaping @Sendable (ScorePDFTextLine) -> [ScorePDFFallbackSpan] = { _ in [] },
     ) throws -> ScorePDFFonts {
         try ScorePDFFonts(
             smufl: BundledFonts.data("Bravura.otf"), roman: BundledFonts.data("Edwin-Roman.otf"),
             bold: BundledFonts.data("Edwin-Bold.otf"), italic: BundledFonts.data("Edwin-Italic.otf"),
-            boldItalic: BundledFonts.data("Edwin-BdIta.otf"), system: system,
+            boldItalic: BundledFonts.data("Edwin-BdIta.otf"), system: system, fallback: fallback,
         )
     }
 
@@ -24,9 +27,11 @@ enum WriterFixtures {
 
     /// `commands` walked on an A4 page under the table's provider: the content stream, and the resources it used.
     static func walk(
-        _ commands: [DrawCommand], system: @escaping @Sendable (FontWeight, Bool) -> Data? = { _, _ in nil },
+        _ commands: [DrawCommand],
+        system: @escaping @Sendable (FontWeight, Bool) -> ScorePDFFontFile? = { _, _ in nil },
+        fallback: @escaping @Sendable (ScorePDFTextLine) -> [ScorePDFFallbackSpan] = { _ in [] },
     ) throws -> (content: String, resources: PDFResources) {
-        let resources = try PDFResources(fonts: fonts(system: system))
+        let resources = try PDFResources(fonts: fonts(system: system, fallback: fallback))
         var walker = PDFPageWalker(resources: resources, pageHeightMM: 297)
         try FontMetrics.$scopedProvider.withValue(tableProvider()) {
             walker.walk(commands)

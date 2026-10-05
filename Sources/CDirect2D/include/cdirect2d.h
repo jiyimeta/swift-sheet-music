@@ -119,12 +119,31 @@ int32_t cd2d_measure_carets(
     const uint16_t *text, uint32_t length, float *offsets);
 
 /// The path of the font file `cd2d_fill_text` draws `family` from at `weight` and slant — the face it resolves, as
-/// `cd2d_fill_glyph` describes — into `path` (`capacity` UTF-16 units, NUL included), and its length without the NUL
-/// into `length` even when `path` is too short (ERROR_INSUFFICIENT_BUFFER). E_NOTIMPL when the face is not one file of
-/// its own (a collection's member, or several files); E_NOINTERFACE when the file is not on disk.
+/// `cd2d_fill_glyph` describes — into `path` (`capacity` UTF-16 units, NUL included), its length without the NUL into
+/// `length` even when `path` is too short (ERROR_INSUFFICIENT_BUFFER), and the face's index in its file (a collection's
+/// member; 0 for a single font) into `face_index`. E_NOTIMPL when the face spans several files; E_NOINTERFACE when the
+/// file is not on disk.
 int32_t cd2d_font_file_path(
     cd2d_resources *resources, const uint16_t *family, int32_t weight, int32_t italic, uint16_t *path,
-    uint32_t capacity, uint32_t *length);
+    uint32_t capacity, uint32_t *length, uint32_t *face_index);
+
+/// One run of `cd2d_text_font_runs`: the UTF-16 range of the text a glyph run covers, and the file of the face it is
+/// drawn in.
+typedef struct cd2d_font_run {
+    uint32_t start;
+    uint32_t length;
+    /// The face's index in its file (a collection's member); 0 for a single font.
+    uint32_t faceIndex;
+    /// The file's path, NUL-terminated; empty when the face is not a file on disk or its path does not fit.
+    uint16_t path[260];
+} cd2d_font_run;
+
+/// The glyph runs `cd2d_fill_text` draws `text` in, with the file each one's face comes from: the family's own face,
+/// or the one DirectWrite's system font fallback chose for characters the family lacks. At most `capacity` runs into
+/// `runs`, how many into `count`.
+int32_t cd2d_text_font_runs(
+    cd2d_resources *resources, const uint16_t *family, int32_t weight, int32_t italic, const uint16_t *text,
+    uint32_t length, cd2d_font_run *runs, uint32_t capacity, uint32_t *count);
 
 /// Ends drawing and writes a WIC canvas as a PNG.
 int32_t cd2d_write_png(cd2d_canvas *canvas, const uint16_t *path);

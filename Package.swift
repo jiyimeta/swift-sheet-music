@@ -701,8 +701,10 @@ if isWindows {
             // SheetMusicCore and SheetMusicLayout: the public API speaks their types (`Score`, `LayoutDocument`, the
             // layout policies), and `WindowsFontMetricsProvider` is a `FontMetricsProvider`. SheetMusicBridgeCore is
             // not a product, so none of its types may appear in a public signature here.
+            // SheetMusicPDFWriter: `ScorePDFFonts.windows()`, the screen's faces for a PDF of the score.
             dependencies: [
                 "CDirect2D", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout", "SheetMusicPages",
+                "SheetMusicPDFWriter",
             ],
             // The five faces the walker draws with and the metrics table the layout measures them by, with the fonts'
             // licenses (`BundledResources.swift`). `.copy` of the folder rather than `.process`: nothing here has a
@@ -717,7 +719,7 @@ if isWindows {
             name: "SheetMusicRenderWindowsTests",
             dependencies: [
                 "SheetMusicRenderWindows", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout",
-                "SheetMusicPages",
+                "SheetMusicPages", "SheetMusicPDFWriter",
             ],
         ),
     ]

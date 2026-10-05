@@ -4,14 +4,23 @@ import SheetMusicFoundation
 /// vertical metrics, each glyph's advance, and the Unicode `cmap` — read from the table directory and `head`, `hhea`,
 /// `maxp`, `hmtx` and `cmap` (format 12 when the font has one, which Bravura's private-use repertoire needs, else
 /// format 4) — and, from the optional `OS/2`, `post` and `name`, whether its license lets it be embedded, its slant and
-/// its PostScript name. Every read is bounds-checked: a font that does not hold together throws `Malformed` rather
-/// than trapping.
+/// its PostScript name. A collection (`ttcf`, the CJK fonts' usual shape) is read at one of its faces. Every read is
+/// bounds-checked: a font that does not hold together throws `Malformed` rather than trapping.
 struct OpenTypeFont {
     struct Malformed: Error, Equatable {
         let reason: String
     }
 
+    /// Where a table sits in `data`.
+    struct TableRecord {
+        let offset: Int
+        let length: Int
+    }
+
+    /// The whole file — the collection, for a collection's face.
     let data: Data
+    /// The face's tables by tag, at their offsets in `data`.
+    let tables: [String: TableRecord]
     let unitsPerEm: Int
     /// `head`'s xMin, yMin, xMax, yMax in font units.
     let bbox: (minX: Int, minY: Int, maxX: Int, maxY: Int)
@@ -28,21 +37,34 @@ struct OpenTypeFont {
     private let advances: [Int]
     private let cmap: [UInt32: Int]
 
-    init(_ data: Data) throws {
+    /// - Parameter faceIndex: which face of a collection to read; a single font has only face 0.
+    init(_ data: Data, faceIndex: Int = 0) throws {
         let read = BigEndianReader(bytes: [UInt8](data))
-        let version = try read.u32(0)
+        var directory = 0
+        if try read.u32(0) == 0x7474_6366 { // "ttcf"
+            let faces = try read.u32(8)
+            guard faceIndex >= 0, faceIndex < faces else { throw Malformed(reason: "no face \(faceIndex)") }
+            directory = try read.u32(12 + 4 * faceIndex)
+        } else if faceIndex != 0 {
+            throw Malformed(reason: "no face \(faceIndex)")
+        }
+        let version = try read.u32(directory)
         guard version == 0x0001_0000 || version == 0x4F54_544F else { // TrueType 1.0 or "OTTO"
             throw Malformed(reason: "not an OpenType font")
         }
-        var tables: [String: Int] = [:]
-        for index in try 0 ..< (read.u16(4)) {
-            let record = 12 + 16 * index
+        var tables: [String: TableRecord] = [:]
+        for index in try 0 ..< (read.u16(directory + 4)) {
+            let record = directory + 12 + 16 * index
             let tag = try String(read.slice(record, 4).map { Character(Unicode.Scalar($0)) })
-            tables[tag] = try read.u32(record + 8)
+            let table = try TableRecord(offset: read.u32(record + 8), length: read.u32(record + 12))
+            guard table.offset + table.length <= read.bytes.count else {
+                throw Malformed(reason: "\(tag) past the end")
+            }
+            tables[tag] = table
         }
         func table(_ tag: String) throws -> Int {
-            guard let offset = tables[tag] else { throw Malformed(reason: "no \(tag) table") }
-            return offset
+            guard let record = tables[tag] else { throw Malformed(reason: "no \(tag) table") }
+            return record.offset
         }
         let head = try table("head")
         let hhea = try table("hhea")
@@ -59,9 +81,12 @@ struct OpenTypeFont {
         advances = try (0 ..< glyphCount).map { try read.u16(hmtx + 4 * min($0, metricCount - 1)) }
         cmap = try Self.unicodeMap(read, table: table("cmap"))
         hasCFFOutlines = version == 0x4F54_544F
-        fsType = try tables["OS/2"].map { try read.u16($0 + 8) } ?? 0
-        italicAngle = try tables["post"].map { try Double(read.i16($0 + 4)) + Double(read.u16($0 + 6)) / 65536 } ?? 0
-        postScriptName = try tables["name"].flatMap { try Self.postScriptName(read, table: $0) }
+        fsType = try tables["OS/2"].map { try read.u16($0.offset + 8) } ?? 0
+        italicAngle = try tables["post"].map { post in
+            try Double(read.i16(post.offset + 4)) + Double(read.u16(post.offset + 6)) / 65536
+        } ?? 0
+        postScriptName = try tables["name"].flatMap { try Self.postScriptName(read, table: $0.offset) }
+        self.tables = tables
         self.data = data
     }
 

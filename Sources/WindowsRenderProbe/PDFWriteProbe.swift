@@ -25,27 +25,14 @@ struct PDFWriteProbe {
             score: score, pageWidthMM: 210, pageHeightMM: 297, options: ScorePageOptions(mode: .page),
         )
         let fontFiles = ScoreSurface.bundledFontFiles
-        func font(_ name: String) throws -> Data {
-            guard let path = fontFiles.first(where: { $0.hasSuffix(name) }) else { throw ProbeError("no \(name)") }
-            return try Data(contentsOf: URL(fileURLWithPath: path))
-        }
-        let fonts = try ScorePDFFonts(
-            smufl: font("Bravura.otf"), roman: font("Edwin-Roman.otf"), bold: font("Edwin-Bold.otf"),
-            italic: font("Edwin-Italic.otf"), boldItalic: font("Edwin-BdIta.otf"),
-            system: { weight, isItalic in
-                let file = windowsSystemFontFile(weight: weight, isItalic: isItalic)
-                let size = file.map { "\($0.count) bytes" } ?? "none"
-                print("system face \(weight)\(isItalic ? " italic" : ""): \(size)")
-                return file
-            },
-        )
         let clock = ContinuousClock()
         let start = clock.now
-        let data = try ScorePDFWriter.write(pages, fonts: fonts, title: "probe")
+        let data = try ScorePDFWriter.write(pages, fonts: ScorePDFFonts.windows(), title: "probe")
         let writeMs = OnscreenSession.milliseconds(clock.now - start)
         let pdfURL = outputDirectory.appendingPathComponent("score.pdf")
         try data.write(to: pdfURL)
         print("wrote \(pages.pageCount) pages, \(data.count) bytes in \(String(format: "%.1f", writeMs)) ms")
+        print("fonts: \(Self.baseFonts(in: data).joined(separator: ", "))")
 
         let pdf = try ScorePDF(path: pdfURL.path)
         var passed = pdf.pageCount == pages.pageCount
@@ -79,6 +66,14 @@ struct PDFWriteProbe {
             passed = passed && comparison.missingFromB <= 2 && comparison.missingFromA <= 2
         }
         return passed
+    }
+
+    /// The `/FontName`s of the PDF's font descriptors — the faces it embeds — in the order written.
+    private static func baseFonts(in pdf: Data) -> [String] {
+        let text = String(pdf.map { Character(Unicode.Scalar($0)) })
+        return text.components(separatedBy: "/FontDescriptor /FontName /").dropFirst().map { tail in
+            String(tail.prefix { $0 != " " })
+        }
     }
 }
 
