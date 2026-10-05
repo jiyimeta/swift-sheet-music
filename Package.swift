@@ -101,6 +101,8 @@ var products: [Product] = [
     // A score cut into pages for a host that draws or writes them (`ScorePages.compute`, its options, the page
     // geometry). Portable: the Windows surface re-exports it, and a PDF writer reads the same pages.
     .library(name: "SheetMusicPages", targets: ["SheetMusicPages"]),
+    // Writes those pages as a vector PDF with their fonts embedded, in Swift alone.
+    .library(name: "SheetMusicPDFWriter", targets: ["SheetMusicPDFWriter"]),
 ]
 
 var targets: [Target] = [
@@ -300,6 +302,21 @@ var targets: [Target] = [
     .testTarget(
         name: "SheetMusicPagesTests",
         dependencies: ["SheetMusicPages", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
+    ),
+    // A PDF of a score's pages, written in Swift: the fonts embedded whole, each page's draw-program commands as a
+    // content stream. Portable — Windows exports with it, and Android can in place of its Kotlin walk.
+    .target(
+        name: "SheetMusicPDFWriter",
+        dependencies: [
+            "SheetMusicPages", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicFoundation", "SheetMusicLayout",
+            "SheetMusicZip",
+        ],
+    ),
+    // Reads the bundled fonts from `Sources/SheetMusicRenderWindows/Resources` by path, and the writer's output back
+    // through `SheetMusicPDF`'s Swift reader.
+    .testTarget(
+        name: "SheetMusicPDFWriterTests",
+        dependencies: ["SheetMusicPDFWriter", "SheetMusicBridgeCore", "SheetMusicPages", "SheetMusicPDF"],
     ),
     .testTarget(
         name: "SheetMusicAudioCoreTests",

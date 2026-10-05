@@ -7,7 +7,7 @@
         /// framework with `COMPRESSION_ZLIB` (raw DEFLATE — no header, no
         /// checksum). Destination buffer is sized with a small head-room to
         /// tolerate low-entropy expansion.
-        static func compress(_ input: Data) throws -> Data {
+        package static func compress(_ input: Data) throws -> Data {
             if input.isEmpty {
                 return Data()
             }

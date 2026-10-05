@@ -8,7 +8,7 @@
     extension Deflate {
         /// Compress `input` to raw DEFLATE bytes using system zlib with
         /// `windowBits = -15` (raw DEFLATE — no zlib header).
-        static func compress(_ input: Data) throws -> Data {
+        package static func compress(_ input: Data) throws -> Data {
             if input.isEmpty {
                 return Data()
             }
