@@ -19,6 +19,12 @@ and this project adheres to
   the raw `ScoreHitTester.hitTest(at:)` answer for a tap, as the `ScoreItemIDCodec` item its target names
   (`selectableItem`), re-addressed past the cached layout's hidden staves like `nativeEditingHitTest`. That verb's
   policy drops clefs, engraved elements and text on purpose; a host that selects the thing clicked reads this beside it.
+- **`AndroidPlaybackEngine.replaceScore(scoreHandle)`** (Android) — adopts an edited score without rebuilding the
+  synth: the SoundFont presets, the metronome synth, the output stream and every mixer setting stay, and only the
+  player and the click sequence are rebuilt from the re-rendered score. Returns a `ScoreReplacementOutcome`
+  (`SWAPPED_IN_PLACE` / `FULLY_PREPARED` / `IGNORED_WHILE_EXPORTING`), mirroring Apple's
+  `PlaybackEngine.replaceScore(with:)`: a changed channel layout, or an engine with nothing prepared, falls back to a
+  full `prepare`. The transport returns to the start and the loop is cleared, as after `prepare`.
 
 ### Fixed
 

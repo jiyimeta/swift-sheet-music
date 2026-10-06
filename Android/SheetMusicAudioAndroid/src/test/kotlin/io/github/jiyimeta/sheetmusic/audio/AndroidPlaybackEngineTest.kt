@@ -22,6 +22,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewPlan
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreReplacementOutcome
 import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 import io.github.jiyimeta.wirelet.BinaryWriter
@@ -272,6 +273,107 @@ class AndroidPlaybackEngineTest {
         val engine = newEngineForTests()
         engine.clearCursor()
         assertNull(engine.currentCursor.value)
+    }
+
+    // replaceScore — adopting an edited score without rebuilding the synth
+
+    /** A sequence the fake player can tell apart from [minimalSmf]. */
+    private val editedSmf: ByteArray = byteArrayOf(1, 2, 3)
+
+    private fun twoStaffBridge() = FakeJniBridge(
+        timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+        staffParamsResult = twoStavesPayload(),
+        renderMidiResult = minimalSmf,
+    )
+
+    @Test
+    fun `replaceScore keeps the synth and the mixer and loads the edited sequence`() = runTest {
+        val bridge = twoStaffBridge()
+        val synths = mutableListOf<FakeSynthDriver>()
+        val player = RecordingBindings()
+        val engine = tracked(bridge = bridge, playerBindings = player, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        engine.setStaffVolume(partIndex = 1, ordinal = 0, volume = 0.25f)
+        val synthsAfterPrepare = synths.size
+
+        bridge.renderMidiResult = editedSmf
+        bridge.timelineSummaryResult = longArrayOf(960L, 3_500_000L, 480L)
+        val outcome = engine.replaceScore(1L)
+
+        assertEquals(ScoreReplacementOutcome.SWAPPED_IN_PLACE, outcome)
+        assertEquals("no synth was rebuilt — no SoundFont was reloaded", synthsAfterPrepare, synths.size)
+        assertTrue("the player sounds the edited sequence", player.loadCalls.last().contentEquals(editedSmf))
+        assertEquals("the mixer setting survives", 0.25f, engine.mixerChannels.value[1].volume, 0.0001f)
+        assertEquals(3.5, engine.totalTimeSeconds.value, 0.001)
+        assertEquals(PlaybackState.PREPARED, engine.state.value)
+    }
+
+    @Test
+    fun `replaceScore re-prepares fully when a staff is added`() = runTest {
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+        )
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        val synthsAfterPrepare = synths.size
+
+        bridge.staffParamsResult = twoStavesPayload()
+        val outcome = engine.replaceScore(1L)
+
+        assertEquals(ScoreReplacementOutcome.FULLY_PREPARED, outcome)
+        assertTrue("a synth programmed for one strip cannot sound two", synths.size > synthsAfterPrepare)
+        assertEquals(2, engine.mixerChannels.value.size)
+        assertEquals(PlaybackState.PREPARED, engine.state.value)
+    }
+
+    @Test
+    fun `replaceScore re-prepares fully when a strip's program changes`() = runTest {
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+        )
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        val synthsAfterPrepare = synths.size
+
+        bridge.staffParamsResult = encodeStaffParamsArray(listOf(StaffParams(0, 0, 40, false, 1L)))
+        val outcome = engine.replaceScore(1L)
+
+        assertEquals(ScoreReplacementOutcome.FULLY_PREPARED, outcome)
+        assertTrue(synths.size > synthsAfterPrepare)
+    }
+
+    @Test
+    fun `replaceScore before any prepare is a full prepare`() = runTest {
+        val engine = tracked(bridge = twoStaffBridge())
+
+        val outcome = engine.replaceScore(1L)
+
+        assertEquals(ScoreReplacementOutcome.FULLY_PREPARED, outcome)
+        assertEquals(PlaybackState.PREPARED, engine.state.value)
+        assertEquals(2, engine.mixerChannels.value.size)
+    }
+
+    @Test
+    fun `replaceScore that cannot read the edited score leaves the prepared one in place`() = runTest {
+        val bridge = twoStaffBridge()
+        val player = RecordingBindings()
+        val engine = tracked(bridge = bridge, playerBindings = player)
+        engine.prepare(1L)
+        val loads = player.loadCalls.size
+
+        bridge.renderMidiResult = byteArrayOf()
+        val thrown = runCatching { engine.replaceScore(1L) }.exceptionOrNull()
+
+        assertTrue(thrown is AudioBackendException.InvalidScoreHandle)
+        assertEquals(PlaybackState.PREPARED, engine.state.value)
+        assertEquals("the player was not replaced", loads, player.loadCalls.size)
+        assertEquals(2.0, engine.totalTimeSeconds.value, 0.001)
     }
 
     // T37 — prepare
