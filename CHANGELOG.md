@@ -20,6 +20,13 @@ and this project adheres to
   (`selectableItem`), re-addressed past the cached layout's hidden staves like `nativeEditingHitTest`. That verb's
   policy drops clefs, engraved elements and text on purpose; a host that selects the thing clicked reads this beside it.
 
+### Fixed
+
+- **The Android draw program tints a selected clef or engraved element** — a signature, a barline, a tie, a
+  dynamic… Its selection tint bracketed only notes, rests and tuplets, so a clef or mark a click had selected drew
+  black. It now attaches the tint the way Apple's renderer does: a clef by `.clef(anchor)`, everything else by
+  `LayoutElement.elementItemID`. A tinted mark in the "Show Invisible" pass restores that pass's gray after itself.
+
 ## [4.3.0] - 2026-10-05
 
 ### Added

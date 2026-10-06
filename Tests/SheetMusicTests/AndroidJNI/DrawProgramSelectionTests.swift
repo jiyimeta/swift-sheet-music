@@ -368,6 +368,110 @@
             #expect(brackets.count == 4)
         }
 
+        // MARK: - Clefs and engraved marks
+
+        /// Every element `buildCommands` walks in the first measure — the visible ones, then the invisible
+        /// container's.
+        private static func firstMeasureElements(_ doc: LayoutDocument) -> [LayoutElement] {
+            guard let measure = doc.systems.first?.measures.first else { return [] }
+            return measure.elements + measure.invisibleElements
+        }
+
+        /// The single tint bracket in `commands` — its open, the commands it holds, its close and the program with
+        /// both removed — or `nil` when there is not exactly one.
+        private static func bracketed(
+            _ commands: [DrawCommand],
+        ) -> (inner: ArraySlice<DrawCommand>, close: DrawCommand, stripped: [DrawCommand])? {
+            let opens = setColorIndices(commands, argb: tintArgb)
+            guard opens.count == 1, let open = opens.first,
+                  let close = commands[(open + 1)...].firstIndex(where: {
+                      if case .setColor = $0 { return true }
+                      return false
+                  })
+            else { return nil }
+            var stripped = commands
+            stripped.remove(at: close)
+            stripped.remove(at: open)
+            return (commands[(open + 1) ..< close], commands[close], stripped)
+        }
+
+        private static func glyphCodepoints(_ commands: ArraySlice<DrawCommand>) -> [UInt32] {
+            commands.compactMap {
+                if case let .glyph(codepoint, _, _, _, _) = $0 { return codepoint }
+                return nil
+            }
+        }
+
+        /// A selected clef draws in the selection color, the way Apple's renderer attaches a clef's ink to
+        /// `.clef(anchor)` — the identity `ScoreHitTester` reports a click on it as, so what a click selects is
+        /// what a selection tints. The bracket holds the clef glyph and nothing else, and removing it gives back
+        /// the untinted program: the tint repaints, it never moves or adds ink.
+        @Test("a selected clef is tinted and nothing else is")
+        func selectedClefIsTinted() throws {
+            let doc = Self.layout(Self.plainQuarterChordScore())
+            let anchors = Self.firstMeasureElements(doc).compactMap { element -> ClefAnchor? in
+                if case let .clef(_, _, anchor?) = element { return anchor }
+                return nil
+            }
+            let anchor = try #require(anchors.first)
+            #expect(anchor == .staffDefault(Self.staff0))
+
+            let untinted = LayoutBridge.buildCommands(layout: doc)
+            let tinted = LayoutBridge.buildCommands(layout: doc, tint: (argb: Self.tintArgb, ids: [.clef(anchor)]))
+            let bracket = try #require(Self.bracketed(tinted))
+            #expect(Self.glyphCodepoints(bracket.inner) == [0xE050]) // SMuFL gClef
+            #expect(bracket.close == .setColor(argb: LayoutBridge.blackARGB))
+            #expect(bracket.stripped == untinted)
+        }
+
+        /// A selected engraved element — here the time signature — draws in the selection color through
+        /// `LayoutElement.elementItemID`, the identity a click on it selects.
+        @Test("a selected time signature is tinted")
+        func selectedTimeSignatureIsTinted() throws {
+            let doc = Self.layout(Self.plainQuarterChordScore())
+            let signature = try #require(Self.firstMeasureElements(doc).first {
+                if case .timeSignature = $0 { return true }
+                return false
+            })
+            let id = try #require(signature.elementItemID)
+
+            let tinted = LayoutBridge.buildCommands(layout: doc, tint: (argb: Self.tintArgb, ids: [id]))
+            let bracket = try #require(Self.bracketed(tinted))
+            #expect(Self.glyphCodepoints(bracket.inner) == [0xE084, 0xE084]) // SMuFL timeSig4 over timeSig4
+            #expect(bracket.close == .setColor(argb: LayoutBridge.blackARGB))
+        }
+
+        /// A selected mark parked in the invisible container ("Show Invisible") restores the pass's gray after its
+        /// tint, not black — otherwise every invisible element drawn after it would lose its gray.
+        @Test("a selected invisible mark hands the invisible pass its gray back")
+        func selectedInvisibleMarkRestoresGray() throws {
+            let voice = Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4, visible: false)),
+                .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])),
+            ])
+            let score = Score(
+                division: 480,
+                parts: [Part(
+                    id: "1", instrument: Instrument(id: "x"),
+                    staves: [Staff(measures: [Measure(voices: [voice])])],
+                )],
+            )
+            let doc = LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(showsInvisibleElements: true), availableWidth: 1200,
+            )
+            let invisible = try #require(doc.systems.first?.measures.first?.invisibleElements)
+            let signature = try #require(invisible.first {
+                if case .timeSignature = $0 { return true }
+                return false
+            })
+            let id = try #require(signature.elementItemID)
+
+            let tinted = LayoutBridge.buildCommands(layout: doc, tint: (argb: Self.tintArgb, ids: [id]))
+            let bracket = try #require(Self.bracketed(tinted))
+            #expect(Self.glyphCodepoints(bracket.inner) == [0xE084, 0xE084])
+            #expect(bracket.close == .setColor(argb: LayoutBridge.invisibleARGB))
+        }
+
         /// Round-trips the wire payload `LayoutBridge.buildCommands(layout:tint:)`'s future JNI caller will
         /// send: a color plus an unordered ID set. Exercises all 4 `ScoreItemID` cases so a case this codec
         /// mishandles doesn't hide behind ones it handles correctly.

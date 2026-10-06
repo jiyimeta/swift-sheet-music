@@ -269,6 +269,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     metrics: context,
                     showsInvisible: true,
                     tint: tint,
+                    ambientArgb: invisibleARGB,
                     into: &out,
                 )
             }
@@ -281,6 +282,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 metrics: context,
                 showsInvisible: true,
                 tint: tint,
+                ambientArgb: invisibleARGB,
                 into: &out,
             )
         }
@@ -320,10 +322,19 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // Selection re-encode — see `buildCommands(layout:tint:)`'s doc comment. Threaded down so
         // chord/graceChord/rest/tupletLabel can bracket their own draw commands with `.setColor`.
         tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
+        // The color in force around this element, restored after a selected mark's tint: black, or the invisible
+        // pass's gray so a tinted invisible mark does not turn the rest of that pass black.
+        ambientArgb: UInt32 = LayoutBridge.blackARGB,
         into out: inout [DrawCommand],
     ) {
         let sp = ctx.sp
         let glyphSize = ctx.glyphSize
+        // A selected clef or engraved element takes the selection color, the way Apple's renderer attaches an
+        // element's ink to `elementItemID` and a clef's to `.clef(anchor)` — one predicate for what a click selects
+        // and what a selection tints. Notes, rests and tuplets bracket their own commands below.
+        let markArgb = markTintColor(for: element, tint: tint)
+        if let markArgb { out.append(.setColor(argb: markArgb)) }
+        defer { if markArgb != nil { out.append(.setColor(argb: ambientArgb)) } }
         switch element {
         case let .clef(rawType, origin, _):
             let (codepoint, yOffsetSp) = ClefGlyph.glyph(
