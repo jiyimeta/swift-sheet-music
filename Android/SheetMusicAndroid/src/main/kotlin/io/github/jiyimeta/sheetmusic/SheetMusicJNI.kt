@@ -331,6 +331,17 @@ object SheetMusicJNI {
     }
 
     /**
+     * Every staff's band in the cached layout of [scoreHandle] — the rectangle a host shades to highlight a staff, the
+     * same one Apple hosts shade — as a `[StaffBandWire]` payload: full-score staff address plus document-mm rect, one
+     * per staff per system, widened by [verticalPaddingSp] staff spaces above and below. A hidden staff has no band.
+     * Empty array when the handle is unknown or nothing is cached.
+     */
+    fun nativeStaffBands(scoreHandle: Long, verticalPaddingSp: Double): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeStaffBands(scoreHandle, verticalPaddingSp, arena).toByteArray()
+    }
+
+    /**
      * Resolve the highlight rectangles (mm coordinates) covering a
      * loop region spanning ticks `[fromTick, toTick)`. Returns one
      * rect per intersected system; the rect spans the full staff

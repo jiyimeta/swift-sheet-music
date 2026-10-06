@@ -25,6 +25,13 @@ and this project adheres to
   (`SWAPPED_IN_PLACE` / `FULLY_PREPARED` / `IGNORED_WHILE_EXPORTING`), mirroring Apple's
   `PlaybackEngine.replaceScore(with:)`: a changed channel layout, or an engine with nothing prepared, falls back to a
   full `prepare`. The transport returns to the start and the loop is cleared, as after `prepare`.
+- **`LayoutDocument.staffBands(verticalPaddingSp:)`** (`SheetMusicLayout`) and **`StaffBand`** — every staff's band
+  in every system: from the staff's start to the end of the system's staff lines, over its barline span, widened by
+  the padding above and below. The one implementation of the rectangle a host shades to highlight a staff.
+- **`nativeStaffBands(scoreHandle:verticalPaddingSp:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeStaffBands`) —
+  those bands for the cached layout as `[StaffBandWire]`: the staff in full-score addressing (re-addressed past the
+  cache entry's hidden staves, which have no band) and the rectangle in document millimetres. Empty for an unknown
+  handle or no cached layout.
 
 ### Fixed
 
