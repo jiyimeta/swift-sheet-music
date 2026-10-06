@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`nativeMeasureColumnIDs(scoreHandle:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeMeasureColumnIDs`) — the
+  measure column identities of the score the cached layout was built from, as `[MeasureColumnIDWire]` index-aligned
+  with its measures (`""` for an unassigned column), read from the cache entry's own score so the table describes the
+  same revision as the layout anchors are drawn against. A host maps a stored anchor's identity back to a measure index
+  through it, so ink follows its bar when bars are inserted or deleted before it. Empty for an unknown handle or no
+  cached layout.
+
 ## [4.3.0] - 2026-10-05
 
 ### Added

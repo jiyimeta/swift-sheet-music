@@ -163,3 +163,25 @@ public func nativeFullScoreAnchorReferencePoint(scoreHandle: Int64, anchorsBytes
         ))
     }.encodeToData()
 }
+
+/// JNI entry point exposed via swift-java for the Kotlin `SheetMusicJNI.nativeMeasureColumnIDs(...)` call site. The
+/// measure column identities of the score the CACHED layout was built from, as `[MeasureColumnIDWire]` index-aligned
+/// with its measures (`""` for a column with no assigned identity).
+///
+/// It reads the cache entry's own score rather than the handle's current one: an anchor's stored `measureIndex` and
+/// the reference point it is drawn at both speak the cached layout's measures, so the identities that map one to the
+/// other have to come from the same revision. Hiding staves keeps every column, so the filtered score carries the
+/// full set.
+///
+/// Empty `Data` when the handle is unknown or nothing is cached — distinct from a score with no measures, which
+/// encodes an empty array.
+public func nativeMeasureColumnIDs(scoreHandle: Int64) -> Data {
+    guard scoreTable.value(for: scoreHandle) != nil,
+          let entry = LayoutDocumentCache.entry(for: scoreHandle)
+    else { return Data() }
+    let columns = entry.filteredScore.systemMeasures
+    return columns.indices.map { index -> MeasureColumnIDWire in
+        let id = columns.eid(at: index)
+        return MeasureColumnIDWire(id: id.isValid ? id.stringValue : "")
+    }.encodeToData()
+}

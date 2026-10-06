@@ -74,3 +74,16 @@ public struct AnchorRefPointWire: Equatable {
         self.spMm = spMm
     }
 }
+
+/// One element of the output array of `nativeMeasureColumnIDs`: the identity of one measure column of the score the
+/// cached layout was built from, index-aligned with its measures. `""` when the column has no assigned identity. The
+/// string is `EID.stringValue`, the form a host stores beside an anchor's `measureIndex` so the anchor can follow its
+/// bar when bars are inserted or deleted before it.
+@WireFormat
+public struct MeasureColumnIDWire: Equatable {
+    public let id: String
+
+    public init(id: String) {
+        self.id = id
+    }
+}

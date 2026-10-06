@@ -320,6 +320,17 @@ object SheetMusicJNI {
     }
 
     /**
+     * The measure column identities of the score the cached layout of [scoreHandle] was built from: a
+     * `[MeasureColumnIDWire]` payload, index-aligned with its measures, `""` for a column with no identity. A host
+     * stores the identity beside an anchor's measure index and maps it back through this table, so ink follows its
+     * bar when bars are inserted or deleted before it. Empty array when the handle is unknown or nothing is cached.
+     */
+    fun nativeMeasureColumnIDs(scoreHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeMeasureColumnIDs(scoreHandle, arena).toByteArray()
+    }
+
+    /**
      * Resolve the highlight rectangles (mm coordinates) covering a
      * loop region spanning ticks `[fromTick, toTick)`. Returns one
      * rect per intersected system; the rect spans the full staff
