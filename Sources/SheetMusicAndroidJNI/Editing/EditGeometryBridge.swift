@@ -115,6 +115,35 @@ public func nativeEditingMeasureHitTest(scoreHandle: Int64, xMm: Double, yMm: Do
     return EditMeasureHitCodec.encode(staff: staff, measures: hit.measures)
 }
 
+/// JNI entry point exposed via swift-java for the Kotlin `SheetMusicJNI.nativeEditingHitTarget(...)` call site: the RAW
+/// hit-test answer for a tap — `ScoreHitTester.hitTest(at:)`'s target, as the item it names
+/// (`ScoreHitTarget.selectableItem`) — for a host to read beside `nativeEditingHitTest`.
+///
+/// `nativeEditingHitTest` is `editingHitTest`, a policy: it drops a clef, every engraved element (a key or time
+/// signature, a barline, an articulation, a tie, a slur, a dynamic…) and every engraved text, because what a click on
+/// one of those means is the host's call — and it rescues near misses to the closest note, which would answer a click
+/// on a clef with the note beside it. A host whose click selects the thing clicked (Folino's `EditingTapResolver`)
+/// asks this first. A stem, flag or beam names its note, as `selectableItem` maps it.
+///
+/// Re-addressed past the cached layout's hidden staves exactly as `nativeEditingHitTest` is, and for the same reason
+/// it takes no layout options. Empty `Data` when the handle is unknown, nothing is cached, or nothing is under the
+/// point; on a hit, the `ScoreItemIDCodec` encoding of the item in full-score addressing.
+public func nativeEditingHitTarget(scoreHandle: Int64, xMm: Double, yMm: Double) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle),
+          let entry = LayoutDocumentCache.entry(for: scoreHandle)
+    else { return Data() }
+    let mmToPt = 72.0 / 25.4
+    let point = CGPoint(x: CGFloat(xMm * mmToPt), y: CGFloat(yMm * mmToPt))
+
+    guard #available(macOS 15.0, iOS 16.0, *) else { return Data() }
+    guard let filteredItem = ScoreHitTester(document: entry.document).hitTest(at: point)?.selectableItem,
+          case let .item(fullItem) = score.engineCursorForFilteredTap(
+              .item(filteredItem), hiddenStaves: entry.hiddenStaves,
+          )
+    else { return Data() }
+    return ScoreItemIDCodec.encode(fullItem)
+}
+
 /// JNI entry point exposed via swift-java for the Kotlin `SheetMusicJNI.nativeEditingCaretFrame(...)` call
 /// site. `itemBytes` is a `ScoreItemIDCodec` payload, full-score-addressed — the same value
 /// `nativeEditingHitTest` returns and a host keeps as "the selected item" for edit intents. Re-addressed into

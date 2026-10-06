@@ -15,6 +15,10 @@ and this project adheres to
   same revision as the layout anchors are drawn against. A host maps a stored anchor's identity back to a measure index
   through it, so ink follows its bar when bars are inserted or deleted before it. Empty for an unknown handle or no
   cached layout.
+- **`nativeEditingHitTarget(scoreHandle:xMm:yMm:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeEditingHitTarget`) —
+  the raw `ScoreHitTester.hitTest(at:)` answer for a tap, as the `ScoreItemIDCodec` item its target names
+  (`selectableItem`), re-addressed past the cached layout's hidden staves like `nativeEditingHitTest`. That verb's
+  policy drops clefs, engraved elements and text on purpose; a host that selects the thing clicked reads this beside it.
 
 ## [4.3.0] - 2026-10-05
 

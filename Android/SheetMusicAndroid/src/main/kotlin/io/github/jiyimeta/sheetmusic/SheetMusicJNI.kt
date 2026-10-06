@@ -584,6 +584,26 @@ object SheetMusicJNI {
     }
 
     /**
+     * The RAW hit under a tap at ([xMm], [yMm]) in the cached layout of [scoreHandle] — `ScoreHitTester`'s target, as
+     * the `ScoreItemIDCodec` item it names, full-score-addressed — for a host to read beside [nativeEditingHitTest],
+     * whose policy drops clefs, engraved elements (signatures, barlines, articulations, ties, slurs, dynamics…) and
+     * engraved text. Empty array when the handle is unknown, no layout is cached, or nothing is under the point.
+     */
+    fun nativeEditingHitTarget(
+        scoreHandle: Long,
+        xMm: Double,
+        yMm: Double,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEditingHitTarget(
+            scoreHandle,
+            xMm,
+            yMm,
+            arena,
+        ).toByteArray()
+    }
+
+    /**
      * Where to draw the authoring badges that mark measures carrying an
      * explicit `<LayoutBreak>`.
      *
