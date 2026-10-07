@@ -50,6 +50,40 @@
             }
         }
 
+        /// Decompress raw DEFLATE with an unknown output size. Corrupt or truncated input throws.
+        package static func inflate(_ input: Data) throws -> Data {
+            if input.isEmpty { return Data() }
+            guard input.count <= Int(UInt32.max) else { throw ZipError.corrupted("deflate input too large") }
+            var stream = z_stream()
+            let initialized = inflateInit2_(&stream, -15, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
+            guard initialized == Z_OK else { throw ZipError.deflateFailure("inflateInit2 failed") }
+            defer { inflateEnd(&stream) }
+            return try input.withUnsafeBytes { source in
+                guard let base = source.baseAddress else { throw ZipError.corrupted("missing deflate input") }
+                stream.next_in = UnsafeMutablePointer(mutating: base.assumingMemoryBound(to: UInt8.self))
+                stream.avail_in = UInt32(source.count)
+                var output = Data()
+                var buffer = [UInt8](repeating: 0, count: 16 * 1024)
+                while true {
+                    let before = stream.avail_in
+                    let status = buffer.withUnsafeMutableBufferPointer { destination in
+                        stream.next_out = destination.baseAddress
+                        stream.avail_out = UInt32(destination.count)
+                        return zlib.inflate(&stream, Z_NO_FLUSH)
+                    }
+                    let produced = buffer.count - Int(stream.avail_out)
+                    guard status == Z_OK || status == Z_STREAM_END else {
+                        throw ZipError.corrupted("invalid or truncated deflate stream")
+                    }
+                    output.append(contentsOf: buffer.prefix(produced))
+                    if status == Z_STREAM_END { return output }
+                    guard before != stream.avail_in || produced > 0 else {
+                        throw ZipError.corrupted("truncated deflate stream")
+                    }
+                }
+            }
+        }
+
         /// Decompress raw DEFLATE bytes using system zlib with
         /// `windowBits = -15`. `expectedSize` is used to pre-size the
         /// output buffer.
