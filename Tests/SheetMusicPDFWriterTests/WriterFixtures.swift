@@ -9,14 +9,16 @@ enum WriterFixtures {
     /// - Parameters:
     ///   - system: the platform UI face's files, as a Windows host hands them over; none by default.
     ///   - fallback: the host's fallback spans for a line; none by default.
+    ///   - outlines: the host's outline for a character no font covers; none by default.
     static func fonts(
         system: @escaping @Sendable (FontWeight, Bool) -> ScorePDFFontFile? = { _, _ in nil },
         fallback: @escaping @Sendable (ScorePDFTextLine) -> [ScorePDFFallbackSpan] = { _ in [] },
+        outlines: @escaping @Sendable (Unicode.Scalar, ScorePDFTextStyle) -> ScorePDFGlyphOutline? = { _, _ in nil },
     ) throws -> ScorePDFFonts {
         try ScorePDFFonts(
             smufl: BundledFonts.data("Bravura.otf"), roman: BundledFonts.data("Edwin-Roman.otf"),
             bold: BundledFonts.data("Edwin-Bold.otf"), italic: BundledFonts.data("Edwin-Italic.otf"),
-            boldItalic: BundledFonts.data("Edwin-BdIta.otf"), system: system, fallback: fallback,
+            boldItalic: BundledFonts.data("Edwin-BdIta.otf"), system: system, fallback: fallback, outlines: outlines,
         )
     }
 
@@ -30,8 +32,9 @@ enum WriterFixtures {
         _ commands: [DrawCommand],
         system: @escaping @Sendable (FontWeight, Bool) -> ScorePDFFontFile? = { _, _ in nil },
         fallback: @escaping @Sendable (ScorePDFTextLine) -> [ScorePDFFallbackSpan] = { _ in [] },
+        outlines: @escaping @Sendable (Unicode.Scalar, ScorePDFTextStyle) -> ScorePDFGlyphOutline? = { _, _ in nil },
     ) throws -> (content: String, resources: PDFResources) {
-        let resources = try PDFResources(fonts: fonts(system: system, fallback: fallback))
+        let resources = try PDFResources(fonts: fonts(system: system, fallback: fallback, outlines: outlines))
         var walker = PDFPageWalker(resources: resources, pageHeightMM: 297)
         try FontMetrics.$scopedProvider.withValue(tableProvider()) {
             walker.walk(commands)

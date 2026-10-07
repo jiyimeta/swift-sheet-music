@@ -13,6 +13,7 @@ public struct ScorePDFFonts: Sendable {
     let boldItalic: Data
     let system: @Sendable (FontWeight, Bool) -> ScorePDFFontFile?
     let fallback: @Sendable (ScorePDFTextLine) -> [ScorePDFFallbackSpan]
+    let outlines: @Sendable (Unicode.Scalar, ScorePDFTextStyle) -> ScorePDFGlyphOutline?
 
     /// - Parameters:
     ///   - system: the file the platform UI face draws from at a weight and slant — the face of
@@ -22,6 +23,10 @@ public struct ScorePDFFonts: Sendable {
     ///   - fallback: for a line of text with characters its face lacks, the parts of it the host draws in another font,
     ///     asked once per line. Without any (the default), such a character is kept as invisible text, so the PDF can
     ///     still be searched for it.
+    ///   - outlines: for a character neither its face nor a `fallback` file carries, the outline the host's text engine
+    ///     draws it with — for a host whose fallback fonts the PDF may not embed (Android's CJK faces are CFF). Asked
+    ///     once per character and style. The outline is filled where the character's invisible text sits, so the PDF
+    ///     still finds it. Without one (the default), the character is invisible text alone.
     ///
     /// A file the PDF may not carry — its license forbids embedding, or its outlines are CFF, which only the bundled
     /// faces are embedded with whole — counts as none.
@@ -29,6 +34,8 @@ public struct ScorePDFFonts: Sendable {
         smufl: Data, roman: Data, bold: Data, italic: Data, boldItalic: Data,
         system: @escaping @Sendable (_ weight: FontWeight, _ isItalic: Bool) -> ScorePDFFontFile? = { _, _ in nil },
         fallback: @escaping @Sendable (_ line: ScorePDFTextLine) -> [ScorePDFFallbackSpan] = { _ in [] },
+        outlines: @escaping @Sendable (_ scalar: Unicode.Scalar, _ style: ScorePDFTextStyle) -> ScorePDFGlyphOutline?
+            = { _, _ in nil },
     ) {
         self.smufl = smufl
         self.roman = roman
@@ -37,6 +44,43 @@ public struct ScorePDFFonts: Sendable {
         self.boldItalic = boldItalic
         self.system = system
         self.fallback = fallback
+        self.outlines = outlines
+    }
+}
+
+/// The style a character is drawn in, as the writer asks the host for its outline: the line's face family (the
+/// platform UI face, or Edwin) and its weight and slant.
+public struct ScorePDFTextStyle: Sendable, Hashable {
+    /// Text in the platform UI face (`DrawProgram.FontID.system`) rather than Edwin.
+    public let isSystemFace: Bool
+    public let weight: FontWeight
+    public let isItalic: Bool
+
+    public init(isSystemFace: Bool, weight: FontWeight, isItalic: Bool) {
+        self.isSystemFace = isSystemFace
+        self.weight = weight
+        self.isItalic = isItalic
+    }
+}
+
+/// A character's outline as the host's text engine draws it: closed contours in em units, x from the pen position and
+/// y up from the baseline (a 1000-unit font's path divided by 1000, its y negated if the engine's y runs down). The
+/// writer scales it by the font size and fills it with the nonzero rule in the current color.
+public struct ScorePDFGlyphOutline: Sendable, Hashable {
+    public enum Element: Sendable, Hashable {
+        case move(x: Double, y: Double)
+        case line(x: Double, y: Double)
+        /// A quadratic curve to `(x, y)` through the control point `(cx, cy)` — a PDF has none, so it is raised to a
+        /// cubic.
+        case quad(cx: Double, cy: Double, x: Double, y: Double)
+        case cubic(c1x: Double, c1y: Double, c2x: Double, c2y: Double, x: Double, y: Double)
+        case close
+    }
+
+    public let elements: [Element]
+
+    public init(elements: [Element]) {
+        self.elements = elements
     }
 }
 

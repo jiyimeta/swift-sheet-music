@@ -38,6 +38,12 @@ and this project adheres to
 - **Print resources in the Android AAR** (`SheetMusicComposeAndroid`, `assets/fonts/`): `Edwin-Italic.otf`,
   `Edwin-Bold.otf`, `Edwin-BdIta.otf` and `sheet-music-styled.smft`, so an Android host can lay out and write a PDF in
   Swift with the faces the writer embeds and a table whose bold and italic records measure them. About 533 KB.
+- **`ScorePDFFonts(outlines:)`**, **`ScorePDFGlyphOutline`** and **`ScorePDFTextStyle`** (`SheetMusicPDFWriter`) — for
+  a character neither its face nor a fallback file carries, the outline the host's text engine draws it with: closed
+  contours in em units, y up from the baseline. The writer fills it at the character's pen position, scaled by the font
+  size, in the current color, after the line's text object, and keeps the character as invisible text so the PDF can
+  still be searched for it. Asked once per character and style; without one, the character is invisible text alone,
+  byte for byte as before. For a host whose fallback fonts cannot be embedded — Android's CJK system faces are CFF.
 
 ### Fixed
 

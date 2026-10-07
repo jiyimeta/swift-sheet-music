@@ -11,8 +11,8 @@ import SheetMusicLayout
 /// Text sits where the layout measured it: each character at the offset the installed `FontMetrics.provider` gives
 /// for it — the provider the pages were laid out with — never at the font's own kerning. A character the face does
 /// not have (neither Edwin nor Segoe UI has Japanese) draws in the font the host's text engine falls back to for it
-/// (`ScorePDFFonts(fallback:)`); with none, it draws nothing but stays in the text, as invisible text with its own
-/// code, so the PDF can still be searched for it.
+/// (`ScorePDFFonts(fallback:)`); with none, it stays in the text as invisible text with its own code, so the PDF can
+/// still be searched for it, and is drawn as the outline the host gives for it (`ScorePDFFonts(outlines:)`), if any.
 ///
 /// A walker starts in the draw program's default state (black, opaque, solid, unrotated, no text style).
 struct PDFPageWalker {
@@ -122,7 +122,9 @@ struct PDFPageWalker {
     }
 
     /// Each line from `y` down by the face's line height, each character at the provider's offset for it — in the
-    /// line's face, or for a character it lacks in the font the host falls back to for that part of the line.
+    /// line's face, or for a character it lacks in the font the host falls back to for that part of the line. A
+    /// character no font covers stays invisible text, and when the host has its outline that outline is filled at the
+    /// same pen position after the text object (a path cannot be built inside one).
     private mutating func text(_ text: String, x: Double, y: Double, size: Double, fontId: DrawProgram.FontID) {
         let font = resources.font(fontId, style: textStyle)
         let measured = layoutFont(fontId, size: size)
@@ -130,8 +132,13 @@ struct PDFPageWalker {
         let lineHeight = Double(provider.ascent(font: measured) + provider.descent(font: measured)
             + provider.leading(font: measured))
         let fontSize = Self.number(size * Self.pointsPerMM)
+        let systemStyle = PDFResources.SystemStyle(style: textStyle)
+        let outlineStyle = ScorePDFTextStyle(
+            isSystemFace: fontId == .system, weight: systemStyle.weight, isItalic: systemStyle.isItalic,
+        )
         var current = font
         var shown = "BT /\(font.resourceName) \(fontSize) Tf"
+        var filled: [String] = []
         for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
             let offsets = provider.caretOffsets(text: String(line), font: measured).map { Double($0) }
             let fallbacks = resources.fallbacks(String(line), drawnIn: font, fontId: fontId, style: textStyle)
@@ -151,11 +158,51 @@ struct PDFPageWalker {
                 }
                 let lineY = y + Double(index) * lineHeight
                 let code = face.code(for: scalar.value)
-                shown += " 1 0 0 1 \(point(x + dx, lineY)) Tm"
+                let pen = point(x + dx, lineY)
+                shown += " 1 0 0 1 \(pen) Tm"
                 shown += code.isMissing ? " 3 Tr <\(code.hex)> Tj 0 Tr" : " <\(code.hex)> Tj"
+                if code.isMissing, let outline = resources.outline(scalar, style: outlineStyle) {
+                    filled.append("q \(fontSize) 0 0 \(fontSize) \(pen) cm \(Self.pathOperators(outline)) f Q")
+                }
             }
         }
         emit(shown + " ET")
+        for fill in filled {
+            emit(fill)
+        }
+    }
+
+    /// An outline's contours as path operators in its own units, a quadratic curve raised to the cubic a PDF draws.
+    static func pathOperators(_ outline: ScorePDFGlyphOutline) -> String {
+        var operators: [String] = []
+        var pen = (x: 0.0, y: 0.0)
+        var start = pen
+        func pair(_ x: Double, _ y: Double) -> String {
+            "\(number(x)) \(number(y))"
+        }
+        for element in outline.elements {
+            switch element {
+            case let .move(x, y):
+                operators.append("\(pair(x, y)) m")
+                pen = (x, y)
+                start = pen
+            case let .line(x, y):
+                operators.append("\(pair(x, y)) l")
+                pen = (x, y)
+            case let .quad(cx, cy, x, y):
+                let first = (x: pen.x + 2 * (cx - pen.x) / 3, y: pen.y + 2 * (cy - pen.y) / 3)
+                let second = (x: x + 2 * (cx - x) / 3, y: y + 2 * (cy - y) / 3)
+                operators.append("\(pair(first.x, first.y)) \(pair(second.x, second.y)) \(pair(x, y)) c")
+                pen = (x, y)
+            case let .cubic(c1x, c1y, c2x, c2y, x, y):
+                operators.append("\(pair(c1x, c1y)) \(pair(c2x, c2y)) \(pair(x, y)) c")
+                pen = (x, y)
+            case .close:
+                operators.append("h")
+                pen = start
+            }
+        }
+        return operators.joined(separator: " ")
     }
 
     /// The glyph's box at `size` stretched to span `top`…`bottom`, `xScale` wide, its right edge at `right` — the
