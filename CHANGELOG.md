@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-10-07
+
 ### Added
 
 - **`nativeMeasureColumnIDs(scoreHandle:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeMeasureColumnIDs`) — the
