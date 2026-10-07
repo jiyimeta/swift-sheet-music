@@ -57,23 +57,29 @@ public struct SetTimeSignature: EditCommand {
         // the command is reached through an intent or built directly.
         guard measureIndex >= 0, measureIndex < MeasureStructure.measureCount(of: score), !score.parts.isEmpty
         else { throw Self.refused(.targetNotFound(affectedLocation)) }
+        try Self.validate(numerator: numerator, denominator: denominator, symbol: symbol)
+        return try TimeSignatureRegion.rebar(
+            &score, from: measureIndex,
+            to: TimeSignature(numerator: numerator, denominator: denominator, symbol: symbol),
+            declaringAtHead: true, ids: &ids,
+        )
+    }
+
+    /// The refusals a signature's own numbers earn, wherever it is about to be written — here and in
+    /// `DeclareTimeSignature`, which answers the same intent and so states them under this command's name.
+    static func validate(numerator: Int, denominator: Int, symbol: TimeSignatureSymbol) throws {
         guard TimeSignatureRegion.isWritable(numerator: numerator, denominator: denominator) else {
-            throw Self.refused(.invalidTimeSignatureValue(numerator: numerator, denominator: denominator))
+            throw refused(.invalidTimeSignatureValue(numerator: numerator, denominator: denominator))
         }
         // A symbol stands for exactly one meter (`TimeSignatureSymbol.conventionalMeter`). Writing it over a
         // different one would engrave a glyph contradicting the bar length the same element declares.
         if let expected = symbol.conventionalMeter,
            expected != (numerator, denominator)
         {
-            throw Self.refused(.timeSignatureSymbolMismatch(
+            throw refused(.timeSignatureSymbolMismatch(
                 symbol: symbol, numerator: numerator, denominator: denominator,
             ))
         }
-        return try TimeSignatureRegion.rebar(
-            &score, from: measureIndex,
-            to: TimeSignature(numerator: numerator, denominator: denominator, symbol: symbol),
-            declaringAtHead: true, ids: &ids,
-        )
     }
 }
 

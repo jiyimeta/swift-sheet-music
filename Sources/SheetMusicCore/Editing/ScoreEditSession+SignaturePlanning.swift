@@ -13,11 +13,14 @@ import SheetMusicFoundation
 extension ScoreEditSession {
     /// `.setKeySignature`: the key write, plus the re-spelling of every bar that write silently re-reads.
     ///
-    /// `nil` when that key is already the one in force at `measureIndex` — the score already says this, and
-    /// planning it anyway would push an undo entry that restores the score to itself, the same dead ⌘Z `.movePart`
-    /// refuses. A bar that declares its own key IS the key in force there (`Score.activeKey` reads the last
-    /// declaration up to and including the bar), so this one test covers both "nothing to change" shapes: a bar
-    /// with an explicit key already equal to `concertKey`, and a bar inheriting one that is.
+    /// `nil` when the bar already DECLARES that key — the score already says this, and planning it anyway would
+    /// push an undo entry that restores the score to itself, the same dead ⌘Z `.movePart` refuses. Bar 0 declares
+    /// the score's key whether or not an element is written there, so its test is the key in force.
+    ///
+    /// A later bar that merely INHERITS that key is not a restatement of anything: writing it there declares it, and
+    /// the declaration is what stops a change written earlier from running past this bar — MuseScore keeps such a
+    /// key signature too (`Score::undoChangeKeySig` adds one whatever key is in force). It is how a host changes only
+    /// a span: the key that should come back is written at the span's end first, then the change at its start.
     ///
     /// Also `nil` for a score with no pitched staff at all — a kit-only score declares no key anywhere, so there is
     /// nothing for this intent to change.
@@ -27,9 +30,10 @@ extension ScoreEditSession {
     static func setKeySignatureCommand(
         at measureIndex: Int, concertKey: Int, in score: Score, ids: EIDAllocator,
     ) throws -> (any EditCommand)? {
-        guard let reference = KeySignatureStaves.reference(in: score),
-              score.activeKey(staff: reference, measureIndex: measureIndex) != concertKey
-        else { return nil }
+        guard let reference = KeySignatureStaves.reference(in: score) else { return nil }
+        let declared = KeySignatureStaves.explicitKey(in: score, staff: reference, measureIndex: measureIndex)?
+            .concertKey ?? (measureIndex == 0 ? score.activeKey(staff: reference, measureIndex: 0) : nil)
+        guard declared != concertKey else { return nil }
         return try keyChangeCommand(
             SetKeySignature(measureIndex: measureIndex, concertKey: concertKey), in: score, ids: ids,
         )
@@ -51,10 +55,18 @@ extension ScoreEditSession {
 
     /// `.setTimeSignature`: the meter write and the re-barring of the span it governs, as one command.
     ///
-    /// `nil` when that meter is already the one in force at `measureIndex` — the score already says this, and
-    /// planning it anyway would push an undo entry that restores the score to itself, the same dead ⌘Z
-    /// `.setKeySignature` and `.movePart` both refuse. A bar that declares its own meter IS the meter in force
-    /// there, so this one test covers both "nothing to change" shapes.
+    /// `nil` when the bar already DECLARES that meter, symbol included — the score already says this, and planning
+    /// it anyway would push an undo entry that restores the score to itself, the same dead ⌘Z `.setKeySignature`
+    /// and `.movePart` both refuse. Bar 0 declares the score's meter whether or not an element is written there, so
+    /// its test is the meter in force.
+    ///
+    /// A later bar that merely INHERITS that meter gets the declaration and nothing else (`DeclareTimeSignature`):
+    /// the barlines already fall where it would put them, so there is nothing to re-bar, and re-barring anyway would
+    /// rebuild every bar up to the next change for no difference. The declaration is not a restatement of anything —
+    /// it is what bounds a change written earlier, which re-bars only up to the next declared meter. MuseScore keeps
+    /// such a time signature too (`Score::cmdAddTimeSig` ignores only one equal to a signature already in the bar).
+    /// It is how a host changes only a span: the meter that should come back is written at the span's end first,
+    /// then the change at its start.
     ///
     /// Nothing is bundled onto the command here, unlike the key intents next door: a re-bar moves the BYTES of
     /// every bar in its region, so the session's own diff-driven `renotatingAccidentals` pass already reaches
@@ -63,18 +75,26 @@ extension ScoreEditSession {
     ///
     /// The range is NOT validated here: `SetTimeSignature.apply` states it once, and so are the numerator, the
     /// denominator and their pairing with `symbol` — an unwritable or mismatched signature is never equal to the
-    /// one in force, so it reaches the command.
+    /// one in force, so it reaches the command (`DeclareTimeSignature` states the same refusals).
     static func setTimeSignatureCommand(
         at measureIndex: Int, numerator: Int, denominator: Int,
         symbol: TimeSignatureSymbol, in score: Score,
     ) -> (any EditCommand)? {
-        let inForce = TimeSignatureRegion.signature(inForceAt: measureIndex, in: score)
+        let declared = TimeSignatureRegion.explicitSignature(in: score, measureIndex: measureIndex)
+            ?? (measureIndex == 0 ? TimeSignatureRegion.signature(inForceAt: 0, in: score) : nil)
         // The symbol is part of what the bar declares, so swapping "4/4" for a C is a change even though the
         // meter is untouched — the region re-bars to the same barlines and the glyph is what moves.
-        guard inForce.numerator != numerator
-            || inForce.denominator != denominator
-            || inForce.symbol != symbol
-        else { return nil }
+        if let declared, declared.numerator == numerator, declared.denominator == denominator,
+           declared.symbol == symbol
+        {
+            return nil
+        }
+        let inForce = TimeSignatureRegion.signature(inForceAt: measureIndex, in: score)
+        if declared == nil, inForce.numerator == numerator, inForce.denominator == denominator {
+            return DeclareTimeSignature(
+                measureIndex: measureIndex, numerator: numerator, denominator: denominator, symbol: symbol,
+            )
+        }
         return SetTimeSignature(
             measureIndex: measureIndex, numerator: numerator, denominator: denominator, symbol: symbol,
         )

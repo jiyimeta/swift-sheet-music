@@ -106,10 +106,12 @@ public enum EditIntent: Sendable, Equatable {
     /// score): writes/replaces the `.keySignature` on every non-percussion staff at that measure and
     /// re-spells accidental glyphs over the affected span, as one undo step.
     ///
-    /// Resolves to nothing to apply when that key is already the one in force there — restating a key the score
-    /// already declares would push an undo entry that restores the score to itself, the same rule `.movePart`
-    /// applies to a move onto its own index. An out-of-range `measureIndex` is refused as `.targetNotFound` by
-    /// `SetKeySignature.apply`, so one place states the range.
+    /// Resolves to nothing to apply when that measure already declares that key (measure 0 declares the score's key
+    /// whether or not one is written) — restating it would push an undo entry that restores the score to itself, the
+    /// same rule `.movePart` applies to a move onto its own index. A measure that only INHERITS that key gets it
+    /// written: the declaration is what stops a change made earlier from running past it, which is how a host
+    /// changes only a span (the key that should come back goes at its end first). An out-of-range `measureIndex` is
+    /// refused as `.targetNotFound` by `SetKeySignature.apply`, so one place states the range.
     case setKeySignature(measureIndex: Int, concertKey: Int)
 
     /// Remove the explicit key change at `measureIndex`, reverting its span to the previous key. Refused
@@ -125,8 +127,11 @@ public enum EditIntent: Sendable, Equatable {
     /// score), RE-BARRING that region: its content is re-partitioned into bars of the new length, notes the new
     /// barlines cut are split and tied, and the score's measure count may change. One undo step.
     ///
-    /// Resolves to nothing to apply when that meter is already the one in force there — the same rule
-    /// `.setKeySignature` and `.movePart` apply to an edit that would restore the score to itself. Refused as a
+    /// Resolves to nothing to apply when that measure already declares that meter and symbol (measure 0 declares the
+    /// score's meter whether or not one is written) — the same rule `.setKeySignature` and `.movePart` apply to an
+    /// edit that would restore the score to itself. A measure that only INHERITS that meter gets the declaration and
+    /// is not re-barred, its barlines being where the declaration puts them already; the declaration is what bounds
+    /// a change made earlier, which re-bars only up to the next declared meter. Refused as a
     /// whole, with the score untouched, when the new barring would split a tuplet
     /// (`.rebarWouldSplitTuplet`) or slide a repeat sign off the barline it marks
     /// (`.rebarWouldDisplaceBarlineMarker`): a re-bar is one edit, so it either lands or it does not.
