@@ -44,8 +44,8 @@ extension PDFSourceDocument {
     }
 
     private func space(_ attributes: [String: PDFSourceValue]) throws -> PDFPageSpace {
-        let media = box(attributes["MediaBox"]) ?? [0, 0, 612, 792]
-        let crop = box(attributes["CropBox"]) ?? media
+        let media = try box(attributes["MediaBox"]) ?? [0, 0, 612, 792]
+        let crop = try box(attributes["CropBox"]) ?? media
         let left = max(media[0], crop[0]), bottom = max(media[1], crop[1])
         let right = max(left, min(media[2], crop[2])), top = max(bottom, min(media[3], crop[3]))
         guard (right - left).isFinite, (top - bottom).isFinite else { throw PDFAppendError.unreadable }
@@ -58,9 +58,17 @@ extension PDFSourceDocument {
         )
     }
 
-    private func box(_ value: PDFSourceValue?) -> [Double]? {
-        guard let numbers = value?.array?.compactMap(\.numeric), numbers.count == 4,
-              numbers.allSatisfy(\.isFinite) else { return nil }
+    private func box(_ value: PDFSourceValue?) throws -> [Double]? {
+        guard let value else { return nil }
+        guard let coordinates = try resolve(value).array, coordinates.count == 4 else {
+            throw PDFAppendError.unreadable
+        }
+        let numbers = try coordinates.map { coordinate in
+            guard let number = try resolve(coordinate).numeric, number.isFinite else {
+                throw PDFAppendError.unreadable
+            }
+            return number
+        }
         return [
             min(numbers[0], numbers[2]),
             min(numbers[1], numbers[3]),

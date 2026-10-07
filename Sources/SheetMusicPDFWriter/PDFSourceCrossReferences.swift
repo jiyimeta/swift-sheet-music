@@ -1,20 +1,16 @@
 import SheetMusicFoundation
 
 extension PDFSourceDocument {
-    /// Recover a small byte shift, but never accept an arbitrary out-of-range pointer.
+    /// A recognizable section's errors propagate. Recovery needs one proven nearby top-level boundary.
     static func section(_ bytes: [UInt8], at offset: Int) throws -> Section {
         guard bytes.indices.contains(offset) else { throw PDFAppendError.unreadable }
-        if let exact = try? parseSection(bytes, at: offset) { return exact }
-        let lower = max(0, offset - 1024)
-        let upper = offset + min(1024, bytes.count - offset - 1)
-        for distance in 1 ... 1024 {
-            let candidates = [offset + min(distance, bytes.count - offset), offset - min(distance, offset)]
-            for candidate in candidates where candidate >= lower && candidate <= upper {
-                guard candidate == 0 || PDFSourceBytes.whitespace(bytes[candidate - 1]) else { continue }
-                if let section = try? parseSection(bytes, at: candidate) { return section }
-            }
-        }
-        throw PDFAppendError.unreadable
+        var parser = PDFSourceParser(bytes, at: offset)
+        if parser.token() == "xref" { return try parseSection(bytes, at: offset) }
+        parser = PDFSourceParser(bytes, at: offset)
+        if parser.parseObjectHeader() != nil { return try parseSection(bytes, at: offset) }
+        let boundaries = try PDFSourceBoundaries(bytes)
+        let recovered = try PDFSourceBoundaries.unique(boundaries.sections, near: offset, byteCount: bytes.count)
+        return try parseSection(bytes, at: recovered)
     }
 
     private static func parseSection(_ bytes: [UInt8], at offset: Int) throws -> Section {
@@ -38,7 +34,7 @@ extension PDFSourceDocument {
         )
     }
 
-    private static func classicEntries(_ parser: inout PDFSourceParser) throws -> [Int: Location] {
+    static func classicEntries(_ parser: inout PDFSourceParser) throws -> [Int: Location] {
         var entries: [Int: Location] = [:]
         while true {
             let token = parser.token()

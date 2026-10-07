@@ -22,6 +22,7 @@ final class PDFSourceDocument {
     var locations: [Int: Location] = [:]
     var objectStreams: [Int: [Int: PDFSourceValue]] = [:]
     private var loading: Set<Int> = []
+    private var boundaries: PDFSourceBoundaries?
 
     init(_ data: Data) throws {
         bytes = Array(data)
@@ -87,7 +88,7 @@ final class PDFSourceDocument {
         case let .offset(offset):
             var parser = PDFSourceParser(bytes, at: offset)
             if !bytes.indices.contains(offset) || parser.parseObjectHeader()?.number != number {
-                guard let recovered = objectHeader(number) else { throw PDFAppendError.unreadable }
+                let recovered = try objectHeader(number, near: offset)
                 parser = PDFSourceParser(bytes, at: recovered)
                 guard parser.parseObjectHeader()?.number == number else { throw PDFAppendError.unreadable }
             }
@@ -119,16 +120,9 @@ final class PDFSourceDocument {
         return .stream(dictionary: dictionary, raw: raw)
     }
 
-    private func objectHeader(_ number: Int) -> Int? {
-        let prefix = Array("\(number) ".utf8)
-        var end = bytes.count
-        while let start = Self.find(prefix, in: bytes, from: 0, to: end, backwards: true) {
-            var parser = PDFSourceParser(bytes, at: start)
-            if start == 0 || PDFSourceBytes.whitespace(bytes[start - 1]),
-               parser.parseObjectHeader()?.number == number { return start }
-            end = start
-        }
-        return nil
+    private func objectHeader(_ number: Int, near offset: Int) throws -> Int {
+        if boundaries == nil { boundaries = try PDFSourceBoundaries(bytes) }
+        return try PDFSourceBoundaries.unique(boundaries?.objects[number] ?? [], near: offset, byteCount: bytes.count)
     }
 
     private func loadObjectStream(_ number: Int) throws {
