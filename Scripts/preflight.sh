@@ -10,7 +10,7 @@
 # Usage:
 #   Scripts/preflight.sh              # full suite (Apple + wasm + Android)
 #   Scripts/preflight.sh --apple      # Apple/SwiftPM tests only (fast)
-#   Scripts/preflight.sh --wasm       # WebAssembly: Swift tests, size gate, browser package
+#   Scripts/preflight.sh --wasm       # WebAssembly: Swift tests, size (warns), browser package
 #   Scripts/preflight.sh --android    # Android cross-compile + Kotlin tests + AAR
 #
 # Requirements for the Android stage mirror docs/development/android.md:
@@ -116,13 +116,23 @@ if [[ "$run_wasm" == 1 ]]; then
         js test --environment node \
         --prelude "$ROOT/Scripts/package-to-js-test-prelude.mjs"
 
-    # Before the size gate, which reports the shipped artifact's size and can
+    # Before the size measurement, which reports the shipped artifact's size and can
     # only do so once this has produced one.
     step "WebAssembly: build the browser bundle"
     "$ROOT/Scripts/wasm-build-web.sh"
 
-    step "WebAssembly: size gate"
-    "$ROOT/Scripts/wasm-size.sh"
+    # A warning, not a failure, when over the ceiling (exit 2): the ceiling is a
+    # line drawn at ordinary growth, not a limit anything depends on, and CI
+    # runs this nightly as a warning too (.github/workflows/wasm-size-nightly.yml).
+    # Any other non-zero exit means it could not measure, and still fails.
+    step "WebAssembly: size"
+    size_status=0
+    "$ROOT/Scripts/wasm-size.sh" || size_status=$?
+    if [[ "$size_status" == 2 ]]; then
+        printf '\033[1;33mwarning: WebAssembly size is over the ceiling — see above\033[0m\n'
+    elif [[ "$size_status" != 0 ]]; then
+        exit "$size_status"
+    fi
 
     step "WebAssembly: browser package tests"
     npm --prefix "$ROOT/Web/sheet-music-web" run build

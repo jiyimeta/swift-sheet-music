@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Measures the compressed WebAssembly size of the portable targets and fails if
-# it regresses past the ceiling.
+# Measures the compressed WebAssembly size of the portable targets and reports
+# whether it has grown past the ceiling.
 #
 # The portable targets import `SheetMusicFoundation` rather than `Foundation`
 # so that WebAssembly builds link `FoundationEssentials` instead of the
@@ -9,11 +9,18 @@
 # compiler complains when a plain `import Foundation` drifts back into one of
 # those targets — it still builds everywhere, it just quietly re-fattens the
 # binary. A single such import is enough: this was measured twice while the
-# migration was being done. This script is the gate that catches it.
+# migration was being done. This script was the gate that caught it; SwiftLint's
+# `no_foundation_umbrella` now blocks the import itself on every push, and this
+# measurement watches the growth that rule cannot see.
 #
 # Usage:
-#   Scripts/wasm-size.sh              # measure and enforce the ceiling
+#   Scripts/wasm-size.sh              # measure; exit 2 when over the ceiling
 #   Scripts/wasm-size.sh --report     # measure and print, never fail
+#
+# Exit 2 means the measurement worked and came out over the ceiling; any other
+# non-zero exit means it could not measure. The nightly workflow
+# (.github/workflows/wasm-size-nightly.yml) turns the first into a warning and
+# fails only on the second — this is no longer a gate any push waits for.
 #
 # Requires the open-source swift.org toolchain (Xcode's has no WebAssembly
 # backend and crashes with "No available targets are compatible with triple
@@ -170,7 +177,7 @@ if [ "$compressed_bytes" -gt "$CEILING_BYTES" ]; then
     echo "       target; those must import SheetMusicFoundation instead. Check with:" >&2
     echo "         rg -n '^import Foundation\$' Sources/SheetMusic{Core,XMLTools,Zip,MIDI,MSCX,MusicXML,Layout,AudioCore,EditWire}" >&2
     echo "       Also check conditional imports inside '#if' blocks — one file is enough." >&2
-    exit 1
+    exit 2
 fi
 
 echo

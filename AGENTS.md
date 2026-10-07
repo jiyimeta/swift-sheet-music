@@ -49,10 +49,10 @@ the area changed:
 ```bash
 swift test                         # default SwiftPM test suite
 Scripts/preflight.sh --apple       # Apple build, tests, lint, and format
-Scripts/preflight.sh --wasm        # wasm tests, size gate, and browser package
+Scripts/preflight.sh --wasm        # wasm tests, size (warns), and browser package
 Scripts/preflight.sh --android     # Android cross-compile, tests, and AAR
 Scripts/preflight.sh               # full Apple + wasm + Android preflight
-Scripts/wasm-size.sh               # WebAssembly portable-graph size gate
+Scripts/wasm-size.sh               # WebAssembly portable-graph size (CI: nightly, warns)
 ```
 
 - Run `Scripts/preflight.sh --android` for Android, JNI, Wirelet, portable

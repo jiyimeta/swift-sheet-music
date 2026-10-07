@@ -675,17 +675,32 @@ wasmtime --dir . .build/wasm32-unknown-wasip1/debug/WasmParityProbe.wasm <file.m
 
 ## Size gates
 
-Two complementary gates protect the browser download:
+Two complementary checks protect the browser download:
 
 1. SwiftLint's `no_foundation_umbrella` rule identifies the source import that
-   would pull in ICU.
+   would pull in ICU. It is a hard gate: the Lint job fails on it on every
+   push and pull request.
 2. `Scripts/wasm-size.sh` measures the entire portable dependency graph and
-   catches growth arriving through dependencies or APIs.
+   catches growth arriving through dependencies or APIs. It is a **warning**,
+   not a gate: CI runs it nightly at 06:00 JST
+   (`.github/workflows/wasm-size-nightly.yml`, also runnable by hand), and an
+   over-ceiling result shows as a warning on that run with the numbers in its
+   summary. `Scripts/preflight.sh --wasm` prints the same warning and carries on.
 
 ```bash
-Scripts/wasm-size.sh
-Scripts/wasm-size.sh --report
+Scripts/wasm-size.sh            # exit 2 when over the ceiling
+Scripts/wasm-size.sh --report   # never fails
 ```
+
+It left the push path on 2026-10-07. It is a second, release-mode build of the
+whole portable graph, and it had grown to 14 of the wasm job's 28 minutes —
+the longest step on any job, so every push to `main`, and every release, waited
+on it. Its ceiling was never a limit anything depends on; it is a line drawn
+just above ordinary growth, and the one regression it was built to catch, a
+plain `import Foundation`, is now caught in seconds by rule 1. So a warning
+there is something to look into when convenient: measure the size from a clean
+build, decide whether the growth was intended, and raise `CEILING_BYTES` (or
+replace the absolute line, as the script's comment discusses) if it was.
 
 The wider brotli measurement has a 4.5 MiB ceiling — `CEILING_BYTES` in
 `Scripts/wasm-size.sh`, which is the one place it is written down; quote the

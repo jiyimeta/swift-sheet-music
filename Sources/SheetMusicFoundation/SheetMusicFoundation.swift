@@ -20,8 +20,9 @@
 // `Foundation`, since they already depend on much heavier Apple frameworks.
 //
 // A plain `import Foundation` in a portable target still compiles everywhere,
-// so nothing complains when it drifts back — the wasm size check in
-// `Scripts/wasm-size.sh` is what catches that.
+// so the compiler never complains when it drifts back — SwiftLint's
+// `no_foundation_umbrella` rule is what catches that, and the nightly wasm
+// size check in `Scripts/wasm-size.sh` watches what the rule cannot see.
 #if canImport(FoundationEssentials)
     @_exported import FoundationEssentials
 #else

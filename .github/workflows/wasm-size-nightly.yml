@@ -1,0 +1,72 @@
+name: WebAssembly size (nightly)
+
+# The WebAssembly size measurement, moved off the push path. It is a second,
+# release-mode build of the whole portable graph (WasmSizeProbe) — 14 minutes
+# that every push to main used to wait for — and its ceiling is not a limit
+# anything depends on: it was drawn just above ordinary growth and has been
+# raised once already (see CEILING_BYTES in Scripts/wasm-size.sh). So it runs
+# once a day, at 06:00 JST, when no one is waiting on the macOS runners, and an
+# over-ceiling result is a WARNING on the run rather than a failure: something
+# to look into at a convenient time.
+#
+# The regression it was built to catch — a plain `import Foundation` drifting
+# into a portable target, ~10 MB at once — is blocked on every push by
+# SwiftLint's `no_foundation_umbrella` (ci.yml's Lint job).
+#
+# A run that cannot measure at all (a broken build, a missing tool) still
+# fails: that is the nightly itself being broken, not a size to look into.
+on:
+  schedule:
+    - cron: "0 21 * * *" # 21:00 UTC = 06:00 JST
+  workflow_dispatch:
+
+jobs:
+  size:
+    name: WebAssembly size
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the swift.org toolchain
+        run: |
+          curl -fsSL -o toolchain.pkg \
+            https://download.swift.org/swift-6.3.3-release/xcode/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-osx.pkg
+          installer -pkg toolchain.pkg -target CurrentUserHomeDirectory
+          "$(Scripts/swift-org-toolchain.sh)/swift" --version
+
+      - name: Install the WebAssembly SDK
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          swift sdk install \
+            https://download.swift.org/swift-6.3.3-release/wasm-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_wasm.artifactbundle.tar.gz \
+            --checksum cabfa08b73bb8ac783927ecd15fa386e99d0c139c5f232445067bcf58379cae7
+
+      # brotli measures the download; binaryen supplies wasm-opt, which
+      # PackageToJS runs by default.
+      - name: Install brotli and binaryen
+        run: brew install brotli binaryen
+
+      # The script also reports what a page actually downloads, which only
+      # exists once the browser bundle has been built.
+      - name: Build the browser bundle
+        run: Scripts/wasm-build-web.sh
+
+      # Exit 2 is "over the ceiling" (Scripts/wasm-size.sh): reported as a
+      # warning with the numbers in the run summary. Any other failure fails.
+      - name: Measure
+        run: |
+          set +e
+          Scripts/wasm-size.sh 2>&1 | tee size-report.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          {
+            echo '### WebAssembly size'
+            echo '```'
+            cat size-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -eq 2 ]; then
+            echo "::warning title=WebAssembly size over the ceiling::The portable graph's brotli size is past CEILING_BYTES in Scripts/wasm-size.sh — see this run's summary."
+            exit 0
+          fi
+          exit "$status"

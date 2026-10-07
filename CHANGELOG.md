@@ -7,6 +7,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **The WebAssembly size check left the push path and only warns.** `Scripts/wasm-size.sh` was the longest step in
+  CI — a second, release-mode build of the whole portable graph, 14 of the wasm job's 28 minutes — so every push to
+  `main` and every release waited on a ceiling that is a line drawn at ordinary growth, not a limit anything depends
+  on. It now runs nightly at 06:00 JST and on demand (`.github/workflows/wasm-size-nightly.yml`), an over-ceiling
+  result is a warning on that run (the script exits 2 for it, distinct from being unable to measure), and
+  `Scripts/preflight.sh --wasm` warns and carries on. The regression it was built for, a plain `import Foundation` in
+  a portable target, stays a hard failure through SwiftLint's `no_foundation_umbrella` in the Lint job.
+
 ## [4.4.0] - 2026-10-07
 
 ### Added
