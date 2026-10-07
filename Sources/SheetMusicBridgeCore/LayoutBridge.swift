@@ -325,15 +325,16 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         let sp = ctx.sp
         let glyphSize = ctx.glyphSize
         switch element {
-        case let .clef(rawType, origin, _):
+        case let .clef(rawType, origin, _, mag):
             let (codepoint, yOffsetSp) = ClefGlyph.glyph(
                 for: NotatedClef(rawType: rawType),
             )
+            // `mag` scales the glyph about its reference line, which stays the staff's.
             emitCenterAnchoredGlyph(
                 codepoint: codepoint,
                 cxPt: mox + Double(origin.x),
                 cyPt: moy + Double(origin.y) + Double(yOffsetSp) * sp,
-                sizePt: glyphSize,
+                sizePt: glyphSize * Double(mag),
                 into: &out,
             )
 

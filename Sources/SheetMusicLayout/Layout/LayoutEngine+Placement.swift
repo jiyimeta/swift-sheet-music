@@ -80,6 +80,8 @@ extension LayoutEngine {
         systemElements: [PositionedSystemElement] = [],
         textPlacementStyle: TextPlacementStyles = TextPlacementStyles(),
         maxAboveLyricVerse: Int = 0,
+        drawsLeadingClef: Bool = true,
+        followingClef: FollowingClef? = nil,
     ) -> MeasurePlacement {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         // Barlines are the one thing here measured against the staff's
@@ -486,8 +488,33 @@ extension LayoutEngine {
                     currentClef = NotatedClef(rawType: clef.concertClefType)
                     guard clef.visible || options.showsInvisibleElements
                     else { break }
-                    let clefX = inHeader ? headerSchedule.clefX
-                        : timedX(atTick: tickCursor)
+                    // A clef the bar opens with, mid-system, is drawn by
+                    // the bar before, before its barline
+                    // (`LayoutEngine+BarlineClef`).
+                    if inHeader, voiceIdx == 0, !drawsLeadingClef { break }
+                    // Past the bar's first chord or rest a clef is drawn
+                    // small, as MuseScore draws it. Mid-bar it stands
+                    // BEFORE the column it precedes, clear of that chord's
+                    // accidentals — the room `aggregatedTickWeights`
+                    // reserved for it. After the bar's last chord or rest
+                    // there is no column ahead: it stands before the
+                    // barline, in the room the measure keeps after its
+                    // content (`TickAggregate.trailingClefWidth`). A clef's
+                    // origin is its glyph's center.
+                    let nextChord = voice.elements.values[(voiceElemIdx + 1)...].lazy.compactMap {
+                        if case let .chord(chord) = $0 { chord } else { nil }
+                    }.first
+                    let clefMag: CGFloat = inHeader ? 1 : smallClefMag
+                    let clefX: CGFloat = if inHeader {
+                        headerSchedule.clefX
+                    } else if let nextChord {
+                        timedX(atTick: tickCursor) - midMeasureClefOffset(
+                            rawType: clef.concertClefType, before: nextChord, metrics: metrics,
+                        )
+                    } else {
+                        width - metrics.sp / 2 - clefBarlineDistanceSp * metrics.sp
+                            - smallClefAdvance(rawType: clef.concertClefType, metrics: metrics) / 2
+                    }
                     let veID = VoiceElementID(
                         staff: staffAddress,
                         measureIndex: measureIndex,
@@ -501,6 +528,7 @@ extension LayoutEngine {
                             y: clefY(rawType: clef.concertClefType),
                         ),
                         anchor: .explicit(veID),
+                        mag: clefMag,
                     )
                     if clef.visible {
                         out.append(element)
@@ -640,11 +668,16 @@ extension LayoutEngine {
                         // Center the rest in the measure's chord
                         // area: midpoint of [contentStart,
                         // width − trailingPadding]. Must track
-                        // `minimumMeasureWidth.rightPadding` and
-                        // `chordSpacingTickToX.trailingGap` —
-                        // otherwise the rest drifts off-center
-                        // whenever those constants are tuned.
-                        let trailingPad = metrics.sp * 1
+                        // `TickAggregate.trailingGap` — otherwise the
+                        // rest drifts off-center whenever it is tuned —
+                        // including the room a clef after the rest — or
+                        // the next bar's opening clef — keeps before the
+                        // barline.
+                        let followingWidth = followingClef.map {
+                            $0.visible ? barEndClefWidth(rawType: $0.rawType, metrics: metrics) : 0
+                        } ?? 0
+                        let trailingPad = metrics.sp
+                            + max(barEndClefWidth(in: voice, metrics: metrics), followingWidth)
                         let edgeSum = headerSchedule.contentStartX
                             + width - trailingPad
                         restX = edgeSum / 2
@@ -1921,6 +1954,31 @@ extension LayoutEngine {
                         startElementIndex: tuplet.startIndex,
                     ),
                 )
+            }
+        }
+
+        // The clef the next bar opens with, small, before this bar's barline
+        // — the room `aggregatedTickWeights` kept after the content. It names
+        // the clef where it lives, in the next bar
+        // (`LayoutEngine+BarlineClef`).
+        if let followingClef, followingClef.visible || options.showsInvisibleElements {
+            let element = LayoutElement.clef(
+                rawType: followingClef.rawType,
+                origin: CGPoint(
+                    x: width - metrics.sp / 2 - clefBarlineDistanceSp * metrics.sp
+                        - smallClefAdvance(rawType: followingClef.rawType, metrics: metrics) / 2,
+                    y: clefY(rawType: followingClef.rawType),
+                ),
+                anchor: .explicit(VoiceElementID(
+                    staff: staffAddress, measureIndex: measureIndex + 1,
+                    voiceIndex: 0, elementIndex: followingClef.elementIndex,
+                )),
+                mag: smallClefMag,
+            )
+            if followingClef.visible {
+                out.append(element)
+            } else {
+                invisibleOut.append(element)
             }
         }
 

@@ -27,7 +27,7 @@ struct LayoutElementClefAnchorTests {
             doc.systems.first?.measures.first,
         )
         let anchors = firstMeasure.elements.compactMap { el -> ClefAnchor? in
-            guard case let .clef(_, _, anchor) = el else { return nil }
+            guard case let .clef(_, _, anchor, _) = el else { return nil }
             return anchor
         }
         #expect(anchors.contains { anchor in
@@ -74,7 +74,7 @@ struct LayoutElementClefAnchorTests {
             "fixture should produce at least one clef in the sticky header",
         )
         for el in stickyMeasure.elements {
-            if case let .clef(_, _, anchor) = el {
+            if case let .clef(_, _, anchor, _) = el {
                 #expect(anchor == nil)
             }
         }
@@ -125,7 +125,7 @@ struct LayoutElementClefAnchorTests {
         for system in doc.systems.dropFirst() {
             let firstMeasure = try #require(system.measures.first)
             for el in firstMeasure.elements {
-                if case let .clef(_, _, anchor) = el {
+                if case let .clef(_, _, anchor, _) = el {
                     restatements += 1
                     // A synthesized head clef names the bar it opens; an explicit one there names its own slot.
                     switch anchor {

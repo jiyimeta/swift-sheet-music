@@ -304,7 +304,7 @@
 
             var clefPoint: CGPoint?
             for el in measure.elements {
-                guard case let .clef(rawType, origin, anchor) = el, anchor != nil else { continue }
+                guard case let .clef(rawType, origin, anchor, _) = el, anchor != nil else { continue }
                 // Treble clef is drawn 1 sp above its anchor (mirrors `ScoreHitTester.clefYOffset`).
                 let yOffset = rawType == "G" ? sp : 0
                 clefPoint = CGPoint(x: base.x + origin.x, y: base.y + origin.y + yOffset)

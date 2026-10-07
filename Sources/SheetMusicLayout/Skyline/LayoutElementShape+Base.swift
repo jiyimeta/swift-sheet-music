@@ -302,7 +302,7 @@ extension LayoutElementShape {
         // five-line approximation.
         var barLineHalfHeight: CGFloat?
         switch element {
-        case let .clef(_, origin, _),
+        case let .clef(_, origin, _, _),
              let .keySignature(_, _, _, _, origin, _),
              let .timeSignature(_, _, _, origin, _),
              let .measureRepeat(_, origin),

@@ -194,7 +194,7 @@ struct InvisibleLayoutTests { // swiftlint:disable:this type_body_length
         doc.systems.flatMap(\.measures)
             .flatMap { inInvisible ? $0.invisibleElements : $0.elements }
             .filter {
-                if case let .clef(_, _, anchor) = $0,
+                if case let .clef(_, _, anchor, _) = $0,
                    case .explicit = anchor
                 {
                     true

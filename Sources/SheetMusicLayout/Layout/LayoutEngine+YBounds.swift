@@ -60,7 +60,7 @@ extension LayoutEngine {
         _ element: LayoutElement, sp: CGFloat? = nil,
     ) -> [CGFloat] {
         switch element {
-        case let .clef(_, p, _),
+        case let .clef(_, p, _, _),
              let .keySignature(_, _, _, _, p, _),
              let .timeSignature(_, _, _, p, _),
              let .barLine(_, p, _, _, _),

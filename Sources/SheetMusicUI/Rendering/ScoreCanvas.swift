@@ -178,10 +178,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             CGPoint(x: base.x + p.x, y: base.y + p.y)
         }
         switch element {
-        case let .clef(raw, p, _):
+        case let .clef(raw, p, _, mag):
             ClefRenderer.draw(
                 context: &context, rawType: raw,
-                origin: shift(p), metrics: metrics,
+                origin: shift(p), metrics: metrics, mag: mag,
             )
         case let .keySignature(s, f, clef, naturals, p, _):
             KeySignatureRenderer.draw(

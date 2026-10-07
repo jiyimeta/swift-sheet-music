@@ -135,7 +135,7 @@ private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         /// Every clef anchor `system` draws, in document order.
         private func clefAnchors(in system: LayoutSystem) -> [ClefAnchor] {
             system.measures.flatMap(\.elements).compactMap { element in
-                guard case let .clef(_, _, anchor) = element else { return nil }
+                guard case let .clef(_, _, anchor, _) = element else { return nil }
                 return anchor
             }
         }
@@ -270,7 +270,7 @@ private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
             let continuation = try system(notContaining: 0, in: doc)
             let sp = doc.metrics.sp
             let point = try point(in: continuation) { element in
-                guard case let .clef(rawType, origin, _) = element else { return nil }
+                guard case let .clef(rawType, origin, _, _) = element else { return nil }
                 // The hit box is centred on the glyph's reference line, which is not where it is drawn.
                 return CGPoint(
                     x: origin.x, y: origin.y + ScoreHitTester.clefYOffset(rawType: rawType, sp: sp),

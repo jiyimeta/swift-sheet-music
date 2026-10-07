@@ -87,11 +87,15 @@ extension LayoutEngine {
                 i < staff.measures.count ? staff.measures[i] : nil
             }
             let durationAt = measureDuration(measureDurations, at: i)
+            let followingClefsAt = followingClefs(after: i, staves: staves, plan: nil)
+            let clefDrawnBefore = leadingClefDrawnBefore(measureIdx: i, staves: staves, plan: nil)
             if let prior = priorEntries[i],
                prior.sp == sp,
                prior.division == division, prior.spacing == context.options.spacing,
                prior.measures == measuresAt,
-               prior.measureDuration == durationAt
+               prior.measureDuration == durationAt,
+               prior.followingClefs == followingClefsAt,
+               prior.leadingClefDrawnBefore == clefDrawnBefore
             {
                 // Cache hit: copy the prior entry forward verbatim. Its
                 // `minWidth` is the natural width, so it stays valid under
@@ -102,29 +106,13 @@ extension LayoutEngine {
                 return collapsedOverride(for: i, baseline: prior.minWidth)
             }
             context.cache?.widthMisses += 1
-            let baseHeader = computeHeaderSchedule(
-                measureIdx: i, staves: staves, metrics: context.metrics,
-                synthesizeClefForAllStaves: false, synthesizeKeySigForAllStaves: false,
+            let entry = widthEntry(
+                measureIdx: i, measures: measuresAt, staves: staves, measureDuration: durationAt,
+                followingClefs: followingClefsAt, leadingClefDrawnBefore: clefDrawnBefore, context: context,
             )
-            let result = crossStaffMinimumMeasureWidthWithAggregate(
-                staves: staves,
-                measureIdx: i,
-                metrics: context.metrics,
-                headerSchedule: baseHeader,
-                division: division,
-                measureDuration: durationAt,
-            )
-            context.cache?.entries[i] = LayoutCache.Entry(
-                measures: measuresAt,
-                sp: sp,
-                division: division, spacing: context.options.spacing,
-                measureDuration: durationAt,
-                minWidth: result.width,
-                tickAggregate: result.aggregate,
-                placements: [:],
-            )
-            aggregates[i] = result.aggregate
-            return collapsedOverride(for: i, baseline: result.width)
+            context.cache?.entries[i] = entry
+            aggregates[i] = entry.tickAggregate
+            return collapsedOverride(for: i, baseline: entry.minWidth)
         }
 
         // Cancellation naturals widen a measure that the per-measure
@@ -137,12 +125,24 @@ extension LayoutEngine {
         let cancellationWidths = cancellationNaturalWidths(
             staves: staves, metrics: context.metrics,
         )
+        /// Likewise the clef column a measure's cached width left out because
+        /// the measure before draws its opening clef — when the plan collapses
+        /// that measure into a multi-measure rest, which draws nothing, the
+        /// clef goes back into this measure's own header
+        /// (`leadingClefDrawnBefore`).
+        func restoredClefColumn(_ i: Int) -> CGFloat {
+            guard leadingClefDrawnBefore(measureIdx: i, staves: staves, plan: nil),
+                  !leadingClefDrawnBefore(measureIdx: i, staves: staves, plan: plan),
+                  staves.contains(where: { followingClef(after: i - 1, in: $0) != nil })
+            else { return 0 }
+            return sp * 2
+        }
         let minWidths: [CGFloat] = cachedMinWidths.indices.map { i in
             guard plan.runLength(startingAt: i) == nil,
-                  !plan.isInteriorOfRun(i),
-                  i < cancellationWidths.count
+                  !plan.isInteriorOfRun(i)
             else { return cachedMinWidths[i] }
-            return cachedMinWidths[i] + cancellationWidths[i]
+            let cancellation = i < cancellationWidths.count ? cancellationWidths[i] : 0
+            return cachedMinWidths[i] + cancellation + restoredClefColumn(i)
         }
 
         // A measure's natural width at the host's stretch, divided back by
@@ -249,6 +249,9 @@ extension LayoutEngine {
                 measureIdx: systemStart,
                 activeKeys: activeKeys,
                 metrics: context.metrics,
+                leadingClefDrawnBefore: leadingClefDrawnBefore(
+                    measureIdx: systemStart, staves: staves, plan: plan,
+                ),
             )
             // Targeted measures-per-system across the next forced
             // line-break boundary (or score end). MuseScore's
@@ -481,6 +484,39 @@ extension LayoutEngine {
         return systems
     }
 
+    /// One measure's width-pass entry, computed afresh — what `packSystems`
+    /// stores on a cache miss: the natural width and the aggregate behind it,
+    /// keyed by every input that went into them.
+    private static func widthEntry(
+        measureIdx: Int, measures: [Measure?], staves: [Staff], measureDuration: Fraction,
+        followingClefs: [FollowingClef?], leadingClefDrawnBefore: Bool, context: RenderContext,
+    ) -> LayoutCache.Entry {
+        let baseHeader = computeHeaderSchedule(
+            measureIdx: measureIdx, staves: staves, metrics: context.metrics,
+            synthesizeClefForAllStaves: false, synthesizeKeySigForAllStaves: false,
+            leadingClefDrawnBefore: leadingClefDrawnBefore,
+        )
+        let result = crossStaffMinimumMeasureWidthWithAggregate(
+            staves: staves,
+            measureIdx: measureIdx,
+            metrics: context.metrics,
+            headerSchedule: baseHeader,
+            division: context.score.division,
+            measureDuration: measureDuration,
+        )
+        return LayoutCache.Entry(
+            measures: measures,
+            sp: context.metrics.sp,
+            division: context.score.division, spacing: context.options.spacing,
+            measureDuration: measureDuration,
+            followingClefs: followingClefs,
+            leadingClefDrawnBefore: leadingClefDrawnBefore,
+            minWidth: result.width,
+            tickAggregate: result.aggregate,
+            placements: [:],
+        )
+    }
+
     /// Resolve each staff's starting-of-score default clef from the
     /// part's declarations.  Mirrors the logic used previously inside
     /// `buildSystem`; factored out so `packSystems` can initialize the
@@ -581,6 +617,7 @@ extension LayoutEngine {
             overlappingSpannerAnchors: overlappingAnchors,
             ottavaNumbersOnly: context.score.style.ottavaNumbersOnly,
             trailingCourtesy: trailingCourtesy,
+            followingClefs: followingClefs(after: lastMeasure, staves: staves, plan: context.multiMeasureRestPlan),
         )
     }
 

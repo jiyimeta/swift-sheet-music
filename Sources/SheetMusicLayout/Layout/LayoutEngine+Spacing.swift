@@ -159,6 +159,11 @@ extension LayoutEngine {
     /// width for a key signature even when the measure has no literal
     /// `<KeySig>` — used at the start of continuation systems to
     /// redraw the currently active key.
+    ///
+    /// `leadingClefDrawnBefore`: the clef this measure opens with is drawn
+    /// at the end of the measure before it (`LayoutEngine+BarlineClef`),
+    /// so it takes no column here — unless the measure opens a system
+    /// (`synthesizeClefForAllStaves`), whose header draws it anyway.
     static func computeHeaderSchedule(
         measureIdx: Int,
         staves: [Staff],
@@ -166,6 +171,7 @@ extension LayoutEngine {
         synthesizeClefForAllStaves: Bool,
         synthesizeKeySigForAllStaves: Bool = false,
         activeKeys: [Int]? = nil,
+        leadingClefDrawnBefore: Bool = false,
     ) -> HeaderSchedule {
         var clefWidth: CGFloat = 0
         var keyGlyphCount = 0
@@ -201,7 +207,7 @@ extension LayoutEngine {
             for el in leading {
                 var stop = false
                 switch el {
-                case .clef:
+                case .clef where !leadingClefDrawnBefore:
                     clefWidth = max(clefWidth, metrics.sp * 2)
                 case let .keySignature(k):
                     // A change that lands on C draws no signature of its
@@ -334,6 +340,7 @@ extension LayoutEngine {
                 metrics: metrics,
                 synthesizeClefForAllStaves: false,
                 synthesizeKeySigForAllStaves: false,
+                leadingClefDrawnBefore: leadingClefDrawnBefore(measureIdx: i, staves: staves, plan: nil),
             )
             let w = crossStaffMinimumMeasureWidth(
                 staves: staves,
@@ -359,6 +366,18 @@ extension LayoutEngine {
         let gapFloors: [CGFloat]
         let totalWeight: CGFloat
         let measureEnd: Int
+        /// The room a clef written after the measure's last chord or rest takes before its barline, on whichever
+        /// staff needs the most (`barEndClefWidth`); `0` when there is none. Kept after the content rather than in
+        /// the last gap, so the clef stays by the barline however far the content stretches — and added to the
+        /// trailing gap by both the width (`crossStaffMinimumMeasureWidthWithAggregate`) and the placement
+        /// (`tickColumns`), which must agree.
+        var trailingClefWidth: CGFloat = 0
+
+        /// The slack between the last column's gap and the measure's right edge: 1 sp — which also gives a flagged
+        /// note room for its flag before the barline — plus any bar-end clef.
+        func trailingGap(sp: CGFloat) -> CGFloat {
+            sp + trailingClefWidth
+        }
 
         /// `Σ max(floor, k · weight)`: the gaps' total width at stretch `k`.
         func contentWidth(atStretch k: CGFloat) -> CGFloat {
@@ -418,10 +437,9 @@ extension LayoutEngine {
         guard !agg.sortedTicks.isEmpty else { return [:] }
 
         // Trailing slack between the last note's tick and the right
-        // barline. Matches `minimumMeasureWidth`'s `rightPadding`;
-        // 1 sp also gives flagged 8th / 16th notes room for their
-        // flag glyph before the barline.
-        let trailingGap = metrics.sp * 1
+        // barline — the same `trailingGap` the measure's width was
+        // given (`crossStaffMinimumMeasureWidthWithAggregate`).
+        let trailingGap = agg.trailingGap(sp: metrics.sp)
         // Floor `contentWidth` at `minimumContentWidth`: even when callers
         // hand us a `width` smaller than the cross-staff aggregated
         // minimum, never squeeze gaps below their declared per-segment
@@ -552,7 +570,7 @@ extension LayoutEngine {
         )
         // Must match `tickColumns`' trailingGap so the spacing engine
         // and the placement engine size every measure identically.
-        let trailingGap = metrics.sp * 1
+        let trailingGap = agg.trailingGap(sp: metrics.sp)
         let contentWidth = max(metrics.sp * 4, agg.minimumContentWidth)
         // baseX = contentStartX + sp; the rightmost tick lands at
         // baseX + contentWidth; trailing barline / gap follows.
@@ -638,6 +656,13 @@ extension LayoutEngine {
         var voiceElements: [[TimedElement]] = []
         var allTicks: Set<Int> = []
         var measureEnd = 0
+        // A clef the NEXT bar opens with stands before this one's barline
+        // (`LayoutEngine+BarlineClef`), in the same room a clef after this
+        // bar's own last chord takes.
+        var trailingClefWidth = followingClefs(after: measureIdx, staves: staves, plan: nil)
+            .compactMap { $0?.visible == true ? $0 : nil }
+            .map { barEndClefWidth(rawType: $0.rawType, metrics: metrics) }
+            .max() ?? 0
         // Per staff, tick → what its chords and rests there hang off the
         // column's sides, for `collisionFloors`.
         var inks: [[Int: ColumnInk]] = []
@@ -656,6 +681,28 @@ extension LayoutEngine {
                 // Previous notes-bearing chord, for the backward reach of
                 // a left-pointing chord line (plop / scoop).
                 var previousChord: Chord?
+                // A visible clef written after this voice's first timed
+                // element — mid-bar, drawn before the NEXT column rather
+                // than in the header — waiting to widen that column's left
+                // reach (`midMeasureClefOffset`).
+                var pendingClefType: String?
+                /// The column ink of `chord`, reaching left past a pending
+                /// mid-bar clef when one precedes it.
+                func ink(of chord: Chord) -> ColumnInk {
+                    var ink = columnInk(of: chord, metrics: metrics)
+                    if let rawType = pendingClefType {
+                        ink.left = midMeasureClefReach(rawType: rawType, before: chord, metrics: metrics)
+                        pendingClefType = nil
+                    }
+                    return ink
+                }
+                // A clef still pending once the voice ends follows its last timed element: it stands before the
+                // barline, in room the measure keeps after its content (`trailingClefWidth`).
+                defer {
+                    if let rawType = pendingClefType {
+                        trailingClefWidth = max(trailingClefWidth, barEndClefWidth(rawType: rawType, metrics: metrics))
+                    }
+                }
                 for (idx, el) in voice.elements.enumerated() {
                     switch el {
                     case let .chord(c) where !c.notes.isEmpty:
@@ -711,9 +758,7 @@ extension LayoutEngine {
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: w,
                         ))
-                        staffInks[tick, default: ColumnInk()].formUnion(
-                            columnInk(of: c, metrics: metrics),
-                        )
+                        staffInks[tick, default: ColumnInk()].formUnion(ink(of: c))
                         previousChord = c
                         allTicks.insert(tick)
                         tick = end
@@ -728,11 +773,11 @@ extension LayoutEngine {
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: w,
                         ))
-                        staffInks[tick, default: ColumnInk()].formUnion(
-                            columnInk(of: r, metrics: metrics),
-                        )
+                        staffInks[tick, default: ColumnInk()].formUnion(ink(of: r))
                         allTicks.insert(tick)
                         tick = end
+                    case let .clef(clef) where !elements.isEmpty && clef.visible:
+                        pendingClefType = clef.concertClefType
                     case let .harmony(harmony) where harmony.visible:
                         // Pre-measure so the next chord/rest segment
                         // carries demand to host the symbol without
@@ -851,6 +896,7 @@ extension LayoutEngine {
                 inks: inks, sortedTicks: sortedTicks, gapWeights: gapWeights,
             ),
             totalWeight: totalWeight, measureEnd: measureEnd,
+            trailingClefWidth: trailingClefWidth,
         )
     }
 
@@ -867,11 +913,17 @@ extension LayoutEngine {
     /// despite the same measure spacing fine in horizontal mode.
     /// We compute the synth overhead here and add it to the first
     /// measure's width during system packing.
+    ///
+    /// `leadingClefDrawnBefore`: the natural width left out the clef the
+    /// measure opens with, which mid-system is drawn at the end of the bar
+    /// before (`computeHeaderSchedule`'s parameter of the same name), so a
+    /// system head pays for that clef's column too.
     static func synthHeaderOverhead(
         staves: [Staff],
         measureIdx: Int,
         activeKeys: [Int],
         metrics: StaffMetrics,
+        leadingClefDrawnBefore: Bool = false,
     ) -> CGFloat {
         var clefBoost: CGFloat = 0
         var keyBoost: CGFloat = 0
@@ -905,7 +957,7 @@ extension LayoutEngine {
                     continue
                 }
             }
-            if !hasExplicitClef {
+            if !hasExplicitClef || leadingClefDrawnBefore {
                 clefBoost = max(clefBoost, metrics.sp * 2)
             }
             if activeKey != 0 {

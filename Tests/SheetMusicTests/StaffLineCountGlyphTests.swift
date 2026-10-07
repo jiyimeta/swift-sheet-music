@@ -301,7 +301,7 @@
             var timeSigY: CGFloat?
             for element in measure.elements {
                 switch element {
-                case let .clef(_, p, _): clefY = clefY ?? p.y
+                case let .clef(_, p, _, _): clefY = clefY ?? p.y
                 case let .timeSignature(_, _, _, p, _): timeSigY = timeSigY ?? p.y
                 default: continue
                 }

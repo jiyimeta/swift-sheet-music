@@ -47,7 +47,13 @@ public enum LayoutElement: Sendable, Equatable {
     /// clef bar 0 synthesizes, and `.restatement` for the one a continuation system redraws at its head — which
     /// names THAT bar, so each system's restatement is an identity of its own and an edit through it starts a
     /// clef there. `nil` only for the sticky header's clef: chrome drawn over the score rather than the score.
-    case clef(rawType: String, origin: CGPoint, anchor: ClefAnchor?)
+    ///
+    /// `origin.x` is the glyph's horizontal CENTER; `origin.y` the staff's middle line, which each renderer offsets to
+    /// the clef's reference line (`ClefGlyph.glyph(for:)`). `mag` is the glyph's size against the staff's: 1 for a
+    /// clef at the head of a bar, `LayoutEngine.smallClefMag` for one written after a bar's first chord or rest — a
+    /// mid-bar change, or one standing before the barline — which MuseScore draws small (`Sid::smallClefMag`).
+    /// Renderers scale the glyph's point size by it, about its reference line.
+    case clef(rawType: String, origin: CGPoint, anchor: ClefAnchor?, mag: CGFloat = 1)
     /// `clef` is the clef in force where the signature is drawn. It
     /// selects the accidental step table — MuseScore reads the same
     /// thing off the preceding clef segment in `TLayout::layoutKeySig`

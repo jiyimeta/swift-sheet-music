@@ -35,7 +35,7 @@ extension LayoutDocument {
         let leadingLimit = measure.width / 2
         for el in measure.elements {
             switch el {
-            case let .clef(_, origin, _) where origin.x <= leadingLimit:
+            case let .clef(_, origin, _, _) where origin.x <= leadingLimit:
                 rightEdge = max(rightEdge, origin.x + sp * 2)
             case let .keySignature(sharps, flats, _, naturals, origin, _) where origin.x <= leadingLimit:
                 let glyphs = max(sharps, flats, naturals.count)

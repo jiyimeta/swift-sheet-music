@@ -12,9 +12,10 @@ import SheetMusicLayout
 extension ScoreLayerBuilder {
     // MARK: - Clef
 
+    /// `mag` scales the glyph and nothing else: the reference line it stands on is the staff's, at full size.
     @discardableResult
     static func drawClef(
-        rawType: String, origin: CGPoint,
+        rawType: String, origin: CGPoint, mag: CGFloat = 1,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) -> CAShapeLayer? {
@@ -40,7 +41,7 @@ extension ScoreLayerBuilder {
         guard let layer = glyphLayer(
             glyph,
             at: CGPoint(x: origin.x, y: origin.y + yOffset),
-            size: metrics.glyphFontSize,
+            size: metrics.glyphFontSize * mag,
             height: height,
         ) else {
             return nil

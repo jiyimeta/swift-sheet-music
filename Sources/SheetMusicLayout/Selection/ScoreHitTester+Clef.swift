@@ -50,7 +50,7 @@ extension ScoreHitTester {
                     y: system.origin.y + measure.origin.y,
                 )
                 for el in measure.drawnElements {
-                    guard case let .clef(rawType, origin, elAnchor) = el,
+                    guard case let .clef(rawType, origin, elAnchor, mag) = el,
                           elAnchor == anchor
                     else { continue }
                     let yOffset = Self.clefYOffset(
@@ -62,14 +62,15 @@ extension ScoreHitTester {
                     // test uses: a G clef reaches 4.4 sp above its anchor and
                     // 2.6 sp below it, so a control hung off the top of a
                     // ±2.5 sp box opens over the curl rather than above it.
+                    // A small clef's ink is the glyph's, scaled about its reference line (`LayoutElement.clef`).
                     let ink = ClefGlyph.inkExtentSp(
                         for: NotatedClef(rawType: rawType),
                     )
                     result.append(CGRect(
-                        x: centerX - sp,
-                        y: anchorY - ink.above * sp,
-                        width: sp * 2,
-                        height: (ink.above + ink.below) * sp,
+                        x: centerX - sp * mag,
+                        y: anchorY - ink.above * sp * mag,
+                        width: sp * 2 * mag,
+                        height: (ink.above + ink.below) * sp * mag,
                     ))
                 }
             }

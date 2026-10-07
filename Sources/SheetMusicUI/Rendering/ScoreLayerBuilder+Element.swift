@@ -38,9 +38,9 @@ extension ScoreLayerBuilder {
             }
         }
         switch element {
-        case let .clef(raw, p, anchor):
+        case let .clef(raw, p, anchor, mag):
             let layer = drawClef(
-                rawType: raw, origin: shift(p),
+                rawType: raw, origin: shift(p), mag: mag,
                 metrics: metrics, height: height, into: parent,
             )
             if let layer, let anchor {

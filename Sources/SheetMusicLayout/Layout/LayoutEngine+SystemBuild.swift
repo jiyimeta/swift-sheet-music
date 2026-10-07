@@ -186,6 +186,11 @@ extension LayoutEngine {
             )
             let synthesizeClefHere = j == 0
             let synthesizeKeySigHere = j == 0
+            // A system head draws the clef it opens with in its header; any
+            // other measure leaves it to the measure before, which draws it
+            // before its barline (`LayoutEngine+BarlineClef`).
+            let drawsLeadingClef = synthesizeClefHere
+                || !leadingClefDrawnBefore(measureIdx: measureIdx, staves: staves, plan: plan)
             let schedule = computeHeaderSchedule(
                 measureIdx: measureIdx,
                 staves: staves,
@@ -193,7 +198,9 @@ extension LayoutEngine {
                 synthesizeClefForAllStaves: synthesizeClefHere,
                 synthesizeKeySigForAllStaves: synthesizeKeySigHere,
                 activeKeys: keys,
+                leadingClefDrawnBefore: !drawsLeadingClef,
             )
+            let followingClefsHere = followingClefs(after: measureIdx, staves: staves, plan: plan)
             // Reuse the aggregate `crossStaffMinimumMeasureWidth`
             // already computed for this measure during `packSystems`'s
             // width pass instead of recomputing `aggregatedTickWeights`
@@ -301,6 +308,8 @@ extension LayoutEngine {
                     measureDuration: measDuration,
                     textPlacementStyle: context.score.style.textPlacement,
                     maxAboveLyricVerse: maxAboveVerses[staffIdx],
+                    drawsLeadingClef: drawsLeadingClef,
+                    followingClef: followingClefsHere[staffIdx],
                 )
                 let els: [LayoutElement]
                 let invisibleEls: [LayoutElement]
@@ -345,6 +354,8 @@ extension LayoutEngine {
                         systemElements: systemElementsForStaff,
                         textPlacementStyle: context.score.style.textPlacement,
                         maxAboveLyricVerse: maxAboveVerses[staffIdx],
+                        drawsLeadingClef: drawsLeadingClef,
+                        followingClef: followingClefsHere[staffIdx],
                     )
                     els = result.elements
                     invisibleEls = result.invisibleElements

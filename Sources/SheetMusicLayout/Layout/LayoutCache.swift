@@ -75,6 +75,16 @@ public final class LayoutCache: @unchecked Sendable {
         /// stale aggregate for an unrelated, unedited measure whose
         /// prevailing duration just changed underneath it.
         let measureDuration: Fraction
+        /// The clefs the NEXT measure opens with, which this one draws
+        /// before its barline (`LayoutEngine.followingClefs`, without the
+        /// multi-measure-rest plan), and whether this measure's own opening
+        /// clefs are drawn at the end of the one before
+        /// (`LayoutEngine.leadingClefDrawnBefore`, likewise). Neither is in
+        /// `measures`: one lives in the next measure, the other turns on the
+        /// previous measure's section break. Both change `minWidth` and
+        /// `tickAggregate`.
+        let followingClefs: [LayoutEngine.FollowingClef?]
+        let leadingClefDrawnBefore: Bool
 
         /// --- Output of crossStaffMinimumMeasureWidth ---
         ///
@@ -205,6 +215,10 @@ public final class LayoutCache: @unchecked Sendable {
         /// the following measure would leave this system serving a
         /// cached trailing edge that never announces it.
         let trailingCourtesy: LayoutEngine.TrailingCourtesy?
+        /// The clefs the measure after this range opens with, which its last
+        /// measure draws before the barline (`LayoutEngine.followingClefs`) —
+        /// the same blind spot `trailingCourtesy` covers for signatures.
+        let followingClefs: [LayoutEngine.FollowingClef?]
     }
 
     /// All inputs to `placeMeasureElements` for one (measure, staff).
@@ -271,5 +285,12 @@ public final class LayoutCache: @unchecked Sendable {
         let measureDuration: Fraction
         var textPlacementStyle = TextPlacementStyles()
         var maxAboveLyricVerse = 0
+        /// Whether the measure draws the clef it opens with in its own
+        /// header — `false` mid-system, where the measure before draws it —
+        /// and the clef the next measure opens with, which this one draws
+        /// before its barline (`LayoutEngine+BarlineClef`). Neither is in
+        /// `measure`.
+        var drawsLeadingClef = true
+        var followingClef: LayoutEngine.FollowingClef?
     }
 }

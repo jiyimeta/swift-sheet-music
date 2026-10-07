@@ -456,7 +456,7 @@ extension HarmonyTests {
                     if case let .harmony(lh) = el, foundHarmony == nil {
                         foundHarmony = lh
                     }
-                    if case let .clef(_, p, _) = el, clefY == nil {
+                    if case let .clef(_, p, _, _) = el, clefY == nil {
                         clefY = p.y
                     }
                     if foundHarmony != nil, clefY != nil { break outer }

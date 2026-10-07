@@ -7,6 +7,41 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **`.setKeySignature` / `.setTimeSignature` declare a key or meter a bar only inherits, instead of planning to
+  nothing.** Only a bar that already declares that value (bar 0 declares the score's whether or not one is written)
+  is a restatement now. The declaration bounds a change written before it — a key runs, and a meter re-bars, only up
+  to the next declared one — so a host changes just a span by writing the value that should come back at its end
+  first, as MuseScore keeps such a signature (`undoChangeKeySig`, `cmdAddTimeSig`). A meter declared at a bar that
+  inherits it is written into the leading run on every staff without re-barring: the barlines are already where it
+  puts them.
+- **A clef written after a bar's first chord or rest is drawn small**, as MuseScore draws it (`Sid::smallClefMag`,
+  `LayoutEngine.smallClefMag` = 0.8); a clef at the head of a bar stays full size. `LayoutElement.clef` gains a
+  `mag` member (default 1) that every renderer — the CALayer and Canvas paths and the draw program the Android,
+  Windows and PDF renderers read — applies to the glyph's point size, about its reference line; the clef hit
+  rectangles shrink with it. A client that destructures the case binds one more value.
+- **A clef a bar opens with is drawn at the end of the bar before it, small, before the barline** — MuseScore's
+  spelling of a clef change at a barline (`undoChangeClef` moves such a clef to the end of the previous bar), and no
+  longer full size after the barline with a header column of its own. A bar that opens a system still draws the clef
+  in its header, and the system before announces it the same small way (MuseScore's courtesy clef). Not after a
+  section break, nor after a bar collapsed into a multi-measure rest. The model is unchanged: the clef stays in the
+  bar it governs, and every glyph of it names it there (`LayoutEngine+BarlineClef`).
+
+### Fixed
+
+- **A clef written in the middle of a bar no longer draws on top of the note it governs.** The layout placed it at
+  the next column's own x and the spacing made no room for it. It now stands before that column, its ink 0.8 sp clear
+  of the notehead (`Sid::clefKeyRightMargin`) or 0.6 sp of the chord's leftmost accidental, and the column's
+  collision floor reserves its width, so the note before it is kept clear at any stretch.
+- **A clef written after a bar's last chord or rest stands before the barline.** It used to be drawn where no column
+  was found for it — at the start of the bar's content, over its first note. MuseScore spells a clef change at a
+  barline this way, so every such change in an imported score was drawn there. It now stands 0.5 sp before the
+  barline (`Sid::clefBarlineDistance`), and the measure keeps room for it after its content
+  (`TickAggregate.trailingClefWidth`).
+- **Picking a symbol (C, ¢) over a pickup bar draws it.** The pickup's own signature was rewritten in place with the
+  new numbers only, so the symbol never appeared and the edit left an undo step that changed nothing.
+
 ## [4.3.0] - 2026-10-05
 
 ### Added

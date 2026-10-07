@@ -72,6 +72,82 @@ extension LayoutEngine {
         return ColumnInk(left: left, reach: right + sp * 0.35)
     }
 
+    /// Clearance between a clef written in the middle of a bar and the leftmost accidental of the column it precedes,
+    /// in staff spaces — MuseScore's clef-to-accidental padding.
+    static let midMeasureClefGapSp: CGFloat = 0.6
+
+    /// The same clearance when that column has no accidental and the clef faces its notehead — MuseScore's
+    /// `Sid::clefKeyRightMargin`.
+    static let midMeasureClefNoteGapSp: CGFloat = 0.8
+
+    /// Clearance kept on the clef's other side, beyond the previous column's own `reach` padding.
+    static let midMeasureClefLeadSp: CGFloat = 0.4
+
+    /// The size of a clef written after a bar's first chord or rest against a full one — MuseScore's
+    /// `Sid::smallClefMag`. A clef at the head of a bar stays full size.
+    static let smallClefMag: CGFloat = 0.8
+
+    /// Clearance between a clef written after a bar's last chord or rest and the barline it stands before —
+    /// MuseScore's `Sid::clefBarlineDistance`.
+    static let clefBarlineDistanceSp: CGFloat = 0.5
+
+    /// A small clef's advance — the width every renderer draws it at (`LayoutElement.clef`'s `mag`).
+    static func smallClefAdvance(rawType: String, metrics: StaffMetrics) -> CGFloat {
+        let glyph = ClefGlyph.glyph(for: NotatedClef(rawType: rawType)).codepoint
+        return bravuraAdvance(glyph, metrics: metrics) * smallClefMag
+    }
+
+    /// Column x to the CENTER of a clef written in the middle of a bar, before the chord or rest at that column —
+    /// where the clef is drawn (`placeMeasureElements`; a clef's origin is its glyph's center).
+    ///
+    /// A mid-bar clef used to be drawn AT the next column, on top of the note it governs, with no room made for it:
+    /// the layout gave it the column's x and the spacing gave it nothing. MuseScore gives it a segment of its own
+    /// before the chord's; here it is the left reach of the chord's column (`midMeasureClefReach`), so the collision
+    /// floor that keeps an accidental off the previous note keeps the clef off it too, at any stretch.
+    ///
+    /// `element` is the chord or rest the clef precedes in its own voice; its accidentals push the clef further left.
+    static func midMeasureClefOffset(rawType: String, before element: Chord, metrics: StaffMetrics) -> CGFloat {
+        clefClearance(before: element, metrics: metrics) + smallClefAdvance(rawType: rawType, metrics: metrics) / 2
+    }
+
+    /// How far left of the column a mid-bar clef's ink reaches, plus `midMeasureClefLeadSp` — the column's
+    /// `ColumnInk.left` while one precedes it (`aggregatedTickWeights`).
+    static func midMeasureClefReach(rawType: String, before element: Chord, metrics: StaffMetrics) -> CGFloat {
+        clefClearance(before: element, metrics: metrics) + smallClefAdvance(rawType: rawType, metrics: metrics)
+            + midMeasureClefLeadSp * metrics.sp
+    }
+
+    /// The room a clef written after a bar's last chord or rest takes before the barline: its small glyph, the
+    /// clearance from the barline, and the lead kept from the last column. MuseScore puts such a clef — its usual
+    /// spelling of a clef change at the next barline — in a segment at the end of the bar, before the barline.
+    static func barEndClefWidth(rawType: String, metrics: StaffMetrics) -> CGFloat {
+        smallClefAdvance(rawType: rawType, metrics: metrics)
+            + (clefBarlineDistanceSp + midMeasureClefLeadSp) * metrics.sp
+    }
+
+    /// `barEndClefWidth(rawType:metrics:)` for the visible clef `voice` writes after its last chord or rest — `0`
+    /// when it writes none there.
+    static func barEndClefWidth(in voice: Voice, metrics: StaffMetrics) -> CGFloat {
+        let elements = voice.elements.values
+        guard let lastTimed = elements.lastIndex(where: { if case .chord = $0 { true } else { false } }) else {
+            return 0
+        }
+        let clef = elements[(lastTimed + 1)...].lazy.compactMap { element -> Clef? in
+            if case let .clef(clef) = element, clef.visible { clef } else { nil }
+        }.last
+        return clef.map { barEndClefWidth(rawType: $0.concertClefType, metrics: metrics) } ?? 0
+    }
+
+    /// Column x to where a clef's ink must end before `element`'s column: clear of its leftmost accidental by
+    /// `midMeasureClefGapSp`, else of its notehead by `midMeasureClefNoteGapSp`.
+    private static func clefClearance(before element: Chord, metrics: StaffMetrics) -> CGFloat {
+        let sp = metrics.sp
+        let accidentals = columnInk(of: element, metrics: metrics).left
+        return accidentals > 0
+            ? accidentals + midMeasureClefGapSp * sp
+            : StemGeometry.attachDx(sp: sp) + midMeasureClefNoteGapSp * sp
+    }
+
     /// Per-gap collision floors for an aggregate's gaps: `floors[i]` is the least distance column `i` may sit from
     /// column `i + 1`.
     ///

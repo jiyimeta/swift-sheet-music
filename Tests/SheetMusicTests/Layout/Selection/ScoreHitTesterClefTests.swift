@@ -41,7 +41,7 @@
                 if case .clef = $0 { return true }
                 return false
             })
-            guard case let .clef(_, origin, _) = clefEl else {
+            guard case let .clef(_, origin, _, _) = clefEl else {
                 Issue.record("expected first element to be a clef")
                 return
             }
@@ -68,7 +68,7 @@
             let tester = ScoreHitTester(document: doc)
             let system = try #require(doc.systems.first)
             let measure = try #require(system.measures.first)
-            guard case let .clef(_, origin, _) = (
+            guard case let .clef(_, origin, _, _) = (
                 measure.elements.first { if case .clef = $0 { return true }; return false },
             ) else {
                 Issue.record("no clef element")

@@ -476,12 +476,13 @@ public struct ScoreHitTester: Sendable {
         // The glyph's own box (≈ 2 sp wide, ≈ 5 sp tall), plus the reach every engraved element gets — see
         // `ScoreHitTester.elementHitTolerance`. A clef is narrow enough that its ink alone made it a target a
         // pointer had to be placed on exactly.
-        let halfWidth = sp * (1.0 + Self.elementHitTolerance)
-        let halfHeight = sp * (2.5 + Self.elementHitTolerance)
         for el in measure.drawnElements {
-            guard case let .clef(rawType, origin, anchor) = el,
+            guard case let .clef(rawType, origin, anchor, mag) = el,
                   let anchor
             else { continue }
+            // A small clef's box shrinks with its glyph; the reach around it does not.
+            let halfWidth = sp * (1.0 * mag + Self.elementHitTolerance)
+            let halfHeight = sp * (2.5 * mag + Self.elementHitTolerance)
             let yOffset = Self.clefYOffset(rawType: rawType, sp: sp)
             let ax = base.x + origin.x
             let ay = base.y + origin.y + yOffset
