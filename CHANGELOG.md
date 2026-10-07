@@ -7,6 +7,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Page annotations in vector PDF exports.** `ScorePDFWriter.write` accepts ink with clipped filled appearances
+  and rectangle highlights with multiply blending, addressed by zero-based page index. Files without annotations
+  retain their existing bytes.
+
 ### Changed
 
 - **The WebAssembly size check left the push path and only warns.** `Scripts/wasm-size.sh` was the longest step in

@@ -3,7 +3,7 @@ import SheetMusicFoundation
 /// Writes a PDF file object by object, then the cross-reference table that finds them and the trailer. Numbers are
 /// handed out first (`reserve`) so objects can name each other before they are written; every reserved number has to
 /// be written before `finish`.
-final class PDFObjectWriter {
+final class PDFObjectWriter: PDFObjectSink {
     private var bytes: [UInt8]
     private var offsets: [Int?] = []
 
@@ -27,13 +27,19 @@ final class PDFObjectWriter {
     /// Writes object `number` as a stream: `dictionary`'s entries (without the `<< >>`) plus `/Length`, and with
     /// `compress` `/Filter /FlateDecode`, over `data`.
     func stream(_ number: Int, dictionary: String, data: Data, compress: Bool) throws {
+        begin(number)
+        bytes += try Self.streamBody(dictionary: dictionary, data: data, compress: compress)
+        append("endobj\n")
+    }
+
+    /// A stream object's body after its `N G obj` line: `dictionary`'s entries plus `/Length` (and with `compress`
+    /// `/Filter /FlateDecode`), then the payload. Shared with `PDFIncrementalWriter`.
+    static func streamBody(dictionary: String, data: Data, compress: Bool) throws -> [UInt8] {
         let payload = compress ? try FlateStream.encode(data) : data
         let filter = compress ? " /Filter /FlateDecode" : ""
         let entries = dictionary.isEmpty ? "" : "\(dictionary) "
-        begin(number)
-        append("<< \(entries)/Length \(payload.count)\(filter) >>\nstream\n")
-        bytes += payload
-        append("\nendstream\nendobj\n")
+        return Array("<< \(entries)/Length \(payload.count)\(filter) >>\nstream\n".utf8) + payload
+            + Array("\nendstream\n".utf8)
     }
 
     /// The file: every object, the cross-reference table, and a trailer naming `root` (the catalog) and `info`.
