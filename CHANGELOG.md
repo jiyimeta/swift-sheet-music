@@ -9,6 +9,10 @@ and this project adheres to
 
 ### Added
 
+- **Incremental annotations for existing PDFs.** `PDFIncrementalAnnotator` reports each page's displayed size
+  and appends ink and highlights while preserving the original bytes and existing annotations. Classic
+  cross-reference tables, xref streams, and object streams are supported; encrypted or unreadable files fail
+  cleanly. Nonfinite or unrepresentable annotation geometry is omitted by both PDF writers.
 - **Page annotations in vector PDF exports.** `ScorePDFWriter.write` accepts ink with clipped filled appearances
   and rectangle highlights with multiply blending, addressed by zero-based page index. Files without annotations
   retain their existing bytes.

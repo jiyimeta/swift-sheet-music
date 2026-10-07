@@ -113,6 +113,8 @@ public struct PDFHighlightAnnotation: Equatable, Sendable {
     }
 }
 
+/// Page geometry that is nonfinite or cannot be represented safely in the writer's fixed-point numbers is omitted,
+/// as is an appearance with nothing to draw. Other annotations on the page are retained.
 public enum PDFPageAnnotation: Equatable, Sendable {
     case ink(PDFInkAnnotation)
     case highlight(PDFHighlightAnnotation)

@@ -19,6 +19,7 @@ enum PDFAnnotationObjects {
     ) throws -> [Int] {
         var numbers: [Int] = []
         for annotation in annotations {
+            guard PDFAnnotationGeometry.isRepresentable(annotation, in: space) else { continue }
             let number = switch annotation {
             case let .ink(ink): try write(ink, in: space, into: sink)
             case let .highlight(highlight): try write(highlight, in: space, into: sink)

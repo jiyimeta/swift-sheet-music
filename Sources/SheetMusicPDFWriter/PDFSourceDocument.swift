@@ -1,7 +1,13 @@
 import SheetMusicFoundation
 
-public enum PDFAppendError: Error {
-    case encrypted, unreadable, pageOutOfRange
+/// Why annotations could not be appended to an existing PDF.
+public enum PDFAppendError: Error, Equatable, Sendable {
+    /// Updating encrypted objects requires the original encryption key.
+    case encrypted
+    /// The file cannot be followed or represented as a safe incremental update.
+    case unreadable
+    /// A requested zero-based page index lies outside the file's page tree.
+    case pageOutOfRange
 }
 
 /// An existing PDF's newest trailer, object locations and page tree, for an incremental update.
