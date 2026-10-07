@@ -12,6 +12,12 @@ import SheetMusicLayout
 ///
 /// Throws when the bytes do not decode (empty bytes are truncated); the provider is left as it was.
 public func installFontMetricsTable(_ bytes: Data) throws {
-    let table = try FontMetricsTable.decode(bytes)
-    FontMetrics.provider = makeFontMetricsTableProvider(table: table)
+    FontMetrics.provider = try fontMetricsTableProvider(bytes)
+}
+
+/// The provider `installFontMetricsTable` installs, made without installing it. Tests check this rather than the
+/// process-wide provider: every suite in the test process shares that one, and a test that swaps it and puts it back
+/// can put back a stale value over another suite's install.
+func fontMetricsTableProvider(_ bytes: Data) throws -> any FontMetricsProvider {
+    try makeFontMetricsTableProvider(table: FontMetricsTable.decode(bytes))
 }
