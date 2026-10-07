@@ -32,6 +32,12 @@ and this project adheres to
   those bands for the cached layout as `[StaffBandWire]`: the staff in full-score addressing (re-addressed past the
   cache entry's hidden staves, which have no band) and the rectangle in document millimetres. Empty for an unknown
   handle or no cached layout.
+- **`installFontMetricsTable(_:)`** is now reachable from **`SheetMusicPages`**. It lived in `SheetMusicBridgeCore`,
+  which is not a product, so a host laying out a print with `ScorePages.compute` without CoreText — Android's PDF
+  export — had no way to install the measured table first. Same signature; nothing called the old location.
+- **Print resources in the Android AAR** (`SheetMusicComposeAndroid`, `assets/fonts/`): `Edwin-Italic.otf`,
+  `Edwin-Bold.otf`, `Edwin-BdIta.otf` and `sheet-music-styled.smft`, so an Android host can lay out and write a PDF in
+  Swift with the faces the writer embeds and a table whose bold and italic records measure them. About 533 KB.
 
 ### Fixed
 

@@ -297,7 +297,7 @@ var targets: [Target] = [
     // bridge's draw-program commands (folino spec 2026-10-05-windows-phase4-import-export-pdf-design §6).
     .target(
         name: "SheetMusicPages",
-        dependencies: ["SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicLayout"],
+        dependencies: ["SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicFoundation", "SheetMusicLayout"],
     ),
     // A PDF of a score's pages, written in Swift: the fonts embedded whole, each page's draw-program commands as a
     // content stream. Portable — Windows exports with it, and Android can in place of its Kotlin walk.

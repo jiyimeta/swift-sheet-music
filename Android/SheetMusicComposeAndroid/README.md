@@ -168,6 +168,24 @@ anything out — see `FontMetricsBuilder` in
 Without it the layout falls back to rectangle approximations that are
 sane but not correct.
 
+### Print resources
+
+`assets/fonts/` also carries what a print laid out and written in Swift
+(`ScorePages.compute`, `ScorePDFWriter.write`) needs, so a host can hand
+the same bytes to both:
+
+- `Edwin-Italic.otf`, `Edwin-Bold.otf`, `Edwin-BdIta.otf` — the styled
+  faces the PDF writer embeds for italic, bold and bold-italic text.
+  The screen renderer synthesizes those from `Edwin-Roman.otf` instead.
+- `sheet-music-styled.smft` — the metrics table whose bold and italic
+  records measure those real faces (a copy of the Windows table,
+  `Sources/SheetMusicRenderWindows/Resources/sheet-music.smft`). Install
+  it with `installFontMetricsTable(_:)` before a print's layout. The
+  table `FontMetricsBuilder` builds on the device measures synthesized
+  styles, which would not match the faces the writer embeds.
+
+`AndroidPrintResourcesTests` pins each file byte-equal to its source.
+
 ## ABI matrix
 
 This module is pure Kotlin and carries no native code of its own, so its
