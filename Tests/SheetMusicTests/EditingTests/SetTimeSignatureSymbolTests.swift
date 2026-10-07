@@ -125,6 +125,35 @@ struct SetTimeSignatureSymbolTests {
         #expect(session.score == score)
     }
 
+    /// A pickup keeps its own signature element, rewritten in place (`TimeSignatureRegion.declare`) — which used to
+    /// rewrite the numbers alone, so a C picked over a pickup left the numbers standing behind an undo step that
+    /// changed nothing.
+    @Test("a symbol reaches a pickup's own signature")
+    func symbolReachesAPickup() {
+        var score = uniform44()
+        for partIndex in score.parts.indices {
+            for staffIndex in score.parts[partIndex].staves.indices {
+                score.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.measures[0].actualLength = Fraction(numerator: 1, denominator: 4)
+                        staffValue.measures[0].irregular = true
+                        staffValue.measures[0].voices[0].elements.updateValue(at: 2) {
+                            $0 = .chord(Chord(duration: .quarter, notes: [Note(pitch: 72, tpc: 14)]))
+                        }
+                    }
+                }
+            }
+        }
+        let session = ScoreEditSession(score: score)
+        #expect(session.apply(
+            .setTimeSignature(measureIndex: 0, numerator: 4, denominator: 4, symbol: .common),
+        ))
+        #expect(Self.declared(session.score, 0, 0, 0)?.symbol == .common)
+        #expect(session.score.parts[0].staves[0].measures[0].actualLength == Fraction(numerator: 1, denominator: 4))
+        #expect(session.undo())
+        #expect(session.score == score)
+    }
+
     @Test("removing a symbol-drawn change reverts the span to the meter before it")
     func removingASymbolChange() {
         let score = uniform44()

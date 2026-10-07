@@ -89,8 +89,8 @@ enum TimeSignatureRegion {
 
     /// Writes `signature` into `column`'s voice 0 on every staff: replacing the meter that bar already declares —
     /// in place, so an invisible or courtesy-suppressed signature stays that way and its bar keeps whatever
-    /// `actualLength` it had — or inserting one at the canonical clef → key → time position when it declares
-    /// none.
+    /// `actualLength` it had, while the numbers AND the symbol they are drawn as become the new ones — or inserting
+    /// one at the canonical clef → key → time position when it declares none.
     ///
     /// Only ever called on an IRREGULAR head column. Everywhere else the declaration is `RebarPlanner`'s, which
     /// replaces the declaration while carrying its identity when present — the responsibility stays there.
@@ -101,6 +101,7 @@ enum TimeSignatureRegion {
             if let existing, case var .timeSignature(current) = voice.elements[existing] {
                 current.numerator = signature.numerator
                 current.denominator = signature.denominator
+                current.symbol = signature.symbol
                 voice.elements.updateValue(at: existing) { $0 = .timeSignature(current) }
                 return
             }
