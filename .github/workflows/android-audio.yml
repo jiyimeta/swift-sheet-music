@@ -38,7 +38,7 @@ jobs:
     env:
       WIRELET_PAT: ${{ secrets.WIRELET_PAT }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Rewrite SSH GitHub URLs to authenticated HTTPS (belt-and-suspenders)
         run: |
