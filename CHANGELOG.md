@@ -39,6 +39,9 @@ and this project adheres to
   dynamic… Its selection tint bracketed only notes, rests and tuplets, so a clef or mark a click had selected drew
   black. It now attaches the tint the way Apple's renderer does: a clef by `.clef(anchor)`, everything else by
   `LayoutElement.elementItemID`. A tinted mark in the "Show Invisible" pass restores that pass's gray after itself.
+- **The Android draw program keeps the "Show Invisible" gray after a selected or author-colored element** in that
+  pass. A selected hidden chord, rest or tuplet, or a hidden lyric, tempo mark or beam with its own color, reset the
+  paint to black, so its own stem and every invisible element drawn after it lost their gray.
 
 ## [4.3.0] - 2026-10-05
 

@@ -382,7 +382,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 isBeamed: isBeamed, stemExtension: Double(stemExtension),
                 mag: Double(mag),
                 measureOriginX: mox, measureOriginY: moy,
-                metrics: ctx, showsInvisible: showsInvisible, tint: tint, into: &out,
+                metrics: ctx, showsInvisible: showsInvisible, tint: tint, ambientArgb: ambientArgb, into: &out,
             )
 
         case let .graceChord(notes, duration, stem, stemOrigin, _, hasSlash, mag, _):
@@ -392,7 +392,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 isBeamed: false, stemExtension: 0,
                 mag: Double(mag),
                 measureOriginX: mox, measureOriginY: moy,
-                metrics: ctx, showsInvisible: showsInvisible, tint: tint, into: &out,
+                metrics: ctx, showsInvisible: showsInvisible, tint: tint, ambientArgb: ambientArgb, into: &out,
             )
             // Acciaccatura slash across the (reduced) grace stem.
             if hasSlash {
@@ -426,7 +426,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sizePt: glyphSize,
                 into: &out,
             )
-            if restArgb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
+            if restArgb != nil { out.append(.setColor(argb: ambientArgb)) }
             if dotCount > 0 {
                 emitAugmentationDots(
                     anchorX: mox + Double(origin.x),
@@ -562,7 +562,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             out.append(.lineTo(x: fx, y: (fy + outer) * ptToMM))
             out.append(.fillPath)
             if beamARGB != nil {
-                out.append(.setColor(argb: LayoutBridge.blackARGB))
+                out.append(.setColor(argb: ambientArgb))
             }
 
         case let .textMark(kind, text, origin):
@@ -589,7 +589,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     originX: mox + Double(origin.x), originY: moy + Double(origin.y),
                     sp: sp, anchor: CGPoint(x: 0.5, y: 0.5), into: &out,
                 )
-                if argb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
+                if argb != nil { out.append(.setColor(argb: ambientArgb)) }
             } else if case let .tempo(_, color, properties) = kind {
                 let argb = color.flatMap(LayoutBridge.argb(from:))
                 if let argb { out.append(.setColor(argb: argb)) }
@@ -602,7 +602,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     sp: sp,
                     into: &out,
                 )
-                if argb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
+                if argb != nil { out.append(.setColor(argb: ambientArgb)) }
             } else {
                 emitText(
                     text: text,
@@ -803,7 +803,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sp: sp,
                 into: &out,
             )
-            if tupletArgb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
+            if tupletArgb != nil { out.append(.setColor(argb: ambientArgb)) }
 
         case let .harmony(lh):
             encodeHarmony(

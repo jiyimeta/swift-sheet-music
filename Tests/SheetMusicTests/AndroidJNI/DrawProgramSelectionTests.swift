@@ -472,6 +472,34 @@
             #expect(bracket.close == .setColor(argb: LayoutBridge.invisibleARGB))
         }
 
+        /// The same rule for a note: a selected chord parked in the invisible container restores the pass's gray
+        /// after its notehead, so its own stem and every invisible element after it stay gray.
+        @Test("a selected hidden chord hands the invisible pass its gray back")
+        func selectedHiddenChordRestoresGray() throws {
+            var hidden = Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])
+            hidden.visible = false
+            var hidden2 = Chord(duration: .half, notes: [Note(pitch: 64, tpc: 18)])
+            hidden2.visible = false
+            let voice = Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(hidden), .chord(hidden2),
+            ])
+            let score = Score(
+                division: 480,
+                parts: [Part(
+                    id: "1", instrument: Instrument(id: "x"),
+                    staves: [Staff(measures: [Measure(voices: [voice])])],
+                )],
+            )
+            let doc = LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(showsInvisibleElements: true), availableWidth: 1200,
+            )
+            let note = NoteID(staff: Self.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0)
+            let tinted = LayoutBridge.buildCommands(layout: doc, tint: (argb: Self.tintArgb, ids: [.note(note)]))
+            let bracket = try #require(Self.bracketed(tinted))
+            #expect(bracket.close == .setColor(argb: LayoutBridge.invisibleARGB))
+        }
+
         /// Round-trips the wire payload `LayoutBridge.buildCommands(layout:tint:)`'s future JNI caller will
         /// send: a color plus an unordered ID set. Exercises all 4 `ScoreItemID` cases so a case this codec
         /// mishandles doesn't hide behind ones it handles correctly.
