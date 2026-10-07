@@ -15,6 +15,9 @@ final class PDFResources {
     private let faces: [PDFFontEmbedding]
     private let systemFile: @Sendable (FontWeight, Bool) -> ScorePDFFontFile?
     private let fallbackSpans: @Sendable (ScorePDFTextLine) -> [ScorePDFFallbackSpan]
+    private let hostOutline: @Sendable (Unicode.Scalar, ScorePDFTextStyle) -> ScorePDFGlyphOutline?
+    /// The host's outline for each character and style asked so far; nil where it had none.
+    private var outlines: [OutlineKey: ScorePDFGlyphOutline?] = [:]
     /// The platform UI face at each weight and slant asked for so far; nil where it has no file the PDF may embed.
     private var system: [SystemStyle: PDFFontEmbedding?] = [:]
     /// Every host file read so far, by key and face, in the order first used; nil for one the PDF may not embed.
@@ -73,6 +76,22 @@ final class PDFResources {
         }
         systemFile = fonts.system
         fallbackSpans = fonts.fallback
+        hostOutline = fonts.outlines
+    }
+
+    private struct OutlineKey: Hashable {
+        let scalar: Unicode.Scalar
+        let style: ScorePDFTextStyle
+    }
+
+    /// The host's outline for a character no face or fallback file draws, asked the first time it comes up in a style;
+    /// nil when the host has none, or gives an empty one (a space has no ink to draw).
+    func outline(_ scalar: Unicode.Scalar, style: ScorePDFTextStyle) -> ScorePDFGlyphOutline? {
+        let key = OutlineKey(scalar: scalar, style: style)
+        if let known = outlines[key] { return known }
+        let answer = hostOutline(scalar, style).flatMap { $0.elements.isEmpty ? nil : $0 }
+        outlines[key] = .some(answer)
+        return answer
     }
 
     /// The face a font id draws in under `style` (`DrawCommand.TextStyleFlag` bits): the platform UI face for

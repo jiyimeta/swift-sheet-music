@@ -7,6 +7,44 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`nativeMeasureColumnIDs(scoreHandle:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeMeasureColumnIDs`) — the
+  measure column identities of the score the cached layout was built from, as `[MeasureColumnIDWire]` index-aligned
+  with its measures (`""` for an unassigned column), read from the cache entry's own score so the table describes the
+  same revision as the layout anchors are drawn against. A host maps a stored anchor's identity back to a measure index
+  through it, so ink follows its bar when bars are inserted or deleted before it. Empty for an unknown handle or no
+  cached layout.
+- **`nativeEditingHitTarget(scoreHandle:xMm:yMm:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeEditingHitTarget`) —
+  the raw `ScoreHitTester.hitTest(at:)` answer for a tap, as the `ScoreItemIDCodec` item its target names
+  (`selectableItem`), re-addressed past the cached layout's hidden staves like `nativeEditingHitTest`. That verb's
+  policy drops clefs, engraved elements and text on purpose; a host that selects the thing clicked reads this beside it.
+- **`AndroidPlaybackEngine.replaceScore(scoreHandle)`** (Android) — adopts an edited score without rebuilding the
+  synth: the SoundFont presets, the metronome synth, the output stream and every mixer setting stay, and only the
+  player and the click sequence are rebuilt from the re-rendered score. Returns a `ScoreReplacementOutcome`
+  (`SWAPPED_IN_PLACE` / `FULLY_PREPARED` / `IGNORED_WHILE_EXPORTING`), mirroring Apple's
+  `PlaybackEngine.replaceScore(with:)`: a changed channel layout, or an engine with nothing prepared, falls back to a
+  full `prepare`. The transport returns to the start and the loop is cleared, as after `prepare`.
+- **`LayoutDocument.staffBands(verticalPaddingSp:)`** (`SheetMusicLayout`) and **`StaffBand`** — every staff's band
+  in every system: from the staff's start to the end of the system's staff lines, over its barline span, widened by
+  the padding above and below. The one implementation of the rectangle a host shades to highlight a staff.
+- **`nativeStaffBands(scoreHandle:verticalPaddingSp:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeStaffBands`) —
+  those bands for the cached layout as `[StaffBandWire]`: the staff in full-score addressing (re-addressed past the
+  cache entry's hidden staves, which have no band) and the rectangle in document millimetres. Empty for an unknown
+  handle or no cached layout.
+- **`installFontMetricsTable(_:)`** is now reachable from **`SheetMusicPages`**. It lived in `SheetMusicBridgeCore`,
+  which is not a product, so a host laying out a print with `ScorePages.compute` without CoreText — Android's PDF
+  export — had no way to install the measured table first. Same signature; nothing called the old location.
+- **Print resources in the Android AAR** (`SheetMusicComposeAndroid`, `assets/fonts/`): `Edwin-Italic.otf`,
+  `Edwin-Bold.otf`, `Edwin-BdIta.otf` and `sheet-music-styled.smft`, so an Android host can lay out and write a PDF in
+  Swift with the faces the writer embeds and a table whose bold and italic records measure them. About 533 KB.
+- **`ScorePDFFonts(outlines:)`**, **`ScorePDFGlyphOutline`** and **`ScorePDFTextStyle`** (`SheetMusicPDFWriter`) — for
+  a character neither its face nor a fallback file carries, the outline the host's text engine draws it with: closed
+  contours in em units, y up from the baseline. The writer fills it at the character's pen position, scaled by the font
+  size, in the current color, after the line's text object, and keeps the character as invisible text so the PDF can
+  still be searched for it. Asked once per character and style; without one, the character is invisible text alone,
+  byte for byte as before. For a host whose fallback fonts cannot be embedded — Android's CJK system faces are CFF.
+
 ### Changed
 
 - **`.setKeySignature` / `.setTimeSignature` declare a key or meter a bar only inherits, instead of planning to
@@ -30,6 +68,13 @@ and this project adheres to
 
 ### Fixed
 
+- **The Android draw program tints a selected clef or engraved element** — a signature, a barline, a tie, a
+  dynamic… Its selection tint bracketed only notes, rests and tuplets, so a clef or mark a click had selected drew
+  black. It now attaches the tint the way Apple's renderer does: a clef by `.clef(anchor)`, everything else by
+  `LayoutElement.elementItemID`. A tinted mark in the "Show Invisible" pass restores that pass's gray after itself.
+- **The Android draw program keeps the "Show Invisible" gray after a selected or author-colored element** in that
+  pass. A selected hidden chord, rest or tuplet, or a hidden lyric, tempo mark or beam with its own color, reset the
+  paint to black, so its own stem and every invisible element drawn after it lost their gray.
 - **A clef written in the middle of a bar no longer draws on top of the note it governs.** The layout placed it at
   the next column's own x and the spacing made no room for it. It now stands before that column, its ink 0.8 sp clear
   of the notehead (`Sid::clefKeyRightMargin`) or 0.6 sp of the chord's leftmost accidental, and the column's

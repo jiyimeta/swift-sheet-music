@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Fails when a public declaration of a Windows module names a type from SheetMusicBridgeCore.
+"""Fails when a public declaration of a portable host module names a type from SheetMusicBridgeCore.
 
 SheetMusicBridgeCore is not a product: it is the JNI and wasm bridges' plumbing, and its draw-program types grow by
-appending cases (`DrawCommand`), which would break every Swift host that switches over them. The Windows modules are
-products, so their public surface must speak in product types only (`ScorePages`, `ScorePageOptions`, `PageRectMM`
-in SheetMusicRenderWindows; SheetMusicCore / SheetMusicLayout / SheetMusicAudioCore types elsewhere).
+appending cases (`DrawCommand`), which would break every Swift host that switches over them. The Windows modules and
+the portable print products (SheetMusicPages, SheetMusicPDFWriter — Windows and Android print through them) are
+products, so their public surface must speak in product types only (`ScorePages`, `ScorePageOptions`, `PageRectMM`;
+SheetMusicCore / SheetMusicLayout / SheetMusicAudioCore types elsewhere).
 
 A declaration is read from its `public` / `open` line up to the `{` or the end of the statement, so a signature split
-over several lines is checked whole. Doc comments and string literals are ignored.
+over several lines is checked whole; a comment line ends it, so the doc comment of the next declaration is not read
+as part of this one. Doc comments and string literals are ignored.
 
     Scripts/check-windows-public-api.py
 """
@@ -15,7 +17,10 @@ import pathlib
 import re
 import sys
 
-MODULES = ["Sources/SheetMusicRenderWindows", "Sources/SheetMusicAudioWindows"]
+MODULES = [
+    "Sources/SheetMusicRenderWindows", "Sources/SheetMusicAudioWindows", "Sources/SheetMusicPages",
+    "Sources/SheetMusicPDFWriter",
+]
 BRIDGE_TYPES = [
     "EncodablePage", "DrawCommand", "DrawProgram", "SystemSpan", "DrawRect", "LayoutOptionsWire", "LayoutPages",
     "FontMetricsTable", "LayoutBridge",
@@ -46,7 +51,7 @@ def declarations(lines):
             text = line
             while "{" not in text and not text.rstrip().endswith(("}", ")")) and index + 1 < len(lines):
                 nxt = lines[index + 1]
-                if start.match(nxt) or nxt.strip() == "":
+                if start.match(nxt) or nxt.strip() == "" or nxt.lstrip().startswith("//"):
                     break
                 index += 1
                 text += " " + nxt.strip()

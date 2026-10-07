@@ -40,6 +40,9 @@ extension LayoutBridge {
         // Selection re-encode — see `LayoutBridge.buildCommands(layout:tint:)`'s doc comment. Resolved
         // per-note against `LayoutChordNote.noteID` in `emitNoteGlyphs`.
         tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
+        // The color in force around this chord (black, or the Show Invisible pass's gray), restored after anything
+        // it colors — a selected or author-colored notehead, the grayed per-note-invisible ones.
+        ambientArgb: UInt32 = LayoutBridge.blackARGB,
         into out: inout [DrawCommand],
     ) {
         let glyphSize = ctx.glyphSize * mag
@@ -60,7 +63,7 @@ extension LayoutBridge {
             stem: stem,
             glyphSize: glyphSize, metrics: ctx, mag: mag,
             measureOriginX: mox, measureOriginY: moy,
-            honorColor: true, tint: tint, into: &out,
+            honorColor: true, tint: tint, resetArgb: ambientArgb, into: &out,
         )
         if !invisibleNotes.isEmpty {
             out.append(.setColor(argb: LayoutBridge.invisibleARGB))
@@ -71,7 +74,7 @@ extension LayoutBridge {
                 measureOriginX: mox, measureOriginY: moy,
                 honorColor: false, tint: tint, resetArgb: LayoutBridge.invisibleARGB, into: &out,
             )
-            out.append(.setColor(argb: LayoutBridge.blackARGB))
+            out.append(.setColor(argb: ambientArgb))
         }
         // Whole notes (and lower-resolution rests) are stemless.
         if case .whole = baseDur { return }

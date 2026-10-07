@@ -320,6 +320,28 @@ object SheetMusicJNI {
     }
 
     /**
+     * The measure column identities of the score the cached layout of [scoreHandle] was built from: a
+     * `[MeasureColumnIDWire]` payload, index-aligned with its measures, `""` for a column with no identity. A host
+     * stores the identity beside an anchor's measure index and maps it back through this table, so ink follows its
+     * bar when bars are inserted or deleted before it. Empty array when the handle is unknown or nothing is cached.
+     */
+    fun nativeMeasureColumnIDs(scoreHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeMeasureColumnIDs(scoreHandle, arena).toByteArray()
+    }
+
+    /**
+     * Every staff's band in the cached layout of [scoreHandle] — the rectangle a host shades to highlight a staff, the
+     * same one Apple hosts shade — as a `[StaffBandWire]` payload: full-score staff address plus document-mm rect, one
+     * per staff per system, widened by [verticalPaddingSp] staff spaces above and below. A hidden staff has no band.
+     * Empty array when the handle is unknown or nothing is cached.
+     */
+    fun nativeStaffBands(scoreHandle: Long, verticalPaddingSp: Double): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeStaffBands(scoreHandle, verticalPaddingSp, arena).toByteArray()
+    }
+
+    /**
      * Resolve the highlight rectangles (mm coordinates) covering a
      * loop region spanning ticks `[fromTick, toTick)`. Returns one
      * rect per intersected system; the rect spans the full staff
@@ -565,6 +587,26 @@ object SheetMusicJNI {
     ): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeEditingMeasureHitTest(
+            scoreHandle,
+            xMm,
+            yMm,
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * The RAW hit under a tap at ([xMm], [yMm]) in the cached layout of [scoreHandle] — `ScoreHitTester`'s target, as
+     * the `ScoreItemIDCodec` item it names, full-score-addressed — for a host to read beside [nativeEditingHitTest],
+     * whose policy drops clefs, engraved elements (signatures, barlines, articulations, ties, slurs, dynamics…) and
+     * engraved text. Empty array when the handle is unknown, no layout is cached, or nothing is under the point.
+     */
+    fun nativeEditingHitTarget(
+        scoreHandle: Long,
+        xMm: Double,
+        yMm: Double,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEditingHitTarget(
             scoreHandle,
             xMm,
             yMm,

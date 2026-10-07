@@ -1,5 +1,6 @@
 import SheetMusicCore
 import SheetMusicFoundation
+import SheetMusicLayout
 
 /// ID matching for the selection tint threaded through `LayoutBridge.buildCommands(layout:tint:)`. Split out
 /// of `LayoutBridge.swift` — already at the file-length cap — since this is pure "is this ID selected" logic,
@@ -19,5 +20,20 @@ extension LayoutBridge {
     ) -> UInt32? {
         guard let tint, tint.ids.contains(id) else { return nil }
         return tint.argb
+    }
+
+    /// `tint.argb` when `element` is a clef or an engraved element (a signature, a barline, an articulation, a tie,
+    /// a slur, a dynamic…) whose identity is selected — `.clef(anchor)` for a clef, `LayoutElement.elementItemID`
+    /// for the rest, the identities `ScoreHitTester` reports a click on them as. `nil` for everything else, notes and
+    /// rests included: those bracket their own commands.
+    static func markTintColor(
+        for element: LayoutElement,
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
+    ) -> UInt32? {
+        guard tint != nil else { return nil }
+        if case let .clef(_, _, anchor?, _) = element {
+            return tintColor(for: .clef(anchor), tint: tint)
+        }
+        return element.elementItemID.flatMap { tintColor(for: $0, tint: tint) }
     }
 }

@@ -20,6 +20,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreReplacementOutcome
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 import io.github.jiyimeta.sheetmusic.audio.serialization.AudioExportRangeCodec
 import io.github.jiyimeta.wirelet.BinaryReader
@@ -558,74 +559,22 @@ class AndroidPlaybackEngine internal constructor(
         }
     }
 
-    private suspend fun prepareLocked(scoreHandle: Long) =
+    private suspend fun prepareLocked(scoreHandle: Long, derived: ScoreDerivation? = null) =
         withContext(Dispatchers.IO) {
             _loopRange.value = null
             transportLoop = null
-            val summary = jniBridge.timelineSummary(scoreHandle)
-            if (summary.size < 3) throw AudioBackendException.InvalidScoreHandle()
-            totalTicks = summary[0]
-            val totalSecs = summary[1] / 1_000_000.0
-            ticksPerBeat = summary[2].toInt()
-            // The native bridge always reports the unrolled length as
-            // summary[3]. The three-element summary is kept for the unit
-            // tests' FakeJniBridge, whose default (and most tests) report
-            // only [total, micros, ticksPerBeat] — a score without repeats,
-            // where the notated total is the unrolled one.
-            unrolledTotalTicks = if (summary.size > 3) summary[3] else totalTicks
-
-            val staffBytes = jniBridge.staffParams(scoreHandle)
-            val staves = run {
-                val r = BinaryReader(staffBytes)
-                val out = ArrayList<StaffParams>()
-                r.readLengthPrefixed { inner ->
-                    while (inner.remaining > 0) {
-                        out.add(inner.readLengthPrefixed { StaffParamsCodec.decodePayload(it) })
-                    }
-                }
-                out
-            }
-            if (staves.isEmpty()) throw AudioBackendException.EmptyScore()
-            if (staves.size > 16) throw AudioBackendException.TooManyStaves(staves.size)
-
-            // One entry per deduped (part × instrument) mixer strip — the
-            // Android mirror of Apple's `LiveChannelPlan`.
-            val decodedStrips = decodeInstrumentParams(scoreHandle)
-            val strips = stripsOrFallback(decodedStrips, staves)
-            // `strips.size` — NOT `staves.size` — is what actually gets
-            // handed to `FluidSynthEngine.setupStaves` below (one entry
-            // per live channel, not per staff), so it is the quantity that
-            // must stay within the single-synth 16-channel limit.
-            // `FluidSynthEngine.setupStaves` has its own `require(...)` for
-            // this, but that throws a raw `IllegalArgumentException`
-            // instead of this method's documented `TooManyStaves` — check
-            // here first so the typed exception wins.
-            if (strips.size > 16) throw AudioBackendException.TooManyStaves(strips.size)
-            // Per-staff live channel for `playPreview`: the staff's PART's
-            // primary (ordinal-0) strip. Only meaningful when the real
-            // `instrumentParams` bridge populated `strips` with genuine
-            // `StaffParams.partIndex`-keyed data — the synthetic fallback
-            // above already used `staffIndex` as its own liveChannel, so
-            // reading it back through the same join is equivalent there too.
-            val partToPrimaryChannel = strips.filter { it.ordinal == 0 }
-                .associate { it.partIndex to it.liveChannel }
-            this@AndroidPlaybackEngine.staffLiveChannel = IntArray(staves.size) { i ->
-                if (decodedStrips.isNotEmpty()) {
-                    partToPrimaryChannel[staves[i].partIndex] ?: staves[i].staffIndex
-                } else {
-                    staves[i].staffIndex
-                }
-            }
-            this@AndroidPlaybackEngine.staffIsDrums = BooleanArray(staves.size) { staves[it].isDrums }
+            // Everything read from the score comes first, so a malformed one fails before the graph is touched.
+            val derivation = derived ?: deriveScore(scoreHandle)
+            val strips = derivation.strips
+            val totalSecs = derivation.totalSeconds
+            installScoreDerivedState(derivation)
             if (previewPolicyHandle == 0L) previewPolicyHandle = jniBridge.previewPolicyCreate()
             // A re-prepare lands on a different score and a fresh synth; an audition planned against the
             // previous one must not be ended against this one.
             jniBridge.previewPolicySilence(previewPolicyHandle)
 
-            val metronomeSmfBytes = jniBridge.renderMetronomeMidi(scoreHandle)
-
-            val smfBytes = jniBridge.renderMidi(scoreHandle)
-            if (smfBytes.isEmpty()) throw AudioBackendException.InvalidScoreHandle()
+            val metronomeSmfBytes = derivation.metronomeSmf
+            val smfBytes = derivation.smf
 
             // Tear down any prior prepared state before recreating.
             teardownInternalNoCancelScopes()
@@ -733,6 +682,7 @@ class AndroidPlaybackEngine internal constructor(
             oboeStream = oboe
 
             this@AndroidPlaybackEngine.scoreHandle = scoreHandle
+            loadedChannelLayout = derivation.channelLayout
             _mixerChannels.value = strips.map { s ->
                 // Seed the slider from the score's authored channel volume (CC7 → 0..1),
                 // matching iOS where the mixer opens at the part's notated volume rather
@@ -765,6 +715,195 @@ class AndroidPlaybackEngine internal constructor(
             scoreTickIntent = 0L
             _state.value = PlaybackState.PREPARED
         }
+
+    /**
+     * Replaces the prepared score with the one now behind [scoreHandle] — typically the same handle after an edit
+     * mutated its score in place — keeping the synth with its loaded SoundFont presets, the metronome synth, the
+     * output stream and every mixer setting. Only the player and the click sequence are rebuilt from the re-rendered
+     * score, so adopting an edit costs a render rather than a SoundFont load. Mirrors Apple's
+     * `PlaybackEngine.replaceScore(with:)`.
+     *
+     * As there, the transport stops and returns to the start, and the loop is cleared (a host that keeps one
+     * re-applies it, exactly as after [prepare]). A score whose channel layout differs from the loaded one — a part
+     * added or removed, a strip whose program or kit changed — falls back to a full [prepare], and so does an engine
+     * that has prepared nothing yet: a synth programmed for the old layout cannot sound the new one.
+     *
+     * Rate, tuning, transpose and master gain are engine state and survive either way.
+     *
+     * @throws AudioBackendException the same failures as [prepare], before anything is replaced.
+     */
+    suspend fun replaceScore(scoreHandle: Long): ScoreReplacementOutcome = prepareMutex.withLock {
+        if (_state.value == PlaybackState.EXPORTING) return@withLock ScoreReplacementOutcome.IGNORED_WHILE_EXPORTING
+        withContext(Dispatchers.IO) {
+            val derivation = deriveScore(scoreHandle)
+            val synth = fluidSynthEngine
+            if (synth == null || derivation.channelLayout != loadedChannelLayout) {
+                _isPreparingSoundfont.value = true
+                try {
+                    prepareLocked(scoreHandle, derivation)
+                } finally {
+                    _isPreparingSoundfont.value = false
+                }
+                return@withContext ScoreReplacementOutcome.FULLY_PREPARED
+            }
+            // Stopping first is what makes the player safe to replace: it stops the output stream and joins its
+            // writer, so nothing is rendering the synth the old player is attached to when that player is deleted —
+            // the order `teardownInternalNoCancelScopes` keeps for a full prepare.
+            stop()
+            _loopRange.value = null
+            transportLoop = null
+            if (previewPolicyHandle != 0L) jniBridge.previewPolicySilence(previewPolicyHandle)
+            installScoreDerivedState(derivation)
+
+            playerDriver?.close()
+            val player = playerFactory(synth.synthHandle)
+            player.load(derivation.smf)
+            if (pendingRate != 1.0f) player.setTempo(pendingRate.toDouble())
+            playerDriver = player
+            bodyMetronomeSmf = derivation.metronomeSmf
+            metronomeTickOffset = 0L
+            metronomeMixer?.loadSequence(derivation.metronomeSmf)
+
+            this@AndroidPlaybackEngine.scoreHandle = scoreHandle
+            // The mixer keeps every setting. A strip's label is the one thing that can change without changing the
+            // layout (a part renamed by the edit), so it is refreshed and nothing else is.
+            val names = derivation.strips.associate { (it.partIndex to it.ordinal) to it.displayName }
+            _mixerChannels.update { channels ->
+                channels.map { c ->
+                    val name = names[c.partIndex to c.ordinal]?.ifEmpty { null } ?: return@map c
+                    c.copy(displayName = name)
+                }
+            }
+            _totalTimeSeconds.value = derivation.totalSeconds
+            _currentTimeSeconds.value = 0.0
+            _currentCursor.value = null
+            scoreTickIntent = 0L
+            _state.value = PlaybackState.PREPARED
+            ScoreReplacementOutcome.SWAPPED_IN_PLACE
+        }
+    }
+
+    /**
+     * Everything a prepare reads from a score handle, read before anything touches the audio graph so a malformed
+     * score fails with the engine still holding its previous one.
+     */
+    private class ScoreDerivation(
+        val totalTicks: Long,
+        val totalSeconds: Double,
+        val ticksPerBeat: Int,
+        val unrolledTotalTicks: Long,
+        val staves: List<StaffParams>,
+        /** The bridge's strips as decoded — empty when it answered none (the unit tests' fake). */
+        val decodedStrips: List<InstrumentParams>,
+        /** [decodedStrips], or the per-staff fallback. */
+        val strips: List<InstrumentParams>,
+        val metronomeSmf: ByteArray,
+        val smf: ByteArray,
+    ) {
+        /** What the synth is programmed for: one slot per strip, without its label or authored volume. */
+        val channelLayout: List<ChannelSlot> = strips.map {
+            ChannelSlot(it.partIndex, it.ordinal, it.liveChannel, it.bankLSB, it.program, it.isDrums)
+        }
+    }
+
+    /** One strip of a [ScoreDerivation.channelLayout]. */
+    private data class ChannelSlot(
+        val partIndex: Int,
+        val ordinal: Int,
+        val liveChannel: Int,
+        val bankLSB: UByte,
+        val program: UByte,
+        val isDrums: Boolean,
+    )
+
+    /** The channel layout the synth was last programmed for by a full prepare; `null` before the first one. */
+    private var loadedChannelLayout: List<ChannelSlot>? = null
+
+    /**
+     * Reads [scoreHandle]'s timeline, staves, strips and its two rendered sequences.
+     *
+     * @throws AudioBackendException.InvalidScoreHandle if the timeline summary is malformed or the render is empty.
+     * @throws AudioBackendException.EmptyScore if the score has no staves.
+     * @throws AudioBackendException.TooManyStaves if the score has more than 16 staves or strips.
+     */
+    private fun deriveScore(scoreHandle: Long): ScoreDerivation {
+        val summary = jniBridge.timelineSummary(scoreHandle)
+        if (summary.size < 3) throw AudioBackendException.InvalidScoreHandle()
+        val totalTicks = summary[0]
+
+        val staffBytes = jniBridge.staffParams(scoreHandle)
+        val staves = run {
+            val r = BinaryReader(staffBytes)
+            val out = ArrayList<StaffParams>()
+            r.readLengthPrefixed { inner ->
+                while (inner.remaining > 0) {
+                    out.add(inner.readLengthPrefixed { StaffParamsCodec.decodePayload(it) })
+                }
+            }
+            out
+        }
+        if (staves.isEmpty()) throw AudioBackendException.EmptyScore()
+        if (staves.size > 16) throw AudioBackendException.TooManyStaves(staves.size)
+
+        // One entry per deduped (part × instrument) mixer strip — the
+        // Android mirror of Apple's `LiveChannelPlan`.
+        val decodedStrips = decodeInstrumentParams(scoreHandle)
+        val strips = stripsOrFallback(decodedStrips, staves)
+        // `strips.size` — NOT `staves.size` — is what actually gets
+        // handed to `FluidSynthEngine.setupStaves` (one entry
+        // per live channel, not per staff), so it is the quantity that
+        // must stay within the single-synth 16-channel limit.
+        // `FluidSynthEngine.setupStaves` has its own `require(...)` for
+        // this, but that throws a raw `IllegalArgumentException`
+        // instead of the documented `TooManyStaves` — check
+        // here first so the typed exception wins.
+        if (strips.size > 16) throw AudioBackendException.TooManyStaves(strips.size)
+
+        val metronomeSmfBytes = jniBridge.renderMetronomeMidi(scoreHandle)
+        val smfBytes = jniBridge.renderMidi(scoreHandle)
+        if (smfBytes.isEmpty()) throw AudioBackendException.InvalidScoreHandle()
+
+        return ScoreDerivation(
+            totalTicks = totalTicks,
+            totalSeconds = summary[1] / 1_000_000.0,
+            ticksPerBeat = summary[2].toInt(),
+            // The native bridge always reports the unrolled length as
+            // summary[3]. The three-element summary is kept for the unit
+            // tests' FakeJniBridge, whose default (and most tests) report
+            // only [total, micros, ticksPerBeat] — a score without repeats,
+            // where the notated total is the unrolled one.
+            unrolledTotalTicks = if (summary.size > 3) summary[3] else totalTicks,
+            staves = staves,
+            decodedStrips = decodedStrips,
+            strips = strips,
+            metronomeSmf = metronomeSmfBytes,
+            smf = smfBytes,
+        )
+    }
+
+    /** Publishes a [ScoreDerivation]'s timeline and per-staff routing to the engine's fields. */
+    private fun installScoreDerivedState(derivation: ScoreDerivation) {
+        totalTicks = derivation.totalTicks
+        ticksPerBeat = derivation.ticksPerBeat
+        unrolledTotalTicks = derivation.unrolledTotalTicks
+        val staves = derivation.staves
+        // Per-staff live channel for `playPreview`: the staff's PART's
+        // primary (ordinal-0) strip. Only meaningful when the real
+        // `instrumentParams` bridge populated `strips` with genuine
+        // `StaffParams.partIndex`-keyed data — the synthetic fallback
+        // already used `staffIndex` as its own liveChannel, so
+        // reading it back through the same join is equivalent there too.
+        val partToPrimaryChannel = derivation.strips.filter { it.ordinal == 0 }
+            .associate { it.partIndex to it.liveChannel }
+        staffLiveChannel = IntArray(staves.size) { i ->
+            if (derivation.decodedStrips.isNotEmpty()) {
+                partToPrimaryChannel[staves[i].partIndex] ?: staves[i].staffIndex
+            } else {
+                staves[i].staffIndex
+            }
+        }
+        staffIsDrums = BooleanArray(staves.size) { staves[it].isDrums }
+    }
 
     // ── Playback controls ────────────────────────────────────────────
 
