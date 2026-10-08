@@ -41,25 +41,28 @@ enum PDFAnnotationObjects {
         if let centers = Box(lines.joined()) {
             box.formUnion(centers)
         }
-        box = box.padded(by: max(0, ink.width) / 2)
+        let width = space.userLength(max(0, ink.width))
+        box = box.padded(by: width / 2)
         let opacity = n(min(1, max(0, ink.opacity)))
         var content = "q /GS0 gs \(rgb(ink.color)) rg\n"
         if let clip = ink.clip {
             content += path(clip.elements, in: space) + (clip.evenOdd ? "W* n\n" : "W n\n")
         }
         for figure in figures {
-            content += polygon(figure)
+            content += polygon(figure, in: space)
         }
         content += "f\nQ\n"
         let form = try appearance(
-            content, box: box, graphicsState: "<< /ca \(opacity) /CA \(opacity) >>", into: sink,
+            content, box: box, in: space, graphicsState: "<< /ca \(opacity) /CA \(opacity) >>", into: sink,
         )
-        let inkList = lines.map { "[" + $0.map { "\(n($0.x)) \(n($0.y))" }.joined(separator: " ") + "]" }
+        let inkList = lines.map {
+            "[" + $0.map { "\(space.number($0.x)) \(space.number($0.y))" }.joined(separator: " ") + "]"
+        }
         let annotation = sink.reserve()
         sink.object(
             annotation,
-            "<< /Type /Annot /Subtype /Ink /Rect \(box.array) /InkList [\(inkList.joined(separator: " "))] "
-                + "/BS << /W \(n(max(0, ink.width))) >> /C [\(rgb(ink.color))] /CA \(opacity) /F 4 "
+            "<< /Type /Annot /Subtype /Ink /Rect \(box.array(in: space)) /InkList [\(inkList.joined(separator: " "))] "
+                + "/BS << /W \(space.number(width)) >> /C [\(rgb(ink.color))] /CA \(opacity) /F 4 "
                 + "/AP << /N \(form) 0 R >> >>",
         )
         return annotation
@@ -79,37 +82,37 @@ enum PDFAnnotationObjects {
         guard let box = Box(corners) else { return nil }
         let outline = [corners[0], corners[1], corners[3], corners[2]]
         let form = try appearance(
-            "q /GS0 gs \(rgb(highlight.color)) rg\n" + polygon(outline) + "f\nQ\n", box: box,
+            "q /GS0 gs \(rgb(highlight.color)) rg\n" + polygon(outline, in: space) + "f\nQ\n", box: box, in: space,
             graphicsState: "<< /BM /Multiply >>", into: sink,
         )
-        let quads = corners.map { "\(n($0.x)) \(n($0.y))" }.joined(separator: " ")
+        let quads = corners.map { "\(space.number($0.x)) \(space.number($0.y))" }.joined(separator: " ")
         let annotation = sink.reserve()
         sink.object(
             annotation,
-            "<< /Type /Annot /Subtype /Highlight /Rect \(box.array) /QuadPoints [\(quads)] "
+            "<< /Type /Annot /Subtype /Highlight /Rect \(box.array(in: space)) /QuadPoints [\(quads)] "
                 + "/C [\(rgb(highlight.color))] /F 4 /AP << /N \(form) 0 R >> >>",
         )
         return annotation
     }
 
     private static func appearance(
-        _ content: String, box: Box, graphicsState: String, into sink: some PDFObjectSink,
+        _ content: String, box: Box, in space: PDFPageSpace, graphicsState: String, into sink: some PDFObjectSink,
     ) throws -> Int {
         let form = sink.reserve()
         try sink.stream(
             form,
-            dictionary: "/Type /XObject /Subtype /Form /BBox \(box.array) "
+            dictionary: "/Type /XObject /Subtype /Form /BBox \(box.array(in: space)) "
                 + "/Resources << /ExtGState << /GS0 \(graphicsState) >> >>",
             data: Data(content.utf8), compress: true,
         )
         return form
     }
 
-    private static func polygon(_ points: [(x: Double, y: Double)]) -> String {
+    private static func polygon(_ points: [(x: Double, y: Double)], in space: PDFPageSpace) -> String {
         guard let first = points.first else { return "" }
-        var path = "\(n(first.x)) \(n(first.y)) m\n"
+        var path = "\(space.number(first.x)) \(space.number(first.y)) m\n"
         for point in points.dropFirst() {
-            path += "\(n(point.x)) \(n(point.y)) l\n"
+            path += "\(space.number(point.x)) \(space.number(point.y)) l\n"
         }
         return path + "h\n"
     }
@@ -122,7 +125,7 @@ enum PDFAnnotationObjects {
         var subpathStart: PDFPagePoint?
         func point(_ p: PDFPagePoint) -> String {
             let user = space.user(p)
-            return "\(n(user.x)) \(n(user.y))"
+            return "\(space.number(user.x)) \(space.number(user.y))"
         }
         for element in elements {
             switch element {
@@ -210,9 +213,9 @@ enum PDFAnnotationObjects {
             return box
         }
 
-        var array: String {
-            "[\(PDFPageWalker.number(minX)) \(PDFPageWalker.number(minY)) "
-                + "\(PDFPageWalker.number(maxX)) \(PDFPageWalker.number(maxY))]"
+        func array(in space: PDFPageSpace) -> String {
+            "[\(space.number(minX)) \(space.number(minY)) "
+                + "\(space.number(maxX)) \(space.number(maxY))]"
         }
     }
 }

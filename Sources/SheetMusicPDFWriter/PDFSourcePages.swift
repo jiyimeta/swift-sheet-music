@@ -31,7 +31,7 @@ extension PDFSourceDocument {
                 number: number,
                 generation: generation,
                 dictionary: dictionary,
-                space: space(attributes),
+                space: space(attributes, userUnit: dictionary["UserUnit"]),
             ))
             return
         }
@@ -43,18 +43,28 @@ extension PDFSourceDocument {
         }
     }
 
-    private func space(_ attributes: [String: PDFSourceValue]) throws -> PDFPageSpace {
+    private func space(_ attributes: [String: PDFSourceValue], userUnit: PDFSourceValue?) throws -> PDFPageSpace {
+        let scale: Double
+        if let userUnit {
+            guard let value = try resolve(userUnit).numeric, value.isFinite, value > 0 else {
+                throw PDFAppendError.unreadable
+            }
+            scale = value
+        } else { scale = 1 }
         let media = try box(attributes["MediaBox"]) ?? [0, 0, 612, 792]
         let crop = try box(attributes["CropBox"]) ?? media
         let left = max(media[0], crop[0]), bottom = max(media[1], crop[1])
         let right = max(left, min(media[2], crop[2])), top = max(bottom, min(media[3], crop[3]))
-        guard (right - left).isFinite, (top - bottom).isFinite else { throw PDFAppendError.unreadable }
+        guard ((right - left) * scale).isFinite, ((top - bottom) * scale).isFinite else {
+            throw PDFAppendError.unreadable
+        }
         return PDFPageSpace(
             left: left,
             bottom: bottom,
             right: right,
             top: top,
             rotation: attributes["Rotate"]?.integer ?? 0,
+            userUnit: scale,
         )
     }
 

@@ -4,14 +4,15 @@ enum PDFAnnotationGeometry {
     static func isRepresentable(_ annotation: PDFPageAnnotation, in space: PDFPageSpace) -> Bool {
         switch annotation {
         case let .ink(ink):
-            guard valid(ink.color), ink.opacity.isFinite, valid(ink.width) else { return false }
+            guard valid(ink.color), ink.opacity.isFinite, valid(ink.width),
+                  valid(space.userLength(max(0, ink.width))) else { return false }
             let figures = ink.appearance.filter { $0.count >= 3 }.flatMap { $0.map(space.user) }
             let lines = ink.inkList.flatMap { $0.map(space.user) }
             guard figures.allSatisfy(valid), lines.allSatisfy(valid),
                   var box = PDFAnnotationObjects.Box(figures)
             else { return false }
             if let centers = PDFAnnotationObjects.Box(lines) { box.formUnion(centers) }
-            guard valid(box.padded(by: max(0, ink.width) / 2)) else { return false }
+            guard valid(box.padded(by: space.userLength(max(0, ink.width)) / 2)) else { return false }
             return ink.clip.map { valid($0.elements, in: space) } ?? true
         case let .highlight(highlight):
             let rect = highlight.rect

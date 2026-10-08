@@ -90,7 +90,9 @@ final class PDFIncrementalWriter: PDFObjectSink {
             for section in subsections() {
                 text += "\(section.start) \(section.count)\n"
                 for number in section.start ..< section.start + section.count {
-                    guard let entry = written[number], entry.offset <= 9_999_999_999 else {
+                    guard let entry = written[number], let offset = UInt64(exactly: entry.offset),
+                          offset <= 9_999_999_999
+                    else {
                         throw PDFAppendError.unreadable
                     }
                     text += digits(entry.offset, width: 10) + " " + digits(entry.generation, width: 5) + " n \n"
@@ -125,7 +127,7 @@ final class PDFIncrementalWriter: PDFObjectSink {
 
     private func offsetWidth() -> Int {
         var width = 4
-        var largest = written.values.map(\.offset).max() ?? 0
+        var largest = UInt64(written.values.map(\.offset).max() ?? 0)
         while largest > 0xFFFF_FFFF {
             width += 1
             largest >>= 8
