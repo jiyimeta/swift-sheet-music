@@ -34,6 +34,11 @@ and this project adheres to
   tables. No library links against it, so nothing else needed them. The flag is set by that script alone
   (`SWIFT_SHEET_MUSIC_JNI_LIBRARY=1`), so a consumer that resolves this package by version still never sees
   `.unsafeFlags`.
+- **The AAR ships only the Swift runtime libraries something in it loads.** `Scripts/android-build-libs.sh` stages
+  the DT_NEEDED closure of `libSheetMusicAndroidJNI.so` and `libSwiftJava.so` (and `libswiftCore.so`, which the Java
+  side loads by name) instead of the SDK's whole runtime directory. FoundationNetworking, FoundationXML,
+  `_Differentiation`, SwiftOnoneSupport, Distributed, RegexBuilder, `_Volatile` and Observation are no longer in it —
+  about 6 MB per ABI every consumer's APK carried. A host whose own Swift library needs one of them stages it itself.
 - **The WebAssembly size check left the push path and only warns.** `Scripts/wasm-size.sh` was the longest step in
   CI — a second, release-mode build of the whole portable graph, 14 of the wasm job's 28 minutes — so every push to
   `main` and every release waited on a ceiling that is a line drawn at ordinary growth, not a limit anything depends

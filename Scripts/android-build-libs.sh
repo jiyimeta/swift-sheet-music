@@ -52,6 +52,12 @@ if [[ -z "${ANDROID_NDK_HOME:-}" || ! -d "$ANDROID_NDK_HOME" ]]; then
     exit 1
 fi
 NDK_LIB_BASE="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib"
+# Reads each staged library's DT_NEEDED entries, so only the runtime libraries something loads are staged.
+READELF="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-readelf"
+if [[ ! -x "$READELF" ]]; then
+    echo "error: llvm-readelf not found at $READELF" >&2
+    exit 1
+fi
 
 mkdir -p "$JNI_DIR"
 
@@ -128,19 +134,27 @@ for entry in "${TARGETS[@]}"; do
         echo "      Re-derive the path from your installed Swift Android SDK." >&2
         exit 1
     fi
-    # Copy every runtime .so produced by the SDK *except* the
-    # test/XCTest-only ones. libSheetMusicAndroidJNI.so transitively pulls
-    # libswift_StringProcessing.so, lib_FoundationICU.so, etc. — listing
-    # them by hand is fragile. Excluding the test libs keeps the APK lean.
-    for so in "$runtime_src"/*.so; do
-        name="$(basename "$so")"
-        case "$name" in
-            libTesting.so|libXCTest.so|lib_Testing_Foundation.so|lib_TestingInterop.so)
-                continue
-                ;;
-        esac
-        cp -L "$so" "$dst_dir/"
+    # Stage the runtime libraries the two libraries above load, and the ones those load in turn — the DT_NEEDED
+    # closure, read from the binaries rather than listed by hand. libswiftCore.so is seeded as well because the Java
+    # side loads it by name. Copying the whole runtime directory shipped seven libraries nothing loads
+    # (FoundationNetworking, FoundationXML, _Differentiation, SwiftOnoneSupport, Distributed, RegexBuilder, _Volatile:
+    # 6 MB per ABI) in every consumer's APK. A host's own Swift library that needs one of them stages it itself.
+    staged=""
+    pending=(libSheetMusicAndroidJNI.so libSwiftJava.so libswiftCore.so)
+    while [[ ${#pending[@]} -gt 0 ]]; do
+        lib="${pending[0]}"
+        if [[ ${#pending[@]} -gt 1 ]]; then pending=("${pending[@]:1}"); else pending=(); fi
+        if [[ ! -f "$dst_dir/$lib" ]]; then
+            cp -L "$runtime_src/$lib" "$dst_dir/"
+            staged="$staged $lib"
+        fi
+        for dep in $("$READELF" -d "$dst_dir/$lib" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p'); do
+            if [[ -f "$runtime_src/$dep" && ! -f "$dst_dir/$dep" ]]; then
+                pending+=("$dep")
+            fi
+        done
     done
+    echo "    runtime:$staged"
 
     # libswiftCore.so links against libc++_shared.so (NDK C++ runtime),
     # which is NOT staged by the Swift Android SDK. Pull it from the NDK.
