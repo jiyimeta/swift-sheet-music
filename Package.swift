@@ -67,6 +67,22 @@ let wasmStackLinkerSettings: [LinkerSetting] = isWasm ? [
     ]),
 ] : []
 
+/// Set by `Scripts/android-build-libs.sh` alone — the build that makes the AAR's `libSheetMusicAndroidJNI.so`. Not
+/// `isAndroid`: a consumer cross-compiling its own JNI library (folino) exports that too while resolving this package
+/// by version, and must never see `.unsafeFlags`.
+let isJNILibraryBuild = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_JNI_LIBRARY"] == "1"
+
+/// `libSheetMusicAndroidJNI.so` exports only the `Java_*` entry points the JVM binds its `external fun`s to
+/// (`Scripts/android-jni-exports.map`). A dynamic library otherwise exports every public symbol of every module linked
+/// into it — 16,592 names in 4.4.0, of which the JVM looks up 73 — and carries their symbol tables, while nothing links
+/// against this library: Kotlin loads it by name and resolves only `Java_*` names in it.
+let jniExportLinkerSettings: [LinkerSetting] = isJNILibraryBuild ? [
+    .unsafeFlags(
+        ["-Xlinker", "--version-script=\(Context.packageDirectory)/Scripts/android-jni-exports.map"],
+        .when(platforms: [.android]),
+    ),
+] : []
+
 var products: [Product] = [
     .library(name: "SheetMusic", targets: ["SheetMusic"]),
     .library(name: "SheetMusicCore", targets: ["SheetMusicCore"]),
@@ -622,6 +638,7 @@ if !isWasm, !isWindows {
             swiftSettings: [
                 .swiftLanguageMode(.v5),
             ],
+            linkerSettings: jniExportLinkerSettings,
             plugins: [
                 .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
             ],

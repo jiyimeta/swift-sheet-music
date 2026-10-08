@@ -1,4 +1,5 @@
 import SheetMusicBridgeCore
+import SheetMusicCore
 import SheetMusicFoundation
 import SheetMusicPages
 
@@ -9,11 +10,32 @@ public enum ScorePDFWriter {
     /// Writes `pages`, one PDF page per page at its own size, with `title` as the document's title. Lay the pages out
     /// with the font metrics installed (`ScorePages.compute`): the text is placed by the same provider. Throws when one
     /// of the bundled faces is not an OpenType file; a system face that is not one draws its text in Edwin.
+    ///
+    /// `drawsPageChrome` prints the score's header and footer in the margins of `.page`-mode pages, as Apple's
+    /// `PDFExporter` does (`ScorePageChrome`); off (the default), and in the other modes, the pages are written as they
+    /// are.
+    ///
     /// `annotations` maps zero-based page indices to annotations; indices outside the pages are ignored.
     public static func write(
-        _ pages: ScorePages, fonts: ScorePDFFonts, title: String?, annotations: [Int: [PDFPageAnnotation]] = [:],
+        _ pages: ScorePages, fonts: ScorePDFFonts, title: String?, drawsPageChrome: Bool = false,
+        annotations: [Int: [PDFPageAnnotation]] = [:],
     ) throws -> Data {
-        try write(pages.pages, fonts: fonts, title: title, annotations: annotations)
+        guard drawsPageChrome, pages.options.mode == .page else {
+            return try write(pages.pages, fonts: fonts, title: title, annotations: annotations)
+        }
+        let score = pages.sourceScore
+        let sheets = pages.pages.enumerated().map { index, page in
+            EncodablePage(
+                widthMM: page.widthMM,
+                heightMM: page.heightMM,
+                commands: page.commands + ScorePageChrome.commands(
+                    chrome: score.style.pageChrome, metaTags: score.metaTags, pageIndex: index,
+                    pageCount: pages.pages.count, pageWidthMM: page.widthMM, pageHeightMM: page.heightMM,
+                    margins: pages.options.pageMarginsMM,
+                ),
+            )
+        }
+        return try write(sheets, fonts: fonts, title: title, annotations: annotations)
     }
 
     static func write(

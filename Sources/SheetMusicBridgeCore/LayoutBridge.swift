@@ -76,6 +76,12 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
 
     /// `buildCommands`, also returning each system's run of commands (and the title block's) — see `SystemSpan`.
     /// The commands are the same either way.
+    ///
+    /// `drawsInvisibleElements` `false` leaves out what the layout parked as invisible — the measures'
+    /// `invisibleElements`, the system's `invisibleSpanners`, and invisible notes inside visible chords — while every
+    /// other mark stays where that layout put it, as Apple's print does
+    /// (`ScoreCanvasDrawing.drawSystem(drawsInvisibleElements:)`). `true` (the default) draws them gray; a layout made
+    /// without `showsInvisibleElements` parks nothing.
     static func buildCommandsWithSpans( // swiftlint:disable:this function_body_length
         layout: LayoutDocument,
         // Selection re-encode: `nil` (the default) reproduces today's output byte-for-byte — every
@@ -84,6 +90,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // `.setColor(argb: argb)` … `.setColor(argb: blackARGB)`. `ids` is expected to already be expanded
         // (see `LayoutBridge+Selection.swift`'s doc comment) — this function does no expansion of its own.
         tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
+        drawsInvisibleElements: Bool = true,
     ) -> (commands: [DrawCommand], spans: [SystemSpan]) {
         var out: [DrawCommand] = []
         var spans: [SystemSpan] = []
@@ -128,6 +135,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             // through the trailing announcement band when it carries
             // courtesy signatures.
             let endX = Double(BarLineGeometry.staffLineEndX(for: system))
+            let showsInvisible = system.showsInvisibleElements && drawsInvisibleElements
 
             // ── 1. Staff lines ──────────────────────────────────────────────
             for (staffIndex, staffOrigin) in system.staffOrigins.enumerated() {
@@ -162,7 +170,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                         measureOriginX: mox,
                         measureOriginY: moy,
                         metrics: context,
-                        showsInvisible: system.showsInvisibleElements,
+                        showsInvisible: showsInvisible,
                         tint: tint,
                         into: &out,
                     )
@@ -179,7 +187,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                         measureOriginX: mox,
                         measureOriginY: moy,
                         metrics: context,
-                        showsInvisible: system.showsInvisibleElements,
+                        showsInvisible: showsInvisible,
                         tint: tint,
                         into: &out,
                     )
@@ -198,7 +206,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     measureOriginX: sysOriginX,
                     measureOriginY: sysOriginY,
                     metrics: context,
-                    showsInvisible: system.showsInvisibleElements,
+                    showsInvisible: showsInvisible,
                     tint: tint,
                     into: &out,
                 )
@@ -217,14 +225,16 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             )
 
             // ── 4. Invisible elements (MuseScore "Show Invisible") ──────────
-            appendInvisibleElements(
-                of: system,
-                systemOriginX: sysOriginX,
-                systemOriginY: sysOriginY,
-                metrics: context,
-                tint: tint,
-                into: &out,
-            )
+            if drawsInvisibleElements {
+                appendInvisibleElements(
+                    of: system,
+                    systemOriginX: sysOriginX,
+                    systemOriginY: sysOriginY,
+                    metrics: context,
+                    tint: tint,
+                    into: &out,
+                )
+            }
 
             closeSpan(systemIndex: systemIndex, from: spanStart, frameMM: DrawRect(
                 x: sysOriginX * ptToMM,
