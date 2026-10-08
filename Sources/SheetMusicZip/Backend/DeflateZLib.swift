@@ -114,7 +114,7 @@
                     ret = buffer.withUnsafeMutableBufferPointer { buf -> Int32 in
                         stream.next_out = buf.baseAddress
                         stream.avail_out = UInt32(buf.count)
-                        return inflate(&stream, Z_NO_FLUSH)
+                        return zlib.inflate(&stream, Z_NO_FLUSH)
                     }
                     guard ret == Z_OK || ret == Z_STREAM_END else {
                         throw ZipError.deflateFailure("inflate returned \(ret)")
