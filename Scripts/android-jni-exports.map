@@ -1,0 +1,16 @@
+# What libSheetMusicAndroidJNI.so exports (`jniExportLinkerSettings` in Package.swift; only the AAR's own build,
+# Scripts/android-build-libs.sh, links with it). Everything else the linker would export — every public symbol of
+# every module linked in — becomes local.
+#
+# Java_*      the functions the JVM binds `external fun`s to, by name, at their first call
+# JNI_On*     JNI_OnLoad / JNI_OnUnload, should the library ever define them (it does not today)
+#
+# A name missing here fails at the first call into it with UnsatisfiedLinkError, not at load. Nothing links against
+# this library, so no other name is needed.
+{
+    global:
+        Java_*;
+        JNI_On*;
+    local:
+        *;
+};

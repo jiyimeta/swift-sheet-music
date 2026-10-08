@@ -11,6 +11,9 @@ if TOOLCHAIN_BIN="$("$(dirname "$0")/swift-org-toolchain.sh")"; then
     export PATH="$TOOLCHAIN_BIN:$PATH"
 fi
 export SWIFT_SHEET_MUSIC_ANDROID=1
+# Links the library with Scripts/android-jni-exports.map, so it exports its Java_* entry points and nothing else.
+# Only this build sets it: see `isJNILibraryBuild` in Package.swift.
+export SWIFT_SHEET_MUSIC_JNI_LIBRARY=1
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 JNI_DIR="$ROOT/Android/SheetMusicAndroid/src/main/jniLibs"

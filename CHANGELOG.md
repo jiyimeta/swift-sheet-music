@@ -21,6 +21,12 @@ and this project adheres to
 
 ### Changed
 
+- **`libSheetMusicAndroidJNI.so` exports its `Java_*` entry points and nothing else.** The AAR's build
+  (`Scripts/android-build-libs.sh`) links it with `Scripts/android-jni-exports.map`; before, it exported every public
+  symbol of every module linked into it — 16,592 names, 73 of them looked up by the JVM — and carried their symbol
+  tables. No library links against it, so nothing else needed them. The flag is set by that script alone
+  (`SWIFT_SHEET_MUSIC_JNI_LIBRARY=1`), so a consumer that resolves this package by version still never sees
+  `.unsafeFlags`.
 - **The WebAssembly size check left the push path and only warns.** `Scripts/wasm-size.sh` was the longest step in
   CI — a second, release-mode build of the whole portable graph, 14 of the wasm job's 28 minutes — so every push to
   `main` and every release waited on a ceiling that is a line drawn at ordinary growth, not a limit anything depends
