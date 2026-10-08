@@ -53,7 +53,9 @@
         /// Decompress raw DEFLATE with an unknown output size. Corrupt or truncated input throws.
         package static func inflate(_ input: Data) throws -> Data {
             if input.isEmpty { return Data() }
-            guard input.count <= Int(UInt32.max) else { throw ZipError.corrupted("deflate input too large") }
+            guard let inputSize = UInt32(exactly: input.count) else {
+                throw ZipError.corrupted("deflate input too large")
+            }
             var stream = z_stream()
             let initialized = inflateInit2_(&stream, -15, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
             guard initialized == Z_OK else { throw ZipError.deflateFailure("inflateInit2 failed") }
@@ -61,7 +63,7 @@
             return try input.withUnsafeBytes { source in
                 guard let base = source.baseAddress else { throw ZipError.corrupted("missing deflate input") }
                 stream.next_in = UnsafeMutablePointer(mutating: base.assumingMemoryBound(to: UInt8.self))
-                stream.avail_in = UInt32(source.count)
+                stream.avail_in = inputSize
                 var output = Data()
                 var buffer = [UInt8](repeating: 0, count: 16 * 1024)
                 while true {
