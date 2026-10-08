@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-10-08
+
 ### Added
 
 - **Incremental annotations for existing PDFs.** `PDFIncrementalAnnotator` reports each page's displayed size
