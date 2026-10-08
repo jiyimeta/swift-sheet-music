@@ -1,6 +1,11 @@
 import SheetMusicFoundation
 
 extension PDFSourceDocument {
+    /// The most one stream may decode to. The streams an incremental update reads are cross-reference streams and
+    /// object streams — never page content or images — and 32 MiB holds the cross-reference stream of a file with
+    /// four million objects; past it the file is refused as unreadable rather than inflated until memory runs out.
+    static let maxDecodedStreamBytes = 32 << 20
+
     static func rawStream(_ bytes: [UInt8], parser: inout PDFSourceParser, length: Int?) throws -> [UInt8] {
         // The stream keyword is followed by LF or CRLF, not arbitrary whitespace (the payload may start with it).
         if parser.pos < bytes.count, bytes[parser.pos] == 13 { parser.pos += 1 }
@@ -23,7 +28,9 @@ extension PDFSourceDocument {
         guard filters.isEmpty || filters == [.name("FlateDecode")] else { throw PDFAppendError.unreadable }
         var data = raw
         if !filters.isEmpty {
-            do { data = try Array(FlateStream.decode(Data(raw))) } catch { throw PDFAppendError.unreadable }
+            do {
+                data = try Array(FlateStream.decode(Data(raw), limit: maxDecodedStreamBytes))
+            } catch { throw PDFAppendError.unreadable }
         }
         let parameters = dictionary["DecodeParms"].map { $0.array?.first ?? $0 }?.dictionary ?? [:]
         let predictor = parameters["Predictor"]?.integer ?? 1

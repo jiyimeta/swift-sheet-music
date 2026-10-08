@@ -50,8 +50,10 @@
             }
         }
 
-        /// Decompress raw DEFLATE with an unknown output size. Corrupt or truncated input throws.
-        package static func inflate(_ input: Data) throws -> Data {
+        /// Decompress raw DEFLATE with an unknown output size. Corrupt or truncated input throws, and so does output
+        /// past `limit` bytes: DEFLATE expands up to about a thousandfold, so a few kilobytes of input could otherwise
+        /// ask for gigabytes.
+        package static func inflate(_ input: Data, limit: Int) throws -> Data {
             if input.isEmpty { return Data() }
             guard let inputSize = UInt32(exactly: input.count) else {
                 throw ZipError.corrupted("deflate input too large")
@@ -76,6 +78,9 @@
                     let produced = buffer.count - Int(stream.avail_out)
                     guard status == Z_OK || status == Z_STREAM_END else {
                         throw ZipError.corrupted("invalid or truncated deflate stream")
+                    }
+                    guard produced <= limit - output.count else {
+                        throw ZipError.corrupted("deflate output exceeds \(limit) bytes")
                     }
                     output.append(contentsOf: buffer.prefix(produced))
                     if status == Z_STREAM_END { return output }

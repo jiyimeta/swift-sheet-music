@@ -17,10 +17,10 @@ enum FlateStream {
         return encoded
     }
 
-    /// Decode a PDF zlib stream, tolerating a wrong Adler-32 as PDF readers do.
-    static func decode(_ data: Data) throws -> Data {
+    /// Decode a PDF zlib stream, tolerating a wrong Adler-32 as PDF readers do. Throws past `limit` decoded bytes.
+    static func decode(_ data: Data, limit: Int) throws -> Data {
         guard data.count >= 2 else { throw PDFAppendError.unreadable }
-        return try Deflate.inflate(Data(data.dropFirst(2)))
+        return try Deflate.inflate(Data(data.dropFirst(2)), limit: limit)
     }
 
     /// RFC 1950's checksum.

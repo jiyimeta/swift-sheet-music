@@ -29,6 +29,17 @@ struct PDFSourceRobustnessTests {
         }
     }
 
+    /// A few kilobytes of `/FlateDecode` can ask for gigabytes; a stream decodes up to the budget and no further.
+    @Test func `a stream that decodes past the budget is refused`() throws {
+        let budget = PDFSourceDocument.maxDecodedStreamBytes
+        let flate: [String: PDFSourceValue] = ["Filter": .name("FlateDecode")]
+        let atBudget = try Array(FlateStream.encode(Data(count: budget)))
+        let overBudget = try Array(FlateStream.encode(Data(count: budget + 1)))
+        #expect(overBudget.count < 64 * 1024)
+        #expect(try PDFSourceDocument.decode(atBudget, dictionary: flate).count == budget)
+        #expect(throws: PDFAppendError.unreadable) { try PDFSourceDocument.decode(overBudget, dictionary: flate) }
+    }
+
     @Test func `indirect and wrong stream lengths remain readable`() throws {
         for length in ["5 0 R", "999999999", "-1"] {
             var file = PDFFixtures.updated(

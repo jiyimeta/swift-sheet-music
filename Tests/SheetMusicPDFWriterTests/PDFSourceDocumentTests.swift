@@ -124,8 +124,8 @@ struct PDFSourceDocumentTests {
     }
 
     @Test func `flate decode handles empty and corrupt input`() throws {
-        #expect(try FlateStream.decode(FlateStream.encode(Data())) == Data())
-        #expect(throws: (any Error).self) { try FlateStream.decode(Data([0])) }
-        #expect(throws: (any Error).self) { try FlateStream.decode(Data([0x78, 0x9C, 0xFF])) }
+        #expect(try FlateStream.decode(FlateStream.encode(Data()), limit: 1 << 20) == Data())
+        #expect(throws: (any Error).self) { try FlateStream.decode(Data([0]), limit: 1 << 20) }
+        #expect(throws: (any Error).self) { try FlateStream.decode(Data([0x78, 0x9C, 0xFF]), limit: 1 << 20) }
     }
 }
