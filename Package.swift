@@ -149,6 +149,13 @@ var targets: [Target] = [
             .linkedLibrary("z", .when(platforms: [.linux, .android])),
         ],
     ),
+    // PDF object syntax — the byte classes, the object model, its parser and `/FlateDecode` — for both readers of PDF
+    // files here: the importer (`SheetMusicPDF`) and the incremental writer (`SheetMusicPDFWriter`). Internal to the
+    // package; neither reader exposes these types.
+    .target(
+        name: "SheetMusicPDFSyntax",
+        dependencies: ["SheetMusicFoundation", "SheetMusicZip"],
+    ),
     .target(
         name: "SheetMusicMSCX",
         dependencies: [
@@ -211,10 +218,9 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicPDF",
-        // `PDFFlate` inflates through `zlib` off Apple, which Windows' toolchain does not ship as a module either.
         dependencies: isAppleFree
-            ? ["SheetMusicCore", "SheetMusicLayout"] + (vendorsZlib ? ["zlib"] : [])
-            : ["SheetMusicCore", "SheetMusicLayout", "SheetMusicLayoutApple", "SheetMusicUI"],
+            ? ["SheetMusicCore", "SheetMusicLayout", "SheetMusicPDFSyntax"]
+            : ["SheetMusicCore", "SheetMusicLayout", "SheetMusicLayoutApple", "SheetMusicPDFSyntax", "SheetMusicUI"],
         // Apple-only files (CGPDFScanner walker, PDFDocument entry, PDF export,
         // SwiftUI/PDFKit views) are excluded from the Apple-free build; Android
         // and Windows parse via the Foundation-only pure-Swift reader.
@@ -321,7 +327,7 @@ var targets: [Target] = [
         name: "SheetMusicPDFWriter",
         dependencies: [
             "SheetMusicPages", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicFoundation", "SheetMusicLayout",
-            "SheetMusicZip",
+            "SheetMusicPDFSyntax",
         ],
     ),
     .testTarget(
@@ -342,8 +348,13 @@ if !isWasm {
         ),
         .testTarget(
             name: "SheetMusicPDFWriterTests",
-            dependencies: ["SheetMusicPDFWriter", "SheetMusicBridgeCore", "SheetMusicPages", "SheetMusicPDF"],
+            dependencies: [
+                "SheetMusicPDFWriter", "SheetMusicBridgeCore", "SheetMusicPages", "SheetMusicPDF",
+                "SheetMusicPDFSyntax",
+            ],
         ),
+        // The two readings of malformed syntax the PDF readers share, and the name bytes both keep.
+        .testTarget(name: "SheetMusicPDFSyntaxTests", dependencies: ["SheetMusicPDFSyntax"]),
     ]
 }
 

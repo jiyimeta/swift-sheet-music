@@ -2,6 +2,7 @@ import Foundation
 @testable import SheetMusicBridgeCore
 import SheetMusicLayout
 @testable import SheetMusicPDF
+import SheetMusicPDFSyntax
 @testable import SheetMusicPDFWriter
 import Testing
 
@@ -143,7 +144,7 @@ struct SystemFaceTests {
             guard let open = bytes[found.upperBound...].firstRange(of: start),
                   let close = bytes[open.upperBound...].firstRange(of: end)
             else { break }
-            if let inflated = PDFFlate.inflate(Data(bytes[open.upperBound ..< close.lowerBound])) {
+            if let inflated = try? PDFFlate.decode(Data(bytes[open.upperBound ..< close.lowerBound]), limit: 1 << 30) {
                 programs.append(inflated)
             }
             index = close.upperBound

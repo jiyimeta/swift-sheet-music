@@ -1,4 +1,5 @@
 import SheetMusicFoundation
+import SheetMusicPDFSyntax
 
 extension PDFSourceDocument {
     /// The most one stream may decode to. The streams an incremental update reads are cross-reference streams and
@@ -6,14 +7,14 @@ extension PDFSourceDocument {
     /// four million objects; past it the file is refused as unreadable rather than inflated until memory runs out.
     static let maxDecodedStreamBytes = 32 << 20
 
-    static func rawStream(_ bytes: [UInt8], parser: inout PDFSourceParser, length: Int?) throws -> [UInt8] {
+    static func rawStream(_ bytes: [UInt8], parser: inout PDFObjectParser, length: Int?) throws -> [UInt8] {
         // The stream keyword is followed by LF or CRLF, not arbitrary whitespace (the payload may start with it).
         if parser.pos < bytes.count, bytes[parser.pos] == 13 { parser.pos += 1 }
         guard parser.pos < bytes.count, bytes[parser.pos] == 10 else { throw PDFAppendError.unreadable }
         parser.pos += 1
         let start = parser.pos
         if let length, length >= 0, length <= bytes.count - start {
-            var end = PDFSourceParser(bytes, at: start + length)
+            var end = PDFObjectParser(bytes, at: start + length)
             if end.token() == "endstream" { return Array(bytes[start ..< start + length]) }
         }
         guard let end = find(Array("endstream".utf8), in: bytes, from: start) else { throw PDFAppendError.unreadable }
@@ -23,22 +24,22 @@ extension PDFSourceDocument {
         return Array(bytes[start ..< stop])
     }
 
-    static func decode(_ raw: [UInt8], dictionary: [String: PDFSourceValue]) throws -> [UInt8] {
-        let filters = dictionary["Filter"].map { $0.array ?? [$0] } ?? []
+    static func decode(_ raw: [UInt8], dictionary: [String: PDFObject]) throws -> [UInt8] {
+        let filters = dictionary["Filter"].map { $0.arrayValue ?? [$0] } ?? []
         guard filters.isEmpty || filters == [.name("FlateDecode")] else { throw PDFAppendError.unreadable }
         var data = raw
         if !filters.isEmpty {
             do {
-                data = try Array(FlateStream.decode(Data(raw), limit: maxDecodedStreamBytes))
+                data = try Array(PDFFlate.decode(Data(raw), limit: maxDecodedStreamBytes))
             } catch { throw PDFAppendError.unreadable }
         }
-        let parameters = dictionary["DecodeParms"].map { $0.array?.first ?? $0 }?.dictionary ?? [:]
-        let predictor = parameters["Predictor"]?.integer ?? 1
+        let parameters = dictionary["DecodeParms"].map { $0.arrayValue?.first ?? $0 }?.dictionaryValue ?? [:]
+        let predictor = parameters["Predictor"]?.integerValue ?? 1
         if predictor == 1 { return data }
         guard (10 ... 15).contains(predictor) else { throw PDFAppendError.unreadable }
-        let columns = parameters["Columns"]?.integer ?? 1
-        let colors = parameters["Colors"]?.integer ?? 1
-        let bits = parameters["BitsPerComponent"]?.integer ?? 8
+        let columns = parameters["Columns"]?.integerValue ?? 1
+        let colors = parameters["Colors"]?.integerValue ?? 1
+        let bits = parameters["BitsPerComponent"]?.integerValue ?? 8
         guard columns > 0, colors > 0, [1, 2, 4, 8, 16].contains(bits), colors <= Int.max / bits,
               columns <= (Int.max - 7) / (colors * bits) else { throw PDFAppendError.unreadable }
         let rowSize = (columns * colors * bits + 7) / 8

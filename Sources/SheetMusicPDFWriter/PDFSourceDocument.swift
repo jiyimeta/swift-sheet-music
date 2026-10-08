@@ -1,4 +1,5 @@
 import SheetMusicFoundation
+import SheetMusicPDFSyntax
 
 /// Why annotations could not be appended to an existing PDF.
 public enum PDFAppendError: Error, Equatable, Sendable {
@@ -16,17 +17,17 @@ final class PDFSourceDocument {
     struct Section {
         let offset: Int
         let isStream: Bool
-        let dictionary: [String: PDFSourceValue]
+        let dictionary: [String: PDFObject]
         let entries: [Int: Location]
     }
 
     let bytes: [UInt8]
-    let trailer: [String: PDFSourceValue]
+    let trailer: [String: PDFObject]
     let startXRef: Int
     let lastSectionIsStream: Bool
     let size: Int
     var locations: [Int: Location] = [:]
-    var objectStreams: [Int: [Int: PDFSourceValue]] = [:]
+    var objectStreams: [Int: [Int: PDFObject]] = [:]
     private var loading: Set<Int> = []
     private var boundaries: PDFSourceBoundaries?
 
@@ -42,7 +43,7 @@ final class PDFSourceDocument {
         else {
             throw PDFAppendError.unreadable
         }
-        var parser = PDFSourceParser(bytes, at: marker + 9)
+        var parser = PDFObjectParser(bytes, at: marker + 9)
         guard let offset = Int(parser.token()), bytes.indices.contains(offset) else {
             throw PDFAppendError.unreadable
         }
@@ -50,7 +51,7 @@ final class PDFSourceDocument {
         trailer = latest.dictionary
         startXRef = latest.offset
         lastSectionIsStream = latest.isStream
-        guard let size = trailer["Size"]?.integer, size > 0, trailer["Root"] != nil else {
+        guard let size = trailer["Size"]?.integerValue, size > 0, trailer["Root"] != nil else {
             throw PDFAppendError.unreadable
         }
         self.size = size
@@ -60,7 +61,7 @@ final class PDFSourceDocument {
             guard visited.insert(section.offset).inserted else { throw PDFAppendError.unreadable }
             if section.dictionary["Encrypt"] != nil { throw PDFAppendError.encrypted }
             var entries = section.entries
-            if let hybrid = section.dictionary["XRefStm"]?.integer {
+            if let hybrid = section.dictionary["XRefStm"]?.integerValue {
                 let supplement = try Self.section(bytes, at: hybrid)
                 guard supplement.isStream, visited.insert(supplement.offset).inserted else {
                     throw PDFAppendError.unreadable
@@ -71,7 +72,7 @@ final class PDFSourceDocument {
             }
             merge(entries)
             if let previous = section.dictionary["Prev"] {
-                guard let offset = previous.integer, bytes.indices.contains(offset) else {
+                guard let offset = previous.integerValue, bytes.indices.contains(offset) else {
                     throw PDFAppendError.unreadable
                 }
                 current = try Self.section(bytes, at: offset)
@@ -85,17 +86,17 @@ final class PDFSourceDocument {
         }
     }
 
-    func object(_ number: Int) throws -> PDFSourceValue {
+    func object(_ number: Int) throws -> PDFObject {
         guard let location = locations[number], location != .free else { return .null }
         guard loading.count < 64, loading.insert(number).inserted else { throw PDFAppendError.unreadable }
         defer { loading.remove(number) }
         switch location {
         case .free: return .null
         case let .offset(offset):
-            var parser = PDFSourceParser(bytes, at: offset)
+            var parser = PDFObjectParser(bytes, at: offset)
             if !bytes.indices.contains(offset) || parser.parseObjectHeader()?.number != number {
                 let recovered = try objectHeader(number, near: offset)
-                parser = PDFSourceParser(bytes, at: recovered)
+                parser = PDFObjectParser(bytes, at: recovered)
                 guard parser.parseObjectHeader()?.number == number else { throw PDFAppendError.unreadable }
             }
             return try readValue(&parser)
@@ -106,7 +107,7 @@ final class PDFSourceDocument {
         }
     }
 
-    func resolve(_ value: PDFSourceValue) throws -> PDFSourceValue {
+    func resolve(_ value: PDFObject) throws -> PDFObject {
         var value = value
         var visited: Set<Int> = []
         while case let .reference(number, _) = value {
@@ -116,12 +117,12 @@ final class PDFSourceDocument {
         return value
     }
 
-    private func readValue(_ parser: inout PDFSourceParser) throws -> PDFSourceValue {
+    private func readValue(_ parser: inout PDFObjectParser) throws -> PDFObject {
         guard let value = parser.parseValue() else { throw PDFAppendError.unreadable }
         guard case let .dictionary(dictionary) = value else { return value }
         let saved = parser.pos
         if parser.token() != "stream" { parser.pos = saved; return value }
-        let length = try dictionary["Length"].flatMap { try resolve($0).integer }
+        let length = try dictionary["Length"].flatMap { try resolve($0).integerValue }
         let raw = try Self.rawStream(bytes, parser: &parser, length: length)
         return .stream(dictionary: dictionary, raw: raw)
     }
@@ -133,11 +134,11 @@ final class PDFSourceDocument {
 
     private func loadObjectStream(_ number: Int) throws {
         guard case let .stream(dictionary, raw) = try object(number), dictionary["Type"] == .name("ObjStm"),
-              let count = dictionary["N"]?.integer, count >= 0,
-              let first = dictionary["First"]?.integer, first >= 0 else { throw PDFAppendError.unreadable }
+              let count = dictionary["N"]?.integerValue, count >= 0,
+              let first = dictionary["First"]?.integerValue, first >= 0 else { throw PDFAppendError.unreadable }
         let decoded = try Self.decode(raw, dictionary: dictionary)
         guard first <= decoded.count, count <= first / 2 else { throw PDFAppendError.unreadable }
-        var header = PDFSourceParser(Array(decoded.prefix(first)))
+        var header = PDFObjectParser(Array(decoded.prefix(first)))
         var pairs: [(Int, Int)] = []
         for _ in 0 ..< count {
             guard let number = Int(header.token()), number > 0,
@@ -147,11 +148,11 @@ final class PDFSourceDocument {
             }
             pairs.append((number, offset))
         }
-        var values: [Int: PDFSourceValue] = [:]
+        var values: [Int: PDFObject] = [:]
         for (index, pair) in pairs.enumerated() {
             guard case let .compressed(stream, declaredIndex) = locations[pair.0], stream == number,
                   index == declaredIndex else { continue }
-            var parser = PDFSourceParser(decoded, at: first + pair.1)
+            var parser = PDFObjectParser(decoded, at: first + pair.1)
             guard let value = parser.parseValue() else { throw PDFAppendError.unreadable }
             values[pair.0] = value
         }
@@ -184,6 +185,6 @@ final class PDFSourceDocument {
 struct PDFSourcePage: Equatable {
     let number: Int
     let generation: Int
-    let dictionary: [String: PDFSourceValue]
+    let dictionary: [String: PDFObject]
     let space: PDFPageSpace
 }

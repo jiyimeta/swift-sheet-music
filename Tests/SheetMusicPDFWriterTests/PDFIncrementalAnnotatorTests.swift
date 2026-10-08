@@ -1,4 +1,5 @@
 import Foundation
+import SheetMusicPDFSyntax
 @testable import SheetMusicPDFWriter
 import Testing
 #if canImport(PDFKit)
@@ -152,8 +153,8 @@ struct PDFIncrementalAnnotatorTests {
         }
     #endif
 
-    static func subtypes(_ page: PDFSourcePage, in document: PDFSourceDocument) throws -> [PDFSourceValue?] {
-        let values = try #require(try document.resolve(page.dictionary["Annots"] ?? .null).array)
-        return try values.map { try document.resolve($0).dictionary?["Subtype"] }
+    static func subtypes(_ page: PDFSourcePage, in document: PDFSourceDocument) throws -> [PDFObject?] {
+        let values = try #require(try document.resolve(page.dictionary["Annots"] ?? .null).arrayValue)
+        return try values.map { try document.resolve($0).dictionaryValue?["Subtype"] }
     }
 }

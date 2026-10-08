@@ -1,8 +1,9 @@
 import SheetMusicFoundation
+import SheetMusicPDFSyntax
 
 extension PDFSourceDocument {
     func pages() throws -> [PDFSourcePage] {
-        guard let root = trailer["Root"], let catalog = try resolve(root).dictionary,
+        guard let root = trailer["Root"], let catalog = try resolve(root).dictionaryValue,
               let tree = catalog["Pages"] else { throw PDFAppendError.unreadable }
         var visited: Set<Int> = []
         var pages: [PDFSourcePage] = []
@@ -11,14 +12,14 @@ extension PDFSourceDocument {
     }
 
     private func walk(
-        _ value: PDFSourceValue,
-        inherited: [String: PDFSourceValue],
+        _ value: PDFObject,
+        inherited: [String: PDFObject],
         depth: Int,
         visited: inout Set<Int>,
         pages: inout [PDFSourcePage],
     ) throws {
         guard depth < 64, case let .reference(number, generation) = value,
-              visited.insert(number).inserted, let dictionary = try resolve(value).dictionary
+              visited.insert(number).inserted, let dictionary = try resolve(value).dictionaryValue
         else {
             throw PDFAppendError.unreadable
         }
@@ -35,7 +36,7 @@ extension PDFSourceDocument {
             ))
             return
         }
-        guard let kids = dictionary["Kids"], let children = try resolve(kids).array else {
+        guard let kids = dictionary["Kids"], let children = try resolve(kids).arrayValue else {
             throw PDFAppendError.unreadable
         }
         for child in children {
@@ -43,10 +44,10 @@ extension PDFSourceDocument {
         }
     }
 
-    private func space(_ attributes: [String: PDFSourceValue], userUnit: PDFSourceValue?) throws -> PDFPageSpace {
+    private func space(_ attributes: [String: PDFObject], userUnit: PDFObject?) throws -> PDFPageSpace {
         let scale: Double
         if let userUnit {
-            guard let value = try resolve(userUnit).numeric, value.isFinite, value > 0 else {
+            guard let value = try resolve(userUnit).doubleValue, value.isFinite, value > 0 else {
                 throw PDFAppendError.unreadable
             }
             scale = value
@@ -63,18 +64,18 @@ extension PDFSourceDocument {
             bottom: bottom,
             right: right,
             top: top,
-            rotation: attributes["Rotate"]?.integer ?? 0,
+            rotation: attributes["Rotate"]?.integerValue ?? 0,
             userUnit: scale,
         )
     }
 
-    private func box(_ value: PDFSourceValue?) throws -> [Double]? {
+    private func box(_ value: PDFObject?) throws -> [Double]? {
         guard let value else { return nil }
-        guard let coordinates = try resolve(value).array, coordinates.count == 4 else {
+        guard let coordinates = try resolve(value).arrayValue, coordinates.count == 4 else {
             throw PDFAppendError.unreadable
         }
         let numbers = try coordinates.map { coordinate in
-            guard let number = try resolve(coordinate).numeric, number.isFinite else {
+            guard let number = try resolve(coordinate).doubleValue, number.isFinite else {
                 throw PDFAppendError.unreadable
             }
             return number

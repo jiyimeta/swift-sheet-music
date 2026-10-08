@@ -2,6 +2,7 @@
     import CoreGraphics
 #endif
 import Foundation
+import SheetMusicPDFSyntax
 
 /// An operand in a page content stream.
 enum PDFOperand: Equatable {
@@ -26,6 +27,9 @@ struct PDFContentOp {
 /// operators flush too, so operand stacks never leak across operators).
 /// `BDC` / `DP` marked-content dictionaries are parsed-and-discarded; inline
 /// images (`BI … ID … EI`) are skipped (MuseScore PDFs contain none).
+///
+/// Names, strings and the whitespace between tokens are read by the object parser the rest of the reader uses, so a
+/// name here — a font's resource key in `Tf` — is the same string as that key in the page's `/Font` dictionary.
 enum PDFContentTokenizer {
     static func tokenize(_ bytes: [UInt8]) -> [PDFContentOp] {
         var ops = [PDFContentOp]()
@@ -39,15 +43,15 @@ enum PDFContentTokenizer {
             }
             let c = bytes[pos]
             switch c {
-            case PDFBytes.slash:
-                operands.append(.name(parseName(bytes, &pos)))
-            case PDFBytes.lparen:
-                operands.append(.string(parseLiteralString(bytes, &pos)))
+            case PDFBytes.slash, PDFBytes.lparen:
+                if let operand = scalar(bytes, &pos) {
+                    operands.append(operand)
+                }
             case PDFBytes.lt:
                 if pos + 1 < count, bytes[pos + 1] == PDFBytes.lt {
                     skipDictionary(bytes, &pos) // BDC / DP marked content
-                } else {
-                    operands.append(.string(parseHexString(bytes, &pos)))
+                } else if let operand = scalar(bytes, &pos) {
+                    operands.append(operand)
                 }
             case PDFBytes.lbracket:
                 operands.append(.array(parseOperandArray(bytes, &pos)))
@@ -89,16 +93,16 @@ enum PDFContentTokenizer {
             case PDFBytes.rbracket:
                 pos += 1
                 return items
-            case PDFBytes.lparen:
-                items.append(.string(parseLiteralString(bytes, &pos)))
             case PDFBytes.lt:
                 if pos + 1 < count, bytes[pos + 1] == PDFBytes.lt {
                     skipDictionary(bytes, &pos)
-                } else {
-                    items.append(.string(parseHexString(bytes, &pos)))
+                } else if let operand = scalar(bytes, &pos) {
+                    items.append(operand)
                 }
-            case PDFBytes.slash:
-                items.append(.name(parseName(bytes, &pos)))
+            case PDFBytes.lparen, PDFBytes.slash:
+                if let operand = scalar(bytes, &pos) {
+                    items.append(operand)
+                }
             case PDFBytes.lbracket:
                 items.append(.array(parseOperandArray(bytes, &pos)))
             default:
@@ -117,145 +121,31 @@ enum PDFContentTokenizer {
         return CGFloat(Double(token) ?? 0)
     }
 
-    private static func parseName(_ bytes: [UInt8], _ pos: inout Int) -> String {
-        pos += 1 // '/'
-        var out = [UInt8]()
-        let count = bytes.count
-        while pos < count {
-            let c = bytes[pos]
-            if PDFBytes.isWhitespace(c) || PDFBytes.isDelimiter(c) {
-                break
-            }
-            if c == PDFBytes.hash, pos + 2 < count,
-               let hi = PDFBytes.hexValue(bytes[pos + 1]),
-               let lo = PDFBytes.hexValue(bytes[pos + 2])
-            {
-                out.append(UInt8(hi * 16 + lo))
-                pos += 3
-                continue
-            }
-            out.append(c)
-            pos += 1
+    /// The name, literal string or hex string at `pos`, read by the object parser; `pos` moves past it.
+    private static func scalar(_ bytes: [UInt8], _ pos: inout Int) -> PDFOperand? {
+        var parser = PDFObjectParser(bytes, at: pos, lenient: true)
+        let value = parser.parseValue()
+        pos = max(parser.pos, pos + 1)
+        switch value {
+        case let .name(name): return .name(name)
+        case let .string(string): return .string(string)
+        default: return nil
         }
-        return PDFBytes.string(out)
-    }
-
-    private static func parseLiteralString(_ bytes: [UInt8], _ pos: inout Int) -> [UInt8] {
-        pos += 1 // '('
-        var out = [UInt8]()
-        var depth = 1
-        let count = bytes.count
-        while pos < count {
-            let c = bytes[pos]
-            pos += 1
-            if c == PDFBytes.backslash {
-                appendEscape(bytes, &pos, into: &out)
-            } else if c == PDFBytes.lparen {
-                depth += 1
-                out.append(c)
-            } else if c == PDFBytes.rparen {
-                depth -= 1
-                if depth == 0 {
-                    break
-                }
-                out.append(c)
-            } else {
-                out.append(c)
-            }
-        }
-        return out
-    }
-
-    private static func appendEscape(_ bytes: [UInt8], _ pos: inout Int, into out: inout [UInt8]) {
-        guard pos < bytes.count else {
-            return
-        }
-        let e = bytes[pos]
-        pos += 1
-        switch e {
-        case 0x6E: out.append(PDFBytes.lineFeed) // \n
-        case 0x72: out.append(PDFBytes.carriageReturn) // \r
-        case 0x74: out.append(PDFBytes.tab) // \t
-        case 0x62: out.append(0x08) // \b
-        case 0x66: out.append(PDFBytes.formFeed) // \f
-        case PDFBytes.lparen: out.append(PDFBytes.lparen)
-        case PDFBytes.rparen: out.append(PDFBytes.rparen)
-        case PDFBytes.backslash: out.append(PDFBytes.backslash)
-        case PDFBytes.lineFeed: break // line continuation
-        case PDFBytes.carriageReturn:
-            if pos < bytes.count, bytes[pos] == PDFBytes.lineFeed { pos += 1 }
-        case 0x30 ... 0x37:
-            var value = Int(e - 0x30)
-            var n = 1
-            while n < 3, pos < bytes.count, PDFBytes.isOctalDigit(bytes[pos]) {
-                value = value * 8 + Int(bytes[pos] - 0x30)
-                pos += 1
-                n += 1
-            }
-            out.append(UInt8(value & 0xFF))
-        default:
-            out.append(e)
-        }
-    }
-
-    private static func parseHexString(_ bytes: [UInt8], _ pos: inout Int) -> [UInt8] {
-        pos += 1 // '<'
-        var nibbles = [Int]()
-        let count = bytes.count
-        while pos < count {
-            let c = bytes[pos]
-            pos += 1
-            if c == PDFBytes.gt {
-                break
-            }
-            if let v = PDFBytes.hexValue(c) {
-                nibbles.append(v)
-            }
-        }
-        if nibbles.count % 2 == 1 {
-            nibbles.append(0)
-        }
-        var out = [UInt8]()
-        out.reserveCapacity(nibbles.count / 2)
-        var i = 0
-        while i < nibbles.count {
-            out.append(UInt8((nibbles[i] << 4) | nibbles[i + 1]))
-            i += 2
-        }
-        return out
     }
 
     // MARK: - Cursor helpers
 
     private static func readRegularRun(_ bytes: [UInt8], _ pos: inout Int) -> String {
-        var out = [UInt8]()
-        while pos < bytes.count {
-            let c = bytes[pos]
-            if PDFBytes.isWhitespace(c) || PDFBytes.isDelimiter(c) {
-                break
-            }
-            out.append(c)
-            pos += 1
-        }
-        return PDFBytes.string(out)
+        var parser = PDFObjectParser(bytes, at: pos)
+        let token = parser.token()
+        pos = parser.pos
+        return token
     }
 
     private static func skipWhitespaceAndComments(_ bytes: [UInt8], _ pos: inout Int) {
-        while pos < bytes.count {
-            let c = bytes[pos]
-            if PDFBytes.isWhitespace(c) {
-                pos += 1
-            } else if c == PDFBytes.percent {
-                while pos < bytes.count,
-                      bytes[pos] != PDFBytes.lineFeed,
-                      bytes[pos] != PDFBytes.carriageReturn
-                {
-                    pos += 1
-                }
-            } else {
-                break
-            }
-        }
+        var parser = PDFObjectParser(bytes, at: pos)
+        parser.skipWhitespaceAndComments()
+        pos = parser.pos
     }
 
     /// Skip a `<< … >>` dictionary (nested-aware; literal/hex strings are
@@ -272,10 +162,8 @@ enum PDFContentTokenizer {
             } else if c == PDFBytes.gt, pos + 1 < count, bytes[pos + 1] == PDFBytes.gt {
                 depth -= 1
                 pos += 2
-            } else if c == PDFBytes.lparen {
-                _ = parseLiteralString(bytes, &pos)
-            } else if c == PDFBytes.lt {
-                _ = parseHexString(bytes, &pos)
+            } else if c == PDFBytes.lparen || c == PDFBytes.lt {
+                _ = scalar(bytes, &pos)
             } else {
                 pos += 1
             }

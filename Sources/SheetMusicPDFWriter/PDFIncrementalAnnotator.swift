@@ -1,4 +1,5 @@
 import SheetMusicFoundation
+import SheetMusicPDFSyntax
 
 /// Adds page annotations as an incremental update (ISO 32000-1 §7.5.6), preserving every original byte.
 /// The newest cross-reference section's kind is retained: a classic table or an xref stream.
@@ -23,21 +24,21 @@ public enum PDFIncrementalAnnotator {
             for index in wanted.keys.sorted() {
                 let page = pages[index]
                 let added = try PDFAnnotationObjects.write(wanted[index] ?? [], in: page.space, into: writer)
-                    .map { PDFSourceValue.reference($0, 0) }
+                    .map { PDFObject.reference($0, 0) }
                 guard !added.isEmpty else { continue }
                 var dictionary = page.dictionary
-                var existing: [PDFSourceValue] = []
+                var existing: [PDFObject] = []
                 if let value = dictionary["Annots"] {
                     let resolved = try document.resolve(value)
                     if resolved != .null {
-                        guard let array = resolved.array else { throw PDFAppendError.unreadable }
+                        guard let array = resolved.arrayValue else { throw PDFAppendError.unreadable }
                         existing = array
                     }
                 }
                 // An indirect array may be shared by other pages: give only this page its own updated array.
                 dictionary["Annots"] = .array(existing + added)
                 writer.rewrite(
-                    page.number, generation: page.generation, PDFSourceValue.dictionary(dictionary).serialized,
+                    page.number, generation: page.generation, PDFObject.dictionary(dictionary).serialized,
                 )
             }
             guard writer.hasObjects else { return original }

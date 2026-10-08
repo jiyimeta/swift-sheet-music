@@ -1,6 +1,8 @@
-/// Sources/SheetMusicPDFWriter/PDFPageSpace.swift
-/// A page's displayed space mapped into its default user space, where annotation geometry is written. Displayed means
-/// what a viewer shows: the crop box, y down from its top-left, after `/Rotate` has turned the page clockwise.
+// Sources/SheetMusicPDFWriter/PDFPageSpace.swift
+// A page's displayed space mapped into its default user space, where annotation geometry is written. Displayed means
+// what a viewer shows: the crop box, y down from its top-left, after `/Rotate` has turned the page clockwise.
+import SheetMusicPDFSyntax
+
 struct PDFPageSpace: Equatable {
     let left: Double
     let bottom: Double
@@ -52,7 +54,7 @@ struct PDFPageSpace: Equatable {
     /// Keep legacy Unit1 bytes; other scales need full precision so small physical marks do not round to zero.
     func number(_ value: Double) -> String {
         guard userUnit != 1 else { return PDFPageWalker.number(value) }
-        let decimal = PDFSourceBytes.decimal(value)
+        let decimal = PDFBytes.decimal(value)
         return decimal.hasSuffix(".0") ? String(decimal.dropLast(2)) : decimal
     }
 }

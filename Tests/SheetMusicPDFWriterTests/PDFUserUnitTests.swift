@@ -57,18 +57,18 @@ struct PDFUserUnitTests {
         let file = try PDFIncrementalAnnotator.append([0: [.ink(ink)]], to: original)
         let document = try PDFSourceDocument(file)
         let page = try #require(document.pages().first)
-        let reference = try #require(page.dictionary["Annots"]?.array?.first)
-        let annotation = try #require(document.resolve(reference).dictionary)
-        let width = try #require(annotation["BS"]?.dictionary?["W"]?.numeric)
+        let reference = try #require(page.dictionary["Annots"]?.arrayValue?.first)
+        let annotation = try #require(document.resolve(reference).dictionaryValue)
+        let width = try #require(annotation["BS"]?.dictionaryValue?["W"]?.doubleValue)
         #expect(abs(width * 75000 - 4) < 0.000001)
-        let line = try #require(annotation["InkList"]?.array?.first?.array)
-        let physicalLine = try line.map { try #require($0.numeric) * 75000 }
+        let line = try #require(annotation["InkList"]?.arrayValue?.first?.arrayValue)
+        let physicalLine = try line.map { try #require($0.doubleValue) * 75000 }
         for (actual, expected) in zip(physicalLine, [20.0, 795, 30, 795]) {
             #expect(abs(actual - expected) < 0.000001)
         }
-        let rect = try #require(annotation["Rect"]?.array)
+        let rect = try #require(annotation["Rect"]?.arrayValue)
         for (coordinate, expected) in zip(rect, [18.0, 783, 32, 797]) {
-            #expect(try abs(#require(coordinate.numeric) * 75000 - expected) < 0.000001)
+            #expect(try abs(#require(coordinate.doubleValue) * 75000 - expected) < 0.000001)
         }
         let appearance = try #require(PDFPageAnnotationTests.appearances(in: file).first)
         let moves = appearance.split(separator: "\n").filter { $0.hasSuffix(" m") }

@@ -1,9 +1,10 @@
 import Foundation
 @testable import SheetMusicPDF
+import SheetMusicPDFSyntax
 @testable import SheetMusicPDFWriter
 import Testing
 
-/// `PDFObjectWriter` and `FlateStream`: a file ssm's own Swift reader opens, whose cross-reference table points at
+/// `PDFObjectWriter` and `PDFFlate`: a file ssm's own Swift reader opens, whose cross-reference table points at
 /// its objects, and whose compressed streams inflate back to what was written.
 struct PDFObjectWriterTests {
     /// A one-page A4 document whose page draws `content`.
@@ -69,9 +70,9 @@ struct PDFObjectWriterTests {
     }
 
     @Test func `an empty stream is still a zlib stream`() throws {
-        let encoded = try FlateStream.encode(Data())
+        let encoded = try PDFFlate.encode(Data())
 
-        #expect(PDFFlate.inflate(encoded) == Data())
+        #expect((try? PDFFlate.decode(encoded, limit: 1 << 30)) == Data())
     }
 
     @Test func `a text string is a literal when it can be, and UTF-16 when it cannot`() {

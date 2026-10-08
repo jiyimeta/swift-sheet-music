@@ -1,4 +1,5 @@
 import SheetMusicFoundation
+import SheetMusicPDFSyntax
 
 /// Appended objects and their cross-references. Original objects are never modified in place.
 final class PDFIncrementalWriter: PDFObjectSink {
@@ -43,7 +44,7 @@ final class PDFIncrementalWriter: PDFObjectSink {
     }
 
     /// Retains trailer identity and metadata while replacing section-local keys and linking `/Prev`.
-    func finish(trailer: [String: PDFSourceValue], previous: Int, asStream: Bool) throws -> Data {
+    func finish(trailer: [String: PDFObject], previous: Int, asStream: Bool) throws -> Data {
         guard !exhausted else { throw PDFAppendError.unreadable }
         let dropped: Set = [
             "Size",
@@ -71,7 +72,7 @@ final class PDFIncrementalWriter: PDFObjectSink {
             carried["Type"] = .name("XRef")
             let width = offsetWidth()
             carried["W"] = .array([.int(1), .int(width), .int(2)])
-            carried["Index"] = .array(subsections().flatMap { [PDFSourceValue.int($0.start), .int($0.count)] })
+            carried["Index"] = .array(subsections().flatMap { [PDFObject.int($0.start), .int($0.count)] })
             var rows: [UInt8] = []
             for number in written.keys.sorted() {
                 guard let entry = written[number] else { throw PDFAppendError.unreadable }
@@ -79,7 +80,7 @@ final class PDFIncrementalWriter: PDFObjectSink {
                 rows += bigEndian(entry.offset, width: width)
                 rows += bigEndian(entry.generation, width: 2)
             }
-            let dictionary = PDFSourceValue.dictionary(carried).serialized
+            let dictionary = PDFObject.dictionary(carried).serialized
             let entries = String(dictionary.dropFirst(3).dropLast(3))
             append("\(number) 0 obj\n")
             bytes += try PDFObjectWriter.streamBody(dictionary: entries, data: Data(rows), compress: true)
@@ -99,7 +100,7 @@ final class PDFIncrementalWriter: PDFObjectSink {
                 }
             }
             carried["Size"] = .int(next)
-            text += "trailer\n\(PDFSourceValue.dictionary(carried).serialized)\nstartxref\n\(table)\n%%EOF\n"
+            text += "trailer\n\(PDFObject.dictionary(carried).serialized)\nstartxref\n\(table)\n%%EOF\n"
             append(text)
         }
         return Data(bytes)

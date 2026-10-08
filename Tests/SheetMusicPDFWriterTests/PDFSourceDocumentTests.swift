@@ -1,4 +1,5 @@
 import Foundation
+import SheetMusicPDFSyntax
 @testable import SheetMusicPDFWriter
 import Testing
 
@@ -64,19 +65,19 @@ struct PDFSourceDocumentTests {
 
     @Test func `a value written back parses to itself`() throws {
         let source = "<< /A [1 -2.5 (x\\)y) <00FF> /N#20m 3 0 R true null] /B << /C /D >> >>"
-        var parser = PDFSourceParser(Array(source.utf8))
+        var parser = PDFObjectParser(Array(source.utf8))
         let parsed = parser.parseValue()
         let value = try #require(parsed)
-        var reparser = PDFSourceParser(Array(value.serialized.utf8))
+        var reparser = PDFObjectParser(Array(value.serialized.utf8))
         #expect(reparser.parseValue() == value)
     }
 
     @Test func `every name byte survives serialization`() throws {
         let source = "/" + (0 ... 255).map { String(format: "#%02X", $0) }.joined()
-        var parser = PDFSourceParser(Array(source.utf8))
+        var parser = PDFObjectParser(Array(source.utf8))
         let parsed = parser.parseValue()
         let value = try #require(parsed)
-        var reparser = PDFSourceParser(Array(value.serialized.utf8))
+        var reparser = PDFObjectParser(Array(value.serialized.utf8))
         #expect(reparser.parseValue() == value)
     }
 
@@ -114,7 +115,7 @@ struct PDFSourceDocumentTests {
 
     @Test func `deep syntax is refused without recursion overflow`() {
         let source = String(repeating: "[", count: 1000) + "0" + String(repeating: "]", count: 1000)
-        var parser = PDFSourceParser(Array(source.utf8))
+        var parser = PDFObjectParser(Array(source.utf8))
         #expect(parser.parseValue() == nil)
     }
 
@@ -124,8 +125,8 @@ struct PDFSourceDocumentTests {
     }
 
     @Test func `flate decode handles empty and corrupt input`() throws {
-        #expect(try FlateStream.decode(FlateStream.encode(Data()), limit: 1 << 20) == Data())
-        #expect(throws: (any Error).self) { try FlateStream.decode(Data([0]), limit: 1 << 20) }
-        #expect(throws: (any Error).self) { try FlateStream.decode(Data([0x78, 0x9C, 0xFF]), limit: 1 << 20) }
+        #expect(try PDFFlate.decode(PDFFlate.encode(Data()), limit: 1 << 20) == Data())
+        #expect(throws: (any Error).self) { try PDFFlate.decode(Data([0]), limit: 1 << 20) }
+        #expect(throws: (any Error).self) { try PDFFlate.decode(Data([0x78, 0x9C, 0xFF]), limit: 1 << 20) }
     }
 }

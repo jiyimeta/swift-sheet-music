@@ -1,4 +1,5 @@
 import SheetMusicFoundation
+import SheetMusicPDFSyntax
 
 /// Proven top-level boundaries used only for offset recovery, never byte patterns inside a payload.
 /// If a stream's direct Length does not prove its boundary, recovery fails rather than guessing at endstream.
@@ -7,7 +8,7 @@ struct PDFSourceBoundaries {
     var sections: [Int] = []
 
     init(_ bytes: [UInt8]) throws {
-        var parser = PDFSourceParser(bytes)
+        var parser = PDFObjectParser(bytes)
         while true {
             parser.skipWhitespaceAndComments()
             guard parser.pos < bytes.count else { return }
@@ -20,13 +21,13 @@ struct PDFSourceBoundaries {
                 } else { parser.pos = end }
                 guard parser.token() == "endobj" else { throw PDFAppendError.unreadable }
                 objects[header.number, default: []].append(start)
-                if value.dictionary?["Type"] == .name("XRef") { sections.append(start) }
+                if value.dictionaryValue?["Type"] == .name("XRef") { sections.append(start) }
             } else {
                 switch parser.token() {
                 case "xref":
                     sections.append(start)
                     _ = try PDFSourceDocument.classicEntries(&parser)
-                    guard parser.parseValue()?.dictionary != nil else { throw PDFAppendError.unreadable }
+                    guard parser.parseValue()?.dictionaryValue != nil else { throw PDFAppendError.unreadable }
                 case "startxref":
                     guard let offset = Int(parser.token()), offset >= 0 else { throw PDFAppendError.unreadable }
                 default: throw PDFAppendError.unreadable
@@ -36,9 +37,9 @@ struct PDFSourceBoundaries {
     }
 
     private static func skipStream(
-        _ bytes: [UInt8], dictionary: [String: PDFSourceValue], parser: inout PDFSourceParser,
+        _ bytes: [UInt8], dictionary: [String: PDFObject], parser: inout PDFObjectParser,
     ) throws {
-        guard let length = dictionary["Length"]?.integer, length >= 0 else { throw PDFAppendError.unreadable }
+        guard let length = dictionary["Length"]?.integerValue, length >= 0 else { throw PDFAppendError.unreadable }
         if parser.pos < bytes.count, bytes[parser.pos] == 13 { parser.pos += 1 }
         guard parser.pos < bytes.count, bytes[parser.pos] == 10 else { throw PDFAppendError.unreadable }
         parser.pos += 1

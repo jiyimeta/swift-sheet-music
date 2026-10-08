@@ -2,6 +2,7 @@
     import CoreGraphics
 #endif
 import Foundation
+import SheetMusicPDFSyntax
 
 /// A Foundation-only reader for the bounded family of PDFs that MuseScore
 /// 3.x / 4.x exports: `%PDF-1.4`, classic `xref` table + `trailer` dict,
@@ -158,6 +159,10 @@ struct PDFReaderDocument {
 
     // MARK: - Stream & string decoding
 
+    /// The most one stream may decode to. This reader inflates page content and images as well as fonts' CMaps, so
+    /// the budget is far above any page a score is engraved on; a stream past it is skipped like an undecodable one.
+    static let maxDecodedStreamBytes = 256 << 20
+
     private func decodeStream(dict: [String: PDFObject], raw: [UInt8]) -> Data {
         var filters = [String]()
         switch resolve(dict["Filter"]) {
@@ -174,7 +179,7 @@ struct PDFReaderDocument {
         var data = Data(raw)
         for filter in filters {
             if filter == "FlateDecode" || filter == "Fl" {
-                guard let inflated = PDFFlate.inflate(data) else {
+                guard let inflated = try? PDFFlate.decode(data, limit: Self.maxDecodedStreamBytes) else {
                     return Data()
                 }
                 data = inflated

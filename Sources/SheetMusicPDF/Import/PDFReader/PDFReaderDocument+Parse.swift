@@ -2,6 +2,7 @@
     import CoreGraphics
 #endif
 import Foundation
+import SheetMusicPDFSyntax
 
 /// A collected page: its own dictionary plus the MediaBox / Resources
 /// resolved through page-tree inheritance.
@@ -52,7 +53,7 @@ extension PDFReaderDocument {
         // Second pass: resolve (possibly indirect) /Length now the index is complete.
         for pending in pendingStreams {
             let raw = resolveStreamRaw(bytes: bytes, pending: pending, objects: objects)
-            objects[pending.objNum] = .stream(dict: pending.dict, raw: raw)
+            objects[pending.objNum] = .stream(dictionary: pending.dict, raw: raw)
         }
         return objects
     }
@@ -101,8 +102,8 @@ extension PDFReaderDocument {
     private static func parseObjectBody(
         bytes: [UInt8], at start: Int,
     ) -> (object: PDFObject, stream: (rawStart: Int, contentEnd: Int)?, endPos: Int)? {
-        var parser = PDFObjectParser(bytes, at: start)
-        guard let value = parser.parseObject() else {
+        var parser = PDFObjectParser(bytes, at: start, lenient: true)
+        guard let value = parser.parseValue() else {
             return nil
         }
         guard case .dictionary = value else {
@@ -138,7 +139,7 @@ extension PDFReaderDocument {
     ) -> [UInt8] {
         let rawStart = pending.rawStart
         let contentEnd = pending.contentEnd
-        if let length = resolve(pending.dict["Length"], in: objects)?.intValue,
+        if let length = resolve(pending.dict["Length"], in: objects)?.integerValue,
            length >= 0, rawStart + length <= contentEnd
         {
             return Array(bytes[rawStart ..< (rawStart + length)])
@@ -174,8 +175,8 @@ extension PDFReaderDocument {
         }
         var lastDict: [String: PDFObject]?
         for idx in positions.reversed() {
-            var parser = PDFObjectParser(bytes, at: idx + trailerKeyword.count)
-            guard case let .dictionary(dict)? = parser.parseObject() else {
+            var parser = PDFObjectParser(bytes, at: idx + trailerKeyword.count, lenient: true)
+            guard case let .dictionary(dict)? = parser.parseValue() else {
                 continue
             }
             if lastDict == nil {

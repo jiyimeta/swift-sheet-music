@@ -1,4 +1,5 @@
 import SheetMusicFoundation
+import SheetMusicPDFSyntax
 
 /// Writes a PDF file object by object, then the cross-reference table that finds them and the trailer. Numbers are
 /// handed out first (`reserve`) so objects can name each other before they are written; every reserved number has to
@@ -35,7 +36,7 @@ final class PDFObjectWriter: PDFObjectSink {
     /// A stream object's body after its `N G obj` line: `dictionary`'s entries plus `/Length` (and with `compress`
     /// `/Filter /FlateDecode`), then the payload. Shared with `PDFIncrementalWriter`.
     static func streamBody(dictionary: String, data: Data, compress: Bool) throws -> [UInt8] {
-        let payload = compress ? try FlateStream.encode(data) : data
+        let payload = compress ? try PDFFlate.encode(data) : data
         let filter = compress ? " /Filter /FlateDecode" : ""
         let entries = dictionary.isEmpty ? "" : "\(dictionary) "
         return Array("<< \(entries)/Length \(payload.count)\(filter) >>\nstream\n".utf8) + payload

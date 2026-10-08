@@ -29,6 +29,14 @@ and this project adheres to
 
 ### Changed
 
+- **The PDF importer and the incremental writer read PDF syntax with one parser.** The object model, the object
+  parser and `/FlateDecode` that `SheetMusicPDF`'s reader and `SheetMusicPDFWriter` each kept are one internal module,
+  `SheetMusicPDFSyntax`: the writer parses strictly (malformed syntax is unreadable) and the importer leniently (it
+  keeps what it read), from the same code; the content-stream tokenizer reads its names and strings through it too.
+  For the importer this brings the writer's limits — nesting deeper than 64 levels is refused rather than recursed
+  into, and a stream that would decode past 256 MiB is skipped like an undecodable one — and two readings the writer
+  already had: a name keeps one character per byte, so two names that are not valid UTF-8 no longer decode to the same
+  string, and an unescaped end of line in a literal string reads as a line feed.
 - **`libSheetMusicAndroidJNI.so` exports its `Java_*` entry points and nothing else.** The AAR's build
   (`Scripts/android-build-libs.sh`) links it with `Scripts/android-jni-exports.map`; before, it exported every public
   symbol of every module linked into it — 16,592 names, 73 of them looked up by the JVM — and carried their symbol

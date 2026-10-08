@@ -4,6 +4,7 @@ import Foundation
 import SheetMusicCore
 import SheetMusicLayout
 @testable import SheetMusicPDF
+import SheetMusicPDFSyntax
 @testable import SheetMusicPDFWriter
 import Testing
 #if canImport(PDFKit)
@@ -65,7 +66,7 @@ struct PDFPageAnnotationTests {
               let open = bytes[form.upperBound...].firstRange(of: Array("stream\n".utf8)),
               let close = bytes[open.upperBound...].firstRange(of: Array("\nendstream".utf8))
         {
-            if let inflated = PDFFlate.inflate(Data(bytes[open.upperBound ..< close.lowerBound])),
+            if let inflated = try? PDFFlate.decode(Data(bytes[open.upperBound ..< close.lowerBound]), limit: 1 << 30),
                let content = String(data: inflated, encoding: .utf8)
             {
                 found.append(content)

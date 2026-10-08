@@ -1,12 +1,13 @@
 import SheetMusicFoundation
+import SheetMusicPDFSyntax
 
 extension PDFSourceDocument {
     /// A recognizable section's errors propagate. Recovery needs one proven nearby top-level boundary.
     static func section(_ bytes: [UInt8], at offset: Int) throws -> Section {
         guard bytes.indices.contains(offset) else { throw PDFAppendError.unreadable }
-        var parser = PDFSourceParser(bytes, at: offset)
+        var parser = PDFObjectParser(bytes, at: offset)
         if parser.token() == "xref" { return try parseSection(bytes, at: offset) }
-        parser = PDFSourceParser(bytes, at: offset)
+        parser = PDFObjectParser(bytes, at: offset)
         if parser.parseObjectHeader() != nil { return try parseSection(bytes, at: offset) }
         let boundaries = try PDFSourceBoundaries(bytes)
         let recovered = try PDFSourceBoundaries.unique(boundaries.sections, near: offset, byteCount: bytes.count)
@@ -14,17 +15,17 @@ extension PDFSourceDocument {
     }
 
     private static func parseSection(_ bytes: [UInt8], at offset: Int) throws -> Section {
-        var parser = PDFSourceParser(bytes, at: offset)
+        var parser = PDFObjectParser(bytes, at: offset)
         if parser.token() == "xref" {
             let entries = try classicEntries(&parser)
             guard case let .dictionary(dictionary) = parser.parseValue() else { throw PDFAppendError.unreadable }
             return Section(offset: offset, isStream: false, dictionary: dictionary, entries: entries)
         }
-        parser = PDFSourceParser(bytes, at: offset)
+        parser = PDFObjectParser(bytes, at: offset)
         guard parser.parseObjectHeader() != nil,
               case let .dictionary(dictionary) = parser.parseValue(), dictionary["Type"] == .name("XRef"),
               parser.token() == "stream" else { throw PDFAppendError.unreadable }
-        let raw = try rawStream(bytes, parser: &parser, length: dictionary["Length"]?.integer)
+        let raw = try rawStream(bytes, parser: &parser, length: dictionary["Length"]?.integerValue)
         let data = try decode(raw, dictionary: dictionary)
         return try Section(
             offset: offset,
@@ -34,7 +35,7 @@ extension PDFSourceDocument {
         )
     }
 
-    static func classicEntries(_ parser: inout PDFSourceParser) throws -> [Int: Location] {
+    static func classicEntries(_ parser: inout PDFObjectParser) throws -> [Int: Location] {
         var entries: [Int: Location] = [:]
         while true {
             let token = parser.token()
@@ -56,20 +57,20 @@ extension PDFSourceDocument {
         }
     }
 
-    private static func streamEntries(_ data: [UInt8], dictionary: [String: PDFSourceValue]) throws -> [Int: Location] {
-        guard let widthValues = dictionary["W"]?.array, widthValues.count == 3,
-              widthValues.allSatisfy({ $0.integer != nil }) else { throw PDFAppendError.unreadable }
-        let widths = widthValues.compactMap(\.integer)
+    private static func streamEntries(_ data: [UInt8], dictionary: [String: PDFObject]) throws -> [Int: Location] {
+        guard let widthValues = dictionary["W"]?.arrayValue, widthValues.count == 3,
+              widthValues.allSatisfy({ $0.integerValue != nil }) else { throw PDFAppendError.unreadable }
+        let widths = widthValues.compactMap(\.integerValue)
         guard widths.count == 3,
               widths.allSatisfy({ (0 ... 8).contains($0) }), widths.reduce(0, +) > 0,
-              let size = dictionary["Size"]?.integer, size > 0 else { throw PDFAppendError.unreadable }
+              let size = dictionary["Size"]?.integerValue, size > 0 else { throw PDFAppendError.unreadable }
         let rowSize = widths.reduce(0, +)
         let ranges: [Int]
         if let index = dictionary["Index"] {
-            guard let values = index.array, values.allSatisfy({ $0.integer != nil }) else {
+            guard let values = index.arrayValue, values.allSatisfy({ $0.integerValue != nil }) else {
                 throw PDFAppendError.unreadable
             }
-            ranges = values.compactMap(\.integer)
+            ranges = values.compactMap(\.integerValue)
         } else { ranges = [0, size] }
         guard !ranges.isEmpty, ranges.count.isMultiple(of: 2) else { throw PDFAppendError.unreadable }
         var cursor = 0

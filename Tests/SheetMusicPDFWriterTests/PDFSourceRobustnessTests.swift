@@ -1,4 +1,5 @@
 import Foundation
+import SheetMusicPDFSyntax
 @testable import SheetMusicPDFWriter
 import Testing
 
@@ -11,7 +12,7 @@ struct PDFSourceRobustnessTests {
             [2, 10, 20, 30, 2, 5, 5, 5], [3, 10, 15, 20, 3, 10, 8, 8],
             [4, 10, 10, 10, 4, 5, 5, 5],
         ]
-        let dictionary: [String: PDFSourceValue] = ["DecodeParms": .dictionary([
+        let dictionary: [String: PDFObject] = ["DecodeParms": .dictionary([
             "Predictor": .int(15), "Columns": .int(3),
         ])]
         #expect(try PDFSourceDocument.decode(residuals[filter], dictionary: dictionary) == [10, 20, 30, 15, 25, 35])
@@ -32,9 +33,9 @@ struct PDFSourceRobustnessTests {
     /// A few kilobytes of `/FlateDecode` can ask for gigabytes; a stream decodes up to the budget and no further.
     @Test func `a stream that decodes past the budget is refused`() throws {
         let budget = PDFSourceDocument.maxDecodedStreamBytes
-        let flate: [String: PDFSourceValue] = ["Filter": .name("FlateDecode")]
-        let atBudget = try Array(FlateStream.encode(Data(count: budget)))
-        let overBudget = try Array(FlateStream.encode(Data(count: budget + 1)))
+        let flate: [String: PDFObject] = ["Filter": .name("FlateDecode")]
+        let atBudget = try Array(PDFFlate.encode(Data(count: budget)))
+        let overBudget = try Array(PDFFlate.encode(Data(count: budget + 1)))
         #expect(overBudget.count < 64 * 1024)
         #expect(try PDFSourceDocument.decode(atBudget, dictionary: flate).count == budget)
         #expect(throws: PDFAppendError.unreadable) { try PDFSourceDocument.decode(overBudget, dictionary: flate) }
