@@ -41,7 +41,7 @@ public struct ScorePages: Sendable {
     ) -> ScorePages {
         let laidOut = LayoutBridge.computePages(
             score: score, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM, options: options.wire(),
-            margins: options.pageMarginsMM.bridge,
+            margins: options.pageMarginsMM.bridge, drawsInvisibleElements: options.drawsInvisibleElements,
         )
         let placement = ScorePagePlacement(LayoutBridge.pagePlacement(
             document: laidOut.document, options: options.wire(), pageHeightMM: pageHeightMM,
@@ -82,7 +82,7 @@ public struct ScorePages: Sendable {
         let tint: (argb: UInt32, ids: Set<ScoreItemID>)? = expanded.isEmpty ? nil : (argb: argb, ids: expanded)
         let built = LayoutBridge.encodePagesWithSpans(
             document: document, options: options.wire(), pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
-            margins: options.pageMarginsMM.bridge, tint: tint,
+            margins: options.pageMarginsMM.bridge, tint: tint, drawsInvisibleElements: options.drawsInvisibleElements,
         )
         return ScorePages(
             document: document, filteredScore: filteredScore, placement: placement, pages: built.pages,

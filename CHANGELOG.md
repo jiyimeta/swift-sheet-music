@@ -7,6 +7,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`ScorePDFWriter.write(_:fonts:title:drawsPageChrome:)`** — `drawsPageChrome: true` prints the score's header and
+  footer (`score.style.pageChrome`, macros from `score.metaTags`) in the margins of `.page`-mode pages, by
+  `PageChromeRenderer`'s rules: what Apple's `PDFExporter` prints, now for the portable writer (Windows, Android).
+  Off by default, so existing callers write the same bytes.
+- **`ScorePageOptions.drawsInvisibleElements`** (and `drawsInvisibleElements:` on `LayoutBridge.computePages` /
+  `encodePagesWithSpans`) — `false` keeps the room a `showsInvisibleElements` layout gives invisible elements and draws
+  nothing in it: the container elements, the invisible spanners and invisible notes inside visible chords, as
+  `ScoreCanvasDrawing.drawSystem(drawsInvisibleElements:)` does for Apple's print. `true`, the default, draws them
+  gray as before.
+
 ### Changed
 
 - **The WebAssembly size check left the push path and only warns.** `Scripts/wasm-size.sh` was the longest step in

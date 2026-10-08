@@ -1,5 +1,3 @@
-import Foundation
-
 /// Expands MuseScore's header / footer macros (`$P`, `$:tag:`, etc.)
 /// into plain text. Mirrors `replaceTextMacros` in
 /// `engraving/rendering/score/headerfooterlayout.cpp:246-407`.
@@ -9,9 +7,11 @@ import Foundation
 /// (filesystem, MuseScore version, build metadata) expand to the
 /// empty string. Adding them later is a localised change in
 /// `expandToken`.
-enum PageChromeMacroExpander {
+///
+/// Shared by Apple's `PageChromeRenderer` and the portable pages' `ScorePageChrome`, so both print the same text.
+package enum PageChromeMacroExpander {
     /// Inputs needed to expand a single header / footer string.
-    struct Context {
+    package struct Context {
         /// 0-based page index. Page 1 is `0`.
         let pageIndex: Int
         /// Total number of pages in the document.
@@ -19,12 +19,18 @@ enum PageChromeMacroExpander {
         /// `Score.metaTags`, looked up by `$:tag:` and the
         /// title / copyright shorthands.
         let metaTags: [String: String]
+
+        package init(pageIndex: Int, pageCount: Int, metaTags: [String: String]) {
+            self.pageIndex = pageIndex
+            self.pageCount = pageCount
+            self.metaTags = metaTags
+        }
     }
 
     /// Expand `template` to its rendered string for the given page.
     /// Tokens that don't match any known macro fall through as
     /// literal `$<char>` (matching MuseScore's `default:` branch).
-    static func expand(
+    package static func expand(
         _ template: String, context: Context,
     ) -> String {
         var output = ""

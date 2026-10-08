@@ -101,4 +101,32 @@ struct ScorePDFWriterTests {
 
         #expect(WriterFixtures.soundingChords(parsed.score) == 32)
     }
+
+    /// `drawsPageChrome` reaches the pages in `.page` mode only, and off is today's file byte for byte.
+    @Test func `page chrome is written on sheets only, and off changes nothing`() throws {
+        let provider = try WriterFixtures.tableProvider()
+        let files = try FontMetrics.$scopedProvider.withValue(provider) {
+            let score = try ScoreBridge.loadScore(bytes: Data(WriterFixtures.musicXML(measures: 64).utf8))
+            let sheets = ScorePages.compute(
+                score: score, pageWidthMM: 210, pageHeightMM: 297,
+                options: ScorePageOptions(mode: .page, pageMarginsMM: .uniform(12.7)),
+            )
+            let scroll = ScorePages.compute(score: score, pageWidthMM: 210, pageHeightMM: 297)
+            let fonts = try WriterFixtures.fonts()
+            return try (
+                plain: ScorePDFWriter.write(sheets, fonts: fonts, title: "Prelude"),
+                off: ScorePDFWriter.write(sheets, fonts: fonts, title: "Prelude", drawsPageChrome: false),
+                on: ScorePDFWriter.write(sheets, fonts: fonts, title: "Prelude", drawsPageChrome: true),
+                pageCount: sheets.pageCount,
+                scrollOff: ScorePDFWriter.write(scroll, fonts: fonts, title: "Prelude"),
+                scrollOn: ScorePDFWriter.write(scroll, fonts: fonts, title: "Prelude", drawsPageChrome: true),
+            )
+        }
+
+        #expect(files.pageCount > 1, "control: page numbers need a second page")
+        #expect(files.off == files.plain)
+        #expect(files.on != files.off)
+        #expect(try #require(PDFReaderDocument(data: files.on)).pageCount == files.pageCount)
+        #expect(files.scrollOn == files.scrollOff, "a scroll page has no margins to print chrome in")
+    }
 }

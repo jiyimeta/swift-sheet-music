@@ -157,6 +157,9 @@ extension LayoutBridge {
     /// down, and every page is `margins.paperWidthMM(for:pageWidthMM:)` wide — `pageWidthMM` unless the music overflows
     /// the printable width. `document` must have been engraved into the printable width, as `computePages` does.
     /// `.zero` gives `encodePages`' pages byte for byte; the other modes ignore `margins`.
+    ///
+    /// `drawsInvisibleElements` `false` keeps out what a `showsInvisibleElements` layout parked as invisible, in the
+    /// room that layout gave it — what a print does (`buildCommandsWithSpans`).
     public static func encodePagesWithSpans(
         document: LayoutDocument,
         options optionsWire: LayoutOptionsWire,
@@ -164,12 +167,15 @@ extension LayoutBridge {
         pageHeightMM: Double,
         margins: PageMargins = .zero,
         tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
+        drawsInvisibleElements: Bool = true,
     ) -> (pages: [EncodablePage], spans: [[SystemSpan]]) {
         let ptToMM = 25.4 / 72.0
 
         switch optionsWire.mode {
         case .vertical:
-            let built = buildCommandsWithSpans(layout: document, tint: tint)
+            let built = buildCommandsWithSpans(
+                layout: document, tint: tint, drawsInvisibleElements: drawsInvisibleElements,
+            )
             // Widened to the music as page mode's sheets are, so a measure wider than the line is not cut by a
             // renderer that clips at the page (Windows, Android).
             return ([EncodablePage(
@@ -179,7 +185,9 @@ extension LayoutBridge {
             )], [built.spans])
 
         case .horizontal:
-            let built = buildCommandsWithSpans(layout: document, tint: tint)
+            let built = buildCommandsWithSpans(
+                layout: document, tint: tint, drawsInvisibleElements: drawsInvisibleElements,
+            )
             return ([EncodablePage(
                 widthMM: Double(document.size.width) * ptToMM,
                 heightMM: Double(document.size.height) * ptToMM,
@@ -211,7 +219,9 @@ extension LayoutBridge {
                     )
                     : sub
                 // Onto the paper: the leading and top margins in. Untouched for `.zero`.
-                let built = margins.place(buildCommandsWithSpans(layout: pageDoc, tint: tint))
+                let built = margins.place(buildCommandsWithSpans(
+                    layout: pageDoc, tint: tint, drawsInvisibleElements: drawsInvisibleElements,
+                ))
                 pages.append(EncodablePage(widthMM: paperWidthMM, heightMM: pageHeightMM, commands: built.commands))
                 spans.append(built.spans.map { span in
                     var span = span
@@ -237,6 +247,7 @@ extension LayoutBridge {
         pageHeightMM: Double,
         options optionsWire: LayoutOptionsWire,
         margins: PageMargins = .zero,
+        drawsInvisibleElements: Bool = true,
     ) -> LayoutPages {
         let engravingWidthMM = optionsWire.mode == .page
             ? margins.printableWidthMM(pageWidthMM: pageWidthMM)
@@ -244,7 +255,7 @@ extension LayoutBridge {
         let laidOut = layoutForPages(score: score, pageWidthMM: engravingWidthMM, options: optionsWire)
         let built = encodePagesWithSpans(
             document: laidOut.document, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
-            margins: margins,
+            margins: margins, drawsInvisibleElements: drawsInvisibleElements,
         )
         return LayoutPages(
             document: laidOut.document, pages: built.pages, spans: built.spans, filteredScore: laidOut.filteredScore,

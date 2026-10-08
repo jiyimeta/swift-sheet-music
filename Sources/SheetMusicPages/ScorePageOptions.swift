@@ -69,6 +69,10 @@ public struct ScorePageOptions: Sendable, Equatable {
     public var collapsesMultiMeasureRests: Bool
     /// MuseScore's "Show Invisible": invisible elements are laid out and drawn gray rather than dropped.
     public var showsInvisibleElements: Bool
+    /// Whether what `showsInvisibleElements` laid out is drawn. `false` keeps those elements' room and draws nothing
+    /// in it, as Apple prints a score its reader shows with invisible elements; `true` (the default) draws them gray.
+    /// No effect without `showsInvisibleElements`. Not part of the options the Android bridge carries.
+    public var drawsInvisibleElements: Bool
     /// Staves left out of the layout, addressed in the score passed to `compute`.
     public var hiddenStaves: Set<StaffAddress>
     /// Opening-clef overrides, as `Score.applying(clefOverrides:)` takes them: the raw clef type by staff, addressed
@@ -108,6 +112,7 @@ public struct ScorePageOptions: Sendable, Equatable {
         staffSize: Double = 28,
         collapsesMultiMeasureRests: Bool = false,
         showsInvisibleElements: Bool = false,
+        drawsInvisibleElements: Bool = true,
         hiddenStaves: Set<StaffAddress> = [],
         clefOverrides: [StaffAddress: String] = [:],
         transposeSemitones: Int = 0,
@@ -127,6 +132,7 @@ public struct ScorePageOptions: Sendable, Equatable {
         self.staffSize = staffSize
         self.collapsesMultiMeasureRests = collapsesMultiMeasureRests
         self.showsInvisibleElements = showsInvisibleElements
+        self.drawsInvisibleElements = drawsInvisibleElements
         self.hiddenStaves = hiddenStaves
         self.clefOverrides = clefOverrides
         self.transposeSemitones = transposeSemitones
