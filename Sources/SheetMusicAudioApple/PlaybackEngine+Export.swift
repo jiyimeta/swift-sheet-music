@@ -52,9 +52,12 @@ extension PlaybackEngine {
         let (startTick, endTick) = try range.resolveTickRange(
             timeline: timeline, loop: loopRange,
         )
-        let startSec = timeline.frame(atTick: startTick)?.timeSeconds ?? 0
-        let endSec = timeline.frame(atTick: endTick)?.timeSeconds
-            ?? timeline.totalSeconds
+        // How long the range plays: its ends on the continuous notated clock — a frame lookup lands on the last onset
+        // at or before a tick, which for the end of the score is the start of its last beat, and the file stopped
+        // there — then on the unrolled clock the sequencer actually runs, so repeats and jumps play out in full.
+        let unrolled = exportUnrolledTimeMap()
+        let startSec = unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(startTick)))
+        let endSec = unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(endTick)))
         let durationSec = max(0, endSec - startSec)
 
         let outputFormat = AudioFileExporter.outputFormat(for: format)

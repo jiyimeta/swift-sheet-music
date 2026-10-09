@@ -455,6 +455,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         timeline
     }
 
+    /// The notated timeline's seconds laid out as the sequencer plays them, repeats unrolled — how long an export runs.
+    func exportUnrolledTimeMap() -> UnrolledTimeMap {
+        unrolledTimeMap
+    }
+
     /// Snapshot of mutable engine state captured at export start, so
     /// the export pipeline can reproduce live mixer / metronome /
     /// rate behavior on its own dedicated `AVAudioEngine` without
