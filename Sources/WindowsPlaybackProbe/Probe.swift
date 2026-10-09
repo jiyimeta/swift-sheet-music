@@ -17,7 +17,7 @@ final class Probe { // swiftlint:disable:this type_body_length
     let inbox: ProbeInbox
     /// The SoundFont the engine loaded: a copy the probe owns, so the rename question can be asked of it safely.
     let soundFontCopy: URL
-    private let clock = ContinuousClock()
+    let clock = ContinuousClock()
 
     init(engine: WindowsPlaybackEngine, score: Score, report: ProbeReport, inbox: ProbeInbox, soundFontCopy: URL) {
         self.engine = engine

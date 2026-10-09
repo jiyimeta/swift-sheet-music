@@ -4,10 +4,10 @@
 //
 //     windows-playback-probe <score> <soundfont.sf2> [--scenario NAME[,NAME…]] [--json PATH]
 //
-// Scenarios, in order: prepare, play, seek, rate, loop, tuning, mixer, preview, countin, device-fault, device-real.
-// The default is every one but device-real, which waits for a person to switch the output device. device-fault needs
-// the process to run with SSM_WASAPI_FAIL_ONCE=invalidated. The exit status is the number of failed checks (capped at
-// 100), so a script can gate on it.
+// Scenarios, in order: prepare, play, seek, rate, loop, tuning, mixer, preview, countin, export, device-fault,
+// device-real. The default is every one but device-real, which waits for a person to switch the output device.
+// device-fault needs the process to run with SSM_WASAPI_FAIL_ONCE=invalidated. The exit status is the number of failed
+// checks (capped at 100), so a script can gate on it.
 
 import Foundation
 import SheetMusicAudioCore
@@ -21,7 +21,8 @@ func fail(_ message: String) -> Never {
 }
 
 let allScenarios = [
-    "prepare", "play", "seek", "rate", "loop", "tuning", "mixer", "preview", "countin", "device-fault", "device-real",
+    "prepare", "play", "seek", "rate", "loop", "tuning", "mixer", "preview", "countin", "export", "device-fault",
+    "device-real",
 ]
 var positional: [String] = []
 var scenarios = allScenarios.filter { $0 != "device-real" }
@@ -86,7 +87,8 @@ let probe = Probe(engine: engine, score: score, report: report, inbox: inbox, so
 let steps: [(String, () -> Void)] = [
     ("prepare", probe.prepare), ("play", probe.play), ("seek", probe.seek), ("rate", probe.rate),
     ("loop", probe.loop), ("tuning", probe.tuning), ("mixer", probe.mixer), ("preview", probe.preview),
-    ("countin", probe.countIn), ("device-fault", probe.deviceFault), ("device-real", probe.deviceReal),
+    ("countin", probe.countIn), ("export", probe.export), ("device-fault", probe.deviceFault),
+    ("device-real", probe.deviceReal),
 ]
 for (name, step) in steps where scenarios.contains(name) {
     step()
