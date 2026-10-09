@@ -28,8 +28,17 @@ import Synchronization
 /// **Output.** The stream runs from the first `prepare` to `teardown`: a pause or stop happens in the players (all
 /// sounds off), so previews sound while paused with nothing to restart, and releases ring out. The stream follows the
 /// default output device (`AudioDeviceStream`), and an engine made with no device at all works and stays silent
-/// until one appears.
+/// until one appears. An engine made `.offline` opens no device at all: it is for `exportAudioFile`.
 public final class WindowsPlaybackEngine: @unchecked Sendable {
+    /// Where the engine's sound goes.
+    public enum Output: Sendable, Equatable {
+        /// WASAPI on the default render device, following it as it changes — playback.
+        case defaultDevice
+        /// Nowhere: no device is opened, the synths are built at `sampleRate`, and they render only when something
+        /// pulls them — `exportAudioFile`. The engine a host makes to export.
+        case offline(sampleRate: Double)
+    }
+
     /// Something that happened without a control call asking for it. Delivered on the output thread: hop to the UI
     /// before touching it.
     public enum Event: Sendable, Equatable {
@@ -77,11 +86,12 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         let sequences: LoadedSequences
     }
 
-    private var resolver: SoundfontResolver
-    private let metronomeClickProvider: MetronomeClickProvider?
+    private(set) var resolver: SoundfontResolver
+    let metronomeClickProvider: MetronomeClickProvider?
     private var clickResolver: MetronomeClickResolver
     let core = PlaybackCore()
-    private(set) var output: AudioDeviceStream?
+    let output: Output
+    private(set) var deviceStream: AudioDeviceStream?
     private(set) var loaded: LoadedScore?
 
     /// Where generated metronome-click SoundFonts go (`MetronomeClickResolver`): the user's caches directory, as on
@@ -92,10 +102,14 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
     ).appendingPathComponent("SheetMusicMetronomeClicks", isDirectory: true)
 
     /// Nothing is opened here: the output device and the synths come with the first `prepare(score:)`, so an engine
-    /// can be made, and survives, with no audio device at all.
-    public init(soundfontResolver: SoundfontResolver, metronomeClickProvider: MetronomeClickProvider? = nil) {
+    /// can be made, and survives, with no audio device at all. With `output` `.offline` no device is ever opened.
+    public init(
+        soundfontResolver: SoundfontResolver, metronomeClickProvider: MetronomeClickProvider? = nil,
+        output: Output = .defaultDevice,
+    ) {
         resolver = soundfontResolver
         self.metronomeClickProvider = metronomeClickProvider
+        self.output = output
         clickResolver = MetronomeClickResolver(
             provider: metronomeClickProvider, soundfontResolver: soundfontResolver,
             cacheDirectory: Self.clickCacheDirectory,
@@ -165,7 +179,10 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
     }
 
     public var diagnostics: Diagnostics {
-        let stats = output?.currentStats ?? AudioDeviceStream.Stats()
+        var stats = deviceStream?.currentStats ?? AudioDeviceStream.Stats()
+        if case let .offline(sampleRate) = output {
+            stats.sampleRate = sampleRate
+        }
         let (wraps, handover, soundFont) = core.shared.withLock { shared in
             (shared.loopWraps, shared.lastHandoverLateTicks, (shared.session?.score.soundFontID ?? -1) >= 0)
         }
@@ -263,8 +280,9 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         clickResolver = MetronomeClickResolver(
             provider: metronomeClickProvider, soundfontResolver: newResolver, cacheDirectory: Self.clickCacheDirectory,
         )
-        guard let loaded, let output else { return }
-        let sampleRate = output.sampleRate
+        guard let loaded else { return }
+        // A prepared device engine's stream is already open; an offline engine's rate is its own.
+        let sampleRate = startOutputIfNeeded()
         let rate = core.shared.withLock { $0.rate }
         let scoreSynth: SynthHandle
         let metronomeSynth: SynthHandle
@@ -312,7 +330,7 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         try prepareFully(score: prepared.score, derivation: prepared.derivation, renderedMidi: prepared.renderedMidi)
     }
 
-    private func prepareFully(score: Score, derivation: PlaybackScoreDerivation, renderedMidi: MidiFile?) throws {
+    func prepareFully(score: Score, derivation: PlaybackScoreDerivation, renderedMidi: MidiFile?) throws {
         let layout = derivation.channelLayout
         let rendered = try renderedMidi ?? PreparedPlayback.render(score: score, channelLayout: layout)
         let sequences = try LoadedSequences(rendered: rendered, derivation: derivation)
@@ -399,10 +417,14 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         }
     }
 
-    /// Starts the output on first use and answers the rate the synths have to render at.
+    /// Starts the output on first use and answers the rate the synths have to render at — for an offline engine, its
+    /// own rate, with nothing started.
     private func startOutputIfNeeded() -> Double {
-        if let output {
-            return output.sampleRate
+        if case let .offline(sampleRate) = output {
+            return sampleRate
+        }
+        if let deviceStream {
+            return deviceStream.sampleRate
         }
         let core = core
         let stream = AudioDeviceStream(
@@ -410,7 +432,7 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
             notify: { notice in core.deliver(notice) },
         )
         stream.start()
-        output = stream
+        deviceStream = stream
         return stream.sampleRate
     }
 
@@ -448,8 +470,8 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
             shared.totalTicks = 0
             return session
         }
-        output?.stop()
-        output = nil
+        deviceStream?.stop()
+        deviceStream = nil
         if let retired {
             Self.deletePlayers(of: retired)
             retired.score.delete()

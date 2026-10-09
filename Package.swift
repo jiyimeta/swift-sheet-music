@@ -692,10 +692,21 @@ if isWindows {
                 .linkedLibrary("avrt"),
             ],
         ),
+        // Media Foundation's AAC encoder, for the audio export. Only COM and `mfuuid` (GUID data, no DLL) are linked:
+        // mfplat and mfreadwrite are loaded at run time, so a Windows without them still starts (see the header).
+        .target(
+            name: "CMediaFoundation",
+            path: "Sources/CMediaFoundation",
+            linkerSettings: [
+                .linkedLibrary("ole32"),
+                .linkedLibrary("mfuuid"),
+            ],
+        ),
         .target(
             name: "SheetMusicAudioWindows",
             dependencies: [
                 "CFluidSynth",
+                "CMediaFoundation",
                 "CWASAPI",
                 "SheetMusicAudioCore",
                 "SheetMusicBridgeCore",
@@ -705,6 +716,16 @@ if isWindows {
             linkerSettings: [
                 // The import library in FluidSynth's Windows release zip; Unix builds call it `fluidsynth`.
                 .linkedLibrary("libfluidsynth-3"),
+            ],
+        ),
+        // The export's length, errors and containers (`exportAudioFile`), which need no SoundFont and no device — a
+        // synth without one renders silence of the right length. Windows only, like the module. What the SoundFont
+        // sounds like in a file is the playback probe's `export` scenario. Its scores are SheetMusicTests' fixtures,
+        // read through `#filePath`.
+        .testTarget(
+            name: "SheetMusicAudioWindowsTests",
+            dependencies: [
+                "SheetMusicAudioWindows", "SheetMusicAudioCore", "SheetMusicCore", "SheetMusicLoader",
             ],
         ),
     ]

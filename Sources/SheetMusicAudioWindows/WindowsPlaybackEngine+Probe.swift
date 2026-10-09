@@ -171,7 +171,7 @@ extension WindowsPlaybackEngine {
     /// (`onOutputDeviceRemoved`). Inert unless the process runs with `SSM_WASAPI_FAIL_ONCE=invalidated`.
     @_spi(PlaybackProbe)
     public func probeInjectDeviceFault(removed: Bool = false) {
-        output?.requestFault(removesDevice: removed)
+        deviceStream?.requestFault(removesDevice: removed)
     }
 }
 
