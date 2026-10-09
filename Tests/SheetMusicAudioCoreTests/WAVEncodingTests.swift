@@ -92,6 +92,12 @@ struct WAVEncodingTests {
         #expect(uint32(bytes, at: 4) == Float(-1).bitPattern)
     }
 
+    @Test func aHeaderPastFourGigabytesSaysTheMostAWAVCanHold() {
+        let header = WAVEncoding.header(options: PCMOptions(bitDepth: .int16), frameCount: 2_000_000_000)
+        #expect(Int(uint32(header, at: 40)) == WAVEncoding.maximumDataBytes)
+        #expect(Int(uint32(header, at: 4)) == 36 + WAVEncoding.maximumDataBytes)
+    }
+
     @Test func bytesPerFrameFollowsDepthAndChannels() {
         #expect(WAVEncoding.bytesPerFrame(PCMOptions(bitDepth: .int16, channels: .stereo)) == 4)
         #expect(WAVEncoding.bytesPerFrame(PCMOptions(bitDepth: .int24, channels: .mono)) == 3)

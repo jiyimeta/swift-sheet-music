@@ -8,17 +8,21 @@ import SheetMusicFoundation
 /// The source is always interleaved stereo float — what the Windows engine renders — and each sample is clamped to
 /// full scale, rounded to the nearest step, and averaged into one channel for `.mono`.
 public enum WAVEncoding {
+    /// The most sample bytes a WAV can say it holds: RIFF sizes are 32-bit, and the header counts too. A writer stops
+    /// before this; a header asked for more says this much rather than wrapping round.
+    public static let maximumDataBytes = Int(UInt32.max) - 58
+
     /// The header for `frameCount` frames. A writer that does not know the count yet writes it with 0 and writes it
     /// again, at the same length, once it does.
     public static func header(options: PCMOptions, frameCount: Int) -> [UInt8] {
         let channels = options.channels.rawValue
         let bytesPerSample = bytesPerSample(options.bitDepth)
-        let dataBytes = frameCount * channels * bytesPerSample
+        let dataBytes = min(frameCount * channels * bytesPerSample, maximumDataBytes)
         let isFloat = options.bitDepth == .float32
         var bytes: [UInt8] = []
         bytes.reserveCapacity(58)
         bytes += Array("RIFF".utf8)
-        append(UInt32((isFloat ? 50 : 36) + dataBytes), to: &bytes)
+        append(UInt32(clamping: (isFloat ? 50 : 36) + dataBytes), to: &bytes)
         bytes += Array("WAVEfmt ".utf8)
         append(UInt32(isFloat ? 18 : 16), to: &bytes)
         append(UInt16(isFloat ? 3 : 1), to: &bytes)
@@ -31,10 +35,10 @@ public enum WAVEncoding {
             append(UInt16(0), to: &bytes)
             bytes += Array("fact".utf8)
             append(UInt32(4), to: &bytes)
-            append(UInt32(frameCount), to: &bytes)
+            append(UInt32(clamping: frameCount), to: &bytes)
         }
         bytes += Array("data".utf8)
-        append(UInt32(dataBytes), to: &bytes)
+        append(UInt32(clamping: dataBytes), to: &bytes)
         return bytes
     }
 
@@ -75,7 +79,9 @@ public enum WAVEncoding {
             append(UInt16(bitPattern: Int16((clamped * 32767).rounded())), to: &bytes)
         case .int24:
             let value = UInt32(bitPattern: Int32((clamped * 8_388_607).rounded()))
-            bytes += [UInt8(value & 0xFF), UInt8(value >> 8 & 0xFF), UInt8(value >> 16 & 0xFF)]
+            bytes.append(UInt8(value & 0xFF))
+            bytes.append(UInt8(value >> 8 & 0xFF))
+            bytes.append(UInt8(value >> 16 & 0xFF))
         case .int32:
             append(UInt32(bitPattern: Int32((clamped * 2_147_483_647).rounded())), to: &bytes)
         case .float32:
@@ -84,10 +90,14 @@ public enum WAVEncoding {
     }
 
     private static func append(_ value: UInt16, to bytes: inout [UInt8]) {
-        bytes += [UInt8(value & 0xFF), UInt8(value >> 8)]
+        bytes.append(UInt8(value & 0xFF))
+        bytes.append(UInt8(value >> 8))
     }
 
     private static func append(_ value: UInt32, to bytes: inout [UInt8]) {
-        bytes += [UInt8(value & 0xFF), UInt8(value >> 8 & 0xFF), UInt8(value >> 16 & 0xFF), UInt8(value >> 24)]
+        bytes.append(UInt8(value & 0xFF))
+        bytes.append(UInt8(value >> 8 & 0xFF))
+        bytes.append(UInt8(value >> 16 & 0xFF))
+        bytes.append(UInt8(value >> 24))
     }
 }
