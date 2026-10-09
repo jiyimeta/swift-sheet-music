@@ -145,7 +145,7 @@ repository URL. Requires Swift 6.2+ / Xcode 16+.
 | tvOS | 17 | model, formats, MIDI, layout, SwiftUI, audio (no PDF) |
 | watchOS | 10 | model, formats, MIDI, layout (UI / audio / PDF are iOS / macOS / tvOS only) |
 | Android | API 28 | Foundation-only subset (Core / MSCX / MusicXML / MIDI / Loader / Layout / AudioCore / EditWire / PDF import of typeset PDFs; scanned-PDF reading is Apple-only) via the Swift Android SDK + Kotlin AAR — see [Android](#android) |
-| Windows | 10 (22H2) and later, x64 | the same Foundation-only subset as Android, plus on-screen drawing (`SheetMusicRenderWindows`) and playback (`SheetMusicAudioWindows`); no PDF export, audio-file export or scanned-PDF reading — see [Windows](#windows) |
+| Windows | 10 (22H2) and later, x64 | the same Foundation-only subset as Android, plus on-screen drawing (`SheetMusicRenderWindows`), the portable PDF writer, and playback and audio-file export (`SheetMusicAudioWindows`); no scanned-PDF reading — see [Windows](#windows) |
 
 ## Example
 
@@ -471,10 +471,15 @@ score:
 | Product | Contents |
 |---|---|
 | `SheetMusicRenderWindows` | `ScorePages`: a score laid out per `ScorePageOptions` and cut into pages, and the same pages with a selection tinted. `ScoreSurface`: those pages on a composition swap chain, rasterized into tiles from each system's commands and blitted every frame with the app's overlays (cursor, selection) on top; rebuilt after a device loss. `installWindowsFontMetrics()`. `Direct2DPageRenderer.renderPNG(pages:page:pxPerMM:fontFiles:to:)` for one page as a PNG. Bravura, the Edwin faces and their metrics table bundled. Direct2D + DirectWrite. |
-| `SheetMusicAudioWindows` | `WindowsPlaybackEngine`: the Apple `PlaybackEngine`'s operations under the same names — prepare / replace the score / reload the SoundFont, transport, loops, rate / transposition / tuning, the mixer with its metronome strip, master gain and output stage, level monitoring, note previews — plus events for the end of the score and a lost / recovered output device. FluidSynth + WASAPI; follows the default output device. |
+| `SheetMusicAudioWindows` | `WindowsPlaybackEngine`: the Apple `PlaybackEngine`'s operations under the same names — prepare / replace the score / reload the SoundFont, transport, loops, rate / transposition / tuning, the mixer with its metronome strip, master gain and output stage, level monitoring, note previews, audio-file export (`exportAudioFile`, WAV and M4A) — plus events for the end of the score and a lost / recovered output device. FluidSynth + WASAPI; follows the default output device. An engine made with `output: .offline(sampleRate:)` opens no device, for exporting. |
 
-Not on Windows in 4.0.0: PDF export and scanned-PDF reading (Apple-only,
-as on Android), audio-file export, and arm64.
+Not on Windows: scanned-PDF reading (Apple-only, as on Android) and
+arm64. Audio-file export (4.6.0) writes WAV and, through Media
+Foundation's AAC encoder, M4A — not AIFF or MP3;
+`WindowsPlaybackEngine.canExport(_:)` says what the running Windows can
+write (an "N" edition without the Media Feature Pack has no AAC
+encoder; Media Foundation is loaded at run time, so the app still
+starts there).
 
 ### Requirements
 

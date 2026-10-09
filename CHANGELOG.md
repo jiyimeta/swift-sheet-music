@@ -7,6 +7,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Audio-file export on Windows.** `WindowsPlaybackEngine.exportAudioFile(to:score:format:range:progress:)`, the
+  Apple engine's signature and errors: WAV in every `PCMBitDepth`, and M4A through Media Foundation's AAC encoder
+  (44.1 or 48 kHz, 96–192 kbit/s). The file is the engine's own render — the same synths, transport and output stage
+  the speakers get — pulled as fast as FluidSynth computes, and it runs to where the transport ends: the whole
+  unrolled score, repeats included. A live engine renders through an offline twin and keeps playing.
+  `WindowsPlaybackEngine.canExport(_:)` says what the running Windows can write: Media Foundation is loaded at run
+  time, so a Windows "N" edition without the Media Feature Pack still starts and simply has no AAC.
+- **`WindowsPlaybackEngine.Output`** — `.offline(sampleRate:)` makes an engine that opens no audio device, for
+  exporting; `.defaultDevice`, the default, is what it always did.
+- **`WAVEncoding`** in SheetMusicAudioCore: RIFF/WAVE bytes for a host that writes no audio files itself.
+
+### Fixed
+
+- **Apple: an exported file ends where the score does.** It stopped at the onset of the score's last beat — a one-bar
+  4/4 at 120 exported 1.5 s of its 2 — and, for a score with repeats, at its notated length while the sequencer was
+  playing the unrolled one. The render now lasts from the range's start to its end on the unrolled clock.
+
 ## [4.5.0] - 2026-10-08
 
 ### Added
