@@ -8,15 +8,18 @@ import SheetMusicFoundation
 /// Samples are `WAVEncoding`'s — clamped, rounded and averaged for `.mono` the same way — with each sample's bytes in
 /// the other order.
 public enum AIFFEncoding {
-    /// The most sample bytes an AIFF can say it holds: the `FORM` size is 32-bit and counts the header too. A writer
-    /// stops before this; a header asked for more says this much rather than wrapping round.
-    public static let maximumDataBytes = Int(UInt32.max) - 92
+    /// The most sample bytes an AIFF can say it holds: the `FORM` size is 32-bit and counts the header too (on a 32-bit
+    /// host such as WebAssembly, the most an `Int` counts). A writer stops before this; a header asked for more says
+    /// this much rather than wrapping round.
+    public static let maximumDataBytes = Int(clamping: Int64(UInt32.max) - 92)
 
     /// The header for `frameCount` frames, its length fixed by `options`. A writer that does not know the count yet
     /// writes it with 0 and writes it again once it does.
     public static func header(options: PCMOptions, frameCount: Int) -> [UInt8] {
         let channels = options.channels.rawValue
-        let dataBytes = min(frameCount * bytesPerFrame(options), maximumDataBytes)
+        let dataBytes = min(
+            WAVEncoding.byteCount(frames: frameCount, bytesPerFrame: bytesPerFrame(options)), maximumDataBytes,
+        )
         let isFloat = options.bitDepth == .float32
         let compressionName = Array("32-bit floating point".utf8)
         // COMM: channels, frames, sample size, rate; AIFF-C adds the compression type and its name as a Pascal string

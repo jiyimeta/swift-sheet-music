@@ -8,16 +8,17 @@ import SheetMusicFoundation
 /// The source is always interleaved stereo float — what the Windows engine renders — and each sample is clamped to
 /// full scale, rounded to the nearest step, and averaged into one channel for `.mono`.
 public enum WAVEncoding {
-    /// The most sample bytes a WAV can say it holds: RIFF sizes are 32-bit, and the header counts too. A writer stops
-    /// before this; a header asked for more says this much rather than wrapping round.
-    public static let maximumDataBytes = Int(UInt32.max) - 58
+    /// The most sample bytes a WAV can say it holds: RIFF sizes are 32-bit, and the header counts too (on a 32-bit host
+    /// such as WebAssembly, the most an `Int` counts). A writer stops before this; a header asked for more says this
+    /// much rather than wrapping round.
+    public static let maximumDataBytes = Int(clamping: Int64(UInt32.max) - 58)
 
     /// The header for `frameCount` frames. A writer that does not know the count yet writes it with 0 and writes it
     /// again, at the same length, once it does.
     public static func header(options: PCMOptions, frameCount: Int) -> [UInt8] {
         let channels = options.channels.rawValue
         let bytesPerSample = bytesPerSample(options.bitDepth)
-        let dataBytes = min(frameCount * channels * bytesPerSample, maximumDataBytes)
+        let dataBytes = min(byteCount(frames: frameCount, bytesPerFrame: bytesPerFrame(options)), maximumDataBytes)
         let isFloat = options.bitDepth == .float32
         var bytes: [UInt8] = []
         bytes.reserveCapacity(58)
@@ -62,6 +63,12 @@ public enum WAVEncoding {
 
     public static func bytesPerFrame(_ options: PCMOptions) -> Int {
         options.channels.rawValue * bytesPerSample(options.bitDepth)
+    }
+
+    /// `frames` × `bytesPerFrame`, or `Int.max` where that does not fit — which a header then clamps to its maximum.
+    static func byteCount(frames: Int, bytesPerFrame: Int) -> Int {
+        let (product, overflow) = frames.multipliedReportingOverflow(by: bytesPerFrame)
+        return overflow ? Int.max : product
     }
 
     private static func bytesPerSample(_ depth: PCMBitDepth) -> Int {

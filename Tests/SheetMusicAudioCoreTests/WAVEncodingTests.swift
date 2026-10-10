@@ -98,6 +98,15 @@ struct WAVEncodingTests {
         #expect(Int(uint32(header, at: 4)) == 36 + WAVEncoding.maximumDataBytes)
     }
 
+    /// A frame count whose byte size does not fit an `Int` (on a 32-bit host, a few hours of audio) says the most a
+    /// header can, rather than trapping.
+    @Test func aByteCountPastIntSaturates() {
+        #expect(WAVEncoding.byteCount(frames: Int.max / 2, bytesPerFrame: 4) == Int.max)
+        #expect(WAVEncoding.byteCount(frames: 10, bytesPerFrame: 4) == 40)
+        let header = WAVEncoding.header(options: PCMOptions(bitDepth: .float32), frameCount: Int.max / 2)
+        #expect(Int(uint32(header, at: 54)) == WAVEncoding.maximumDataBytes)
+    }
+
     @Test func bytesPerFrameFollowsDepthAndChannels() {
         #expect(WAVEncoding.bytesPerFrame(PCMOptions(bitDepth: .int16, channels: .stereo)) == 4)
         #expect(WAVEncoding.bytesPerFrame(PCMOptions(bitDepth: .int24, channels: .mono)) == 3)
