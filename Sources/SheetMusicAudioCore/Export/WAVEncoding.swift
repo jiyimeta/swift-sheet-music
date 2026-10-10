@@ -9,9 +9,9 @@ import SheetMusicFoundation
 /// full scale, rounded to the nearest step, and averaged into one channel for `.mono`.
 public enum WAVEncoding {
     /// The most sample bytes a WAV can say it holds: RIFF sizes are 32-bit, and the header counts too (on a 32-bit host
-    /// such as WebAssembly, the most an `Int` counts). A writer stops before this; a header asked for more says this
-    /// much rather than wrapping round.
-    public static let maximumDataBytes = Int(clamping: Int64(UInt32.max) - 58)
+    /// such as WebAssembly, an `Int`'s most, less the header, so the sizes the header adds up stay in range). A writer
+    /// stops before this; a header asked for more says this much rather than wrapping round.
+    public static let maximumDataBytes = Int(clamping: Int64(UInt32.max)) - 58
 
     /// The header for `frameCount` frames. A writer that does not know the count yet writes it with 0 and writes it
     /// again, at the same length, once it does.
