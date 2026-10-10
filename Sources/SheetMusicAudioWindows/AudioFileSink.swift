@@ -22,45 +22,75 @@ enum AudioFileSinks {
     static func make(_ format: AudioFileFormat, at url: URL) throws -> any AudioFileSink {
         switch format {
         case let .wav(options):
-            return try WAVFileSink(url: url, options: options)
+            return try PCMFileSink(url: url, options: options, encoding: .wav)
+        case let .aiff(options):
+            return try PCMFileSink(url: url, options: options, encoding: .aiff)
         case let .m4a(options):
             guard aacAccepts(options) else { throw AudioExportError.formatUnsupportedOnThisOS(format) }
             return try AACFileSink(url: url, options: options, format: format)
-        case .aiff, .mp3:
+        case .mp3:
             throw AudioExportError.formatUnsupportedOnThisOS(format)
         }
     }
 }
 
-/// `WAVEncoding` into a file: the header with no length, the samples, then the header again with the length.
-final class WAVFileSink: AudioFileSink {
+/// `WAVEncoding` or `AIFFEncoding` into a file: the header with no length, the samples, then the header again with
+/// the length. `.aiff` at `.float32` is AIFF-C written at the URL given (Apple's writer renames that one `.aifc`).
+final class PCMFileSink: AudioFileSink {
+    enum Encoding {
+        case wav, aiff
+
+        func header(_ options: PCMOptions, frames: Int) -> [UInt8] {
+            switch self {
+            case .wav: WAVEncoding.header(options: options, frameCount: frames)
+            case .aiff: AIFFEncoding.header(options: options, frameCount: frames)
+            }
+        }
+
+        func append(_ source: UnsafeBufferPointer<Float>, frames: Int, _ options: PCMOptions, to bytes: inout [UInt8]) {
+            switch self {
+            case .wav: WAVEncoding.appendSamples(source, frames: frames, options: options, to: &bytes)
+            case .aiff: AIFFEncoding.appendSamples(source, frames: frames, options: options, to: &bytes)
+            }
+        }
+
+        var maximumDataBytes: Int {
+            switch self {
+            case .wav: WAVEncoding.maximumDataBytes
+            case .aiff: AIFFEncoding.maximumDataBytes
+            }
+        }
+    }
+
     private let handle: FileHandle
     private let options: PCMOptions
+    private let encoding: Encoding
     private var frames = 0
     private var scratch: [UInt8] = []
 
-    init(url: URL, options: PCMOptions) throws {
+    init(url: URL, options: PCMOptions, encoding: Encoding) throws {
         guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
             throw AudioExportError.fileWriteFailed(underlying: "cannot create \(url.lastPathComponent)")
         }
         handle = try FileHandle(forWritingTo: url)
         self.options = options
-        try handle.write(contentsOf: WAVEncoding.header(options: options, frameCount: 0))
+        self.encoding = encoding
+        try handle.write(contentsOf: encoding.header(options, frames: 0))
     }
 
     func append(_ interleavedStereo: UnsafeBufferPointer<Float>, frames count: Int) throws {
-        guard (frames + count) * WAVEncoding.bytesPerFrame(options) <= WAVEncoding.maximumDataBytes else {
-            throw AudioExportError.fileWriteFailed(underlying: "a WAV file holds at most 4 GB")
+        guard (frames + count) * WAVEncoding.bytesPerFrame(options) <= encoding.maximumDataBytes else {
+            throw AudioExportError.fileWriteFailed(underlying: "a WAV or AIFF file holds at most 4 GB")
         }
         scratch.removeAll(keepingCapacity: true)
-        WAVEncoding.appendSamples(interleavedStereo, frames: count, options: options, to: &scratch)
+        encoding.append(interleavedStereo, frames: count, options, to: &scratch)
         try handle.write(contentsOf: scratch)
         frames += count
     }
 
     func finish() throws {
         try handle.seek(toOffset: 0)
-        try handle.write(contentsOf: WAVEncoding.header(options: options, frameCount: frames))
+        try handle.write(contentsOf: encoding.header(options, frames: frames))
         try handle.close()
     }
 

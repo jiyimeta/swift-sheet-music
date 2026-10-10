@@ -5,16 +5,17 @@ import SheetMusicCore
 import Synchronization
 
 // Audio-file export: the prepared score rendered as fast as FluidSynth computes, through the same render the device
-// thread pulls, into a WAV or AAC file (folino spec 2026-10-05-windows-phase4-import-export-pdf-design §8.2).
+// thread pulls, into a WAV, AIFF or AAC file (folino spec 2026-10-05-windows-phase4-import-export-pdf-design §8.2).
 
 extension WindowsPlaybackEngine {
-    /// Whether this engine can write `format` on this Windows: WAV always, AAC (`.m4a`) when Media Foundation's encoder
-    /// is installed and takes the options. What a host asks before it offers the format; cheap after the first ask.
+    /// Whether this engine can write `format` on this Windows: WAV and AIFF always, AAC (`.m4a`) when Media
+    /// Foundation's encoder is installed and takes the options, MP3 never. What a host asks before it offers the
+    /// format; cheap after the first ask.
     public static func canExport(_ format: AudioFileFormat) -> Bool {
         switch format {
-        case .wav: true
+        case .wav, .aiff: true
         case let .m4a(options): AudioFileSinks.aacAccepts(options) && aacEncoderAvailable
-        case .aiff, .mp3: false
+        case .mp3: false
         }
     }
 

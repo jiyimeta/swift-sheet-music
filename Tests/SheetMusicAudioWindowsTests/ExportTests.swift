@@ -84,14 +84,44 @@ struct ExportTests {
         }
     }
 
-    @Test func aiffAndMP3AreNotWrittenHere() async throws {
+    @Test func mp3IsNotWrittenHere() async throws {
         let (engine, score) = try offlineEngine("multiPartMixedStaves")
         defer { engine.teardown() }
-        for format in [AudioFileFormat.aiff(), .mp3()] {
-            #expect(!WindowsPlaybackEngine.canExport(format))
-            await #expect(throws: AudioExportError.formatUnsupportedOnThisOS(format)) {
-                try await engine.exportAudioFile(to: Fixtures.temporaryFile("x"), score: score, format: format)
-            }
+        let format = AudioFileFormat.mp3()
+        #expect(!WindowsPlaybackEngine.canExport(format))
+        await #expect(throws: AudioExportError.formatUnsupportedOnThisOS(format)) {
+            try await engine.exportAudioFile(to: Fixtures.temporaryFile("x"), score: score, format: format)
+        }
+    }
+
+    /// An AIFF of the same render as the WAV: its `COMM` frame count and `SSND` size say the same length, and its
+    /// samples are the WAV's with each sample's bytes reversed.
+    @Test func anAIFFIsTheWAVBigEndian() async throws {
+        let (engine, score) = try offlineEngine("multiPartMixedStaves")
+        defer { engine.teardown() }
+        let aiff = AudioFileFormat.aiff(PCMOptions(sampleRate: 44100, bitDepth: .int16, channels: .stereo))
+        #expect(WindowsPlaybackEngine.canExport(aiff))
+        let wavURL = Fixtures.temporaryFile("wav")
+        let aiffURL = Fixtures.temporaryFile("aiff")
+        defer {
+            try? FileManager.default.removeItem(at: wavURL)
+            try? FileManager.default.removeItem(at: aiffURL)
+        }
+        try await engine.exportAudioFile(to: wavURL, score: score, format: wav16)
+        try await engine.exportAudioFile(to: aiffURL, score: score, format: aiff)
+        let bytes = try [UInt8](Data(contentsOf: aiffURL))
+        let bigEndian = { (offset: Int) in bytes[offset ..< offset + 4].reduce(0) { $0 << 8 | Int($1) } }
+        #expect(Array(bytes[0 ..< 4]) == Array("FORM".utf8))
+        #expect(bigEndian(4) == bytes.count - 8)
+        #expect(Array(bytes[8 ..< 12]) == Array("AIFF".utf8))
+        let frames = try wavFrames(wavURL)
+        #expect(bigEndian(22) == frames)
+        #expect(bigEndian(42) == 8 + frames * 4)
+        let wav = try [UInt8](Data(contentsOf: wavURL))
+        #expect(bytes.count - 54 == wav.count - 44)
+        for sample in [0, 1, frames / 2, frames * 2 - 1] {
+            #expect(bytes[54 + sample * 2] == wav[44 + sample * 2 + 1], "sample \(sample)")
+            #expect(bytes[54 + sample * 2 + 1] == wav[44 + sample * 2], "sample \(sample)")
         }
     }
 

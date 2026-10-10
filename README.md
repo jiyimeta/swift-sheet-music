@@ -471,11 +471,11 @@ score:
 | Product | Contents |
 |---|---|
 | `SheetMusicRenderWindows` | `ScorePages`: a score laid out per `ScorePageOptions` and cut into pages, and the same pages with a selection tinted. `ScoreSurface`: those pages on a composition swap chain, rasterized into tiles from each system's commands and blitted every frame with the app's overlays (cursor, selection) on top; rebuilt after a device loss. `installWindowsFontMetrics()`. `Direct2DPageRenderer.renderPNG(pages:page:pxPerMM:fontFiles:to:)` for one page as a PNG. Bravura, the Edwin faces and their metrics table bundled. Direct2D + DirectWrite. |
-| `SheetMusicAudioWindows` | `WindowsPlaybackEngine`: the Apple `PlaybackEngine`'s operations under the same names — prepare / replace the score / reload the SoundFont, transport, loops, rate / transposition / tuning, the mixer with its metronome strip, master gain and output stage, level monitoring, note previews, audio-file export (`exportAudioFile`, WAV and M4A) — plus events for the end of the score and a lost / recovered output device. FluidSynth + WASAPI; follows the default output device. An engine made with `output: .offline(sampleRate:)` opens no device, for exporting. |
+| `SheetMusicAudioWindows` | `WindowsPlaybackEngine`: the Apple `PlaybackEngine`'s operations under the same names — prepare / replace the score / reload the SoundFont, transport, loops, rate / transposition / tuning, the mixer with its metronome strip, master gain and output stage, level monitoring, note previews, audio-file export (`exportAudioFile`, WAV, AIFF and M4A) — plus events for the end of the score and a lost / recovered output device. FluidSynth + WASAPI; follows the default output device. An engine made with `output: .offline(sampleRate:)` opens no device, for exporting. |
 
 Not on Windows: scanned-PDF reading (Apple-only, as on Android) and
-arm64. Audio-file export (4.6.0) writes WAV and, through Media
-Foundation's AAC encoder, M4A — not AIFF or MP3;
+arm64. Audio-file export (4.6.0) writes WAV, AIFF and, through Media
+Foundation's AAC encoder, M4A — not MP3;
 `WindowsPlaybackEngine.canExport(_:)` says what the running Windows can
 write (an "N" edition without the Media Feature Pack has no AAC
 encoder; Media Foundation is loaded at run time, so the app still
