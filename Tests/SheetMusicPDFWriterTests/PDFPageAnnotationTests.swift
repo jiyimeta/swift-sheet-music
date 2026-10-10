@@ -31,10 +31,14 @@ struct PDFPageAnnotationTests {
         data.reduce(0xCBF2_9CE4_8422_2325) { ($0 ^ UInt64($1)) &* 0x0000_0100_0000_01B3 }
     }
 
-    /// 4.4.0's bytes, fingerprinted before annotations existed: a file without them must not move by a byte.
-    @Test func `without annotations the file is 4.4.0's byte for byte`() throws {
-        #expect(try Self.fnv1a(Self.write(pages: 2)) == 13_369_278_125_582_008_218)
-    }
+    #if canImport(Compression)
+        /// 4.4.0's bytes, fingerprinted before annotations existed: a file without them must not move by a byte. The
+        /// fingerprint is of Apple's Compression deflating the streams; zlib (Windows, Linux, Android) deflates them to
+        /// other, equally valid bytes, so the check runs where the fingerprint was taken.
+        @Test func `without annotations the file is 4.4.0's byte for byte`() throws {
+            #expect(try Self.fnv1a(Self.write(pages: 2)) == 13_369_278_125_582_008_218)
+        }
+    #endif
 
     static let red = PDFRGB(red: 1, green: 0, blue: 0)
 
