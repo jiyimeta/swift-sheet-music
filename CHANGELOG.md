@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.6.0] - 2026-10-11
+
 ### Added
 
 - **Audio-file export on Windows.** `WindowsPlaybackEngine.exportAudioFile(to:score:format:range:progress:)`, the
