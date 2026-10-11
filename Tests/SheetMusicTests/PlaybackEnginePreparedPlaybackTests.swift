@@ -272,6 +272,29 @@
                 #expect(backend.seekCalls.last == 0)
             }
 
+            /// The graph rebuild's own paused branch, before the SoundFont lands: it kept the cursor but left the
+            /// transport stopped, so the next resume started at the top of the piece.
+            @Test("a paused rebuild while the SoundFont loads resumes where it paused")
+            func pausedRestartWhileLoadingResumesInPlace() throws {
+                let score = makeScore(pitch: 60, measureCount: 2)
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                try engine.prepare(score: score)
+                engine.play(in: score)
+                engine.seek(to: .item(.note(noteID(measureIndex: 1, elementIndex: 1))))
+                engine.pause()
+                let before = try #require(engine.currentCursor)
+                backend.isReady = false
+
+                try engine.restartGraphPreservingState()
+
+                #expect(engine.state == .paused)
+                #expect(engine.currentCursor == before)
+                backend.isReady = true
+                engine.play(from: nil, in: score)
+                #expect(backend.seekCalls.last == Self.secondQuarterOfMeasureOne)
+            }
+
             @Test("a layout change keeps the transport too")
             func fullPrepareKeepsPosition() throws {
                 let original = makeScore(pitch: 60, program: 0, measureCount: 2)

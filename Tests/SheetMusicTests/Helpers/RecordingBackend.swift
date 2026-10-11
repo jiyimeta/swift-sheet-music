@@ -13,6 +13,8 @@
     @MainActor
     final class RecordingBackend: SynthBackendTestDouble {
         let outputNode: AVAudioNode = AVAudioMixerNode()
+        /// Whether the SoundFont has landed. A test sets it false to stand in for an asynchronous load still running.
+        var isReady = true
         var currentPositionSeconds: TimeInterval = 0
         var isAtEnd = false
         private(set) var volumeSends: [(channel: UInt8, cc7: UInt8)] = []

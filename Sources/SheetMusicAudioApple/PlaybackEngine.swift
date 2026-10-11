@@ -1051,9 +1051,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // `play` would DEFER (the SoundFont isn't ready), leaving `state ==
             // .stopped`, so the `if state == .playing` re-pause never fires and the
             // deferred play later starts audibly — a paused rebuild spontaneously
-            // resuming. Just keep the position; the next real play resumes from
-            // `currentCursor` once the synth is ready.
+            // resuming. Keep the position and pause instead, as a paused score swap
+            // does (`replaceScore(with:)`): the cursor alone is not enough, because
+            // `prepare(score:)` left the transport stopped and a stopped transport's
+            // next `play(from: nil)` starts at the top.
             if usingBackend, backend?.isReady == false {
+                pause()
                 currentCursor = savedCursor
             } else {
                 play(from: savedCursor, in: score)

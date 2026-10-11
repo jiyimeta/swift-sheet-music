@@ -31,6 +31,9 @@ and this project adheres to
   wider than MuseScore does. The group is now part of its chord's left ink — a collision floor on the gap, as
   MuseScore's shapes are — and graces on a bar's first chord widen the bar's lead-in instead of being drawn across its
   barline. A mid-bar clef before such a chord stands left of its graces. Trailing graces are unchanged.
+- **A paused graph rebuild before the SoundFont has loaded resumes where it paused.** `restartGraphPreservingState()`
+  (a SoundFont reload, an audio configuration change) kept the cursor on that path but left the transport stopped, so
+  the next `play(from: nil)` started at the top of the piece. It now pauses there, as a paused score swap does.
 
 ## [4.7.0] - 2026-10-11
 
