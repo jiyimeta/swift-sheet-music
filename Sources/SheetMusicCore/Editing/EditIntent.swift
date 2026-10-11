@@ -216,9 +216,9 @@ public enum EditIntent: Sendable, Equatable {
     /// plays (`nil` for no end repeat). Resolves to nothing to apply when both flags already match.
     case setRepeatBarLines(at: MeasureRef, startRepeat: Bool, endRepeatCount: Int?)
 
-    /// Turn `numMeasures` consecutive empty bars of `staff` starting at `at` into a measure-repeat group, or (with
-    /// `nil`) dissolve the group starting there back into measure rests. Resolves to nothing to apply when `nil` is
-    /// asked for a bar that carries no group.
+    /// Turn `numMeasures` consecutive bars of `staff` starting at `at` into a measure-repeat group, REPLACING their
+    /// notes and rests as MuseScore does, or (with `nil`) dissolve the group starting there back into measure rests.
+    /// Resolves to nothing to apply when `nil` is asked for a bar that carries no group.
     case setMeasureRepeat(at: MeasureRef, staff: StaffAddress, numMeasures: Int?)
 
     /// Move the chord or rest at `at` to `to` — another voice of the same bar, at the same tick.
@@ -241,7 +241,8 @@ public enum EditIntent: Sendable, Equatable {
 
     /// Turn everything `over` covers into rests, and nothing outside it. Per bar-voice, the covered slots are
     /// re-spelled as the metric-aligned rests that total their combined length; a bar-voice the range covers
-    /// ENTIRELY collapses to one measure rest instead, tuplets dissolved. Rests are re-spelled like anything else,
+    /// ENTIRELY collapses to one measure rest instead, tuplets dissolved, and a bar it covers entirely in EVERY voice
+    /// also drops its upper voices that held nothing but notes and rests. Rests are re-spelled like anything else,
     /// so a range holding only rests is not automatically inert. Tuplet members keep their own length and their
     /// bracket. Resolves to nothing to apply when no bar-voice would read differently afterwards.
     case deleteRange(over: VoiceElementRange)

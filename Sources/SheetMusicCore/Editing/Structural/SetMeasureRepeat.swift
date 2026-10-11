@@ -1,13 +1,19 @@
 import SheetMusicFoundation
 
-/// Turns `numMeasures` consecutive empty bars of one staff into a measure-repeat group — the `%` sign in the first
-/// bar, `measureRepeatCount = 1…n` across the group — or, with `nil`, dissolves the group that starts at `measure`
-/// back into measure rests. Per staff, because that is what a measure repeat is (`Measure.measureRepeatCount` is
-/// not part of `Measure.Flags`).
+/// Turns `numMeasures` consecutive bars of one staff into a measure-repeat group — the `%` sign in the first bar,
+/// `measureRepeatCount = 1…n` across the group — or, with `nil`, dissolves the group that starts at `measure` back
+/// into measure rests. Per staff, because that is what a measure repeat is (`Measure.measureRepeatCount` is not part
+/// of `Measure.Flags`).
 ///
-/// Only empty bars qualify: a bar with notes, a second voice, or one already inside a group is refused rather than
-/// silently overwritten. A leading key / time signature is kept in front of the sign, and whatever trails the
-/// bar's body — an end barline, a clef — is kept behind it.
+/// **The sign replaces the bar's music**, as MuseScore's `makeMeasureRepeatGroup` does (MuseScore asks first; this
+/// command leaves the asking to the host, and its inverse brings every bar back whole). What goes is what a delete of
+/// the whole bar takes: every note and rest — voice 1's become the sign (or, past the first bar, a measure rest),
+/// tuplets with them — and the upper voices outright. What stays is what that delete keeps: everything in voice 1
+/// that is not a note or a rest — a key / time signature, a clef, a barline, an annotation — in its order, with the
+/// sign standing where the first note or rest stood.
+///
+/// Refused: a bar already inside a group, and a bar whose upper voice holds anything but notes and rests — a measure
+/// repeat is ONE voice, and an annotation up there would have nowhere to go.
 ///
 /// The inverse carries the group's bars whole (`restoring:`), the `SetRehearsalMark(restoringLane:)` idiom.
 public struct SetMeasureRepeat: EditCommand {
@@ -58,7 +64,7 @@ public struct SetMeasureRepeat: EditCommand {
             throw Self.refused(.invalidMeasureRepeatSpan(numMeasures: numMeasures))
         }
         let previous = try group(of: numMeasures, in: score)
-        if let offset = previous.firstIndex(where: { !Self.isEmpty($0) }) {
+        if let offset = previous.firstIndex(where: { !Self.canTakeSign($0) }) {
             throw Self.refused(.measureRepeatSpanNotEmpty(measureIndex: measure.measureIndex + offset))
         }
         let rewritten = previous.enumerated().map { offset, bar -> Measure in
@@ -129,18 +135,26 @@ public struct SetMeasureRepeat: EditCommand {
         }
     }
 
+    /// `voice` with its timed run collapsed into the one `body` — the sign, or a measure rest — standing where the
+    /// run's first element stood, and every other element kept, in order. A rest written over a rest keeps that
+    /// rest's identifier. A voice with no timed element at all (constructible) takes `body` after its leading
+    /// signatures. Tuplets go: the run they bracketed is one slot long now.
     private static func rebuiltVoice(_ voice: Voice, body: VoiceElement, ids: inout EIDAllocator) -> Voice {
-        let (prefix, suffix) = frame(of: voice)
-        let start = prefix.count
-        let tail = voice.elements.count - suffix.count
-        let eid: EID
-        if body.isRest, start < tail, voice.elements[start].isRest {
-            eid = voice.elements.eid(at: start)
-        } else {
-            eid = ids.next()
+        var pairs: [(EID, VoiceElement)] = []
+        var placed = false
+        for (index, element) in voice.elements.enumerated() {
+            guard isBody(element) else {
+                pairs.append((voice.elements.eid(at: index), element))
+                continue
+            }
+            guard !placed else { continue }
+            placed = true
+            pairs.append((body.isRest && element.isRest ? voice.elements.eid(at: index) : ids.next(), body))
         }
-        let pairs = voice.elements.identifiedPairs(in: 0 ..< start)
-            + [(eid, body)] + voice.elements.identifiedPairs(in: tail ..< voice.elements.count)
+        if !placed {
+            let prefix = MeasureStructure.leadingSignaturePrefix(of: voice).values.count
+            pairs.insert((ids.next(), body), at: prefix)
+        }
         return Voice(elements: IdentifiedArray(pairs))
     }
 
@@ -152,19 +166,9 @@ public struct SetMeasureRepeat: EditCommand {
         return nil
     }
 
-    /// What stays put around a bar's body when the `%` sign replaces it: the leading signature run, and
-    /// everything after the last body element — a trailing barline, a clef at the end of the bar. Only the body
-    /// (the chords and rests, or the sign standing in for them) is the command's to rewrite; dropping the rest
-    /// of the voice is how a `SetBarLine` before a `SetMeasureRepeat` used to lose its barline.
-    private static func frame(of voice: Voice) -> (prefix: [VoiceElement], suffix: [VoiceElement]) {
-        let prefix = MeasureStructure.leadingSignaturePrefix(of: voice).values
-        guard let lastBody = voice.elements.lastIndex(where: isBody) else {
-            return (prefix, Array(voice.elements.dropFirst(prefix.count)))
-        }
-        return (prefix, Array(voice.elements[(lastBody + 1)...]))
-    }
-
-    /// A timed element, or the `%` sign standing in for one — what the command's body slot holds.
+    /// A timed element, or the `%` sign standing in for one — what the command's body slot holds. Only the body is
+    /// the command's to rewrite; dropping the rest of the voice is how a `SetBarLine` before a `SetMeasureRepeat`
+    /// used to lose its barline.
     private static func isBody(_ element: VoiceElement) -> Bool {
         switch element {
         case .chord, .measureRepeat: true
@@ -172,17 +176,14 @@ public struct SetMeasureRepeat: EditCommand {
         }
     }
 
-    /// One voice, no tuplets, no group membership, and a body of nothing but rests. Signatures and barlines
-    /// count as empty only where `frame` keeps them — at the head and the tail; one BETWEEN two rests would be
-    /// dropped by the rewrite, so a bar carrying one is refused instead.
-    private static func isEmpty(_ bar: Measure) -> Bool {
-        guard bar.voices.count == 1, bar.measureRepeatCount == nil, bar.voices[0].tuplets.isEmpty else {
-            return false
-        }
-        let voice = bar.voices[0]
-        let (prefix, suffix) = frame(of: voice)
-        return voice.elements.dropFirst(prefix.count).dropLast(suffix.count).allSatisfy { element in
-            if case let .chord(chord) = element { chord.notes.isEmpty } else { false }
+    /// Not already in a group, and every voice above the first holding nothing but notes and rests — the voices
+    /// the sign replaces outright, since a measure repeat is one voice.
+    private static func canTakeSign(_ bar: Measure) -> Bool {
+        guard bar.measureRepeatCount == nil, !bar.voices.isEmpty else { return false }
+        return bar.voices.dropFirst().allSatisfy { voice in
+            voice.elements.allSatisfy { element in
+                if case .chord = element { true } else { false }
+            }
         }
     }
 }

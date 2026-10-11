@@ -21,7 +21,7 @@ enum NextChordProbe {
     /// Rests answer this too — a rest is a `.chord` with no notes (`VoiceElement.rest(duration:)`) — because the
     /// caller, not the walk, decides whether a rest is an acceptable partner. A `.measureRepeat` is also timed and
     /// the walk steps past it without matching, but it is unreachable here today: it fills its voice alone, for the
-    /// whole measure (`SetMeasureRepeat` requires the bar's one voice to be empty before writing one), so no chord
+    /// whole measure (`SetMeasureRepeat` replaces every note and rest of the bar with it), so no chord
     /// `location` can resolve to shares a voice with one for this walk to ever reach.
     static func nextTimedElement(after location: VoiceElementID, in score: Score) -> VoiceElement? {
         guard let voice = score[voice: VoiceRef(location)],

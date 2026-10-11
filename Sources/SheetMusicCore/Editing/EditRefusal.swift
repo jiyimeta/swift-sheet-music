@@ -110,9 +110,10 @@ public struct EditRefusal: Sendable, Hashable {
         /// other than 1, 2 or 4 bars, or one of those lengths running off the end of the score. Distinct from
         /// `.targetNotFound` because the measure the caller named DOES exist — it is the group that does not fit.
         case invalidMeasureRepeatSpan(numMeasures: Int)
-        /// A member of the span `SetMeasureRepeat` was asked to turn into a measure repeat is not an empty bar —
-        /// it carries notes, a second voice, or already belongs to a repeat group. The sign replaces the bar's
-        /// contents, so writing over one would silently destroy music; `measureIndex` names the offending bar.
+        /// A member of the span `SetMeasureRepeat` was asked to turn into a measure repeat cannot take one: it
+        /// already belongs to a repeat group, has no voice at all, or carries an upper voice holding something other
+        /// than notes and rests. The sign replaces the bar's notes and rests in every voice, but a measure repeat is
+        /// one voice, so an annotation in an upper voice would have nowhere to go; `measureIndex` names the bar.
         case measureRepeatSpanNotEmpty(measureIndex: Int)
         /// `MoveToVoice` was given a destination that is not another voice of the SAME bar of the same staff —
         /// a different measure, a different staff, or the voice the element is already in. Moving to a voice is
@@ -260,7 +261,7 @@ public struct EditRefusal: Sendable, Hashable {
         case let .invalidMeasureRepeatSpan(numMeasures):
             "a measure repeat spans 1, 2 or 4 bars that exist (got \(numMeasures))"
         case let .measureRepeatSpanNotEmpty(measureIndex):
-            "measure \(measureIndex) is not an empty single-voice bar"
+            "measure \(measureIndex) cannot take a measure repeat"
         case let .voiceMismatch(from, to):
             "cannot move from \(from) to \(to): the destination must be another voice of the same bar"
         case let .destinationNotFree(location):

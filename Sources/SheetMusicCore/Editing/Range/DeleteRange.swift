@@ -14,6 +14,12 @@ import SheetMusicFoundation
 /// (`FullMeasureRestCollapse`). That rule is about COVERAGE, not about what happens to survive, so it fires for a
 /// range of nothing but rests too: selecting a bar's two half rests and deleting collapses them to a measure rest.
 ///
+/// When that coverage takes in EVERY voice of a bar, the bar is emptied, and an emptied bar is one voice: the upper
+/// voices go rather than each staying behind as a measure rest of its own. Only an upper voice that held nothing but
+/// notes and rests goes — one carrying a dynamic or any other non-timed element keeps it the way voice 1 keeps its
+/// own, as a measure rest — and since voices are an array, they go from the top down, stopping at the first that
+/// has to stay.
+///
 /// Rests are re-spelled like anything else the range covers, but a run whose fill lands on the very same lengths it
 /// replaced keeps each rest's identifier and its original spelling — so a `.measure` rest the range covered stays a
 /// `.measure` rest instead of being rewritten as the literal `.whole` that totals the same ticks.
@@ -65,14 +71,35 @@ public struct DeleteRange: EditCommand {
         var working = score
         var scratch = ids
         var location: VoiceElementID?
-        for (ref, covered) in Self.grouped(targets) {
-            guard let rewrite = Self.rewrite(voice: ref, clearing: covered, in: working) else { continue }
-            _ = try rewrite.command.apply(to: &working, ids: &scratch)
-            commands.append(rewrite.command)
-            location = location ?? VoiceElementID(
-                staff: ref.staff, measureIndex: ref.measureIndex,
-                voiceIndex: ref.voiceIndex, elementIndex: rewrite.restElementIndex,
-            )
+        let groups = Self.grouped(targets)
+        let removedFrom = Self.removableUpperVoices(of: groups, in: score)
+        for (ref, covered) in groups {
+            let bar = BarKey(ref)
+            // An emptied bar's removable upper voices are dropped by its voice-1 pass below, not rewritten.
+            if let first = removedFrom[bar], ref.voiceIndex >= first { continue }
+            if let rewrite = Self.rewrite(voice: ref, clearing: covered, in: working) {
+                _ = try rewrite.command.apply(to: &working, ids: &scratch)
+                commands.append(rewrite.command)
+                location = location ?? VoiceElementID(
+                    staff: ref.staff, measureIndex: ref.measureIndex,
+                    voiceIndex: ref.voiceIndex, elementIndex: rewrite.restElementIndex,
+                )
+            }
+            guard ref.voiceIndex == 0, let first = removedFrom[bar],
+                  let voiceCount = working[measure: MeasureRef(measureIndex: ref.measureIndex), staff: ref.staff]?
+                      .voices.count
+            else { continue }
+            // Top down: `RemoveVoice` takes only the LAST voice of a bar.
+            for voiceIndex in stride(from: voiceCount - 1, through: first, by: -1) {
+                let removal = RemoveVoice(staff: ref.staff, measureIndex: ref.measureIndex, voiceIndex: voiceIndex)
+                _ = try removal.apply(to: &working, ids: &scratch)
+                commands.append(removal)
+            }
+            // Voice 1 may have needed no rewrite — it was already one measure rest — and still be where the
+            // selection belongs once the voices above it are gone.
+            location = location ?? working[voice: ref]?.elements.values.firstIndex(where: Self.isTimed).map { index in
+                VoiceElementID(staff: ref.staff, measureIndex: ref.measureIndex, voiceIndex: 0, elementIndex: index)
+            }
         }
         guard let location, !commands.isEmpty else { return nil }
         return RangeEditPlanner.Plan(
@@ -92,6 +119,57 @@ public struct DeleteRange: EditCommand {
             covered[ref, default: []].insert(target.elementIndex)
         }
         return order.map { ($0, covered[$0] ?? []) }
+    }
+
+    /// One bar of one staff — the unit an emptied bar is judged in.
+    private struct BarKey: Hashable {
+        let staff: StaffAddress
+        let measureIndex: Int
+
+        init(_ ref: VoiceRef) {
+            staff = ref.staff
+            measureIndex = ref.measureIndex
+        }
+    }
+
+    /// For each bar the range empties — every timed slot of every voice covered, and more than one voice — the
+    /// lowest voice index from which the upper voices go: the top run of voices above the first that hold nothing
+    /// but notes and rests. A bar with no such run is absent.
+    private static func removableUpperVoices(
+        of groups: [(ref: VoiceRef, covered: Set<Int>)], in score: Score,
+    ) -> [BarKey: Int] {
+        var covered: [VoiceRef: Set<Int>] = [:]
+        for group in groups {
+            covered[group.ref] = group.covered
+        }
+        var result: [BarKey: Int] = [:]
+        for group in groups where group.ref.voiceIndex == 0 {
+            let ref = group.ref
+            guard let bar = score[measure: MeasureRef(measureIndex: ref.measureIndex), staff: ref.staff],
+                  bar.voices.count > 1
+            else { continue }
+            let emptied = bar.voices.indices.allSatisfy { voiceIndex in
+                let timed = bar.voices[voiceIndex].elements.values.indices.filter {
+                    isTimed(bar.voices[voiceIndex].elements.values[$0])
+                }
+                let voiceRef = VoiceRef(staff: ref.staff, measureIndex: ref.measureIndex, voiceIndex: voiceIndex)
+                return Set(timed).isSubset(of: covered[voiceRef] ?? [])
+            }
+            guard emptied else { continue }
+            var first = bar.voices.count
+            while first > 1, bar.voices[first - 1].elements.values.allSatisfy(isTimed) {
+                first -= 1
+            }
+            if first < bar.voices.count {
+                result[BarKey(ref)] = first
+            }
+        }
+        return result
+    }
+
+    /// A chord or a rest — what a delete clears, as opposed to what it carries over.
+    private static func isTimed(_ element: VoiceElement) -> Bool {
+        if case .chord = element { true } else { false }
     }
 
     private struct Rewrite {

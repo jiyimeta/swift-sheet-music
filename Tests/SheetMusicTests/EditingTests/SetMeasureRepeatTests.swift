@@ -106,19 +106,90 @@ struct SetMeasureRepeatTests {
         #expect(bars[3].voices[0].elements == [.rest(duration: .measure)])
     }
 
-    @Test("a bar with notes, a second voice, or a bad span is refused")
-    func refusals() {
+    /// MuseScore's `makeMeasureRepeatGroup`: the sign REPLACES what the bar held. Bar 0 of the flute is
+    /// `[ts, C4 q, D4 q, r, r]`; its notes and rests become the sign, and the time signature stays in front of it.
+    @Test("a bar with notes is replaced by the sign, and undo brings the notes back")
+    func replacesNotes() throws {
         var score = EditingFixtures.parityFixture()
-        let withNotes = #expect(throws: SheetMusicError.self) {
-            let command = SetMeasureRepeat(at: MeasureRef(measureIndex: 0), staff: Self.flute, numMeasures: 1)
-            _ = try command.apply(to: &score)
+        let before = score
+        let command = SetMeasureRepeat(at: MeasureRef(measureIndex: 0), staff: Self.flute, numMeasures: 1)
+        let inverse = try command.apply(to: &score)
+        let bar = score.parts[0].staves[0].measures[0]
+        #expect(bar.measureRepeatCount == 1)
+        #expect(bar.voices.count == 1)
+        #expect(bar.voices[0].elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .measureRepeat(MeasureRepeat(numMeasures: 1, duration: .measure)),
+        ])
+        _ = try inverse.apply(to: &score)
+        #expect(score == before)
+    }
+
+    /// The bar a whole-bar delete used to leave behind — four quarter rests over a second voice's measure rest — is
+    /// one a measure repeat can be written into: the second voice goes with the music it held.
+    @Test("a bar of two voices becomes one voice holding the sign")
+    func replacesASecondVoice() throws {
+        var score = EditingFixtures.parityFixture()
+        let before = score
+        let command = SetMeasureRepeat(at: MeasureRef(measureIndex: 1), staff: Self.flute, numMeasures: 1)
+        let inverse = try command.apply(to: &score)
+        let bar = score.parts[0].staves[0].measures[1]
+        #expect(bar.voices.count == 1)
+        #expect(bar.voices[0].elements == [.measureRepeat(MeasureRepeat(numMeasures: 1, duration: .measure))])
+        _ = try inverse.apply(to: &score)
+        #expect(score == before)
+    }
+
+    /// What is not a note or a rest is not the bar's music, and stays — in front of the sign when it stood in
+    /// front of the music, behind it when it stood among it — exactly where a whole-bar delete would have kept it.
+    @Test("a dynamic in front of the music and one among it both survive the sign")
+    func keepsAnnotations() throws {
+        var score = EditingFixtures.parityFixture()
+        let piano = VoiceElement.dynamic(Dynamic(subtype: "p", velocity: 40))
+        let forte = VoiceElement.dynamic(Dynamic(subtype: "f", velocity: 96))
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0].elements.insert(piano, at: 1, id: EID(first: 77, second: 1))
+                staff.measures[0].voices[0].elements.insert(forte, at: 3, id: EID(first: 77, second: 2))
+            }
+        } // [ts, p, C4 q, f, D4 q, r, r]
+        _ = try SetMeasureRepeat(at: MeasureRef(measureIndex: 0), staff: Self.flute, numMeasures: 1).apply(to: &score)
+        #expect(score.parts[0].staves[0].measures[0].voices[0].elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)), piano,
+            .measureRepeat(MeasureRepeat(numMeasures: 1, duration: .measure)), forte,
+        ])
+    }
+
+    /// A measure repeat is one voice. An upper voice that holds something other than notes and rests cannot go
+    /// with the music, so the bar is refused rather than losing it.
+    @Test("an upper voice holding an annotation is refused")
+    func refusesAnAnnotatedUpperVoice() throws {
+        var score = EditingFixtures.parityFixture()
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[1].voices[1] = Voice(elements: [
+                    .dynamic(Dynamic(subtype: "p", velocity: 40)), .rest(duration: .measure),
+                ])
+            }
         }
-        #expect(Self.reason(of: withNotes) == .measureRepeatSpanNotEmpty(measureIndex: 0))
-        let secondVoice = #expect(throws: SheetMusicError.self) {
+        let before = score
+        let annotated = #expect(throws: SheetMusicError.self) {
             let command = SetMeasureRepeat(at: MeasureRef(measureIndex: 1), staff: Self.flute, numMeasures: 1)
             _ = try command.apply(to: &score)
         }
-        #expect(Self.reason(of: secondVoice) == .measureRepeatSpanNotEmpty(measureIndex: 1))
+        #expect(Self.reason(of: annotated) == .measureRepeatSpanNotEmpty(measureIndex: 1))
+        #expect(score == before)
+    }
+
+    @Test("a bar already in a group, or a bad span, is refused")
+    func refusals() throws {
+        var score = EditingFixtures.parityFixture()
+        _ = try SetMeasureRepeat(at: MeasureRef(measureIndex: 1), staff: Self.cello, numMeasures: 2).apply(to: &score)
+        let inGroup = #expect(throws: SheetMusicError.self) {
+            let command = SetMeasureRepeat(at: MeasureRef(measureIndex: 2), staff: Self.cello, numMeasures: 1)
+            _ = try command.apply(to: &score)
+        }
+        #expect(Self.reason(of: inGroup) == .measureRepeatSpanNotEmpty(measureIndex: 2))
         let pastEnd = #expect(throws: SheetMusicError.self) {
             let command = SetMeasureRepeat(at: MeasureRef(measureIndex: 3), staff: Self.cello, numMeasures: 2)
             _ = try command.apply(to: &score)
