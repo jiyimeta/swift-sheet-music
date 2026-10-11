@@ -12,8 +12,10 @@
 
         private static let staff0 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-        /// B4 with a B4 acciaccatura before it, D5 with a D5 after-grace, then a half rest. Each grace shares its
-        /// parent's pitch, so the two heads sit on one line and only horizontal distance separates them.
+        /// B4 with a B4 quarter grace before it, D5 with a D5 after-grace, then a half rest. Each grace shares its
+        /// parent's pitch, so the two heads sit on one line and only horizontal distance separates them. The leading
+        /// grace is a QUARTER grace because it draws no flag: a flagged one stands further from its chord (its flag
+        /// keeps clear of the chord's head, `LayoutEngine+GraceGroup.swift`), out of the parent head's reach.
         private static func score() -> Score {
             let voice = Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
@@ -21,7 +23,7 @@
                 .chord(Chord(
                     duration: .quarter, notes: [Note(pitch: 71, tpc: 19)],
                     graceNotesBefore: [GraceChord(
-                        graceType: .acciaccatura, duration: .eighth, notes: [Note(pitch: 71, tpc: 19)],
+                        graceType: .grace4, duration: .quarter, notes: [Note(pitch: 71, tpc: 19)],
                     )],
                     graceNotesAfter: [],
                 )),

@@ -116,7 +116,10 @@ struct GracePlacementTests {
 struct GraceSpacingTests {
     private let _installFontMetrics = TestSupport.installFontMetrics
 
-    @Test("Three before-graces push the main chord X to the right vs. zero graces")
+    /// At the natural width the quarter's gap is narrower than three graces, so they push their chord right. Where
+    /// the gap already holds them — a justified system with room to spare — they do not
+    /// (`GraceGroupSpacingTests`): a grace group is a floor on the gap, as MuseScore's shapes are, not an addition.
+    @Test("Three before-graces push the main chord X to the right when its gap is too narrow for them")
     func extraSpacing() {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         func mainX(_ before: [GraceType]) -> CGFloat {
@@ -146,7 +149,7 @@ struct GraceSpacingTests {
             )
             let score = Score(division: 480, parts: [part])
             let doc = LayoutEngine.layout(
-                score: score, options: ScoreViewOptions(), availableWidth: 800,
+                score: score, options: ScoreViewOptions(wrapToViewWidth: false), availableWidth: 800,
             )
             let elements = doc.systems.flatMap { sys in sys.measures.flatMap(\.elements) }
             // Find the second chord — that's `main` (pitch 60, C4).

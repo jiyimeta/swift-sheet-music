@@ -7,6 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A chord's leading grace notes stand clear of its accidentals.** Each grace stood a fixed 1.5 sp further left of
+  its chord, so a grace on a note with an accidental was drawn over the accidental. The group is now laid out the way
+  MuseScore lays it (`TLayout::layoutGraceNotesGroup`): right to left, 0.3 sp between graces (`graceToGraceNoteDist`)
+  and 0.45 sp clear of the chord's own ink, accidentals included (`graceToMainNoteDist`). A grace's flag keeps clear of
+  the noteheads to its right only, riding over their accidentals as it does in MuseScore.
+- **Leading grace notes take only the room their gap lacks.** They added 1.5 sp per grace to the previous column's
+  spacing weight, which the system's stretch then multiplied, so one acciaccatura spread its beat several staff spaces
+  wider than MuseScore does. The group is now part of its chord's left ink — a collision floor on the gap, as
+  MuseScore's shapes are — and graces on a bar's first chord widen the bar's lead-in instead of being drawn across its
+  barline. A mid-bar clef before such a chord stands left of its graces. Trailing graces are unchanged.
+
 ## [4.7.0] - 2026-10-11
 
 ### Changed

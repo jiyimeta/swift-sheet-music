@@ -349,6 +349,7 @@ extension LayoutEngine {
                 headerSchedule: baseHeader,
                 division: score.division,
                 measureDuration: measureDuration(durations, at: i),
+                graceNoteMag: options.graceNoteMag,
             )
             total += w + (i < cancellations.count ? cancellations[i] : 0)
         }
@@ -372,11 +373,23 @@ extension LayoutEngine {
         /// trailing gap by both the width (`crossStaffMinimumMeasureWidthWithAggregate`) and the placement
         /// (`tickColumns`), which must agree.
         var trailingClefWidth: CGFloat = 0
+        /// How far left of the FIRST column its leading grace notes reach, on whichever staff they reach furthest
+        /// (`ColumnInk.graceReach`); `0` when it has none.
+        var leadingGraceReach: CGFloat = 0
 
         /// The slack between the last column's gap and the measure's right edge: 1 sp — which also gives a flagged
         /// note room for its flag before the barline — plus any bar-end clef.
         func trailingGap(sp: CGFloat) -> CGFloat {
             sp + trailingClefWidth
+        }
+
+        /// The room between `HeaderSchedule.contentStartX` and the first column: 1 sp, or as much more as the first
+        /// column's leading graces need to end no further left than 1 sp before `contentStartX` — about 1 sp after a
+        /// plain barline, MuseScore's distance in its rendering of the report's bars. Graces on a bar's first chord
+        /// used to get no room at all and were drawn across the barline (reported 2026-10-11). Both the width
+        /// (`crossStaffMinimumMeasureWidthWithAggregate`) and the placement (`tickColumns`) add it, and must agree.
+        func leadingGap(sp: CGFloat) -> CGFloat {
+            max(sp, leadingGraceReach - sp)
         }
 
         /// `Σ max(floor, k · weight)`: the gaps' total width at stretch `k`.
@@ -448,14 +461,15 @@ extension LayoutEngine {
         // on the previous note (`gapFloors`). Excess width spreads
         // proportionally to the weights, so the measure can stretch but
         // cannot collapse.
+        let leadingGap = agg.leadingGap(sp: metrics.sp)
         let contentWidth = max(
             agg.minimumContentWidth,
             max(
                 metrics.sp * 4,
-                width - headerSchedule.contentStartX - trailingGap,
+                width - headerSchedule.contentStartX - (leadingGap - metrics.sp) - trailingGap,
             ),
         )
-        let baseX = headerSchedule.contentStartX + metrics.sp
+        let baseX = headerSchedule.contentStartX + leadingGap
 
         var tickToX: [Int: CGFloat] = [:]
         let proportional = agg.totalWeight > 0 ? contentWidth / agg.totalWeight : 0
@@ -496,6 +510,8 @@ extension LayoutEngine {
     ///   `MSCXDecoder+MeasureRepeat.swift`, `MSCXDecoder+Voice.swift`,
     ///   and `MusicXMLDecoder+Note.swift` — so this must be the real
     ///   per-measure value, not a hardcoded 4/4.
+    /// - Parameter graceNoteMag: The size grace notes are drawn at; the
+    ///   engine's own default when the caller has no options to hand.
     static func tickColumns(
         staves: [Staff],
         measureIdx: Int,
@@ -504,12 +520,14 @@ extension LayoutEngine {
         width: CGFloat,
         division: Int,
         measureDuration: Fraction,
+        graceNoteMag: CGFloat = ScoreViewOptions().graceNoteMag,
     ) -> [Int: CGFloat] {
         tickColumns(
             aggregate: aggregatedTickWeights(
                 staves: staves, measureIdx: measureIdx,
                 metrics: metrics, division: division,
                 measureDuration: measureDuration,
+                graceNoteMag: graceNoteMag,
             ),
             metrics: metrics,
             headerSchedule: headerSchedule,
@@ -542,11 +560,13 @@ extension LayoutEngine {
         headerSchedule: HeaderSchedule,
         division: Int,
         measureDuration: Fraction,
+        graceNoteMag: CGFloat,
     ) -> CGFloat {
         crossStaffMinimumMeasureWidthWithAggregate(
             staves: staves, measureIdx: measureIdx,
             metrics: metrics, headerSchedule: headerSchedule,
             division: division, measureDuration: measureDuration,
+            graceNoteMag: graceNoteMag,
         ).width
     }
 
@@ -562,19 +582,21 @@ extension LayoutEngine {
         headerSchedule: HeaderSchedule,
         division: Int,
         measureDuration: Fraction,
+        graceNoteMag: CGFloat,
     ) -> (width: CGFloat, aggregate: TickAggregate) {
         let agg = aggregatedTickWeights(
             staves: staves, measureIdx: measureIdx,
             metrics: metrics, division: division,
             measureDuration: measureDuration,
+            graceNoteMag: graceNoteMag,
         )
         // Must match `tickColumns`' trailingGap so the spacing engine
         // and the placement engine size every measure identically.
         let trailingGap = agg.trailingGap(sp: metrics.sp)
         let contentWidth = max(metrics.sp * 4, agg.minimumContentWidth)
-        // baseX = contentStartX + sp; the rightmost tick lands at
+        // baseX = contentStartX + leadingGap; the rightmost tick lands at
         // baseX + contentWidth; trailing barline / gap follows.
-        let width = headerSchedule.contentStartX + metrics.sp
+        let width = headerSchedule.contentStartX + agg.leadingGap(sp: metrics.sp)
             + contentWidth + trailingGap
         return (width, agg)
     }
@@ -645,6 +667,7 @@ extension LayoutEngine {
         metrics: StaffMetrics,
         division: Int,
         measureDuration: Fraction,
+        graceNoteMag: CGFloat,
     ) -> TickAggregate {
         struct TimedElement {
             let startTick: Int
@@ -689,9 +712,11 @@ extension LayoutEngine {
                 /// The column ink of `chord`, reaching left past a pending
                 /// mid-bar clef when one precedes it.
                 func ink(of chord: Chord) -> ColumnInk {
-                    var ink = columnInk(of: chord, metrics: metrics)
+                    var ink = columnInk(of: chord, graceNoteMag: graceNoteMag, metrics: metrics)
                     if let rawType = pendingClefType {
-                        ink.left = midMeasureClefReach(rawType: rawType, before: chord, metrics: metrics)
+                        ink.left = midMeasureClefReach(
+                            rawType: rawType, before: chord, graceNoteMag: graceNoteMag, metrics: metrics,
+                        )
                         pendingClefType = nil
                     }
                     return ink
@@ -709,21 +734,14 @@ extension LayoutEngine {
                         let nextLyric = nextLyricBearingChord(
                             in: voice.elements.values, after: idx,
                         )
-                        // Reserve column width for grace clusters whose
-                        // glyphs live inside THIS column's horizontal
-                        // span (from THIS tick to the NEXT tick):
-                        //   • after-graces of THIS chord appear at the
-                        //     right end of this column.
-                        //   • before-graces of the NEXT chord appear at
-                        //     the left end of the next column — but that
-                        //     space is carved from THIS column (the gap
-                        //     from THIS tick to the next tick IS this
-                        //     column's weight in the proportional spacer).
-                        let nextBeforeCount = nextChordBeforeGraceCount(
-                            in: voice.elements.values, after: idx,
-                        )
+                        // Reserve column width for THIS chord's after-graces,
+                        // drawn at the right end of this column. The NEXT
+                        // chord's before-graces take no weight: they are part
+                        // of its column's left ink (`columnInk`), a floor on
+                        // this gap rather than an addition to it — MuseScore's
+                        // shapes (`LayoutEngine+GraceGroup.swift`).
                         let graceBudget = LayoutEngine.graceWidth(sp: metrics.sp)
-                            * CGFloat(c.graceNotesAfter.count + nextBeforeCount)
+                            * CGFloat(c.graceNotesAfter.count)
                         // Jazz inflection lines are part of the chord's
                         // shape upstream, so they widen the neighbouring
                         // gaps — a left-pointing scoop/plop reaches back
@@ -890,6 +908,7 @@ extension LayoutEngine {
         }
 
         let totalWeight = gapWeights.reduce(0, +)
+        let firstTick = sortedTicks[0]
         return TickAggregate(
             sortedTicks: sortedTicks, gapWeights: gapWeights,
             gapFloors: collisionFloors(
@@ -897,6 +916,7 @@ extension LayoutEngine {
             ),
             totalWeight: totalWeight, measureEnd: measureEnd,
             trailingClefWidth: trailingClefWidth,
+            leadingGraceReach: inks.compactMap { $0[firstTick]?.graceReach }.max() ?? 0,
         )
     }
 
@@ -1354,28 +1374,5 @@ extension LayoutEngine {
             }
         }
         return nil
-    }
-
-    /// Number of before-graces on the next note-chord after `startIndex`.
-    /// Used to widen THIS chord's column weight so the graces of the NEXT
-    /// chord don't collide with THIS chord's notehead: the gap from THIS
-    /// tick to the NEXT tick is THIS column's responsibility in the
-    /// proportional spacer.
-    static func nextChordBeforeGraceCount(
-        in elements: [VoiceElement], after startIndex: Int,
-    ) -> Int {
-        guard startIndex + 1 < elements.count else { return 0 }
-        for j in (startIndex + 1) ..< elements.count {
-            switch elements[j] {
-            case let .chord(nc) where !nc.notes.isEmpty:
-                return nc.graceNotesBefore.count
-            case .chord:
-                // Rest — no graces.
-                return 0
-            default:
-                continue
-            }
-        }
-        return 0
     }
 }

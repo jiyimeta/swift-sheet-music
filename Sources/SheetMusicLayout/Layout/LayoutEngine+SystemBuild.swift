@@ -228,6 +228,7 @@ extension LayoutEngine {
                 measureDuration: measureDuration(
                     sharedMeasureDurations, at: measureIdx,
                 ),
+                graceNoteMag: context.options.graceNoteMag,
             )
             let tickCols = tickColumns(
                 aggregate: aggregate,

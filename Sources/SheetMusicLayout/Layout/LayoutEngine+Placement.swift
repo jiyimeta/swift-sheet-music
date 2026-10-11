@@ -509,7 +509,8 @@ extension LayoutEngine {
                         headerSchedule.clefX
                     } else if let nextChord {
                         timedX(atTick: tickCursor) - midMeasureClefOffset(
-                            rawType: clef.concertClefType, before: nextChord, metrics: metrics,
+                            rawType: clef.concertClefType, before: nextChord,
+                            graceNoteMag: options.graceNoteMag, metrics: metrics,
                         )
                     } else {
                         width - metrics.sp / 2 - clefBarlineDistanceSp * metrics.sp
@@ -827,8 +828,18 @@ extension LayoutEngine {
                     let chordFullyHidden = !chord.visible
                     let graceW = LayoutEngine.graceWidth(sp: metrics.sp)
                     let mag = options.graceNoteMag
+                    // Each grace's stem first: how far its flag reaches right decides how close it may stand
+                    // (`beforeGraceOffsets`), and the stem turns on the clef.
+                    let beforeStems = chord.graceNotesBefore.values.map { g in
+                        StemDirectionRule.direction(for: g.notes.map {
+                            graceStep(of: $0, currentClef: currentClef, drumLineMap: drumLineMap)
+                        })
+                    }
+                    let beforeOffsets = beforeGraceOffsets(
+                        of: chord, stems: beforeStems, mag: mag, metrics: metrics,
+                    )
                     for (gIdx, g) in chord.graceNotesBefore.enumerated() {
-                        let relX = -graceW * CGFloat(chord.graceNotesBefore.count - gIdx)
+                        let relX = beforeOffsets[gIdx]
                         let layoutNotes = makeGraceLayoutNotes(
                             grace: g, atX: chordX + relX,
                             staffMidY: staffMidY, metrics: metrics,
@@ -841,13 +852,10 @@ extension LayoutEngine {
                             drumLineMap: drumLineMap,
                             showsInvisibleElements: options.showsInvisibleElements,
                         )
-                        let graceStem = StemDirectionRule.direction(
-                            for: layoutNotes.map(\.step),
-                        )
                         out.append(.graceChord(
                             notes: layoutNotes,
                             duration: g.duration,
-                            stem: graceStem,
+                            stem: beforeStems[gIdx],
                             stemOrigin: CGPoint(x: chordX + relX, y: staffMidY),
                             relativeX: relX,
                             hasSlash: g.graceType == .acciaccatura,
@@ -2367,6 +2375,14 @@ extension LayoutEngine {
         }
     }
 
+    /// A grace note's staff step: its drum line on a drumset staff, else its pitch under `currentClef`.
+    fileprivate static func graceStep(of note: Note, currentClef: NotatedClef, drumLineMap: [Int: Int]?) -> Int {
+        if let drumLine = drumLineMap?[note.pitch] {
+            return 4 - drumLine
+        }
+        return PitchStaffPosition.step(midiPitch: note.pitch, tpc: note.tpc, clef: currentClef).step
+    }
+
     /// Build `LayoutChordNote` values for a single `GraceChord`.
     /// Mirrors the inline notehead construction used for main chords
     /// but takes `graceIdx` / `isAfter` so synthesized `NoteID`s
@@ -2397,15 +2413,7 @@ extension LayoutEngine {
         // anything seen in real scores.
         let base = (isAfter ? 2000 : 1000) + graceIdx * 100
         return grace.notes.enumerated().map { noteIdx, note in
-            let step: Int
-            if let drumLine = drumLineMap?[note.pitch] {
-                step = 4 - drumLine
-            } else {
-                step = PitchStaffPosition.step(
-                    midiPitch: note.pitch, tpc: note.tpc,
-                    clef: currentClef,
-                ).step
-            }
+            let step = graceStep(of: note, currentClef: currentClef, drumLineMap: drumLineMap)
             let y = staffMidY - CGFloat(step) * metrics.sp / 2
             let id = NoteID(
                 staff: staffAddress,

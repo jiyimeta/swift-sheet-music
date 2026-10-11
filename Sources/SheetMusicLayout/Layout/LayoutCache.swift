@@ -59,6 +59,9 @@ public final class LayoutCache: @unchecked Sendable {
         /// `spacePerQuarter`, so changing spacing must invalidate the entry;
         /// otherwise a hit silently serves widths computed for old options.
         let spacing: EngravingSpacing
+        /// The size grace notes are drawn at. A chord's leading graces are part of its column's left ink, so both
+        /// `minWidth` and `tickAggregate` move with it.
+        let graceNoteMag: CGFloat
         /// The effective duration `measureDuration(context
         /// .measureDurations, at: measureIdx)` resolved to for this
         /// measure at the time this entry was built. NOT derivable

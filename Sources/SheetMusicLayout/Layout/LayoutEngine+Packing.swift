@@ -92,6 +92,7 @@ extension LayoutEngine {
             if let prior = priorEntries[i],
                prior.sp == sp,
                prior.division == division, prior.spacing == context.options.spacing,
+               prior.graceNoteMag == context.options.graceNoteMag,
                prior.measures == measuresAt,
                prior.measureDuration == durationAt,
                prior.followingClefs == followingClefsAt,
@@ -503,11 +504,13 @@ extension LayoutEngine {
             headerSchedule: baseHeader,
             division: context.score.division,
             measureDuration: measureDuration,
+            graceNoteMag: context.options.graceNoteMag,
         )
         return LayoutCache.Entry(
             measures: measures,
             sp: context.metrics.sp,
             division: context.score.division, spacing: context.options.spacing,
+            graceNoteMag: context.options.graceNoteMag,
             measureDuration: measureDuration,
             followingClefs: followingClefs,
             leadingClefDrawnBefore: leadingClefDrawnBefore,
