@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.8.0] - 2026-10-11
+
 ### Changed
 
 - **`PlaybackEngine.replaceScore(with:)` keeps the transport.** It used to stop and rewind like `prepare(score:)`, so
