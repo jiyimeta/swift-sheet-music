@@ -19,6 +19,12 @@ and this project adheres to
   transport over too. `WindowsPlaybackEngine.replaceScore(with:)` and the Android engine's `replaceScore` still stop
   and rewind.
 
+### Fixed
+
+- **A paused graph rebuild before the SoundFont has loaded resumes where it paused.** `restartGraphPreservingState()`
+  (a SoundFont reload, an audio configuration change) kept the cursor on that path but left the transport stopped, so
+  the next `play(from: nil)` started at the top of the piece. It now pauses there, as a paused score swap does.
+
 ## [4.7.0] - 2026-10-11
 
 ### Changed
