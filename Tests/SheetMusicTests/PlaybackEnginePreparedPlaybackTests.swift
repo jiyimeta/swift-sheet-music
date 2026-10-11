@@ -173,37 +173,121 @@
                 #expect(engine.loadedScore == edited)
             }
 
-            @Test("replace resets transport position like prepare")
-            func replaceResetsTransportPosition() throws {
+            /// The second quarter of measure 1 sits at tick 1920 + 480. (Element 0 of measure 0 is the time signature,
+            /// so a measure's quarters are elements 1–4 there and 0–3 everywhere else.)
+            private static let secondQuarterOfMeasureOne = 2400
+
+            @Test("a paused replace stays paused at the same place")
+            func pausedReplaceKeepsPosition() throws {
                 let original = makeScore(pitch: 60, measureCount: 2)
                 let edited = makeScore(pitch: 67, measureCount: 2)
                 let backend = RecordingBackend()
                 let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
                 try engine.prepare(score: original)
                 engine.play(in: original)
-                engine.seek(toTimeSeconds: 1)
+                engine.seek(to: .item(.note(noteID(measureIndex: 1, elementIndex: 1))))
+                engine.pause()
+                let before = try #require(engine.currentCursor)
+
+                try engine.replaceScore(with: PreparedPlayback.make(score: edited))
+
+                #expect(engine.state == .paused)
+                #expect(engine.currentCursor == before)
+                // Seated already, so the clock a host reads the time from agrees with the cursor.
+                #expect(backend.seekCalls.last == Self.secondQuarterOfMeasureOne)
+                #expect(noteOnPitches(in: backend.lastSequence).contains(67))
+                engine.play(from: nil, in: edited)
+                #expect(backend.seekCalls.last == Self.secondQuarterOfMeasureOne)
+            }
+
+            @Test("a playing replace keeps playing from the same place")
+            func playingReplaceKeepsPlaying() throws {
+                let original = makeScore(pitch: 60, measureCount: 2)
+                let edited = makeScore(pitch: 67, measureCount: 2)
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                try engine.prepare(score: original)
+                engine.play(in: original)
+                engine.seek(to: .item(.note(noteID(measureIndex: 1, elementIndex: 1))))
+                let before = try #require(engine.currentCursor)
+
+                try engine.replaceScore(with: PreparedPlayback.make(score: edited))
+
+                #expect(engine.state == .playing)
+                #expect(engine.currentCursor == before)
+                #expect(backend.seekCalls.last == Self.secondQuarterOfMeasureOne)
+                #expect(noteOnPitches(in: backend.lastSequence).contains(67))
+                #expect(!noteOnPitches(in: backend.lastSequence).contains(60))
+            }
+
+            @Test("the loop comes back over the same measures")
+            func replaceKeepsLoop() throws {
+                let original = makeScore(pitch: 60, measureCount: 2)
+                let edited = makeScore(pitch: 67, measureCount: 2)
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                try engine.prepare(score: original)
+                engine.play(in: original)
                 engine.setLoop(
                     from: .item(.note(noteID(measureIndex: 0, elementIndex: 1))),
                     throughEndOf: .note(noteID(measureIndex: 0, elementIndex: 3)),
                 )
+                let loop = try #require(engine.loopRange)
+
+                try engine.replaceScore(with: PreparedPlayback.make(score: edited))
+
+                #expect(engine.loopRange == loop)
+            }
+
+            @Test("a cursor in a measure the edit removed lands on the start of the last one")
+            func removedMeasureClampsCursor() throws {
+                let original = makeScore(pitch: 60, measureCount: 3)
+                let edited = makeScore(pitch: 60, measureCount: 2)
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                try engine.prepare(score: original)
+                engine.play(in: original)
+                engine.seek(to: .item(.note(noteID(measureIndex: 2, elementIndex: 2))))
+                engine.pause()
+
+                try engine.replaceScore(with: PreparedPlayback.make(score: edited))
+
+                #expect(engine.state == .paused)
+                #expect(backend.seekCalls.last == 1920)
+            }
+
+            @Test("an engine that never played stays at the top")
+            func unplayedReplaceStaysAtTop() throws {
+                let original = makeScore(pitch: 60, measureCount: 2)
+                let edited = makeScore(pitch: 67, measureCount: 2)
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                try engine.prepare(score: original)
 
                 try engine.replaceScore(with: PreparedPlayback.make(score: edited))
 
                 #expect(engine.state == .stopped)
                 #expect(engine.currentCursor == nil)
-                #expect(engine.loopRange == nil)
                 engine.play(from: nil, in: edited)
-
-                let freshBackend = RecordingBackend()
-                let freshEngine = PlaybackEngine(
-                    soundfontResolver: NullResolver(),
-                    backend: freshBackend,
-                )
-                try freshEngine.prepare(score: edited)
-                freshEngine.play(from: nil, in: edited)
-
-                #expect(backend.seekCalls.last == freshBackend.seekCalls.last)
                 #expect(backend.seekCalls.last == 0)
+            }
+
+            @Test("a layout change keeps the transport too")
+            func fullPrepareKeepsPosition() throws {
+                let original = makeScore(pitch: 60, program: 0, measureCount: 2)
+                let edited = makeScore(pitch: 60, program: 40, measureCount: 2)
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                try engine.prepare(score: original)
+                engine.play(in: original)
+                engine.seek(to: .item(.note(noteID(measureIndex: 1, elementIndex: 1))))
+                engine.pause()
+
+                let outcome = try engine.replaceScore(with: PreparedPlayback.make(score: edited))
+
+                #expect(outcome == .fullyPrepared)
+                #expect(engine.state == .paused)
+                #expect(backend.seekCalls.last == Self.secondQuarterOfMeasureOne)
             }
 
             @Test("a shifted instrument change keeps the fast path and installs its new tick")

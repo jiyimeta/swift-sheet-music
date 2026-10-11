@@ -230,7 +230,9 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
 
     /// Replaces the prepared score while keeping the synths, the mixer, rate, tuning, transposition, the master stage
     /// and the metronome — when the mixer layout is unchanged. A changed layout or an unprepared engine falls back to
-    /// the full `prepare(score:)`. Either way playback stops and the loop is cleared, as on the Apple engine.
+    /// the full `prepare(score:)`. Either way playback stops and the loop is cleared. The Apple engine's swap keeps
+    /// the transport instead (`PlaybackEngine.replaceScore(with:)`, through `PlaybackMeasurePosition`); this one has
+    /// yet to follow.
     @discardableResult
     public func replaceScore(with prepared: PreparedPlayback) throws -> ScoreReplacementOutcome {
         guard let loaded, loaded.derivation.channelLayout == prepared.channelLayout else {

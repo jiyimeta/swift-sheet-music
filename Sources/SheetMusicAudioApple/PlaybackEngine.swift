@@ -736,11 +736,23 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Replaces the prepared score while retaining an identical backend audio
     /// layout. A layout change, an unprepared engine, or the AUMIDISynth path
     /// falls back to the same full graph preparation as `prepare(score:)`.
+    ///
+    /// Either way the transport carries over, as it does across `restartGraphPreservingState()`: a playing engine
+    /// keeps playing, a paused one stays paused, and the cursor and the loop are found again in the new score at the
+    /// same measure and offset (`PlaybackMeasurePosition`), kept inside it when the edit shortened the score. The swap
+    /// used to rewind like `prepare`, so a host that adopted each edit sent its player back to the top every time.
     @discardableResult
     public func replaceScore(
         with prepared: PreparedPlayback,
     ) throws -> ScoreReplacementOutcome {
         guard state != .exporting else { return .ignoredWhileExporting }
+        let transport = replacementTransport()
+        let outcome = try swapScore(with: prepared)
+        restore(transport, in: prepared.score)
+        return outcome
+    }
+
+    private func swapScore(with prepared: PreparedPlayback) throws -> ScoreReplacementOutcome {
         guard usingBackend,
               loadedScore != nil,
               loadedChannelLayout == prepared.channelLayout
@@ -768,6 +780,82 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             renderedMidi: prepared.renderedMidi,
         )
         return .swappedInPlace
+    }
+
+    /// What `replaceScore(with:)` puts back after the swap: whether the transport was running, and the cursor and
+    /// the loop as measure positions — the coordinate that still names the same place in the edited score.
+    private struct ReplacementTransport {
+        let state: PlaybackState
+        let cursor: PlaybackMeasurePosition?
+        let loop: (start: PlaybackMeasurePosition, end: PlaybackMeasurePosition)?
+    }
+
+    private func replacementTransport() -> ReplacementTransport? {
+        guard let timeline else { return nil }
+        let cursor = currentCursor
+            .flatMap { timeline.frame(forCursor: $0)?.tick }
+            .flatMap { timeline.measurePosition(ofTick: $0) }
+        var loop: (start: PlaybackMeasurePosition, end: PlaybackMeasurePosition)?
+        if let range = loopRange,
+           let start = timeline.measurePosition(ofTick: range.startTick),
+           let end = timeline.measurePosition(ofTick: range.endTick)
+        {
+            loop = (start, end)
+        }
+        return ReplacementTransport(state: state, cursor: cursor, loop: loop)
+    }
+
+    private func restore(_ transport: ReplacementTransport?, in score: Score) {
+        guard let transport, let timeline else { return }
+        let cursor = transport.cursor
+            .flatMap { timeline.tick(at: $0) }
+            .flatMap { timeline.frame(atTick: $0)?.cursor }
+        switch transport.state {
+        case .playing:
+            play(from: cursor, in: score)
+        case .paused:
+            pause()
+            park(at: cursor, in: score, timeline: timeline)
+        case .stopped, .exporting:
+            currentCursor = cursor
+        }
+        // After the transport is seated, as in `restartGraphPreservingState()`: `apply(loop:)` projects the loop onto
+        // the transport through the timeline and unroll the swap has just rebuilt.
+        if let loop = transport.loop,
+           let start = timeline.tick(at: loop.start),
+           let end = timeline.tick(at: loop.end),
+           start < end
+        {
+            apply(loop: LoopRange(startTick: start, endTick: end))
+        }
+    }
+
+    /// Seats a paused transport at `cursor` without sounding anything. The backend gets the new score's sequence now
+    /// rather than at the next `play`, so its clock — what `currentTimeSeconds` reads — already stands where the
+    /// cursor does. The AUMIDISynth path has no silent way to build its sequencer and plays it for an instant, as
+    /// `restartGraphPreservingState()` does.
+    private func park(at cursor: ScoreCursor?, in score: Score, timeline: PlaybackTimeline) {
+        guard let cursor, let tick = timeline.frame(forCursor: cursor)?.tick else {
+            currentCursor = nil
+            return
+        }
+        if let backend {
+            // Before the SoundFont lands there is no sequence to seat; the next `play` resumes from the cursor.
+            if backend.isReady, let rendered = try? cachedRender(score) {
+                loadBackendNormalSequence(backend: backend, score: score, rendered: rendered, timeline: timeline)
+                backend.setMetronomeMuted(!metronome.isEnabled)
+                backend.seek(toTick: tick)
+                // A backend seek resets the synth's channels; see `seek(to:)`.
+                reapplyMixerPrograms()
+                applyMixerState()
+            }
+            currentCursor = cursor
+            return
+        }
+        play(from: cursor, in: score)
+        if state == .playing {
+            pause()
+        }
     }
 
     private func prepare(

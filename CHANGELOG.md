@@ -7,6 +7,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **`PlaybackEngine.replaceScore(with:)` keeps the transport.** It used to stop and rewind like `prepare(score:)`, so
+  a host that took each edit into playback sent its player back to the top of the piece, and one that read the
+  cursor going nil as the end of the score took the swap for it. Now a playing engine keeps playing, a paused one
+  stays paused, and the cursor and the loop are found again in the edited score at the same measure and offset — the
+  coordinate an edit elsewhere leaves standing, where a notated tick or a positional item ID would not — kept inside
+  the score when the edit shortened it. A paused backend engine is seated silently, so `currentTimeSeconds` already
+  agrees with the cursor. The full-prepare fallback (a changed channel layout, the AUMIDISynth path) carries the
+  transport over too. `WindowsPlaybackEngine.replaceScore(with:)` and the Android engine's `replaceScore` still stop
+  and rewind.
+
 ## [4.7.0] - 2026-10-11
 
 ### Changed
