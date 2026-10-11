@@ -7,6 +7,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.7.0] - 2026-10-11
+
+### Changed
+
+- **`SetMeasureRepeat` replaces the bar's music, as MuseScore does.** It used to refuse any bar that was not already
+  an empty single voice, so writing a `%` over a bar of notes — or over the two voices of rests a whole-bar delete
+  left behind — did nothing. Now the notes and rests become the sign (voice 1) or go (the upper voices), and
+  everything else in voice 1 — signatures, clefs, barlines, annotations — stays in order; undo brings the bar back
+  whole. Still refused: a bar already in a group, and one whose upper voice holds anything but notes and rests.
+- **`DeleteRange` over a whole bar leaves one voice.** When the range covers every timed slot of every voice of a
+  bar, the upper voices that held nothing but notes and rests are removed rather than each left as a measure rest of
+  their own; one carrying a dynamic or another non-timed element stays. A partly covered bar is unchanged.
+
+### Fixed
+
+- **`WAVEncoding` and `AIFFEncoding` on a 32-bit host.** Their size limits were `Int(UInt32.max)`, which traps where
+  an `Int` is 32 bits, so the first header written on WebAssembly crashed. The limits now clamp to what an `Int`
+  counts before the header is taken off, and a frame count whose byte size overflows saturates instead of trapping.
+
 ## [4.6.0] - 2026-10-11
 
 ### Added
