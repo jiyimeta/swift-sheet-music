@@ -65,7 +65,16 @@ extension ScoreEditSession {
             let command = TransposeScore(
                 semitones: semitones, transposeKeySignatures: transposeKeySignatures, respellInKey: respellInKey,
             )
-            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
+            // The PLANNED COMPOSITE, as `.deleteRange` hands back, here for cost rather than for location. The
+            // command's own `apply` plans the whole score again, and the session applies what this returns twice —
+            // the repair preview, then the editor — so handing back the command planned every chord of the score
+            // three times per transposition. The composite is exactly what that `apply` applies and reports the
+            // same location. A plan that throws falls back to the command, so the refusal is raised at apply time.
+            do {
+                return try command.plan(in: score, ids: ids)
+            } catch {
+                return command
+            }
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.

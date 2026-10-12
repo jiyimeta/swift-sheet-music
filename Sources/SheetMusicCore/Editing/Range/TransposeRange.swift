@@ -49,17 +49,22 @@ public struct TransposeRange: EditCommand {
         guard (-24 ... 24).contains(semitones) else {
             throw Self.refused(.invalidTransposition(semitones: semitones))
         }
-        guard !score.voiceElements(in: range).isEmpty else { throw Self.refused(.targetNotFound(range.start)) }
+        let targets = score.voiceElements(in: range)
+        guard !targets.isEmpty else { throw Self.refused(.targetNotFound(range.start)) }
         guard semitones != 0 else { return nil }
+        // The range's own edits move pitches, never key signatures, so the score this started from says both which
+        // key each note is read under as the walk rewrites it and which key it was in.
+        let keys = ActiveKeyTable(score, staves: targets.map(\.staff))
         var visited: Set<NoteID> = []
-        return try RangeEditPlanner.plan(over: range, in: score, ids: ids) { target, working in
+        let plan = try RangeEditPlanner.plan(targets: targets, in: score, ids: ids) { target, working in
             guard RangeEditPlanner.isPitched(target.staff, in: working) else { return [] }
-            // The range's own edits move pitches, never key signatures, so the score this started from is also
-            // the one that says which key each note was in.
             return TranspositionPlanner.steps(
-                at: target, in: working, semitones: semitones, sourceKeys: respellInKey ? score : nil,
+                at: target, in: working, semitones: semitones,
+                keys: TranspositionPlanner.Keys(reading: keys, source: respellInKey ? keys : nil),
                 visited: &visited,
             )
-        }?.composite
+        }
+        assert(plan.map { keys.agrees(with: $0.result) } ?? true, "a transposition step wrote a key signature")
+        return plan?.composite
     }
 }

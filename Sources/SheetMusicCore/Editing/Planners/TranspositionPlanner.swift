@@ -7,6 +7,17 @@ import SheetMusicFoundation
 /// because a range moved two semitones and a score moved two semitones have to spell their results identically —
 /// otherwise the same music reads differently depending on how much of it the host had selected.
 enum TranspositionPlanner {
+    /// The keys a transposition reads, each a table built once for the whole walk (`ActiveKeyTable`).
+    struct Keys {
+        /// What each moved note is READ under — the key that decides its accidental. Built from the score the walk
+        /// starts on, which is also right for the working copy the walk rewrites: no step writes a key signature.
+        let reading: ActiveKeyTable
+        /// What key each note was in BEFORE the move, or `nil` for the chromatic rule, which needs no such thing. It
+        /// is separate from `reading` because the two differ for `TransposeScore`, which writes the new key
+        /// signatures before it plans a single note.
+        let source: ActiveKeyTable?
+    }
+
     /// The concert key (fifths, −7…+7) that `concertKey` becomes when the music it governs moves `semitones`.
     ///
     /// Moving a key is moving it round the circle of fifths: one semitone up is seven fifths sharpwards, and the
@@ -43,19 +54,17 @@ enum TranspositionPlanner {
     /// carry the element as it stood before them and quietly undo the lot; run before, it copies whatever pitches
     /// the working score holds now and the `SetNotePitch`es land on top of it.
     ///
-    /// `sourceKeys` is the score whose key signatures say what key each note was in BEFORE the move — `nil` for the
-    /// chromatic rule, which needs no such thing. It is passed separately from `working` because the two differ
-    /// for `TransposeScore`, which writes the new key signatures before it plans a single note.
+    /// `keys` says what key each note is read under and was in before the move (`Keys`).
     static func steps(
-        at target: VoiceElementID, in working: Score, semitones: Int, sourceKeys: Score?,
+        at target: VoiceElementID, in working: Score, semitones: Int, keys: Keys,
         visited: inout Set<NoteID>,
     ) -> [any EditCommand] {
         var commands: [any EditCommand] = []
-        if let grace = graceRetune(at: target, in: working, semitones: semitones, sourceKeys: sourceKeys) {
+        if let grace = graceRetune(at: target, in: working, semitones: semitones, keys: keys) {
             commands.append(grace)
         }
         commands += RangeEditPlanner.unvisitedTieChains(of: target, in: working, visited: &visited)
-            .flatMap { retune(chain: $0, in: working, semitones: semitones, sourceKeys: sourceKeys) }
+            .flatMap { retune(chain: $0, in: working, semitones: semitones, keys: keys) }
         return commands
     }
 
@@ -66,12 +75,12 @@ enum TranspositionPlanner {
     /// accidental is written on the head alone — the far side of a tie carries none. The key it is spelled from is
     /// the HEAD's, which is where the chain's pitch is written.
     static func retune(
-        chain: [NoteID], in score: Score, semitones: Int, sourceKeys: Score?,
+        chain: [NoteID], in score: Score, semitones: Int, keys: Keys,
     ) -> [any EditCommand] {
         guard let head = chain.first, let note = score[head] else { return [] }
-        let keySig = score.activeKey(at: head)
+        let keySig = keys.reading.key(at: head)
         guard let shifted = shifted(
-            note, by: semitones, in: keySig, fromKey: sourceKeys?.activeKey(at: head),
+            note, by: semitones, in: keySig, fromKey: keys.source?.key(at: head),
         ) else { return [] }
         return chain.map { member in
             SetNotePitch(
@@ -93,13 +102,13 @@ enum TranspositionPlanner {
     /// Read from the WORKING score rather than the score the plan started from, so a chord whose main notes an
     /// earlier tie chain already moved is copied forward with those pitches instead of the ones it opened with.
     static func graceRetune(
-        at target: VoiceElementID, in score: Score, semitones: Int, sourceKeys: Score?,
+        at target: VoiceElementID, in score: Score, semitones: Int, keys: Keys,
     ) -> (any EditCommand)? {
         guard case let .chord(chord)? = score[target],
               !chord.graceNotesBefore.isEmpty || !chord.graceNotesAfter.isEmpty
         else { return nil }
-        let keySig = score.activeKey(staff: target.staff, measureIndex: target.measureIndex)
-        let fromKey = sourceKeys?.activeKey(staff: target.staff, measureIndex: target.measureIndex)
+        let keySig = keys.reading.key(staff: target.staff, measureIndex: target.measureIndex)
+        let fromKey = keys.source?.key(staff: target.staff, measureIndex: target.measureIndex)
         var moved = chord
         for index in chord.graceNotesBefore.indices {
             guard let notes = shifted(
@@ -119,9 +128,10 @@ enum TranspositionPlanner {
 
     /// Whether every note of the chord at `target` — grace notes included — can move `semitones` and stay inside
     /// MIDI 0…127. What `TransposeScore` checks before it plans anything, so a whole-score move is all or nothing.
-    static func canMove(_ target: VoiceElementID, in score: Score, semitones: Int) -> Bool {
+    /// `keys` is `score`'s own.
+    static func canMove(_ target: VoiceElementID, in score: Score, semitones: Int, keys: ActiveKeyTable) -> Bool {
         guard case let .chord(chord)? = score[target] else { return true }
-        let keySig = score.activeKey(staff: target.staff, measureIndex: target.measureIndex)
+        let keySig = keys.key(staff: target.staff, measureIndex: target.measureIndex)
         let graceNotes = (chord.graceNotesBefore.values + chord.graceNotesAfter.values).flatMap(\.notes.values)
         return (chord.notes.values + graceNotes).allSatisfy {
             $0.shifted(bySemitones: semitones, in: keySig) != nil

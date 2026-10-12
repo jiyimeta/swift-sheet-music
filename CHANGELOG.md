@@ -7,6 +7,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **Transposing a whole score, or a long range, no longer slows down with the square of its length.** For every chord
+  it visited, the range walk rebuilt the staff's bar-length table and the transposition rescanned the staff's key
+  signatures from bar 1, and the session planned a whole-score transposition three times per apply. The walk now reads
+  both off tables built once (asserted unchanged by its steps in debug builds), and the session plans `.transposeScore`
+  once, handing back the planned composite as it does for `.deleteRange`. The edited score is unchanged — byte for
+  byte, in five transpositions of a 130-bar, six-part score and their undos. On that score a whole-score transposition
+  went from 0.23–0.33 s to 0.011–0.019 s in release and from 11–21 s to 0.16–0.18 s in a debug build; a range over the
+  whole score from 0.38 s to 0.03 s, and from 16–18 s to 0.4 s.
+
 ## [4.8.0] - 2026-10-11
 
 ### Changed
