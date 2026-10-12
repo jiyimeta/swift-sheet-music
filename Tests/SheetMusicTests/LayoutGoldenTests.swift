@@ -210,8 +210,26 @@
         /// layout work (beams not crossing a tuplet boundary, the blank score's credits, the courtesy-signature
         /// cursor frame) is absent from this diff because no committed fixture exercises it — the same reason the
         /// lyric-spacing change came out byte-identical.
+        ///
+        /// **Re-recorded 2026-10-12 for the trailing-grace branch, which found the constant stale since 3.5.0.**
+        /// Digests were written at four trees and read line by line (3889 lines in each). 3.5.0 (`10632031`) hashes
+        /// to the `acda1d10…` that was committed here, so that is where the gate last held. Then:
+        ///
+        /// - `6f1e943c` (an accidental no longer lands on the previous note): 158 lines in eight fixtures —
+        ///   `guitarbend_{gracebend,prebend,simple,tied}`, `midi01`–`03`, `testMeasureRepeats` — numbers only, the
+        ///   collision floor widening gaps before accidentals at the natural width and the wrapped layout following.
+        /// - From there to 4.8.0 (`faeba706`): every `el clef(` line gains a trailing `mag:` (393 lines, payload
+        ///   only — with it stripped, no clef line differs), and the two fixtures with leading graces move (78
+        ///   lines), the grace group of `0358917d`. Nothing else.
+        /// - This branch: 125 lines, all in the five fixtures that hold graces (`grace_after`,
+        ///   `guitarbend_gracebend`, `guitarbend_prebend`, `guitarbend_release_twice`,
+        ///   `single_note_multi_appoggiatura_post`). The trailing graces move from right after their chord to
+        ///   before what follows it (`grace_after`'s from 1.5 sp after its quarter to right before the rest), the
+        ///   leading groups move by the padding-table distances, and two `graceChord` lines change `stem:` from
+        ///   down to up. In `grace_after`, the up stem reaches above the staff, so the unwrapped system grows and
+        ///   everything in it moves down 4.95 pt. No fixture without a grace changed.
         private static let expectedDigestSHA256 =
-            "acda1d109248d464a71acf7fcde7828d994430b5c75150028925625b0b4b8963"
+            "4135ad8219430e9339d0dd9a9058e6de7ad8e48b7858fe938ba54f4d9fa60a66"
 
         @Test("write digest")
         func writeDigest() throws {
