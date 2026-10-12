@@ -830,12 +830,11 @@ extension LayoutEngine {
                     let chordFullyHidden = !chord.visible
                     let mag = options.graceNoteMag
                     // Each grace's stem first: how far its flag reaches right decides how close it may stand
-                    // (`beforeGraceOffsets`), and the stem turns on the clef.
-                    let beforeStems = chord.graceNotesBefore.values.map { g in
-                        StemDirectionRule.direction(for: g.notes.map {
-                            graceStep(of: $0, currentClef: currentClef, drumLineMap: drumLineMap)
-                        })
-                    }
+                    // (`beforeGraceOffsets`). MuseScore's `ChordLayout::computeUp` sends it up whatever its pitch,
+                    // unless the staff has voices to tell apart — a grace on the top line is not a note on the top
+                    // line, whose stem would go down.
+                    let graceStem = forcedStem ?? .up
+                    let beforeStems = chord.graceNotesBefore.values.map { _ in graceStem }
                     let beforeOffsets = beforeGraceOffsets(
                         of: chord, stems: beforeStems, mag: mag, metrics: metrics,
                     )
@@ -909,11 +908,7 @@ extension LayoutEngine {
                     // (`LayoutEngine+GraceGroup.swift`). The room is the left
                     // ink `aggregatedTickWeights` gave that column, or the
                     // floor it gave the bar's last gap.
-                    let afterStems = chord.graceNotesAfter.values.map { g in
-                        StemDirectionRule.direction(for: g.notes.map {
-                            graceStep(of: $0, currentClef: currentClef, drumLineMap: drumLineMap)
-                        })
-                    }
+                    let afterStems = chord.graceNotesAfter.values.map { _ in graceStem }
                     let afterAnchor: (x: CGFloat, obstacles: [GraceObstacle])? = if chord.graceNotesAfter.isEmpty {
                         nil
                     } else if let next = columnsOnStaff.column(after: tickCursor),

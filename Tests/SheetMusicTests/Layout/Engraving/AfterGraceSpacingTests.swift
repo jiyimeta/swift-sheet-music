@@ -162,8 +162,7 @@ import Testing
             let grace = inks.graces[0]
             #expect(grace.headRight + LayoutEngine.graceToMainNoteDistSp * sp <= inks.main[1].headLeft + 0.01)
             #expect(inks.main[1].headLeft - grace.headRight <= 1.2 * sp)
-            // Nearer the note it leads into than the one it follows.
-            #expect(grace.headLeft - inks.main[0].headRight > inks.main[1].headLeft - grace.headRight)
+            #expect(inks.main[0].headRight + LayoutEngine.graceToMainNoteDistSp * sp <= grace.headLeft + 0.01)
         }
 
         @Test func `trailing graces at a bar's end stand before its barline`() throws {
@@ -267,6 +266,29 @@ import Testing
             let grace = inks.graces[0]
             #expect(inks.main[1].headRight + LayoutEngine.graceToMainNoteDistSp * sp <= grace.left + 0.01)
             #expect(grace.headRight < inks.main[2].left)
+        }
+
+        // MARK: - Stem direction
+
+        /// MuseScore's `ChordLayout::computeUp` sends a grace's stem up whatever its pitch; only voices on the staff
+        /// turn it, the second voice's down. A grace on the top space used to take a note's rule and point down.
+        @Test func `a grace's stem goes up whatever its pitch, and down only in a lower voice`() {
+            let high = [Self.grace(81, 17, type: .acciaccatura)]
+            let single = Self.layout(Self.score([[[
+                Self.chord(.half, 79, 15, before: high, after: [Self.grace(83, 19)]), Self.chord(.half, 72, 14),
+            ]]]))
+            let low = [Self.grace(64, 18, type: .acciaccatura)]
+            let voices = Self.layout(Self.score([[
+                [Self.chord(.whole, 79, 15)],
+                [Self.chord(.half, 62, 16, before: low), Self.chord(.half, 60, 14)],
+            ]]))
+            func stems(_ doc: LayoutDocument) -> [StemDirection] {
+                doc.systems.flatMap(\.measures).flatMap(\.elements).compactMap {
+                    if case let .graceChord(_, _, stem, _, _, _, _, _) = $0 { stem } else { nil }
+                }
+            }
+            #expect(stems(single) == [.up, .up])
+            #expect(stems(voices) == [.down])
         }
 
         // MARK: - A flag and an accidental

@@ -19,6 +19,9 @@ and this project adheres to
   `noteBarDistance`. A grace's flag keeps 0.35 sp (scaled) from a note, a rest, and an accidental it would cross — it
   used to ride over every accidental, through the sharp of the note it led into when the two stood at one height. An
   accidental wholly above or below the flag still lets it pass.
+- **A grace note's stem goes up whatever its pitch.** Graces took a note's rule, so one on or above the middle line
+  pointed down. MuseScore (`ChordLayout::computeUp`) sends every grace's stem up and turns it only for voices — down in
+  the second voice, as the staff's notes go.
 
 ## [4.8.0] - 2026-10-11
 
