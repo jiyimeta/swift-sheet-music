@@ -30,6 +30,21 @@ extension Score {
         return current
     }
 
+    /// `activeKey(staff:measureIndex:)` for every measure of `staff` at once, indexed by measure: one pass over the
+    /// staff instead of one per measure asked about. Empty for a staff the score does not have.
+    func activeKeys(staff: StaffAddress) -> [Int] {
+        guard let s = self[staff] else { return [] }
+        var current = 0
+        return s.measures.map { measure in
+            for el in measure.voices.first?.elements ?? [] {
+                if case let .keySignature(k) = el {
+                    current = k.concertKey
+                }
+            }
+            return current
+        }
+    }
+
     /// Convenience: active key for the staff/measure that contains
     /// `noteID`. Equivalent to
     /// `activeKey(staff: noteID.staff,

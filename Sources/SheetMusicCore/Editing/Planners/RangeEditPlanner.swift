@@ -46,22 +46,32 @@ enum RangeEditPlanner {
     /// span from its two bounds and so cannot name "every staff, every bar" without a pair of slots that happen to
     /// encode it. The targets are expected in the same ascending-onset, document order `voiceElements(in:)` yields;
     /// the re-resolution below assumes it.
+    ///
+    /// Every target's bar length is read off one `MeasureDurationTable` of `score`, for the working score as much as
+    /// for `score`: the steps rewrite chords, rests and notes, never a time signature or an `actualLength`, so the bar
+    /// lengths the walk started with are the ones it ends with — asserted in debug builds. Rebuilding the staff's
+    /// table per target, as each lookup used to, made a whole-score walk quadratic in the staff's length.
     static func plan(
         targets: [VoiceElementID], in score: Score, ids: EIDAllocator,
         step: (_ target: VoiceElementID, _ working: Score) throws -> [any EditCommand],
     ) throws -> Plan? {
         var scratch = ids
         guard let first = targets.first else { return nil }
+        let durations = MeasureDurationTable(score, staves: targets.map(\.staff))
         var plan = Plan(commands: [], location: first, result: score, idAllocator: scratch)
         for target in targets {
-            guard let onset = score.onset(of: target),
-                  let index = plan.result.timedElementIndex(startingAt: onset.tick, in: VoiceRef(target))
+            let measureDuration = durations.duration(at: target.staff, measureIndex: target.measureIndex)
+            guard let onset = score.onset(of: target, measureDuration: measureDuration),
+                  let index = plan.result.timedElementIndex(
+                      startingAt: onset.tick, in: VoiceRef(target), measureDuration: measureDuration,
+                  )
             else { continue }
             for command in try step(target.withElementIndex(index), plan.result) {
                 _ = try command.apply(to: &plan.result, ids: &scratch)
                 plan.commands.append(command)
             }
         }
+        assert(durations.agrees(with: plan.result), "a range step changed a bar's length")
         plan.idAllocator = scratch
         return plan.commands.isEmpty ? nil : plan
     }
@@ -99,8 +109,15 @@ extension Score {
     /// Index of the chord or rest of `voice` that STARTS at `tick`, or `nil` when none does — because the tick lies
     /// inside an element, past the voice's end, or the voice does not exist.
     func timedElementIndex(startingAt tick: Int, in voice: VoiceRef) -> Int? {
+        timedElementIndex(
+            startingAt: tick, in: voice,
+            measureDuration: effectiveMeasureDuration(at: voice.staff, measureIndex: voice.measureIndex),
+        )
+    }
+
+    /// The same, with the bar's effective duration already known (`MeasureDurationTable`).
+    func timedElementIndex(startingAt tick: Int, in voice: VoiceRef, measureDuration: Fraction) -> Int? {
         guard let elements = self[voice: voice]?.elements else { return nil }
-        let measureDuration = effectiveMeasureDuration(at: voice.staff, measureIndex: voice.measureIndex)
         var cursor = 0
         for (index, element) in elements.enumerated() {
             guard case let .chord(timed) = element else { continue }

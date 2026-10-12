@@ -85,7 +85,11 @@ public struct TransposeScore: EditCommand {
             throw Self.refused(.invalidTransposition(semitones: semitones))
         }
         guard semitones != 0 else { return nil }
-        try ensureEveryNoteCanMove(Self.pitchedChords(in: score), in: score)
+        let unmoved = Self.pitchedChords(in: score)
+        // Every key lookup below reads a table built once (`ActiveKeyTable`): asked per chord, `activeKey` rescans
+        // the staff from its first bar, which made this command quadratic in the length of the score.
+        let sourceKeys = ActiveKeyTable(score, staves: unmoved.map(\.staff))
+        try ensureEveryNoteCanMove(unmoved, in: score, keys: sourceKeys)
 
         // The keys are applied to a preview before the notes are planned, so every note's `activeKey` — the key its
         // accidental is decided against, and the key the chromatic step rule reads its predicate from — is the one
@@ -105,14 +109,15 @@ public struct TransposeScore: EditCommand {
         // how this was caught).
         var visited: Set<NoteID> = []
         let targets = Self.pitchedChords(in: preview)
+        // Read under the PREVIEW's keys, which the note steps never change; spelled FROM the key each note was in
+        // before the move — `score`'s, not the preview's, whose signatures already say where the music is going.
+        let keys = TranspositionPlanner.Keys(
+            reading: ActiveKeyTable(preview, staves: targets.map(\.staff)), source: respellInKey ? sourceKeys : nil,
+        )
         let notes = try RangeEditPlanner.plan(targets: targets, in: preview, ids: scratch) { target, working in
-            // Spelled FROM the key each note was in before the move — `score`, not the preview, whose signatures
-            // already say where the music is going.
-            TranspositionPlanner.steps(
-                at: target, in: working, semitones: semitones, sourceKeys: respellInKey ? score : nil,
-                visited: &visited,
-            )
+            TranspositionPlanner.steps(at: target, in: working, semitones: semitones, keys: keys, visited: &visited)
         }
+        assert(notes.map { keys.reading.agrees(with: $0.result) } ?? true, "a note step wrote a key signature")
         commands += notes?.commands ?? []
         guard !commands.isEmpty else { return nil }
         return CompositeEditCommand(commands: commands, location: affectedLocation)
@@ -123,11 +128,12 @@ public struct TransposeScore: EditCommand {
     /// on, and when the move leaves every key where it was (any whole number of octaves).
     private func keyCommands(in score: Score) -> [any EditCommand] {
         guard transposeKeySignatures, let reference = KeySignatureStaves.reference(in: score) else { return [] }
+        let keys = ActiveKeyTable(score, staves: [reference])
         var commands: [any EditCommand] = []
         for measureIndex in 0 ..< MeasureStructure.measureCount(of: score) {
             let declared = KeySignatureStaves.explicitKey(in: score, staff: reference, measureIndex: measureIndex)
             guard measureIndex == 0 || declared != nil else { continue }
-            let current = declared?.concertKey ?? score.activeKey(staff: reference, measureIndex: measureIndex)
+            let current = declared?.concertKey ?? keys.key(staff: reference, measureIndex: measureIndex)
             let moved = TranspositionPlanner.key(current, transposedBy: semitones)
             guard moved != current else { continue }
             commands.append(SetKeySignature(measureIndex: measureIndex, concertKey: moved))
@@ -138,8 +144,8 @@ public struct TransposeScore: EditCommand {
     /// Refuses the whole move when any chord holds a note the shift would push outside MIDI 0…127. Decided against
     /// the untouched score, before anything is planned, so the first offender is named and nothing has been written
     /// when it fires.
-    private func ensureEveryNoteCanMove(_ targets: [VoiceElementID], in score: Score) throws {
-        for target in targets where !TranspositionPlanner.canMove(target, in: score, semitones: semitones) {
+    private func ensureEveryNoteCanMove(_ targets: [VoiceElementID], in score: Score, keys: ActiveKeyTable) throws {
+        for target in targets where !TranspositionPlanner.canMove(target, in: score, semitones: semitones, keys: keys) {
             throw Self.refused(.transpositionOutOfRange(at: target, semitones: semitones))
         }
     }

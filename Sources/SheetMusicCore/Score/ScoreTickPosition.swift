@@ -48,10 +48,16 @@ extension Score {
     /// Onset of the element at `id`: the running tick of its voice at that slot — the resolved durations of the
     /// chords before it plus any `.locationShift` jogs among them. `nil` when the path does not resolve.
     func onset(of id: VoiceElementID) -> ScoreTickPosition? {
-        guard let voice = self[voice: VoiceRef(id)], voice.elements.indices.contains(id.elementIndex),
-              let staff = self[id.staff]
-        else { return nil }
-        let measureDuration = staff.measures.effectiveMeasureDurations()[id.measureIndex]
+        guard let staff = self[id.staff], staff.measures.indices.contains(id.measureIndex) else { return nil }
+        return onset(of: id, measureDuration: staff.measures.effectiveMeasureDurations()[id.measureIndex])
+    }
+
+    /// `onset(of:)` with the measure's effective duration already known — for a walk that reads it off a
+    /// `MeasureDurationTable` rather than rebuilding the staff's whole table for every element.
+    func onset(of id: VoiceElementID, measureDuration: Fraction) -> ScoreTickPosition? {
+        guard let voice = self[voice: VoiceRef(id)], voice.elements.indices.contains(id.elementIndex) else {
+            return nil
+        }
         var tick = 0
         for element in voice.elements[..<id.elementIndex] {
             tick += element.cursorAdvance(division: division, in: measureDuration)
