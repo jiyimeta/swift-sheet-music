@@ -79,7 +79,9 @@ public struct PreparedPlayback: Sendable {
         return midi
     }
 
-    private static func staffChannelSwitches(
+    /// Each flat staff's instrument changes as `(tick, live channel)`, ascending — the table `PreviewRouting` routes an
+    /// audition through. Also read by the Android bridge, which keeps no `PreparedPlayback` of its own.
+    package static func staffChannelSwitches(
         score: Score,
         plan: LiveChannelPlan,
     ) -> [Int: [StaffChannelSwitch]] {

@@ -9,10 +9,10 @@ and this project adheres to
 
 ### Added
 
-- **`AndroidPlaybackEngine.playPreview(pitch, staffIndex, durationMillis, velocity)`** (Android) — sounds a pitch on
-  a staff's instrument with the same ring, supersede and release as `playPreview(noteId)`, which now resolves the note
-  and calls it. For a note no `NoteID` names: a grace note, whose host resolves the pitch and the staff against its own
-  copy of the score.
+- **`AndroidPlaybackEngine.playPreview(noteId, pitch, durationMillis, velocity)`** (Android) — sounds `pitch` in
+  `noteId`'s place, on the instrument the note's staff plays there, with the same ring, supersede and release as
+  `playPreview(noteId)`. For a note no `NoteID` names: a grace note, which its host auditions through its parent's
+  `NoteID` — same staff, same tick — at the grace's own pitch.
 
 ### Changed
 
@@ -40,6 +40,13 @@ and this project adheres to
   away from the music until the edit was adopted. They now resolve against the engine's copy of the score it prepared,
   the one `replaceScore` carries the transport from, as the Apple engine resolves against the timeline it prepared.
   A note audition, `earliest(of:)` and an export still read the score as it stands.
+- **An Android note audition sounds the instrument its staff plays at that note.** `playPreview(noteId)` always used
+  the part's opening instrument, so a note after a mid-score instrument change was heard in the wrong one. It now
+  routes through `PreviewRouting` — the rule the Apple and Windows engines apply — via `nativePreviewRoute`, with the
+  instrument changes of the score the engine prepared, whose channels are the ones on the synth.
+  `AndroidPlaybackEngine.JniBridge` gains `previewRoute`, whose default does not route: a bridge that does not
+  implement it still sounds the opening instrument. `previewNoteOn(pitch, onStaff)`, the held note, still sounds the
+  opening instrument: it has no tick to route by (Apple's takes one).
 
 ## [4.8.0] - 2026-10-11
 

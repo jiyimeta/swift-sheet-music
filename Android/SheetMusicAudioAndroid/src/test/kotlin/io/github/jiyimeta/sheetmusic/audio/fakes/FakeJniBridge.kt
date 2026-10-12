@@ -109,6 +109,26 @@ internal open class FakeJniBridge(
         pitchAndStaffCalls += noteIdBytes
         return pitchAndStaffOfNoteResult
     }
+
+    /**
+     * What [previewRoute] answers, given the pitch it was asked for (negative: the note's own) — what the shared Swift
+     * would route. `null`, the default, keeps the interface's own answer: [pitchAndStaffOfNote] with no routing.
+     */
+    var previewRouteResult: ((pitch: Int) -> LongArray)? = null
+    /** `(scoreHandle, preparedScoreHandle, pitch)` for every [previewRoute] call. */
+    val previewRouteCalls = mutableListOf<Triple<Long, Long, Int>>()
+
+    override fun previewRoute(
+        scoreHandle: Long,
+        preparedScoreHandle: Long,
+        noteIdBytes: ByteArray,
+        pitch: Int,
+    ): LongArray {
+        previewRouteCalls += Triple(scoreHandle, preparedScoreHandle, pitch)
+        val scripted = previewRouteResult
+            ?: return super.previewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch)
+        return scripted(pitch)
+    }
     override fun earliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray {
         earliestOfCalls += idsBytes
         return earliestOfResult

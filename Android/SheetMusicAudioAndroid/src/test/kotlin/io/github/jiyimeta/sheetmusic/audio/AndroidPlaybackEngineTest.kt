@@ -1438,24 +1438,65 @@ class AndroidPlaybackEngineTest {
         )
     }
 
+    /** [oneStaffPayload] with two strips on its part (live channels 5 and 9), its routing scripted through [route]. */
+    private fun routingBridge(route: (pitch: Int) -> LongArray) = FakeJniBridge(
+        timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+        staffParamsResult = oneStaffPayload(),
+        instrumentParamsResult = twoStripsSamePartDivergentChannelsPayload(),
+        renderMidiResult = minimalSmf,
+    ).apply {
+        keepsSnapshots = true
+        previewRouteResult = route
+    }
+
     @Test
-    fun `playPreview by pitch and staff sounds that pitch on the staff's primary strip`() = runTest {
+    fun `playPreview sounds on the channel the note is routed to, after an instrument change`() = runTest {
         val synths = mutableListOf<FakeSynthDriver>()
-        val bridge = FakeJniBridge(
-            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
-            staffParamsResult = oneStaffPayload(),
-            instrumentParamsResult = twoStripsSamePartDivergentChannelsPayload(),
-            renderMidiResult = minimalSmf,
-        )
+        // The shared Swift routes this note past the part's instrument change: channel 9, not the opening 5.
+        val bridge = routingBridge { pitch -> longArrayOf(if (pitch < 0) 67L else pitch.toLong(), 0L, 9L, 0L) }
         val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
         engine.prepare(1L)
         val synth = synths.first()
         synth.calls.clear()
 
-        engine.playPreview(pitch = 70, staffIndex = 0)
+        engine.playPreview(NoteID(StaffAddress(0, 0), 1, 0, 0, 0))
 
-        assertTrue("got ${synth.calls}", synth.calls.contains("noteOn(5,70,96)"))
-        assertTrue("no NoteID was resolved", bridge.pitchAndStaffCalls.isEmpty())
+        assertTrue("got ${synth.calls}", synth.calls.contains("noteOn(9,67,96)"))
+        assertEquals(
+            "the note in the score as it stands, routed through the copy the engine prepared, at its own pitch",
+            Triple(1L, 100L, -1),
+            bridge.previewRouteCalls.single(),
+        )
+    }
+
+    @Test
+    fun `playPreview with a pitch sounds that pitch in the note's place`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val bridge = routingBridge { pitch -> longArrayOf(if (pitch < 0) 67L else pitch.toLong(), 0L, 9L, 0L) }
+        val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        // A grace note, auditioned through its parent's NoteID at its own pitch.
+        engine.playPreview(NoteID(StaffAddress(0, 0), 1, 0, 0, 0), pitch = 74)
+
+        assertTrue("got ${synth.calls}", synth.calls.contains("noteOn(9,74,96)"))
+        assertEquals(74, bridge.previewRouteCalls.single().third)
+    }
+
+    @Test
+    fun `playPreview of a note that does not route sounds nothing`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val bridge = routingBridge { LongArray(0) }
+        val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        engine.playPreview(NoteID(StaffAddress(0, 0), 9, 0, 0, 0))
+
+        assertFalse("got ${synth.calls}", synth.calls.any { it.startsWith("noteOn(") })
     }
 
     // T42 — metronome
