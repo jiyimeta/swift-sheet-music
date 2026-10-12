@@ -23,6 +23,21 @@ internal object SheetMusicAudioJNI {
         )
     }
 
+    fun nativePreviewRoute(
+        scoreHandle: Long,
+        preparedScoreHandle: Long,
+        noteIdBytes: ByteArray,
+        pitch: Int,
+    ): LongArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePreviewRoute(
+            scoreHandle,
+            preparedScoreHandle,
+            SwiftData.fromByteArray(noteIdBytes, arena),
+            pitch,
+        )
+    }
+
     fun nativeItemEndTick(scoreHandle: Long, idBytes: ByteArray): Long {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeItemEndTick(

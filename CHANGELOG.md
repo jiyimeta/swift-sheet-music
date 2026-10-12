@@ -9,10 +9,10 @@ and this project adheres to
 
 ### Added
 
-- **`AndroidPlaybackEngine.playPreview(pitch, staffIndex, durationMillis, velocity)`** (Android) — sounds a pitch on
-  a staff's instrument with the same ring, supersede and release as `playPreview(noteId)`, which now resolves the note
-  and calls it. For a note no `NoteID` names: a grace note, whose host resolves the pitch and the staff against its own
-  copy of the score.
+- **`AndroidPlaybackEngine.playPreview(noteId, pitch, durationMillis, velocity)`** (Android) — sounds `pitch` in
+  `noteId`'s place, on the instrument the note's staff plays there, with the same ring, supersede and release as
+  `playPreview(noteId)`. For a note no `NoteID` names: a grace note, which its host auditions through its parent's
+  `NoteID` — same staff, same tick — at the grace's own pitch.
 
 ### Changed
 
@@ -41,6 +41,25 @@ and this project adheres to
 - **A grace note's stem goes up whatever its pitch.** Graces took a note's rule, so one on or above the middle line
   pointed down. MuseScore (`ChordLayout::computeUp`) sends every grace's stem up and turns it only for voices — down in
   the second voice, as the staff's notes go.
+- **An Android pause with nothing playing leaves the transport where it stands.** `AndroidPlaybackEngine.pause()`
+  stopped the score and click players whatever the state, so a pause that arrived while paused or prepared — a lost
+  audio focus, a media controller's pause — undid a seek made since: fluid_player applies a seek on its next render,
+  so the stop re-seated it at its stale tick, and a player stopped before its first play refuses any later seek past
+  tick 0 (FluidSynth 2.4.6). The next play started away from the cursor the readout showed. Only a running
+  transport's players are stopped now.
+- **The Android transport resolves its positions against the score it is playing.** The cursor and the time readout,
+  seeks, the loop and the count-in were resolved against the score behind the prepared handle — which an Android host
+  edits in place and adopts only later — so an edit that added or removed time before the playhead moved the cursor
+  away from the music until the edit was adopted. They now resolve against the engine's copy of the score it prepared,
+  the one `replaceScore` carries the transport from, as the Apple engine resolves against the timeline it prepared.
+  A note audition, `earliest(of:)` and an export still read the score as it stands.
+- **An Android note audition sounds the instrument its staff plays at that note.** `playPreview(noteId)` always used
+  the part's opening instrument, so a note after a mid-score instrument change was heard in the wrong one. It now
+  routes through `PreviewRouting` — the rule the Apple and Windows engines apply — via `nativePreviewRoute`, with the
+  instrument changes of the score the engine prepared, whose channels are the ones on the synth.
+  `AndroidPlaybackEngine.JniBridge` gains `previewRoute`, whose default does not route: a bridge that does not
+  implement it still sounds the opening instrument. `previewNoteOn(pitch, onStaff)`, the held note, still sounds the
+  opening instrument: it has no tick to route by (Apple's takes one).
 
 ## [4.8.0] - 2026-10-11
 

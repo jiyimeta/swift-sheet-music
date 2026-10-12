@@ -539,6 +539,40 @@ class AndroidPlaybackEngineTest {
     }
 
     @Test
+    fun `the transport resolves against the score as prepared, not the one being edited`() = runTest {
+        val bridge = carryingBridge().apply {
+            frameAtTickResult = encodeFrameBytes(tick = 480L, timeMicros = 1_000_000L, cursor = carriedCursor)
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+        bridge.frameScoreHandles.clear()
+
+        // The host edits the score behind handle 1 in place. Until it adopts the edit, the player still plays the
+        // sequence rendered from the copy taken at prepare (100), so positions to and from it are that copy's.
+        engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
+        engine.skip(1.0)
+        engine.setLoopMeasures(fromMeasure = 0, toMeasure = 1)
+        engine.play() // the poll resolves the player's tick once before it first waits
+        engine.teardown()
+
+        assertTrue(bridge.frameAtTickCalls.isNotEmpty())
+        assertEquals(setOf(100L), bridge.frameScoreHandles.toSet())
+    }
+
+    @Test
+    fun `an adopted edit moves the transport onto the edited score`() = runTest {
+        val bridge = carryingBridge()
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+        engine.replaceScore(1L)
+        bridge.frameScoreHandles.clear()
+
+        engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
+
+        assertEquals("the copy the swap took of the edited score", listOf(101L), bridge.frameScoreHandles)
+    }
+
+    @Test
     fun `replaceScore with no snapshot stops at the start as before`() = runTest {
         val bridge = twoStaffBridge().apply {
             frameForCursorResult = encodeFrameBytes(tick = 480L, timeMicros = 1_000_000L, cursor = carriedCursor)
@@ -690,6 +724,51 @@ class AndroidPlaybackEngineTest {
         engine.play()
         assertEquals(PlaybackState.PLAYING, engine.state.value)
         engine.teardown()
+    }
+
+    /** [twoStaffBridge] whose every cursor resolves to a frame at tick 480, 1 s in. */
+    private fun seekableBridge() = twoStaffBridge().apply {
+        frameForCursorResult = encodeFrameBytes(
+            tick = 480L,
+            timeMicros = 1_000_000L,
+            cursor = ScoreCursor.Beat(measureIndex = 2, tickInMeasure = 0),
+        )
+    }
+
+    @Test
+    fun `a pause before the first play leaves the player able to seek`() = runTest {
+        val player = RecordingBindings()
+        val engine = tracked(bridge = seekableBridge(), playerBindings = player)
+        engine.prepare(1L)
+        val stopsBefore = player.stopCalls.size
+
+        // A lost audio focus or a media controller's pause, with nothing playing yet.
+        engine.pause()
+        engine.seek(ScoreCursor.Beat(measureIndex = 2, tickInMeasure = 0))
+
+        assertEquals(PlaybackState.PAUSED, engine.state.value)
+        assertEquals("a pause with nothing running stops no player", stopsBefore, player.stopCalls.size)
+        assertEquals("the never-played player took the seek", 480L, player.seekTicks.last())
+    }
+
+    @Test
+    fun `a second pause leaves a seek made while paused alone`() = runTest {
+        val player = RecordingBindings()
+        val engine = tracked(bridge = seekableBridge(), playerBindings = player)
+        engine.prepare(1L)
+        engine.play()
+        engine.pause()
+        engine.seek(ScoreCursor.Beat(measureIndex = 2, tickInMeasure = 0))
+        val stopsBefore = player.stopCalls.size
+
+        engine.pause()
+
+        assertEquals(PlaybackState.PAUSED, engine.state.value)
+        assertEquals(
+            "a stop would re-seat fluid_player at its stale tick, undoing the seek",
+            stopsBefore,
+            player.stopCalls.size,
+        )
     }
 
     @Test
@@ -1359,24 +1438,65 @@ class AndroidPlaybackEngineTest {
         )
     }
 
+    /** [oneStaffPayload] with two strips on its part (live channels 5 and 9), its routing scripted through [route]. */
+    private fun routingBridge(route: (pitch: Int) -> LongArray) = FakeJniBridge(
+        timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+        staffParamsResult = oneStaffPayload(),
+        instrumentParamsResult = twoStripsSamePartDivergentChannelsPayload(),
+        renderMidiResult = minimalSmf,
+    ).apply {
+        keepsSnapshots = true
+        previewRouteResult = route
+    }
+
     @Test
-    fun `playPreview by pitch and staff sounds that pitch on the staff's primary strip`() = runTest {
+    fun `playPreview sounds on the channel the note is routed to, after an instrument change`() = runTest {
         val synths = mutableListOf<FakeSynthDriver>()
-        val bridge = FakeJniBridge(
-            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
-            staffParamsResult = oneStaffPayload(),
-            instrumentParamsResult = twoStripsSamePartDivergentChannelsPayload(),
-            renderMidiResult = minimalSmf,
-        )
+        // The shared Swift routes this note past the part's instrument change: channel 9, not the opening 5.
+        val bridge = routingBridge { pitch -> longArrayOf(if (pitch < 0) 67L else pitch.toLong(), 0L, 9L, 0L) }
         val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
         engine.prepare(1L)
         val synth = synths.first()
         synth.calls.clear()
 
-        engine.playPreview(pitch = 70, staffIndex = 0)
+        engine.playPreview(NoteID(StaffAddress(0, 0), 1, 0, 0, 0))
 
-        assertTrue("got ${synth.calls}", synth.calls.contains("noteOn(5,70,96)"))
-        assertTrue("no NoteID was resolved", bridge.pitchAndStaffCalls.isEmpty())
+        assertTrue("got ${synth.calls}", synth.calls.contains("noteOn(9,67,96)"))
+        assertEquals(
+            "the note in the score as it stands, routed through the copy the engine prepared, at its own pitch",
+            Triple(1L, 100L, -1),
+            bridge.previewRouteCalls.single(),
+        )
+    }
+
+    @Test
+    fun `playPreview with a pitch sounds that pitch in the note's place`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val bridge = routingBridge { pitch -> longArrayOf(if (pitch < 0) 67L else pitch.toLong(), 0L, 9L, 0L) }
+        val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        // A grace note, auditioned through its parent's NoteID at its own pitch.
+        engine.playPreview(NoteID(StaffAddress(0, 0), 1, 0, 0, 0), pitch = 74)
+
+        assertTrue("got ${synth.calls}", synth.calls.contains("noteOn(9,74,96)"))
+        assertEquals(74, bridge.previewRouteCalls.single().third)
+    }
+
+    @Test
+    fun `playPreview of a note that does not route sounds nothing`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val bridge = routingBridge { LongArray(0) }
+        val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        engine.playPreview(NoteID(StaffAddress(0, 0), 9, 0, 0, 0))
+
+        assertFalse("got ${synth.calls}", synth.calls.any { it.startsWith("noteOn(") })
     }
 
     // T42 — metronome
@@ -1463,6 +1583,16 @@ class AndroidPlaybackEngineTest {
         engine.pause()
 
         assertEquals(1, metronome.stopCalls.size)
+    }
+
+    @Test
+    fun `a pause with nothing playing leaves the click transport alone`() = runTest(testDispatcher) {
+        val metronome = RecordingBindings()
+        val engine = engineWithMetronomeTransport(metronomeBindings = metronome)
+
+        engine.pause()
+
+        assertEquals("a stop before its first play would make it refuse the next seek", 0, metronome.stopCalls.size)
     }
 
     @Test

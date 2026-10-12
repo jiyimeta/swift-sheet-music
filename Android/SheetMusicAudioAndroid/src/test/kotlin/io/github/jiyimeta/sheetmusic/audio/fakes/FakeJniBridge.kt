@@ -32,6 +32,8 @@ internal open class FakeJniBridge(
 
     val frameAtTickCalls = mutableListOf<Long>()
     val frameForCursorCalls = mutableListOf<ByteArray>()
+    /** The score handle each [frameAtTick] / [frameForCursor] call resolved against, in order. */
+    val frameScoreHandles = mutableListOf<Long>()
     val pitchAndStaffCalls = mutableListOf<ByteArray>()
     val earliestOfCalls = mutableListOf<ByteArray>()
 
@@ -45,10 +47,12 @@ internal open class FakeJniBridge(
     override fun timelineSummary(scoreHandle: Long): LongArray = timelineSummaryResult
     override fun frameAtTick(scoreHandle: Long, tick: Long): ByteArray {
         frameAtTickCalls += tick
+        frameScoreHandles += scoreHandle
         return frameAtTickResult
     }
     open override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
         frameForCursorCalls += cursorBytes
+        frameScoreHandles += scoreHandle
         return frameForCursorResult
     }
     /**
@@ -104,6 +108,26 @@ internal open class FakeJniBridge(
     override fun pitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long {
         pitchAndStaffCalls += noteIdBytes
         return pitchAndStaffOfNoteResult
+    }
+
+    /**
+     * What [previewRoute] answers, given the pitch it was asked for (negative: the note's own) — what the shared Swift
+     * would route. `null`, the default, keeps the interface's own answer: [pitchAndStaffOfNote] with no routing.
+     */
+    var previewRouteResult: ((pitch: Int) -> LongArray)? = null
+    /** `(scoreHandle, preparedScoreHandle, pitch)` for every [previewRoute] call. */
+    val previewRouteCalls = mutableListOf<Triple<Long, Long, Int>>()
+
+    override fun previewRoute(
+        scoreHandle: Long,
+        preparedScoreHandle: Long,
+        noteIdBytes: ByteArray,
+        pitch: Int,
+    ): LongArray {
+        previewRouteCalls += Triple(scoreHandle, preparedScoreHandle, pitch)
+        val scripted = previewRouteResult
+            ?: return super.previewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch)
+        return scripted(pitch)
     }
     override fun earliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray {
         earliestOfCalls += idsBytes

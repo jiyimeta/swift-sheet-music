@@ -211,6 +211,24 @@ class AndroidPlaybackEngine internal constructor(
         fun pitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long
 
         /**
+         * Where an audition of [noteIdBytes] sounds: `[pitch, staffIndex, channel, isDrum]`, or empty when the note
+         * does not resolve in [scoreHandle]'s score. Routed as the Apple engine routes one — on the channel the note's
+         * staff plays at the note's tick, after any instrument change — through the instrument changes of
+         * [preparedScoreHandle]'s score, the engine's copy of the score it prepared (0 for none: [scoreHandle]'s). A
+         * negative [pitch] sounds the note's own.
+         *
+         * The default answers from [pitchAndStaffOfNote] without routing — `channel` and `isDrum` are -1, and the
+         * engine sounds the staff's opening channel, as it did before the routing existed.
+         */
+        fun previewRoute(scoreHandle: Long, preparedScoreHandle: Long, noteIdBytes: ByteArray, pitch: Int): LongArray {
+            val packed = pitchAndStaffOfNote(scoreHandle, noteIdBytes)
+            if (packed == -1L) return LongArray(0)
+            val ownPitch = ((packed.toULong() shr 32) and 0xFFFF_FFFFu).toLong()
+            val staffIndex = (packed.toULong() and 0xFFFF_FFFFu).toLong()
+            return longArrayOf(if (pitch < 0) ownPitch else pitch.toLong(), staffIndex, -1L, -1L)
+        }
+
+        /**
          * Returns a serialized [ScoreItemID] for the earliest item in
          * [idsBytes], or an empty byte array if [idsBytes] is empty.
          */
@@ -304,6 +322,8 @@ class AndroidPlaybackEngine internal constructor(
             override fun instrumentParams(h: Long) = SheetMusicAudioJNI.nativeInstrumentParams(h)
             override fun pitchAndStaffOfNote(h: Long, n: ByteArray) =
                 SheetMusicAudioJNI.nativePitchAndStaffOfNote(h, n)
+            override fun previewRoute(scoreHandle: Long, preparedScoreHandle: Long, noteIdBytes: ByteArray, pitch: Int) =
+                SheetMusicAudioJNI.nativePreviewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch)
             override fun earliestOf(h: Long, i: ByteArray) = SheetMusicAudioJNI.nativeEarliestOf(h, i)
             override fun itemEndTick(h: Long, i: ByteArray) =
                 SheetMusicAudioJNI.nativeItemEndTick(h, i)
@@ -889,9 +909,24 @@ class AndroidPlaybackEngine internal constructor(
     /**
      * A copy of the score this engine last prepared or swapped in, as a score handle of its own; 0 for none. The
      * "before" of [carriedTransport]: the host edits the score behind [scoreHandle] in place, so by the time it calls
-     * [replaceScore] that handle already holds the "after".
+     * [replaceScore] that handle already holds the "after". Also what the transport resolves against
+     * ([transportScoreHandle]).
      */
     private val preparedScoreSnapshot = AtomicLong(0L)
+
+    /**
+     * The score the transport resolves its positions against: [preparedScoreSnapshot], the score the loaded sequence
+     * was rendered from — as the Apple engine resolves against the timeline it prepared. The host edits the score
+     * behind [scoreHandle] in place and adopts the edit later ([replaceScore]), and until then that handle no longer
+     * describes what is playing: a player tick resolved there named the wrong place once an edit added or removed time
+     * before it, so the cursor and the readout drifted from the music. [scoreHandle] when no copy is kept.
+     *
+     * Only the transport's own lookups go through it — positions to and from the player, the loop and the count-in.
+     * What the host addresses in the score as it stands (a note to audition, the earliest of a selection, an export)
+     * still reads [scoreHandle].
+     */
+    private val transportScoreHandle: Long
+        get() = preparedScoreSnapshot.get().takeIf { it != 0L } ?: scoreHandle
 
     /** Replaces [preparedScoreSnapshot] with a copy of the score now behind [scoreHandle]. */
     private fun retakeScoreSnapshot(scoreHandle: Long) {
@@ -1106,7 +1141,7 @@ class AndroidPlaybackEngine internal constructor(
     private fun beginCountInOrNull(): CountInHandover? {
         if (!countInEnabled) return null
         val mixer = metronomeMixer ?: return null
-        val handle = scoreHandle.takeIf { it != 0L } ?: return null
+        val handle = transportScoreHandle.takeIf { it != 0L } ?: return null
         val cursor = _currentCursor.value ?: ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
         val cursorBytes = ScoreCursorCodec.encode(cursor)
         val schedule = runCatching {
@@ -1163,17 +1198,27 @@ class AndroidPlaybackEngine internal constructor(
      * `AVAudioEngine.pause()` discipline on Apple side.
      *
      * No-op when [state] is [PlaybackState.EXPORTING].
+     *
+     * Only a running transport touches the players. A pause that arrives while nothing plays — a lost audio focus, a
+     * media controller's pause, any second pause — must leave a seek made since alone: the player's tick has not
+     * caught up with that seek (fluid_player applies one on its next render), so reading it back would capture the
+     * old position, and stopping a player that has never played moves it out of READY, after which it refuses any seek
+     * past tick 0. Either way the next play started somewhere else than the cursor the readout showed.
      */
     fun pause() {
         if (_state.value == PlaybackState.EXPORTING) return
+        val running = _state.value == PlaybackState.PLAYING
         // Capture the position while the player's own tick is still live — after this it stops advancing
         // and a later seek would not be reflected in it, so this is what the next play() resumes from.
         // Only once the score has actually started: pausing mid-count-in must keep the start position
         // the pre-roll was counting into, which the not-yet-started player does not know.
-        if (countInJob == null) playerDriver?.let { scoreTickIntent = it.currentTick }
+        if (running && countInJob == null) playerDriver?.let { scoreTickIntent = it.currentTick }
         cancelCountIn()
-        playerDriver?.stop()
-        metronomeMixer?.stop()
+        if (running) {
+            playerDriver?.stop()
+            // The click transport is a fluid_player too, with the same rule about a stop before its first play.
+            metronomeMixer?.stop()
+        }
         oboeStream?.stop()
         stopPollJob()
         _state.value = PlaybackState.PAUSED
@@ -1228,7 +1273,7 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         val player = playerDriver ?: return
         val cursorBytes = ScoreCursorCodec.encode(to)
-        val frameBytes = jniBridge.frameForCursor(scoreHandle, cursorBytes)
+        val frameBytes = jniBridge.frameForCursor(transportScoreHandle, cursorBytes)
         val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
         frame ?: return
         // `frame.tick` and the loop are NOTATED; the player and the click transport are not.
@@ -1259,7 +1304,7 @@ class AndroidPlaybackEngine internal constructor(
         val targetTickEstimate = if (total > 0) {
             unrolledTick(forNotated = (target / total * totalTicks).toLong())
         } else 0L
-        val frameBytes = jniBridge.frameAtTick(scoreHandle, targetTickEstimate)
+        val frameBytes = jniBridge.frameAtTick(transportScoreHandle, targetTickEstimate)
         val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
         frame ?: return
         // Back the other way: the frame's tick and the loop are notated, the player is not.
@@ -1306,8 +1351,8 @@ class AndroidPlaybackEngine internal constructor(
     fun setLoop(from: ScoreCursor, to: ScoreCursor) {
         if (_state.value == PlaybackState.EXPORTING) return
         if (playerDriver == null) return
-        val fromBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(from))
-        val toBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(to))
+        val fromBytes = jniBridge.frameForCursor(transportScoreHandle, ScoreCursorCodec.encode(from))
+        val toBytes = jniBridge.frameForCursor(transportScoreHandle, ScoreCursorCodec.encode(to))
         val fromFrame = if (fromBytes.isEmpty()) null else FrameCodec.decode(fromBytes)
         fromFrame ?: return
         val toFrame = if (toBytes.isEmpty()) null else FrameCodec.decode(toBytes)
@@ -1327,10 +1372,10 @@ class AndroidPlaybackEngine internal constructor(
     fun setLoop(from: ScoreCursor, throughEndOf: ScoreItemID) {
         if (_state.value == PlaybackState.EXPORTING) return
         if (playerDriver == null) return
-        val fromBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(from))
+        val fromBytes = jniBridge.frameForCursor(transportScoreHandle, ScoreCursorCodec.encode(from))
         val fromFrame = if (fromBytes.isEmpty()) null else FrameCodec.decode(fromBytes)
         fromFrame ?: return
-        val endTick = jniBridge.itemEndTick(scoreHandle, ScoreItemIDCodec.encode(throughEndOf))
+        val endTick = jniBridge.itemEndTick(transportScoreHandle, ScoreItemIDCodec.encode(throughEndOf))
         if (endTick < 0) return
         if (fromFrame.tick >= endTick) return
         armLoop(LoopRange(startTick = fromFrame.tick, endTick = endTick))
@@ -1348,13 +1393,13 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         if (playerDriver == null) return
         val fromBytes = jniBridge.frameForCursor(
-            scoreHandle,
+            transportScoreHandle,
             ScoreCursorCodec.encode(ScoreCursor.Beat(fromMeasure, 0)),
         )
         val fromFrame = if (fromBytes.isEmpty()) null else FrameCodec.decode(fromBytes)
         fromFrame ?: return
         val endBytes = jniBridge.frameForCursor(
-            scoreHandle,
+            transportScoreHandle,
             ScoreCursorCodec.encode(ScoreCursor.Beat(toMeasure + 1, 0)),
         )
         val endTick = if (endBytes.isEmpty()) totalTicks else FrameCodec.decode(endBytes).tick
@@ -1421,8 +1466,9 @@ class AndroidPlaybackEngine internal constructor(
      * is what this engine did before the projection existed and stays correct without a repeat.
      */
     private fun unrolledTick(forNotated: Long): Long {
-        if (scoreHandle == 0L || forNotated < 0) return forNotated
-        val projected = jniBridge.unrolledTickForNotated(scoreHandle, forNotated)
+        val handle = transportScoreHandle
+        if (handle == 0L || forNotated < 0) return forNotated
+        val projected = jniBridge.unrolledTickForNotated(handle, forNotated)
         return if (projected < 0) forNotated else projected
     }
 
@@ -1462,42 +1508,62 @@ class AndroidPlaybackEngine internal constructor(
      * Plays a single-note preview for [noteId] at the given [velocity] for
      * [durationMillis] ms. Fires noteOff asynchronously in [previewScope].
      * No-op when [state] is [PlaybackState.EXPORTING] or no engine is ready.
+     *
+     * It sounds on the instrument the note's staff plays at the note's tick — after a mid-score instrument change, the
+     * new one — as the Apple and Windows engines route an audition (`JniBridge.previewRoute`).
      */
-    fun playPreview(noteId: NoteID, durationMillis: Long = 300L, velocity: Int = 96) {
-        if (_state.value == PlaybackState.EXPORTING) return
-        if (fluidSynthEngine == null) return
-        val packed = jniBridge.pitchAndStaffOfNote(scoreHandle, NoteIDCodec.encode(noteId))
-        if (packed == -1L || packed.toULong() == 0xFFFF_FFFF_FFFF_FFFFuL) return
-        val pitch = ((packed.toULong() shr 32) and 0xFFFF_FFFFu).toInt()
-        val staffIndex = (packed.toULong() and 0xFFFF_FFFFu).toInt()
-        playPreview(pitch = pitch, staffIndex = staffIndex, durationMillis = durationMillis, velocity = velocity)
-    }
+    fun playPreview(noteId: NoteID, durationMillis: Long = 300L, velocity: Int = 96) =
+        playRoutedPreview(noteId, pitch = -1, durationMillis = durationMillis, velocity = velocity)
 
     /**
-     * Plays [pitch] as a single-note preview on staff [staffIndex]'s instrument — what [playPreview] by `NoteID` does
-     * once it has resolved the note, for a note no `NoteID` names. A grace note is one: its host resolves the pitch and
-     * the staff against its own copy of the score and hands both over. [staffIndex] counts the prepared score's staves
-     * in order, as the engine's own resolution does. Same ring, supersede and release as the `NoteID` form.
+     * Plays [pitch] as a single-note preview in [noteId]'s place: on the instrument the note's staff plays at the
+     * note's tick, with the same ring, supersede and release as [playPreview]. For a note no `NoteID` names — a grace
+     * note, which its host auditions through its parent's `NoteID` (same staff, same tick) at the grace's own pitch.
      * No-op when [state] is [PlaybackState.EXPORTING] or no engine is ready.
      */
-    fun playPreview(pitch: Int, staffIndex: Int, durationMillis: Long = 300L, velocity: Int = 96) {
+    fun playPreview(noteId: NoteID, pitch: Int, durationMillis: Long = 300L, velocity: Int = 96) =
+        playRoutedPreview(noteId, pitch = pitch, durationMillis = durationMillis, velocity = velocity)
+
+    /** Both [playPreview]s: routes [noteId] (a negative [pitch] keeps the note's own) and sounds it. */
+    private fun playRoutedPreview(noteId: NoteID, pitch: Int, durationMillis: Long, velocity: Int) {
         if (_state.value == PlaybackState.EXPORTING) return
+        if (fluidSynthEngine == null) return
+        // The note is addressed in the score as it stands; the instrument changes that route it are the prepared
+        // copy's, whose channels are the ones programmed on the synth.
+        val route = jniBridge.previewRoute(
+            scoreHandle = scoreHandle,
+            preparedScoreHandle = preparedScoreSnapshot.get(),
+            noteIdBytes = NoteIDCodec.encode(noteId),
+            pitch = pitch,
+        )
+        if (route.size < 4) return
+        val staffIndex = route[1].toInt()
+        // A bridge that does not route answers -1 for both: the staff's opening (ordinal-0) live channel, not the raw
+        // staffIndex, which is no longer a channel number once a score has a drum part or a grand staff
+        // (`staffLiveChannel`, populated in `prepare`).
+        val channel = if (route[2] >= 0) route[2].toInt() else staffLiveChannel.getOrElse(staffIndex) { staffIndex }
+        val isDrum = if (route[3] >= 0) route[3] == 1L else staffIsDrums.getOrElse(staffIndex) { false }
+        soundPreview(
+            channel = channel,
+            pitch = route[0].toInt(),
+            isDrum = isDrum,
+            durationMillis = durationMillis,
+            velocity = velocity,
+        )
+    }
+
+    /** Sounds one routed audition: the shared policy's ring, supersede and release on [channel]. */
+    private fun soundPreview(channel: Int, pitch: Int, isDrum: Boolean, durationMillis: Long, velocity: Int) {
         val engine = fluidSynthEngine ?: return
-        // Audition the instrument actually configured on the synth for this
-        // staff's part — its PRIMARY (ordinal-0) live channel — not the raw
-        // staffIndex, which is no longer the same as a channel number once a
-        // score has a drum part, a grand staff, or a mid-score instrument
-        // change (see `staffLiveChannel`, populated in `prepare`).
-        val liveChannel = staffLiveChannel.getOrElse(staffIndex) { staffIndex }
 
         // What this audition does — whether it supersedes one already sounding, how long it rings, how long
         // the graph has to stay alive after it — is decided by the shared policy. See `JniBridge`.
         val planBytes = jniBridge.previewPolicyBegin(
             policyHandle = previewPolicyHandle,
-            channel = liveChannel,
+            channel = channel,
             pitch = pitch,
             velocity = velocity,
-            isDrum = staffIsDrums.getOrElse(staffIndex) { false },
+            isDrum = isDrum,
             ringMilliseconds = durationMillis.toInt(),
         )
         if (planBytes.isEmpty()) return
@@ -2058,7 +2124,7 @@ class AndroidPlaybackEngine internal constructor(
                     tick = loop.startTick
                 }
 
-                val frameBytes = jniBridge.frameAtTick(scoreHandle, tick)
+                val frameBytes = jniBridge.frameAtTick(transportScoreHandle, tick)
                 val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
                 // StateFlow.value assignments are atomic and thread-safe;
                 // no Main-dispatch required here. Collectors in ViewModels
