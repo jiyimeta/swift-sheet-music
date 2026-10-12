@@ -34,6 +34,12 @@ and this project adheres to
   so the stop re-seated it at its stale tick, and a player stopped before its first play refuses any later seek past
   tick 0 (FluidSynth 2.4.6). The next play started away from the cursor the readout showed. Only a running
   transport's players are stopped now.
+- **The Android transport resolves its positions against the score it is playing.** The cursor and the time readout,
+  seeks, the loop and the count-in were resolved against the score behind the prepared handle — which an Android host
+  edits in place and adopts only later — so an edit that added or removed time before the playhead moved the cursor
+  away from the music until the edit was adopted. They now resolve against the engine's copy of the score it prepared,
+  the one `replaceScore` carries the transport from, as the Apple engine resolves against the timeline it prepared.
+  A note audition, `earliest(of:)` and an export still read the score as it stands.
 
 ## [4.8.0] - 2026-10-11
 

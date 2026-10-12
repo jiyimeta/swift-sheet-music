@@ -32,6 +32,8 @@ internal open class FakeJniBridge(
 
     val frameAtTickCalls = mutableListOf<Long>()
     val frameForCursorCalls = mutableListOf<ByteArray>()
+    /** The score handle each [frameAtTick] / [frameForCursor] call resolved against, in order. */
+    val frameScoreHandles = mutableListOf<Long>()
     val pitchAndStaffCalls = mutableListOf<ByteArray>()
     val earliestOfCalls = mutableListOf<ByteArray>()
 
@@ -45,10 +47,12 @@ internal open class FakeJniBridge(
     override fun timelineSummary(scoreHandle: Long): LongArray = timelineSummaryResult
     override fun frameAtTick(scoreHandle: Long, tick: Long): ByteArray {
         frameAtTickCalls += tick
+        frameScoreHandles += scoreHandle
         return frameAtTickResult
     }
     open override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
         frameForCursorCalls += cursorBytes
+        frameScoreHandles += scoreHandle
         return frameForCursorResult
     }
     /**

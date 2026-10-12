@@ -889,9 +889,24 @@ class AndroidPlaybackEngine internal constructor(
     /**
      * A copy of the score this engine last prepared or swapped in, as a score handle of its own; 0 for none. The
      * "before" of [carriedTransport]: the host edits the score behind [scoreHandle] in place, so by the time it calls
-     * [replaceScore] that handle already holds the "after".
+     * [replaceScore] that handle already holds the "after". Also what the transport resolves against
+     * ([transportScoreHandle]).
      */
     private val preparedScoreSnapshot = AtomicLong(0L)
+
+    /**
+     * The score the transport resolves its positions against: [preparedScoreSnapshot], the score the loaded sequence
+     * was rendered from — as the Apple engine resolves against the timeline it prepared. The host edits the score
+     * behind [scoreHandle] in place and adopts the edit later ([replaceScore]), and until then that handle no longer
+     * describes what is playing: a player tick resolved there named the wrong place once an edit added or removed time
+     * before it, so the cursor and the readout drifted from the music. [scoreHandle] when no copy is kept.
+     *
+     * Only the transport's own lookups go through it — positions to and from the player, the loop and the count-in.
+     * What the host addresses in the score as it stands (a note to audition, the earliest of a selection, an export)
+     * still reads [scoreHandle].
+     */
+    private val transportScoreHandle: Long
+        get() = preparedScoreSnapshot.get().takeIf { it != 0L } ?: scoreHandle
 
     /** Replaces [preparedScoreSnapshot] with a copy of the score now behind [scoreHandle]. */
     private fun retakeScoreSnapshot(scoreHandle: Long) {
@@ -1106,7 +1121,7 @@ class AndroidPlaybackEngine internal constructor(
     private fun beginCountInOrNull(): CountInHandover? {
         if (!countInEnabled) return null
         val mixer = metronomeMixer ?: return null
-        val handle = scoreHandle.takeIf { it != 0L } ?: return null
+        val handle = transportScoreHandle.takeIf { it != 0L } ?: return null
         val cursor = _currentCursor.value ?: ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
         val cursorBytes = ScoreCursorCodec.encode(cursor)
         val schedule = runCatching {
@@ -1238,7 +1253,7 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         val player = playerDriver ?: return
         val cursorBytes = ScoreCursorCodec.encode(to)
-        val frameBytes = jniBridge.frameForCursor(scoreHandle, cursorBytes)
+        val frameBytes = jniBridge.frameForCursor(transportScoreHandle, cursorBytes)
         val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
         frame ?: return
         // `frame.tick` and the loop are NOTATED; the player and the click transport are not.
@@ -1269,7 +1284,7 @@ class AndroidPlaybackEngine internal constructor(
         val targetTickEstimate = if (total > 0) {
             unrolledTick(forNotated = (target / total * totalTicks).toLong())
         } else 0L
-        val frameBytes = jniBridge.frameAtTick(scoreHandle, targetTickEstimate)
+        val frameBytes = jniBridge.frameAtTick(transportScoreHandle, targetTickEstimate)
         val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
         frame ?: return
         // Back the other way: the frame's tick and the loop are notated, the player is not.
@@ -1316,8 +1331,8 @@ class AndroidPlaybackEngine internal constructor(
     fun setLoop(from: ScoreCursor, to: ScoreCursor) {
         if (_state.value == PlaybackState.EXPORTING) return
         if (playerDriver == null) return
-        val fromBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(from))
-        val toBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(to))
+        val fromBytes = jniBridge.frameForCursor(transportScoreHandle, ScoreCursorCodec.encode(from))
+        val toBytes = jniBridge.frameForCursor(transportScoreHandle, ScoreCursorCodec.encode(to))
         val fromFrame = if (fromBytes.isEmpty()) null else FrameCodec.decode(fromBytes)
         fromFrame ?: return
         val toFrame = if (toBytes.isEmpty()) null else FrameCodec.decode(toBytes)
@@ -1337,10 +1352,10 @@ class AndroidPlaybackEngine internal constructor(
     fun setLoop(from: ScoreCursor, throughEndOf: ScoreItemID) {
         if (_state.value == PlaybackState.EXPORTING) return
         if (playerDriver == null) return
-        val fromBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(from))
+        val fromBytes = jniBridge.frameForCursor(transportScoreHandle, ScoreCursorCodec.encode(from))
         val fromFrame = if (fromBytes.isEmpty()) null else FrameCodec.decode(fromBytes)
         fromFrame ?: return
-        val endTick = jniBridge.itemEndTick(scoreHandle, ScoreItemIDCodec.encode(throughEndOf))
+        val endTick = jniBridge.itemEndTick(transportScoreHandle, ScoreItemIDCodec.encode(throughEndOf))
         if (endTick < 0) return
         if (fromFrame.tick >= endTick) return
         armLoop(LoopRange(startTick = fromFrame.tick, endTick = endTick))
@@ -1358,13 +1373,13 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         if (playerDriver == null) return
         val fromBytes = jniBridge.frameForCursor(
-            scoreHandle,
+            transportScoreHandle,
             ScoreCursorCodec.encode(ScoreCursor.Beat(fromMeasure, 0)),
         )
         val fromFrame = if (fromBytes.isEmpty()) null else FrameCodec.decode(fromBytes)
         fromFrame ?: return
         val endBytes = jniBridge.frameForCursor(
-            scoreHandle,
+            transportScoreHandle,
             ScoreCursorCodec.encode(ScoreCursor.Beat(toMeasure + 1, 0)),
         )
         val endTick = if (endBytes.isEmpty()) totalTicks else FrameCodec.decode(endBytes).tick
@@ -1431,8 +1446,9 @@ class AndroidPlaybackEngine internal constructor(
      * is what this engine did before the projection existed and stays correct without a repeat.
      */
     private fun unrolledTick(forNotated: Long): Long {
-        if (scoreHandle == 0L || forNotated < 0) return forNotated
-        val projected = jniBridge.unrolledTickForNotated(scoreHandle, forNotated)
+        val handle = transportScoreHandle
+        if (handle == 0L || forNotated < 0) return forNotated
+        val projected = jniBridge.unrolledTickForNotated(handle, forNotated)
         return if (projected < 0) forNotated else projected
     }
 
@@ -2068,7 +2084,7 @@ class AndroidPlaybackEngine internal constructor(
                     tick = loop.startTick
                 }
 
-                val frameBytes = jniBridge.frameAtTick(scoreHandle, tick)
+                val frameBytes = jniBridge.frameAtTick(transportScoreHandle, tick)
                 val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
                 // StateFlow.value assignments are atomic and thread-safe;
                 // no Main-dispatch required here. Collectors in ViewModels

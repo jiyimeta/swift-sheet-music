@@ -539,6 +539,40 @@ class AndroidPlaybackEngineTest {
     }
 
     @Test
+    fun `the transport resolves against the score as prepared, not the one being edited`() = runTest {
+        val bridge = carryingBridge().apply {
+            frameAtTickResult = encodeFrameBytes(tick = 480L, timeMicros = 1_000_000L, cursor = carriedCursor)
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+        bridge.frameScoreHandles.clear()
+
+        // The host edits the score behind handle 1 in place. Until it adopts the edit, the player still plays the
+        // sequence rendered from the copy taken at prepare (100), so positions to and from it are that copy's.
+        engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
+        engine.skip(1.0)
+        engine.setLoopMeasures(fromMeasure = 0, toMeasure = 1)
+        engine.play() // the poll resolves the player's tick once before it first waits
+        engine.teardown()
+
+        assertTrue(bridge.frameAtTickCalls.isNotEmpty())
+        assertEquals(setOf(100L), bridge.frameScoreHandles.toSet())
+    }
+
+    @Test
+    fun `an adopted edit moves the transport onto the edited score`() = runTest {
+        val bridge = carryingBridge()
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+        engine.replaceScore(1L)
+        bridge.frameScoreHandles.clear()
+
+        engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
+
+        assertEquals("the copy the swap took of the edited score", listOf(101L), bridge.frameScoreHandles)
+    }
+
+    @Test
     fun `replaceScore with no snapshot stops at the start as before`() = runTest {
         val bridge = twoStaffBridge().apply {
             frameForCursorResult = encodeFrameBytes(tick = 480L, timeMicros = 1_000_000L, cursor = carriedCursor)
