@@ -207,6 +207,8 @@ extension LayoutEngine {
 
         var remainingSynthClef = synthesizeLeadingClef
         var remainingSynthKeySig = synthesizeLeadingKeySig
+        // What a chord's trailing graces stand before: the staff's columns, in every voice.
+        let columnsOnStaff = staffColumns(of: measure, measureDuration: measureDuration, division: division)
         for (voiceIdx, voice) in measure.voices.enumerated() {
             var tickCursor = 0
             var inHeader = true
@@ -826,7 +828,6 @@ extension LayoutEngine {
                     // or grays them (toggle on) while leaving stem geometry
                     // derived from the full note list.
                     let chordFullyHidden = !chord.visible
-                    let graceW = LayoutEngine.graceWidth(sp: metrics.sp)
                     let mag = options.graceNoteMag
                     // Each grace's stem first: how far its flag reaches right decides how close it may stand
                     // (`beforeGraceOffsets`), and the stem turns on the clef.
@@ -902,8 +903,43 @@ extension LayoutEngine {
                         lineGeometry: lineGeometry,
                         metrics: metrics,
                     ))
+                    // Trailing graces stand before what follows the chord on
+                    // the staff — the next column, in any voice, or the
+                    // barline — as MuseScore appends them to the next segment
+                    // (`LayoutEngine+GraceGroup.swift`). The room is the left
+                    // ink `aggregatedTickWeights` gave that column, or the
+                    // floor it gave the bar's last gap.
+                    let afterStems = chord.graceNotesAfter.values.map { g in
+                        StemDirectionRule.direction(for: g.notes.map {
+                            graceStep(of: $0, currentClef: currentClef, drumLineMap: drumLineMap)
+                        })
+                    }
+                    let afterAnchor: (x: CGFloat, obstacles: [GraceObstacle])? = if chord.graceNotesAfter.isEmpty {
+                        nil
+                    } else if let next = columnsOnStaff.column(after: tickCursor),
+                              let targets = columnsOnStaff.entries[next]
+                    {
+                        (
+                            timedX(atTick: next),
+                            afterGraceObstacles(before: targets, graceNoteMag: mag, metrics: metrics),
+                        )
+                    } else {
+                        (
+                            width - metrics.sp / 2,
+                            afterGraceObstacles(
+                                atBarEndOf: columnsOnStaff,
+                                followingClef: followingClef.flatMap { $0.visible ? $0.rawType : nil },
+                                endsRepeat: endsRepeat, metrics: metrics,
+                            ),
+                        )
+                    }
+                    let afterOffsets = afterAnchor.map {
+                        afterGraceOffsets(
+                            of: chord, stems: afterStems, clearing: $0.obstacles, mag: mag, metrics: metrics,
+                        )
+                    } ?? []
                     for (gIdx, g) in chord.graceNotesAfter.enumerated() {
-                        let relX = graceW * CGFloat(gIdx + 1)
+                        let relX = (afterAnchor?.x ?? chordX) + afterOffsets[gIdx] - chordX
                         let layoutNotes = makeGraceLayoutNotes(
                             grace: g, atX: chordX + relX,
                             staffMidY: staffMidY, metrics: metrics,
@@ -916,13 +952,10 @@ extension LayoutEngine {
                             drumLineMap: drumLineMap,
                             showsInvisibleElements: options.showsInvisibleElements,
                         )
-                        let graceStem = StemDirectionRule.direction(
-                            for: layoutNotes.map(\.step),
-                        )
                         out.append(.graceChord(
                             notes: layoutNotes,
                             duration: g.duration,
-                            stem: graceStem,
+                            stem: afterStems[gIdx],
                             stemOrigin: CGPoint(x: chordX + relX, y: staffMidY),
                             relativeX: relX,
                             hasSlash: false,
@@ -1422,21 +1455,7 @@ extension LayoutEngine {
                     // + pause when looking ahead — the next chord's
                     // `tickColumns` entry was built by the spacing
                     // pass at the post-breath tick.
-                    let breathGlyphReservationTicks = 120
-                    let breathExtraTicks: Int = {
-                        var t = breathGlyphReservationTicks
-                        if b.pause > 0 {
-                            // TODO: multi-tempo — sample the timeline
-                            // at the breath's tick. v1 hard-codes 2.0
-                            // bps.
-                            let bps = 2.0
-                            t += Int(
-                                (b.pause * bps * Double(division))
-                                    .rounded(),
-                            )
-                        }
-                        return t
-                    }()
+                    let breathExtraTicks = breathReservationTicks(b, division: division)
                     var lookaheadTick = tickCursor + breathExtraTicks
                     var nextChordX: CGFloat?
                     for j in (voiceElemIdx + 1) ..< voice.elements.count {

@@ -19,8 +19,10 @@ import SheetMusicFoundation
 /// leave a gap already pushed past its natural width alone until the rest catch up.
 ///
 /// This file is that floor reduced to what collides in practice: per staff, the previous column's noteheads, dots
-/// and rests on the right against the next column's accidentals and leading grace notes on the left
-/// (`LayoutEngine+GraceGroup.swift`). `TickAggregate.gapFloors` carries the
+/// and rests on the right against the next column's accidentals and the grace notes that stand before it — its own
+/// leading ones, and the previous chord's trailing ones — on the left (`LayoutEngine+GraceGroup.swift`). A trailing
+/// group with no column after it in the bar floors the bar's last gap instead (`aggregatedTickWeights`).
+/// `TickAggregate.gapFloors` carries the
 /// result, and every consumer of the aggregate honors it as `max(floor, k · weight)` — `tickColumns` when it places
 /// the columns, `crossStaffMinimumMeasureWidth` at `k = 1`, and `packSystems` at the host's stretch.
 ///
@@ -31,8 +33,8 @@ import SheetMusicFoundation
 extension LayoutEngine {
     /// How far one staff's chords and rests at one tick reach either side of their column's x, in points.
     struct ColumnInk: Equatable {
-        /// Column x to the left edge of the leftmost accidental or leading grace note; `0` when the column draws
-        /// neither.
+        /// Column x to the left edge of the leftmost accidental or grace note standing before the column — its own
+        /// leading graces, or the previous chord's trailing ones; `0` when the column has none of them.
         var left: CGFloat = 0
         /// Column x to the rightmost notehead / dot / rest ink, plus the padding MuseScore keeps between that ink and
         /// a following accidental (`paddingtable.cpp`: note or dot → accidental 0.35 sp, rest → accidental 0.45 sp).
@@ -238,6 +240,12 @@ extension LayoutEngine {
             PitchStaffPosition.step(midiPitch: $0.pitch, tpc: $0.tpc, clef: trebleClef).step
         }.sorted()
         return zip(steps, steps.dropFirst()).contains { $1 - $0 < 2 }
+    }
+
+    /// `note`'s staff step under a treble clef — a vertical position whose differences, the only thing the passes
+    /// that run before the clef is known compare, are the same under every clef.
+    static func trebleStep(of note: Note) -> CGFloat {
+        CGFloat(PitchStaffPosition.step(midiPitch: note.pitch, tpc: note.tpc, clef: trebleClef).step)
     }
 
     /// A glyph's advance, measured the way the renderers measure it (`AccidentalPlacement.leftEdgeX` takes the

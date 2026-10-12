@@ -682,15 +682,23 @@ extension LayoutEngine {
         // A clef the NEXT bar opens with stands before this one's barline
         // (`LayoutEngine+BarlineClef`), in the same room a clef after this
         // bar's own last chord takes.
-        var trailingClefWidth = followingClefs(after: measureIdx, staves: staves, plan: nil)
-            .compactMap { $0?.visible == true ? $0 : nil }
+        let followingClefs = followingClefs(after: measureIdx, staves: staves, plan: nil)
+            .map { $0?.visible == true ? $0 : nil }
+        var trailingClefWidth = followingClefs.compactMap(\.self)
             .map { barEndClefWidth(rawType: $0.rawType, metrics: metrics) }
             .max() ?? 0
+        let endsRepeat = staves.first.map {
+            measureIdx < $0.measures.count && $0.measures[measureIdx].endRepeatCount != nil
+        } ?? false
         // Per staff, tick → what its chords and rests there hang off the
         // column's sides, for `collisionFloors`.
         var inks: [[Int: ColumnInk]] = []
+        // Trailing graces with nothing after them in the bar, which stand
+        // before its barline: their chord's tick, the reach of that chord's
+        // column, and how far left of the barline the group reaches.
+        var barEndGraces: [(tick: Int, columnReach: CGFloat, reach: CGFloat)] = []
 
-        for staff in staves where measureIdx < staff.measures.count {
+        for (staffIndex, staff) in staves.enumerated() where measureIdx < staff.measures.count {
             var staffInks: [Int: ColumnInk] = [:]
             defer { inks.append(staffInks) }
             for voice in staff.measures[measureIdx].voices {
@@ -734,14 +742,14 @@ extension LayoutEngine {
                         let nextLyric = nextLyricBearingChord(
                             in: voice.elements.values, after: idx,
                         )
-                        // Reserve column width for THIS chord's after-graces,
-                        // drawn at the right end of this column. The NEXT
-                        // chord's before-graces take no weight: they are part
-                        // of its column's left ink (`columnInk`), a floor on
-                        // this gap rather than an addition to it — MuseScore's
-                        // shapes (`LayoutEngine+GraceGroup.swift`).
-                        let graceBudget = LayoutEngine.graceWidth(sp: metrics.sp)
-                            * CGFloat(c.graceNotesAfter.count)
+                        // Graces take no weight. The next chord's leading ones
+                        // are part of its column's left ink (`columnInk`), and
+                        // this chord's trailing ones part of the left ink of
+                        // whatever follows it on the staff (below the voice
+                        // loop): a floor on the gap rather than an addition
+                        // to it — MuseScore's shapes
+                        // (`LayoutEngine+GraceGroup.swift`).
+                        //
                         // Jazz inflection lines are part of the chord's
                         // shape upstream, so they widen the neighbouring
                         // gaps — a left-pointing scoop/plop reaches back
@@ -762,7 +770,7 @@ extension LayoutEngine {
                             )
                         }
                         let baseWeight = max(
-                            durationWidth(c.duration, metrics: metrics) + graceBudget,
+                            durationWidth(c.duration, metrics: metrics),
                             lyricsPairWidth(
                                 currentLyrics: c.lyrics,
                                 next: nextLyric,
@@ -825,22 +833,9 @@ extension LayoutEngine {
                         // the tick cursor by the MIDI tick budget so
                         // subsequent chords sit at their post-pause
                         // ticks and `tickColumns` produces matching
-                        // keys for the placement walker.
-                        //
-                        // TODO: multi-tempo scores — sample the tempo
-                        // timeline at the breath's tick instead of
-                        // hard-coding 2.0 bps (120 BPM). Mirrors the
-                        // same TODO in `LayoutEngine+Placement.swift`.
-                        let breathGlyphReservationTicks = 120
-                        var extraTicks = breathGlyphReservationTicks
-                        if b.pause > 0 {
-                            let bps = 2.0
-                            extraTicks += Int(
-                                (b.pause * bps * Double(division))
-                                    .rounded(),
-                            )
-                        }
-                        tick += extraTicks
+                        // keys for the placement walker
+                        // (`breathReservationTicks`).
+                        tick += breathReservationTicks(b, division: division)
                     case let .locationShift(delta):
                         // A voice that starts part-way through the
                         // measure (`<location><fractions>3/4`) — this
@@ -858,6 +853,36 @@ extension LayoutEngine {
                 if !elements.isEmpty {
                     voiceElements.append(elements)
                     measureEnd = max(measureEnd, tick)
+                }
+            }
+            // A chord's trailing graces stand before the next column on the
+            // staff, in any voice, or before the barline; either way they are
+            // left ink of what they stand before (`LayoutEngine+GraceGroup`).
+            let columns = staffColumns(
+                of: staff.measures[measureIdx], measureDuration: measureDuration, division: division,
+            )
+            for (tick, entries) in columns.entries {
+                for chord in entries.map(\.element) where !chord.graceNotesAfter.isEmpty {
+                    if let next = columns.column(after: tick), let targets = columns.entries[next] {
+                        let reach = afterGraceReach(
+                            of: chord,
+                            clearing: afterGraceObstacles(
+                                before: targets, graceNoteMag: graceNoteMag, metrics: metrics,
+                            ),
+                            mag: graceNoteMag, metrics: metrics,
+                        )
+                        staffInks[next, default: ColumnInk()].left = max(staffInks[next]?.left ?? 0, reach)
+                    } else {
+                        let reach = afterGraceReach(
+                            of: chord,
+                            clearing: afterGraceObstacles(
+                                atBarEndOf: columns, followingClef: followingClefs[staffIndex]?.rawType,
+                                endsRepeat: endsRepeat, metrics: metrics,
+                            ),
+                            mag: graceNoteMag, metrics: metrics,
+                        )
+                        barEndGraces.append((tick, staffInks[tick]?.reach ?? 0, reach))
+                    }
                 }
             }
         }
@@ -909,11 +934,27 @@ extension LayoutEngine {
 
         let totalWeight = gapWeights.reduce(0, +)
         let firstTick = sortedTicks[0]
+        var gapFloors = collisionFloors(
+            inks: inks, sortedTicks: sortedTicks, gapWeights: gapWeights,
+        )
+        // Trailing graces before the barline: the barline stands
+        // `sp / 2 + trailingClefWidth` past the last gap (`trailingGap`,
+        // less the half staff space the barline is drawn inside of), so
+        // what the group needs beyond that, and beyond the gaps between its
+        // chord and the last column, is the last gap's floor.
+        if let last = gapWeights.indices.last {
+            for grace in barEndGraces {
+                guard let from = sortedTicks.firstIndex(of: grace.tick) else { continue }
+                let spanned = gapWeights[from ..< last].reduce(0, +)
+                gapFloors[last] = max(
+                    gapFloors[last],
+                    grace.columnReach + grace.reach - metrics.sp / 2 - trailingClefWidth - spanned,
+                )
+            }
+        }
         return TickAggregate(
             sortedTicks: sortedTicks, gapWeights: gapWeights,
-            gapFloors: collisionFloors(
-                inks: inks, sortedTicks: sortedTicks, gapWeights: gapWeights,
-            ),
+            gapFloors: gapFloors,
             totalWeight: totalWeight, measureEnd: measureEnd,
             trailingClefWidth: trailingClefWidth,
             leadingGraceReach: inks.compactMap { $0[firstTick]?.graceReach }.max() ?? 0,

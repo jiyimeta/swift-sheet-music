@@ -134,7 +134,14 @@ import Testing
             let (main, graces) = try Self.inks(doc)
             let sp = doc.metrics.sp
             try #require(graces.count == 1 && main.count == 3)
-            #expect(graces[0].headRight + LayoutEngine.graceToMainNoteDistSp * sp <= main[1].left + 0.01)
+            // MuseScore's note → accidental padding, scaled by the mean of the two sizes; 0.45 sp
+            // (`graceToMainNoteDist`) is a grace's distance from a HEAD, not from an accidental.
+            #expect(graces[0].headRight + Self.accidentalPadding(sp) <= main[1].left + 0.01)
+            #expect(graces[0].headRight + LayoutEngine.graceToMainNoteDistSp * sp <= main[1].headLeft + 0.01)
+        }
+
+        private static func accidentalPadding(_ sp: CGFloat) -> CGFloat {
+            LayoutEngine.graceAccidentalPaddingSp * (ScoreViewOptions().graceNoteMag + 1) / 2 * sp
         }
 
         @Test func `two graces keep apart and clear of the sharp they lead into`() throws {
@@ -147,7 +154,7 @@ import Testing
             let sp = doc.metrics.sp
             try #require(graces.count == 2 && main.count == 3)
             #expect(graces[0].headRight + LayoutEngine.graceToGraceNoteDistSp * sp <= graces[1].left + 0.01)
-            #expect(graces[1].headRight + LayoutEngine.graceToMainNoteDistSp * sp <= main[1].left + 0.01)
+            #expect(graces[1].headRight + Self.accidentalPadding(sp) <= main[1].left + 0.01)
         }
 
         @Test func `a grace with its own accidental keeps it clear of the note before`() throws {

@@ -14,15 +14,6 @@ extension LayoutEngine {
         sp * 0.7
     }
 
-    /// Horizontal width budget for one TRAILING grace note (after-grace) in
-    /// measure-local units: its step right of the chord, and the weight it
-    /// adds to that chord's column. Picked once-and-for-all at 1.5 sp — wide
-    /// enough for a 0.6×-scaled notehead + flag. Leading graces are laid out
-    /// by their shapes instead (`LayoutEngine+GraceGroup.swift`).
-    static func graceWidth(sp: CGFloat) -> CGFloat {
-        sp * 1.5
-    }
-
     /// Lowest Y a chord's geometry occupies BELOW the staff,
     /// in measure-local coords. Used to push lyrics below low
     /// noteheads / ties-below so they don't overlap.

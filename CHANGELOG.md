@@ -7,6 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A chord's trailing grace notes stand before what follows it.** They stood a fixed 1.5 sp per grace right of their
+  own chord, and that much was added to the chord's spacing weight. MuseScore appends them to the next segment that
+  holds anything on the staff (`ChordLayout::appendGraceNotes`): they now stand right before the next chord or rest,
+  in any voice — left of that chord's own leading graces — or before the barline when nothing follows in the bar, and
+  their room is a collision floor on that gap rather than an addition to it.
+- **A grace keeps the distances MuseScore's padding table gives it.** 0.45 sp (`graceToMainNoteDist`) is a grace
+  head's distance from a note or rest; from an accidental it is 0.35 sp scaled by the two items' sizes, from a barline
+  `noteBarDistance`. A grace's flag keeps 0.35 sp (scaled) from a note, a rest, and an accidental it would cross — it
+  used to ride over every accidental, through the sharp of the note it led into when the two stood at one height. An
+  accidental wholly above or below the flag still lets it pass.
+
 ## [4.8.0] - 2026-10-11
 
 ### Changed

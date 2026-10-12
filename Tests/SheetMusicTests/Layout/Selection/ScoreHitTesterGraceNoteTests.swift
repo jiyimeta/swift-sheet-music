@@ -12,10 +12,12 @@
 
         private static let staff0 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-        /// B4 with a B4 quarter grace before it, D5 with a D5 after-grace, then a half rest. Each grace shares its
-        /// parent's pitch, so the two heads sit on one line and only horizontal distance separates them. The leading
-        /// grace is a QUARTER grace because it draws no flag: a flagged one stands further from its chord (its flag
-        /// keeps clear of the chord's head, `LayoutEngine+GraceGroup.swift`), out of the parent head's reach.
+        /// B4 with a B4 quarter grace before it, D5 with a D5 after-grace, another D5, then a quarter rest. Each grace
+        /// shares the pitch of the note it stands beside — the leading one its parent, the trailing one the D5 AFTER
+        /// its parent, which it stands right before (`LayoutEngine+GraceGroup.swift`) — so the two heads sit on one
+        /// line and only horizontal distance separates them. Both graces are QUARTER graces because they draw no flag:
+        /// a flagged one stands further from the note on its right (its flag keeps clear of that note's head), out of
+        /// that head's reach.
         private static func score() -> Score {
             let voice = Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
@@ -31,10 +33,11 @@
                     duration: .quarter, notes: [Note(pitch: 74, tpc: 16)],
                     graceNotesBefore: [],
                     graceNotesAfter: [GraceChord(
-                        graceType: .grace8after, duration: .eighth, notes: [Note(pitch: 74, tpc: 16)],
+                        graceType: .grace8after, duration: .quarter, notes: [Note(pitch: 74, tpc: 16)],
                     )],
                 )),
-                .rest(duration: .half),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 74, tpc: 16)])),
+                .rest(duration: .quarter),
             ])
             return Score(division: 480, parts: [Part(
                 id: "1", instrument: Instrument(id: "x"),
@@ -114,34 +117,35 @@
             }
         }
 
-        @Test("A click on a grace head, even on its side facing the parent, hits the grace note")
-        func graceHeadWinsOverParent() throws {
+        @Test("A click on a grace head, even on its side facing the note beside it, hits the grace note")
+        func graceHeadWinsOverNeighbour() throws {
             guard #available(macOS 15.0, *) else { return }
             let score = Self.score()
             let document = Self.layout(score)
             let tester = ScoreHitTester(document: document)
             let sp = document.metrics.sp
-            let cases: [(grace: GraceNoteID, parent: NoteID)] = [
-                (Self.before, Self.noteID(2)), (Self.after, Self.noteID(3)),
+            // A leading grace stands beside its parent; a trailing one beside the note after its parent.
+            let cases: [(grace: GraceNoteID, neighbour: NoteID)] = [
+                (Self.before, Self.noteID(2)), (Self.after, Self.noteID(4)),
             ]
-            for (grace, parent) in cases {
+            for (grace, neighbour) in cases {
                 let graceHead = try Self.head(of: .graceNote(grace), in: document)
-                let parentHead = try Self.head(of: .note(parent), in: document)
+                let neighbourHead = try Self.head(of: .note(neighbour), in: document)
                 #expect(tester.hitTest(at: graceHead) == .graceNote(grace))
                 #expect(tester.itemID(at: graceHead) == .graceNote(grace))
                 #expect(document.editingHitTest(at: graceHead, activeVoice: 0) == .graceNote(grace))
 
-                // 0.4 sp from the grace head's center toward its parent: still inside the grace head's own reach,
-                // and — the case first-match got wrong — inside the parent head's reach too.
-                let towardParent: CGFloat = parentHead.x > graceHead.x ? 1 : -1
-                let inner = CGPoint(x: graceHead.x + towardParent * sp * 0.4, y: graceHead.y)
-                try #require(Self.distance(inner, parentHead) <= sp * 1.2, "fixture no longer overlaps the reaches")
+                // 0.4 sp from the grace head's center toward the note beside it: still inside the grace head's own
+                // reach, and — the case first-match got wrong — inside that note head's reach too.
+                let toward: CGFloat = neighbourHead.x > graceHead.x ? 1 : -1
+                let inner = CGPoint(x: graceHead.x + toward * sp * 0.4, y: graceHead.y)
+                try #require(Self.distance(inner, neighbourHead) <= sp * 1.2, "fixture no longer overlaps the reaches")
                 #expect(tester.hitTest(at: inner) == .graceNote(grace))
                 #expect(tester.hitTest(at: inner)?.selectableItem == .graceNote(grace))
 
-                // The control: the parent's own head still selects the parent.
-                #expect(tester.hitTest(at: parentHead) == .note(parent))
-                #expect(document.editingHitTest(at: parentHead, activeVoice: 0) == .note(parent))
+                // The control: the note's own head still selects the note.
+                #expect(tester.hitTest(at: neighbourHead) == .note(neighbour))
+                #expect(document.editingHitTest(at: neighbourHead, activeVoice: 0) == .note(neighbour))
             }
         }
 

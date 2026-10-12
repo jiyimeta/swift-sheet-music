@@ -119,4 +119,20 @@ public enum BarLineGeometry {
             sp * thinThicknessSp / 2
         }
     }
+
+    /// Distance from the barline `origin.x` to the left edge of the leftmost ink this subtype paints — what a trailing
+    /// grace note before it keeps clear of.
+    static func leftExtent(subtype: String?, sp: CGFloat) -> CGFloat {
+        switch subtype {
+        case "end-repeat":
+            // Repeat dots centered at dx = -0.6 sp.
+            sp * (repeatDotDxSp + repeatDotDiameterSp / 2)
+        case "double":
+            // Left thin stroke at dx = -0.3 sp, width 0.15 sp.
+            sp * (doubleStrokeDxSp + thinThicknessSp / 2)
+        default:
+            // A thin stroke at dx = 0, alone or with a thick one or repeat dots to its right.
+            sp * thinThicknessSp / 2
+        }
+    }
 }
