@@ -866,14 +866,20 @@ class AndroidPlaybackEngine internal constructor(
      * Seats the transport [carriedTransport] measured, as the Apple engine's `restore` does: a playing one plays on
      * from its cursor, a paused one pauses there without sounding, and an idle one keeps its cursor. The loop goes back
      * after the transport is seated, so the seek is not snapped into a loop that is not armed yet.
+     *
+     * A paused transport is seated by seeking and then naming the state, never by [pause]: that stops the player, and
+     * the one the swap just loaded has never played. fluid_player reads its tracks on its first play, and until then a
+     * stopped player refuses any seek past tick 0 (2.4.6 `fluid_player_seek` rejects a tick past the total unless the
+     * player is still READY, and the total is 0 with no tracks read) — so the cursor was dropped and the next play
+     * started from the top. The swap's own [stop] has already silenced the output, which is all [pause] would add.
      */
     private fun restore(transport: CarriedTransport?) {
         transport ?: return
         when (transport.state) {
             PlaybackState.PLAYING -> play(from = transport.cursor)
             PlaybackState.PAUSED -> {
-                pause()
                 transport.cursor?.let { seek(it) }
+                _state.value = PlaybackState.PAUSED
             }
             else -> transport.cursor?.let { seek(it) }
         }

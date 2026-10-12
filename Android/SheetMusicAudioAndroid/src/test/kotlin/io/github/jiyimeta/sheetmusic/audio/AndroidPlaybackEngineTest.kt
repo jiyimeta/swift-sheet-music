@@ -170,7 +170,11 @@ internal class RecordingOboeStream : OboeStream() {
 
 // ── FakePlayerBindings for inspection ────────────────────────────────────
 
-/** Records calls made through PlayerDriver's NativeBindings seam. */
+/**
+ * Records calls made through PlayerDriver's NativeBindings seam — and, like fluid_player 2.4.6, refuses a seek past tick
+ * 0 on a player that was stopped before it ever played: its tracks are read on the first play, a stop leaves READY, and
+ * `fluid_player_seek` rejects a tick past the total (0 with no tracks) unless the player is READY.
+ */
 private class RecordingBindings : PlayerDriver.NativeBindings {
     val loadCalls = mutableListOf<ByteArray>()
     val playCalls = mutableListOf<Unit>()
@@ -179,14 +183,29 @@ private class RecordingBindings : PlayerDriver.NativeBindings {
     val seekTicks = mutableListOf<Long>()
     var closeCalled = false
     var tickToReturn: Long = 0L
+    private var hasPlayed = false
+    private var stoppedBeforePlaying = false
 
-    override fun newPlayer(synthHandle: Long): Long = 1L
+    override fun newPlayer(synthHandle: Long): Long {
+        hasPlayed = false
+        stoppedBeforePlaying = false
+        return 1L
+    }
     override fun deletePlayer(handle: Long) { closeCalled = true }
     override fun playerAddMem(handle: Long, bytes: ByteArray): Int { loadCalls += bytes; return 0 }
-    override fun playerPlay(handle: Long): Int { playCalls += Unit; return 0 }
-    override fun playerStop(handle: Long): Int { stopCalls += Unit; return 0 }
+    override fun playerPlay(handle: Long): Int { playCalls += Unit; hasPlayed = true; return 0 }
+    override fun playerStop(handle: Long): Int {
+        stopCalls += Unit
+        if (!hasPlayed) stoppedBeforePlaying = true
+        return 0
+    }
     override fun playerJoin(handle: Long): Int { joinCalls += Unit; return 0 }
-    override fun playerSeek(handle: Long, tick: Long): Int { seekTicks += tick; tickToReturn = tick; return 0 }
+    override fun playerSeek(handle: Long, tick: Long): Int {
+        if (stoppedBeforePlaying && tick > 0L) return -1 // FLUID_FAILED
+        seekTicks += tick
+        tickToReturn = tick
+        return 0
+    }
     override fun playerGetCurrentTick(handle: Long): Long = tickToReturn
     val setTempoCalls = mutableListOf<Pair<Int, Double>>()
     override fun playerSetTempo(handle: Long, type: Int, value: Double): Int {
@@ -399,13 +418,20 @@ class AndroidPlaybackEngineTest {
         engine.play()
         engine.pause()
         val playsBefore = player.playCalls.size
+        val seeksBefore = player.seekTicks.size
 
         engine.replaceScore(1L)
 
         assertEquals(PlaybackState.PAUSED, engine.state.value)
         assertEquals(carriedCursor, engine.currentCursor.value)
         assertEquals(1.0, engine.currentTimeSeconds.value, 0.001)
-        assertEquals("the player is seated at the carried cursor", 480L, player.seekTicks.last())
+        // The new player has never played, so a stop before this seek would have made it refuse the seek — and the
+        // next play would start from the top while the readout still showed the carried position (Pixel, 2026-10-12).
+        assertEquals(
+            "the new player is seated at the carried cursor",
+            480L,
+            player.seekTicks.drop(seeksBefore).last(),
+        )
         assertEquals("a paused swap sounds nothing", playsBefore, player.playCalls.size)
         assertEquals(
             "measured against the score as prepared, carried into the edited one",
@@ -478,11 +504,13 @@ class AndroidPlaybackEngineTest {
     @Test
     fun `replaceScore that re-prepares fully carries the transport too`() = runTest {
         val bridge = carryingBridge().apply { staffParamsResult = oneStaffPayload() }
-        val engine = tracked(bridge = bridge)
+        val player = RecordingBindings()
+        val engine = tracked(bridge = bridge, playerBindings = player)
         engine.prepare(1L)
         engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
         engine.play()
         engine.pause()
+        val seeksBefore = player.seekTicks.size
 
         bridge.staffParamsResult = twoStavesPayload()
         val outcome = engine.replaceScore(1L)
@@ -490,6 +518,7 @@ class AndroidPlaybackEngineTest {
         assertEquals(ScoreReplacementOutcome.FULLY_PREPARED, outcome)
         assertEquals(PlaybackState.PAUSED, engine.state.value)
         assertEquals(carriedCursor, engine.currentCursor.value)
+        assertEquals(480L, player.seekTicks.drop(seeksBefore).last())
     }
 
     @Test
