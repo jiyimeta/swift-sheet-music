@@ -787,29 +787,21 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private struct ReplacementTransport {
         let state: PlaybackState
         let cursor: PlaybackMeasurePosition?
-        let loop: (start: PlaybackMeasurePosition, end: PlaybackMeasurePosition)?
+        let loop: PlaybackMeasureLoop?
     }
 
     private func replacementTransport() -> ReplacementTransport? {
         guard let timeline else { return nil }
-        let cursor = currentCursor
-            .flatMap { timeline.frame(forCursor: $0)?.tick }
-            .flatMap { timeline.measurePosition(ofTick: $0) }
-        var loop: (start: PlaybackMeasurePosition, end: PlaybackMeasurePosition)?
-        if let range = loopRange,
-           let start = timeline.measurePosition(ofTick: range.startTick),
-           let end = timeline.measurePosition(ofTick: range.endTick)
-        {
-            loop = (start, end)
-        }
-        return ReplacementTransport(state: state, cursor: cursor, loop: loop)
+        return ReplacementTransport(
+            state: state,
+            cursor: currentCursor.flatMap { timeline.measurePosition(ofCursor: $0) },
+            loop: loopRange.flatMap { timeline.measureLoop(of: $0) },
+        )
     }
 
     private func restore(_ transport: ReplacementTransport?, in score: Score) {
         guard let transport, let timeline else { return }
-        let cursor = transport.cursor
-            .flatMap { timeline.tick(at: $0) }
-            .flatMap { timeline.frame(atTick: $0)?.cursor }
+        let cursor = transport.cursor.flatMap { timeline.cursor(at: $0) }
         switch transport.state {
         case .playing:
             play(from: cursor, in: score)
@@ -821,12 +813,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
         // After the transport is seated, as in `restartGraphPreservingState()`: `apply(loop:)` projects the loop onto
         // the transport through the timeline and unroll the swap has just rebuilt.
-        if let loop = transport.loop,
-           let start = timeline.tick(at: loop.start),
-           let end = timeline.tick(at: loop.end),
-           start < end
-        {
-            apply(loop: LoopRange(startTick: start, endTick: end))
+        if let loop = transport.loop.flatMap({ timeline.loopRange(at: $0) }) {
+            apply(loop: loop)
         }
     }
 

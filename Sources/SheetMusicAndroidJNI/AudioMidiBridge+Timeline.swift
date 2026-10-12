@@ -103,6 +103,57 @@ public func nativeFrameForCursor(scoreHandle: Int64, cursorBytes: Data) -> Data 
     return AudioMidiBridge.frameForCursor(score: score, cursor: cursor)
 }
 
+// MARK: - Carrying the transport across a score swap
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeSnapshotScore(...)` call site: a new handle holding a copy of the score behind
+/// `scoreHandle` as it stands now, or 0 for an unknown handle.
+///
+/// The Android engine keeps one of the score it last prepared. Its host edits the score behind the prepared handle in
+/// place, so when it adopts the edit (`replaceScore`) the score the cursor and the loop were measured against is gone
+/// from that handle — and carrying them over (`nativeCarryCursor`, `nativeCarryLoop`) needs it. Released through
+/// `nativeReleaseScore`, like any score handle. `Score` is a value, so the copy shares storage until the next edit.
+public func nativeSnapshotScore(scoreHandle: Int64) -> Int64 {
+    guard let score = scoreTable.value(for: scoreHandle) else { return 0 }
+    return scoreTable.insert(score)
+}
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeCarryCursor(...)` call site: `cursorBytes`, a place in the score behind
+/// `fromScoreHandle`, as the cursor at the same measure and offset in the score behind `toScoreHandle`
+/// (`AudioMidiBridge.carriedCursor`). Empty `Data` for an unknown handle, an undecodable cursor, or one that names
+/// nothing in the first score.
+public func nativeCarryCursor(fromScoreHandle: Int64, toScoreHandle: Int64, cursorBytes: Data) -> Data {
+    guard let old = scoreTable.value(for: fromScoreHandle),
+          let new = scoreTable.value(for: toScoreHandle),
+          !cursorBytes.isEmpty,
+          let cursor = try? ScoreCursorCodec.decode(cursorBytes),
+          let carried = AudioMidiBridge.carriedCursor(cursor, from: old, to: new)
+    else { return Data() }
+    return ScoreCursorCodec.encode(carried)
+}
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeCarryLoop(...)` call site: the loop `[startTick, endTick)` — NOTATED ticks of the score
+/// behind `fromScoreHandle` — as the same measures and offsets in the score behind `toScoreHandle`
+/// (`AudioMidiBridge.carriedLoop`). Answers `[start, end]`, or an empty array for an unknown handle, an empty range,
+/// or a loop the edit left spanning nothing.
+public func nativeCarryLoop(
+    fromScoreHandle: Int64,
+    toScoreHandle: Int64,
+    startTick: Int64,
+    endTick: Int64,
+) -> [Int64] {
+    guard let old = scoreTable.value(for: fromScoreHandle),
+          let new = scoreTable.value(for: toScoreHandle),
+          startTick >= 0, startTick < endTick,
+          let carried = AudioMidiBridge.carriedLoop(
+              LoopRange(startTick: Int(startTick), endTick: Int(endTick)), from: old, to: new,
+          )
+    else { return [] }
+    return [Int64(carried.startTick), Int64(carried.endTick)]
+}
+
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicAudioJNI.nativeMetronomeBeats(...)` call site.
 public func nativeMetronomeBeats(scoreHandle: Int64) -> Data {
