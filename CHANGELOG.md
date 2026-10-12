@@ -7,6 +7,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`AndroidPlaybackEngine.playPreview(pitch, staffIndex, durationMillis, velocity)`** (Android) — sounds a pitch on
+  a staff's instrument with the same ring, supersede and release as `playPreview(noteId)`, which now resolves the note
+  and calls it. For a note no `NoteID` names: a grace note, whose host resolves the pitch and the staff against its own
+  copy of the score.
+
+### Changed
+
+- **The Android engine's `replaceScore` keeps the transport**, as the Apple engine's has since 4.8.0: a playing engine
+  keeps playing, a paused one stays paused, and the cursor and the loop are found again in the edited score at the same
+  measure and offset, through the same `PlaybackTimeline` helpers the Apple engine now uses
+  (`measurePosition(ofCursor:)`, `cursor(at:)`, `measureLoop(of:)`, `loopRange(at:)`). An Android host edits the
+  prepared score in place, so the engine keeps a copy of the score it last prepared to measure against
+  (`nativeSnapshotScore`) and carries both across in Swift (`nativeCarryCursor`, `nativeCarryLoop`).
+  `AndroidPlaybackEngine.JniBridge` gains `snapshotScore`, `releaseScore`, `carryCursor` and `carryLoop`, whose
+  defaults keep no copy — a bridge that does not implement them still stops and rewinds on a swap.
+  `WindowsPlaybackEngine.replaceScore(with:)` still stops and rewinds.
+
 ### Fixed
 
 - **A chord's trailing grace notes stand before what follows it.** They stood a fixed 1.5 sp per grace right of their

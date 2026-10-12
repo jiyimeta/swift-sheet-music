@@ -59,6 +59,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Public facade that wires [SheetMusicAudioJNI] + [FluidSynthEngine] +
@@ -156,6 +157,38 @@ class AndroidPlaybackEngine internal constructor(
          * notated tick, which is correct for every score without a repeat.
          */
         fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long
+
+        // ── Carrying the transport across a score swap ───────────────
+        //
+        // A host edits the score behind the prepared handle in place, so by the time it adopts the edit
+        // ([replaceScore]) the score the cursor and the loop were measured against is gone from that handle. The
+        // engine keeps a copy of the score it last prepared and carries both across through shared Swift — the
+        // measure-and-offset rule the Apple engine's `replaceScore(with:)` applies (`PlaybackMeasurePosition`).
+        //
+        // The defaults keep no copy, and an engine without one stops and rewinds on a swap, as it did before.
+
+        /**
+         * A new handle holding a copy of the score behind [scoreHandle] as it stands now, or 0 for an unknown
+         * handle. The caller owns it and must [releaseScore] it.
+         */
+        fun snapshotScore(scoreHandle: Long): Long = 0L
+
+        /** Releases a score handle — here, one from [snapshotScore]. */
+        fun releaseScore(scoreHandle: Long) {}
+
+        /**
+         * [cursorBytes], a place in [fromScoreHandle]'s score, as the cursor at the same measure and offset in
+         * [toScoreHandle]'s. Empty when it cannot be carried.
+         */
+        fun carryCursor(fromScoreHandle: Long, toScoreHandle: Long, cursorBytes: ByteArray): ByteArray =
+            ByteArray(0)
+
+        /**
+         * The loop `[startTick, endTick)` — NOTATED ticks of [fromScoreHandle]'s score — as the same measures and
+         * offsets in [toScoreHandle]'s: `[start, end]`, or empty when it spans nothing there.
+         */
+        fun carryLoop(fromScoreHandle: Long, toScoreHandle: Long, startTick: Long, endTick: Long): LongArray =
+            LongArray(0)
 
         /** Returns a serialized `CountInWire` for a pre-roll starting at [cursorBytes]. */
         fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
@@ -260,6 +293,12 @@ class AndroidPlaybackEngine internal constructor(
                 SheetMusicAudioJNI.nativeFrameForCursor(h, c)
             override fun unrolledTickForNotated(h: Long, t: Long) =
                 SheetMusicAudioJNI.nativeUnrolledTickForNotated(h, t)
+            override fun snapshotScore(scoreHandle: Long) = SheetMusicAudioJNI.nativeSnapshotScore(scoreHandle)
+            override fun releaseScore(scoreHandle: Long) = SheetMusicAudioJNI.nativeReleaseScore(scoreHandle)
+            override fun carryCursor(fromScoreHandle: Long, toScoreHandle: Long, cursorBytes: ByteArray) =
+                SheetMusicAudioJNI.nativeCarryCursor(fromScoreHandle, toScoreHandle, cursorBytes)
+            override fun carryLoop(fromScoreHandle: Long, toScoreHandle: Long, startTick: Long, endTick: Long) =
+                SheetMusicAudioJNI.nativeCarryLoop(fromScoreHandle, toScoreHandle, startTick, endTick)
             override fun countIn(h: Long, c: ByteArray) = SheetMusicAudioJNI.nativeCountIn(h, c)
             override fun staffParams(h: Long) = SheetMusicAudioJNI.nativeStaffParams(h)
             override fun instrumentParams(h: Long) = SheetMusicAudioJNI.nativeInstrumentParams(h)
@@ -682,6 +721,7 @@ class AndroidPlaybackEngine internal constructor(
             oboeStream = oboe
 
             this@AndroidPlaybackEngine.scoreHandle = scoreHandle
+            retakeScoreSnapshot(scoreHandle)
             loadedChannelLayout = derivation.channelLayout
             _mixerChannels.value = strips.map { s ->
                 // Seed the slider from the score's authored channel volume (CC7 → 0..1),
@@ -723,10 +763,12 @@ class AndroidPlaybackEngine internal constructor(
      * score, so adopting an edit costs a render rather than a SoundFont load. Mirrors Apple's
      * `PlaybackEngine.replaceScore(with:)`.
      *
-     * As there, the transport stops and returns to the start, and the loop is cleared (a host that keeps one
-     * re-applies it, exactly as after [prepare]). A score whose channel layout differs from the loaded one — a part
-     * added or removed, a strip whose program or kit changed — falls back to a full [prepare], and so does an engine
-     * that has prepared nothing yet: a synth programmed for the old layout cannot sound the new one.
+     * As there, the transport carries over: a playing engine keeps playing, a paused one stays paused, and the cursor
+     * and the loop are found again in the edited score at the same measure and offset — kept inside it when the edit
+     * shortened it ([carriedTransport]). A score whose channel layout differs from the loaded one — a part added or
+     * removed, a strip whose program or kit changed — falls back to a full [prepare], which carries the transport too,
+     * and so does an engine that has prepared nothing yet: a synth programmed for the old layout cannot sound the new
+     * one.
      *
      * Rate, tuning, transpose and master gain are engine state and survive either way.
      *
@@ -736,51 +778,130 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return@withLock ScoreReplacementOutcome.IGNORED_WHILE_EXPORTING
         withContext(Dispatchers.IO) {
             val derivation = deriveScore(scoreHandle)
-            val synth = fluidSynthEngine
-            if (synth == null || derivation.channelLayout != loadedChannelLayout) {
-                _isPreparingSoundfont.value = true
-                try {
-                    prepareLocked(scoreHandle, derivation)
-                } finally {
-                    _isPreparingSoundfont.value = false
-                }
-                return@withContext ScoreReplacementOutcome.FULLY_PREPARED
-            }
-            // Stopping first is what makes the player safe to replace: it stops the output stream and joins its
-            // writer, so nothing is rendering the synth the old player is attached to when that player is deleted —
-            // the order `teardownInternalNoCancelScopes` keeps for a full prepare.
-            stop()
-            _loopRange.value = null
-            transportLoop = null
-            if (previewPolicyHandle != 0L) jniBridge.previewPolicySilence(previewPolicyHandle)
-            installScoreDerivedState(derivation)
-
-            playerDriver?.close()
-            val player = playerFactory(synth.synthHandle)
-            player.load(derivation.smf)
-            if (pendingRate != 1.0f) player.setTempo(pendingRate.toDouble())
-            playerDriver = player
-            bodyMetronomeSmf = derivation.metronomeSmf
-            metronomeTickOffset = 0L
-            metronomeMixer?.loadSequence(derivation.metronomeSmf)
-
-            this@AndroidPlaybackEngine.scoreHandle = scoreHandle
-            // The mixer keeps every setting. A strip's label is the one thing that can change without changing the
-            // layout (a part renamed by the edit), so it is refreshed and nothing else is.
-            val names = derivation.strips.associate { (it.partIndex to it.ordinal) to it.displayName }
-            _mixerChannels.update { channels ->
-                channels.map { c ->
-                    val name = names[c.partIndex to c.ordinal]?.ifEmpty { null } ?: return@map c
-                    c.copy(displayName = name)
-                }
-            }
-            _totalTimeSeconds.value = derivation.totalSeconds
-            _currentTimeSeconds.value = 0.0
-            _currentCursor.value = null
-            scoreTickIntent = 0L
-            _state.value = PlaybackState.PREPARED
-            ScoreReplacementOutcome.SWAPPED_IN_PLACE
+            // Measured before anything is replaced, while the transport still says where it stands.
+            val transport = carriedTransport(intoScoreHandle = scoreHandle)
+            val outcome = swapScore(scoreHandle, derivation)
+            restore(transport)
+            outcome
         }
+    }
+
+    /** [replaceScore]'s swap, leaving the transport stopped at the start; [restore] puts it back afterwards. */
+    private suspend fun swapScore(scoreHandle: Long, derivation: ScoreDerivation): ScoreReplacementOutcome {
+        val synth = fluidSynthEngine
+        if (synth == null || derivation.channelLayout != loadedChannelLayout) {
+            _isPreparingSoundfont.value = true
+            try {
+                prepareLocked(scoreHandle, derivation)
+            } finally {
+                _isPreparingSoundfont.value = false
+            }
+            return ScoreReplacementOutcome.FULLY_PREPARED
+        }
+        // Stopping first is what makes the player safe to replace: it stops the output stream and joins its writer, so
+        // nothing is rendering the synth the old player is attached to when that player is deleted — the order
+        // `teardownInternalNoCancelScopes` keeps for a full prepare.
+        stop()
+        _loopRange.value = null
+        transportLoop = null
+        if (previewPolicyHandle != 0L) jniBridge.previewPolicySilence(previewPolicyHandle)
+        installScoreDerivedState(derivation)
+
+        playerDriver?.close()
+        val player = playerFactory(synth.synthHandle)
+        player.load(derivation.smf)
+        if (pendingRate != 1.0f) player.setTempo(pendingRate.toDouble())
+        playerDriver = player
+        bodyMetronomeSmf = derivation.metronomeSmf
+        metronomeTickOffset = 0L
+        metronomeMixer?.loadSequence(derivation.metronomeSmf)
+
+        this.scoreHandle = scoreHandle
+        retakeScoreSnapshot(scoreHandle)
+        // The mixer keeps every setting. A strip's label is the one thing that can change without changing the layout
+        // (a part renamed by the edit), so it is refreshed and nothing else is.
+        val names = derivation.strips.associate { (it.partIndex to it.ordinal) to it.displayName }
+        _mixerChannels.update { channels ->
+            channels.map { c ->
+                val name = names[c.partIndex to c.ordinal]?.ifEmpty { null } ?: return@map c
+                c.copy(displayName = name)
+            }
+        }
+        _totalTimeSeconds.value = derivation.totalSeconds
+        _currentTimeSeconds.value = 0.0
+        _currentCursor.value = null
+        scoreTickIntent = 0L
+        _state.value = PlaybackState.PREPARED
+        return ScoreReplacementOutcome.SWAPPED_IN_PLACE
+    }
+
+    /**
+     * What [replaceScore] puts back after the swap: whether the transport was running, and the cursor and the loop
+     * already carried into the edited score.
+     */
+    private class CarriedTransport(val state: PlaybackState, val cursor: ScoreCursor?, val loop: LoopRange?)
+
+    /**
+     * The transport as it stands, carried into the score behind [intoScoreHandle] at the same measure and offset — the
+     * coordinate an edit elsewhere leaves standing, where a notated tick or a positional item ID would not
+     * (`PlaybackMeasurePosition`, the rule the Apple engine applies). Measured against [preparedScoreSnapshot], the
+     * score as it was prepared: the host has already edited the one behind the handle. `null` with no snapshot — an
+     * engine that has prepared nothing, or a bridge that keeps none — and the swap then leaves the transport stopped.
+     */
+    private fun carriedTransport(intoScoreHandle: Long): CarriedTransport? {
+        val before = preparedScoreSnapshot.get()
+        if (before == 0L) return null
+        val cursor = _currentCursor.value?.let { cursor ->
+            val bytes = jniBridge.carryCursor(before, intoScoreHandle, ScoreCursorCodec.encode(cursor))
+            if (bytes.isEmpty()) null else ScoreCursorCodec.decode(bytes)
+        }
+        val loop = _loopRange.value?.let { range ->
+            val ticks = jniBridge.carryLoop(before, intoScoreHandle, range.startTick, range.endTick)
+            if (ticks.size == 2) LoopRange(startTick = ticks[0], endTick = ticks[1]) else null
+        }
+        return CarriedTransport(_state.value, cursor, loop)
+    }
+
+    /**
+     * Seats the transport [carriedTransport] measured, as the Apple engine's `restore` does: a playing one plays on
+     * from its cursor, a paused one pauses there without sounding, and an idle one keeps its cursor. The loop goes back
+     * after the transport is seated, so the seek is not snapped into a loop that is not armed yet.
+     *
+     * A paused transport is seated by seeking and then naming the state, never by [pause]: that stops the player, and
+     * the one the swap just loaded has never played. fluid_player reads its tracks on its first play, and until then a
+     * stopped player refuses any seek past tick 0 (2.4.6 `fluid_player_seek` rejects a tick past the total unless the
+     * player is still READY, and the total is 0 with no tracks read) — so the cursor was dropped and the next play
+     * started from the top. The swap's own [stop] has already silenced the output, which is all [pause] would add.
+     */
+    private fun restore(transport: CarriedTransport?) {
+        transport ?: return
+        when (transport.state) {
+            PlaybackState.PLAYING -> play(from = transport.cursor)
+            PlaybackState.PAUSED -> {
+                transport.cursor?.let { seek(it) }
+                _state.value = PlaybackState.PAUSED
+            }
+            else -> transport.cursor?.let { seek(it) }
+        }
+        transport.loop?.let { armLoop(it) }
+    }
+
+    /**
+     * A copy of the score this engine last prepared or swapped in, as a score handle of its own; 0 for none. The
+     * "before" of [carriedTransport]: the host edits the score behind [scoreHandle] in place, so by the time it calls
+     * [replaceScore] that handle already holds the "after".
+     */
+    private val preparedScoreSnapshot = AtomicLong(0L)
+
+    /** Replaces [preparedScoreSnapshot] with a copy of the score now behind [scoreHandle]. */
+    private fun retakeScoreSnapshot(scoreHandle: Long) {
+        releaseScoreSnapshot()
+        preparedScoreSnapshot.set(jniBridge.snapshotScore(scoreHandle))
+    }
+
+    private fun releaseScoreSnapshot() {
+        val snapshot = preparedScoreSnapshot.getAndSet(0L)
+        if (snapshot != 0L) jniBridge.releaseScore(snapshot)
     }
 
     /**
@@ -1344,11 +1465,24 @@ class AndroidPlaybackEngine internal constructor(
      */
     fun playPreview(noteId: NoteID, durationMillis: Long = 300L, velocity: Int = 96) {
         if (_state.value == PlaybackState.EXPORTING) return
-        val engine = fluidSynthEngine ?: return
+        if (fluidSynthEngine == null) return
         val packed = jniBridge.pitchAndStaffOfNote(scoreHandle, NoteIDCodec.encode(noteId))
         if (packed == -1L || packed.toULong() == 0xFFFF_FFFF_FFFF_FFFFuL) return
         val pitch = ((packed.toULong() shr 32) and 0xFFFF_FFFFu).toInt()
         val staffIndex = (packed.toULong() and 0xFFFF_FFFFu).toInt()
+        playPreview(pitch = pitch, staffIndex = staffIndex, durationMillis = durationMillis, velocity = velocity)
+    }
+
+    /**
+     * Plays [pitch] as a single-note preview on staff [staffIndex]'s instrument — what [playPreview] by `NoteID` does
+     * once it has resolved the note, for a note no `NoteID` names. A grace note is one: its host resolves the pitch and
+     * the staff against its own copy of the score and hands both over. [staffIndex] counts the prepared score's staves
+     * in order, as the engine's own resolution does. Same ring, supersede and release as the `NoteID` form.
+     * No-op when [state] is [PlaybackState.EXPORTING] or no engine is ready.
+     */
+    fun playPreview(pitch: Int, staffIndex: Int, durationMillis: Long = 300L, velocity: Int = 96) {
+        if (_state.value == PlaybackState.EXPORTING) return
+        val engine = fluidSynthEngine ?: return
         // Audition the instrument actually configured on the synth for this
         // staff's part — its PRIMARY (ordinal-0) live channel — not the raw
         // staffIndex, which is no longer the same as a channel number once a
@@ -1897,6 +2031,7 @@ class AndroidPlaybackEngine internal constructor(
             jniBridge.previewPolicyRelease(previewPolicyHandle)
             previewPolicyHandle = 0L
         }
+        releaseScoreSnapshot()
         _state.value = PlaybackState.STOPPED
     }
 

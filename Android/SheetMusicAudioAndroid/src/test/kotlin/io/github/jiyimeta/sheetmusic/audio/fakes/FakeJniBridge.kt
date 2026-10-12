@@ -56,6 +56,48 @@ internal open class FakeJniBridge(
      * it overrides this with its own unroll table.
      */
     override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long = notatedTick
+
+    // ── Carrying the transport across a score swap ─────────────────────────
+    //
+    // Off by default — [snapshotScore] answers 0, so the engine keeps no copy and a swap stops and rewinds, which is
+    // what every fixture written before the carry expects. A test that exercises the carry turns [keepsSnapshots] on
+    // and scripts what the shared Swift would answer.
+
+    /** Whether [snapshotScore] hands out copies: handles 100, 101, … in order. */
+    var keepsSnapshots: Boolean = false
+    private var nextSnapshot = 100L
+    /** The handles [snapshotScore] was asked to copy, in order. */
+    val snapshotScoreCalls = mutableListOf<Long>()
+    /** The handles released through [releaseScore], in order. */
+    val releaseScoreCalls = mutableListOf<Long>()
+    /** What [carryCursor] answers for the cursor bytes it was handed; carries nothing by default. */
+    var carryCursorResult: (cursorBytes: ByteArray) -> ByteArray = { ByteArray(0) }
+    /** `(from, to)` for every [carryCursor] call. */
+    val carryCursorCalls = mutableListOf<Pair<Long, Long>>()
+    /** What [carryLoop] answers for the loop it was handed; carries nothing by default. */
+    var carryLoopResult: (startTick: Long, endTick: Long) -> LongArray = { _, _ -> LongArray(0) }
+    /** `(from, to)` for every [carryLoop] call. */
+    val carryLoopCalls = mutableListOf<Pair<Long, Long>>()
+
+    override fun snapshotScore(scoreHandle: Long): Long {
+        snapshotScoreCalls += scoreHandle
+        return if (keepsSnapshots) nextSnapshot++ else 0L
+    }
+
+    override fun releaseScore(scoreHandle: Long) {
+        releaseScoreCalls += scoreHandle
+    }
+
+    override fun carryCursor(fromScoreHandle: Long, toScoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+        carryCursorCalls += fromScoreHandle to toScoreHandle
+        return carryCursorResult(cursorBytes)
+    }
+
+    override fun carryLoop(fromScoreHandle: Long, toScoreHandle: Long, startTick: Long, endTick: Long): LongArray {
+        carryLoopCalls += fromScoreHandle to toScoreHandle
+        return carryLoopResult(startTick, endTick)
+    }
+
     override fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray = countInResult
     override fun staffParams(scoreHandle: Long): ByteArray = staffParamsResult
     override fun instrumentParams(scoreHandle: Long): ByteArray = instrumentParamsResult

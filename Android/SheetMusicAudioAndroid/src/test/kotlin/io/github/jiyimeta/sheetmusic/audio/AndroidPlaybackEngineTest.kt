@@ -16,6 +16,7 @@ import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
+import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
 import io.github.jiyimeta.sheetmusic.audio.model.MixAudibilityTable
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
@@ -169,7 +170,11 @@ internal class RecordingOboeStream : OboeStream() {
 
 // ── FakePlayerBindings for inspection ────────────────────────────────────
 
-/** Records calls made through PlayerDriver's NativeBindings seam. */
+/**
+ * Records calls made through PlayerDriver's NativeBindings seam — and, like fluid_player 2.4.6, refuses a seek past tick
+ * 0 on a player that was stopped before it ever played: its tracks are read on the first play, a stop leaves READY, and
+ * `fluid_player_seek` rejects a tick past the total (0 with no tracks) unless the player is READY.
+ */
 private class RecordingBindings : PlayerDriver.NativeBindings {
     val loadCalls = mutableListOf<ByteArray>()
     val playCalls = mutableListOf<Unit>()
@@ -178,14 +183,29 @@ private class RecordingBindings : PlayerDriver.NativeBindings {
     val seekTicks = mutableListOf<Long>()
     var closeCalled = false
     var tickToReturn: Long = 0L
+    private var hasPlayed = false
+    private var stoppedBeforePlaying = false
 
-    override fun newPlayer(synthHandle: Long): Long = 1L
+    override fun newPlayer(synthHandle: Long): Long {
+        hasPlayed = false
+        stoppedBeforePlaying = false
+        return 1L
+    }
     override fun deletePlayer(handle: Long) { closeCalled = true }
     override fun playerAddMem(handle: Long, bytes: ByteArray): Int { loadCalls += bytes; return 0 }
-    override fun playerPlay(handle: Long): Int { playCalls += Unit; return 0 }
-    override fun playerStop(handle: Long): Int { stopCalls += Unit; return 0 }
+    override fun playerPlay(handle: Long): Int { playCalls += Unit; hasPlayed = true; return 0 }
+    override fun playerStop(handle: Long): Int {
+        stopCalls += Unit
+        if (!hasPlayed) stoppedBeforePlaying = true
+        return 0
+    }
     override fun playerJoin(handle: Long): Int { joinCalls += Unit; return 0 }
-    override fun playerSeek(handle: Long, tick: Long): Int { seekTicks += tick; tickToReturn = tick; return 0 }
+    override fun playerSeek(handle: Long, tick: Long): Int {
+        if (stoppedBeforePlaying && tick > 0L) return -1 // FLUID_FAILED
+        seekTicks += tick
+        tickToReturn = tick
+        return 0
+    }
     override fun playerGetCurrentTick(handle: Long): Long = tickToReturn
     val setTempoCalls = mutableListOf<Pair<Int, Double>>()
     override fun playerSetTempo(handle: Long, type: Int, value: Double): Int {
@@ -374,6 +394,166 @@ class AndroidPlaybackEngineTest {
         assertEquals(PlaybackState.PREPARED, engine.state.value)
         assertEquals("the player was not replaced", loads, player.loadCalls.size)
         assertEquals(2.0, engine.totalTimeSeconds.value, 0.001)
+    }
+
+    // replaceScore — the transport carries over, as Apple's `replaceScore(with:)` keeps it (4.8.0)
+
+    /** Where the shared Swift says the cursor stands in the edited score; its frame is at tick 480, 1 s in. */
+    private val carriedCursor = ScoreCursor.Beat(measureIndex = 2, tickInMeasure = 0)
+
+    /** [twoStaffBridge], keeping snapshots and carrying any cursor to [carriedCursor]. */
+    private fun carryingBridge() = twoStaffBridge().apply {
+        keepsSnapshots = true
+        frameForCursorResult = encodeFrameBytes(tick = 480L, timeMicros = 1_000_000L, cursor = carriedCursor)
+        carryCursorResult = { ScoreCursorCodec.encode(carriedCursor) }
+    }
+
+    @Test
+    fun `replaceScore keeps a paused transport paused at the carried cursor`() = runTest {
+        val bridge = carryingBridge()
+        val player = RecordingBindings()
+        val engine = tracked(bridge = bridge, playerBindings = player)
+        engine.prepare(1L)
+        engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
+        engine.play()
+        engine.pause()
+        val playsBefore = player.playCalls.size
+        val seeksBefore = player.seekTicks.size
+
+        engine.replaceScore(1L)
+
+        assertEquals(PlaybackState.PAUSED, engine.state.value)
+        assertEquals(carriedCursor, engine.currentCursor.value)
+        assertEquals(1.0, engine.currentTimeSeconds.value, 0.001)
+        // The new player has never played, so a stop before this seek would have made it refuse the seek — and the
+        // next play would start from the top while the readout still showed the carried position (Pixel, 2026-10-12).
+        assertEquals(
+            "the new player is seated at the carried cursor",
+            480L,
+            player.seekTicks.drop(seeksBefore).last(),
+        )
+        assertEquals("a paused swap sounds nothing", playsBefore, player.playCalls.size)
+        assertEquals(
+            "measured against the score as prepared, carried into the edited one",
+            100L to 1L,
+            bridge.carryCursorCalls.single(),
+        )
+    }
+
+    @Test
+    fun `replaceScore keeps a playing transport playing from the carried cursor`() = runTest {
+        val bridge = carryingBridge()
+        val player = RecordingBindings()
+        val engine = tracked(bridge = bridge, playerBindings = player)
+        engine.prepare(1L)
+        engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
+        engine.play()
+        val playsBefore = player.playCalls.size
+
+        engine.replaceScore(1L)
+
+        assertEquals(PlaybackState.PLAYING, engine.state.value)
+        assertEquals(carriedCursor, engine.currentCursor.value)
+        assertEquals(480L, player.seekTicks.last())
+        assertTrue("the edited sequence plays on", player.playCalls.size > playsBefore)
+        // Before `runTest` drains the scheduler, which a poll loop that is still PLAYING never lets go idle.
+        engine.teardown()
+    }
+
+    @Test
+    fun `replaceScore keeps an idle transport's cursor without starting it`() = runTest {
+        val bridge = carryingBridge()
+        val player = RecordingBindings()
+        val engine = tracked(bridge = bridge, playerBindings = player)
+        engine.prepare(1L)
+        engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
+
+        engine.replaceScore(1L)
+
+        assertEquals(PlaybackState.PREPARED, engine.state.value)
+        assertEquals(carriedCursor, engine.currentCursor.value)
+        assertTrue(player.playCalls.isEmpty())
+    }
+
+    @Test
+    fun `replaceScore carries the loop`() = runTest {
+        val bridge = carryingBridge().apply {
+            carryLoopResult = { start, end -> longArrayOf(start + 100L, end + 100L) }
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+        engine.setLoopFullScore()
+
+        engine.replaceScore(1L)
+
+        assertEquals(LoopRange(startTick = 100L, endTick = 1060L), engine.loopRange.value)
+        assertEquals(100L to 1L, bridge.carryLoopCalls.single())
+    }
+
+    @Test
+    fun `replaceScore drops a loop the edit left spanning nothing`() = runTest {
+        val engine = tracked(bridge = carryingBridge())
+        engine.prepare(1L)
+        engine.setLoopFullScore()
+
+        engine.replaceScore(1L)
+
+        assertNull(engine.loopRange.value)
+    }
+
+    @Test
+    fun `replaceScore that re-prepares fully carries the transport too`() = runTest {
+        val bridge = carryingBridge().apply { staffParamsResult = oneStaffPayload() }
+        val player = RecordingBindings()
+        val engine = tracked(bridge = bridge, playerBindings = player)
+        engine.prepare(1L)
+        engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
+        engine.play()
+        engine.pause()
+        val seeksBefore = player.seekTicks.size
+
+        bridge.staffParamsResult = twoStavesPayload()
+        val outcome = engine.replaceScore(1L)
+
+        assertEquals(ScoreReplacementOutcome.FULLY_PREPARED, outcome)
+        assertEquals(PlaybackState.PAUSED, engine.state.value)
+        assertEquals(carriedCursor, engine.currentCursor.value)
+        assertEquals(480L, player.seekTicks.drop(seeksBefore).last())
+    }
+
+    @Test
+    fun `replaceScore measures the next swap against the edited score`() = runTest {
+        val bridge = carryingBridge()
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+        engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
+
+        engine.replaceScore(1L)
+        engine.replaceScore(1L)
+
+        assertEquals(listOf(1L, 1L, 1L), bridge.snapshotScoreCalls)
+        assertEquals("each swap releases the copy it measured against", listOf(100L, 101L), bridge.releaseScoreCalls)
+        assertEquals(listOf(100L to 1L, 101L to 1L), bridge.carryCursorCalls)
+        engine.teardown()
+        assertEquals("teardown releases the last copy", 102L, bridge.releaseScoreCalls.last())
+    }
+
+    @Test
+    fun `replaceScore with no snapshot stops at the start as before`() = runTest {
+        val bridge = twoStaffBridge().apply {
+            frameForCursorResult = encodeFrameBytes(tick = 480L, timeMicros = 1_000_000L, cursor = carriedCursor)
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+        engine.seek(ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 0))
+        engine.play()
+        engine.pause()
+
+        engine.replaceScore(1L)
+
+        assertEquals(PlaybackState.PREPARED, engine.state.value)
+        assertNull(engine.currentCursor.value)
+        assertTrue("nothing to carry from", bridge.carryCursorCalls.isEmpty())
     }
 
     // T37 — prepare
@@ -1177,6 +1357,26 @@ class AndroidPlaybackEngineTest {
             "must not fire on channel 0 (the raw staffIndex)",
             synth.calls.any { it.startsWith("noteOn(0,") },
         )
+    }
+
+    @Test
+    fun `playPreview by pitch and staff sounds that pitch on the staff's primary strip`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            instrumentParamsResult = twoStripsSamePartDivergentChannelsPayload(),
+            renderMidiResult = minimalSmf,
+        )
+        val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        engine.playPreview(pitch = 70, staffIndex = 0)
+
+        assertTrue("got ${synth.calls}", synth.calls.contains("noteOn(5,70,96)"))
+        assertTrue("no NoteID was resolved", bridge.pitchAndStaffCalls.isEmpty())
     }
 
     // T42 — metronome

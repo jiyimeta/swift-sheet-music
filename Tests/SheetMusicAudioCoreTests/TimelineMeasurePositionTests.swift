@@ -54,4 +54,48 @@ struct TimelineMeasurePositionTests {
         #expect(timeline.tick(at: PlaybackMeasurePosition(measureIndex: 0, tickInMeasure: 5000)) == 1920)
         #expect(timeline.tick(at: PlaybackMeasurePosition(measureIndex: 1, tickInMeasure: 5000)) == 3840)
     }
+
+    @Test("a cursor is the measure and offset of its frame, and that position is a cursor again")
+    func cursorRoundTripsThroughAPosition() throws {
+        let timeline = PlaybackTimeline(score: Self.score(measureCount: 3))
+        let cursor = try #require(timeline.frame(atTick: 2400)?.cursor)
+
+        let position = try #require(timeline.measurePosition(ofCursor: cursor))
+
+        #expect(position == PlaybackMeasurePosition(measureIndex: 1, tickInMeasure: 480))
+        #expect(timeline.cursor(at: position) == cursor)
+    }
+
+    @Test("a cursor at a measure the edit removed lands on the start of the last measure")
+    func cursorPastTheEndLandsOnTheLastMeasure() throws {
+        let shorter = PlaybackTimeline(score: Self.score(measureCount: 2))
+
+        let cursor = try #require(shorter.cursor(at: PlaybackMeasurePosition(measureIndex: 2, tickInMeasure: 960)))
+
+        #expect(shorter.frame(forCursor: cursor)?.tick == 1920)
+    }
+
+    @Test("a loop keeps its measures and offsets")
+    func loopRoundTripsThroughMeasures() throws {
+        let timeline = PlaybackTimeline(score: Self.score(measureCount: 3))
+        let range = LoopRange(startTick: 2400, endTick: 4320)
+
+        let loop = try #require(timeline.measureLoop(of: range))
+
+        #expect(loop.start == PlaybackMeasurePosition(measureIndex: 1, tickInMeasure: 480))
+        #expect(loop.end == PlaybackMeasurePosition(measureIndex: 2, tickInMeasure: 480))
+        #expect(timeline.loopRange(at: loop) == range)
+    }
+
+    @Test("a loop the edit left spanning nothing is no loop")
+    func loopClampedOntoOneTickIsNil() {
+        let shorter = PlaybackTimeline(score: Self.score(measureCount: 2))
+        // Both ends sat in measures the edit removed, so both clamp to the start of the last one.
+        let loop = PlaybackMeasureLoop(
+            start: PlaybackMeasurePosition(measureIndex: 2, tickInMeasure: 0),
+            end: PlaybackMeasurePosition(measureIndex: 3, tickInMeasure: 0),
+        )
+
+        #expect(shorter.loopRange(at: loop) == nil)
+    }
 }

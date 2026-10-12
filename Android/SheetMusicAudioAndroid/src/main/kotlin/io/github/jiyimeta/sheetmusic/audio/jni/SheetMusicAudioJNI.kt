@@ -71,6 +71,32 @@ internal object SheetMusicAudioJNI {
     fun nativeUnrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
         SwiftJavaJNI.nativeUnrolledTickForNotated(scoreHandle, notatedTick)
 
+    // ── Carrying the transport across a score swap ───────────────────
+    //
+    // See `AndroidPlaybackEngine.JniBridge`'s section of the same name; the rule is shared Swift
+    // (`AudioMidiBridge.carriedCursor` / `carriedLoop`).
+
+    /** A new handle holding a copy of the score behind [scoreHandle]; 0 for an unknown handle. */
+    fun nativeSnapshotScore(scoreHandle: Long): Long = SwiftJavaJNI.nativeSnapshotScore(scoreHandle)
+
+    /** Releases a score handle — the engine's own snapshot; the host releases the handles it loaded. */
+    fun nativeReleaseScore(scoreHandle: Long) {
+        SwiftJavaJNI.nativeReleaseScore(scoreHandle)
+    }
+
+    fun nativeCarryCursor(fromScoreHandle: Long, toScoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeCarryCursor(
+            fromScoreHandle,
+            toScoreHandle,
+            SwiftData.fromByteArray(cursorBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    fun nativeCarryLoop(fromScoreHandle: Long, toScoreHandle: Long, startTick: Long, endTick: Long): LongArray =
+        SwiftJavaJNI.nativeCarryLoop(fromScoreHandle, toScoreHandle, startTick, endTick)
+
     fun nativeFrameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeFrameForCursor(
