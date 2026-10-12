@@ -1163,17 +1163,27 @@ class AndroidPlaybackEngine internal constructor(
      * `AVAudioEngine.pause()` discipline on Apple side.
      *
      * No-op when [state] is [PlaybackState.EXPORTING].
+     *
+     * Only a running transport touches the players. A pause that arrives while nothing plays — a lost audio focus, a
+     * media controller's pause, any second pause — must leave a seek made since alone: the player's tick has not
+     * caught up with that seek (fluid_player applies one on its next render), so reading it back would capture the
+     * old position, and stopping a player that has never played moves it out of READY, after which it refuses any seek
+     * past tick 0. Either way the next play started somewhere else than the cursor the readout showed.
      */
     fun pause() {
         if (_state.value == PlaybackState.EXPORTING) return
+        val running = _state.value == PlaybackState.PLAYING
         // Capture the position while the player's own tick is still live — after this it stops advancing
         // and a later seek would not be reflected in it, so this is what the next play() resumes from.
         // Only once the score has actually started: pausing mid-count-in must keep the start position
         // the pre-roll was counting into, which the not-yet-started player does not know.
-        if (countInJob == null) playerDriver?.let { scoreTickIntent = it.currentTick }
+        if (running && countInJob == null) playerDriver?.let { scoreTickIntent = it.currentTick }
         cancelCountIn()
-        playerDriver?.stop()
-        metronomeMixer?.stop()
+        if (running) {
+            playerDriver?.stop()
+            // The click transport is a fluid_player too, with the same rule about a stop before its first play.
+            metronomeMixer?.stop()
+        }
         oboeStream?.stop()
         stopPollJob()
         _state.value = PlaybackState.PAUSED

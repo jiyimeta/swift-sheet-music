@@ -26,6 +26,15 @@ and this project adheres to
   defaults keep no copy — a bridge that does not implement them still stops and rewinds on a swap.
   `WindowsPlaybackEngine.replaceScore(with:)` still stops and rewinds.
 
+### Fixed
+
+- **An Android pause with nothing playing leaves the transport where it stands.** `AndroidPlaybackEngine.pause()`
+  stopped the score and click players whatever the state, so a pause that arrived while paused or prepared — a lost
+  audio focus, a media controller's pause — undid a seek made since: fluid_player applies a seek on its next render,
+  so the stop re-seated it at its stale tick, and a player stopped before its first play refuses any later seek past
+  tick 0 (FluidSynth 2.4.6). The next play started away from the cursor the readout showed. Only a running
+  transport's players are stopped now.
+
 ## [4.8.0] - 2026-10-11
 
 ### Changed

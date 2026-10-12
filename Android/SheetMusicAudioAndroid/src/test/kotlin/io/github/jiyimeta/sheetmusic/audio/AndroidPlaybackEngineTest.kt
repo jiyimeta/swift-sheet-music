@@ -692,6 +692,51 @@ class AndroidPlaybackEngineTest {
         engine.teardown()
     }
 
+    /** [twoStaffBridge] whose every cursor resolves to a frame at tick 480, 1 s in. */
+    private fun seekableBridge() = twoStaffBridge().apply {
+        frameForCursorResult = encodeFrameBytes(
+            tick = 480L,
+            timeMicros = 1_000_000L,
+            cursor = ScoreCursor.Beat(measureIndex = 2, tickInMeasure = 0),
+        )
+    }
+
+    @Test
+    fun `a pause before the first play leaves the player able to seek`() = runTest {
+        val player = RecordingBindings()
+        val engine = tracked(bridge = seekableBridge(), playerBindings = player)
+        engine.prepare(1L)
+        val stopsBefore = player.stopCalls.size
+
+        // A lost audio focus or a media controller's pause, with nothing playing yet.
+        engine.pause()
+        engine.seek(ScoreCursor.Beat(measureIndex = 2, tickInMeasure = 0))
+
+        assertEquals(PlaybackState.PAUSED, engine.state.value)
+        assertEquals("a pause with nothing running stops no player", stopsBefore, player.stopCalls.size)
+        assertEquals("the never-played player took the seek", 480L, player.seekTicks.last())
+    }
+
+    @Test
+    fun `a second pause leaves a seek made while paused alone`() = runTest {
+        val player = RecordingBindings()
+        val engine = tracked(bridge = seekableBridge(), playerBindings = player)
+        engine.prepare(1L)
+        engine.play()
+        engine.pause()
+        engine.seek(ScoreCursor.Beat(measureIndex = 2, tickInMeasure = 0))
+        val stopsBefore = player.stopCalls.size
+
+        engine.pause()
+
+        assertEquals(PlaybackState.PAUSED, engine.state.value)
+        assertEquals(
+            "a stop would re-seat fluid_player at its stale tick, undoing the seek",
+            stopsBefore,
+            player.stopCalls.size,
+        )
+    }
+
     @Test
     fun `stop transitions to STOPPED and resets cursor`() = runTest {
         val engine = preparedEngine()
@@ -1463,6 +1508,16 @@ class AndroidPlaybackEngineTest {
         engine.pause()
 
         assertEquals(1, metronome.stopCalls.size)
+    }
+
+    @Test
+    fun `a pause with nothing playing leaves the click transport alone`() = runTest(testDispatcher) {
+        val metronome = RecordingBindings()
+        val engine = engineWithMetronomeTransport(metronomeBindings = metronome)
+
+        engine.pause()
+
+        assertEquals("a stop before its first play would make it refuse the next seek", 0, metronome.stopCalls.size)
     }
 
     @Test
