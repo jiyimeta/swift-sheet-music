@@ -68,6 +68,14 @@ and this project adheres to
   byte, in five transpositions of a 130-bar, six-part score and their undos. On that score a whole-score transposition
   went from 0.23–0.33 s to 0.011–0.019 s in release and from 11–21 s to 0.16–0.18 s in a debug build; a range over the
   whole score from 0.38 s to 0.03 s, and from 16–18 s to 0.4 s.
+- **MusicXML grace notes import as grace notes.** The importer ignored `<grace>`, so each grace was read as an
+  ordinary note of its `<type>`: it took voice time, overfilled its measure and pushed everything after it late, and
+  the grace itself was lost. Graces are now read as MuseScore reads them (`importmusicxmlpass2.cpp`): a slashed one
+  is an acciaccatura, an unslashed one an appoggiatura — or `grace4` / `grace16` / `grace32` by its `<type>` — a
+  `<chord/>` grace joins the grace chord before it, and they lead into the next chord of their voice. Graces a slur or
+  wavy line ends on, and graces left at the end of a measure, lean back on the chord before them as after-graces. One
+  difference from MuseScore: graces wait for a chord of their own voice, where MuseScore pools a measure's graces
+  across voices.
 
 ## [4.8.0] - 2026-10-11
 

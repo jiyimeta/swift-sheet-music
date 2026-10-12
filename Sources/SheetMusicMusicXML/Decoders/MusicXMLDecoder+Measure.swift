@@ -201,6 +201,13 @@ enum MusicXMLMeasureWalker {
                     for element in elements {
                         perStaff[staffIdx].append(element, toVoice: voice)
                     }
+                case let .grace(note, shape, joinsChord, endsAfterGraces):
+                    perStaff[staffIdx].appendGrace(
+                        note, shape: shape, joinsChord: joinsChord, endsAfterGraces: endsAfterGraces, toVoice: voice,
+                    )
+                    // A grace note is not in the voice's elements yet, so the index below would name the chord
+                    // before it; glissandi from grace notes are not modelled.
+                    continue
                 }
                 // Glissando / slide events on this note: record the
                 // chord's voice + index now (after append) so the

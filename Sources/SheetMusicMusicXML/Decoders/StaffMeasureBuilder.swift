@@ -24,6 +24,13 @@ struct StaffMeasureBuilder {
     /// `originalStaff` is left nil here and stamped by the caller
     /// once the staff address is known.
     private var systemElements: [PositionedSystemElement] = []
+    /// Grace chords waiting for the chord they lean on, per positional voice, in document order — MuseScore's
+    /// `GraceChordList` (`importmusicxmlpass2.cpp`), kept per voice where MuseScore keeps one per measure and leaves
+    /// "check if same voice" as a TODO.
+    private var pendingGraces: [Int: [GraceChord]] = [:]
+    /// How many of a voice's pending grace chords end in a slur or wavy line and so lean back on the previous chord
+    /// (MuseScore's `gac`).
+    private var pendingAfterGraceCount: [Int: Int] = [:]
 
     /// Result of `build()`: the decoded `Measure` and the system
     /// elements that should be merged into the score-level
@@ -64,10 +71,45 @@ struct StaffMeasureBuilder {
     }
 
     /// Append a note-sourced element under the MSCX index corresponding to
-    /// this MusicXML voice id.
+    /// this MusicXML voice id. A chord takes the voice's pending grace chords: those a slur or wavy line ended on
+    /// become after-graces of the chord before it, and the rest lead into this one (MuseScore's
+    /// `addGraceChordsAfter` then `addGraceChordsBefore`).
     mutating func append(_ element: VoiceElement, toVoice voiceId: String) {
         let idx = internVoice(voiceId)
-        voices[idx].append(element)
+        guard case var .chord(chord) = element, let pending = pendingGraces.removeValue(forKey: idx) else {
+            voices[idx].append(element)
+            return
+        }
+        let afterCount = min(pendingAfterGraceCount.removeValue(forKey: idx) ?? 0, pending.count)
+        // With no chord before it in the voice the after-graces have nowhere to lean back on; MuseScore leaves them
+        // pending, so they lead into this chord with the rest.
+        let leading = attachBack(Array(pending.prefix(afterCount)), voice: idx)
+            ? Array(pending.dropFirst(afterCount))
+            : pending
+        chord.graceNotesBefore = IdentifiedArray(Array(chord.graceNotesBefore) + leading)
+        voices[idx].append(.chord(chord))
+    }
+
+    /// Queue a grace note (`<grace>`) for the next chord in its voice: it opens a grace chord of `shape`, or joins the
+    /// pending one when it carries `<chord/>`. `endsAfterGraces` marks every grace queued so far as leaning back on
+    /// the previous chord. Graces still pending when the measure ends lean back too (`build()`).
+    mutating func appendGrace(
+        _ note: Note,
+        shape: MusicXMLNoteDecoder.GraceChordShape,
+        joinsChord: Bool,
+        endsAfterGraces: Bool,
+        toVoice voiceId: String,
+    ) {
+        let idx = internVoice(voiceId)
+        var pending = pendingGraces[idx, default: []]
+        if joinsChord, var last = pending.popLast() {
+            last.notes = ChordNotes(Array(last.notes) + [note])
+            pending.append(last)
+        } else {
+            pending.append(GraceChord(graceType: shape.graceType, duration: shape.duration, notes: [note]))
+        }
+        pendingGraces[idx] = pending
+        if endsAfterGraces { pendingAfterGraceCount[idx] = pending.count }
     }
 
     func elements(forVoice voiceId: String) -> [VoiceElement] {
@@ -121,7 +163,13 @@ struct StaffMeasureBuilder {
     }
 
     func build() -> Built {
-        var final = voices
+        // Graces still pending at the end of the measure lean back on their voice's last chord (MuseScore's
+        // "convert remaining grace chords to grace after"); a voice with no chord drops them, as MuseScore does.
+        var settled = self
+        for (idx, pending) in pendingGraces {
+            _ = settled.attachBack(pending, voice: idx)
+        }
+        var final = settled.voices
         if let trailing = trailingBarline {
             if final.isEmpty {
                 final.append([])
@@ -148,6 +196,40 @@ struct StaffMeasureBuilder {
     }
 
     // MARK: - private helpers
+
+    /// Hangs `graces` on the last chord of voice `idx` as MuseScore's `addGraceChordsAfter` does: each becomes its
+    /// after-grace form (`Chord::toGraceAfter` — an appoggiatura, `grace16` or `grace32` turns into `grace8after`,
+    /// `grace16after` or `grace32after`), and one with no after form, an acciaccatura or a `grace4`, stays a grace
+    /// before that chord, since MuseScore files a grace by its type. False, with nothing changed, when the voice has
+    /// no chord to lean on; true for no graces.
+    private mutating func attachBack(_ graces: [GraceChord], voice idx: Int) -> Bool {
+        guard !graces.isEmpty else { return true }
+        guard voices.indices.contains(idx),
+              let chordIdx = voices[idx].lastIndex(where: { if case .chord = $0 { true } else { false } }),
+              case var .chord(chord) = voices[idx][chordIdx]
+        else { return false }
+        for grace in graces {
+            var after = grace
+            after.graceType = Self.afterForm(of: grace.graceType)
+            if after.graceType.isAfter {
+                chord.graceNotesAfter = IdentifiedArray(Array(chord.graceNotesAfter) + [after])
+            } else {
+                chord.graceNotesBefore = IdentifiedArray(Array(chord.graceNotesBefore) + [after])
+            }
+        }
+        voices[idx][chordIdx] = .chord(chord)
+        return true
+    }
+
+    /// `Chord::toGraceAfter`.
+    private static func afterForm(of type: GraceType) -> GraceType {
+        switch type {
+        case .appoggiatura: .grace8after
+        case .grace16: .grace16after
+        case .grace32: .grace32after
+        default: type
+        }
+    }
 
     private mutating func ensureFirstVoice() {
         if voices.isEmpty {

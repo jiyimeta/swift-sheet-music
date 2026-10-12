@@ -20,6 +20,17 @@ enum MusicXMLNoteDecoder {
         /// since the host chord remains the previous one, and the note's
         /// articulations join the host chord's.
         case foldIntoLastChord(Note, NoteDuration, trailingBreaths: [Breath], articulations: [ChordArticulation])
+        /// A grace note (`<grace>`), which takes no voice time: it waits for the chord it leans on
+        /// (`StaffMeasureBuilder.appendGrace`). `joinsChord` is `<chord/>` — the note joins the pending grace chord
+        /// rather than opening one — and `endsAfterGraces` a slur or wavy line ending on it, which makes the graces so
+        /// far lean back on the previous chord instead (MuseScore's `mustStopGraceAFter`).
+        case grace(Note, GraceChordShape, joinsChord: Bool, endsAfterGraces: Bool)
+    }
+
+    /// The type and the drawn duration of the grace chord a grace note opens.
+    struct GraceChordShape: Equatable {
+        let graceType: GraceType
+        let duration: NoteDuration
     }
 
     static func decodeNote(
@@ -84,6 +95,8 @@ enum MusicXMLNoteDecoder {
             userVelocity: decodeUserVelocity(node),
         )
 
+        if let grace = decodeGrace(node, note: note, duration: duration, isChord: isChord) { return grace }
+
         let articulations = decodeArticulations(node)
         if isChord {
             return .foldIntoLastChord(note, duration, trailingBreaths: breaths, articulations: articulations)
@@ -97,6 +110,41 @@ enum MusicXMLNoteDecoder {
         )
         _ = existingVoiceElements // reserved for future use (e.g. tie backrefs)
         return .new(prefix + [.chord(chord)] + suffix)
+    }
+
+    /// `.grace` for a `<note>` that carries `<grace>`, nil for any other.
+    private static func decodeGrace(
+        _ node: XMLTreeNode, note: Note, duration: NoteDuration, isChord: Bool,
+    ) -> Decoded? {
+        guard let graceNode = node.first("grace") else { return nil }
+        let shape = GraceChordShape(
+            graceType: graceType(typeName: node.first("type")?.text, slash: graceNode.attributes["slash"] == "yes"),
+            duration: duration,
+        )
+        return .grace(note, shape, joinsChord: isChord, endsAfterGraces: endsAfterGraces(node))
+    }
+
+    /// MuseScore's `graceNoteType` (`importmusicxmlpass2.cpp`): a slashed grace is an acciaccatura; an unslashed one
+    /// is an appoggiatura, or `grace4` / `grace16` / `grace32` for a quarter, 16th or 32nd `<type>`.
+    static func graceType(typeName: String?, slash: Bool) -> GraceType {
+        if slash { return .acciaccatura }
+        switch typeName {
+        case "quarter": return .grace4
+        case "16th": return .grace16
+        case "32nd": return .grace32
+        default: return .appoggiatura
+        }
+    }
+
+    /// Whether a slur or a wavy line stops on this grace note — MuseScore's `mustStopGraceAFter`, the sign that the
+    /// graces up to here are after-graces of the note before them.
+    private static func endsAfterGraces(_ node: XMLTreeNode) -> Bool {
+        guard let notations = node.first("notations") else { return false }
+        let slurStops = notations.all("slur").contains { $0.attributes["type"] == "stop" }
+        let wavyLineStops = notations.all("ornaments").contains { ornaments in
+            ornaments.all("wavy-line").contains { $0.attributes["type"] == "stop" }
+        }
+        return slurStops || wavyLineStops
     }
 
     /// Decode `<note dynamics="…">` into an absolute per-note MIDI
