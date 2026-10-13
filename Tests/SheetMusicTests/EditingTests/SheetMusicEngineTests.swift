@@ -21,7 +21,7 @@ struct SheetMusicEngineTests {
         // release process that touches it. The in-flight build carried a `-w9` suffix and was
         // published only to a local `~/.m2`, so it stamps differently from this tagged one — see
         // the constant's own doc for why that difference is load-bearing.
-        #expect(SheetMusicEngine.version == "2.0.1")
+        #expect(SheetMusicEngine.version == "4.9.0")
     }
 
     @Test("the stamp is the FNV-1a of the version string")
@@ -32,6 +32,6 @@ struct SheetMusicEngineTests {
         // 3598528033961937950, so the three are visibly distinct. The digest is unsigned and this
         // is `Int64`, so a release whose hash lands above 2^63 reads negative — 2.0.0 was the first
         // one that did. Nothing compares it for order; only for equality.
-        #expect(SheetMusicEngine.versionStamp == -7_874_816_884_992_456_974)
+        #expect(SheetMusicEngine.versionStamp == -1_278_775_108_558_397_452)
     }
 }

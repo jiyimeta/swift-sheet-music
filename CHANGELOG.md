@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.9.0] - 2026-10-13
+
 ### Added
 
 - **`AndroidPlaybackEngine.playPreview(noteId, pitch, durationMillis, velocity)`** (Android) — sounds `pitch` in
@@ -76,6 +78,8 @@ and this project adheres to
   wavy line ends on, and graces left at the end of a measure, lean back on the chord before them as after-graces. One
   difference from MuseScore: graces wait for a chord of their own voice, where MuseScore pools a measure's graces
   across voices.
+- **`SheetMusicEngine.version` reads `4.9.0`.** It had stayed at `2.0.1` through every release from 2.1.0 to 4.8.0, so
+  all of them stamped alike and a host comparing the stamps of its two Android images could not tell them apart.
 
 ## [4.8.0] - 2026-10-11
 
