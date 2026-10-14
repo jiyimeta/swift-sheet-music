@@ -176,6 +176,9 @@ struct MSCXIdempotencyTests {
     ///   flag, a preserved child) and a tempo with no text, which the encoder synthesizes on pass 1.
     /// - `tempo-gradual` — gradual tempo payloads whose unmodeled children (hooks, a begin-text offset) ride a
     ///   payload-level bag, a continue text, and a voice-level end side that ends mid-measure.
+    /// - `repeat53` — a MuseScore 3 file whose marker has no `<markerType>`: read by its label, written with a type,
+    ///   and read by that type the second time (import fidelity W3).
+    /// - `markers-jumps` — every MuseScore marker type, a marker without `<text>` and two marks to a bar.
     @Test("committed MSCX fixtures encode to a fixed point", arguments: [
         "testVoltaTemp",
         "testSingleNoteDynamics",
@@ -188,6 +191,8 @@ struct MSCXIdempotencyTests {
         "guitarbend_simple",
         "tempo-texts",
         "tempo-gradual",
+        "repeat53",
+        "markers-jumps",
     ])
     func mscxFixtureIsAFixedPoint(_ name: String) throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData(name))

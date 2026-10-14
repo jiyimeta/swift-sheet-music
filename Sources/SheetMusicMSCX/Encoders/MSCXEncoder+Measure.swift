@@ -136,23 +136,35 @@ extension Measure {
 }
 
 extension Marker {
-    /// Build a `<Marker>` element matching the decoder in
-    /// `MSCXDecoder+Measure.swift`.
+    /// Build a `<Marker>` in MuseScore's own order — text, label, the type last (`TWrite::write(Marker)`,
+    /// `rw/write/twrite.cpp:2274-2282`). The order is load-bearing: MuseScore applies `<markerType>` as it reads it,
+    /// and `Marker::setMarkerType` fills an empty text and a still-default label from the type's table
+    /// (`dom/marker.cpp:86-106`), so a type read first had both wiped by the `<text>` and `<label>` after it (F3.5).
+    /// `<label>` is the effective label, as MuseScore always writes one; `<markerType>` is MuseScore's name
+    /// (`Kind.mscxName`), written for Fine too — MuseScore omits its default, but this library's 3.02 exports are read
+    /// by it.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children = [
-            XMLTreeNode(name: "markerType", text: kind.rawValue),
-            XMLTreeNode(name: "label", text: label),
-            encodeText(
-                text,
-                preservedTextMarkup: preservedTextMarkup,
-                options: options,
-            ),
-        ]
+        var children: [XMLTreeNode] = []
+        if let text = encodedText(options: options) {
+            children.append(text)
+        }
+        children.append(XMLTreeNode(name: "label", text: effectiveLabel))
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
-        return XMLTreeNode(
-            name: "Marker",
-            children: children,
-        )
+        children.append(XMLTreeNode(name: "markerType", text: kind.mscxName))
+        return XMLTreeNode(name: "Marker", children: children)
+    }
+
+    /// `<text>`, or nothing for a marker that has none, which MuseScore then gives its type's default text. The kinds
+    /// MuseScore has no type for (`.daCapo`, `.dalSegno`) go out as `user`, which has no default, so their words are
+    /// written in full.
+    private func encodedText(options: MSCXEncoderOptions) -> XMLTreeNode? {
+        let writesMarkup = options.emitPreservedMarkup && preservedTextMarkup?.derivedText == text
+        if !text.isEmpty || writesMarkup {
+            return encodeText(text, preservedTextMarkup: preservedTextMarkup, options: options)
+        }
+        let words = kind.defaultXMLText
+        guard kind.mscxName == Kind.user.mscxName, !words.isEmpty else { return nil }
+        return XMLTreeNode(name: "text", text: words)
     }
 }
 

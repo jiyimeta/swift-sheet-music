@@ -144,6 +144,12 @@ and this project adheres to
 
 ### Fixed
 
+- **Saved markers open in MuseScore as the same type, label and text (F3.4, F3.5).** `<markerType>` is MuseScore's name
+  (`codab`, `coda`, `codasym`, `dacoda`, `dadblcoda`, `user` for the types MuseScore lacks) where it was this library's
+  raw value, which MuseScore read as Custom; it comes after `<text>` and `<label>`, as MuseScore writes it; `<label>` is
+  the effective label; and a marker without text writes no `<text>`, so MuseScore gives it its type's default. Markers
+  inserted in folino no longer open in MuseScore blank and label-less (and unreachable for its D.S. al Coda), and
+  folino's Coda no longer opens as To Coda.
 - **MuseScore's marker types read as MuseScore reads them (F3.1–F3.3).** A Coda (`<markerType>codab`) is a Coda — it
   read as an unknown type and printed the word "codab"; a To Coda (`coda`) is a To Coda, no longer a Coda glyph;
   `codasym`, `dacoda`, `dadblcoda` and `user` are their own kinds; a format-4.60 marker without `<markerType>` is a
