@@ -118,7 +118,10 @@ enum HairpinRamps {
     /// part last reached. A hairpin with no Dynamic of its own picks up
     /// the previous hairpin's end level rather than the last written
     /// mark — MS3's `ChangeMap::cleanupStage3` takes a ramp's start from
-    /// "the cached end value if [the previous event] is a ramp".
+    /// "the cached end value if [the previous event] is a ramp". One
+    /// starting on an accent or a two-level dynamic starts from that
+    /// dynamic, as MuseScore 4's `appliableDynamicLevel` does there
+    /// (`playbackcontext.cpp:576-601`).
     private static func resolveChained(
         _ pending: [Pending], dynList: [DynPoint],
     ) -> [HairpinRamp] {
@@ -126,7 +129,7 @@ enum HairpinRamps {
         var reached: (tick: Int, velocity: Int)?
         for p in pending.sorted(by: { $0.startTick < $1.startTick }) {
             var startVelocity = p.startVelocity
-            if let reached, reached.tick <= p.startTick {
+            if !p.startsOnItsDynamic, let reached, reached.tick <= p.startTick {
                 let lastMark = dynList
                     .last { $0.tick <= p.startTick }?.tick ?? Int.min
                 if reached.tick > lastMark { startVelocity = reached.velocity }
@@ -193,6 +196,9 @@ enum HairpinRamps {
         let endTick: Int
         let startVelocity: Int
         let payload: Spanner.HairpinPayload
+        /// The wedge starts on an accent or a two-level dynamic, from that dynamic's level, which no earlier wedge's
+        /// end replaces (`resolveChained`).
+        var startsOnItsDynamic = false
     }
 
     // swiftlint:disable:next function_parameter_count
@@ -237,6 +243,7 @@ enum HairpinRamps {
                     endTick: endTick,
                     startVelocity: start.velocity,
                     payload: payload,
+                    startsOnItsDynamic: walk.wedgeStartsOnItsDynamic(at: runningTick),
                 ))
             case let .chord(chord):
                 let ticks = chord.duration.resolved(in: measureDuration).ticks(division: division)

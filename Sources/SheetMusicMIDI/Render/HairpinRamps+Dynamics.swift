@@ -89,6 +89,12 @@ struct DynamicsWalk {
         return (start.tick, start.velocity)
     }
 
+    /// Whether a wedge whose spanner stands at `tick` starts on an accent or a two-level dynamic — from that dynamic's
+    /// level, which no earlier wedge's end replaces (`HairpinRamps.resolveChained`).
+    func wedgeStartsOnItsDynamic(at tick: Int) -> Bool {
+        wedgeStartOverride?.at == tick
+    }
+
     /// A two-level change's steps (`Dynamic.transitionSteps`), each a flat ramp from its offset to the next one's; the
     /// level it lands on is the running level from then on and needs none.
     static func transitionRamps(from: Int, to: Int, ticks: Int, at tick: Int) -> [HairpinRamp] {

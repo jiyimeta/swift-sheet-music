@@ -63,6 +63,26 @@ struct DynamicAccentPlaybackTests {
         #expect(try F.velocities(score) == [49, 96, 73, 84, 96, 96, 96, 96])
     }
 
+    /// An earlier wedge that reached its level after the last written mark must not lend that level to a wedge that
+    /// starts on an accent or a two-level dynamic: MuseScore 4 starts it from the dynamic (`appliableDynamicLevel`,
+    /// `playbackcontext.cpp:576-601`).
+    @Test("a crescendo starting on an accent or a two-level dynamic after another crescendo starts from that dynamic")
+    func dynamicStartsAWedgeAfterAnotherWedge() {
+        func wedgeStarts(_ dynamic: VoiceElement) -> [Int] {
+            let score = F.score([
+                [F.dynamic("p"), F.crescendo(), F.quarter, F.quarter, F.quarter, F.quarter],
+                [F.quarter, dynamic, F.crescendo(), F.quarter, F.quarter, F.quarter],
+                [F.quarter, F.quarter, F.quarter, F.quarter],
+            ])
+            return HairpinRamps.collect(
+                voiceIndex: 0, staff: score.parts[0].staves[0], instrument: score.parts[0].instrument,
+                division: 480, tempoMap: score.resolvedTempoMap(),
+            ).filter { $0.role == .wedge }.map(\.startVelocity)
+        }
+        #expect(wedgeStarts(F.dynamic("sf")) == [49, 96])
+        #expect(wedgeStarts(F.dynamic("fp")) == [49, 49])
+    }
+
     @Test("the roles, by MuseScore 4's single-note table")
     func roles() {
         #expect(Dynamic(subtype: "sf", velocity: 112).playbackRole == .accent(velocity: 96))
