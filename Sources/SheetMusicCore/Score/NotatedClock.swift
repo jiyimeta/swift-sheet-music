@@ -132,12 +132,17 @@ extension Score {
         var elapsed = 0.0
         for point in map.points(inMeasure: measureIndex) where point.tickInMeasure > 0 && point.tickInMeasure < length {
             let last = segments[segments.count - 1]
-            guard point.tickInMeasure > last.startTick else { continue }
+            let rate = secondsPerTick(beatsPerSecond: point.beatsPerSecond) + holdPerTick
+            // Two points on one tick: the last wins, as `point(inForceAtMeasure:tickInMeasure:)` has it.
+            if point.tickInMeasure == last.startTick {
+                segments[segments.count - 1] = NotatedClock.Segment(
+                    startTick: last.startTick, secondsPerTick: rate, startSeconds: last.startSeconds,
+                )
+                continue
+            }
             elapsed += Double(point.tickInMeasure - last.startTick) * last.secondsPerTick
             segments.append(NotatedClock.Segment(
-                startTick: point.tickInMeasure,
-                secondsPerTick: secondsPerTick(beatsPerSecond: point.beatsPerSecond) + holdPerTick,
-                startSeconds: elapsed,
+                startTick: point.tickInMeasure, secondsPerTick: rate, startSeconds: elapsed,
             ))
         }
         let last = segments[segments.count - 1]

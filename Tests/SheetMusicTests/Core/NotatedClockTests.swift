@@ -117,6 +117,22 @@ struct NotatedClockTests {
         #expect(score.cursor(atSeconds: 7.3, clock: supplied) == score.cursor(atSeconds: 7.3))
     }
 
+    @Test("two points on one tick: the last wins, as the tempo map's own lookup has it")
+    func sameTickLastPointWins() {
+        let score = TempoMapFixtures.score(measures: 2, notes: true)
+        let map = ResolvedTempoMap(points: [
+            ResolvedTempoMap.Point(measureIndex: 0, tickInMeasure: 0, beatsPerSecond: 2, role: .marking),
+            ResolvedTempoMap.Point(measureIndex: 0, tickInMeasure: 960, beatsPerSecond: 3, role: .marking),
+            ResolvedTempoMap.Point(measureIndex: 0, tickInMeasure: 960, beatsPerSecond: 4, role: .ramp),
+        ])
+        #expect(map.beatsPerSecond(atMeasure: 0, tickInMeasure: 960) == 4)
+        let clock = score.notatedClock(tempoMap: map)
+        // Bar 1: 960 ticks at 2 beats/s (1 s) then 960 at 4 beats/s (0.5 s); bar 2 at 4 beats/s (1 s).
+        #expect(abs(clock.startSeconds(ofMeasure: 1) - 1.5) < 1e-9)
+        #expect(abs(clock.durationSeconds - 2.5) < 1e-9)
+        #expect(abs(clock.seconds(measureIndex: 0, tickInMeasure: 1440) - 1.25) < 1e-9)
+    }
+
     @Test("a score without gradual changes resolves the same tempo map as before")
     func noRampScoreHasNoRampPoints() {
         let score = TempoMapFixtures.score(

@@ -145,7 +145,7 @@ extension LayoutEngine {
             let currentOrdinal = ordinal
             ordinal += 1
             // Hidden and unresolved slurs still occupy an ordinal in their owner's storage.
-            guard spanner.visible else { continue }
+            guard spanner.visible, !spanner.isEndMarker else { continue }
             guard let end = slurEnd(
                 spanner: spanner, staff: staff, durations: durations,
                 startMeasureIndex: start.measureIndex,
