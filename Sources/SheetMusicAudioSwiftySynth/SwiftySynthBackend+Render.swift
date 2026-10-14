@@ -77,9 +77,10 @@ extension SwiftySynthBackend {
         let bodyR = UnsafeMutableBufferPointer(rebasing: right[preRoll ..< count])
         // Advance the score transport, dispatch due events, render.
         sequencer.render(left: bodyL, right: bodyR)
-        // Mix the metronome in when it's unmuted. While muted it is NOT rendered at all (its
-        // transport freezes), so the effects-free click synth costs zero — `setMetronomeMuted`
-        // reseeks it to the score position on un-mute so it lands back on the beat.
+        // Mix the metronome in when it's audible. While muted or at zero gain it is NOT rendered
+        // at all (its transport freezes), so the effects-free click synth costs zero —
+        // `setMetronomeMuted` / `setMetronomeVolume` reseek it to the score position when it
+        // becomes audible again, so it lands back on the beat.
         mixMetronome(
             into: bodyL, bodyR, shared: &shared,
             render: { seq, l, r in seq.render(left: l, right: r) },
@@ -115,7 +116,8 @@ extension SwiftySynthBackend {
     /// Render the metronome sequencer (or, when paused, its synth) into scratch
     /// in `scratchCapacity`-frame slices and add it onto `left`/`right`, scaled
     /// by the strip's `metronomeGain`. A no-op while muted or at zero gain —
-    /// the metronome then spends no render-thread CPU at all.
+    /// the metronome then spends no render-thread CPU at all, and its transport
+    /// freezes until `resyncMetronome` reseeks it.
     /// Allocation-free: uses the pre-sized `shared.scratch*`.
     ///
     /// `forceAudible` overrides the mute flag (not the gain) for a count-in

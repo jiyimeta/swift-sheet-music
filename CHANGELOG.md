@@ -43,6 +43,12 @@ and this project adheres to
   the backend reads in every preset a loaded sequence sounds, and every program the mixer sets, on a utility thread
   first.
 
+### Fixed
+
+- **A metronome turned down to zero and back up mid-playback stays on the beat** (SwiftySynth backend). At zero gain
+  the click is not rendered, so its transport froze exactly as a mute freezes it, but only un-muting reseeked it to
+  the score's position; every click after turning the volume back up came late by however long it had been silent.
+
 ## [4.9.0] - 2026-10-13
 
 ### Added

@@ -322,22 +322,34 @@ public final class SwiftySynthBackend: SynthBackend {
 
     public func setMetronomeMuted(_ muted: Bool) {
         lock.withLockUnchecked { shared in
-            // Un-muting: the metronome transport froze while muted (not
-            // rendered, to spend no CPU), so reseek it to the score's current
-            // position before it resumes so clicks land back on the beat.
-            if !muted, shared.metronomeMuted, let pos = shared.sequencer?.position {
-                let seconds = Double(pos.components.seconds)
-                    + Double(pos.components.attoseconds) * 1e-18
-                shared.metronomeSequencer?.seek(to: Self.metronomePosition(seconds, in: shared))
-            }
+            let wasFrozen = Self.metronomeIsFrozen(shared)
             shared.metronomeMuted = muted
+            Self.resyncMetronome(ifThawedFrom: wasFrozen, &shared)
         }
     }
 
     public func setMetronomeVolume(_ volume: Float) {
         lock.withLockUnchecked { shared in
+            let wasFrozen = Self.metronomeIsFrozen(shared)
             shared.metronomeGain = max(0, volume)
+            Self.resyncMetronome(ifThawedFrom: wasFrozen, &shared)
         }
+    }
+
+    /// Whether the render block skips the metronome — muted, or at zero gain — so that it costs no CPU. Its transport
+    /// does not advance meanwhile.
+    private nonisolated static func metronomeIsFrozen(_ shared: Shared) -> Bool {
+        shared.metronomeMuted || shared.metronomeGain <= 0
+    }
+
+    /// When the metronome becomes audible again — un-muted, or turned up from zero — reseek its frozen transport to
+    /// the score's current position, so clicks land back on the beat. Zero gain used to freeze it exactly as a mute
+    /// does without ever reseeking it, so turning the click down to nothing and back up mid-playback left every later
+    /// click late by however long it had been silent.
+    private nonisolated static func resyncMetronome(ifThawedFrom wasFrozen: Bool, _ shared: inout Shared) {
+        guard wasFrozen, !metronomeIsFrozen(shared), let pos = shared.sequencer?.position else { return }
+        let seconds = Double(pos.components.seconds) + Double(pos.components.attoseconds) * 1e-18
+        shared.metronomeSequencer?.seek(to: metronomePosition(seconds, in: shared))
     }
 
     /// Where the metronome transport belongs when the score transport is at
