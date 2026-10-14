@@ -12,10 +12,11 @@ import Testing
 @Suite("MSCX marker types")
 struct MarkerTypeDecodeTests {
     /// One bar holding `markers`, in a `<museScore version="…">` document.
-    private static func markers(_ markers: String, version: String = "4.60") throws -> [Marker] {
+    private static func markers(_ markers: String, version: String? = "4.60") throws -> [Marker] {
+        let versionAttribute = version.map { " version=\"\($0)\"" } ?? ""
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
-        <museScore version="\(version)"><Score><Division>480</Division>
+        <museScore\(versionAttribute)><Score><Division>480</Division>
         <Part><Staff id="1"/><Instrument id="piano"><longName>Piano</longName><trackName>Piano</trackName>
         <Channel><program value="0"/></Channel></Instrument></Part>
         <Staff id="1"><Measure>\(markers)
@@ -69,6 +70,15 @@ struct MarkerTypeDecodeTests {
             "<Marker><text>Fine</text><label>fine</label></Marker><Marker><label>end</label></Marker>",
         ).map(\.kind)
         #expect(kinds == [.fine, .fine])
+    }
+
+    @Test("a file with no version attribute is read as 4.60 or later: a marker without <markerType> is a Fine")
+    func noVersionAttribute() throws {
+        let kinds = try Self.markers(
+            "<Marker><label>segno</label></Marker><Marker><label>coda</label><markerType>coda</markerType></Marker>",
+            version: nil,
+        ).map(\.kind)
+        #expect(kinds == [.fine, .toCoda])
     }
 
     /// Review Focus 3.

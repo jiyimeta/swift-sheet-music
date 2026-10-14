@@ -47,6 +47,8 @@ enum MarkerTypeDecoding {
     static func kind(
         markerType: String?, label: String?, text: String, markup: PreservedTextMarkup?, formatRevision: Int?,
     ) -> Marker.Kind {
+        // Not version-gated, and deliberately opposite to the oracle (a pre-4.60 MuseScore ignores `<markerType>` and
+        // reads `<label>`): a `<markerType>` in an older file can only be this library's own 3.02 export.
         if let markerType {
             return kindFromType(markerType, label: label ?? "", text: text, markup: markup)
         }
@@ -66,7 +68,8 @@ enum MarkerTypeDecoding {
         case "dalSegno": .dalSegno
         case "other": legacyKind(label: label, text: text, markup: markup)
         // MuseScore's To Coda — and this library's old Coda, written with no label or with the default it filled in
-        // on reading. A To Coda is labeled `coda` unless renamed.
+        // on reading. A To Coda is labeled `coda` unless renamed. The empty / `codab` label arm is for this library's
+        // own older files only, in any format version; MuseScore never writes `coda` with those labels.
         case "coda" where label.isEmpty || label == Marker.Kind.coda.defaultLabel: .coda
         default: Marker.Kind(mscxName: markerType) ?? .user
         }

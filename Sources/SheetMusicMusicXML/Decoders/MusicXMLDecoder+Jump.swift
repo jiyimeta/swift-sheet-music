@@ -27,11 +27,15 @@ enum MusicXMLJumpDecoder {
         let sound = direction.first("sound")
 
         // A `<segno/>` or `<coda/>`: the glyph names the family, the `<sound>` label the member.
-        if directionType.children.contains(where: { $0.name == "segno" }) {
-            result.markers.append(glyphMarker(family: .segno, label: sound?.attributes["segno"]))
+        if let glyph = directionType.first("segno") {
+            result.markers.append(glyphMarker(
+                family: .segno, label: sound?.attributes["segno"], smufl: glyph.attributes["smufl"],
+            ))
         }
-        if directionType.children.contains(where: { $0.name == "coda" }) {
-            result.markers.append(glyphMarker(family: .coda, label: sound?.attributes["coda"]))
+        if let glyph = directionType.first("coda") {
+            result.markers.append(glyphMarker(
+                family: .coda, label: sound?.attributes["coda"], smufl: glyph.attributes["smufl"],
+            ))
         }
 
         // Word-based navigation ("To Coda", "D.C.", "D.S.", "Fine"): use
@@ -51,13 +55,22 @@ enum MusicXMLJumpDecoder {
         return result
     }
 
-    /// A segno or coda glyph's marker: MuseScore's variant when the `<sound>` label names one of the family
-    /// (`varsegno`; `varcoda`, `codetta`), else the family's plain kind; the label defaults to that kind's, as
-    /// MuseScore's importer gives it (`MusicXmlParserDirection::findMarker`, `importmusicxmlpass2.cpp:4772-4796`).
-    private static func glyphMarker(family: Marker.Kind, label: String?) -> Marker {
+    /// A segno or coda glyph's marker. MuseScore's importer always makes a plain SEGNO or CODA of it
+    /// (`MusicXmlParserDirection::handleRepeats`, `importmusicxmlpass2.cpp:~4659-4670`); the variants are a DELIBERATE
+    /// EXTENSION with no oracle, there so MuseScore's own exports round-trip: its exporter writes the variant's glyph
+    /// as `smufl="segnoSerpent1"` / `"codaSquare"` on the `<segno>` / `<coda>` and the marker's label as the `<sound>`
+    /// value (`exportmusicxml.cpp:~6179-6239`). The `smufl` attribute is preferred; else the `<sound>` label names the
+    /// member (`varsegno`; `varcoda`, `codetta`); else the family's plain kind. The label defaults to that kind's.
+    private static func glyphMarker(family: Marker.Kind, label: String?, smufl: String?) -> Marker {
         let members: [Marker.Kind] = family == .segno ? [.segno, .varsegno] : [.coda, .varcoda, .codetta]
+        let fromGlyph: Marker.Kind? = switch smufl {
+        case "segnoSerpent1": .varsegno
+        case "codaSquare": .varcoda
+        default: nil
+        }
         let named = label.flatMap { Marker.Kind(mscxName: $0) }
-        let kind = named.flatMap { members.contains($0) ? $0 : nil } ?? family
+        let kind = fromGlyph.flatMap { members.contains($0) ? $0 : nil }
+            ?? named.flatMap { members.contains($0) ? $0 : nil } ?? family
         return Marker(kind: kind, label: label ?? kind.defaultLabel, text: "")
     }
 

@@ -36,6 +36,32 @@ struct MusicXMLMarkerTests {
         #expect(variant.markers == [Marker(kind: .varsegno, label: "varsegno")])
     }
 
+    @Test("MuseScore's own export marks the variants with smufl, which wins over the <sound> label")
+    func smuflVariants() throws {
+        let serpent = try Self.decode(
+            "<direction><direction-type><segno smufl=\"segnoSerpent1\"/></direction-type>"
+                + "<sound segno=\"x\"/></direction>",
+        )
+        #expect(serpent.markers == [Marker(kind: .varsegno, label: "x")])
+        let square = try Self.decode(
+            "<direction><direction-type><coda smufl=\"codaSquare\"/></direction-type></direction>",
+        )
+        #expect(square.markers == [Marker(kind: .varcoda, label: "varcoda")])
+    }
+
+    /// Pins today's output for one `<direction>` carrying both; a later pass that dedupes the two replaces it.
+    @Test("a <coda/> glyph with <sound tocoda> yields a Coda and a To Coda")
+    func codaGlyphWithToCoda() throws {
+        let decoded = try Self.decode(
+            "<direction><direction-type><coda/></direction-type><sound tocoda=\"coda\"/></direction>",
+        )
+        #expect(decoded.markers == [
+            Marker(kind: .coda, label: "codab"),
+            Marker(kind: .toCoda, label: "coda", text: "To Coda"),
+        ])
+        #expect(decoded.jumps.isEmpty)
+    }
+
     @Test("<sound tocoda> is a To Coda, not a Coda")
     func toCoda() throws {
         let decoded = try Self.decode(
