@@ -101,7 +101,6 @@ struct RichTextTests {
         #expect(rich.lines == [[.text("a", Self.plain)], [.text("b", Self.plain), .text("c", Self.bold)]])
     }
 
-    /// Review Focus 3.
     @Test("leading, trailing and doubled line breaks are lines of their own, in the plain text too")
     func emptyLines() {
         let rich = RichText(content: [
@@ -132,7 +131,6 @@ struct RichTextTests {
         #expect(RichText(xmlText: "a<br/>b").plainText == "a\nb")
     }
 
-    /// Review Focus 1.
     @Test("entities decode; a stray & or < stays literal, so a label typed as text draws as typed")
     func xmlTextLiterals() {
         #expect(RichText(xmlText: "Tom &amp; Jerry").plainText == "Tom & Jerry")
@@ -142,6 +140,95 @@ struct RichTextTests {
         #expect(RichText(xmlText: "a < b <i>c</i>").lines == [
             [.text("a < b ", Self.plain), .text("c", RichTextFormat(italic: true))],
         ])
+    }
+
+    @Test("<u> sets underline and </u> clears it")
+    func underline() {
+        #expect(RichText(xmlText: "<u>a</u>b").lines == [
+            [.text("a", RichTextFormat(underline: true)), .text("b", RichTextFormat(underline: false))],
+        ])
+    }
+
+    @Test("</i> and </s> clear their state")
+    func italicAndStrikeClear() {
+        #expect(RichText(xmlText: "<i>a</i>b<s>c</s>d").lines == [[
+            .text("a", RichTextFormat(italic: true)),
+            .text("b", RichTextFormat(italic: false)),
+            .text("c", RichTextFormat(italic: false, strike: true)),
+            .text("d", RichTextFormat(italic: false, strike: false)),
+        ]])
+    }
+
+    @Test("</sup> returns to the normal alignment for the text after it")
+    func superscriptCloses() {
+        #expect(RichText(xmlText: "x<sup>2</sup>y").lines == [[
+            .text("x", Self.plain), .text("2", RichTextFormat(verticalAlign: .superScript)), .text("y", Self.plain),
+        ]])
+    }
+
+    @Test("&quot;, &gt; and &apos; decode in xml text")
+    func quoteEntities() {
+        #expect(RichText(xmlText: "say &quot;hi&quot; &gt; &apos;x&apos;").plainText == "say \"hi\" > 'x'")
+    }
+
+    // MARK: - Whitespace, line ends and self-closing tags
+
+    @Test("only ASCII space, tab, CR and LF make character data droppable; NBSP and U+3000 are kept")
+    func unicodeWhitespaceIsText() {
+        #expect(RichText(content: [.characters("\u{A0}")]).lines == [[.text("\u{A0}", Self.plain)]])
+        #expect(RichText(content: [.characters("\u{3000}")]).lines == [[.text("\u{3000}", Self.plain)]])
+        let crlf = RichText(content: [.characters("\r\n\t "), Self.element("b", .characters("X"))])
+        #expect(crlf.lines == [[.text("X", Self.bold)]])
+    }
+
+    @Test("CRLF and a lone CR are one line break, in xml text and in the element tree")
+    func carriageReturns() {
+        let twoLines: [[RichTextRun]] = [[.text("a", Self.plain)], [.text("b", Self.plain)]]
+        #expect(RichText(xmlText: "a\r\nb").lines == twoLines)
+        #expect(RichText(xmlText: "a\rb").lines == twoLines)
+        #expect(RichText(content: [.characters("a\r\nb")]).lines == twoLines)
+    }
+
+    @Test("a self-closing <i/> in <b> is a no-op: the text stays bold and italic stays unset (element tree)")
+    func selfClosingFormatTagTree() {
+        let rich = RichText(content: [
+            Self.element("b", .characters("x"), Self.element("i"), .characters("y")),
+        ])
+        #expect(rich.lines == [[.text("xy", Self.bold)]])
+    }
+
+    @Test("a self-closing <i/> in <b> is a no-op: the text stays bold and italic stays unset (xml text)")
+    func selfClosingFormatTagXmlText() {
+        #expect(RichText(xmlText: "<b>x<i/>y</b>").lines == [[.text("xy", Self.bold)]])
+    }
+
+    @Test("an empty or self-closing <sym> emits nothing")
+    func emptySymbol() {
+        #expect(RichText(xmlText: "a<sym/>b").lines == [[.text("ab", Self.plain)]])
+        #expect(RichText(xmlText: "a<sym></sym>b").lines == [[.text("ab", Self.plain)]])
+        #expect(RichText(content: [.characters("a"), Self.element("sym")]).lines == [[.text("a", Self.plain)]])
+    }
+
+    // MARK: - Malformed xml text
+
+    @Test("an unclosed tag at the end stays literal")
+    func unclosedTag() {
+        #expect(RichText(xmlText: "a <b").lines == [[.text("a <b", Self.plain)]])
+    }
+
+    @Test("an & with no ; stays literal")
+    func ampersandWithoutSemicolon() {
+        #expect(RichText(xmlText: "a & b").lines == [[.text("a & b", Self.plain)]])
+    }
+
+    @Test("an empty tag <> is transparent and leaves no characters")
+    func emptyTag() {
+        #expect(RichText(xmlText: "<>").lines == [[]])
+    }
+
+    @Test("an unterminated <sym>name has no closing tag, so it emits no run")
+    func unterminatedSymbol() {
+        #expect(RichText(xmlText: "<sym>name").lines == [[]])
     }
 
     // MARK: - Currency

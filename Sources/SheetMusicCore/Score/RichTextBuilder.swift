@@ -25,6 +25,8 @@ struct RichTextBuilder {
                 pending += text
             case let .element(element):
                 flush(&pending)
+                // An element with no content is a self-closing tag; only `br` and `font` mean anything then.
+                if element.content.isEmpty, !Self.selfClosingNames.contains(element.name) { continue }
                 openTag(element.name, attributes: element.attributes)
                 walk(element.content)
                 closeTag(element.name)
@@ -33,9 +35,16 @@ struct RichTextBuilder {
         flush(&pending)
     }
 
+    /// The only tags `createBlocks` acts on when written self-closing (`<br/>`, `<font …/>`); its token for any other
+    /// (`i/`) matches nothing.
+    private static let selfClosingNames: Set = ["br", "font"]
+
+    /// pugixml's `parse_default` drops a text node made entirely of ASCII space, tab, CR and LF — not other Unicode
+    /// whitespace such as U+00A0 or U+3000, which stay as text.
     private mutating func flush(_ pending: inout String) {
         defer { pending = "" }
-        guard !pending.trimmingWhitespaceAndNewlines().isEmpty else { return }
+        let isWhitespaceOnly = pending.unicodeScalars.allSatisfy { " \t\n\r".unicodeScalars.contains($0) }
+        guard !isWhitespaceOnly else { return }
         appendCharacters(pending)
     }
 
@@ -76,8 +85,8 @@ struct RichTextBuilder {
             return
         }
         let name = String(body.prefix { !$0.isWhitespace })
+        if selfClosing, !Self.selfClosingNames.contains(name) { return }
         openTag(name, attributes: Self.attributes(in: body.dropFirst(name.count)))
-        if selfClosing { closeTag(name) }
     }
 
     /// The index of the `>` closing the tag opened at `start`, or `nil` when another `<` or the end comes first.
@@ -93,6 +102,7 @@ struct RichTextBuilder {
         return nil
     }
 
+    /// `&apos;` is decoded on purpose: createBlocks drops it, but MuseScore never writes it; typed text reads better.
     private static let entities: [String: Character] = [
         "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'",
     ]
@@ -144,7 +154,8 @@ struct RichTextBuilder {
     /// Characters in the current format. A line feed starts a line even inside `<sym>`: `createBlocks` tests for it
     /// before it tests the symbol state.
     private mutating func appendCharacters(_ text: String) {
-        for (index, segment) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+        let segments = Self.normalizingLineEnds(text).split(separator: "\n", omittingEmptySubsequences: false)
+        for (index, segment) in segments.enumerated() {
             if index > 0 { lines.append([]) }
             guard !segment.isEmpty else { continue }
             if symbolName != nil {
@@ -153,6 +164,22 @@ struct RichTextBuilder {
                 appendText(String(segment))
             }
         }
+    }
+
+    /// CRLF and a lone CR become LF, as the XML parser normalizes them. Done on scalars because Swift reads "\r\n" as
+    /// one `Character`, which a split on "\n" would never see.
+    private static func normalizingLineEnds(_ text: String) -> String {
+        var result = String.UnicodeScalarView()
+        var previousWasCR = false
+        for scalar in text.unicodeScalars {
+            if scalar == "\n", previousWasCR {
+                previousWasCR = false
+                continue
+            }
+            previousWasCR = scalar == "\r"
+            result.append(scalar == "\r" ? "\n" : scalar)
+        }
+        return String(result)
     }
 
     /// `prepareFormat` sets bold, italic, underline, strike, the vertical alignment, and the font's size or face;
@@ -185,7 +212,7 @@ struct RichTextBuilder {
         case "s": format.strike = false
         case "sub", "sup": format.verticalAlign = .normal
         case "sym":
-            if let symbolName {
+            if let symbolName, !symbolName.isEmpty {
                 lines[lines.count - 1].append(.symbol(name: symbolName, format))
             }
             symbolName = nil

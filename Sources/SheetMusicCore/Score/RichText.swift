@@ -43,7 +43,8 @@ public struct RichText: Sendable, Equatable {
 /// One run of a `RichText` line.
 public enum RichTextRun: Sendable, Equatable {
     case text(String, RichTextFormat)
-    /// A SMuFL glyph name as MuseScore writes it inside `<sym>` — `dynamicPiano`, `metNoteQuarterUp`, `coda`.
+    /// A SMuFL glyph name as MuseScore writes it inside `<sym>` — `dynamicPiano`, `metNoteQuarterUp`, `coda`. The name
+    /// is not validated here: a name with no glyph is the renderer's to drop (MuseScore drops `SymId::noSym`).
     case symbol(name: String, RichTextFormat)
 }
 
