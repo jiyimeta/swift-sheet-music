@@ -61,7 +61,11 @@ struct RichTextLyricLayoutTests {
         document.systems.flatMap(\.measures).map(\.width) + marks(document).map(\.x)
     }
 
-    private static let elided: [PreservedTextMarkup.ContentItem] = [
+    /// An elided "gloria" set at 22 pt, twice the lyric size. The size makes its runs wider than the plain stand-in
+    /// under every metrics provider: with the portable table (wasm) the lyric face is narrower than the semibold
+    /// stand-in, and an elision alone measured 43.8 against the stand-in's 46.2.
+    private static let wideElided: [PreservedTextMarkup.ContentItem] = [
+        .element(.init(name: "font", attributes: ["size": "22"])),
         .characters("glo"), symbol("lyricsElision"), .characters("ria"),
     ]
 
@@ -134,7 +138,7 @@ struct RichTextLyricLayoutTests {
     /// connecting dash is emitted from `centerX + width / 2 + 0.3 sp`, and a dash never starts left of that.
     @Test("the hyphen after an elided syllable starts past its rich width")
     func hyphenStartsAfterRichWidth() throws {
-        let begin = Self.lyric("gloria", markup: Self.elided, syllabic: .begin)
+        let begin = Self.lyric("gloria", markup: Self.wideElided, syllabic: .begin)
         let document = Self.document([begin, nil, Lyric(text: "a", syllabic: .end), nil])
         let mark = try #require(Self.marks(document).first { $0.text == "gloria" })
         let rich = try #require(mark.rich)
@@ -157,7 +161,7 @@ struct RichTextLyricLayoutTests {
     /// the narrower plain text's edge. Three ticks of 480 end the rule on the fourth chord's column.
     @Test("a melisma line starts after the rich width")
     func melismaStartsAfterRichWidth() throws {
-        let held = Self.lyric("gloria", markup: Self.elided, ticks: 1440)
+        let held = Self.lyric("gloria", markup: Self.wideElided, ticks: 1440)
         let document = Self.document([held, nil, nil, nil])
         let mark = try #require(Self.marks(document).first { $0.text == "gloria" })
         let rich = try #require(mark.rich)

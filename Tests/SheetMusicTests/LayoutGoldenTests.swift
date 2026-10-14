@@ -228,8 +228,18 @@
         ///   leading groups move by the padding-table distances, and two `graceChord` lines change `stem:` from
         ///   down to up. In `grace_after`, the up stem reaches above the staff, so the unwrapped system grows and
         ///   everything in it moves down 4.95 pt. No fixture without a grace changed.
+        ///
+        /// **Re-recorded 2026-10-14 for import-fidelity W1 (rich text), after reading the diff** against a digest
+        /// written on the untouched 4.9.0 tree. 146 of 3889 lines changed: 138 are text elements and title entries
+        /// gaining `richText: nil` and nothing else, and 8 gain a non-nil `richText:` — the four elements in the
+        /// corpus whose source `<text>` is formatted, each in both wrap modes: the `<sym>segno</sym>` markers of
+        /// `repeat52` and `repeat53` (which drew the word "segno" and now draw the glyph) and `guitarbend_simple`'s
+        /// two `<font size="7"/>` system texts (already `<size>7</size>`, so set at the size they had). With
+        /// `richText: nil` stripped from the new digest, those 8 lines are the only difference, and a word diff of
+        /// them finds additions only: no origin, size or system height moved anywhere (markers are inert in the
+        /// skyline autoplace pass, so the segno glyph's taller ink moves nothing).
         private static let expectedDigestSHA256 =
-            "4135ad8219430e9339d0dd9a9058e6de7ad8e48b7858fe938ba54f4d9fa60a66"
+            "7400ac3a85d746f17f933f0cba1c42270e0ec3263c960578c1cca28a002a0bce"
 
         @Test("write digest")
         func writeDigest() throws {
