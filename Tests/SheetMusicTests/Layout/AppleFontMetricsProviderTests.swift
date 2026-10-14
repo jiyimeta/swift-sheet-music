@@ -1,5 +1,6 @@
 #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import CoreGraphics
+    import CoreText
     import Foundation
     @testable import SheetMusicLayout
     @testable import SheetMusicLayoutApple
@@ -68,6 +69,31 @@
             let font = LayoutFont(face: "", pointSize: 12)
             let ink = provider.inkBounds(text: "C2", font: font)
             #expect(ink.width > 0)
+        }
+
+        /// The per-string answers are cached by (text, font). Asked twice, each must still be what CoreText says
+        /// for a line set in the provider's own `CTFont` — the second answer comes from the cache.
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test(arguments: ["Pa", "glo", "Cm7(♭5)", "歌詞", "", "a\nb"])
+        func cachedTextAnswersMatchCoreText(text: String) {
+            let provider = AppleFontMetricsProvider()
+            let font = LayoutFont(face: "", pointSize: 11, weight: .semibold)
+            let ct = provider.renderingFont(for: font)
+            let line = CTLineCreateWithAttributedString(NSAttributedString(
+                string: text,
+                attributes: [NSAttributedString.Key(kCTFontAttributeName as String): ct],
+            ) as CFAttributedString)
+            let width = text.isEmpty ? 0 : CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+            let image = CTLineGetImageBounds(line, nil)
+            for _ in 0 ..< 2 {
+                #expect(provider.typographicWidth(text: text, font: font) == width)
+                let ink = provider.inkBounds(text: text, font: font)
+                #expect(ink.leftBearing == (text.isEmpty ? 0 : image.origin.x))
+                #expect(ink.width == (text.isEmpty ? 0 : image.width))
+            }
+            let firstBox = provider.textInkBounds(text: text, font: font)
+            #expect(provider.textInkBounds(text: text, font: font) == firstBox)
+            #expect((firstBox == nil) == text.isEmpty)
         }
 
         @available(macOS 15.0, iOS 16.0, *)

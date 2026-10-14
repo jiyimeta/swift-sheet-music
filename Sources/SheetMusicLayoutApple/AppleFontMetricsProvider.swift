@@ -11,6 +11,12 @@ import SheetMusicLayout
 /// (`BraceMetrics.bboxCache`, `FermataGlyphMetrics.cache`,
 /// `HarmonyRendering.fontCache`) that the Layout-side rewrites
 /// remove.
+///
+/// The same lock guards the per-string answers too — `typographicWidth`, `inkBounds` and `textInkBounds` — keyed by
+/// (text, font). A lyric-heavy score repeats a few hundred syllables and chord names thousands of times, and layout
+/// measures each occurrence more than once; every answer used to cost a fresh `CTLine`, which was 44 % of a cold
+/// layout of such a score. The answer depends only on the key, since `ctFont(for:)` already pins one
+/// `CTFont` per `LayoutFont`.
 @available(macOS 15.0, *)
 public struct AppleFontMetricsProvider: FontMetricsProvider {
     public init() {
@@ -63,8 +69,12 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
     ) -> CGFloat {
         guard !text.isEmpty else { return 0 }
         return Lock.shared.with {
+            let key = TextKey(text: text, font: font)
+            if let cached = Cache.shared.widths[key] { return cached }
             let line = ctLine(text: text, font: font)
-            return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+            let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+            Cache.store(width, for: key, in: &Cache.shared.widths)
+            return width
         }
     }
 
@@ -88,27 +98,40 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
     public func inkBounds(text: String, font: LayoutFont) -> InkBounds {
         guard !text.isEmpty else { return InkBounds(leftBearing: 0, width: 0) }
         return Lock.shared.with {
+            let key = TextKey(text: text, font: font)
+            if let cached = Cache.shared.inkBounds[key] { return cached }
             let line = ctLine(text: text, font: font)
             let image = CTLineGetImageBounds(line, nil)
-            return InkBounds(
+            let bounds = InkBounds(
                 leftBearing: image.origin.x,
                 width: image.width,
             )
+            Cache.store(bounds, for: key, in: &Cache.shared.inkBounds)
+            return bounds
         }
     }
 
     public func textInkBounds(text: String, font: LayoutFont) -> CGRect? {
         Lock.shared.with {
-            let ct = ctFont(for: font)
-            let stride = CTFontGetAscent(ct) + CTFontGetDescent(ct) + CTFontGetLeading(ct)
-            var result: CGRect?
-            for (index, line) in text.components(separatedBy: "\n").enumerated() {
-                guard let bounds = lineInkBounds(ctLine(text: line, font: font), fallbackFont: ct) else { continue }
-                let box = bounds.offsetBy(dx: 0, dy: -CGFloat(index) * stride)
-                result = result.map { $0.union(box) } ?? box
-            }
-            return result
+            let key = TextKey(text: text, font: font)
+            if let cached = Cache.shared.textInkBounds[key] { return cached }
+            let bounds = uncachedTextInkBounds(text: text, font: font)
+            Cache.store(bounds, for: key, in: &Cache.shared.textInkBounds)
+            return bounds
         }
+    }
+
+    /// Caller must hold `Lock.shared`.
+    private func uncachedTextInkBounds(text: String, font: LayoutFont) -> CGRect? {
+        let ct = ctFont(for: font)
+        let stride = CTFontGetAscent(ct) + CTFontGetDescent(ct) + CTFontGetLeading(ct)
+        var result: CGRect?
+        for (index, line) in text.components(separatedBy: "\n").enumerated() {
+            guard let bounds = lineInkBounds(ctLine(text: line, font: font), fallbackFont: ct) else { continue }
+            let box = bounds.offsetBy(dx: 0, dy: -CGFloat(index) * stride)
+            result = result.map { $0.union(box) } ?? box
+        }
+        return result
     }
 
     package func renderingFont(for font: LayoutFont) -> CTFont {
@@ -199,7 +222,27 @@ private final class Lock: @unchecked Sendable {
 }
 
 @available(macOS 15.0, *)
+private struct TextKey: Hashable {
+    let text: String
+    let font: LayoutFont
+}
+
+/// Every member is read and written only under `Lock.shared`.
+@available(macOS 15.0, *)
 private final class Cache: @unchecked Sendable {
     static let shared = Cache()
     var ctFonts: [LayoutFont: CTFont] = [:]
+    var widths: [TextKey: CGFloat] = [:]
+    var inkBounds: [TextKey: InkBounds] = [:]
+    var textInkBounds: [TextKey: CGRect?] = [:]
+
+    /// Entries per per-string table before it is emptied. The tables only grow — an app that opens many scores
+    /// keeps every syllable it ever measured — so each is dropped wholesale when it reaches this, which costs one
+    /// relayout's worth of fresh `CTLine`s. A dense score's distinct strings fit well under it.
+    static let capacity = 20000
+
+    static func store<Value>(_ value: Value, for key: TextKey, in table: inout [TextKey: Value]) {
+        if table.count >= capacity { table.removeAll(keepingCapacity: true) }
+        table[key] = value
+    }
 }

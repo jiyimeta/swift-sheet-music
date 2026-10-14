@@ -74,19 +74,17 @@ extension ScoreLayerBuilder {
 
     // MARK: - Font caches
 
-    private nonisolated(unsafe) static var cachedBravura: CTFont?
-    private nonisolated(unsafe) static var cachedBravuraSize: CGFloat = 0
-
+    /// One `CTFont` per Bravura size. A score draws at several — the staff size, grace and cue notes, the tempo
+    /// mark's metronome glyph — so a single cached size was replaced back and forth within one system.
     static func bravuraFont(size: CGFloat) -> CTFont {
-        if let font = cachedBravura, cachedBravuraSize == size {
+        if let font = RenderPathCache.shared.bravura(size: size) {
             return font
         }
         _ = SheetMusicLayoutApple.install
         let font = CTFontCreateWithName(
             SMuFLFamily.bravura as CFString, size, nil,
         )
-        cachedBravura = font
-        cachedBravuraSize = size
+        RenderPathCache.shared.store(bravura: font, size: size)
         return font
     }
 
@@ -133,7 +131,20 @@ extension ScoreLayerBuilder {
 
     // MARK: - Glyph layer (Bravura SMuFL)
 
+    /// The outline of `character` in `font`, at the origin. Cached per (character, font): a score draws the same
+    /// few dozen SMuFL glyphs thousands of times, and each caller copies the shared path into place with its own
+    /// transform.
     private static func glyphPath(
+        character: Character, font: CTFont,
+    ) -> CGPath? {
+        let key = RenderPathCache.GlyphKey(character: character, font: font)
+        if let cached = RenderPathCache.shared.glyphPath(for: key) { return cached }
+        let path = uncachedGlyphPath(character: character, font: font)
+        RenderPathCache.shared.store(glyphPath: path, for: key)
+        return path
+    }
+
+    private static func uncachedGlyphPath(
         character: Character, font: CTFont,
     ) -> CGPath? {
         let uniChars = Array(String(character).utf16)
@@ -295,7 +306,20 @@ extension ScoreLayerBuilder {
         return composite.isEmpty ? nil : composite
     }
 
+    /// One line of `text` set in `font`, as a path at the origin. Cached per (text, font) for the same reason as
+    /// `glyphPath`: lyrics and chord names repeat, and building each one's `CTLine` and glyph outlines was a fifth
+    /// of building a lyric-heavy score's layers.
     private static func textPathSingleLine(
+        _ text: String, font: CTFont,
+    ) -> CGPath? {
+        let key = RenderPathCache.TextKey(text: text, font: font)
+        if let cached = RenderPathCache.shared.textPath(for: key) { return cached }
+        let path = uncachedTextPathSingleLine(text, font: font)
+        RenderPathCache.shared.store(textPath: path, for: key)
+        return path
+    }
+
+    private static func uncachedTextPathSingleLine(
         _ text: String, font: CTFont,
     ) -> CGPath? {
         let attr = NSAttributedString(
