@@ -11,11 +11,10 @@ extension SpannerGeometry {
     public static let gradualTempoChangeGapSp: CGFloat = 1.35
     /// The clearance between the label and the line (`TextLineBaseSegment` layout, `textlinebase.cpp:556-557`).
     public static let gradualTempoChangeLabelGapSp: CGFloat = 0.5
-    /// The band a gradual line reserves: its label's height in the tempo change font (12 pt at the reference spatium).
-    public static let gradualTempoChangeHeightSp: CGFloat = 2.4
 
     public struct GradualTempoChangeParts: Sendable, Equatable {
-        /// Where the label's runs hang, by `LayoutRichText.anchor(for: .gradualTempoChangeLabel)`.
+        /// Where the label's runs hang, by `LayoutRichText.anchor(for: .gradualTempoChangeLabel)` (its top-left): the
+        /// label's first baseline lands on the segment's `from.y`.
         public let labelOrigin: CGPoint
         public let lineStart: CGPoint
         public let lineEnd: CGPoint
@@ -24,20 +23,39 @@ extension SpannerGeometry {
         public let dashPattern: [CGFloat]
     }
 
-    /// A gradual tempo line from `from` to `to`: its label hung at `from`, the dashed line from half a space after the
-    /// label — from `from` itself when there is none — to `to`. MuseScore's end hook and end text are not drawn.
+    /// A gradual tempo line from `from` to `to`. `from.y` is the label's baseline (`tempoChangeAlign` = LEFT, BASELINE,
+    /// `styledef.cpp:1174`); the dashed line starts half a space after the label — at `from` itself when there is
+    /// none — and, with a label, runs lifted by half its width so the label's baseline sits on the line's lower edge
+    /// (`alignBaseLine`, `tlayout.cpp:5750-5768`). MuseScore's end hook and end text are not drawn.
     public static func gradualTempoChange(
         from: CGPoint, to: CGPoint, label: LayoutRichText?, sp: CGFloat,
     ) -> GradualTempoChangeParts {
         let labelWidth = label?.size.width ?? 0
         let start = labelWidth > 0 ? from.x + labelWidth + sp * gradualTempoChangeLabelGapSp : from.x
+        let thickness = sp * gradualTempoChangeLineThicknessSp
+        let lineY = label == nil ? from.y : from.y - thickness / 2
         return GradualTempoChangeParts(
-            labelOrigin: from,
-            lineStart: CGPoint(x: min(start, to.x), y: from.y),
-            lineEnd: to,
-            lineThickness: sp * gradualTempoChangeLineThicknessSp,
+            labelOrigin: CGPoint(x: from.x, y: from.y - (label?.firstBaseline ?? 0)),
+            lineStart: CGPoint(x: min(start, to.x), y: lineY),
+            lineEnd: CGPoint(x: to.x, y: lineY),
+            lineThickness: thickness,
             dashPattern: [sp * gradualTempoChangeDashSp, sp * gradualTempoChangeGapSp],
         )
+    }
+
+    /// The ink a gradual tempo line occupies, for the skyline and the system's height: the label's ink and the line's
+    /// stroke, placed by `gradualTempoChange(from:to:label:sp:)`.
+    static func gradualTempoChangeInk(
+        from: CGPoint, to: CGPoint, label: LayoutRichText?, sp: CGFloat,
+    ) -> CGRect {
+        let parts = gradualTempoChange(from: from, to: to, label: label, sp: sp)
+        let line = CGRect(
+            x: parts.lineStart.x, y: parts.lineStart.y - parts.lineThickness / 2,
+            width: max(0, parts.lineEnd.x - parts.lineStart.x), height: parts.lineThickness,
+        )
+        let anchor = LayoutRichText.anchor(for: .gradualTempoChangeLabel)
+        guard let ink = label?.inkRect(at: parts.labelOrigin, anchor: anchor) else { return line }
+        return line.union(ink)
     }
 }
 

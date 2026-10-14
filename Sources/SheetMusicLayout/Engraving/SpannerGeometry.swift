@@ -50,10 +50,10 @@ public enum SpannerGeometry {
             sp * voltaLabelSizeSp
         case .ottava:
             sp * ottavaLabelSizeSp
-        case .textLine, .palmMute, .letRing:
+        case .textLine, .palmMute, .letRing, .gradualTempoChange:
+            // A gradual tempo change measures its own ink (`gradualTempoChangeInk`); this is only the plain-band
+            // fallback for callers that hold no label.
             sp * textLineLabelSizeSp
-        case .gradualTempoChange:
-            sp * gradualTempoChangeHeightSp
         case .pedal:
             sp * 1.5
         case .slur, .vibrato, .trill:

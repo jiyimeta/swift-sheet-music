@@ -27,9 +27,12 @@ extension ScoreLayerBuilder {
         let path = CGMutablePath()
         path.move(to: parts.lineStart)
         path.addLine(to: parts.lineEnd)
-        parent.addSublayer(strokeLayer(
+        let line = strokeLayer(
             path: path, height: height, lineWidth: parts.lineThickness,
             dashPattern: parts.dashPattern.map { NSNumber(value: Double($0)) },
-        ))
+        )
+        // Flat caps, MuseScore's `PenCapStyle::FlatCap` for text lines (`tdraw.cpp:1777`).
+        line.lineCap = .butt
+        parent.addSublayer(line)
     }
 }

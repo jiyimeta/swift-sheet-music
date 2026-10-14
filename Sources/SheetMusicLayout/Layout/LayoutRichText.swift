@@ -151,6 +151,11 @@ public struct LayoutRichText: Sendable, Equatable {
         ink = union.map { CGRect(x: 0, y: $0.minY, width: width, height: $0.height) }
     }
 
+    /// The first line's baseline, down from the block's top.
+    var firstBaseline: CGFloat {
+        lineBaselines.first ?? 0
+    }
+
     /// The block's top-left — the left edge of its ink, the top of its line stack — for an element whose `origin` names
     /// the point `anchor` divides the block at (UnitPoint convention: `(0, 1)` bottom-leading, `(0.5, 0.5)` center).
     /// A line's pen start sits its own ink's `minX` before that ink (`positionedRuns(at:anchor:)`).
@@ -240,8 +245,9 @@ extension LayoutRichText {
         /// A tempo marking, hung leading and vertically centered on its origin — where every tempo was placed before
         /// it was typeset from runs.
         case tempo
-        /// A gradual tempo change line's label (`<beginText>` / `<continueText>`), hung leading and vertically
-        /// centered on the line's origin.
+        /// A gradual tempo change line's label (`<beginText>` / `<continueText>`), hung by its top-left. MuseScore
+        /// aligns it LEFT, BASELINE (`tempoChangeAlign`), which no fractional anchor can say for text of any height, so
+        /// `SpannerGeometry.gradualTempoChange` hands out the origin that puts the first baseline on the line's y.
         case gradualTempoChangeLabel
     }
 
@@ -257,7 +263,8 @@ extension LayoutRichText {
         case .lyric: CGPoint(x: 0.5, y: 0.5)
         case .marker: NotationTextStyle.anchorPoint(for: .markerText)
         case .jump: NotationTextStyle.anchorPoint(for: .jump)
-        case .tempo, .gradualTempoChangeLabel: CGPoint(x: 0, y: 0.5)
+        case .tempo: CGPoint(x: 0, y: 0.5)
+        case .gradualTempoChangeLabel: CGPoint(x: 0, y: 0)
         }
     }
 }

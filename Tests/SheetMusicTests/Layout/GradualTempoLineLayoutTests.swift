@@ -69,11 +69,112 @@ struct GradualTempoLineLayoutTests {
         let to = CGPoint(x: 220, y: 50)
         let parts = SpannerGeometry.gradualTempoChange(from: from, to: to, label: label, sp: metrics.sp)
         #expect(abs(parts.lineStart.x - (20 + label.size.width + metrics.sp * 0.5)) < 1e-9)
-        #expect(parts.lineEnd == to)
+        #expect(parts.lineEnd.x == to.x)
         #expect(parts.dashPattern == [metrics.sp * 0.9, metrics.sp * 1.35])
         #expect(abs(parts.lineThickness - metrics.sp * 0.15) < 1e-9)
         let bare = SpannerGeometry.gradualTempoChange(from: from, to: to, label: nil, sp: metrics.sp)
         #expect(bare.lineStart == from)
+        #expect(bare.lineEnd == to)
         #expect(LayoutRichText.gradualTempoChangeLabel("", metrics: metrics) == nil)
+    }
+
+    @Test("the label's baseline is the segment's y and the line runs half its width above it (alignBaseLine)")
+    func lineSitsOnLabelBaseline() throws {
+        let metrics = StaffMetrics(staffSize: 20)
+        let label = try #require(LayoutRichText.gradualTempoChangeLabel("rit.", metrics: metrics))
+        let from = CGPoint(x: 20, y: 50)
+        let to = CGPoint(x: 220, y: 50)
+        let parts = SpannerGeometry.gradualTempoChange(from: from, to: to, label: label, sp: metrics.sp)
+        let anchor = LayoutRichText.anchor(for: .gradualTempoChangeLabel)
+        let runs = label.positionedRuns(at: parts.labelOrigin, anchor: anchor)
+        let baseline = try #require(runs.first?.baseline.y)
+        #expect(abs(baseline - from.y) < 1e-9)
+        #expect(abs(parts.lineStart.y - (baseline - parts.lineThickness / 2)) < 1e-9)
+        #expect(parts.lineStart.y == parts.lineEnd.y)
+        // The label hangs from its left edge at `from.x`, so the line cannot cut through it vertically.
+        let ink = try #require(label.inkRect(at: parts.labelOrigin, anchor: anchor))
+        #expect(abs(ink.minX - from.x) < 1e-9)
+        #expect(ink.minY < baseline)
+        // A label-less line has no baseline to align to: it stays at the segment's y.
+        let bare = SpannerGeometry.gradualTempoChange(from: from, to: to, label: nil, sp: metrics.sp)
+        #expect(bare.lineStart.y == from.y)
+    }
+
+    @Test("the ink band holds the label above its baseline and the whole stroke")
+    func inkBand() throws {
+        let metrics = StaffMetrics(staffSize: 20)
+        let label = try #require(LayoutRichText.gradualTempoChangeLabel("rit.", metrics: metrics))
+        let from = CGPoint(x: 20, y: 50)
+        let to = CGPoint(x: 220, y: 50)
+        let parts = SpannerGeometry.gradualTempoChange(from: from, to: to, label: label, sp: metrics.sp)
+        let ink = SpannerGeometry.gradualTempoChangeInk(from: from, to: to, label: label, sp: metrics.sp)
+        #expect(ink.minY < from.y - parts.lineThickness)
+        // The line's lower edge is the label's baseline, which is `from.y`.
+        #expect(ink.maxY >= from.y - 1e-9)
+        #expect(ink.minX <= from.x + 1e-9)
+        #expect(ink.maxX >= to.x - 1e-9)
+    }
+
+    private static func gradualScore(visible: Bool) -> Score {
+        var rit = TempoMapFixtures.ritardando(measures: 2)
+        rit.beginText = "rit."
+        rit.visible = visible
+        return TempoMapFixtures.score(measures: 3, ramps: [(measure: 0, spanner: rit)])
+    }
+
+    @Test(
+        "an invisible gradual line is not laid out, whether or not invisible elements are shown",
+        arguments: [false, true],
+    )
+    func invisibleLineIsOmitted(showsInvisible: Bool) {
+        let options = ScoreViewOptions(showsInvisibleElements: showsInvisible)
+        let hiddenScore = Self.gradualScore(visible: false)
+        let hidden = LayoutEngine.layout(score: hiddenScore, options: options, availableWidth: 600)
+        #expect(Self.segments(hidden).isEmpty)
+        #expect(hidden.systems.flatMap(\.invisibleSpanners).isEmpty)
+        let shownScore = Self.gradualScore(visible: true)
+        let shown = LayoutEngine.layout(score: shownScore, options: options, availableWidth: 600)
+        #expect(Self.segments(shown).count == 1)
+    }
+
+    private struct Line {
+        let kind: LayoutElement.SpannerKind
+        let from: CGPoint
+        let to: CGPoint
+        let rich: LayoutRichText?
+        let text: String
+    }
+
+    private static func lines(of kind: Spanner.Kind, rawType: String) -> [Line] {
+        var line = Spanner(kind: kind, rawType: rawType, nextMeasuresOffset: 2)
+        line.beginText = "dim."
+        let score = TempoMapFixtures.score(measures: 3, ramps: [(measure: 0, spanner: line)])
+        let document = LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 600)
+        return document.systems.flatMap(\.spanners).compactMap { element in
+            guard case let .spannerSegment(segmentKind, from, to, _, _, text, _, rich) = element else { return nil }
+            return Line(kind: segmentKind, from: from, to: to, rich: rich, text: text)
+        }
+    }
+
+    @Test("a .textLine and an .other spanner still lay out as the plain text line, with no typeset label")
+    func plainTextLinesUnchanged() throws {
+        let textLine = try #require(Self.lines(of: .textLine, rawType: "TextLine").first)
+        let other = try #require(Self.lines(of: .other, rawType: "Foo").first)
+        #expect(textLine.kind == .textLine)
+        #expect(other.kind == .textLine)
+        #expect(textLine.rich == nil)
+        #expect(other.rich == nil)
+        #expect(textLine.text == "dim.")
+        #expect(other.text == "dim.")
+        // Same path, same geometry: the kind alone does not move a plain line.
+        #expect(textLine.from == other.from)
+        #expect(textLine.to == other.to)
+        // …and its x span is the one a gradual line over the same measures gets.
+        var rit = TempoMapFixtures.ritardando(measures: 2)
+        rit.beginText = "dim."
+        let score = TempoMapFixtures.score(measures: 3, ramps: [(measure: 0, spanner: rit)])
+        let document = LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 600)
+        let gradual = try #require(Self.segments(document).first)
+        #expect(abs(gradual.from.x - textLine.from.x) < 1e-9)
     }
 }

@@ -12,11 +12,34 @@ import SheetMusicLayout
 extension ScoreLayerBuilder {
     // MARK: - Spanners
 
-    static func drawSpanner( // swiftlint:disable:this function_body_length
+    static func drawSpanner(
         kind: LayoutElement.SpannerKind,
         from: CGPoint, to: CGPoint,
         continuesLeft: Bool, continuesRight: Bool,
         text: String, richText: LayoutRichText? = nil, metrics: StaffMetrics,
+        height: CGFloat,
+        into parent: CALayer,
+    ) {
+        switch kind {
+        case .slur, .volta, .hairpinOpen, .hairpinClose, .hairpinLine, .pedal, .ottava:
+            drawMarkSpanner(
+                kind: kind, from: from, to: to, continuesLeft: continuesLeft, continuesRight: continuesRight,
+                metrics: metrics, height: height, into: parent,
+            )
+        case .textLine, .palmMute, .letRing, .vibrato, .trill, .gradualTempoChange:
+            drawLineSpanner(
+                kind: kind, from: from, to: to, continuesLeft: continuesLeft, text: text, richText: richText,
+                metrics: metrics, height: height, into: parent,
+            )
+        }
+    }
+
+    /// The kinds drawn as a shape of their own: slur, volta, hairpins, pedal and ottava.
+    private static func drawMarkSpanner(
+        kind: LayoutElement.SpannerKind,
+        from: CGPoint, to: CGPoint,
+        continuesLeft: Bool, continuesRight: Bool,
+        metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer,
     ) {
@@ -55,6 +78,23 @@ extension ScoreLayerBuilder {
                 numbersOnly: numbersOnly,
                 metrics: metrics, height: height, into: parent,
             )
+        case .textLine, .palmMute, .letRing, .vibrato, .trill, .gradualTempoChange:
+            break // `drawLineSpanner`
+        }
+    }
+
+    /// The kinds drawn along a line: text lines, palm mute, let ring, vibrato, trill and the gradual tempo change.
+    private static func drawLineSpanner(
+        kind: LayoutElement.SpannerKind,
+        from: CGPoint, to: CGPoint,
+        continuesLeft: Bool,
+        text: String, richText: LayoutRichText?, metrics: StaffMetrics,
+        height: CGFloat,
+        into parent: CALayer,
+    ) {
+        switch kind {
+        case .slur, .volta, .hairpinOpen, .hairpinClose, .hairpinLine, .pedal, .ottava:
+            break // `drawMarkSpanner`
         case .textLine:
             drawTextLine(
                 from: from, to: to, text: text, dashed: false,

@@ -149,10 +149,9 @@ extension LayoutEngine {
                 continuationInset: continuationInset,
                 metrics: metrics,
             )
-            let y = staffTopLocal + defaultBandOffsetY(
-                belowStaff: isBelowStaff(anchor: anchor),
-                lineGeometry: geometry(staffGeometries, anchor.startStaff),
-                metrics: metrics,
+            let y = staffTopLocal + bandOffsetY(
+                kind: kind, belowStaff: isBelowStaff(anchor: anchor),
+                lineGeometry: geometry(staffGeometries, anchor.startStaff), metrics: metrics,
             )
             // Back into the start measure's own frame — the pass and
             // pass 2 both re-add `xOffsets[startLocal]`.
@@ -172,6 +171,19 @@ extension LayoutEngine {
                     richText: lineLabelRuns(kind: kind, anchor: anchor, clip: clip, metrics: metrics),
                 ))
         }
+    }
+
+    /// Where a segment's anchor line sits relative to the staff top (above) or the staff's own height (below).
+    /// A gradual tempo change is placed by its style's `tempoChangePosAbove` = (0, -2 sp) and `tempoChangePosBelow` =
+    /// (0, 3 sp) (`styledef.cpp:1177-1178`) — the offset of its label's BASELINE — so above the staff it sits 2 sp over
+    /// the top line, not at the 4 sp the band-centered kinds use; every other kind keeps `defaultBandOffsetY`. The
+    /// clearance from what it must clear is `tempoChangeMinDistance` = 0.5 sp (`styledef.cpp:1179`), the skyline pass's
+    /// default `AutoplaceRules.minDistance`.
+    static func bandOffsetY(
+        kind: LayoutElement.SpannerKind, belowStaff: Bool, lineGeometry: StaffLineGeometry, metrics: StaffMetrics,
+    ) -> CGFloat {
+        if kind == .gradualTempoChange, !belowStaff { return -metrics.sp * 2 }
+        return defaultBandOffsetY(belowStaff: belowStaff, lineGeometry: lineGeometry, metrics: metrics)
     }
 
     /// The typeset label of a kind that draws formatted text — a gradual tempo change's `<beginText>`, or on a later

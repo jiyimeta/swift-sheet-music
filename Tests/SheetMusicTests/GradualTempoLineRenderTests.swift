@@ -47,12 +47,13 @@
             )
             #expect(abs(lineBox.minX - parts.lineStart.x) < 0.01)
             #expect(shapes.contains { $0.fillColor != nil })
+            // MuseScore strokes a text line with flat caps (`tdraw.cpp:1777`).
+            #expect(line.lineCap == .butt)
         }
 
+        /// The red channel of the rendered Canvas, row by row from the top, on white.
         @available(macOS 15.0, *)
-        @Test("the Canvas draws the label and the line across the whole span")
-        func canvasDrawsLabelAndLine() throws {
-            let (element, _) = try Self.segment()
+        private static func renderRows(_ element: LayoutElement) throws -> [[UInt8]] {
             let metrics = Self.metrics
             let view = Canvas { context, _ in
                 ScoreCanvasDrawing.drawElement(element, base: .zero, metrics: metrics, into: &context)
@@ -71,16 +72,46 @@
             context.fill(CGRect(x: 0, y: 0, width: image.width, height: image.height))
             context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
             let bytes = try #require(context.data).bindMemory(to: UInt8.self, capacity: image.width * image.height * 4)
-            var inked: [Int] = []
-            for y in 0 ..< image.height {
-                for x in 0 ..< image.width where bytes[(y * image.width + x) * 4] < 200 {
-                    inked.append(x)
-                }
-            }
+            return (0 ..< image.height).map { y in (0 ..< image.width).map { x in bytes[(y * image.width + x) * 4] } }
+        }
+
+        @available(macOS 15.0, *)
+        @Test("the Canvas draws the label and the line across the whole span")
+        func canvasDrawsLabelAndLine() throws {
+            let (element, _) = try Self.segment()
+            let rows = try Self.renderRows(element)
+            let inked = rows.flatMap { row in row.indices.filter { row[$0] < 200 } }
             let minX = try #require(inked.min())
             let maxX = try #require(inked.max())
             #expect(minX <= 22)
             #expect(maxX >= 210)
+        }
+
+        @available(macOS 15.0, *)
+        @Test("the Canvas line is dashed: dark runs and gaps along the row the label's baseline sits on")
+        func canvasLineHasGaps() throws {
+            let (element, label) = try Self.segment()
+            let parts = SpannerGeometry.gradualTempoChange(
+                from: Self.from, to: Self.to, label: label, sp: Self.metrics.sp,
+            )
+            let rows = try Self.renderRows(element)
+            // Past the label, so only the line inks; the row with the most ink is the line's.
+            let from = Int(parts.lineStart.x) + 2
+            let to = Int(parts.lineEnd.x) - 2
+            let counts = rows.map { row in (from ... to).filter { row[$0] < 200 }.count }
+            let top = try #require(counts.max())
+            let lineRow = try #require(counts.firstIndex(of: top))
+            let span = to - from + 1
+            #expect(top >= 5)
+            // A solid line would leave no light pixel in its row.
+            #expect(top < span)
+            #expect(rows[lineRow][from ... to].contains { $0 >= 200 })
+            // The gap is 1.35 sp = 6.75 pt wide, so two consecutive dark pixels sit at least 4 apart across one.
+            let darkXs = (from ... to).filter { rows[lineRow][$0] < 200 }
+            let widestJump = zip(darkXs, darkXs.dropFirst()).map { $1 - $0 }.max() ?? 0
+            #expect(widestJump >= 4)
+            // The stroke's centre is the baseline less half its width: the line row is the one just above `from.y`.
+            #expect(abs(Double(lineRow) - (Double(Self.from.y) - 1)) <= 1)
         }
     }
 #endif

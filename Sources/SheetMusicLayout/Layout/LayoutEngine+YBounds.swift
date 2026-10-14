@@ -94,9 +94,9 @@ extension LayoutEngine {
             // bars stack a fraction of sp away and are accounted for
             // by the generic glyphPad in elementYBounds.
             return [from.y, to.y]
-        case let .spannerSegment(kind, from, to, _, _, _, _, _):
+        case let .spannerSegment(kind, from, to, _, _, _, _, richText):
             return spannerSegmentYPoints(
-                kind: kind, from: from, to: to, sp: sp,
+                kind: kind, from: from, to: to, richText: richText, sp: sp,
             )
         case let .tieArc(from, to, _, _),
              let .glissandoLine(from, to, _, _, _),
@@ -206,9 +206,13 @@ extension LayoutEngine {
     /// known, otherwise just the anchor line.
     private static func spannerSegmentYPoints(
         kind: LayoutElement.SpannerKind,
-        from: CGPoint, to: CGPoint, sp: CGFloat?,
+        from: CGPoint, to: CGPoint, richText: LayoutRichText?, sp: CGFloat?,
     ) -> [CGFloat] {
         guard let sp else { return [from.y, to.y] }
+        if kind == .gradualTempoChange {
+            let ink = SpannerGeometry.gradualTempoChangeInk(from: from, to: to, label: richText, sp: sp)
+            return [ink.minY, ink.maxY]
+        }
         if kind == .pedal {
             let rects = PedalInkGeometry.rects(from: from, to: to, metrics: StaffMetrics(staffSize: sp * 4))
             return rects.flatMap { [$0.minY, $0.maxY] }

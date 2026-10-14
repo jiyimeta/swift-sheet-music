@@ -96,8 +96,9 @@ and this project adheres to
 - **Gradual tempo changes draw as MuseScore draws them** (import-fidelity F2.7): the label in the tempo change style
   (Edwin 12 bold, symbols at 12) — `<beginText>`, `<continueText>` on a later system, nothing when the file has none —
   and a 0.15 sp line dashed at 6 / 9 line widths from half a space after it, above the staff
-  (`LayoutElement.SpannerKind.gradualTempoChange`; `SpannerGeometry.gradualTempoChange`). They used to draw as a solid
-  generic text line.
+  (`LayoutElement.SpannerKind.gradualTempoChange`; `SpannerGeometry.gradualTempoChange`). The label sits on its
+  baseline with the line lifted half its width above it (`tempoChangeAlign` LEFT, BASELINE), 2 sp over the staff
+  (`tempoChangePosAbove`). They used to draw as a solid generic text line.
 - **Breath pauses and arpeggios follow the tempo where they stand** (import-fidelity F2.9). A caesura's pause is
   converted to ticks at the tempo map's value at the breath — in the voice walk, in `measureTicks` (and so in every
   bar-length consumer: the repeat plan, swing, hairpins, ottavas, fermata bookends) and in both `PlaybackTimeline`

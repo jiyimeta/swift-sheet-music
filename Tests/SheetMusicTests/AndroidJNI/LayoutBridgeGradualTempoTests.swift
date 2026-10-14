@@ -34,6 +34,13 @@
             #expect(out.contains { if case let .text(text, _, _, _, _) = $0 { text == "rit." } else { false } })
             #expect(out.contains(.setTextStyle(flags: DrawCommand.TextStyleFlag.bold)))
             #expect(out.last == .setDash(onMM: 0, offMM: 0))
+            // The line runs half its width above the label's baseline, which is the segment's y (`alignBaseLine`).
+            let lineY = out.compactMap { command -> Double? in
+                if case let .moveTo(_, y) = command { return y }
+                return nil
+            }
+            try #require(lineY.count == 1)
+            #expect(abs(lineY[0] - (50 - sp * 0.15 / 2) * Self.mm) < 1e-9)
         }
     }
 #endif

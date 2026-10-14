@@ -22,7 +22,8 @@ extension SpannerRenderer {
         path.addLine(to: parts.lineEnd)
         context.stroke(
             path, with: .color(.primary),
-            style: StrokeStyle(lineWidth: parts.lineThickness, dash: parts.dashPattern),
+            // Flat caps, MuseScore's `PenCapStyle::FlatCap` for text lines (`tdraw.cpp:1777`).
+            style: StrokeStyle(lineWidth: parts.lineThickness, lineCap: .butt, dash: parts.dashPattern),
         )
     }
 }
