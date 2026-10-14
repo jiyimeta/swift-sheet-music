@@ -74,8 +74,15 @@ enum TextMarkRenderer {
         properties: TextProperties = TextProperties(),
         verse: Int = 0,
         color: Color = .primary,
+        richText: LayoutRichText? = nil,
         metrics: StaffMetrics,
     ) {
+        if let richText {
+            TextInkRenderer.drawRich(
+                context: &context, richText: richText, origin: origin, anchor: CGPoint(x: 0.5, y: 0.5), color: color,
+            )
+            return
+        }
         let style = ResolvedTextStyle.resolve(
             verse.isMultiple(of: 2) ? .lyricsOdd : .lyricsEven,
             overrides: properties, metrics: metrics,

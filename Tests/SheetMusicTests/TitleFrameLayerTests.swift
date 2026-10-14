@@ -122,5 +122,38 @@
             // passing because every `anchor.x` happened to be 0.
             #expect(Set(placed.map(\.anchor)) == [.top, .topTrailing])
         }
+
+        @Test("A rich title line is filled from its runs, symbol included")
+        func richTitleLine() throws {
+            guard #available(macOS 15.0, *) else { return }
+            func titleFrame(_ text: FrameText) throws -> LayoutTitleFrame {
+                let measure = Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+                let score = Score(
+                    division: 480,
+                    parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [measure])])],
+                    systemMeasures: [SystemMeasure()],
+                    titleFrame: ScoreFrame(heightSp: 12, texts: [text]),
+                )
+                return try #require(LayoutEngine.layout(
+                    score: score, options: ScoreViewOptions(includeTitleFrame: true),
+                    availableWidth: Self.availableWidth,
+                ).titleFrame)
+            }
+            func inkWidth(_ frame: LayoutTitleFrame) -> CGFloat {
+                (TitleFrameLayerBuilder.build(frame: frame, width: Self.availableWidth).sublayers ?? [])
+                    .compactMap { ($0 as? CAShapeLayer)?.path?.boundingBoxOfPath }
+                    .reduce(CGRect.null) { $0.union($1) }.width
+            }
+            let markup = PreservedTextMarkup(
+                content: [
+                    .element(.init(name: "b", content: [.characters("Big")])),
+                    .element(.init(name: "sym", content: [.characters("coda")])),
+                ],
+                derivedText: "Big",
+            )
+            let rich = try titleFrame(FrameText(style: .title, text: "Big", preservedTextMarkup: markup))
+            let plain = try titleFrame(FrameText(style: .title, text: "Big"))
+            #expect(inkWidth(rich) > inkWidth(plain) + 5)
+        }
     }
 #endif

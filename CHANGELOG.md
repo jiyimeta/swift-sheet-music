@@ -61,6 +61,12 @@ and this project adheres to
 - **A line spanner's begin text no longer prints its markup.** MuseScore writes `<beginText>` as an escaped string
   (`&lt;b&gt;rit.&lt;/b&gt;`), and a text line, palm mute or let-ring label drew the tags literally. The label is now
   the text's plain projection, and `Spanner.beginRichText` reads its formatting.
+- **Formatted text draws formatted on Apple.** Bold, italic, underlined, struck-through, resized and super- or
+  subscript runs, and SMuFL symbols inside text (`senza <sym>keyboardPedalPed</sym>`, a coda inside a marker), draw run
+  by run in the CALayer tree, the Canvas / PDF path and the title block, at the positions layout measured. Every text
+  used to draw in one font. A marker whose text is only a symbol (`<text><sym>segno</sym></text>` with no
+  `<markerType>`) drew its `<label>` as a word ("segno") — its plain text is empty, so layout fell back to the label;
+  it now draws the glyph.
 
 ## [4.9.0] - 2026-10-13
 

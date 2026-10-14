@@ -11,9 +11,10 @@ enum RehearsalMarkRenderer {
         frame: TextFrameType,
         color: ScoreColor?,
         properties: TextProperties = TextProperties(),
+        richText: LayoutRichText? = nil,
         metrics: StaffMetrics,
     ) {
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty || richText != nil else { return }
         // MuseScore defaults via TextStyleType.rehearsalMark:
         // Edwin 14 pt bold, frameType=square, framePadding=0.5 sp.
         let style = ResolvedTextStyle.resolve(
@@ -39,13 +40,20 @@ enum RehearsalMarkRenderer {
         let textOrigin = CGPoint(
             x: origin.x + pad, y: origin.y - pad,
         )
-        TextInkRenderer.draw(
-            context: &context, text: text, font: style.ctFont,
-            origin: textOrigin, anchor: CGPoint(x: 0, y: 1), color: textColor,
-        )
+        if let richText {
+            TextInkRenderer.drawRich(
+                context: &context, richText: richText, origin: textOrigin,
+                anchor: CGPoint(x: 0, y: 1), color: textColor,
+            )
+        } else {
+            TextInkRenderer.draw(
+                context: &context, text: text, font: style.ctFont,
+                origin: textOrigin, anchor: CGPoint(x: 0, y: 1), color: textColor,
+            )
+        }
         let shape = TextInkGeometry.rehearsalFrame(
             text: text, font: TextInkGeometry.font(for: .rehearsalMark, overrides: properties, metrics: metrics),
-            origin: origin, sp: metrics.sp, frame: frame,
+            origin: origin, sp: metrics.sp, frame: frame, rich: richText,
         )
         let strokeWidth = RehearsalMarkFrame.strokeWidthSp(
             sp: metrics.sp,

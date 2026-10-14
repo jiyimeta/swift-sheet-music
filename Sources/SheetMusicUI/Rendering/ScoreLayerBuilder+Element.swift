@@ -146,19 +146,26 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height, into: parent,
             )
         case let .textMark(
-            .lyrics(lyricColor, _, _, _, properties), text, p, _,
+            .lyrics(lyricColor, _, _, _, properties), text, p, richText,
         ):
-            let style = ResolvedTextStyle.resolve(
-                .lyricsOdd, overrides: properties, metrics: metrics,
-            )
-            if let layer = textLayer(
-                text: text, at: shift(p),
-                size: style.pointSize, italic: style.isItalic,
-                anchor: CGPoint(x: 0.5, y: 0.5),
-                color: lyricColor.map(scoreColorToCGColor) ?? inkColor,
-                font: style.ctFont,
-                height: height,
-            ) {
+            let ink = lyricColor.map(scoreColorToCGColor) ?? inkColor
+            let layer: CAShapeLayer?
+            if let richText {
+                layer = richTextLayer(
+                    richText, at: shift(p), anchor: CGPoint(x: 0.5, y: 0.5), color: ink, height: height,
+                )
+            } else {
+                let style = ResolvedTextStyle.resolve(.lyricsOdd, overrides: properties, metrics: metrics)
+                layer = textLayer(
+                    text: text, at: shift(p),
+                    size: style.pointSize, italic: style.isItalic,
+                    anchor: CGPoint(x: 0.5, y: 0.5),
+                    color: ink,
+                    font: style.ctFont,
+                    height: height,
+                )
+            }
+            if let layer {
                 parent.addSublayer(layer)
                 // One syllable, one selectable item — never the verse
                 // row, and never the hyphen / melisma rules between
@@ -248,29 +255,37 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height,
                 context: &context, into: parent,
             )
-        case let .marker(kind, text, p, _, _):
+        case let .marker(kind, text, p, _, richText):
             drawMarker(
                 kind: kind, text: text, origin: shift(p),
+                richText: richText,
                 metrics: metrics, height: height, into: parent,
             )
-        case let .rehearsalMark(text, p, frame, color, _, _, properties, _):
+        case let .rehearsalMark(text, p, frame, color, _, _, properties, richText):
             // The frame is attached alongside the letter: MuseScore
             // tints a selected text's frame too, from the same
             // `curColor` (`TDraw::drawTextBase`), so a selected boxed
             // "A" turns blue box and all.
             for layer in drawRehearsalMark(
                 text: text, origin: shift(p), frame: frame, properties: properties,
+                richText: richText,
                 color: color.map(scoreColorToCGColor) ?? Self.inkColor,
                 metrics: metrics, height: height, into: parent,
             ) {
                 attachText(element, layer, context: &context)
             }
-        case let .jump(text, p, _, _):
-            if !text.isEmpty,
-               let layer = notationTextLayer(
-                   text: text, role: .jump, origin: shift(p), metrics: metrics, height: height,
-               )
-            {
+        case let .jump(text, p, _, richText):
+            let layer: CAShapeLayer? = if let richText {
+                richTextLayer(
+                    richText, at: shift(p), anchor: NotationTextStyle.anchorPoint(for: .jump),
+                    color: Self.inkColor, height: height,
+                )
+            } else if !text.isEmpty {
+                notationTextLayer(text: text, role: .jump, origin: shift(p), metrics: metrics, height: height)
+            } else {
+                nil
+            }
+            if let layer {
                 parent.addSublayer(layer)
             }
         case let .measureNumber(text, p):
@@ -287,25 +302,29 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
-        case let .staffText(text, p, color, style, _, _, properties, _, _):
+        case let .staffText(text, p, color, style, _, _, properties, _, richText):
             // Author-supplied staff/system text. Color, font and offset
             // (already baked into `p` by placement) come from the
             // source `.mscx`. Bottom-leading anchor at `p` matches
             // the placement convention used for dynamics/tempo.
-            let resolvedStyle = ResolvedTextStyle.resolve(
-                style, overrides: properties, metrics: metrics,
-            )
-            if !text.isEmpty,
-               let layer = textLayer(
-                   text: text, at: shift(p),
-                   size: resolvedStyle.pointSize, italic: resolvedStyle.isItalic,
-                   anchor: CGPoint(x: 0, y: 1),
-                   color: color.map(scoreColorToCGColor)
-                       ?? Self.inkColor,
-                   font: resolvedStyle.ctFont,
-                   height: height,
-               )
-            {
+            let ink = color.map(scoreColorToCGColor) ?? Self.inkColor
+            let layer: CAShapeLayer?
+            if let richText {
+                layer = richTextLayer(richText, at: shift(p), anchor: CGPoint(x: 0, y: 1), color: ink, height: height)
+            } else if !text.isEmpty {
+                let resolvedStyle = ResolvedTextStyle.resolve(style, overrides: properties, metrics: metrics)
+                layer = textLayer(
+                    text: text, at: shift(p),
+                    size: resolvedStyle.pointSize, italic: resolvedStyle.isItalic,
+                    anchor: CGPoint(x: 0, y: 1),
+                    color: ink,
+                    font: resolvedStyle.ctFont,
+                    height: height,
+                )
+            } else {
+                layer = nil
+            }
+            if let layer {
                 parent.addSublayer(layer)
                 attachText(element, layer, context: &context)
             }

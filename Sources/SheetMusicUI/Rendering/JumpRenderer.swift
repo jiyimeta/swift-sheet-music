@@ -7,8 +7,16 @@ enum JumpRenderer {
         context: inout GraphicsContext,
         text: String,
         origin: CGPoint,
+        richText: LayoutRichText? = nil,
         metrics: StaffMetrics,
     ) {
+        if let richText {
+            TextInkRenderer.drawRich(
+                context: &context, richText: richText, origin: origin,
+                anchor: NotationTextStyle.anchorPoint(for: .jump), color: .primary,
+            )
+            return
+        }
         guard !text.isEmpty else { return }
         context.drawExpressionText(
             text, at: origin,

@@ -9,6 +9,7 @@ enum MarkerRenderer {
         kind: Marker.Kind,
         text: String,
         origin: CGPoint,
+        richText: LayoutRichText? = nil,
         metrics: StaffMetrics,
     ) {
         switch MarkerGlyph.variant(for: kind, text: text) {
@@ -19,6 +20,13 @@ enum MarkerRenderer {
                 glyph, at: origin, size: metrics.glyphFontSize,
             )
         case let .text(label):
+            if let richText {
+                TextInkRenderer.drawRich(
+                    context: &context, richText: richText, origin: origin,
+                    anchor: NotationTextStyle.anchorPoint(for: .markerText), color: .primary,
+                )
+                return
+            }
             context.drawExpressionText(
                 label, at: origin,
                 size: NotationTextStyle.fontSize(

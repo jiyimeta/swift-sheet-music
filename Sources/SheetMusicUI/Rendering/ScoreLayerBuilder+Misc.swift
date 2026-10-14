@@ -258,6 +258,7 @@ extension ScoreLayerBuilder {
 
     static func drawMarker(
         kind: Marker.Kind, text: String, origin: CGPoint,
+        richText: LayoutRichText? = nil,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
@@ -273,9 +274,15 @@ extension ScoreLayerBuilder {
                 parent.addSublayer(layer)
             }
         case let .text(label):
-            if let layer = notationTextLayer(
-                text: label, role: .markerText, origin: origin, metrics: metrics, height: height,
-            ) {
+            let layer = if let richText {
+                richTextLayer(
+                    richText, at: origin, anchor: NotationTextStyle.anchorPoint(for: .markerText),
+                    color: inkColor, height: height,
+                )
+            } else {
+                notationTextLayer(text: label, role: .markerText, origin: origin, metrics: metrics, height: height)
+            }
+            if let layer {
                 parent.addSublayer(layer)
             }
         }
@@ -285,11 +292,13 @@ extension ScoreLayerBuilder {
 
     static func drawRehearsalMark( // swiftlint:disable:this function_body_length
         text: String, origin: CGPoint,
-        frame: TextFrameType, properties: TextProperties, color: CGColor,
+        frame: TextFrameType, properties: TextProperties,
+        richText: LayoutRichText? = nil,
+        color: CGColor,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) -> [CAShapeLayer] {
-        guard !text.isEmpty else { return [] }
+        guard !text.isEmpty || richText != nil else { return [] }
         // MuseScore `Sid::rehearsalMarkFontSize` = 14 pt with
         // `FontSpatiumDependent = true`; resolved through
         // `TextStyleType.rehearsalMark` (Edwin 14 pt bold), then the
@@ -310,21 +319,26 @@ extension ScoreLayerBuilder {
         )
 
         var built: [CAShapeLayer] = []
-        if let layer = textLayer(
-            text: text, at: textOrigin,
-            size: textSize, italic: style.isItalic,
-            anchor: CGPoint(x: 0, y: 1),
-            color: color,
-            font: font,
-            height: height,
-        ) {
-            parent.addSublayer(layer)
-            built.append(layer)
+        let label: CAShapeLayer? = if let richText {
+            richTextLayer(richText, at: textOrigin, anchor: CGPoint(x: 0, y: 1), color: color, height: height)
+        } else {
+            textLayer(
+                text: text, at: textOrigin,
+                size: textSize, italic: style.isItalic,
+                anchor: CGPoint(x: 0, y: 1),
+                color: color,
+                font: font,
+                height: height,
+            )
+        }
+        if let label {
+            parent.addSublayer(label)
+            built.append(label)
         }
 
         let shape = TextInkGeometry.rehearsalFrame(
             text: text, font: TextInkGeometry.font(for: .rehearsalMark, overrides: properties, metrics: metrics),
-            origin: origin, sp: metrics.sp, frame: frame,
+            origin: origin, sp: metrics.sp, frame: frame, rich: richText,
         )
         let lineWidth = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp)
         let framePath: CGPath?

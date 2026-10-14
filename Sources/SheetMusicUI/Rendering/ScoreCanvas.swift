@@ -259,12 +259,13 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 color: tempoColor.map { Color(scoreColor: $0) } ?? .primary,
                 metrics: metrics,
             )
-        case let .textMark(.lyrics(lyricColor, _, _, _, properties), text, p, _):
+        case let .textMark(.lyrics(lyricColor, _, _, _, properties), text, p, richText):
             TextMarkRenderer.drawLyric(
                 context: &context, text: text,
                 origin: shift(p),
                 properties: properties,
                 color: lyricColor.map { Color(scoreColor: $0) } ?? .primary,
+                richText: richText,
                 metrics: metrics,
             )
         case let .beam(from, to, direction, level, beamColor):
@@ -366,22 +367,23 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 isAbove: above,
                 metrics: metrics,
             )
-        case let .marker(kind, text, p, _, _):
+        case let .marker(kind, text, p, _, richText):
             MarkerRenderer.draw(
                 context: &context, kind: kind, text: text,
-                origin: shift(p), metrics: metrics,
+                origin: shift(p), richText: richText, metrics: metrics,
             )
-        case let .rehearsalMark(text, p, frame, color, _, _, properties, _):
+        case let .rehearsalMark(text, p, frame, color, _, _, properties, richText):
             RehearsalMarkRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), frame: frame, color: color,
                 properties: properties,
+                richText: richText,
                 metrics: metrics,
             )
-        case let .jump(text, p, _, _):
+        case let .jump(text, p, _, richText):
             JumpRenderer.draw(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics,
+                origin: shift(p), richText: richText, metrics: metrics,
             )
         case let .measureNumber(text, p):
             MeasureNumberRenderer.draw(
@@ -393,13 +395,14 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .staffText(text, p, color, style, _, _, properties, _, _):
+        case let .staffText(text, p, color, style, _, _, properties, _, richText):
             StaffTextRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p),
                 color: color,
                 style: style,
                 properties: properties,
+                richText: richText,
                 metrics: metrics,
             )
         case let .harmony(lh):

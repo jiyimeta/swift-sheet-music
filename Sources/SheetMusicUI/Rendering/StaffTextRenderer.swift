@@ -14,11 +14,18 @@ enum StaffTextRenderer {
         color: ScoreColor?,
         style: TextStyleType = .staffText,
         properties: TextProperties = TextProperties(),
+        richText: LayoutRichText? = nil,
         metrics: StaffMetrics,
     ) {
-        guard !text.isEmpty else { return }
         let swiftUIColor: Color = color.map(swiftUIColor(_:))
             ?? .primary
+        if let richText {
+            TextInkRenderer.drawRich(
+                context: &context, richText: richText, origin: origin, anchor: CGPoint(x: 0, y: 1), color: swiftUIColor,
+            )
+            return
+        }
+        guard !text.isEmpty else { return }
         let resolved = ResolvedTextStyle.resolve(
             style,
             overrides: properties,

@@ -64,6 +64,12 @@ enum TitleFrameLayerBuilder {
         )
         root.masksToBounds = false
         for line in TitleFrameRenderer.placedLines(frame) {
+            if !line.richRuns.isEmpty {
+                if let path = ScoreLayerBuilder.richTextPath(runs: line.richRuns, decorations: line.richDecorations) {
+                    root.addSublayer(ScoreLayerBuilder.fillLayer(path: path, height: height))
+                }
+                continue
+            }
             guard let layer = ScoreLayerBuilder.textLayer(
                 text: line.text,
                 at: line.position,

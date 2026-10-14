@@ -22,6 +22,12 @@ public enum TitleFrameRenderer {
         origin: CGPoint = .zero,
     ) {
         for line in placedLines(frame, origin: origin) {
+            if !line.richRuns.isEmpty {
+                if let path = ScoreLayerBuilder.richTextPath(runs: line.richRuns, decorations: line.richDecorations) {
+                    context.fill(Path(path), with: .color(.black))
+                }
+                continue
+            }
             let resolved = context.resolve(
                 Text(line.text)
                     .font(font(size: line.fontSize))
@@ -48,6 +54,9 @@ public enum TitleFrameRenderer {
         let position: CGPoint
         let anchor: UnitPoint
         let fontSize: CGFloat
+        /// The rich line's runs on the page; empty for a plain line (`LayoutTitleFrame.PlacedLine.positionedRuns`).
+        let richRuns: [LayoutRichTextPositionedRun]
+        let richDecorations: [LayoutRichTextDecoration]
     }
 
     /// `LayoutTitleFrame.placedLines(origin:)` in SwiftUI's anchor
@@ -63,6 +72,7 @@ public enum TitleFrameRenderer {
                 position: line.position,
                 anchor: UnitPoint(x: line.horizontalAnchor, y: 0),
                 fontSize: line.fontSize,
+                richRuns: line.positionedRuns, richDecorations: line.decorations,
             )
         }
     }
