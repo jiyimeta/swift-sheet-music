@@ -252,11 +252,12 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .textMark(.tempo(_, tempoColor, properties), text, p, _):
+        case let .textMark(.tempo(_, tempoColor, properties), text, p, richText):
             TextMarkRenderer.drawTempo(
                 context: &context, text: text,
                 origin: shift(p), properties: properties,
                 color: tempoColor.map { Color(scoreColor: $0) } ?? .primary,
+                richText: richText,
                 metrics: metrics,
             )
         case let .textMark(.lyrics(lyricColor, _, _, _, properties), text, p, richText):

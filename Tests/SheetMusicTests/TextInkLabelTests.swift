@@ -99,6 +99,28 @@
             }
         }
 
+        /// One drawn run as the web renderer sees it: a `.text` in its face, or a `.glyph` in Bravura.
+        private struct DrawnRun {
+            let text: String
+            let x: Double
+            let y: Double
+            let size: Double
+            let face: String
+        }
+
+        private static func drawnRun(_ command: DrawCommand) -> DrawnRun? {
+            switch command {
+            case let .text(text, x, y, size, fontID):
+                #expect(fontID != .system, "a portable stream names no system face")
+                return DrawnRun(text: text, x: x, y: y, size: size, face: fontID == .smufl ? "Bravura" : "Edwin")
+            case let .glyph(codepoint, x, y, size, _):
+                guard let scalar = Unicode.Scalar(codepoint) else { return nil }
+                return DrawnRun(text: String(Character(scalar)), x: x, y: y, size: size, face: "Bravura")
+            default:
+                return nil
+            }
+        }
+
         /// Reconstruct the Web renderer's real outlines from emitted baseline commands.
         /// No layout metrics or anchoring helper contributes the expected geometry.
         ///
@@ -114,9 +136,9 @@
                     flags = value
                     #expect(value & DrawCommand.TextStyleFlag.semibold == 0, "a portable stream names no semibold")
                 }
-                guard case let .text(text, x, y, size, fontID) = command else { continue }
-                #expect(fontID != .system, "a portable stream names no system face")
-                let font = TextInkOracle.font(face: fontID == .smufl ? "Bravura" : "Edwin", size: size * scale)
+                guard let run = Self.drawnRun(command) else { continue }
+                let (text, x, y, size) = (run.text, run.x, run.y, run.size)
+                let font = TextInkOracle.font(face: run.face, size: size * scale)
                 guard let path = TextInkOracle.path(text, font: font) else { continue }
                 let outline = CGMutablePath(); outline.addPath(path)
                 if flags & 1 != 0 {

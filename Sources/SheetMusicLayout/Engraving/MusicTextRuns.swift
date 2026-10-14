@@ -5,9 +5,9 @@ import SheetMusicFoundation
 ///
 /// MuseScore stores tempo text like `<sym>metNoteQuarterUp</sym> = 128`
 /// where the music symbols resolve to SMuFL Private Use Area codepoints
-/// (U+E000–U+F8FF). The Apple SwiftUI renderer and the Android wire
-/// format both need to switch fonts at run boundaries; this helper
-/// produces that segmentation from a single source of truth.
+/// (U+E000–U+F8FF). No renderer in this package uses it any more — a
+/// tempo marking is typeset from runs (`LayoutRichText`) — but it stays
+/// public for hosts that split such strings themselves.
 public enum MusicTextRuns {
     public enum Kind: Sendable, Equatable {
         /// Run consists entirely of SMuFL PUA codepoints — render with

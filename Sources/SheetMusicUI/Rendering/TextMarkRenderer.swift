@@ -94,58 +94,22 @@ enum TextMarkRenderer {
         )
     }
 
-    /// Tempo indication ("♩ = 120"). MuseScore default: Edwin 12 pt
-    /// bold for the text portion + Bravura for the leading music
-    /// symbol; runs come from `MusicTextRuns.runs`. `properties` and
-    /// `color` are the marking's own font override and ink, applied to
-    /// both runs.
+    /// A tempo marking: its typeset runs — the metronome glyph a Bravura symbol run at the tempo style's symbol size —
+    /// or, for an element built without them, its plain text typeset the same way (`LayoutRichText.tempoText`).
+    /// `properties` and `color` are the marking's font override and ink.
     static func drawTempo(
         context: inout GraphicsContext,
         text: String,
         origin: CGPoint,
         properties: TextProperties = TextProperties(),
         color: Color = .primary,
+        richText: LayoutRichText? = nil,
         metrics: StaffMetrics,
     ) {
-        let style = ResolvedTextStyle.resolve(
-            .tempo, overrides: properties, metrics: metrics,
+        TextInkRenderer.drawRich(
+            context: &context,
+            richText: richText ?? LayoutRichText.tempoText(text, properties: properties, metrics: metrics),
+            origin: origin, anchor: LayoutRichText.anchor(for: .tempo), color: color,
         )
-        // Inline Bravura symbol at the same point size as the
-        // surrounding Edwin text — MuseScore renders metronome glyphs
-        // proportional to the text, not at full SMuFL 1-em staff size.
-        let glyphSize = style.pointSize
-        var cursorX = origin.x
-        for run in MusicTextRuns.runs(in: text) {
-            let resolved: GraphicsContext.ResolvedText
-            let font: LayoutFont
-            switch run.kind {
-            case .musicSymbol:
-                resolved = context.resolve(
-                    Text(run.text)
-                        .foregroundColor(color)
-                        .font(.custom(SMuFLFamily.bravura, size: glyphSize)),
-                )
-                font = LayoutFont(
-                    face: SMuFLFamily.bravura, pointSize: glyphSize,
-                )
-            case .text:
-                resolved = context.resolve(
-                    Text(run.text)
-                        .foregroundColor(color)
-                        .font(style.font),
-                )
-                font = LayoutFont(
-                    face: style.face, pointSize: style.pointSize,
-                )
-            }
-            context.draw(
-                resolved,
-                at: CGPoint(x: cursorX, y: origin.y),
-                anchor: .leading,
-            )
-            cursorX += FontMetrics.provider.typographicWidth(
-                text: run.text, font: font,
-            )
-        }
     }
 }

@@ -2087,12 +2087,10 @@ extension LayoutEngine {
             switch positioned.element {
             case let .tempo(t):
                 guard t.visible || options.showsInvisibleElements else { break }
-                let value = Int(t.beatsPerMinute.rounded())
-                // `t.beatGlyph` is the marking's beat note as Bravura "Individual notes" glyphs (e.g. a quarter
-                // U+E1D5, or a dotted quarter U+E1D5 U+E1E7). Renderers split the string into Bravura-glyph and
-                // Edwin-text runs via `MusicTextRuns.runs`.
-                // Color and font ride along for the renderers. Neither moves the origin, which is a fixed offset
-                // from the staff rather than a measured one.
+                // The marking draws from its runs: its authored text and formatting, or the derived "♩ = N" in
+                // MuseScore's palette spelling (`Tempo.displayedRichText`), typeset in the tempo style with the
+                // marking's font override. Color rides along for the renderers. Neither moves the origin, which is a
+                // fixed offset from the staff rather than a measured one.
                 let element = LayoutElement.textMark(
                     kind: .tempo(
                         anchor: systemLaneAnchor(
@@ -2102,12 +2100,15 @@ extension LayoutEngine {
                         color: t.elementProperties.color,
                         properties: t.properties.fontOverrides,
                     ),
-                    text: "\(t.beatGlyph) = \(value)",
+                    text: t.text ?? "\(t.beatGlyph) = \(Tempo.printedNumber(t.beatsPerMinute))",
                     origin: CGPoint(
                         x: xAtTick
                             + CGFloat(t.offsetX) * metrics.sp,
                         y: staffMidY - metrics.sp * 4
                             + CGFloat(t.offsetY) * metrics.sp,
+                    ),
+                    richText: LayoutRichText(
+                        t.displayedRichText, style: .tempo, overrides: t.properties.fontOverrides, metrics: metrics,
                     ),
                 )
                 if t.visible { out.append(element) } else { invisibleOut.append(element) }

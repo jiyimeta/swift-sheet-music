@@ -350,13 +350,7 @@ struct LayoutElementAutoplacedShapeTests {
     /// same em-box trap applies to its glyph half: the union must
     /// use the glyph's measured ink, not Bravura's 4 em line box.
     ///
-    /// And it must place that ink the way `ScoreLayerBuilder` draws
-    /// it — `bravuraInkCenteredLayer` centres the glyph's INK on
-    /// `origin.y`. Offsetting it by the Edwin run's baseline (which
-    /// sits 3.98 pt below `origin.y` at this size) instead put the
-    /// band 0.57 sp off, more than the pass's whole 0.5 sp
-    /// `minVerticalDistance` budget — and a height-only assertion
-    /// could not see it. Hence the explicit min/max Y below.
+    /// It is the box of the runs every renderer draws (`LayoutRichText`), so the skyline and the page agree.
     ///
     /// The band's absolute position used to be Apple-only, because the
     /// union's edges are set by the EDWIN run's ascent and descent while the
@@ -380,11 +374,12 @@ struct LayoutElementAutoplacedShapeTests {
         #expect(box.height > metrics.sp * 2)
         // …but nowhere near Bravura's 4 em (≈ 9.7 sp here).
         #expect(box.height < metrics.sp * 5)
-        // Both the Edwin box and the glyph ink are centred on
-        // `origin.y`, so their union is too — exactly.
-        #expect(abs((box.minY + box.maxY) / 2 - -14) < 0.01)
-        #expect(abs(box.minY - (-14 - metrics.sp * 1.2192)) < 0.05)
-        #expect(abs(box.maxY - (-14 + metrics.sp * 1.2192)) < 0.05)
+        // The box is the typeset block's — the text's line box united with the glyph's ink, the glyph on the text's
+        // baseline as MuseScore sets it — not Bravura's em box.
+        let rich = LayoutRichText.tempoText("\u{E1D5} = 120", metrics: metrics)
+        let expected = LayoutElementShape.textRect(rich: rich, origin: CGPoint(x: 20, y: -14), kind: .tempo)
+        #expect(abs(box.minY - expected.minY) < 0.01)
+        #expect(abs(box.maxY - expected.maxY) < 0.01)
     }
 
     @Test func melismaAndHyphenAreThinSpans() throws {

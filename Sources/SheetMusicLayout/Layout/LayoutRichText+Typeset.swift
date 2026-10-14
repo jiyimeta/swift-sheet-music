@@ -98,11 +98,25 @@ extension LayoutRichText {
 
 /// One element's run formatting: the base font and sizes each run's format applies to.
 private struct RichTextTypesetter {
+    /// The face MuseScore gives every symbol in a text (`TextBase::createBlocks`,
+    /// `engraving/dom/textbase.cpp:1724-1740`) and the one MuseScore 2/3 files spell a metronome mark in: `<font
+    /// face="ScoreText"/>` then U+ECA5.
+    static let scoreTextFace = "ScoreText"
+    /// SMuFL's code points: the Private Use Area.
+    static let smuflScalars: ClosedRange<UInt32> = 0xE000 ... 0xF8FF
+
     let baseFont: LayoutFont
     let pointScale: CGFloat
     let symbolPointSize: CGFloat
     let underline: Bool
     let strike: Bool
+
+    /// What a source run typesets as: its content, its format, and whether it can carry an underline or a strike.
+    private struct Piece {
+        let content: LayoutRichTextRun.Content
+        let format: RichTextFormat
+        let decorates: Bool
+    }
 
     func line(_ source: [RichTextRun]) -> LayoutRichTextLine {
         let provider = FontMetrics.provider
@@ -110,40 +124,17 @@ private struct RichTextTypesetter {
         var pen: CGFloat = 0
         var ascent: CGFloat?
         var descent: CGFloat?
-        for run in source {
-            let format: RichTextFormat
-            let content: LayoutRichTextRun.Content
-            // Only a fragment in a text face is underlined or struck through (`TextFragment::font`,
-            // `textbase.cpp:914-920`); every `<sym>`, the `space` one included, is a ScoreText fragment.
-            let decorates: Bool
-            switch run {
-            case let .text(text, runFormat):
-                format = runFormat
-                content = .text(text)
-                decorates = true
-            case let .symbol(name, runFormat):
-                format = runFormat
-                decorates = false
-                // MuseScore inserts a plain space for `SymId::space`, as ScoreText like any symbol, and drops a name it
-                // has no glyph for (`TextBase::createBlocks`, `engraving/dom/textbase.cpp:1724-1740`).
-                if name == "space" {
-                    content = .text(" ")
-                } else if let codepoint = SMuFLCodepoint.byName(name) {
-                    content = .symbol(codepoint: codepoint)
-                } else {
-                    continue
-                }
-            }
-            let runFont = font(for: content, format: format)
-            let advance = provider.typographicWidth(text: content.string, font: runFont)
+        for piece in source.flatMap(Self.pieces(of:)) {
+            let runFont = font(for: piece.content, format: piece.format)
+            let advance = provider.typographicWidth(text: piece.content.string, font: runFont)
             runs.append(LayoutRichTextRun(
-                content: content, font: runFont, x: pen, advance: advance,
-                baselineShift: baselineShift(format, font: runFont),
-                underline: decorates && (format.underline ?? underline),
-                strike: decorates && (format.strike ?? strike),
+                content: piece.content, font: runFont, x: pen, advance: advance,
+                baselineShift: baselineShift(piece.format, font: runFont),
+                underline: piece.decorates && (piece.format.underline ?? underline),
+                strike: piece.decorates && (piece.format.strike ?? strike),
             ))
             pen += advance
-            if case .text = content {
+            if case .text = piece.content {
                 ascent = max(ascent ?? 0, provider.ascent(font: runFont))
                 descent = max(descent ?? 0, provider.descent(font: runFont))
             }
@@ -153,6 +144,48 @@ private struct RichTextTypesetter {
             ascent: ascent ?? provider.ascent(font: baseFont),
             descent: descent ?? provider.descent(font: baseFont),
         )
+    }
+
+    /// Only a fragment in a text face is underlined or struck through (`TextFragment::font`, `textbase.cpp:914-920`);
+    /// every `<sym>`, the `space` one included, is a ScoreText fragment. MuseScore inserts a plain space for
+    /// `SymId::space` and drops a name it has no glyph for (`TextBase::createBlocks`, `textbase.cpp:1724-1740`).
+    private static func pieces(of run: RichTextRun) -> [Piece] {
+        switch run {
+        case let .text(text, format) where format.face == scoreTextFace:
+            return scoreTextPieces(text, format: format)
+        case let .text(text, format):
+            return [Piece(content: .text(text), format: format, decorates: true)]
+        case let .symbol(name, format):
+            if name == "space" {
+                return [Piece(content: .text(" "), format: format, decorates: false)]
+            }
+            guard let codepoint = SMuFLCodepoint.byName(name) else { return [] }
+            return [Piece(content: .symbol(codepoint: codepoint), format: format, decorates: false)]
+        }
+    }
+
+    /// A text run in the ScoreText face is music, as MuseScore draws it: each SMuFL character a symbol run, anything
+    /// else text in the element's own face (ScoreText has no letters).
+    private static func scoreTextPieces(_ text: String, format: RichTextFormat) -> [Piece] {
+        var textFormat = format
+        textFormat.face = nil
+        var pieces: [Piece] = []
+        var pending = String.UnicodeScalarView()
+        for scalar in text.unicodeScalars {
+            guard smuflScalars.contains(scalar.value) else {
+                pending.append(scalar)
+                continue
+            }
+            if !pending.isEmpty {
+                pieces.append(Piece(content: .text(String(pending)), format: textFormat, decorates: true))
+                pending = String.UnicodeScalarView()
+            }
+            pieces.append(Piece(content: .symbol(codepoint: scalar.value), format: format, decorates: false))
+        }
+        if !pending.isEmpty {
+            pieces.append(Piece(content: .text(String(pending)), format: textFormat, decorates: true))
+        }
+        return pieces
     }
 
     /// A symbol is a glyph in the music font, never bold or italic (MuseScore's `musicalSymbolsNotBold` test,
@@ -180,5 +213,20 @@ private struct RichTextTypesetter {
         case .subScript: xHeight * LayoutRichText.subscriptOffset
         case .superScript: xHeight * LayoutRichText.superscriptOffset
         }
+    }
+}
+
+extension LayoutRichText {
+    /// A tempo marking's plain text typeset as the marking draws — its SMuFL characters (`Tempo.beatGlyph`'s, or a
+    /// MuseScore 2/3 metronome character) as glyphs, the rest in the tempo font — for a `.textMark(.tempo)` built
+    /// without runs. Layout always supplies runs; this keeps a hand-built element measured and drawn alike everywhere.
+    package static func tempoText(
+        _ text: String, properties: TextProperties = TextProperties(), metrics: StaffMetrics,
+    ) -> LayoutRichText {
+        let face = RichTextFormat(face: RichTextTypesetter.scoreTextFace)
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> [RichTextRun] in
+            line.isEmpty ? [] : [.text(String(line), face)]
+        }
+        return LayoutRichText(RichText(lines: lines), style: .tempo, overrides: properties, metrics: metrics)
     }
 }

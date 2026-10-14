@@ -611,14 +611,11 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             } else if case let .tempo(_, color, properties) = kind {
                 let argb = color.flatMap(LayoutBridge.argb(from:))
                 if let argb { out.append(.setColor(argb: argb)) }
-                emitText(
-                    text: text,
-                    style: .tempo,
-                    properties: properties,
-                    originX: mox + Double(origin.x),
-                    originY: moy + Double(origin.y),
-                    sp: sp,
-                    into: &out,
+                let tempoMetrics = StaffMetrics(staffSize: CGFloat(sp) * 4)
+                emitRichText(
+                    richText ?? LayoutRichText.tempoText(text, properties: properties, metrics: tempoMetrics),
+                    origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
+                    anchor: LayoutRichText.anchor(for: .tempo), into: &out,
                 )
                 if argb != nil { out.append(.setColor(argb: ambientArgb)) }
             } else {

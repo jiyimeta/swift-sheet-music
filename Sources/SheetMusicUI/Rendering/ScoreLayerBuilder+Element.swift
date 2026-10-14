@@ -139,12 +139,14 @@ extension ScoreLayerBuilder {
                     parent.addSublayer(layer)
                 }
             }
-        case let .textMark(.tempo(_, tempoColor, properties), text, p, _):
-            drawTempoText(
-                text: text, origin: shift(p), properties: properties,
-                color: tempoColor.map(scoreColorToCGColor) ?? inkColor,
-                metrics: metrics, height: height, into: parent,
-            )
+        case let .textMark(.tempo(_, tempoColor, properties), text, p, richText):
+            if let layer = richTextLayer(
+                richText ?? LayoutRichText.tempoText(text, properties: properties, metrics: metrics),
+                at: shift(p), anchor: LayoutRichText.anchor(for: .tempo),
+                color: tempoColor.map(scoreColorToCGColor) ?? inkColor, height: height,
+            ) {
+                parent.addSublayer(layer)
+            }
         case let .textMark(
             .lyrics(lyricColor, _, _, _, properties), text, p, richText,
         ):

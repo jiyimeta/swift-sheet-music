@@ -88,19 +88,14 @@ extension LayoutBridge {
         out.append(.setTextStyle(flags: DrawCommand.TextStyleFlag.none))
     }
 
-    /// Emit a text element honoring the role's MuseScore anchor.
-    /// Splits the string into Bravura-glyph runs (SMuFL PUA codepoints)
-    /// and Edwin-text runs via `MusicTextRuns.runs`, advancing X across
-    /// each run. The first run anchors at `originX` (adjusted by anchor
-    /// offset using the total width).
+    /// Emit a text element at its role's leading-center anchor, in the role's font with the element's font override.
     ///
     /// The role's bold / italic defaults ride along as a `setTextStyle` pair around the runs, read off the font each
-    /// run is measured in (`TextFontMapping`). They are the reason a tempo mark and a rehearsal mark used to render in
-    /// regular weight everywhere but Apple: the wire had no way to say "bold", so `ResolvedTextStyle`'s answer stopped
-    /// at the Apple renderer's own door.
+    /// run is measured in (`TextFontMapping`). They are the reason a rehearsal mark used to render in regular weight
+    /// everywhere but Apple: the wire had no way to say "bold", so `ResolvedTextStyle`'s answer stopped at the Apple
+    /// renderer's own door.
     ///
-    /// `properties` is the element's font override — a tempo marking's, today — applied the way
-    /// `emitRoleText` applies it.
+    /// `properties` is applied the way `emitRoleText` applies it.
     static func emitText(
         text: String,
         style: TextStyleType,
@@ -111,23 +106,13 @@ extension LayoutBridge {
         into out: inout [DrawCommand],
     ) {
         let metrics = StaffMetrics(staffSize: CGFloat(sp) * 4)
-        let origin = CGPoint(x: originX, y: originY)
-        if style == .tempo {
-            let runs = TextInkGeometry.tempoRuns(text: text, origin: origin, properties: properties, metrics: metrics)
-            for run in runs {
-                withTextStyle(TextFontMapping.wire(for: run.font).style, into: &out) { out in
-                    emitBaselineText(text: run.text, font: run.font, baseline: run.baseline, into: &out)
-                }
-            }
-        } else {
-            emitAnchoredText(
-                text: text,
-                font: TextInkGeometry.font(for: style, overrides: properties, metrics: metrics),
-                origin: origin,
-                anchor: CGPoint(x: 0, y: 0.5),
-                into: &out,
-            )
-        }
+        emitAnchoredText(
+            text: text,
+            font: TextInkGeometry.font(for: style, overrides: properties, metrics: metrics),
+            origin: CGPoint(x: originX, y: originY),
+            anchor: CGPoint(x: 0, y: 0.5),
+            into: &out,
+        )
     }
 
     /// Emit a dynamic marking. Standard symbol dynamics (p, mf, ff,

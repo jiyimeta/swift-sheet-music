@@ -109,9 +109,9 @@
             let styled = Self.commands(lane: [.tempo(tempo)])
             #expect(!Self.colors(plain).contains(Self.redARGB))
             #expect(Self.colors(styled).contains(Self.redARGB))
-            // The text run after the metronome glyph, its separating space already advanced past.
-            let plainSize = try #require(Self.size(of: "= 120", in: plain))
-            let styledSize = try #require(Self.size(of: "= 120", in: styled))
+            // The text run after the metronome glyph: a typeset run keeps its leading space.
+            let plainSize = try #require(Self.size(of: " = 120", in: plain))
+            let styledSize = try #require(Self.size(of: " = 120", in: styled))
             #expect(styledSize > plainSize * 1.5)
         }
     }

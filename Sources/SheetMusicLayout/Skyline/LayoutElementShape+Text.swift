@@ -257,8 +257,9 @@ extension LayoutElementShape {
                 origin: origin, anchor: .leadingCenter,
             )
         case let .tempo(_, _, properties):
-            return tempoRect(
-                text: text, origin: origin, properties: properties, metrics: metrics,
+            return textRect(
+                rich: rich ?? LayoutRichText.tempoText(text, properties: properties, metrics: metrics),
+                origin: origin, kind: .tempo,
             )
         }
     }
@@ -296,59 +297,6 @@ extension LayoutElementShape {
         return CGRect(
             x: origin.x, y: baseline + ink.top,
             width: width, height: max(0, ink.bottom - ink.top),
-        )
-    }
-
-    /// Tempo is a mixed Bravura + Edwin run list; sum the run widths
-    /// the way the renderers advance their cursor.
-    ///
-    /// Mirrors `ScoreLayerBuilder+Element`'s CALayer tempo path — the
-    /// one `ScoreView` actually renders through — which draws the beat
-    /// glyph via `bravuraInkCenteredLayer`, i.e. with the glyph's **ink
-    /// box centred on `origin.y`**. It deliberately does *not* mirror
-    /// `TextMarkRenderer.drawTempo`, whose Canvas path anchors every run
-    /// `.leading` on `origin.y`; the two renderers disagree on the beat
-    /// glyph's Y and the CALayer one is production.
-    private static func tempoRect(
-        text: String, origin: CGPoint, properties: TextProperties, metrics: StaffMetrics,
-    ) -> CGRect {
-        let textFont = styleFont(.tempo, overrides: properties, sp: metrics.sp)
-        let glyphFont = LayoutFont(
-            face: SMuFLFamily.bravura, pointSize: textFont.pointSize,
-        )
-        let provider = FontMetrics.provider
-        let runs = MusicTextRuns.runs(in: text)
-        var width: CGFloat = 0
-        for run in runs {
-            let f = run.kind == .musicSymbol ? glyphFont : textFont
-            width += provider.typographicWidth(text: run.text, font: f)
-        }
-        // Edwin's em box is a fair stand-in for its own ink, so the
-        // text half of the run keeps it. The Bravura half must NOT —
-        // its em box is 4 em (see `smuflRunInkExtent`), which at the
-        // tempo size is 68 pt of skyline against ~14 pt of metronome
-        // glyph. Union the text box with the glyphs' measured ink,
-        // centred on `origin.y` exactly as the CALayer renderer draws
-        // it. Offsetting the ink by the *Edwin* baseline (as an earlier
-        // revision did) drops the band ~0.57 sp — more than the pass's
-        // whole 0.5 sp `minVerticalDistance` budget.
-        let textHeight = provider.ascent(font: textFont)
-            + provider.descent(font: textFont)
-        var top = origin.y - textHeight / 2
-        var bottom = origin.y + textHeight / 2
-        let glyphs = runs
-            .filter { $0.kind == .musicSymbol }
-            .map(\.text).joined()
-        if let ink = smuflRunInkExtent(
-            glyphs: glyphs, pointSize: glyphFont.pointSize,
-        ) {
-            let inkHeight = max(0, ink.bottom - ink.top)
-            top = min(top, origin.y - inkHeight / 2)
-            bottom = max(bottom, origin.y + inkHeight / 2)
-        }
-        return CGRect(
-            x: origin.x, y: top,
-            width: width, height: max(0, bottom - top),
         )
     }
 

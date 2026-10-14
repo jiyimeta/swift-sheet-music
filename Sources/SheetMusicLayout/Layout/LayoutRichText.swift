@@ -237,6 +237,9 @@ extension LayoutRichText {
         /// A text marker's runs; a segno or coda draws its glyph instead (`MarkerGlyph.variant`).
         case marker
         case jump
+        /// A tempo marking, hung leading and vertically centered on its origin — where every tempo was placed before
+        /// it was typeset from runs.
+        case tempo
     }
 
     /// The point of the block an element's `origin` names, for `blockOrigin(at:anchor:)` and everything placed by it
@@ -251,6 +254,7 @@ extension LayoutRichText {
         case .lyric: CGPoint(x: 0.5, y: 0.5)
         case .marker: NotationTextStyle.anchorPoint(for: .markerText)
         case .jump: NotationTextStyle.anchorPoint(for: .jump)
+        case .tempo: CGPoint(x: 0, y: 0.5)
         }
     }
 }

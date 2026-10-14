@@ -67,9 +67,18 @@ and this project adheres to
   from 4.9.0's for the same file. The MSCX bytes written for unedited markup are unchanged.
 - **`FrameText.text` can hold `"\n"`.** A title-block text with a `<br/>` now keeps it as a line break instead of
   joining the lines; a client showing a title, subtitle, composer or lyricist on one line has to handle it.
+- **The metronome glyph sits on the text's baseline at MuseScore's tempo symbol size** (20 pt at the reference
+  spatium) rather than ink-centered at the text's size, and a number prints to two decimals ("♩ = 74.8"), as the saved
+  text says. A text run in MuseScore's `ScoreText` face typesets as music glyphs, so a MuseScore 2/3 metronome mark
+  draws as the note it is in every formatted text. `TextInkGeometry.tempoRuns` and `TextInkGeometry.PositionedRun`
+  (package) are removed; `MusicTextRuns` stays public, unused by the package's renderers.
 
 ### Fixed
 
+- **A tempo marking draws what it says** (import-fidelity F2.1–F2.5): "a tempo", "tempo primo", Italian terms,
+  "Allegro ♩ = 144" and "♩ = ♪" draw their own text and formatting instead of a regenerated "♩ = N". Every marking is
+  typeset from runs (`LayoutRichText`) on the layer tree, the Canvas and the draw program alike, so its ink, its skyline
+  and its pixels agree.
 - **A MuseScore tempo marking opens and saves as written** (import-fidelity F2.8). `Tempo.decode` keeps the marking's
   text and formatting, `<type>` (a tempo, tempo primo), `<play>`, `<followText>` and the children nothing models; a
   text that is exactly the marking this library prints decodes as derived, so a marking made here stays derived after
