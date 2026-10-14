@@ -49,11 +49,23 @@ struct ScoreHitTesterNavigationTests {
     /// An empty jump keeps the zero-width, line-high box it always had, so it can still be selected and deleted.
     @Test(
         "a jump is highlighted by its runs' box and hit within text's reach",
-        arguments: ["D.S.", "", "D.S.\nal Fine"],
+        arguments: ["D.S.", "D.S.\nal Fine"],
     )
     func jumpHit(_ text: String) throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         try Self.checkHit(Self.jump(text), isJump: true)
+    }
+
+    /// A jump with no words prints nothing (`Jump.displayedRichText`), so, like a marker without runs, it reserves no
+    /// box and is never hit.
+    @Test("a jump without words is never hit")
+    func emptyJumpIsNotHit() throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let jump = Self.jump("")
+        #expect(LayoutElementShape.navigationLabelRect(for: jump) == nil)
+        let tester = ScoreHitTester(document: ElementHitFixtures.document([], markers: [], jumps: [jump]))
+        let target = try ScoreHitTarget(elementID: #require(jump.elementID))
+        #expect(tester.elementHitRect(for: target) == nil)
     }
 
     @Test("a marker without runs is never hit")
