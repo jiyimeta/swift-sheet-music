@@ -84,13 +84,16 @@ extension Chord {
                 XMLTreeNode(name: "visible", text: "0"),
             ]))
         }
-        // Lyrics sit between durationType and the first <Note>: this
-        // matches MuseScore's serializer (Chord::write) and is what
-        // both MS3 and MS4 readers expect. Empty-text placeholders
-        // (verse-padding entries inserted by the decoder when verse N
-        // exists without verse N-1) are skipped — emitting them
-        // produces stray empty syllables on screen.
-        for lyric in lyrics where !lyric.text.isEmpty {
+        // Lyrics sit between durationType and the first <Note>: this matches MuseScore's serializer (Chord::write) and
+        // is what both MS3 and MS4 readers expect. Empty-text placeholders (verse-padding entries inserted by the
+        // decoder when verse N exists without verse N-1) are skipped — emitting them produces stray empty syllables on
+        // screen.
+        //
+        // A syllable of symbols alone (`<text><sym>…</sym></text>`) has empty text too, but it is no placeholder: its
+        // markup still describes that text, so layout draws it (`Lyric.richText`) and its markup is written back
+        // (`Lyric.savesMarkup(options:)`). With preserved markup off it would save as an empty `<text>`, a stray
+        // syllable again, so it is skipped then.
+        for lyric in lyrics where !lyric.text.isEmpty || lyric.savesMarkup(options: options) {
             children.append(lyric.encode(options: options))
         }
         // Per-note overrides for a tie whose partner is one of this

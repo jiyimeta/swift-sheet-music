@@ -40,6 +40,13 @@ extension Lyric {
         return XMLTreeNode(name: "Lyrics", children: children)
     }
 
+    /// Whether `encode(options:)` writes this syllable's preserved markup back: it is on, and the markup still
+    /// describes `text` (`encodeText`'s own condition). A syllable of symbols alone is saved on this account alone, its
+    /// text being empty — the glissando label's encoder keeps a symbol-only label the same way.
+    func savesMarkup(options: MSCXEncoderOptions) -> Bool {
+        options.emitPreservedMarkup && preservedTextMarkup?.derivedText == text
+    }
+
     private var syllabicMSCXName: String {
         switch syllabic {
         case .single: "single"

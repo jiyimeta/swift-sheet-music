@@ -288,6 +288,31 @@ struct MSCXTextMarkupTests {
         #expect(try Self.xml(lyric.encode()).contains("<text><sym>keyboardPedalPed</sym></text>"))
     }
 
+    /// `Lyric.encode()` wrote the symbol back while the chord around it skipped the syllable as an empty padding
+    /// placeholder, so a save lost it. Encoded the way a save does, through the chord: verse 1 is the symbol, and the
+    /// decoder pads verse 0 with a placeholder that must still be skipped.
+    @Test("a symbol-only lyric survives its chord's encoding, and the padding before it does not")
+    func symbolOnlyLyricSurvivesChordEncoding() throws {
+        let chord = try Chord.decode(Self.parse("""
+        <Chord><durationType>quarter</durationType>
+          <Lyrics><no>1</no><text><sym>keyboardPedalPed</sym></text></Lyrics>
+          <Note><pitch>72</pitch><tpc>14</tpc></Note>
+        </Chord>
+        """))
+        #expect(chord.lyrics.map(\.verse) == [0, 1])
+        #expect(chord.lyrics.map(\.text) == ["", ""])
+
+        let xml = try Self.xml(chord.encodeAsChord(eid: .invalid))
+        #expect(xml.components(separatedBy: "<Lyrics>").count == 2, "exactly one <Lyrics>: \(xml)")
+        #expect(xml.contains("<no>1</no>"))
+        #expect(xml.contains("<text><sym>keyboardPedalPed</sym></text>"))
+
+        // With preserved markup off the syllable would save as an empty `<text>`, a stray syllable: none is written.
+        var options = MSCXEncoderOptions()
+        options.emitPreservedMarkup = false
+        #expect(try !Self.xml(chord.encodeAsChord(eid: .invalid, options: options)).contains("<Lyrics>"))
+    }
+
     @Test("a title line with a leading or trailing <br/> keeps its empty line: text and rich lines agree")
     func titleLineWithEdgeBreaks() throws {
         let frame = try ScoreFrame.decode(vbox: Self.parse("""
