@@ -57,6 +57,7 @@ extension MidiRenderer {
         // playback ticks (which include unrolled repeats) back to
         // pre-repeat ticks for ramp lookup.
         var originalMeasureBase: [Int] = []
+        var originalScoreEnd = 0
         do {
             var acc = 0
             for (idx, m) in staff.measures.enumerated() {
@@ -70,6 +71,7 @@ extension MidiRenderer {
                     measureIndex: idx, tempoMap: tempoMap,
                 )
             }
+            originalScoreEnd = acc
         }
 
         // Instrument-change channel switches, flattened against THIS
@@ -102,6 +104,10 @@ extension MidiRenderer {
         // bar line.
         var sustainedChannel: Int?
 
+        // The ramps the run being played hears (`HairpinRamp.appliesToPass(startingAt:)`): all of them until a repeat
+        // or a jump starts a new run.
+        var passRamps = hairpinRamps
+
         // The unrolled `plan` is computed ONCE, score-globally, from
         // staff 0's measure count (see `render(score:)`), then applied
         // to every staff. A hand-built `Score` whose non-canonical
@@ -114,8 +120,20 @@ extension MidiRenderer {
         var lastProcessedEntry: PlaybackEntry?
         for entry in plan {
             guard entry.measureIndex < staff.measures.count else { continue }
-            let jumped = lastProcessedEntry.map { $0.measureIndex + 1 != entry.measureIndex } ?? false
+            let previous = lastProcessedEntry
+            let jumped = previous.map { $0.measureIndex + 1 != entry.measureIndex } ?? false
             lastProcessedEntry = entry
+            if jumped, let previous {
+                // MuseScore 4 reads a note's level from a map built in playback order (`PlaybackContext::update`,
+                // `engraving/playback/playbackcontext.cpp:309-347`): a jump lands with the level in force where it
+                // left, and the new run hears only the ramps that reach it.
+                let sourceEnd = previous.measureIndex + 1 < originalMeasureBase.count
+                    ? originalMeasureBase[previous.measureIndex + 1]
+                    : originalScoreEnd
+                velocity = HairpinRamps.levelToCarry(at: sourceEnd - 1, ramps: passRamps, running: velocity)
+                let passStart = originalMeasureBase[entry.measureIndex]
+                passRamps = hairpinRamps.filter { $0.appliesToPass(startingAt: passStart) }
+            }
             // Splice in the source measure's notes if this measure is a
             // measure-repeat. Returns nil only when neither the current
             // measure nor any source measure has this voice — silent skip.
@@ -137,12 +155,11 @@ extension MidiRenderer {
                 voiceElements: effectiveVoice.elements.values,
             )
 
-            // When a new iteration loops back to original measure 0 (e.g. volta
-            // playback returning to the top of the score), re-emit timeSig + reset
-            // tempo to default — matches MuseScore's exportmidi behavior where
-            // each RepeatSegment whose first measure starts at tick 0 also emits
-            // those meta events at its utick start. Loops that repeat a measure
-            // mid-score (single-measure repeat) keep their existing state.
+            // When a new iteration loops back to original measure 0 (e.g. volta playback returning to the top of the
+            // score), re-emit timeSig + reset tempo to default (the dynamic level carries — see the jump above) —
+            // matches MuseScore's exportmidi behavior where each RepeatSegment whose first measure starts at tick 0
+            // also emits those meta events at its utick start. Loops that repeat a measure mid-score (single-measure
+            // repeat) keep their existing state.
             let isFreshSectionStart =
                 entry.isIterationStart && entry.measureIndex == 0 && entry.tickOffset > 0
             if isFreshSectionStart {
@@ -160,9 +177,6 @@ extension MidiRenderer {
                     ))))
                     tempoSequence = TempoSequence(tick: entry.tickOffset)
                 }
-                // Reset dynamic state too: starting a fresh section means notes
-                // play at the score's default (mf) velocity until a Dynamic re-asserts.
-                velocity = effectiveVelocity(forDynamic: nil, instrument: part.instrument)
             }
 
             var localTick = entry.tickOffset
@@ -275,7 +289,7 @@ extension MidiRenderer {
                         channel: channel,
                         division: division,
                         events: &events,
-                        hairpinRamps: hairpinRamps,
+                        hairpinRamps: passRamps,
                         ottavaRanges: ottavaRanges,
                         originalTickDelta: originalTickDelta,
                     )
@@ -302,7 +316,7 @@ extension MidiRenderer {
                     division: division,
                     events: &events,
                     lyricAnchors: &lyricAnchors,
-                    hairpinRamps: hairpinRamps,
+                    hairpinRamps: passRamps,
                     ottavaRanges: ottavaRanges,
                     originalTickDelta: originalTickDelta,
                 )

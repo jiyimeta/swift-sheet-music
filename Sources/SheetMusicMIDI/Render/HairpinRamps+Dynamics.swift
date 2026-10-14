@@ -104,7 +104,18 @@ struct DynamicsWalk {
             return HairpinRamp(
                 startTick: tick + step.offset, endTick: tick + next.offset - 1,
                 startVelocity: step.velocity, endVelocity: step.velocity, method: .normal, role: .transition,
+                origin: tick ... tick,
             )
         }
+    }
+}
+
+extension HairpinRamps {
+    /// The level a jump carries from `tick`, the last of the run it leaves: the ramp in force there, else `running` —
+    /// but never an accent's, which MuseScore 4 has already restored by the next segment, the jump's target
+    /// (`playbackcontext.cpp:401-405`).
+    static func levelToCarry(at tick: Int, ramps: [HairpinRamp], running: Int) -> Int {
+        let ramp = active(in: ramps.filter { $0.role != .accent }, at: tick)
+        return ramp.map { interpolate(ramp: $0, atOriginalTick: tick) } ?? running
     }
 }

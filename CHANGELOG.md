@@ -171,6 +171,11 @@ and this project adheres to
 
 ### Fixed
 
+- **A repeat or a jump carries the dynamic level in force** (import-fidelity, MuseScore 4 playback — owner decision c):
+  a return to bar 1 starts with the level the music left with — a hairpin's held level too, an accent's never —
+  instead of mf, and a run of measures hears only the hairpins that reach into it, so a hold from before a repeat's
+  start no longer leaks into the repeat. MuseScore's MIDI export still resets to mf; `MidiExportTests` records the
+  difference.
 - **fp, pf, sfp and sfpp change between their two levels** (import-fidelity F4.4, MuseScore 4 playback — owner decision
   c): the chord on the dynamic plays the first level (f, or p for pf), notes starting during the change take its six
   steps, and the second level (p, pp, f) is the running level from then on. The change lasts MuseScore's

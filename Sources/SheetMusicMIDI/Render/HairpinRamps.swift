@@ -27,6 +27,18 @@ struct HairpinRamp: Equatable {
     let endVelocity: Int // already articulation-scaled
     let method: Spanner.HairpinPayload.VeloChangeMethod
     var role: Role = .wedge
+    /// The ticks of what produced the ramp — a wedge's whole span for its segments and for its hold, a two-level
+    /// dynamic's own tick for its steps; `nil` for the ramp's own range (an accent's chord).
+    var origin: ClosedRange<Int>?
+
+    /// MuseScore 4 builds its dynamics map in playback order and lays out, for each run of measures, only the hairpins
+    /// that overlap it (`PlaybackContext::update`, `engraving/playback/playbackcontext.cpp:324-339`; `handleSpanners`,
+    /// `:540-567`): a run starting at original tick `start` hears a ramp produced there or later, or one whose hairpin
+    /// reaches past its start.
+    func appliesToPass(startingAt start: Int) -> Bool {
+        let range = origin ?? startTick ... endTick
+        return range.lowerBound >= start || range.upperBound > start
+    }
 }
 
 enum HairpinRamps {
@@ -179,6 +191,7 @@ enum HairpinRamps {
                 endVelocity: wedge.endVelocity,
                 method: .normal,
                 role: .hold,
+                origin: wedge.origin,
             )
         }
     }
@@ -298,6 +311,7 @@ enum HairpinRamps {
                 startVelocity: start,
                 endVelocity: end,
                 method: p.payload.veloChangeMethod,
+                origin: p.startTick ... p.endTick,
             )
         }
 

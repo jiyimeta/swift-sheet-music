@@ -54,6 +54,18 @@ enum DynamicPlaybackFixtures {
         return Score(division: 480, parts: [part], systemMeasures: IdentifiedArray(lane))
     }
 
+    /// `score` with a repeat from bar `start` through bar `end` (0-based), played twice.
+    static func repeating(_ score: Score, from start: Int, through end: Int) -> Score {
+        var score = score
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[start].startRepeat = true
+                staff.measures[end].endRepeatCount = 2
+            }
+        }
+        return score
+    }
+
     /// Every sounding note-on's velocity, in order.
     static func velocities(_ score: Score) throws -> [Int] {
         let midi = try MidiRenderer.render(score: score)
