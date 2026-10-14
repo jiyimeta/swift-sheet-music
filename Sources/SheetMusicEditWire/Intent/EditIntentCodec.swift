@@ -26,7 +26,7 @@ import Wirelet
 /// does the same for every case payload — there is no "omit a zero-valued scalar" shortcut. Every tag listed below
 /// must be written on encode, including zero-valued ones (a committed golden fixture emits literal `08 00` / `10 00`
 /// / `20 00` triples for exactly this reason), or decoding throws `unknownTag`. The one exception the macro allows
-/// is an `Optional<T>` (`T?`) stored property, written only when non-nil: `SetTempoIntentWire`'s tags 6–8 are the only
+/// is an `Optional<T>` (`T?`) stored property, written only when non-nil: `SetTempoIntentWire`'s tags 6–9 are the only
 /// ones, so a number-only tempo edit encodes exactly as it did before they existed. Every other field below is
 /// mandatory.
 ///
@@ -530,6 +530,7 @@ import Wirelet
 /// tag 6: textMode        u8, varint, OPTIONAL — absent = keep the text, 1 = derive it, 2 = set it to `text`
 /// tag 7: text            string, OPTIONAL — present only with textMode 2
 /// tag 8: playsBack       u8, varint, OPTIONAL — absent = leave `<play>`, 0 = mute, 1 = play
+/// tag 9: numberEdit      u8, varint, OPTIONAL — absent = the receiver infers it, 0 = number and beat kept, 1 = edited
 /// ```
 ///
 /// `SetStaffTextIntentWire` (`setStaffText`'s payload):

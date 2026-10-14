@@ -4,7 +4,7 @@ import Wirelet
 
 // Payload structs for intents 41…47 (edit-command parity, group 3). Tag layouts are documented in
 // `EditIntentCodec.swift`'s file-level comment alongside the older payloads; the rules there apply unchanged —
-// every field mandatory (`SetTempoIntentWire`'s tags 6–8 are the one `T?` exception, written only when non-nil),
+// every field mandatory (`SetTempoIntentWire`'s tags 6–9 are the one `T?` exception, written only when non-nil),
 // optionals as `has` + value pairs, enums this codec does not own as raw strings, small
 // closed enums as `u8` with a throwing table. The `Double` fields are the codec's first floating-point payloads:
 // Wirelet writes them as fixed 64-bit IEEE 754 bit patterns, so they are byte-stable and round-trip exactly.
@@ -56,8 +56,11 @@ public struct SetTempoIntentWire {
     public var text: String?
     /// Tag 8: `<play>` — absent leaves it, 0 mutes the marking, 1 plays it.
     public var playsBack: UInt8?
+    /// Tag 9: whether the number and beat were edited — absent infers it at the receiver (older senders), 0 no, 1 yes.
+    public var numberEdit: UInt8?
 
     public init(anchor: VoiceElementID, marking: SetTempo.Marking?) {
+        numberEdit = marking?.numberEdit.map { $0 ? 1 : 0 }
         self.anchor = VoiceElementIDWire(from: anchor)
         hasTempo = marking == nil ? 0 : 1
         beatsPerSecond = marking?.beatsPerSecond ?? 0
@@ -97,7 +100,7 @@ public struct SetTempoIntentWire {
             anchor: anchor.decoded(),
             marking: SetTempo.Marking(
                 beatsPerSecond: beatsPerSecond, beatNote: beatNote.decoded(), beatDots: Int(beatDots),
-                text: textEdit, playsBack: playsBack.map { $0 != 0 },
+                text: textEdit, playsBack: playsBack.map { $0 != 0 }, numberEdit: numberEdit.map { $0 != 0 },
             ),
         )
     }

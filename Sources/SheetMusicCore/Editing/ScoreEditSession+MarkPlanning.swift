@@ -24,7 +24,11 @@ extension ScoreEditSession {
         case let .removeClef(location):
             return RemoveClef(at: location)
         case let .setTempo(anchor, marking):
-            return SetTempo.current(at: anchor, in: score) == marking ? nil : SetTempo(anchor: anchor, marking: marking)
+            // The sender's `numberEdit` stamp says how to apply a write, not whether it changes anything.
+            var unstamped = marking
+            unstamped?.numberEdit = nil
+            let unchanged = SetTempo.current(at: anchor, in: score) == unstamped
+            return unchanged ? nil : SetTempo(anchor: anchor, marking: marking)
         case let .setStaffText(anchor, text, isSystemText):
             // Compared as given, because it is stored as given (`SetStaffText`): "pizz." and "pizz.\n" are two texts,
             // the second reserving an empty last line. A whitespace-only text never equals a mark that exists, so it

@@ -59,8 +59,14 @@ and this project adheres to
   and `playsBack`, and `Marking.beatsPerMinute` reads and writes the number in the marking's own beat.
   `SetTempo.current(at:in:)` reads the marking as it plays (an "a tempo" its reinstated tempo); `SetTempo.inForce(at:in:)`
   reads what plays at a beat without a marking. `SetTempoIntentWire` carries the two as optional tags 6–8, absent for a
-  number-only edit, whose bytes are unchanged; a decoder built before them skips the tags and applies the number and
-  beat, dropping the text and play edits.
+  number-only edit, whose bytes are unchanged. `Marking.numberEdit` (tag 9) states whether the sender edited the number
+  and beat, so a replay applies what was meant even when an earlier tempo changed first; a host stamps it with
+  `SetTempo.stamped(_:at:in:)`, and without it (an older sender) the receiver infers it as before.
+  **Mixed-version collaboration.** A 5.0.0 client that receives a number-only tempo edit from an older client also
+  rewrites the text equation and turns an "a tempo" into an ordinary marking, which the older client did not do. An
+  older client that receives a 5.0.0 edit applies the number and beat and drops the text, play and number-edit fields
+  (tags 6–9). `stableFingerprint` covers tempo text (tag 111), so such a split is detected but not repaired; groups
+  that mix versions should update.
 
 ### Changed
 

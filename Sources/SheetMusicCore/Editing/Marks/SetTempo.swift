@@ -24,6 +24,11 @@ public struct SetTempo: EditCommand {
         public var beatDots: Int
         public var text: TextEdit
         public var playsBack: Bool?
+        /// Whether the number and beat were edited: `true` writes them (and edits the words), `false` leaves them
+        /// alone, `nil` infers it by comparing with what `SetTempo.current` reports where the write is applied. The
+        /// inference differs between replicas when an earlier tempo changed before a replay, so a host stamps the
+        /// sender's intent with `SetTempo.stamped(_:at:in:)`; `nil` is what an older sender's intent carries.
+        public var numberEdit: Bool?
 
         /// What a write does to the marking's text.
         public enum TextEdit: Hashable, Sendable {
@@ -38,8 +43,9 @@ public struct SetTempo: EditCommand {
 
         public init(
             beatsPerSecond: Double, beatNote: NoteDuration = .quarter, beatDots: Int = 0,
-            text: TextEdit = .keep, playsBack: Bool? = nil,
+            text: TextEdit = .keep, playsBack: Bool? = nil, numberEdit: Bool? = nil,
         ) {
+            self.numberEdit = numberEdit
             self.beatsPerSecond = beatsPerSecond
             self.beatNote = beatNote
             self.beatDots = beatDots
@@ -129,6 +135,17 @@ public struct SetTempo: EditCommand {
             beatsPerSecond: tempo.beatsPerSecond, beatNote: tempo.beatNote, beatDots: tempo.beatDots,
             playsBack: playsBack,
         )
+    }
+
+    /// `marking` with `numberEdit` set from what the host changed relative to what `current` reports at the anchor —
+    /// call it on the sender, before the intent is made, so every replica applies the edit the sender meant.
+    public static func stamped(_ marking: Marking, at anchor: VoiceElementID, in score: Score) -> Marking {
+        var stamped = marking
+        stamped.numberEdit = current(at: anchor, in: score).map {
+            $0.beatsPerSecond != marking.beatsPerSecond || $0.beatNote != marking.beatNote
+                || $0.beatDots != marking.beatDots
+        } ?? true
+        return stamped
     }
 
     /// What plays at the anchor's beat, as a marking a host can show and write — the tempo map's point in force there

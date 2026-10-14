@@ -11,8 +11,9 @@ extension Tempo {
     /// stored tempo.
     mutating func apply(_ marking: SetTempo.Marking, reported: SetTempo.Marking? = nil) {
         let basis = reported ?? SetTempo.Marking(beatsPerSecond: beatsPerSecond, beatNote: beatNote, beatDots: beatDots)
-        let numberChanged = marking.beatsPerSecond != basis.beatsPerSecond
-            || marking.beatNote != basis.beatNote || marking.beatDots != basis.beatDots
+        // The sender's stamp wins; without one (an older sender) the edit is inferred from what this replica reported.
+        let numberChanged = marking.numberEdit ?? (marking.beatsPerSecond != basis.beatsPerSecond
+            || marking.beatNote != basis.beatNote || marking.beatDots != basis.beatDots)
         if numberChanged {
             beatsPerSecond = marking.beatsPerSecond
             beatNote = marking.beatNote

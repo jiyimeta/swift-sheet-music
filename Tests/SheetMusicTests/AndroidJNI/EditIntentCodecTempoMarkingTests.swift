@@ -11,11 +11,16 @@ struct EditIntentCodecTempoMarkingTests {
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 2, voiceIndex: 0, elementIndex: 1,
     )
 
-    private static func intent(_ text: SetTempo.Marking.TextEdit = .keep, playsBack: Bool? = nil) -> EditIntent {
-        .setTempo(anchor: slot, marking: SetTempo.Marking(beatsPerSecond: 2.4, text: text, playsBack: playsBack))
+    private static func intent(
+        _ text: SetTempo.Marking.TextEdit = .keep, playsBack: Bool? = nil, numberEdit: Bool? = nil,
+    ) -> EditIntent {
+        .setTempo(anchor: slot, marking: SetTempo.Marking(
+            beatsPerSecond: 2.4, text: text, playsBack: playsBack, numberEdit: numberEdit,
+        ))
     }
 
     private static let cases: [EditIntent] = [
+        intent(numberEdit: true), intent(playsBack: false, numberEdit: false),
         intent(), intent(.derive), intent(.set("Allegro molto")), intent(.set("")),
         intent(playsBack: false), intent(playsBack: true), intent(.set("a tempo"), playsBack: false),
     ]
@@ -54,5 +59,6 @@ struct EditIntentCodecTempoMarkingTests {
         #expect(EditIntentCodec.encode(Self.intent(.derive)).count == plain + 2)
         #expect(EditIntentCodec.encode(Self.intent(.set("x"))).count == plain + 5)
         #expect(EditIntentCodec.encode(Self.intent(playsBack: false)).count == plain + 2)
+        #expect(EditIntentCodec.encode(Self.intent(numberEdit: true)).count == plain + 2)
     }
 }

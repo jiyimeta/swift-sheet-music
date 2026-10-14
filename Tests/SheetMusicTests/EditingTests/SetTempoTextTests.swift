@@ -314,6 +314,40 @@ struct SetTempoTextTests {
         #expect(SetTempo.current(at: anchor, in: score) == expected)
     }
 
+    @Test("a stamped playsBack-only toggle replays as such after an earlier tempo changed; an unstamped one does not")
+    func stampedToggleSurvivesAReplay() throws {
+        let sender = try Self.fixture()
+        let anchor = Self.anchor(measure: 3)
+        var toggle = try #require(SetTempo.current(at: anchor, in: sender))
+        toggle.playsBack = false
+        let stamped = SetTempo.stamped(toggle, at: anchor, in: sender)
+        #expect(stamped.numberEdit == false)
+
+        // The receiver's earlier tempo moved before the replay, so `current` there reports another number.
+        var stamping = try Self.fixture()
+        _ = try SetTempo(anchor: Self.anchor(measure: 1), marking: SetTempo.Marking(beatsPerSecond: 1))
+            .apply(to: &stamping)
+        var replayed = stamping
+        _ = try SetTempo(anchor: anchor, marking: stamped).apply(to: &replayed)
+        let kept = try Self.tempo(replayed, measure: 3)
+        #expect(kept.textType == .aTempo)
+        #expect(kept.beatsPerSecond == 2)
+        #expect(kept.text == "a tempo")
+        #expect(!kept.playsBack)
+
+        // Legacy: no stamp, so the receiver infers a number edit from its own `current`.
+        var legacy = stamping
+        _ = try SetTempo(anchor: anchor, marking: toggle).apply(to: &legacy)
+        #expect(try Self.tempo(legacy, measure: 3).textType == .normal)
+    }
+
+    @Test("a stamped number edit is applied even when it equals what the receiver reports")
+    func stampedNumberEditIsHonored() throws {
+        let tempo = Tempo(beatsPerSecond: 2, text: "Allegro \u{ECA5} = 120")
+        let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2, numberEdit: true))
+        #expect(edited.text == "Allegro \u{ECA5} = 132")
+    }
+
     @Test("undoing a successful markup rewrite restores the markup and the file bytes")
     func undoRestoresARewrittenMarkup() throws {
         var score = try Self.fixture()
