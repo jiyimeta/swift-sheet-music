@@ -103,13 +103,21 @@ and this project adheres to
   spatium) rather than ink-centered at the text's size, and a number prints to two decimals ("♩ = 74.8"), as the saved
   text says. A text run in MuseScore's `ScoreText` face typesets as music glyphs, so a MuseScore 2/3 metronome mark
   draws as the note it is in every formatted text. `TextInkGeometry.tempoRuns` and `TextInkGeometry.PositionedRun`
-  (package) are removed; `MusicTextRuns` stays public, unused by the package's renderers.
+  (package) are removed (see Removed for the public `MusicTextRuns`).
 - **SMF tempo metas are written into the first track only**, as MuseScore's export does; a `<Tempo>` whose
   `originalStaff` is another staff used to put its meta on that staff's track (and so did not reach a player that
   reads the conductor track alone).
 
+### Removed
+
+- **`MusicTextRuns`** (SheetMusicLayout) — the public splitter of a string into Bravura and text runs. No renderer in
+  the package used it once tempo markings were typeset from runs (`LayoutRichText`); a host that split such strings
+  itself reads `LayoutRichText` (or `SMuFLCodepoint`) instead.
+
 ### Fixed
 
+- **An empty line text is not written.** A spanner's empty `<beginText>`, `<continueText>` or `<endText>` is omitted, as
+  MuseScore omits it, rather than saved as an element that reads back as an empty text.
 - **A tempo marking hangs on its first baseline, and `<sym>space</sym>` advances in the music font** (import-fidelity
   W2): `tempoAlign` is LEFT, BASELINE, so the first baseline sits at `tempoPosAbove` (2 sp over the top line) or, with
   `<placement>below`, `tempoPosBelow` (3 sp under the bottom one) — the line a gradual tempo change's label hangs on —
@@ -188,8 +196,8 @@ and this project adheres to
   carries each run as the opcodes it already had — a `.text` per text run inside its own `setTextStyle`, a SMuFL
   `.glyph` per symbol, a stroked line per underline or strike-through — at the positions layout measured, anchored as
   the Apple renderers anchor each kind. Staff text, lyrics, rehearsal marks, markers, jumps and title lines are
-  covered; tempo and expression text marks still emit plain text on the wire, and their formatting arrives with the
-  tempo and dynamics workstreams. No opcode was added and the wire stays v8, so no reader changes. A `<font face>`
+  covered, and so are tempo markings (typeset from runs, see above); expression text marks still emit plain text on the
+  wire, and their formatting arrives with the dynamics workstream. No opcode was added and the wire stays v8, so no reader changes. A `<font face>`
   override reaches the wire only as the face id `TextFontMapping` can name; Apple honors the face itself.
 
 ## [4.10.0] - 2026-10-14
