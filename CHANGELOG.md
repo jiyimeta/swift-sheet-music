@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`RichText`** (SheetMusicCore) — MuseScore's formatted text: lines of runs, each a string or a SMuFL symbol with its
+  bold / italic / underline / strike, font face and size, and super- or subscript. Built by MuseScore's own format
+  state machine (`TextBase::createBlocks`) from a `<text>` element's markup (`init(markup:)`, `init(content:)`) or from
+  the same markup held as a string (`init(xmlText:)`, the `<beginText>` form). `plainText` is the projection a text
+  carrier stores: characters in source order, a line break per line, nothing for a symbol.
+  `PreservedTextMarkup.richText(ifCurrentFor:)` reads the markup only while it still describes the text.
+
 ## [4.9.0] - 2026-10-13
 
 ### Added
