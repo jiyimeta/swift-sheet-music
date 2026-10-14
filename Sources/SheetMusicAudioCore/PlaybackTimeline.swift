@@ -249,6 +249,7 @@ extension PlaybackTimeline {
     /// playback time we report matches the `.mid` export's timing.
     public init(score: Score) { // swiftlint:disable:this function_body_length
         let division = score.division
+        let tempoMap = score.resolvedTempoMap()
         struct Pending {
             let tick: Int
             // Sort key for dedup: lower wins. Item entries from
@@ -317,12 +318,16 @@ extension PlaybackTimeline {
             // playback ticks to frames at the wrong measure during /
             // after the silence.
             if let voice0 = score.parts.first?.staves.first?.measures[mi].voices.first {
+                // Where a breath stands before the pauses earlier in the bar — the position the map is read at.
+                var nominal = 0
                 for el in voice0.elements {
                     switch el {
                     case let .chord(c):
-                        spineTick += c.duration
+                        let length = c.duration
                             .resolved(in: measureDuration)
                             .ticks(division: division)
+                        spineTick += length
+                        nominal += length
                     case let .measureRepeat(r):
                         // A measure-repeat bar carries no chords of its own — `MidiRenderer`
                         // splices the source measure's notes in at render time and
@@ -330,18 +335,16 @@ extension PlaybackTimeline {
                         // too is what keeps `measureStarts` equal to the MIDI measure bases;
                         // without it every measure after a `𝄎` sat one bar's worth of ticks
                         // early, so the cursor ran a whole measure ahead of the audio.
-                        spineTick += r.duration
+                        let length = r.duration
                             .resolved(in: measureDuration)
                             .ticks(division: division)
+                        spineTick += length
+                        nominal += length
                     case let .breath(b) where b.pause > 0:
-                        // TODO: multi-tempo — sample the tempo
-                        // timeline at the breath's tick instead of
-                        // hard-coding 2.0 bps (120 BPM). Mirrors the
-                        // same TODO in MidiRenderer's measureTicks.
-                        let bps = 2.0
-                        spineTick += Int(
-                            (b.pause * bps * Double(division))
-                                .rounded(),
+                        // At the tempo the map has where the breath stands, as `MidiRenderer.measureTicks` does.
+                        spineTick += MidiRenderer.breathPauseTicks(
+                            b.pause, beatsPerSecond: tempoMap.beatsPerSecond(atMeasure: mi, tickInMeasure: nominal),
+                            division: division,
                         )
                     default:
                         break
@@ -361,6 +364,7 @@ extension PlaybackTimeline {
                     : Fraction(numerator: 4, denominator: 4)
                 for (voiceIdx, voice) in measure.voices.enumerated() {
                     var tick = measureStartTick
+                    var pauseTicks = 0
                     for (elemIdx, el) in voice.elements.enumerated() {
                         switch el {
                         case let .locationShift(delta):
@@ -461,14 +465,15 @@ extension PlaybackTimeline {
                             // pause the cursor maps to the wrong
                             // chord frame.
                             //
-                            // TODO: multi-tempo — sample the tempo
-                            // timeline at the breath's tick instead
-                            // of hard-coding 2.0 bps (120 BPM).
-                            let bps = 2.0
-                            tick += Int(
-                                (b.pause * bps * Double(division))
-                                    .rounded(),
+                            let pause = MidiRenderer.breathPauseTicks(
+                                b.pause,
+                                beatsPerSecond: tempoMap.beatsPerSecond(
+                                    atMeasure: measureIdx, tickInMeasure: tick - measureStartTick - pauseTicks,
+                                ),
+                                division: division,
                             )
+                            tick += pause
+                            pauseTicks += pause
                         case let .measureRepeat(r):
                             // No frame: the bar engraves a `𝄎` rather than notes, so the
                             // cursor's stops in it are the `.beat` entries added below. The
@@ -555,7 +560,7 @@ extension PlaybackTimeline {
         }
         // The tempo map's points (`Score.resolvedTempoMap()`) are measure-relative; `measureStarts` lands each on the
         // absolute spine tick.
-        for point in score.resolvedTempoMap().points where point.measureIndex < measureStarts.count {
+        for point in tempoMap.points where point.measureIndex < measureStarts.count {
             tempoEvents.append((
                 measureStarts[point.measureIndex] + point.tickInMeasure, point.microsecondsPerQuarter, TempoRank.score,
             ))

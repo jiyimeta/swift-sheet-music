@@ -54,6 +54,7 @@ public enum MidiRenderer {
         let bookends = fermataBookendEvents(score: score)
         let canonicalLayout = measureBaseLayout(
             measures: score.parts.first?.staves.first?.measures ?? [], division: score.division,
+            tempoMap: tempoMap,
         )
         let projectedFermataClose = projectBookends(
             bookends.closeEvents, opening: false, plan: plan,
@@ -249,7 +250,7 @@ public enum MidiRenderer {
         // stable sort below realises the documented close → .tempo → open ordering at boundary
         // ticks.
         let measureBases = measureBaseLayout(
-            measures: staff.measures, division: division,
+            measures: staff.measures, division: division, tempoMap: tempoMap,
         ).bases
 
         events.append(contentsOf: fermataCloseEvents)
@@ -367,7 +368,7 @@ public enum MidiRenderer {
     /// each measure's effective duration so `.measure` rests get the
     /// correct concrete fraction before tick computation.
     private static func measureBaseLayout(
-        measures: [Measure], division: Int,
+        measures: [Measure], division: Int, tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
     ) -> (bases: [Int], spans: [Int]) {
         var bases: [Int] = []
         var spans: [Int] = []
@@ -381,6 +382,7 @@ public enum MidiRenderer {
             let span = measureTicks(
                 measure: m, division: division,
                 measureDuration: mDur,
+                measureIndex: i, tempoMap: tempoMap,
             )
             spans.append(span)
             acc += span

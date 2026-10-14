@@ -45,11 +45,13 @@ extension MidiRenderer {
             staff: staff,
             instrument: part.instrument,
             division: division,
+            tempoMap: tempoMap,
         )
         let ottavaRanges = OttavaRanges.collect(
             voiceIndex: voiceIndex,
             staff: staff,
             division: division,
+            tempoMap: tempoMap,
         )
         // Original-tick base for each measure index, used to map
         // playback ticks (which include unrolled repeats) back to
@@ -65,6 +67,7 @@ extension MidiRenderer {
                 acc += measureTicks(
                     measure: m, division: division,
                     measureDuration: mDuration,
+                    measureIndex: idx, tempoMap: tempoMap,
                 )
             }
         }
@@ -155,7 +158,6 @@ extension MidiRenderer {
                     events.append(TimedMidiEvent(tick: entry.tickOffset, event: .meta(.tempo(
                         microsecondsPerQuarter: defaultMicrosPerQuarter,
                     ))))
-                    currentTempoBps = 2.0
                     tempoSequence = TempoSequence(tick: entry.tickOffset)
                 }
                 // Reset dynamic state too: starting a fresh section means notes
@@ -164,6 +166,7 @@ extension MidiRenderer {
             }
 
             var localTick = entry.tickOffset
+            var pauseTicksInMeasure = 0
             var currentKey = firstKeySignature(in: staff)?.concertKey ?? 0
             let originalTickDelta = originalMeasureBase[entry.measureIndex] - entry.tickOffset
             // Tempo metas come from the resolved tempo map, written once on track 0 / voice 0
@@ -182,10 +185,10 @@ extension MidiRenderer {
                     let tickAt = entry.tickOffset
                         + positioned.position.ticks(division: division)
                     switch positioned.element {
-                    case let .tempo(tempo):
-                        // The meta comes from the tempo map above; the arpeggio and breath
-                        // arithmetic still read the marking here.
-                        currentTempoBps = tempo.beatsPerSecond
+                    case .tempo:
+                        // The tempo map supplies both the meta (above) and the tempo the breath and
+                        // arpeggio arithmetic read (below, per element).
+                        break
                     case let .rehearsalMark(rm):
                         if !rm.text.isEmpty {
                             events.append(TimedMidiEvent(
@@ -219,6 +222,13 @@ extension MidiRenderer {
             // follower.
             var consumedByTremolo: Set<Int> = []
             for (elementIndex, element) in effectiveVoice.elements.enumerated() {
+                // The tempo where this element stands — its nominal tick, before the pauses earlier in the bar — is
+                // what a breath's pause and an arpeggio's spread are converted at (import-fidelity F2.9).
+                currentTempoBps = tempoMap.beatsPerSecond(
+                    atMeasure: entry.measureIndex,
+                    tickInMeasure: localTick - entry.tickOffset - pauseTicksInMeasure,
+                )
+                let tickBeforeElement = localTick
                 var channel = channel(
                     atOriginalTick: localTick + originalTickDelta,
                 )
@@ -296,6 +306,7 @@ extension MidiRenderer {
                     ottavaRanges: ottavaRanges,
                     originalTickDelta: originalTickDelta,
                 )
+                if case .breath = element { pauseTicksInMeasure += localTick - tickBeforeElement }
             }
         }
 
@@ -311,6 +322,7 @@ extension MidiRenderer {
                 measure: staff.measures[last.measureIndex],
                 division: division,
                 measureDuration: lastDuration,
+                measureIndex: last.measureIndex, tempoMap: tempoMap,
             )
         } else {
             endTick = 0
@@ -486,7 +498,7 @@ extension MidiRenderer {
             break
         case let .breath(breath):
             // Pauses are realized by shifting subsequent note onsets
-            // forward at the constant tempo — exactly what MuseScore's
+            // forward at the tempo where the breath stands — exactly what MuseScore's
             // MIDI export does. Verified by dumping `mscore -o` output:
             // tempo stays unchanged across the pause; the next chord's
             // delta increases by `pause × bps × ppq` ticks.
@@ -494,10 +506,7 @@ extension MidiRenderer {
             // Mirrors mu::engraving::Breath::play() / MuseScore's
             // ExportMidi pauseMap → tick-advance lowering.
             if breath.pause > 0 {
-                let extraTicks = Int(
-                    (breath.pause * currentTempoBps * Double(division)).rounded(),
-                )
-                localTick += extraTicks
+                localTick += breathPauseTicks(breath.pause, beatsPerSecond: currentTempoBps, division: division)
             }
         }
     }

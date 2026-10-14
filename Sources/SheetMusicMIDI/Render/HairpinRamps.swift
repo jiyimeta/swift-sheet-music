@@ -65,6 +65,7 @@ enum HairpinRamps {
         staff: Staff,
         instrument: Instrument,
         division: Int,
+        tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
     ) -> [HairpinRamp] {
         var dynList: [DynPoint] = []
         var pending: [Pending] = []
@@ -81,6 +82,7 @@ enum HairpinRamps {
             let mTicks = MidiRenderer.measureTicks(
                 measure: measure, division: division,
                 measureDuration: measureDuration,
+                measureIndex: measureIdx, tempoMap: tempoMap,
             )
             // Read the literal voice — hairpins inside a
             // measure-repeat source apply each time the group plays
@@ -95,6 +97,7 @@ enum HairpinRamps {
                     instrument: instrument,
                     measures: staff.measures,
                     division: division,
+                    tempoMap: tempoMap,
                     runningVel: &runningVel,
                     dynList: &dynList,
                     pending: &pending,
@@ -187,6 +190,7 @@ enum HairpinRamps {
         instrument: Instrument,
         measures: [Measure],
         division: Int,
+        tempoMap: ResolvedTempoMap,
         runningVel: inout Int,
         dynList: inout [DynPoint],
         pending: inout [Pending],
@@ -213,6 +217,7 @@ enum HairpinRamps {
                     spanner: s,
                     measures: measures,
                     division: division,
+                    tempoMap: tempoMap,
                 )
                 pending.append(Pending(
                     startTick: runningTick,
@@ -341,6 +346,7 @@ enum HairpinRamps {
         spanner: Spanner,
         measures: [Measure],
         division: Int,
+        tempoMap: ResolvedTempoMap,
     ) -> Int {
         var measureSpan = 0
         let endIndex = min(
@@ -356,6 +362,7 @@ enum HairpinRamps {
                 measureSpan += MidiRenderer.measureTicks(
                     measure: measures[i], division: division,
                     measureDuration: mDuration,
+                    measureIndex: i, tempoMap: tempoMap,
                 )
             }
         }

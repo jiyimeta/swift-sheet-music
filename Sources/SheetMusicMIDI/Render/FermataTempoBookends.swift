@@ -52,6 +52,7 @@ extension MidiRenderer {
     ///   then overrode the real tempo in the merged map for the rest of the piece.
     static func fermataBookendEvents(score: Score) -> FermataRanges.TempoEvents {
         let division = score.division
+        let tempoMap = score.resolvedTempoMap()
         let holds = score.fermataHolds()
         guard !holds.isEmpty else {
             return FermataRanges.TempoEvents(openEvents: [], closeEvents: [])
@@ -71,6 +72,7 @@ extension MidiRenderer {
                 measureDuration: index < measureDurations.count
                     ? measureDurations[index]
                     : Fraction(numerator: 4, denominator: 4),
+                measureIndex: index, tempoMap: tempoMap,
             )
         }
         let ranges = holds.compactMap { hold -> FermataRange? in
@@ -89,6 +91,7 @@ extension MidiRenderer {
                 measures: measures,
                 systemMeasures: score.systemMeasures.values,
                 division: division,
+                tempoMap: tempoMap,
             ),
         )
     }

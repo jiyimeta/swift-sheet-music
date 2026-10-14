@@ -32,6 +32,7 @@ enum OttavaRanges {
         voiceIndex: Int,
         staff: Staff,
         division: Int,
+        tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
     ) -> [OttavaRange] {
         var ranges: [OttavaRange] = []
         var measureBase = 0
@@ -43,6 +44,7 @@ enum OttavaRanges {
             let mTicks = MidiRenderer.measureTicks(
                 measure: measure, division: division,
                 measureDuration: measureDuration,
+                measureIndex: measureIdx, tempoMap: tempoMap,
             )
             if voiceIndex < measure.voices.count {
                 walkVoice(
@@ -52,6 +54,7 @@ enum OttavaRanges {
                     measureDuration: measureDuration,
                     measures: staff.measures,
                     division: division,
+                    tempoMap: tempoMap,
                     out: &ranges,
                 )
             }
@@ -67,6 +70,7 @@ enum OttavaRanges {
         measureDuration: Fraction,
         measures: [Measure],
         division: Int,
+        tempoMap: ResolvedTempoMap,
         out: inout [OttavaRange],
     ) {
         var runningTick = measureBase
@@ -84,6 +88,7 @@ enum OttavaRanges {
                     spanner: s,
                     measures: measures,
                     division: division,
+                    tempoMap: tempoMap,
                 )
                 out.append(OttavaRange(
                     startTick: runningTick,
@@ -114,6 +119,7 @@ enum OttavaRanges {
         spanner: Spanner,
         measures: [Measure],
         division: Int,
+        tempoMap: ResolvedTempoMap,
     ) -> Int {
         var measureSpan = 0
         let measureCount = max(0, spanner.nextMeasuresOffset)
@@ -127,6 +133,7 @@ enum OttavaRanges {
                 measureSpan += MidiRenderer.measureTicks(
                     measure: measures[i], division: division,
                     measureDuration: mDur,
+                    measureIndex: i, tempoMap: tempoMap,
                 )
             }
         }

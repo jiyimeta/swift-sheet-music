@@ -15,6 +15,7 @@ extension MidiRenderer {
     /// exactly as in `renderVoiceElement`. Empty when the score has no swing in force anywhere.
     public static func swingOnsetShifts(score: Score) -> [SheetMusicCore.ScoreItemID: Int] {
         let division = score.division
+        let tempoMap = score.resolvedTempoMap()
         let swingMaps = collectSwingMaps(score: score, division: division)
         guard swingMaps.contains(where: { $0.initial.isOn || $0.entries.contains { $0.state.isOn } })
         else { return [:] }
@@ -50,6 +51,7 @@ extension MidiRenderer {
                 }
                 measureBase += measureTicks(
                     measure: measure, division: division, measureDuration: measureDuration,
+                    measureIndex: measureIndex, tempoMap: tempoMap,
                 )
             }
         }

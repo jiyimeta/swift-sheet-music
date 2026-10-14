@@ -90,6 +90,7 @@ extension MidiRenderer {
         let referenceMeasures = allStaves.first?.staff.measures ?? []
         var measureBases: [Int] = []
         let measureDurations = referenceMeasures.effectiveMeasureDurations()
+        let tempoMap = score.resolvedTempoMap()
         do {
             var acc = 0
             for (i, m) in referenceMeasures.enumerated() {
@@ -100,6 +101,7 @@ extension MidiRenderer {
                 acc += measureTicks(
                     measure: m, division: division,
                     measureDuration: mDur,
+                    measureIndex: i, tempoMap: tempoMap,
                 )
             }
         }

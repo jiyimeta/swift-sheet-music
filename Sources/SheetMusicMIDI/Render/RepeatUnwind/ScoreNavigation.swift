@@ -78,6 +78,7 @@ extension ScoreNavigation {
             staves: staves,
             canonicalMeasures: staves.first ?? [],
             division: score.division,
+            tempoMap: score.resolvedTempoMap(),
         )
     }
 
@@ -91,6 +92,7 @@ extension ScoreNavigation {
             staves: [staffMeasures],
             canonicalMeasures: staffMeasures,
             division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         for i in measures.indices {
             measures[i].markers = []
@@ -99,7 +101,7 @@ extension ScoreNavigation {
         }
     }
 
-    private init(staves: [[Measure]], canonicalMeasures: [Measure], division: Int) {
+    private init(staves: [[Measure]], canonicalMeasures: [Measure], division: Int, tempoMap: ResolvedTempoMap) {
         let measureDurations = canonicalMeasures.effectiveMeasureDurations()
         var facts: [MeasureFacts] = canonicalMeasures.enumerated().map { i, measure in
             let duration = i < measureDurations.count
@@ -107,6 +109,7 @@ extension ScoreNavigation {
                 : Fraction(numerator: 4, denominator: 4)
             return MeasureFacts(tickSpan: MidiRenderer.measureTicks(
                 measure: measure, division: division, measureDuration: duration,
+                measureIndex: i, tempoMap: tempoMap,
             ))
         }
         var voltaSpans: [VoltaSpan] = []

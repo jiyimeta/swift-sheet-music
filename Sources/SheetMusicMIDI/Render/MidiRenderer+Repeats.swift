@@ -35,41 +35,49 @@ extension MidiRenderer {
     /// to the correct concrete fraction before the tick count is taken.
     /// Callers that may see non-4/4 measures must pass the effective
     /// duration; the 4/4 default is only safe when the measure contains no
-    /// `.measure` rests.
+    /// `.measure` rests. `measureIndex` and `tempoMap` place a breath's pause at the tempo where it
+    /// stands; their defaults are 120 BPM.
     static func measureTicks(
         measure: Measure,
         division: Int,
         measureDuration: Fraction = Fraction(numerator: 4, denominator: 4),
+        measureIndex: Int = 0,
+        tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
     ) -> Int {
         guard let voice = measure.voices.first else { return 4 * division }
         var ticks = 0
+        // Where a breath stands before the pauses earlier in the bar — the position the tempo map is read at.
+        var nominal = 0
         for element in voice.elements {
             switch element {
             case let .chord(chord):
-                ticks += chord.duration
-                    .resolved(in: measureDuration)
-                    .ticks(division: division)
-            case let .measureRepeat(rep): ticks += rep.duration
-                .resolved(in: measureDuration)
-                .ticks(division: division)
+                let length = chord.duration.resolved(in: measureDuration).ticks(division: division)
+                ticks += length
+                nominal += length
+            case let .measureRepeat(rep):
+                let length = rep.duration.resolved(in: measureDuration).ticks(division: division)
+                ticks += length
+                nominal += length
             case let .breath(b) where b.pause > 0:
-                // Breath pauses shift subsequent note onsets forward
-                // at the constant tempo (mirroring MuseScore's
-                // ExportMidi behavior). The pause therefore counts
-                // toward the measure's total tick budget so the next
-                // measure's playback-plan offset accounts for it.
-                //
-                // TODO: multi-tempo scores — sample the tempo timeline
-                // at the breath's tick instead of hard-coding 2.0 bps
-                // (120 BPM). Same TODO lives in the layout side.
-                let bps = 2.0
-                ticks += Int(
-                    (b.pause * bps * Double(division)).rounded(),
+                // Breath pauses shift subsequent onsets forward, so the pause counts toward the bar's tick budget and
+                // the next bar's playback-plan offset accounts for it — at the tempo the map has where the breath
+                // stands, exactly as the voice walk converts it.
+                ticks += breathPauseTicks(
+                    b.pause,
+                    beatsPerSecond: tempoMap.beatsPerSecond(atMeasure: measureIndex, tickInMeasure: nominal),
+                    division: division,
                 )
             default: continue
             }
         }
         return ticks
+    }
+
+    /// The ticks a breath's `pause` (seconds) occupies at `beatsPerSecond`: the onsets after it shift by this much at a
+    /// constant tempo, as MuseScore's export does. Every walker — the voice walk, `measureTicks`, both cursor-timeline
+    /// walks — converts here, at the tempo map's value where the breath stands (import-fidelity F2.9).
+    package static func breathPauseTicks(_ pause: Double, beatsPerSecond: Double, division: Int) -> Int {
+        Int((pause * beatsPerSecond * Double(division)).rounded())
     }
 
     /// Resolve which notes to play for the given voice index of the given

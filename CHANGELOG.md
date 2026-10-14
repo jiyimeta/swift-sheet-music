@@ -47,8 +47,9 @@ and this project adheres to
   `Point`s (bps, role `.marking` / `.ramp`, the beat to count it in) with `point(inForceAtMeasure:tickInMeasure:)`,
   `beatsPerSecond(atMeasure:tickInMeasure:)` and `points(inMeasure:)`; `Score.resolvedTempoMap()` builds it. The SMF
   writer's tempo metas, the fermata bookends, the `PlaybackTimeline` cursor timeline, the notated clock and the
-  quarter-BPM readout (`effectiveQuarterBpm(at:)`) read it now; the voice walker's breath / arpeggio arithmetic and
-  `governingTempo` still walk the lane's `<Tempo>`s.
+  quarter-BPM readout (`effectiveQuarterBpm(at:)`) read it now, and so do the voice walker's breath / arpeggio
+  arithmetic and every bar-length walker's breath pause; only `governingTempo` still walks the lane's `<Tempo>`s,
+  because it answers which marking governs a position, not what plays there.
 - **Gradual tempo changes are their own spanner kind** — `Spanner.Kind.gradualTempoChange` with a
   `GradualTempoChangePayload` (`GradualTempoChangeType`, an optional factor and its MuseScore default, the easing
   `Spanner.ChangeMethod`, `playsBack`) whose other children (hooks, line style, `<Segment>` offsets) are kept and
@@ -89,6 +90,11 @@ and this project adheres to
 
 ### Fixed
 
+- **Breath pauses and arpeggios follow the tempo where they stand** (import-fidelity F2.9). A caesura's pause is
+  converted to ticks at the tempo map's value at the breath — in the voice walk, in `measureTicks` (and so in every
+  bar-length consumer: the repeat plan, swing, hairpins, ottavas, fermata bookends) and in both `PlaybackTimeline`
+  walks — instead of at 120 BPM in all but the first staff's voice 0. Audio, every staff and the cursor now agree after
+  a pause at any tempo; an arpeggio spreads at the same tempo on every staff.
 - **After a repeat jump the SMF plays the notated tempo** (import-fidelity F2.10). At a jump's target the first track
   re-states the tempo in force there when the track plays another one there and nothing on that downbeat states it,
   so audio and the cursor (which already replayed each span at its notated tempo, as MuseScore's playback does) no

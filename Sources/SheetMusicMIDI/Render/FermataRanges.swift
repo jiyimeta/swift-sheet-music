@@ -87,6 +87,7 @@ struct TempoTimeline: Equatable {
         measures: [Measure],
         systemMeasures: [SystemMeasure],
         division: Int,
+        tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
     ) -> TempoTimeline {
         var entries: [(tick: Int, bps: Double)] = [(0, 2.0)]
         var measureBases: [Int] = []
@@ -101,6 +102,7 @@ struct TempoTimeline: Equatable {
                 acc += MidiRenderer.measureTicks(
                     measure: m, division: division,
                     measureDuration: mDur,
+                    measureIndex: i, tempoMap: tempoMap,
                 )
             }
         }
