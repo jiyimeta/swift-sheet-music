@@ -27,8 +27,8 @@ import Wirelet
 /// must be written on encode, including zero-valued ones (a committed golden fixture emits literal `08 00` / `10 00`
 /// / `20 00` triples for exactly this reason), or decoding throws `unknownTag`. The one exception the macro allows
 /// is an `Optional<T>` (`T?`) stored property, written only when non-nil: `SetTempoIntentWire`'s tags 6–9 are the only
-/// ones, so a number-only tempo edit encodes exactly as it did before they existed. Every other field below is
-/// mandatory.
+/// ones, so an unstamped number-only tempo edit encodes exactly as before (a stamped one adds tag 9, 2 bytes).
+/// Every other field below is mandatory.
 ///
 /// Two decode behaviors of Wirelet's struct decoder (`WireFormatMacro.swift`) keep that compatible.
 /// `unknownTag` is thrown for a MISSING mandatory field, not for an extra one. A field NUMBER the decoder does not

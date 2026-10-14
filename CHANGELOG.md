@@ -59,7 +59,7 @@ and this project adheres to
   and `playsBack`, and `Marking.beatsPerMinute` reads and writes the number in the marking's own beat.
   `SetTempo.current(at:in:)` reads the marking as it plays (an "a tempo" its reinstated tempo); `SetTempo.inForce(at:in:)`
   reads what plays at a beat without a marking. `SetTempoIntentWire` carries the two as optional tags 6–8, absent for a
-  number-only edit, whose bytes are unchanged. `Marking.numberEdit` (tag 9) states whether the sender edited the number
+  number-only edit, whose bytes are unchanged while it is unstamped (a stamped one costs 2 more bytes, for tag 9). `Marking.numberEdit` (tag 9) states whether the sender edited the number
   and beat, so a replay applies what was meant even when an earlier tempo changed first; a host stamps it with
   `SetTempo.stamped(_:at:in:)`, and without it (an older sender) the receiver infers it as before.
   **Mixed-version collaboration.** A 5.0.0 client that receives a number-only tempo edit from an older client also
@@ -68,8 +68,14 @@ and this project adheres to
   (tags 6–9). `stableFingerprint` covers tempo text (tag 111), so such a split is detected but not repaired; groups
   that mix versions should update.
 
+- **`NotatedClock` and `Score.notatedClock(tempoMap:)`** — `seconds(at:clock:)`, `cursor(atSeconds:clock:)` and
+  `rehearsalMarks(clock:)` accept a cached clock, so per-frame callers skip the tempo-map build.
+
 ### Changed
 
+- **`resolvedTempoMap()` skips voices with no gradual tempo change** when looking for ramps (performance).
+  `HairpinRamps.collect(tempoMap:)` and `MidiRenderer.renderVoice(tempoMap:)` now require the tempo map; the silent
+  120 BPM default is gone. Both are internal, so this is not a public API break.
 - **A number edit changes only the equation in a marking's words** (import-fidelity owner decision b): the text is
   read as MuseScore reads it, an equation alone becomes derived, words around an equation get the new number written
   in — counted in the beat the text prints, in the markup too, so the glyph and formatting stay; a host that changes
@@ -122,6 +128,18 @@ and this project adheres to
 
 ### Fixed
 
+- **A hidden spanner (hairpin, pedal, volta, ottava, rit./accel., …) no longer loses its payload on save.** A begin
+  side hidden with `<visible>0</visible>` used to be re-encoded as a bare `<prev/>` end marker, which dropped its type,
+  factor, easing, text and `<next>`, so MuseScore reopened the score with no ramp. `Spanner.isEndMarker` now carries
+  the side explicitly (derived from `visible == false` when absent, set from the payload by the MSCX decoder);
+  `visible` means visibility only. The score fingerprint changes only for hidden begin sides.
+- **A `<tempo>` of 0 or below, or a gradual tempo change with a factor of 0 or below, no longer traps.** A read
+  `<tempo>` is clamped to 5…999 BPM as MuseScore does (`Tempo.clampedBeatsPerSecond`); a stored factor ≤ 0 reads as
+  0.01 through `effectiveFactor`; the count-in tempo (`CountInBeats.Result.microsecondsPerQuarter`) no longer divides
+  by zero below 0.5 BPM.
+- **The notated clock integrates every tempo-map point.** `Score.notatedDurationSeconds`, `seconds(at:)`,
+  `cursor(atSeconds:)` and `rehearsalMarks()` used to read only each bar's downbeat tempo; seek-bar totals and scrub
+  positions now agree with `PlaybackTimeline` and the SMF through a rit./accel. or a mid-bar tempo marking.
 - **An empty line text is not written.** A spanner's empty `<beginText>`, `<continueText>` or `<endText>` is omitted, as
   MuseScore omits it, rather than saved as an element that reads back as an empty text.
 - **A tempo marking hangs on its first baseline, and `<sym>space</sym>` advances in the music font** (import-fidelity
