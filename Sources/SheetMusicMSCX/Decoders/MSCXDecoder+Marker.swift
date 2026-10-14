@@ -4,7 +4,10 @@ import SheetMusicXMLTools
 
 extension Measure {
     /// Every `<Marker>` child the decoder reads; the rest is preserved markup.
-    static let consumedMarkerChildren: Set = ["label", "markerType", "text"]
+    static let consumedMarkerChildren: Set = [
+        "label", "markerType", "text", "markerCenterOnSymbol", "musicSymbolSize",
+        "visible", "color", "offset", "placement", "autoplace",
+    ]
 
     /// A `<Marker>`: its type as MuseScore reads it (`MarkerTypeDecoding`), its label — the type's default when the
     /// file leaves it empty, as MuseScore gives a new marker (`markerTypeTable`, `engraving/dom/marker.cpp:51-62`) —
@@ -21,13 +24,18 @@ extension Measure {
             markerType: node.first("markerType")?.text, label: labelNode?.text, text: text, markup: markup,
             formatRevision: MSCXParserContext.formatRevision,
         )
-        return Marker(
+        var marker = Marker(
             kind: kind,
             label: rawLabel.isEmpty ? kind.defaultLabel : rawLabel,
             text: text,
             preservedMarkup: node.preservedMarkup(consuming: consumedMarkerChildren),
             preservedTextMarkup: markup,
         )
+        marker.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        // `Pid::MARKER_CENTER_ON_SYMBOL` defaults on; MuseScore writes it only when off.
+        marker.centersOnSymbol = node.first("markerCenterOnSymbol")?.text != "0"
+        marker.musicSymbolSize = node.first("musicSymbolSize").flatMap { Double($0.text) }
+        return marker
     }
 }
 

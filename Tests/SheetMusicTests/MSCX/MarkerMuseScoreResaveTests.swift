@@ -22,5 +22,14 @@
             try MSCXEncoder.encode(score).write(to: url)
             #expect(FileManager.default.fileExists(atPath: url.path))
         }
+
+        @Test("write the saved properties fixture")
+        func writeProperties() throws {
+            let directory = try #require(ProcessInfo.processInfo.environment["SM_W3_RESAVE_OUT"])
+            let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("marker-properties"))
+            let url = URL(fileURLWithPath: directory).appendingPathComponent("marker-properties-ssm.mscx")
+            try MSCXEncoder.encode(score).write(to: url)
+            #expect(FileManager.default.fileExists(atPath: url.path))
+        }
     }
 #endif

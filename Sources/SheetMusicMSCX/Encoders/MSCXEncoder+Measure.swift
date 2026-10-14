@@ -142,15 +142,24 @@ extension Marker {
     /// (`dom/marker.cpp:86-106`), so a type read first had both wiped by the `<text>` and `<label>` after it (F3.5).
     /// `<label>` is the effective label, as MuseScore always writes one; `<markerType>` is MuseScore's name
     /// (`Kind.mscxName`), written for Fine too — MuseScore omits its default, but this library's 3.02 exports are read
-    /// by it.
+    /// by it. The element properties follow `<text>`; color and symbol size follow the preserved `<style>`, which
+    /// MuseScore would let reset them; `<markerCenterOnSymbol>` closes the element when off.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let text = encodedText(options: options) {
             children.append(text)
         }
+        children += elementProperties.mscxChildren()
         children.append(XMLTreeNode(name: "label", text: effectiveLabel))
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
+        if let musicSymbolSize {
+            children.append(XMLTreeNode(name: "musicSymbolSize", text: formatDouble(musicSymbolSize)))
+        }
         children.append(XMLTreeNode(name: "markerType", text: kind.mscxName))
+        if !centersOnSymbol {
+            children.append(XMLTreeNode(name: "markerCenterOnSymbol", text: "0"))
+        }
         return XMLTreeNode(name: "Marker", children: children)
     }
 
@@ -166,6 +175,7 @@ extension Marker {
         if kind == .toCodaSym, options.targetVersion == .v3 {
             // MuseScore 3 types a marker by its label alone, and these three share "coda" with To Coda, so without
             // its own text each would open there as "To Coda".
+            guard options.emitPreservedMarkup else { return XMLTreeNode(name: "text", text: "To Coda") }
             let markup = PreservedTextMarkup(
                 content: [.characters("To "), .element(.init(name: "sym", content: [.characters("coda")]))],
                 derivedText: "To ",
@@ -200,7 +210,9 @@ extension Jump {
             preservedTextMarkup: preservedTextMarkup,
             options: options,
         ))
+        children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Jump", children: children)
     }
 }

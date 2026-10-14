@@ -19,6 +19,8 @@ public struct Jump: Sendable, Equatable {
     public var preservedTextMarkup: PreservedTextMarkup?
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
+    /// `<visible>`, `<color>`, `<offset>`, `<placement>`, `<autoplace>`, applied by layout the way staff text's are.
+    public var elementProperties = ElementProperties()
 
     public init(
         jumpTo: String,

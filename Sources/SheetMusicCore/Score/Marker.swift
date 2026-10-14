@@ -89,6 +89,15 @@ public struct Marker: Sendable, Equatable {
     public var preservedTextMarkup: PreservedTextMarkup?
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
+    /// `<visible>`, `<color>`, `<offset>`, `<placement>`, `<autoplace>` — the properties every MuseScore item carries,
+    /// applied by layout the way staff text's are. A hidden marker draws nothing in print and still steers playback.
+    public var elementProperties = ElementProperties()
+    /// MuseScore's "Center on symbol" (`<markerCenterOnSymbol>`, `Pid::MARKER_CENTER_ON_SYMBOL`, default on): a marker
+    /// holding a segno or coda centers that symbol on its barline; off, it aligns by its own edge, like words.
+    public var centersOnSymbol = true
+    /// The marker's own symbol size (`<musicSymbolSize>`, `Pid::MUSIC_SYMBOL_SIZE`) in points at the reference
+    /// spatium; `nil` takes the repeat style's 18.
+    public var musicSymbolSize: Double?
 
     public init(
         kind: Kind,

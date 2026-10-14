@@ -9,6 +9,10 @@ and this project adheres to
 
 ### Added
 
+- **Markers and jumps keep their own properties.** `Marker.elementProperties` / `Jump.elementProperties` read and write
+  `<visible>`, `<color>`, `<offset>`, `<placement>` and `<autoplace>`; `Marker.centersOnSymbol` is MuseScore's "Center on
+  symbol" (`<markerCenterOnSymbol>`) and `Marker.musicSymbolSize` its `<musicSymbolSize>`. They were kept as unread
+  markup. Color and symbol size are written after `<style>`, which would reset them in MuseScore.
 - **`TextStyleType.repeatLeft` / `.repeatRight`** — MuseScore's repeat text styles (Edwin 10, regular, spatium-dependent,
   18-point symbols), the styles markers and jumps are set in. **Breaking** for an exhaustive switch over `TextStyleType`.
 - **MuseScore's Da Coda, Da Doppia Coda and Custom markers** — `Marker.Kind.daCoda`, `.daDoubleCoda` and `.user`,

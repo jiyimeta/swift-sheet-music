@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="piano">
+        <longName>Piano</longName>
+        <trackName>Piano</trackName>
+        <Channel>
+          <program value="0"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <Marker>
+          <text><sym>segno</sym></text>
+          <musicSymbolSize>24</musicSymbolSize>
+          <label>segno</label>
+          <markerType>segno</markerType>
+        </Marker>
+        <voice>
+          <TimeSig>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+          </TimeSig>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note>
+              <pitch>79</pitch>
+              <tpc>15</tpc>
+            </Note>
+          </Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <Marker>
+          <text>To Coda</text>
+          <visible>0</visible>
+          <label>coda</label>
+          <markerType>coda</markerType>
+        </Marker>
+        <voice>
+          <Rest>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+          </Rest>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Rest>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+          </Rest>
+        </voice>
+        <Jump>
+          <text>D.S. al Coda</text>
+          <offset x="-2" y="0"/>
+          <color r="200" g="0" b="0" a="255"/>
+          <jumpTo>segno</jumpTo>
+          <playUntil>coda</playUntil>
+          <continueAt>codab</continueAt>
+        </Jump>
+      </Measure>
+      <Measure>
+        <Marker>
+          <text><sym>coda</sym></text>
+          <placement>below</placement>
+          <label>codab</label>
+          <markerType>codab</markerType>
+          <markerCenterOnSymbol>0</markerCenterOnSymbol>
+        </Marker>
+        <voice>
+          <Rest>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+          </Rest>
+        </voice>
+      </Measure>
+      <Measure>
+        <Marker>
+          <text>Fine</text>
+          <offset x="0" y="1"/>
+          <autoplace>0</autoplace>
+          <label>fine</label>
+        </Marker>
+        <voice>
+          <Rest>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+          </Rest>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

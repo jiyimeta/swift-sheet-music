@@ -42,6 +42,7 @@ extension Measure {
 
     private static let consumedJumpChildren: Set = [
         "continueAt", "jumpTo", "playRepeats", "playUntil", "text",
+        "visible", "color", "offset", "placement", "autoplace",
     ]
 
     /// Decoded `Measure` plus any system-level elements lifted out
@@ -245,7 +246,7 @@ extension Measure {
         let textNode = node.first("text")
         // The plain projection, as `decodeMarker` reads it.
         let text = textNode.map(StaffText.plainText(of:)) ?? ""
-        return Jump(
+        var jump = Jump(
             jumpTo: node.first("jumpTo")?.text ?? "",
             playUntil: node.first("playUntil")?.text ?? "",
             continueAt: node.first("continueAt")?.text ?? "",
@@ -256,5 +257,7 @@ extension Measure {
                 StaffText.preservedTextMarkup(of: $0, derivedText: text)
             },
         )
+        jump.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return jump
     }
 }
