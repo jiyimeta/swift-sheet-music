@@ -6,8 +6,8 @@ import SheetMusicFoundation
 /// `dom/marker.h:87-93`).
 public struct Marker: Sendable, Equatable {
     /// This library's marker identity. The raw values are folino's command and palette ids, wire values and
-    /// fingerprint input, so they never change; they are NOT MuseScore's `<markerType>` names (`mscxName` spells
-    /// those — MuseScore's Coda is `codab` and its To Coda `coda`).
+    /// fingerprint input, so they never change; they are NOT MuseScore's `<markerType>` names (Task 6's
+    /// `mscxName` spells those — MuseScore's Coda is `codab` and its To Coda `coda`).
     public enum Kind: String, Sendable {
         case segno
         case varsegno
@@ -120,7 +120,7 @@ public struct Marker: Sendable, Equatable {
     /// it has none — its type's default (`Kind.defaultXMLText`), the text MuseScore gives it on reading. A marker made
     /// with `Marker(kind:)` therefore prints like MuseScore's palette marker of that type.
     public var displayedRichText: RichText {
-        if let richText { return richText }
+        if let richText, !richText.lines.allSatisfy(\.isEmpty) { return richText }
         if !text.isEmpty { return RichText(plainText: text) }
         return RichText(xmlText: kind.defaultXMLText)
     }

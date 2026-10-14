@@ -67,6 +67,13 @@ struct MarkerKindTests {
         #expect(stacked == [[.text("a", Self.plain)], [], [.text("b", Self.plain)]])
     }
 
+    @Test("markup that parses to no runs counts as no text, so the type's default prints")
+    func emptyMarkupPrintsDefault() {
+        let empty = PreservedTextMarkup(content: [], derivedText: "")
+        let marker = Marker(kind: .fine, preservedTextMarkup: empty)
+        #expect(marker.displayedRichText.lines == [[.text("Fine", Self.plain)]])
+    }
+
     @Test("a jump prints its runs or its words, and nothing when it has neither")
     func jumpText() {
         let words = Jump(jumpTo: "start", playUntil: "end", text: "D.C.").displayedRichText.lines
