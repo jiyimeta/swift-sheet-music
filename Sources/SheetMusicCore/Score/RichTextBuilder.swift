@@ -25,7 +25,9 @@ struct RichTextBuilder {
                 pending += text
             case let .element(element):
                 flush(&pending)
-                // An element with no content is a self-closing tag; only `br` and `font` mean anything then.
+                // An element with no content is a self-closing tag — MuseScore re-serializes every childless element
+                // as `<x/>`, `<i></i>` included (`XmlReader::htmlToString`, `engraving/rw/xmlreader.cpp:171-176`) —
+                // and only `br` and `font` mean anything then.
                 if element.content.isEmpty, !Self.selfClosingNames.contains(element.name) { continue }
                 openTag(element.name, attributes: element.attributes)
                 walk(element.content)

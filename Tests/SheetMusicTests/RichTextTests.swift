@@ -189,7 +189,9 @@ struct RichTextTests {
         #expect(RichText(content: [.characters("a\r\nb")]).lines == twoLines)
     }
 
-    @Test("a self-closing <i/> in <b> is a no-op: the text stays bold and italic stays unset (element tree)")
+    /// The tree cannot tell `<i/>` from `<i></i>`, and need not: MuseScore writes both back as `<i/>` before
+    /// `createBlocks` sees them (`XmlReader::htmlToString`).
+    @Test("a childless <i/> or <i></i> in <b> is a no-op: the text stays bold and italic stays unset (element tree)")
     func selfClosingFormatTagTree() {
         let rich = RichText(content: [
             Self.element("b", .characters("x"), Self.element("i"), .characters("y")),
