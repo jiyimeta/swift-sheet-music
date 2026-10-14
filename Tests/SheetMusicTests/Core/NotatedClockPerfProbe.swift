@@ -16,14 +16,13 @@ struct NotatedClockPerfProbe {
             .chord(Chord(duration: .eighth, notes: ChordNotes([Note(pitch: 60 + index, tpc: 14)])))
         }
         let bar = Measure(voices: [Voice(elements: eighths)])
-        var rampBar = bar
-        rampBar.voices[0].elements.insert(.spanner(TempoMapFixtures.ritardando(measures: 4)), at: 0)
+        let rampBar = Measure(voices: [Voice(elements: [.spanner(TempoMapFixtures.ritardando(measures: 4))] + eighths)])
         let allStaves = (0 ..< staves).map { staffIndex -> Staff in
             var measures = Array(repeating: bar, count: bars)
             if withRamp, staffIndex == 0 { measures[100] = rampBar }
             return Staff(measures: measures)
         }
-        let part = Part(id: "P1", instrument: Instrument(id: "x"), staves: allStaves)
+        let part = Part(id: "P1", instrument: Instrument(id: "x"), staves: IdentifiedArray(allStaves))
         let lane = (0 ..< bars / 50).map { index in
             TempoMapFixtures.tempo(index * 50, 0, Tempo(beatsPerSecond: 2 + Double(index % 3) * 0.25))
         }

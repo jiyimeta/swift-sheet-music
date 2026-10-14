@@ -15,19 +15,24 @@ struct TempoClampTests {
         return try Tempo.decode(node)
     }
 
-    @Test("a <tempo> outside MuseScore's 5...999 BPM reads as the nearest bound", arguments: [
-        ("0", 5.0 / 60), ("-3", 5.0 / 60), ("0.01", 5.0 / 60), ("2", 2.0), ("100", 999.0 / 60),
-        ("inf", 2.0), ("nan", 2.0),
-    ])
+    private static let lowest = 5.0 / 60
+    private static let highest = 999.0 / 60
+    private static let decodeCases: [(String, Double)] = [
+        ("0", lowest), ("-3", lowest), ("0.01", lowest), ("2", 2.0), ("100", highest), ("inf", 2.0), ("nan", 2.0),
+    ]
+
+    @Test("a <tempo> outside MuseScore's 5...999 BPM reads as the nearest bound", arguments: decodeCases)
     func decodeClampsTheTempo(text: String, expected: Double) throws {
         let tempo = try Self.decoded(text)
         #expect(tempo.beatsPerSecond == expected)
         #expect(tempo.microsecondsPerQuarter > 0)
     }
 
-    @Test("microsecondsPerQuarter survives a tempo built at 0, below 0 and past the bound", arguments: [
+    private static let microsecondCases: [(Double, Int)] = [
         (0.0, 12_000_000), (-1.0, 12_000_000), (Double.nan, 500_000), (Double.infinity, 500_000), (1000.0, 60060),
-    ])
+    ]
+
+    @Test("microsecondsPerQuarter survives a tempo built at 0, below 0 and past the bound", arguments: microsecondCases)
     func microsecondsPerQuarterNeverTraps(bps: Double, expected: Int) {
         #expect(Tempo(beatsPerSecond: bps).microsecondsPerQuarter == expected)
     }

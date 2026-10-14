@@ -24,6 +24,12 @@ struct NotatedClockTests {
         return seconds + Double(tick - lastTick) * Double(micros) / 1_000_000 / Double(division)
     }
 
+    /// How close the clock must come to the SMF and `PlaybackTimeline`. Both carry a tempo as whole microseconds per
+    /// quarter (180 BPM is 333 333 µs, not 333 333.3…), so they drift from the exact clock by up to half a microsecond
+    /// a beat — a couple of microseconds over these scores. A clock that read only each downbeat's tempo misses a
+    /// rit.'s mid-bar steps by tens of milliseconds, far outside this.
+    private static let engineTolerance = 1e-4
+
     /// Every measure start and the total of the clock against the SMF's, for a score without repeats.
     private static func expectMatchesSMF(_ score: Score) throws {
         let clock = score.notatedClock()
@@ -33,12 +39,12 @@ struct NotatedClockTests {
         var base = 0
         for (index, length) in lengths.enumerated() {
             let expected = smfSeconds(atTick: base, division: score.division, events: events)
-            #expect(abs(clock.startSeconds(ofMeasure: index) - expected) < 1e-6, "measure \(index)")
+            #expect(abs(clock.startSeconds(ofMeasure: index) - expected) < Self.engineTolerance, "measure \(index)")
             base += length
         }
         let total = smfSeconds(atTick: base, division: score.division, events: events)
-        #expect(abs(clock.durationSeconds - total) < 1e-6)
-        #expect(abs(score.notatedDurationSeconds - total) < 1e-6)
+        #expect(abs(clock.durationSeconds - total) < Self.engineTolerance)
+        #expect(abs(score.notatedDurationSeconds - total) < Self.engineTolerance)
     }
 
     @Test("a rit. spanning bars: the notated starts and total equal the SMF's, on MuseScore's own fixtures")
@@ -58,7 +64,7 @@ struct NotatedClockTests {
         )
         try Self.expectMatchesSMF(score)
         let timeline = PlaybackTimeline(score: score)
-        #expect(abs(score.notatedClock().durationSeconds - timeline.totalSeconds) < 1e-6)
+        #expect(abs(score.notatedClock().durationSeconds - timeline.totalSeconds) < Self.engineTolerance)
         // The ramp steps mid-bar, so a downbeat-only clock would have missed it.
         #expect(score.resolvedTempoMap().points(inMeasure: 1).contains { $0.tickInMeasure > 0 })
     }
@@ -80,7 +86,7 @@ struct NotatedClockTests {
         #expect(abs(clock.seconds(measureIndex: 0, tickInMeasure: 480) - 0.5) < 1e-9)
         #expect(abs(clock.seconds(measureIndex: 0, tickInMeasure: 1440) - (1 + 1.0 / 3)) < 1e-9)
         try Self.expectMatchesSMF(score)
-        #expect(abs(PlaybackTimeline(score: score).totalSeconds - 3) < 1e-6)
+        #expect(abs(PlaybackTimeline(score: score).totalSeconds - 3) < Self.engineTolerance)
     }
 
     @Test("cursor(atSeconds:) inverts seconds across ramp steps")
