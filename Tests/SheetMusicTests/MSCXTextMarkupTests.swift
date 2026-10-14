@@ -82,7 +82,7 @@ struct MSCXTextMarkupTests {
         #expect(!xml.contains("<sym>"))
     }
 
-    @Test("Tempo regenerates markup after its model changes")
+    @Test("Tempo regenerates its marking once its text is derived again")
     func tempoRegeneratesMarkup() throws {
         let source = """
         <Tempo>
@@ -96,7 +96,9 @@ struct MSCXTextMarkupTests {
             preservingMixedContentIn: ["text"],
         )
         var tempo = try Tempo.decode(node)
+        #expect(tempo.text == "\u{ECA5} = 400")
         tempo.beatsPerSecond = 2
+        tempo.text = nil
 
         let encoded = XMLTreeSerializer.serialize(tempo.encode(eid: .invalid))
         let xml = try #require(String(bytes: encoded, encoding: .utf8))

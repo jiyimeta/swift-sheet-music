@@ -172,6 +172,8 @@ struct MSCXIdempotencyTests {
     /// - `guitarbend_simple` — 6 `<location>` nodes, and the most recently reworked endpoint writer
     ///   (`bb3474ae feat(mscx): encode GuitarBend spanners with real endpoint locations`) had no fixture here at
     ///   all until now.
+    /// - `tempo-texts` — authored tempo texts written back verbatim (words, a modulation, bold runs, a type, a play
+    ///   flag, a preserved child) and a tempo with no text, which the encoder synthesizes on pass 1.
     @Test("committed MSCX fixtures encode to a fixed point", arguments: [
         "testVoltaTemp",
         "testSingleNoteDynamics",
@@ -182,6 +184,7 @@ struct MSCXIdempotencyTests {
         "spanner_offsets_score_end",
         "slur_ms3_exchangevoices",
         "guitarbend_simple",
+        "tempo-texts",
     ])
     func mscxFixtureIsAFixedPoint(_ name: String) throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData(name))

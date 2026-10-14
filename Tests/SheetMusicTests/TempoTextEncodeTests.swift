@@ -4,8 +4,9 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-/// `Tempo.encode()` synthesizes the `<text>` MuseScore 4 needs to show a saved tempo, from `beatNote` /
-/// `beatDots` / bps, and `Tempo.decode` reads the beat back out of it — so encode → parse → encode is a fixed
+/// `Tempo.encode()` synthesizes the `<text>` MuseScore 4 needs to show a derived tempo, from `beatNote`
+/// / `beatDots` / bps (an authored text is written back as read — `TempoTextRoundTripTests`), and `Tempo.decode` reads
+/// the beat back out of it — so encode → parse → encode is a fixed
 /// point, which is what the corpus 2-pass gate measures.
 @Suite("Tempo <text> encode")
 struct TempoTextEncodeTests {
@@ -94,11 +95,12 @@ struct TempoTextEncodeTests {
     /// returns), so pass-2 stability is pinned on every local tempo shape: the MS4 `<sym>` marking with and
     /// without an inline `<font>`, the MS3-era double-`<b>` wrapper (`repeat52`, `testArpeggio`, `testVoltaTemp`),
     /// and a `<Tempo>` with a `<text>` but no `<followText>` (`guitarbend_release_twice`), whose beat the decoder
-    /// cannot read back and which therefore re-emerges as the quarter its `<tempo>` means.
+    /// cannot read back and which therefore stays the quarter its `<tempo>` means, its `<font>`-carrying text written
+    /// back as read.
     @Test("the tempo fixtures are fixed points too", arguments: [
         "slur_ms4_glissando_legato", "grace_after", "guitarbend_tied", "guitarbend_prebend",
         "guitarbend_simple", "guitarbend_slightbend", "guitarbend_gracebend", "guitarbend_release_twice",
-        "repeat52", "repeat53", "testArpeggio", "testVoltaTemp",
+        "repeat52", "repeat53", "testArpeggio", "testVoltaTemp", "tempo-texts",
     ])
     func fixturesAreFixedPoints(name: String) throws {
         let first = try MSCXEncoder.encode(MSCXParser.parse(MSCXFixtureLoader.mscxData(name)))

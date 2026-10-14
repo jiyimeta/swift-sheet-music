@@ -73,6 +73,12 @@ and this project adheres to
 
 ### Fixed
 
+- **A MuseScore tempo marking opens and saves as written** (import-fidelity F2.8). `Tempo.decode` keeps the marking's
+  text and formatting, `<type>` (a tempo, tempo primo), `<play>`, `<followText>` and the children nothing models; a
+  text that is exactly the marking this library prints decodes as derived, so a marking made here stays derived after
+  a save and a reopen. Saving writes MuseScore's order (`<play>`, `<tempo>`, `<followText>`, `<type>`, …, `<text>`) and
+  the authored text verbatim instead of rewriting every marking as "♩ = N". A `<Tempo>` without text opens hidden, as
+  MuseScore opens it.
 - **Formatted text keeps its characters in order and its line breaks.** A `<text>` holding markup read its own
   characters first and its tags' afterwards, so `<b>Solo</b> ad lib.` read "ad lib.Solo", a `<br/>` vanished ("poco a
   pococresc."), and a `<sym>`'s SMuFL name leaked in as text. Staff and system text, swing and instrument-change text,

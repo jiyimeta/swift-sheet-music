@@ -106,13 +106,6 @@ enum MSCXPreservation {
             + "mscx.slur.locationDropped diagnostic."
     private static let tremoloReason =
         "by design: unsupported tremolo embellishments are dropped after a diagnostic under the parser policy."
-    private static let legacyTempoTextReason =
-        "by design: these pairs survive only inside Tempo text, which the encoder regenerates "
-            + "from beatsPerSecond, beatNote, and beatDots rather than round-tripping. MuseScore "
-            + "2/3 writes the metronome glyph as a ScoreText-font character, while this encoder "
-            + "writes a <sym>, so the source and regenerated plain text differ and preservation "
-            + "would decline under the preserve-if-equal rule. Recovering that markup needs a "
-            + "separate Tempo dirty flag."
     private static let soundIDReason =
         "genuinely lost, and not fixable by preserving it: MuseScore's <Instrument id> attribute "
             + "(template id) and <instrumentId> element (MusicXML Sound ID) hold different values, "
@@ -296,9 +289,6 @@ enum MSCXPreservation {
         // `Text/style` used to sit here too. The only fixture that lost it was
         // a `<TBox>`, whose whole subtree is now carried as preserved markup —
         // so it comes back, and the entry would be stale.
-        allow([
-            "b/font", "text/b", "text/font",
-        ], because: legacyTempoTextReason, into: &result)
         allow([
             "Instrument/instrumentId",
         ], because: soundIDReason, into: &result)
