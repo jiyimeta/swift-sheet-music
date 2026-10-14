@@ -359,7 +359,7 @@
                 let origin = try #require(system.staffOrigins.first).y
                 let y = try #require(
                     system.measures.flatMap(\.jumps).compactMap {
-                        if case let .jump(_, p, _) = $0 { return p.y }
+                        if case let .jump(_, p, _, _) = $0 { return p.y }
                         return nil
                     }.first,
                 )
@@ -432,7 +432,7 @@
             let y = try #require(
                 system.measures.flatMap { measure in
                     measure.elements.compactMap {
-                        if case let .textMark(.tempo, _, p) = $0 {
+                        if case let .textMark(.tempo, _, p, _) = $0 {
                             return measure.origin.y + p.y
                         }
                         return nil

@@ -75,21 +75,21 @@ public enum TextInkGeometry {
     /// but no painted ink, so callers must not substitute an anchor-sized fallback.
     public static func rects(for element: LayoutElement, metrics: StaffMetrics) -> [CGRect]? {
         switch element {
-        case let .textMark(.lyrics(_, _, _, _, properties), text, origin):
+        case let .textMark(.lyrics(_, _, _, _, properties), text, origin, _):
             return rect(
                 text: text,
                 font: font(for: .lyricsOdd, overrides: properties, metrics: metrics),
                 origin: origin,
                 anchor: CGPoint(x: 0.5, y: 0.5),
             ).map { [$0] } ?? []
-        case let .staffText(text, origin, _, style, _, _, properties, _):
+        case let .staffText(text, origin, _, style, _, _, properties, _, _):
             return rect(
                 text: text,
                 font: font(for: style, overrides: properties, metrics: metrics),
                 origin: origin,
                 anchor: CGPoint(x: 0, y: 1),
             ).map { [$0] } ?? []
-        case let .rehearsalMark(text, origin, frame, _, _, _, properties):
+        case let .rehearsalMark(text, origin, frame, _, _, _, properties, _):
             return rehearsalRects(text: text, origin: origin, frame: frame, properties: properties, metrics: metrics)
         case let .harmony(harmony):
             return harmonyRects(harmony, metrics: metrics)

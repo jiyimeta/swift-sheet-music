@@ -30,7 +30,7 @@ struct TempoFontAndColorEditTests {
     ) throws -> (color: ScoreColor?, properties: TextProperties) {
         let document = LayoutEngine.layout(score: score, options: ScoreViewOptions(staffSize: 28), availableWidth: 800)
         let payloads = document.systems.flatMap(\.measures).flatMap(\.elements).compactMap { element in
-            if case let .textMark(.tempo(_, color, properties), _, _) = element { (color, properties) } else { nil }
+            if case let .textMark(.tempo(_, color, properties), _, _, _) = element { (color, properties) } else { nil }
         }
         try #require(payloads.count == 1)
         return payloads[0]

@@ -20,7 +20,7 @@ extension LayoutDocument {
         for system in systems {
             for measure in system.measures where measure.measureIndex == cursor.location.measureIndex {
                 for element in measure.elements {
-                    guard case let .textMark(.lyrics(_, verse, anchor, _, _), _, point) = element,
+                    guard case let .textMark(.lyrics(_, verse, anchor, _, _), _, point, _) = element,
                           anchor == cursor.location, verse == cursor.verse else { continue }
                     return absolute(point, in: system, measure: measure)
                 }
@@ -108,7 +108,7 @@ extension LayoutDocument {
         style: TextStyleType,
     ) -> CGPoint? {
         firstOrigin(inMeasure: anchor.measureIndex) { element in
-            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _, _, _) = element,
+            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _, _, _, _) = element,
                   candidateAnchor == anchor,
                   candidateStyle == style
             else { return nil }
@@ -158,7 +158,7 @@ extension LayoutDocument {
         if let exact = staffTextOrigin(at: anchor, style: style) { return exact }
         guard let wanted = SystemLaneSlot.position(of: anchor, in: score) else { return nil }
         return firstOrigin(inMeasure: anchor.measureIndex) { element in
-            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _, _, _) = element,
+            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _, _, _, _) = element,
                   candidateStyle == style,
                   let candidateAnchor,
                   candidateAnchor.measureIndex == anchor.measureIndex,
@@ -206,7 +206,7 @@ extension LayoutDocument {
                 where measure.measureIndex == anchor.measureIndex
             {
                 for element in measure.elements {
-                    guard case let .rehearsalMark(_, origin, _, _, candidateMeasureIndex, _, _) = element,
+                    guard case let .rehearsalMark(_, origin, _, _, candidateMeasureIndex, _, _, _) = element,
                           candidateMeasureIndex == anchor.measureIndex
                     else { continue }
                     let padding = RehearsalMarkFrame.paddingSp(sp: system.sp)

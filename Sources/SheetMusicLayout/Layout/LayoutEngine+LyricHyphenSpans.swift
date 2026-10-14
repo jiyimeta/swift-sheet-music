@@ -111,7 +111,7 @@ extension LayoutEngine {
         for (slot, measure) in untranslated.enumerated() {
             guard let elements = measure.perStaffElements[staffIdx] else { continue }
             for element in elements {
-                guard case let .textMark(.lyrics(_, verse, anchor, placement, properties), text, origin) = element,
+                guard case let .textMark(.lyrics(_, verse, anchor, placement, properties), text, origin, _) = element,
                       let anchor, !text.isEmpty,
                       let syllabic = syllabic(of: anchor, verse: verse, in: score)
                 else { continue }

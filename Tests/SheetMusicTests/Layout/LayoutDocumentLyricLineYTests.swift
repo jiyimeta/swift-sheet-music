@@ -92,7 +92,7 @@ struct LayoutDocumentLyricLineYTests {
         })
         return measure.elements.compactMap { element in
             guard case let .textMark(
-                .lyrics(_, verse, _, _, _), _, origin,
+                .lyrics(_, verse, _, _, _), _, origin, _,
             ) = element
             else { return nil }
             return (

@@ -298,9 +298,9 @@
                         kind: kind, fromOrigin: from, toOrigin: to, continuesLeft: left,
                         continuesRight: right, text: text, anchor: nil,
                     )
-                case let .jump(text, origin, _):
+                case let .jump(text, origin, _, _):
                     element = .jump(text: text, origin: origin)
-                case let .marker(kind, text, origin, _):
+                case let .marker(kind, text, origin, _, _):
                     element = .marker(kind: kind, text: text, origin: origin)
                 default:
                     Issue.record("Unexpected Selection-3 sample")

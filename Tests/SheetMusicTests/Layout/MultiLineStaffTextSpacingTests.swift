@@ -18,7 +18,7 @@ struct MultiLineStaffTextSpacingTests {
     func multiLineTextClearsUpperLyrics() throws {
         let document = Self.layout(text: "one\ntwo\nthree\nfour")
         let lyric = try #require(Self.inkRects(in: document) { element in
-            if case .textMark(.lyrics, _, _) = element { return true }
+            if case .textMark(.lyrics, _, _, _) = element { return true }
             return false
         }.max { $0.maxY < $1.maxY })
         let text = try #require(Self.inkRects(in: document) { element in

@@ -67,7 +67,7 @@ struct TextFontOverrideLayoutTests {
     }
 
     private static func lyrics(_ document: LayoutDocument) -> [LayoutElement] {
-        elements(document).filter { if case .textMark(.lyrics, _, _) = $0 { true } else { false } }
+        elements(document).filter { if case .textMark(.lyrics, _, _, _) = $0 { true } else { false } }
     }
 
     private static func first(_ document: LayoutDocument, _ matches: (LayoutElement) -> Bool) throws -> LayoutElement {
@@ -93,7 +93,7 @@ struct TextFontOverrideLayoutTests {
     }
 
     private static func isTempo(_ element: LayoutElement) -> Bool {
-        if case .textMark(.tempo, _, _) = element { true } else { false }
+        if case .textMark(.tempo, _, _, _) = element { true } else { false }
     }
 
     // MARK: - Lyrics
@@ -108,7 +108,9 @@ struct TextFontOverrideLayoutTests {
         #expect(Self.inkWidth(largeLyrics[0]) > Self.inkWidth(plainLyrics[0]) * 1.5)
 
         func gap(_ pair: [LayoutElement]) -> CGFloat {
-            guard case let .textMark(_, _, left) = pair[0], case let .textMark(_, _, right) = pair[1] else { return 0 }
+            guard case let .textMark(_, _, left, _) = pair[0],
+                  case let .textMark(_, _, right, _) = pair[1]
+            else { return 0 }
             return right.x - left.x
         }
         #expect(gap(largeLyrics) > gap(plainLyrics))

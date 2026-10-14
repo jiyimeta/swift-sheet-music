@@ -24,10 +24,10 @@ struct TextPlacementTests {
             )
             let system = try #require(document.systems.first)
             let mark = try #require(system.measures.flatMap(\.elements).first {
-                if case .textMark(.lyrics, _, _) = $0 { return true }
+                if case .textMark(.lyrics, _, _, _) = $0 { return true }
                 return false
             })
-            guard case let .textMark(_, _, origin) = mark else { return 0 }
+            guard case let .textMark(_, _, origin, _) = mark else { return 0 }
             let chord = try #require(system.measures.flatMap(\.elements).first {
                 if case .chord = $0 { return true }
                 return false

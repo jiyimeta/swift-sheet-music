@@ -576,7 +576,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 out.append(.setColor(argb: ambientArgb))
             }
 
-        case let .textMark(kind, text, origin):
+        case let .textMark(kind, text, origin, _):
             // Standard dynamics (p, mf, ff, sfz, …) render as bold
             // Bravura SMuFL glyphs, NOT Edwin text — mirrors Apple's
             // `TextMarkRenderer.drawDynamic`. `emitText` alone would
@@ -625,7 +625,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .staffText(text, origin, color, style, _, _, properties, _):
+        case let .staffText(text, origin, color, style, _, _, properties, _, _):
             let argb = color.flatMap(LayoutBridge.argb(from:))
             if let argb { out.append(.setColor(argb: argb)) }
             emitRoleText(
@@ -664,7 +664,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .marker(kind, text, origin, _):
+        case let .marker(kind, text, origin, _, _):
             switch MarkerGlyph.variant(for: kind, text: text) {
             case let .glyph(codepoint):
                 emitCenterAnchoredGlyph(
@@ -684,7 +684,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .rehearsalMark(text, origin, frame, color, _, _, properties):
+        case let .rehearsalMark(text, origin, frame, color, _, _, properties, _):
             encodeRehearsalMark(
                 text: text,
                 originX: mox + Double(origin.x),
@@ -696,7 +696,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .jump(text, origin, _):
+        case let .jump(text, origin, _, _):
             encodeNotationText(
                 text: text, role: .jump,
                 originX: mox + Double(origin.x),

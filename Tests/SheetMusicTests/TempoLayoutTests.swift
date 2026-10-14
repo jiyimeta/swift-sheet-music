@@ -64,7 +64,7 @@ struct TempoLayoutTests {
             for measure in system.measures {
                 let absY = system.origin.y + measure.origin.y
                 for el in measure.elements {
-                    if case let .textMark(.tempo, _, p) = el, tempoY == nil {
+                    if case let .textMark(.tempo, _, p, _) = el, tempoY == nil {
                         tempoY = absY + p.y
                     }
                     if case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = el,

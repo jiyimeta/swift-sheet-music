@@ -91,7 +91,7 @@
         }
 
         private static func isLyric(_ element: LayoutElement) -> Bool {
-            if case .textMark(.lyrics, _, _) = element { true } else { false }
+            if case .textMark(.lyrics, _, _, _) = element { true } else { false }
         }
 
         private static func isStaffText(_ element: LayoutElement) -> Bool {
@@ -103,7 +103,7 @@
         }
 
         private static func isTempo(_ element: LayoutElement) -> Bool {
-            if case .textMark(.tempo, _, _) = element { true } else { false }
+            if case .textMark(.tempo, _, _, _) = element { true } else { false }
         }
 
         @available(macOS 15.0, *)

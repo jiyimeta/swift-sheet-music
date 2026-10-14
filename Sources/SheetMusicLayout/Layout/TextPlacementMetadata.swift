@@ -40,9 +40,9 @@ public struct TextPlacementMetadata: Sendable, Equatable {
 extension LayoutElement {
     public var textPlacement: TextPlacementMetadata? {
         switch self {
-        case let .textMark(.lyrics(_, _, _, placement, _), _, _),
-             let .staffText(_, _, _, _, _, placement, _, _),
-             let .rehearsalMark(_, _, _, _, _, placement, _),
+        case let .textMark(.lyrics(_, _, _, placement, _), _, _, _),
+             let .staffText(_, _, _, _, _, placement, _, _, _),
+             let .rehearsalMark(_, _, _, _, _, placement, _, _),
              let .lyricsMelisma(_, _, placement), let .lyricHyphen(_, _, placement): placement
         case let .harmony(harmony): harmony.placement
         default: nil

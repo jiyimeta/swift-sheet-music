@@ -46,11 +46,11 @@ struct LyricLayoutElementTests {
             .flatMap(\.measures)
             .flatMap(\.elements)
             .first { element in
-                if case .textMark(.lyrics, _, _) = element { return true }
+                if case .textMark(.lyrics, _, _, _) = element { return true }
                 return false
             })
         guard case let .textMark(
-            .lyrics(_, verse, anchor, _, _), _, _,
+            .lyrics(_, verse, anchor, _, _), _, _, _,
         ) = mark else {
             Issue.record("Expected a lyric text mark")
             return

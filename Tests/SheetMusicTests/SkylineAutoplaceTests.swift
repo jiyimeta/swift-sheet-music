@@ -145,7 +145,7 @@ enum SkylineFixtures {
         guard let system = doc.systems.first else { return nil }
         for measure in system.measures {
             for el in measure.elements {
-                if case let .staffText(_, p, _, _, _, _, _, _) = el { return p.y }
+                if case let .staffText(_, p, _, _, _, _, _, _, _) = el { return p.y }
             }
         }
         return nil
@@ -454,7 +454,7 @@ struct SkylineAutoplaceRegressionTests {
         for measure in system.measures {
             for el in measure.elements {
                 switch el {
-                case let .textMark(.lyrics, _, p):
+                case let .textMark(.lyrics, _, p, _):
                     let y = (p.y * 100).rounded() / 100
                     if !rows.contains(y) { rows.append(y) }
                 case let .lyricsMelisma(from, _, _):

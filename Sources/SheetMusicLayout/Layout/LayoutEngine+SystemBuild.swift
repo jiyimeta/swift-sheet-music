@@ -1215,7 +1215,7 @@ extension LayoutEngine {
         guard !tickColumns.isEmpty else { return [] }
         var out: [LayoutMeasure.DynamicExtent] = []
         for element in elements {
-            guard case let .textMark(kind, _, origin) = element,
+            guard case let .textMark(kind, _, origin, _) = element,
                   case .dynamic = kind,
                   let tick = dynamicTick(
                       anchorX: origin.x + metrics.sp,

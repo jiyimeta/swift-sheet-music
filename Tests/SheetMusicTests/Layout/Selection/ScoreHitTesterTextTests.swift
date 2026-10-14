@@ -377,8 +377,8 @@
                     for element in measure.invisibleElements where element.textID == id {
                         let local: CGPoint
                         switch element {
-                        case let .textMark(_, _, origin): local = origin
-                        case let .staffText(_, origin, _, _, _, _, _, _): local = origin
+                        case let .textMark(_, _, origin, _): local = origin
+                        case let .staffText(_, origin, _, _, _, _, _, _, _): local = origin
                         default: continue
                         }
                         return CGPoint(

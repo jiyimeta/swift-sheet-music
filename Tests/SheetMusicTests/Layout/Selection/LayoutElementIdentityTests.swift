@@ -143,7 +143,7 @@ struct LayoutElementIdentityTests {
         score.systemMeasures.updateValue(at: 1) {
             $0.elements.updateValue(at: 0) { $0.originalStaff = Self.staff }
         }
-        let tempos = Self.elements(score).filter { if case .textMark(.tempo, _, _) = $0 { true } else { false } }
+        let tempos = Self.elements(score).filter { if case .textMark(.tempo, _, _, _) = $0 { true } else { false } }
         #expect(tempos.map(\.elementID) == [.tempo(anchor: command.anchor)])
         #expect(tempos.map(\.elementItemID) == [.element(.tempo(anchor: expected))])
         let id = try #require(tempos.first?.elementID?.anchor)
@@ -161,7 +161,7 @@ struct LayoutElementIdentityTests {
                 element: .tempo(Tempo(beatsPerSecond: 2)), originalStaff: Self.staff,
             ),
         ])]
-        let tempos = Self.elements(score).filter { if case .textMark(.tempo, _, _) = $0 { true } else { false } }
+        let tempos = Self.elements(score).filter { if case .textMark(.tempo, _, _, _) = $0 { true } else { false } }
         #expect(tempos.count == 1)
         #expect(tempos.first?.elementID == nil)
     }

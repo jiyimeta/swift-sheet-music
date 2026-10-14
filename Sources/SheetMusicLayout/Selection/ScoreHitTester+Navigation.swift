@@ -8,7 +8,7 @@ extension ScoreHitTester {
     /// Unpadded navigation geometry. Glyph variants must never fall back to label text:
     /// missing glyph ink means no hit, because the renderer draws a glyph, not that label.
     func navigationRects(_ element: LayoutElement) -> [CGRect]? {
-        if case let .marker(kind, text, origin, _) = element,
+        if case let .marker(kind, text, origin, _, _) = element,
            case let .glyph(codepoint) = MarkerGlyph.variant(for: kind, text: text)
         {
             return glyphInkRects([(codepoint, origin)])
@@ -28,10 +28,10 @@ extension ScoreHitTester {
         switch element {
         case .jump:
             return element
-        case let .marker(kind, text, origin, identity):
+        case let .marker(kind, text, origin, identity, richText):
             guard case let .text(label) = MarkerGlyph.variant(for: kind, text: text) else { return nil }
             // Measure exactly the label the renderer draws, including Fine / D.C. fallback labels.
-            return .marker(kind: kind, text: label, origin: origin, identity: identity)
+            return .marker(kind: kind, text: label, origin: origin, identity: identity, richText: richText)
         default:
             return nil
         }

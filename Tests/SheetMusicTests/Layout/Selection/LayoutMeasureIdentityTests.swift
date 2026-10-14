@@ -309,8 +309,8 @@ extension LayoutMeasureIdentityTests {
         ])
         let marker = try #require(measure.markers.first)
         let jump = try #require(measure.jumps.first)
-        guard case let .marker(_, _, markerOrigin, _) = marker,
-              case let .jump(_, jumpOrigin, _) = jump
+        guard case let .marker(_, _, markerOrigin, _, _) = marker,
+              case let .jump(_, jumpOrigin, _, _) = jump
         else {
             Issue.record("Expected navigation elements")
             return
@@ -376,7 +376,7 @@ extension LayoutMeasureIdentityTests {
         let single = try Self.navigationMeasure(reference, index: 0)
         #expect(measure.markers == single.markers)
         #expect(measure.jumps == single.jumps)
-        guard case let .marker(_, label, _, _) = measure.markers[0] else {
+        guard case let .marker(_, label, _, _, _) = measure.markers[0] else {
             Issue.record("Expected a marker")
             return
         }

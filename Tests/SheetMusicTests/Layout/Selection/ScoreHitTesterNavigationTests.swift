@@ -154,7 +154,7 @@ struct ScoreHitTesterNavigationTests {
             [], markers: isJump ? [] : [element], jumps: isJump ? [element] : [],
         ))
         let measured: LayoutElement
-        if case let .marker(kind, _, origin, identity) = element {
+        if case let .marker(kind, _, origin, identity, _) = element {
             measured = .marker(kind: kind, text: rendered, origin: origin, identity: identity)
         } else {
             measured = element
@@ -192,9 +192,9 @@ struct ScoreHitTesterNavigationTests {
             let dx = box.minX - miss.x
             let shifted: LayoutElement
             switch element {
-            case let .jump(text, origin, identity):
+            case let .jump(text, origin, identity, _):
                 shifted = .jump(text: text, origin: CGPoint(x: origin.x - dx, y: origin.y), identity: identity)
-            case let .marker(kind, text, origin, identity):
+            case let .marker(kind, text, origin, identity, _):
                 shifted = .marker(
                     kind: kind, text: text, origin: CGPoint(x: origin.x - dx, y: origin.y), identity: identity,
                 )

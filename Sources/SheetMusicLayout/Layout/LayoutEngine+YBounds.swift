@@ -64,21 +64,21 @@ extension LayoutEngine {
              let .keySignature(_, _, _, _, p, _),
              let .timeSignature(_, _, _, p, _),
              let .barLine(_, p, _, _, _),
-             let .textMark(_, _, p),
+             let .textMark(_, _, p, _),
              let .fermata(_, p, _),
              let .breath(_, p, _),
              let .articulation(_, p, _, _),
-             let .marker(_, _, p, _),
-             let .jump(_, p, _),
+             let .marker(_, _, p, _, _),
+             let .jump(_, p, _, _),
              let .measureRepeat(_, p),
              let .multiMeasureRest(_, p),
              let .measureNumber(_, p),
              let .staffName(_, p),
-             let .rehearsalMark(_, p, _, _, _, _, _),
+             let .rehearsalMark(_, p, _, _, _, _, _, _),
              let .rest(_, p, _, _, _),
              let .note(_, _, _, _, p, _, _, _):
             return [p.y]
-        case let .staffText(text, p, _, style, _, _, properties, _):
+        case let .staffText(text, p, _, style, _, _, properties, _, _):
             return staffTextYPoints(text: text, origin: p, style: style, properties: properties, sp: sp)
         case let .chord(notes, _, _, so, _, _, _, _, _, _, _):
             var ys = notes.map(\.origin.y)
@@ -227,13 +227,14 @@ extension LayoutEngine {
             CGPoint(x: p.x, y: p.y + dy)
         }
         switch element {
-        case let .textMark(.lyrics(color, verse, anchor, placement, properties), text, p):
+        case let .textMark(.lyrics(color, verse, anchor, placement, properties), text, p, richText):
             return .textMark(
                 kind: .lyrics(
                     color: color, verse: verse, anchor: anchor, placement: placement, properties: properties,
                 ),
                 text: text,
                 origin: bump(p),
+                richText: richText,
             )
         case let .lyricHyphen(from, to, placement):
             return .lyricHyphen(

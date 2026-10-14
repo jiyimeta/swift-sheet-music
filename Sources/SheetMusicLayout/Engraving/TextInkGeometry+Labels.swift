@@ -6,7 +6,7 @@ import SheetMusicCore
 extension TextInkGeometry {
     static func labelRects(for element: LayoutElement, metrics: StaffMetrics) -> [CGRect]? {
         switch element {
-        case let .textMark(.dynamic, text, origin):
+        case let .textMark(.dynamic, text, origin, _):
             let glyphs = DynamicSymbolMap.glyphString(for: text)
             let font = glyphs == nil ? font(for: .dynamics, metrics: metrics)
                 : LayoutFont(face: SMuFLFamily.bravura, pointSize: metrics.sp * 4)
@@ -16,15 +16,15 @@ extension TextInkGeometry {
                 origin: origin,
                 anchor: CGPoint(x: 0, y: 0.5),
             ).map { [$0] } ?? []
-        case let .textMark(.tempo(_, _, properties), text, origin):
+        case let .textMark(.tempo(_, _, properties), text, origin, _):
             return tempoRects(text: text, origin: origin, properties: properties, metrics: metrics)
         case let .measureNumber(text, origin):
             return notationRects(text: text, role: .measureNumber, origin: origin, metrics: metrics)
         case let .staffName(text, origin):
             return notationRects(text: text, role: .staffName, origin: origin, metrics: metrics)
-        case let .jump(text, origin, _):
+        case let .jump(text, origin, _, _):
             return notationRects(text: text, role: .jump, origin: origin, metrics: metrics)
-        case let .marker(kind, text, origin, _):
+        case let .marker(kind, text, origin, _, _):
             guard case let .text(label) = MarkerGlyph.variant(for: kind, text: text) else { return nil }
             return notationRects(text: label, role: .markerText, origin: origin, metrics: metrics)
         default: return nil

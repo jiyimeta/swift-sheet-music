@@ -68,8 +68,8 @@ extension LayoutEngine {
                 stemIsInvisible: stemHidden,
                 mag: mag,
             )
-        case let .textMark(k, t, p):
-            return .textMark(kind: k, text: t, origin: shift(p))
+        case let .textMark(k, t, p, richText):
+            return .textMark(kind: k, text: t, origin: shift(p), richText: richText)
         case let .fermata(s, p, anchor):
             return .fermata(subtype: s, origin: shift(p), anchor: anchor)
         case let .breath(kind, p, anchor):
@@ -170,7 +170,7 @@ extension LayoutEngine {
                 toOrigin: shift(to),
                 placement: placement,
             )
-        case let .staffText(text, p, color, style, anchor, placement, properties, identity):
+        case let .staffText(text, p, color, style, anchor, placement, properties, identity, richText):
             // Emitted by `placeMeasureElements` in staff-local coords
             // (relative to a virtual staff with top at sp * 2), so the
             // per-staff `dy` must be applied for the text to land above
@@ -185,8 +185,9 @@ extension LayoutEngine {
                 placement: placement,
                 properties: properties,
                 identity: identity,
+                richText: richText,
             )
-        case let .rehearsalMark(text, p, frame, color, measureIndex, placement, properties):
+        case let .rehearsalMark(text, p, frame, color, measureIndex, placement, properties, richText):
             // Same staff-local origin convention as `.staffText`;
             // shift onto the system's actual top-staff y.
             return .rehearsalMark(
@@ -195,6 +196,7 @@ extension LayoutEngine {
                 measureIndex: measureIndex,
                 placement: placement,
                 properties: properties,
+                richText: richText,
             )
         case let .harmony(lh):
             // Apply per-staff dy to the anchor point. The runs are
@@ -245,10 +247,10 @@ extension LayoutEngine {
                 text: text,
                 anchor: anchor,
             )
-        case let .marker(kind, text, origin, identity):
-            return .marker(kind: kind, text: text, origin: shift(origin), identity: identity)
-        case let .jump(text, origin, identity):
-            return .jump(text: text, origin: shift(origin), identity: identity)
+        case let .marker(kind, text, origin, identity, richText):
+            return .marker(kind: kind, text: text, origin: shift(origin), identity: identity, richText: richText)
+        case let .jump(text, origin, identity, richText):
+            return .jump(text: text, origin: shift(origin), identity: identity, richText: richText)
         case let .staffName(text, origin):
             return .staffName(text: text, origin: shift(origin))
         case .note, .tieArc:
@@ -271,19 +273,19 @@ extension LayoutEngine {
             CGPoint(x: p.x + dx, y: p.y)
         }
         switch element {
-        case let .staffText(text, p, color, style, anchor, placement, properties, identity):
+        case let .staffText(text, p, color, style, anchor, placement, properties, identity, richText):
             return .staffText(
                 text: text, origin: shift(p),
                 color: color, style: style, anchor: anchor, placement: placement, properties: properties,
-                identity: identity,
+                identity: identity, richText: richText,
             )
-        case let .textMark(k, t, p):
-            return .textMark(kind: k, text: t, origin: shift(p))
-        case let .rehearsalMark(text, p, frame, color, measureIndex, placement, properties):
+        case let .textMark(k, t, p, richText):
+            return .textMark(kind: k, text: t, origin: shift(p), richText: richText)
+        case let .rehearsalMark(text, p, frame, color, measureIndex, placement, properties, richText):
             return .rehearsalMark(
                 text: text, origin: shift(p),
                 frame: frame, color: color, measureIndex: measureIndex, placement: placement,
-                properties: properties,
+                properties: properties, richText: richText,
             )
         default:
             return element

@@ -42,6 +42,11 @@ public enum TremoloAnchor: Sendable, Equatable {
 /// that gets painted. Anything that needs the staff's real extent —
 /// where its lines stop, how far a barline spans, how tall the cursor
 /// is — must go through `StaffLineGeometry`, not through `staffHeight`.
+///
+/// `richText` — the last member of `.staffText`, `.rehearsalMark`, `.marker`, `.jump` and `.textMark` — is the
+/// element's formatted text, typeset (`LayoutRichText`), while its source markup still describes `text`; `nil` for
+/// plain text. `text` stays the plain projection caret geometry, hit-testing and editing use, and every measurement and
+/// renderer draws the runs when they are present.
 public enum LayoutElement: Sendable, Equatable {
     /// `anchor` names the clef this glyph is: `.explicit` for a declared one, `.staffDefault` for the opening
     /// clef bar 0 synthesizes, and `.restatement` for the one a continuation system redraws at its head — which
@@ -202,7 +207,7 @@ public enum LayoutElement: Sendable, Equatable {
         // default ink (black).
         color: ScoreColor? = nil,
     )
-    case textMark(kind: TextMarkKind, text: String, origin: CGPoint)
+    case textMark(kind: TextMarkKind, text: String, origin: CGPoint, richText: LayoutRichText? = nil)
     /// Free-form staff / system text or an instrument-change
     /// instruction, imported from MuseScore. Distinct from `.textMark`
     /// because it carries author-supplied color and the placement comes
@@ -238,6 +243,7 @@ public enum LayoutElement: Sendable, Equatable {
         placement: TextPlacementMetadata? = nil,
         properties: TextProperties = TextProperties(),
         identity: ScoreElementID? = nil,
+        richText: LayoutRichText? = nil,
     )
     /// Pre-typeset chord symbol with a baked-in run list (text +
     /// SMuFL accidental glyphs) and total width. The placement
@@ -275,7 +281,10 @@ public enum LayoutElement: Sendable, Equatable {
     /// Navigation owned by the first drawn staff's measure list, in the input score's coordinates.
     /// Same-origin marks retain distinct identities. At overlapping ink, only the first is
     /// point-hittable until engraving separates them; the hit tester visits storage order.
-    case marker(kind: Marker.Kind, text: String, origin: CGPoint, identity: ScoreElementID? = nil)
+    case marker(
+        kind: Marker.Kind, text: String, origin: CGPoint, identity: ScoreElementID? = nil,
+        richText: LayoutRichText? = nil,
+    )
     /// Rehearsal letter / number drawn above the top staff at the
     /// start of its containing measure. `frame` controls whether
     /// the text is boxed, circled, or unframed.
@@ -301,11 +310,12 @@ public enum LayoutElement: Sendable, Equatable {
         measureIndex: Int,
         placement: TextPlacementMetadata? = nil,
         properties: TextProperties = TextProperties(),
+        richText: LayoutRichText? = nil,
     )
     /// Navigation owned by the first drawn staff's measure list, in the input score's coordinates.
     /// Same-origin jumps retain distinct identities. At overlapping ink, only the first is
     /// point-hittable until engraving separates them; the hit tester visits storage order.
-    case jump(text: String, origin: CGPoint, identity: ScoreElementID? = nil)
+    case jump(text: String, origin: CGPoint, identity: ScoreElementID? = nil, richText: LayoutRichText? = nil)
     case measureRepeat(count: Int, origin: CGPoint)
     /// Multi-measure rest H-bar with a count printed above. Replaces
     /// the `count` consecutive rest measures starting at this layout

@@ -62,7 +62,7 @@ extension LayoutDocument {
                   system.staffOrigins.indices.contains(staffIndex) else { continue }
             var candidates: [(verse: Int, side: Placement, y: CGFloat)] = []
             for el in measure.elements {
-                guard case let .textMark(.lyrics(_, markVerse, anchor, metadata, _), _, point) = el,
+                guard case let .textMark(.lyrics(_, markVerse, anchor, metadata, _), _, point, _) = el,
                       anchor?.staff == voiceElementID.staff else { continue }
                 let y = system.origin.y + measure.origin.y + point.y
                 if anchor == voiceElementID, markVerse == verse { return y }

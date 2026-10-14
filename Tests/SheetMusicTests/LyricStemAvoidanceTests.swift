@@ -54,7 +54,7 @@
                 for measure in system.measures {
                     for el in measure.elements {
                         switch el {
-                        case .textMark(.lyrics, _, _) where lyricEl == nil:
+                        case .textMark(.lyrics, _, _, _) where lyricEl == nil:
                             lyricEl = el
                         case .chord where chordEl == nil:
                             chordEl = el
@@ -68,7 +68,7 @@
                 Issue.record("Missing lyric or chord layout element")
                 return
             }
-            guard case let .textMark(_, _, lyricOrigin) = lyricEl,
+            guard case let .textMark(_, _, lyricOrigin, _) = lyricEl,
                   case let .chord(notes, _, stem, _, _, _, _, _, _, _, _) = chordEl
             else {
                 Issue.record("Unexpected LayoutElement shape")
@@ -127,7 +127,7 @@
                 for measure in system.measures {
                     for el in measure.elements {
                         switch el {
-                        case .textMark(.lyrics, _, _) where lyricEl == nil:
+                        case .textMark(.lyrics, _, _, _) where lyricEl == nil:
                             lyricEl = el
                         case .chord where chordEl == nil:
                             chordEl = el
@@ -141,7 +141,7 @@
                 Issue.record("Missing lyric or chord layout element")
                 return
             }
-            guard case let .textMark(_, _, lyricOrigin) = lyricEl,
+            guard case let .textMark(_, _, lyricOrigin, _) = lyricEl,
                   case let .chord(notes, _, stem, _, _, _, _, _, _, _, _) = chordEl
             else {
                 Issue.record("Unexpected LayoutElement shape")

@@ -59,7 +59,7 @@
         private static func tempoLayers(_ tempo: Tempo) throws -> [CAShapeLayer] {
             // Only the tempo: a signature or barline in the same bar has an element identity too.
             try layers(score(lane: [.tempo(tempo)])) { element in
-                if case .textMark(.tempo, _, _) = element { element.elementItemID } else { nil }
+                if case .textMark(.tempo, _, _, _) = element { element.elementItemID } else { nil }
             }
         }
 

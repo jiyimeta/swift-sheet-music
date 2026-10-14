@@ -86,7 +86,7 @@ struct LyricsVisibilityTests {
             for measure in system.measures {
                 for element in measure.elements {
                     switch element {
-                    case .textMark(.lyrics, _, _): counts.syllables += 1
+                    case .textMark(.lyrics, _, _, _): counts.syllables += 1
                     case .lyricHyphen: counts.hyphens += 1
                     case .lyricsMelisma: counts.melismas += 1
                     default: break
@@ -95,7 +95,7 @@ struct LyricsVisibilityTests {
                 // The invisible container must not become a back door: hiding
                 // is a host display choice, not the element's `visible` flag.
                 for element in measure.invisibleElements {
-                    if case .textMark(.lyrics, _, _) = element { counts.syllables += 1 }
+                    if case .textMark(.lyrics, _, _, _) = element { counts.syllables += 1 }
                 }
             }
         }

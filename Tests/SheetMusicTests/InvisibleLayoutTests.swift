@@ -53,12 +53,12 @@ struct InvisibleLayoutTests { // swiftlint:disable:this type_body_length
 
     private func tempoMarks(_ doc: LayoutDocument) -> [LayoutElement] {
         doc.systems.flatMap(\.measures).flatMap(\.elements)
-            .filter { if case .textMark(.tempo, _, _) = $0 { true } else { false } }
+            .filter { if case .textMark(.tempo, _, _, _) = $0 { true } else { false } }
     }
 
     private func invisibleTempoMarks(_ doc: LayoutDocument) -> [LayoutElement] {
         doc.systems.flatMap(\.measures).flatMap(\.invisibleElements)
-            .filter { if case .textMark(.tempo, _, _) = $0 { true } else { false } }
+            .filter { if case .textMark(.tempo, _, _, _) = $0 { true } else { false } }
     }
 
     @Test func hiddenTempoDroppedWhenToggleOff() {
@@ -429,7 +429,7 @@ struct InvisibleLayoutTests { // swiftlint:disable:this type_body_length
         doc.systems.flatMap(\.measures)
             .flatMap { inInvisible ? $0.invisibleElements : $0.elements }
             .filter {
-                if case .textMark(.dynamic, _, _) = $0 { true } else { false }
+                if case .textMark(.dynamic, _, _, _) = $0 { true } else { false }
             }
     }
 
@@ -541,7 +541,7 @@ struct InvisibleLayoutTests { // swiftlint:disable:this type_body_length
         doc.systems.flatMap(\.measures)
             .flatMap { inInvisible ? $0.invisibleElements : $0.elements }
             .filter {
-                if case .textMark(.lyrics, _, _) = $0 { true } else { false }
+                if case .textMark(.lyrics, _, _, _) = $0 { true } else { false }
             }
     }
 

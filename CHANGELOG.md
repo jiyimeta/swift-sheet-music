@@ -32,6 +32,12 @@ and this project adheres to
   `decorations(at:anchor:)` place it by the plain-text anchor rule, so a single unformatted run measures exactly as plain
   text does.
 
+### Changed
+
+- **`LayoutElement`'s text cases carry their formatted text.** `.staffText`, `.rehearsalMark`, `.marker`, `.jump` and
+  `.textMark` gain a last associated value `richText: LayoutRichText? = nil`. Construction sites compile unchanged; a
+  positional pattern needs one more `_` (a new payload member is a minor change for `LayoutElement`, `CONTRIBUTING.md`).
+
 ### Fixed
 
 - **Formatted text keeps its characters in order and its line breaks.** A `<text>` holding markup read its own

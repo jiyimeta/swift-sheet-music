@@ -175,12 +175,12 @@ extension LayoutElementShape {
     ) -> [CGRect] {
         let sp = metrics.sp
         switch element {
-        case let .textMark(markKind, text, origin):
+        case let .textMark(markKind, text, origin, _):
             return [textMarkRect(
                 markKind: markKind, text: text, origin: origin,
                 kind: kind, metrics: metrics,
             )]
-        case let .staffText(text, origin, _, style, _, _, properties, _):
+        case let .staffText(text, origin, _, style, _, _, properties, _, _):
             return [textRect(
                 text: text, font: TextInkGeometry.font(for: style, overrides: properties, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
@@ -190,12 +190,12 @@ extension LayoutElementShape {
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
             )]
-        case let .marker(_, text, origin, _), let .jump(text, origin, _):
+        case let .marker(_, text, origin, _, _), let .jump(text, origin, _, _):
             return [textRect(
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .leadingCenter,
             )]
-        case let .rehearsalMark(text, origin, frame, _, _, _, properties):
+        case let .rehearsalMark(text, origin, frame, _, _, _, properties, _):
             return [rehearsalMarkRect(
                 text: text, origin: origin, frame: frame, properties: properties,
                 metrics: metrics,

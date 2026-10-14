@@ -247,19 +247,19 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 showsInvisibleElements: showsInvisibleElements,
                 into: &context,
             )
-        case let .textMark(.dynamic, text, p):
+        case let .textMark(.dynamic, text, p, _):
             TextMarkRenderer.drawDynamic(
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .textMark(.tempo(_, tempoColor, properties), text, p):
+        case let .textMark(.tempo(_, tempoColor, properties), text, p, _):
             TextMarkRenderer.drawTempo(
                 context: &context, text: text,
                 origin: shift(p), properties: properties,
                 color: tempoColor.map { Color(scoreColor: $0) } ?? .primary,
                 metrics: metrics,
             )
-        case let .textMark(.lyrics(lyricColor, _, _, _, properties), text, p):
+        case let .textMark(.lyrics(lyricColor, _, _, _, properties), text, p, _):
             TextMarkRenderer.drawLyric(
                 context: &context, text: text,
                 origin: shift(p),
@@ -366,19 +366,19 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 isAbove: above,
                 metrics: metrics,
             )
-        case let .marker(kind, text, p, _):
+        case let .marker(kind, text, p, _, _):
             MarkerRenderer.draw(
                 context: &context, kind: kind, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .rehearsalMark(text, p, frame, color, _, _, properties):
+        case let .rehearsalMark(text, p, frame, color, _, _, properties, _):
             RehearsalMarkRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), frame: frame, color: color,
                 properties: properties,
                 metrics: metrics,
             )
-        case let .jump(text, p, _):
+        case let .jump(text, p, _, _):
             JumpRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
@@ -393,7 +393,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .staffText(text, p, color, style, _, _, properties, _):
+        case let .staffText(text, p, color, style, _, _, properties, _, _):
             StaffTextRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p),

@@ -107,7 +107,7 @@ extension ScoreLayerBuilder {
                 metrics: chordMetrics, height: height,
                 context: &context, into: parent,
             )
-        case let .textMark(.dynamic, text, p):
+        case let .textMark(.dynamic, text, p, _):
             // Standard dynamics → Bravura SMuFL glyphs at 4 sp.
             // Free-form text dynamics → Edwin italic 10 pt fallback.
             // See `TextMarkRenderer.drawDynamic` for the rationale.
@@ -139,14 +139,14 @@ extension ScoreLayerBuilder {
                     parent.addSublayer(layer)
                 }
             }
-        case let .textMark(.tempo(_, tempoColor, properties), text, p):
+        case let .textMark(.tempo(_, tempoColor, properties), text, p, _):
             drawTempoText(
                 text: text, origin: shift(p), properties: properties,
                 color: tempoColor.map(scoreColorToCGColor) ?? inkColor,
                 metrics: metrics, height: height, into: parent,
             )
         case let .textMark(
-            .lyrics(lyricColor, _, _, _, properties), text, p,
+            .lyrics(lyricColor, _, _, _, properties), text, p, _,
         ):
             let style = ResolvedTextStyle.resolve(
                 .lyricsOdd, overrides: properties, metrics: metrics,
@@ -248,12 +248,12 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height,
                 context: &context, into: parent,
             )
-        case let .marker(kind, text, p, _):
+        case let .marker(kind, text, p, _, _):
             drawMarker(
                 kind: kind, text: text, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .rehearsalMark(text, p, frame, color, _, _, properties):
+        case let .rehearsalMark(text, p, frame, color, _, _, properties, _):
             // The frame is attached alongside the letter: MuseScore
             // tints a selected text's frame too, from the same
             // `curColor` (`TDraw::drawTextBase`), so a selected boxed
@@ -265,7 +265,7 @@ extension ScoreLayerBuilder {
             ) {
                 attachText(element, layer, context: &context)
             }
-        case let .jump(text, p, _):
+        case let .jump(text, p, _, _):
             if !text.isEmpty,
                let layer = notationTextLayer(
                    text: text, role: .jump, origin: shift(p), metrics: metrics, height: height,
@@ -287,7 +287,7 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
-        case let .staffText(text, p, color, style, _, _, properties, _):
+        case let .staffText(text, p, color, style, _, _, properties, _, _):
             // Author-supplied staff/system text. Color, font and offset
             // (already baked into `p` by placement) come from the
             // source `.mscx`. Bottom-leading anchor at `p` matches
