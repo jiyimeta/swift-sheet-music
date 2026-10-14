@@ -25,6 +25,29 @@ struct EditIntentCodecTempoMarkingTests {
         #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
     }
 
+    @Test("a decoder skips a field number it does not declare, which is how an older build reads tags 6–8")
+    func unknownFieldIsSkipped() throws {
+        let marking = SetTempo.Marking(beatsPerSecond: 2.4)
+        var writer = WireFormatWriter()
+        SetTempoIntentWire(anchor: Self.slot, marking: marking).encodePayload(into: &writer)
+        writer.writeTag(tag: 15, wireType: .varint)
+        writer.writeVarint(1)
+        var reader = WireFormatReader(data: writer.data)
+        let decoded = try SetTempoIntentWire(decodingPayload: &reader).decoded()
+        #expect(decoded.anchor == Self.slot)
+        #expect(decoded.marking == marking)
+    }
+
+    @Test("an unknown text mode, and a set without its text, are refused")
+    func malformedTextEditIsRefused() {
+        var unknownMode = SetTempoIntentWire(anchor: Self.slot, marking: SetTempo.Marking(beatsPerSecond: 2))
+        unknownMode.textMode = 3
+        #expect(throws: WireFormatError.unknownChoiceDiscriminator(3)) { try unknownMode.decoded() }
+        var missingText = SetTempoIntentWire(anchor: Self.slot, marking: SetTempo.Marking(beatsPerSecond: 2))
+        missingText.textMode = 2
+        #expect(throws: WireFormatError.unknownTag(tag: 7, wireType: .lengthDelimited)) { try missingText.decoded() }
+    }
+
     @Test("a number-only marking writes no optional tag; each one costs exactly its own bytes")
     func optionalTagsCostOnlyWhenPresent() {
         let plain = EditIntentCodec.encode(Self.intent()).count

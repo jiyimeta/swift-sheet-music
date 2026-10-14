@@ -89,9 +89,12 @@ public struct SetTempo: EditCommand {
             throw Self.refused(.targetNotFound(anchor))
         }
         if let marking {
+            // What the host was shown, read before the lane is padded or written: a marking is compared with this, not
+            // with the stored tempo, to tell a number edit from one that only toggles `playsBack`.
+            let reported = Self.current(at: anchor, in: score)
             RehearsalMarkLane.pad(&score, ids: &ids)
             score.systemMeasures.updateValue(at: anchor.measureIndex) {
-                Self.write(marking, at: position, into: &$0, ids: &ids)
+                Self.write(marking, reported: reported, at: position, into: &$0, ids: &ids)
             }
         } else {
             // Decided against the untouched score, before anything is written — `RemoveRehearsalMark`'s order.
@@ -118,7 +121,8 @@ public struct SetTempo: EditCommand {
     public static func current(at anchor: VoiceElementID, in score: Score) -> Marking? {
         guard let tempo = tempo(at: anchor, in: score) else { return nil }
         let playsBack: Bool? = tempo.playsBack ? nil : false
-        if tempo.followText, tempo.textType != .normal, tempo.playsBack, let point = inForce(at: anchor, in: score) {
+        if tempo.followText, tempo.textType != .normal, var point = inForce(at: anchor, in: score) {
+            point.playsBack = playsBack
             return point
         }
         return Marking(
@@ -163,12 +167,13 @@ public struct SetTempo: EditCommand {
     }
 
     private static func write(
-        _ marking: Marking, at position: MeasurePosition, into measure: inout SystemMeasure, ids: inout EIDAllocator,
+        _ marking: Marking, reported: Marking?, at position: MeasurePosition, into measure: inout SystemMeasure,
+        ids: inout EIDAllocator,
     ) {
         if let index = SystemLaneSlot.firstIndex(in: measure, at: position, where: isTempo),
            case var .tempo(existing) = measure.elements[index].element
         {
-            existing.apply(marking)
+            existing.apply(marking, reported: reported)
             measure.elements.updateValue(at: index) { $0.element = .tempo(existing) }
             for duplicate in measure.elements.indices.reversed() where duplicate > index {
                 let element = measure.elements[duplicate]

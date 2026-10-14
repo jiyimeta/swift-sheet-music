@@ -129,6 +129,108 @@ struct SetTempoTextTests {
         #expect(SetTempo.inForce(at: Self.anchor(measure: 2), in: score) == SetTempo.Marking(beatsPerSecond: 1.333333))
     }
 
+    @Test("a number edit is counted in the beat the text prints; a host beat change rewrites the glyph too")
+    func numberIsCountedInTheTextsBeat() throws {
+        let dotted = Tempo(beatsPerSecond: 1, beatDots: 1, text: "Allegro \u{ECA5}\u{ECB7} = 40")
+        // The beat stays a dotted quarter: only the number is written, counted in that beat (1.2 × 60 / 1.5).
+        let sameBeat = try Self.edited(dotted, to: SetTempo.Marking(beatsPerSecond: 1.2, beatDots: 1))
+        #expect(sameBeat.text == "Allegro \u{ECA5}\u{ECB7} = 48")
+        // The host changes the beat to a plain quarter: the glyph follows and the number is counted in the new beat.
+        let changedBeat = try Self.edited(dotted, to: SetTempo.Marking(beatsPerSecond: 1))
+        #expect(changedBeat.text == "Allegro \u{ECA5} = 60")
+        #expect(changedBeat.beatDots == 0)
+    }
+
+    @Test("a decimal tempo prints the way the derived text prints decimals")
+    func decimalNumber() throws {
+        let tempo = Tempo(beatsPerSecond: 2, text: "Allegro \u{ECA5} = 120")
+        let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 72.5 / 60))
+        #expect(edited.text == "Allegro \u{ECA5} = \(Tempo.printedNumber(72.5))")
+        #expect(edited.text == "Allegro \u{ECA5} = 72.5")
+    }
+
+    @Test("a host beat change rewrites a markup glyph and counts the number in the new beat")
+    func beatChangeRewritesMarkupGlyph() throws {
+        var score = try Self.fixture()
+        let marking = SetTempo.Marking(beatsPerSecond: 2.4, beatNote: .eighth)
+        _ = try SetTempo(anchor: Self.anchor(measure: 8), marking: marking).apply(to: &score)
+        let edited = try Self.tempo(score, measure: 8)
+        #expect(edited.text == "Allegro  = 288")
+        let data = try MSCXEncoder.encode(score)
+        let xml = try #require(String(bytes: data, encoding: .utf8))
+        #expect(xml.contains("<text>Allegro <sym>metNote8thUp</sym> = 288</text>"))
+    }
+
+    @Test("the equation the classification matched is the one rewritten")
+    func anchoredOnTheEquation() throws {
+        let cases: [(String, String)] = [
+            ("2 Allegro \u{ECA5} = 120", "2 Allegro \u{ECA5} = 132"),
+            ("x = 3 Allegro \u{ECA5} = 120", "x = 3 Allegro \u{ECA5} = 132"),
+            ("(\u{ECA5} = 120)", "(\u{ECA5} = 132)"),
+            ("\u{ECA5} = 60–70", "\u{ECA5} = 132–70"),
+        ]
+        for (input, expected) in cases {
+            let tempo = Tempo(beatsPerSecond: 2, text: input)
+            let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
+            #expect(edited.text == expected)
+        }
+    }
+
+    @Test("muting a following a tempo through current keeps its type, number and text")
+    func mutingAnATempoKeepsIt() throws {
+        var score = try Self.fixture()
+        let anchor = Self.anchor(measure: 3)
+        var marking = try #require(SetTempo.current(at: anchor, in: score))
+        marking.playsBack = false
+        _ = try SetTempo(anchor: anchor, marking: marking).apply(to: &score)
+        let muted = try Self.tempo(score, measure: 3)
+        #expect(muted.textType == .aTempo)
+        #expect(muted.beatsPerSecond == 2)
+        #expect(muted.text == "a tempo")
+        #expect(!muted.playsBack)
+        // `current` of the muted marking is the map's tempo with the play flag, as it is when unmuted.
+        var expected = try #require(SetTempo.inForce(at: anchor, in: score))
+        expected.playsBack = false
+        #expect(SetTempo.current(at: anchor, in: score) == expected)
+    }
+
+    @Test("undo restores the text, markup, follow flag, play flag and type a rewrite changed")
+    func undoRestoresEverything() throws {
+        let markup = PreservedTextMarkup(
+            content: [
+                .characters("Allegro "),
+                .element(PreservedTextMarkup.Element(name: "sym", content: [.characters("metNoteQuarterUp")])),
+                .characters(" = "),
+                .element(PreservedTextMarkup.Element(name: "b", content: [.characters("144")])),
+            ],
+            derivedText: "Allegro  = 144",
+        )
+        let original = Tempo(
+            beatsPerSecond: 2.4, text: "Allegro  = 144", preservedTextMarkup: markup,
+            followText: true, textType: .aTempo, playsBack: false,
+        )
+        var score = EditingFixtures.fourQuarterRests()
+        score.systemMeasures = [SystemMeasure(elements: [
+            PositionedSystemElement(position: .start, element: .tempo(original)),
+        ])]
+        let anchor = VoiceElementID(staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1)
+        let marking = SetTempo.Marking(beatsPerSecond: 2.2, playsBack: true)
+        let inverse = try SetTempo(anchor: anchor, marking: marking).apply(to: &score)
+        let changed = try #require(SetTempo.tempo(at: anchor, in: score))
+        #expect(changed.text == "Allegro  = 132")
+        #expect(changed.preservedTextMarkup == nil)
+        #expect(changed.textType == .normal)
+        #expect(changed.playsBack)
+        _ = try inverse.apply(to: &score)
+        let restored = try #require(SetTempo.tempo(at: anchor, in: score))
+        #expect(restored.text == "Allegro  = 144")
+        #expect(restored.preservedTextMarkup == markup)
+        #expect(restored.followText)
+        #expect(!restored.playsBack)
+        #expect(restored.textType == .aTempo)
+        #expect(restored.beatsPerSecond == 2.4)
+    }
+
     @Test("the number is read and written in the marking's own beat")
     func beatsPerMinuteIsInTheBeat() {
         var marking = SetTempo.Marking(beatsPerSecond: 2, beatNote: .quarter, beatDots: 1)

@@ -79,10 +79,19 @@ public struct SetTempoIntentWire {
 
     public func decoded() throws -> (anchor: VoiceElementID, marking: SetTempo.Marking?) {
         guard hasTempo != 0 else { return (anchor: anchor.decoded(), marking: nil) }
-        let textEdit: SetTempo.Marking.TextEdit = switch textMode {
-        case 1: .derive
-        case 2: .set(text ?? "")
-        default: .keep
+        // A mode this build does not know, or a `.set` without its text, is malformed bytes: refusing them is better
+        // than applying a different edit from the one that was sent.
+        let textEdit: SetTempo.Marking.TextEdit
+        switch textMode {
+        case nil:
+            textEdit = .keep
+        case 1?:
+            textEdit = .derive
+        case 2?:
+            guard let text else { throw WireFormatError.unknownTag(tag: 7, wireType: .lengthDelimited) }
+            textEdit = .set(text)
+        case let mode?:
+            throw WireFormatError.unknownChoiceDiscriminator(UInt32(mode))
         }
         return try (
             anchor: anchor.decoded(),

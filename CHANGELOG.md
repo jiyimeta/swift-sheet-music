@@ -59,15 +59,19 @@ and this project adheres to
   and `playsBack`, and `Marking.beatsPerMinute` reads and writes the number in the marking's own beat.
   `SetTempo.current(at:in:)` reads the marking as it plays (an "a tempo" its reinstated tempo); `SetTempo.inForce(at:in:)`
   reads what plays at a beat without a marking. `SetTempoIntentWire` carries the two as optional tags 6–8, absent for a
-  number-only edit, whose bytes are unchanged.
+  number-only edit, whose bytes are unchanged; a decoder built before them skips the tags and applies the number and
+  beat, dropping the text and play edits.
 
 ### Changed
 
-- **A number edit treats a marking's words as MuseScore reads them** (import-fidelity owner decision b): an equation
-  alone becomes derived, words around an equation get the new number written in — in the markup too, so the glyph
-  and formatting stay — and words alone keep their words, the number changing what plays only; an "a tempo" or "tempo
-  primo" whose number is edited becomes an ordinary marking with the same words. Editing "Allegro ♩ = 144" no longer
-  saves the old 144 beside the new `<tempo>`.
+- **A number edit changes only the equation in a marking's words** (import-fidelity owner decision b): the text is
+  read as MuseScore reads it, an equation alone becomes derived, words around an equation get the new number written
+  in — counted in the beat the text prints, in the markup too, so the glyph and formatting stay; a host that changes
+  the beat itself gets the glyph rewritten with it — and words alone keep their words, the number changing what plays
+  only. Editing "Allegro ♩ = 144" no longer saves the old 144 beside the new `<tempo>`. A deliberate deviation from
+  MuseScore, whose `updateTempo` never changes a marking's type: an "a tempo" or "tempo primo" whose number is edited
+  becomes an ordinary marking with the same words, because an edited number that playback ignored would be worse.
+  A host that only toggles `playsBack` on such a marking no longer counts as editing its number.
 - **`LayoutElement.spannerSegment` gains a trailing `richText: LayoutRichText?`** (default `nil`): the typeset label of
   a kind that draws formatted text (a gradual tempo change). Constructions are unchanged; a positional pattern needs one
   more `_` (`case let .spannerSegment(kind, from, to, _, _, _, _, _)`). `LayoutElement` is non-exhaustive by contract.

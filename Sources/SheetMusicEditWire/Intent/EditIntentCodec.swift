@@ -30,6 +30,13 @@ import Wirelet
 /// ones, so a number-only tempo edit encodes exactly as it did before they existed. Every other field below is
 /// mandatory.
 ///
+/// Two decode behaviors of Wirelet's struct decoder (`WireFormatMacro.swift`) keep that compatible.
+/// `unknownTag` is thrown for a MISSING mandatory field, not for an extra one. A field NUMBER the decoder does not
+/// declare is skipped (`default: try reader.skipUnknownField(wireType:)`). So a decoder built before
+/// tags 6–8 existed reads a new `setTempo` intent, skips those tags, and applies the number and beat; the text and play
+/// edits are dropped by it, silently. A decoder that knows them reads an old intent — which carries none — as `.keep`
+/// and no change to `<play>`.
+///
 /// `EditIntentWire` top-level bytes: `varint(payloadLength)` + payload, where payload is `varint(caseIndex)`
 /// followed — for every case here, since none is payload-less — by `tag(1, lengthDelimited) +
 /// associatedValue.encode()`. Case indices below are the committed order; `EditIntent`'s declaration order follows
