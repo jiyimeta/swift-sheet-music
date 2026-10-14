@@ -87,16 +87,50 @@ struct SetTempoTextTests {
         let tempo = Tempo(beatsPerSecond: 2.4, text: "Allegro  = 144", preservedTextMarkup: markup)
         let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
         #expect(edited.text == "Allegro  = 132")
-        let expected: [Item] = [.characters("Allegro "), Self.quarter, .characters(" = 132"), Self.bold("")]
+        // The `<b>` that held only the rest of the old number is removed, not kept empty.
+        let expected: [Item] = [.characters("Allegro "), Self.quarter, .characters(" = 132")]
         #expect(edited.preservedTextMarkup?.content == expected)
         #expect(edited.preservedTextMarkup?.derivedText == "Allegro  = 132")
     }
 
-    @Test("a glyph with no anchor in the text regenerates the equation from the marking instead of guessing")
+    @Test("MuseScore's ca. prefix is kept where it stands, and the equation is still found")
+    func approximatePrefixIsKept() throws {
+        let cases: [(String, String)] = [
+            ("Allegro \u{ECA5} ca. = 120", "Allegro \u{ECA5} ca. = 132"),
+            ("Allegro \u{ECA5} = ca. 120", "Allegro \u{ECA5} = ca. 132"),
+            ("x = 3 \u{ECA5} approx. = c. 120", "x = 3 \u{ECA5} approx. = c. 132"),
+        ]
+        for (input, expected) in cases {
+            let edited = try Self.edited(
+                Tempo(beatsPerSecond: 2, text: input), to: SetTempo.Marking(beatsPerSecond: 2.2),
+            )
+            #expect(edited.text == expected)
+        }
+    }
+
+    @Test("an unreachable first equation stops the markup search; a later equation of the same beat stays")
+    func laterEquationIsNotRewrittenInsteadOfAnUnreachableFirst() throws {
+        let group = Item.element(PreservedTextMarkup.Element(name: "b", content: [Self.quarter, .characters(" =")]))
+        let content: [Item] = [
+            .characters("Allegro "), group, .characters(" 144 and "), Self.quarter, .characters(" = 120"),
+        ]
+        let text = "Allegro  = 144 and  = 120"
+        let markup = PreservedTextMarkup(content: content, derivedText: text)
+        let tempo = Tempo(beatsPerSecond: 2.4, text: text, preservedTextMarkup: markup)
+        let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
+        #expect(edited.text == "Allegro  = 132 and  = 120")
+        #expect(edited.preservedTextMarkup == nil)
+    }
+
+    @Test("a glyph split by a typed space reads as one beat to the classifier only: the equation is regenerated")
     func unanchoredEquationIsRegenerated() throws {
-        // MuseScore's normalization drops "ca." before it reads the equation; the glyph and the equals sign are then
-        // adjacent for it, but not in the text, where nothing can be anchored.
-        let tempo = Tempo(beatsPerSecond: 2, text: "Allegro \u{ECA5} ca. = 120")
+        // "♩", a typed space and a dot symbol are three runs here but one dotted beat for MuseScore, so the classifier
+        // finds an equation the locator cannot place; nothing is guessed, and the text is regenerated.
+        let dot = Self.sym("metAugmentationDot")
+        let content: [Item] = [.characters("Allegro "), Self.quarter, .characters(" "), dot, .characters(" = 120")]
+        let text = "Allegro   = 120"
+        let markup = PreservedTextMarkup(content: content, derivedText: text)
+        let tempo = Tempo(beatsPerSecond: 2, text: text, preservedTextMarkup: markup)
         let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
         #expect(edited.text == nil)
         #expect(edited.preservedTextMarkup == nil)

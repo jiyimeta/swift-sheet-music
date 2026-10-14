@@ -100,10 +100,17 @@ extension PreservedTextMarkup {
             }
             switch item {
             case let .characters(text):
-                result.append(.characters(rewritingLeaf(text, number: number, phase: &phase)))
+                let rewritten = rewritingLeaf(text, number: number, phase: &phase)
+                // A run whose every character was a digit of the old number is removed, not kept empty.
+                if !rewritten.isEmpty || text.isEmpty {
+                    result.append(.characters(rewritten))
+                }
             case let .element(element):
                 let inner = replacingNumber(in: element.content, number: number, phase: &phase)
-                result.append(.element(Element(name: element.name, attributes: element.attributes, content: inner)))
+                if !inner.isEmpty || element.content.isEmpty {
+                    let kept = Element(name: element.name, attributes: element.attributes, content: inner)
+                    result.append(.element(kept))
+                }
             }
         }
         return result

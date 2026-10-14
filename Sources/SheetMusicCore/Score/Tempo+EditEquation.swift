@@ -6,6 +6,12 @@ import SheetMusicFoundation
 /// anywhere, and within it the first such equation in document order. Every locator here is handed that pattern's
 /// beat length and takes the first equation of that beat in document order, which is the same equation — except where
 /// the classifier's equation cannot be reached in the markup (below), when the markup is left alone.
+///
+/// The classifier removes "ca." / "c." / "approx." before it reads, so they may stand anywhere in the equation; the
+/// locators skip them with the same function (`skippingSpacesAndPrefixes`) wherever the classifier would have them
+/// removed, and leave them in the text. A plain text the classifier accepts is therefore always located, with one
+/// exception: a glyph written as `<sym>`s that a text run splits ("♩", a typed space, then a dot symbol) reads as one
+/// beat to the classifier, but as separate runs here.
 extension Tempo {
     /// Where an equation sits in a plain text: its beat glyph (empty for a glyph written as `<sym>`s, which plain text
     /// drops — it is then the position the glyph would stand at) and its number.
@@ -85,14 +91,14 @@ extension Tempo {
             var glyphEnd = scalars.index(after: index)
             var dots = 0
             while dots < 2 {
-                let probe = skippingSpaces(from: glyphEnd, in: scalars)
+                let probe = skippingSpacesAndPrefixes(from: glyphEnd, in: text)
                 guard probe < scalars.endIndex, scalars[probe] == TempoTextEquation.dot else { break }
                 glyphEnd = scalars.index(after: probe)
                 dots += 1
             }
             guard let length = beatQuarters(note: scalars[index], dots: dots), abs(length - quarters) < 1e-9
             else { continue }
-            let sign = skippingSpaces(from: glyphEnd, in: scalars)
+            let sign = skippingSpacesAndPrefixes(from: glyphEnd, in: text)
             if sign < scalars.endIndex, isSign(scalars[sign]), let number = numberAfter(sign, in: text) {
                 return EquationMatch(glyph: index ..< glyphEnd, number: number)
             }
@@ -128,7 +134,7 @@ extension Tempo {
                 guard let length = beatQuarters(ofSymbols: names), abs(length - quarters) < 1e-9,
                       let start = scalars.index(scalars.startIndex, offsetBy: offset, limitedBy: scalars.endIndex)
                 else { continue }
-                let sign = skippingSpaces(from: start, in: scalars)
+                let sign = skippingSpacesAndPrefixes(from: start, in: text)
                 if sign < scalars.endIndex, isSign(scalars[sign]), let number = numberAfter(sign, in: text) {
                     return EquationMatch(glyph: start ..< start, number: number)
                 }
@@ -158,19 +164,12 @@ extension Tempo {
             if let number = numberStarting(at: text.startIndex, in: text) { return .number(number) }
             return skippingSpacesAndPrefixes(from: text.startIndex, in: text) == text.endIndex ? .blank : .unrelated
         }
-        guard let sign = text.firstIndex(where: { !$0.isWhitespace }) else { return .blank }
+        let sign = skippingSpacesAndPrefixes(from: text.startIndex, in: text)
+        guard sign < text.endIndex else { return .blank }
         guard isSign(of: text[sign]) else { return .unrelated }
         if let number = numberAfter(sign, in: text) { return .number(number) }
         return skippingSpacesAndPrefixes(from: text.index(after: sign), in: text) == text.endIndex
             ? .signOnly : .unrelated
-    }
-
-    private static func skippingSpaces(from start: String.Index, in scalars: String.UnicodeScalarView) -> String.Index {
-        var cursor = start
-        while cursor < scalars.endIndex, TempoTextEquation.isSpace(scalars[cursor]) {
-            cursor = scalars.index(after: cursor)
-        }
-        return cursor
     }
 
     /// The equals signs MuseScore reads: =, ≒, ≈, ~.
