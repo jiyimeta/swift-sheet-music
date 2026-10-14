@@ -228,8 +228,16 @@
         ///   leading groups move by the padding-table distances, and two `graceChord` lines change `stem:` from
         ///   down to up. In `grace_after`, the up stem reaches above the staff, so the unwrapped system grows and
         ///   everything in it moves down 4.95 pt. No fixture without a grace changed.
+        ///
+        /// **Re-recorded 2026-10-14 when the corpus gained lyrics.** Until then it held no lyric at all — no
+        /// `lyricHyphen`, no `lyricsMelisma`, no sung syllable — so every change to lyric layout, including 4.10.0's
+        /// removal of the melisma table from the cache keys, rested on other evidence. `lyrics_verses_melisma.mscx`
+        /// adds two verses, words hyphenated within and across bars, and melismas inside a bar, across a barline and
+        /// across a forced system break. The digest was diffed against the one written just before the fixture was
+        /// added (which hashed to the previous `4135ad82…`): the 66 existing blocks are identical to the character,
+        /// and the only change is the new fixture's two blocks, 174 lines.
         private static let expectedDigestSHA256 =
-            "4135ad8219430e9339d0dd9a9058e6de7ad8e48b7858fe938ba54f4d9fa60a66"
+            "d7d2f72f2adb168221837ef8570f9ceaaae38dd47b35c5e7ed94592f56a70c1c"
 
         @Test("write digest")
         func writeDigest() throws {
