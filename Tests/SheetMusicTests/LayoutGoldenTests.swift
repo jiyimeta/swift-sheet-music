@@ -257,8 +257,17 @@
         /// metronome glyph is Bravura at `tempoMusicalSymbolSize` 20, so the box is taller and pushes the system down.
         /// No fixture without a tempo changed except by `richText: nil`. Against 4.10.0's own digest, the lyrics
         /// fixture's 52 changed lines gain W1's `richText: nil` and nothing else.
+        ///
+        /// **Re-recorded 2026-10-15 for import-fidelity W3 (markers and jumps), after reading the diff** block by block
+        /// against W2's digest, rewritten on a worktree at W2's last commit (it hashed to `f5d31d24…`, the constant
+        /// above). 8 of 4063 lines changed, all in `repeat52` and `repeat53`, one marker and one jump per block: the
+        /// markers read as segnos (`.other` → `.segno`, text "segno" → ""), set in MuseScore's repeat style and
+        /// centered on their bar's start barline (x 4.0 → −10.38, y 40.26 → 42.60); the jumps gain their runs ("D.S."
+        /// in Edwin) and stand above the staff ending on their bar's end barline (y 82.26 below the staff → 43.76
+        /// above it); every one gains `color: nil` and its above, autoplaced `placement:`. No system origin, system
+        /// height or page size moved, and no other fixture changed.
         private static let expectedDigestSHA256 =
-            "f5d31d2477b7955a67d59fe2122e18e05223f4469d539cf7029b37c2f7e2c49b"
+            "27aba95fd27f1051a464b85352115cf6cdada7739c4be8a0d97285277d019c20"
 
         @Test("write digest")
         func writeDigest() throws {
