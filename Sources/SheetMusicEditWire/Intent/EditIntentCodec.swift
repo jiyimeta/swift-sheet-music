@@ -26,7 +26,9 @@ import Wirelet
 /// does the same for every case payload — there is no "omit a zero-valued scalar" shortcut. Every tag listed below
 /// must be written on encode, including zero-valued ones (a committed golden fixture emits literal `08 00` / `10 00`
 /// / `20 00` triples for exactly this reason), or decoding throws `unknownTag`. The one exception the macro allows
-/// is an `Optional<T>` (`T?`) stored property, which this codec declares none of — every field below is mandatory.
+/// is an `Optional<T>` (`T?`) stored property, written only when non-nil: `SetTempoIntentWire`'s tags 6–8 are the only
+/// ones, so a number-only tempo edit encodes exactly as it did before they existed. Every other field below is
+/// mandatory.
 ///
 /// `EditIntentWire` top-level bytes: `varint(payloadLength)` + payload, where payload is `varint(caseIndex)`
 /// followed — for every case here, since none is payload-less — by `tag(1, lengthDelimited) +
@@ -518,6 +520,9 @@ import Wirelet
 /// tag 4: beatNote        NoteDurationWire, see layout above — the encoder writes the `kind = 3` (quarter)
 ///                        placeholder when hasTempo == 0, so a byte-for-byte parity check should expect it
 /// tag 5: beatDots        i32, zig-zag varint — 0 when hasTempo == 0
+/// tag 6: textMode        u8, varint, OPTIONAL — absent = keep the text, 1 = derive it, 2 = set it to `text`
+/// tag 7: text            string, OPTIONAL — present only with textMode 2
+/// tag 8: playsBack       u8, varint, OPTIONAL — absent = leave `<play>`, 0 = mute, 1 = play
 /// ```
 ///
 /// `SetStaffTextIntentWire` (`setStaffText`'s payload):

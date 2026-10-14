@@ -4,7 +4,8 @@ import Wirelet
 
 // Payload structs for intents 41…47 (edit-command parity, group 3). Tag layouts are documented in
 // `EditIntentCodec.swift`'s file-level comment alongside the older payloads; the rules there apply unchanged —
-// every field mandatory, optionals as `has` + value pairs, enums this codec does not own as raw strings, small
+// every field mandatory (`SetTempoIntentWire`'s tags 6–8 are the one `T?` exception, written only when non-nil),
+// optionals as `has` + value pairs, enums this codec does not own as raw strings, small
 // closed enums as `u8` with a throwing table. The `Double` fields are the codec's first floating-point payloads:
 // Wirelet writes them as fixed 64-bit IEEE 754 bit patterns, so they are byte-stable and round-trip exactly.
 
@@ -49,6 +50,12 @@ public struct SetTempoIntentWire {
     public var beatsPerSecond: Double
     public var beatNote: NoteDurationWire
     public var beatDots: Int32
+    /// Tag 6: what the write does to the text — absent `.keep`, 1 `.derive`, 2 `.set(text)`.
+    public var textMode: UInt8?
+    /// Tag 7: the text a `.set` writes.
+    public var text: String?
+    /// Tag 8: `<play>` — absent leaves it, 0 mutes the marking, 1 plays it.
+    public var playsBack: UInt8?
 
     public init(anchor: VoiceElementID, marking: SetTempo.Marking?) {
         self.anchor = VoiceElementIDWire(from: anchor)
@@ -56,14 +63,32 @@ public struct SetTempoIntentWire {
         beatsPerSecond = marking?.beatsPerSecond ?? 0
         beatNote = NoteDurationWire(from: marking?.beatNote ?? .quarter)
         beatDots = Int32(marking?.beatDots ?? 0)
+        switch marking?.text ?? .keep {
+        case .keep:
+            textMode = nil
+            text = nil
+        case .derive:
+            textMode = 1
+            text = nil
+        case let .set(value):
+            textMode = 2
+            text = value
+        }
+        playsBack = marking?.playsBack.map { $0 ? 1 : 0 }
     }
 
     public func decoded() throws -> (anchor: VoiceElementID, marking: SetTempo.Marking?) {
         guard hasTempo != 0 else { return (anchor: anchor.decoded(), marking: nil) }
+        let textEdit: SetTempo.Marking.TextEdit = switch textMode {
+        case 1: .derive
+        case 2: .set(text ?? "")
+        default: .keep
+        }
         return try (
             anchor: anchor.decoded(),
             marking: SetTempo.Marking(
                 beatsPerSecond: beatsPerSecond, beatNote: beatNote.decoded(), beatDots: Int(beatDots),
+                text: textEdit, playsBack: playsBack.map { $0 != 0 },
             ),
         )
     }

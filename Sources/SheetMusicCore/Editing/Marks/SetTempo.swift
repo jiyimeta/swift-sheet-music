@@ -8,6 +8,8 @@ import SheetMusicFoundation
 /// dots change, its offsets, font overrides and visibility do not — and collapses any further tempo at the same
 /// beat, so that the read, the write and the removal agree on which tempo "the one here" is. A fresh tempo is
 /// written with `originalStaff` nil. The removal drops every tempo at the beat, and is refused when there is none.
+/// The write also sets `<play>` when the marking says, and the text as `Marking.text` says; a new number under
+/// `.keep` edits the words as `Tempo.applyNumberEdit()` describes.
 ///
 /// ## The inverse
 ///
@@ -20,11 +22,35 @@ public struct SetTempo: EditCommand {
         public var beatsPerSecond: Double
         public var beatNote: NoteDuration
         public var beatDots: Int
+        public var text: TextEdit
+        public var playsBack: Bool?
 
-        public init(beatsPerSecond: Double, beatNote: NoteDuration = .quarter, beatDots: Int = 0) {
+        /// What a write does to the marking's text.
+        public enum TextEdit: Hashable, Sendable {
+            /// Leave the words; a new number or beat then edits them as MuseScore's would read them
+            /// (`Tempo.applyNumberEdit`).
+            case keep
+            /// Make the text derived: the marking prints its beat and number (`Tempo.metronomeMarking`).
+            case derive
+            /// Replace the text with this plain text.
+            case set(String)
+        }
+
+        public init(
+            beatsPerSecond: Double, beatNote: NoteDuration = .quarter, beatDots: Int = 0,
+            text: TextEdit = .keep, playsBack: Bool? = nil,
+        ) {
             self.beatsPerSecond = beatsPerSecond
             self.beatNote = beatNote
             self.beatDots = beatDots
+            self.text = text
+            self.playsBack = playsBack
+        }
+
+        /// The number in the marking's own beat — what it prints (`Tempo.beatsPerMinute`). Setting it keeps the beat.
+        public var beatsPerMinute: Double {
+            get { beatsPerSecond * 60 / Tempo.lengthInQuarters(of: beatNote, dots: beatDots) }
+            set { beatsPerSecond = newValue * Tempo.lengthInQuarters(of: beatNote, dots: beatDots) / 60 }
         }
     }
 
@@ -79,14 +105,38 @@ public struct SetTempo: EditCommand {
         return SetTempo(restoringLane: previous, anchor: anchor)
     }
 
-    /// The marking at the anchor's beat, or `nil` when there is none (or the anchor does not resolve).
+    /// The marking at the anchor's beat as it plays, or `nil` when the beat carries none (or the anchor does not
+    /// resolve): an "a tempo" or "tempo primo" that follows its text reads the tempo it reinstates — the tempo map's
+    /// point there, in that tempo's beat — and every other marking its own number and beat. `text` is `.keep`;
+    /// `playsBack` is `nil` while the marking plays and `false` when it does not, so a host that copies this, edits the
+    /// number and writes it back changes nothing else, and one that changes nothing writes an equal marking — the
+    /// planner's no-op test (`ScoreEditSession+MarkPlanning.swift`).
     ///
     /// Public because a host editing a marking has to show what it currently says — folino's tempo popover puts a
     /// BPM field on the selected marking and writes the edited number back through `SetTempo`, preserving the beat
     /// note this read hands it.
     public static func current(at anchor: VoiceElementID, in score: Score) -> Marking? {
         guard let tempo = tempo(at: anchor, in: score) else { return nil }
-        return Marking(beatsPerSecond: tempo.beatsPerSecond, beatNote: tempo.beatNote, beatDots: tempo.beatDots)
+        let playsBack: Bool? = tempo.playsBack ? nil : false
+        if tempo.followText, tempo.textType != .normal, tempo.playsBack, let point = inForce(at: anchor, in: score) {
+            return point
+        }
+        return Marking(
+            beatsPerSecond: tempo.beatsPerSecond, beatNote: tempo.beatNote, beatDots: tempo.beatDots,
+            playsBack: playsBack,
+        )
+    }
+
+    /// What plays at the anchor's beat, as a marking a host can show and write — the tempo map's point in force there
+    /// (`Score.resolvedTempoMap()`), its number and beat; `nil` before the first point or when the anchor does not
+    /// resolve. A caret on a beat with no marking shows this.
+    public static func inForce(at anchor: VoiceElementID, in score: Score) -> Marking? {
+        guard let position = SystemLaneSlot.position(of: anchor, in: score),
+              let point = score.resolvedTempoMap().point(
+                  inForceAtMeasure: anchor.measureIndex, tickInMeasure: position.ticks(division: score.division),
+              )
+        else { return nil }
+        return Marking(beatsPerSecond: point.beatsPerSecond, beatNote: point.beatNote, beatDots: point.beatDots)
     }
 
     /// The whole tempo at the anchor's beat — the one `current` reads the marking from, and the one the
@@ -118,9 +168,7 @@ public struct SetTempo: EditCommand {
         if let index = SystemLaneSlot.firstIndex(in: measure, at: position, where: isTempo),
            case var .tempo(existing) = measure.elements[index].element
         {
-            existing.beatsPerSecond = marking.beatsPerSecond
-            existing.beatNote = marking.beatNote
-            existing.beatDots = marking.beatDots
+            existing.apply(marking)
             measure.elements.updateValue(at: index) { $0.element = .tempo(existing) }
             for duplicate in measure.elements.indices.reversed() where duplicate > index {
                 let element = measure.elements[duplicate]
@@ -130,13 +178,12 @@ public struct SetTempo: EditCommand {
             }
             return
         }
+        var fresh = Tempo(
+            beatsPerSecond: marking.beatsPerSecond, beatNote: marking.beatNote, beatDots: marking.beatDots,
+        )
+        fresh.apply(marking)
         measure.elements.insert(
-            PositionedSystemElement(
-                position: position,
-                element: .tempo(Tempo(
-                    beatsPerSecond: marking.beatsPerSecond, beatNote: marking.beatNote, beatDots: marking.beatDots,
-                )),
-            ),
+            PositionedSystemElement(position: position, element: .tempo(fresh)),
             at: SystemLaneSlot.insertionIndex(in: measure, for: position),
             id: ids.next(),
         )

@@ -55,9 +55,19 @@ and this project adheres to
   `Spanner.ChangeMethod`, `playsBack`) whose other children (hooks, line style, `<Segment>` offsets) are kept and
   written back. They used to decode as `.other` and lose their whole payload on save. Every line spanner now models
   `continueText` and `endText` beside `beginText`.
+- **`SetTempo` writes a marking's text and `<play>`** — `SetTempo.Marking.text` (`.keep`, `.derive`, `.set(String)`)
+  and `playsBack`, and `Marking.beatsPerMinute` reads and writes the number in the marking's own beat.
+  `SetTempo.current(at:in:)` reads the marking as it plays (an "a tempo" its reinstated tempo); `SetTempo.inForce(at:in:)`
+  reads what plays at a beat without a marking. `SetTempoIntentWire` carries the two as optional tags 6–8, absent for a
+  number-only edit, whose bytes are unchanged.
 
 ### Changed
 
+- **A number edit treats a marking's words as MuseScore reads them** (import-fidelity owner decision b): an equation
+  alone becomes derived, words around an equation get the new number written in — in the markup too, so the glyph
+  and formatting stay — and words alone keep their words, the number changing what plays only; an "a tempo" or "tempo
+  primo" whose number is edited becomes an ordinary marking with the same words. Editing "Allegro ♩ = 144" no longer
+  saves the old 144 beside the new `<tempo>`.
 - **`LayoutElement.spannerSegment` gains a trailing `richText: LayoutRichText?`** (default `nil`): the typeset label of
   a kind that draws formatted text (a gradual tempo change). Constructions are unchanged; a positional pattern needs one
   more `_` (`case let .spannerSegment(kind, from, to, _, _, _, _, _)`). `LayoutElement` is non-exhaustive by contract.
