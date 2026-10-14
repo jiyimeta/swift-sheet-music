@@ -355,7 +355,7 @@
                 let origin = try #require(system.staffOrigins.first).y
                 let y = try #require(
                     system.measures.flatMap(\.jumps).compactMap {
-                        if case let .jump(_, p, _, _) = $0 { return p.y }
+                        if case let .jump(_, p, _, _, _, _) = $0 { return p.y }
                         return nil
                     }.first,
                 )

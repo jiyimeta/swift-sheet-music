@@ -285,10 +285,11 @@ public enum LayoutElement: Sendable, Equatable {
     ///
     /// `richText` is what draws: `LayoutEngine` always sets it — the mark's markup, its words, or a marker's type
     /// default (`Marker.displayedRichText`) — and `text` is its plain projection. One built without `richText` draws
-    /// nothing and has no ink, box or hit.
+    /// nothing and has no ink, box or hit. `color` is the mark's author color (nil = ink); `placement` its side and
+    /// autoplace switch, which `SkylineAutoplacePass` reads through `textPlacement`.
     case marker(
         kind: Marker.Kind, text: String, origin: CGPoint, identity: ScoreElementID? = nil,
-        richText: LayoutRichText? = nil,
+        richText: LayoutRichText? = nil, color: ScoreColor? = nil, placement: TextPlacementMetadata? = nil,
     )
     /// Rehearsal letter / number drawn above the top staff at the
     /// start of its containing measure. `frame` controls whether
@@ -323,8 +324,12 @@ public enum LayoutElement: Sendable, Equatable {
     ///
     /// `richText` is what draws: `LayoutEngine` always sets it — the mark's markup, its words, or a marker's type
     /// default (`Marker.displayedRichText`) — and `text` is its plain projection. One built without `richText` draws
-    /// nothing and has no ink, box or hit.
-    case jump(text: String, origin: CGPoint, identity: ScoreElementID? = nil, richText: LayoutRichText? = nil)
+    /// nothing and has no ink, box or hit. `color` is the mark's author color (nil = ink); `placement` its side and
+    /// autoplace switch, which `SkylineAutoplacePass` reads through `textPlacement`.
+    case jump(
+        text: String, origin: CGPoint, identity: ScoreElementID? = nil, richText: LayoutRichText? = nil,
+        color: ScoreColor? = nil, placement: TextPlacementMetadata? = nil,
+    )
     case measureRepeat(count: Int, origin: CGPoint)
     /// Multi-measure rest H-bar with a count printed above. Replaces
     /// the `count` consecutive rest measures starting at this layout

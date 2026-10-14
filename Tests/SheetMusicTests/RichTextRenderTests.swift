@@ -105,7 +105,7 @@
         }
 
         private static func isMarkerWithRuns(_ element: LayoutElement) -> Bool {
-            if case .marker(_, _, _, _, .some) = element { true } else { false }
+            if case .marker(_, _, _, _, .some, _, _) = element { true } else { false }
         }
 
         /// The first element of the `rich-text` fixture `match` accepts, with the document's metrics.
@@ -151,7 +151,7 @@
         @Test("the CALayer jump draws its runs where layout measured the ink")
         func jumpLayerMatchesInk() throws {
             let found = try Self.fixtureElement { element in
-                if case .jump(_, _, _, .some) = element { true } else { false }
+                if case .jump(_, _, _, .some, _, _) = element { true } else { false }
             }
             try Self.expectDrawnInk(found.element, metrics: found.metrics)
         }

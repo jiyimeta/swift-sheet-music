@@ -368,8 +368,8 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 isAbove: above,
                 metrics: metrics,
             )
-        case let .marker(kind, _, p, _, richText):
-            MarkerRenderer.draw(context: &context, kind: kind, origin: shift(p), richText: richText)
+        case let .marker(kind, _, p, _, richText, color, _):
+            MarkerRenderer.draw(context: &context, kind: kind, origin: shift(p), richText: richText, color: color)
         case let .rehearsalMark(text, p, frame, color, _, _, properties, richText):
             RehearsalMarkRenderer.draw(
                 context: &context, text: text,
@@ -378,8 +378,8 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 richText: richText,
                 metrics: metrics,
             )
-        case let .jump(_, p, _, richText):
-            JumpRenderer.draw(context: &context, origin: shift(p), richText: richText)
+        case let .jump(_, p, _, richText, color, _):
+            JumpRenderer.draw(context: &context, origin: shift(p), richText: richText, color: color)
         case let .measureNumber(text, p):
             MeasureNumberRenderer.draw(
                 context: &context, text: text,

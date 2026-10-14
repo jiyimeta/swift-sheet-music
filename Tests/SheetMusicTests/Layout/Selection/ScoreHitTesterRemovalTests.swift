@@ -148,17 +148,17 @@ struct ScoreHitTesterRemovalTests {
         let after = Self.elements(Self.layout(score, filtered: filtered))
         if marker {
             #expect(after.compactMap { element -> ScoreElementID? in
-                if case let .marker(.coda, _, _, id, _) = element { return id }; return nil
+                if case let .marker(.coda, _, _, id, _, _, _) = element { return id }; return nil
             } == [selected])
-            #expect(!after.contains { if case .marker(.segno, _, _, _, _) = $0 { true } else { false } })
+            #expect(!after.contains { if case .marker(.segno, _, _, _, _, _, _) = $0 { true } else { false } })
             let prior = Self.elements(document).filter { if case .jump = $0 { true } else { false } }
             #expect(after.filter { if case .jump = $0 { true } else { false } }.compactMap(\.elementID)
                 == prior.compactMap(\.elementID))
         } else {
             #expect(after.compactMap { element -> ScoreElementID? in
-                if case let .jump("D.C.", _, id, _) = element { return id }; return nil
+                if case let .jump("D.C.", _, id, _, _, _) = element { return id }; return nil
             } == [selected])
-            #expect(!after.contains { if case .jump("D.S.", _, _, _) = $0 { true } else { false } })
+            #expect(!after.contains { if case .jump("D.S.", _, _, _, _, _) = $0 { true } else { false } })
             let prior = Self.elements(document).filter { if case .marker = $0 { true } else { false } }
             #expect(after.filter { if case .marker = $0 { true } else { false } }.compactMap(\.elementID)
                 == prior.compactMap(\.elementID))

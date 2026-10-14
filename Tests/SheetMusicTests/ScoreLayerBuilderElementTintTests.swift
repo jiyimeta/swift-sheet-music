@@ -298,10 +298,12 @@
                         kind: kind, fromOrigin: from, toOrigin: to, continuesLeft: left,
                         continuesRight: right, text: text, anchor: nil,
                     )
-                case let .jump(text, origin, _, richText):
-                    element = .jump(text: text, origin: origin, richText: richText)
-                case let .marker(kind, text, origin, _, richText):
-                    element = .marker(kind: kind, text: text, origin: origin, richText: richText)
+                case let .jump(text, origin, _, richText, color, placement):
+                    element = .jump(text: text, origin: origin, richText: richText, color: color, placement: placement)
+                case let .marker(kind, text, origin, _, richText, color, placement):
+                    element = .marker(
+                        kind: kind, text: text, origin: origin, richText: richText, color: color, placement: placement,
+                    )
                 default:
                     Issue.record("Unexpected Selection-3 sample")
                     return

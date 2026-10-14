@@ -26,9 +26,9 @@ extension TextInkGeometry {
         case let .staffName(text, origin):
             return notationRects(text: text, role: .staffName, origin: origin, metrics: metrics)
         // A marker or jump is its runs, which layout always sets; without them it has no ink.
-        case let .jump(_, origin, _, richText):
+        case let .jump(_, origin, _, richText, _, _):
             return richRects(richText, origin: origin, kind: .jump) ?? []
-        case let .marker(kind, _, origin, _, richText):
+        case let .marker(kind, _, origin, _, richText, _, _):
             return richRects(richText, origin: origin, kind: .forMarker(kind)) ?? []
         default: return nil
         }

@@ -9,7 +9,7 @@ extension LayoutElement {
         switch self {
         case let .tieArc(_, _, _, identity): return identity
         case let .glissandoLine(_, _, _, _, start): return start.map { .glissando(start: $0) }
-        case let .marker(_, _, _, identity, _), let .jump(_, _, identity, _): return identity
+        case let .marker(_, _, _, identity, _, _, _), let .jump(_, _, identity, _, _, _): return identity
         // A swing marking, which prints as staff text and says which element it is here rather than through the
         // text `anchor` beside it — see `LayoutElement.staffText`. An ordinary staff text carries no identity and
         // falls through to `nil`, so the element rung declines it and the text rung answers for it.

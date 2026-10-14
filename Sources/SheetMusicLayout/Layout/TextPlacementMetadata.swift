@@ -41,6 +41,7 @@ extension LayoutElement {
     public var textPlacement: TextPlacementMetadata? {
         switch self {
         case let .textMark(.lyrics(_, _, _, placement, _), _, _, _),
+             let .marker(_, _, _, _, _, _, placement), let .jump(_, _, _, _, _, placement),
              let .staffText(_, _, _, _, _, placement, _, _, _),
              let .rehearsalMark(_, _, _, _, _, placement, _, _),
              let .lyricsMelisma(_, _, placement), let .lyricHyphen(_, _, placement): placement

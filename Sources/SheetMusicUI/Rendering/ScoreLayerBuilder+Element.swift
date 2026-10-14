@@ -257,11 +257,11 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height,
                 context: &context, into: parent,
             )
-        case let .marker(kind, _, p, _, richText):
+        case let .marker(kind, _, p, _, richText, color, _):
             // A marker is its text's runs — a segno or coda included — hung by its kind's anchor.
             if let richText, let layer = richTextLayer(
                 richText, at: shift(p), anchor: LayoutRichText.anchor(for: .forMarker(kind)),
-                color: Self.inkColor, height: height,
+                color: color.map(Self.scoreColorToCGColor) ?? Self.inkColor, height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -278,10 +278,10 @@ extension ScoreLayerBuilder {
             ) {
                 attachText(element, layer, context: &context)
             }
-        case let .jump(_, p, _, richText):
+        case let .jump(_, p, _, richText, color, _):
             if let richText, let layer = richTextLayer(
                 richText, at: shift(p), anchor: LayoutRichText.anchor(for: .jump),
-                color: Self.inkColor, height: height,
+                color: color.map(Self.scoreColorToCGColor) ?? Self.inkColor, height: height,
             ) {
                 parent.addSublayer(layer)
             }

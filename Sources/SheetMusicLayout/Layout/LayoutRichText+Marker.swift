@@ -8,10 +8,22 @@ extension LayoutRichText {
     /// MuseScore's `TextLayout::musicSymbolBaseLineAdjust` (`rendering/score/textlayout.cpp:391-414`), which it applies
     /// to markers alone: a segno or coda sits centered on the capitals of "To" rather than standing on the baseline.
     /// With no text beside it the marker's own font is the reference, so a lone segno sits where it would beside a
-    /// capital. Cap height is measured as the ink top of "H": no `FontMetricsProvider` reports it.
-    init(marker richText: RichText, style: TextStyleType, metrics: StaffMetrics) {
-        let typeset = LayoutRichText(richText, style: style, metrics: metrics)
+    /// capital. Cap height is measured as the ink top of "H": no `FontMetricsProvider` reports it. `symbolSize` is the
+    /// marker's own `<musicSymbolSize>`, in points at the reference spatium.
+    init(marker richText: RichText, style: TextStyleType, metrics: StaffMetrics, symbolSize: Double? = nil) {
         let baseFont = TextInkGeometry.font(for: style, metrics: metrics)
+        let typeset: LayoutRichText
+        if let symbolSize {
+            // A marker's own `<musicSymbolSize>` replaces the style's 18 (`Pid::MUSIC_SYMBOL_SIZE`); repeat text is
+            // spatium-dependent, so it scales by sp / 5 exactly as the style's size does.
+            let pointScale = metrics.sp / TextRoleStyle.referenceSpatiumInPoints
+            typeset = LayoutRichText(
+                richText, baseFont: baseFont, pointScale: pointScale,
+                symbolPointSize: CGFloat(symbolSize) * pointScale,
+            )
+        } else {
+            typeset = LayoutRichText(richText, style: style, metrics: metrics)
+        }
         self.init(
             lines: typeset.lines.map { Self.centeringSymbols(in: $0, baseFont: baseFont) },
             leading: typeset.leading,

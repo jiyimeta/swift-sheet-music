@@ -88,7 +88,7 @@ struct NavigationPlacementTests {
 
     /// The ink center x of the marker's first symbol run, measure-local.
     private static func symbolCenterX(_ element: LayoutElement) throws -> CGFloat {
-        guard case let .marker(kind, _, origin, _, rich?) = element else {
+        guard case let .marker(kind, _, origin, _, rich?, _, _) = element else {
             Issue.record("not a marker with runs")
             return .nan
         }

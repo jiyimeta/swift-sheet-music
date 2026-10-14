@@ -675,13 +675,16 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .marker(kind, _, origin, _, richText):
-            // A marker is its text's runs, a segno or coda included; Android, Windows and the web draw them as is.
+        case let .marker(kind, _, origin, _, richText, color, _):
+            // A marker is its text's runs, a segno or coda included, in its author color.
             if let richText {
+                let argb = navigationArgb(color, markArgb: markArgb, ambientArgb: ambientArgb)
+                if let argb { out.append(.setColor(argb: argb)) }
                 emitRichText(
                     richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
                     anchor: LayoutRichText.anchor(for: .forMarker(kind)), into: &out,
                 )
+                if argb != nil { out.append(.setColor(argb: ambientArgb)) }
             }
 
         case let .rehearsalMark(text, origin, frame, color, _, _, properties, richText):
@@ -697,12 +700,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .jump(_, origin, _, richText):
+        case let .jump(_, origin, _, richText, color, _):
             if let richText {
+                let argb = navigationArgb(color, markArgb: markArgb, ambientArgb: ambientArgb)
+                if let argb { out.append(.setColor(argb: argb)) }
                 emitRichText(
                     richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
                     anchor: LayoutRichText.anchor(for: .jump), into: &out,
                 )
+                if argb != nil { out.append(.setColor(argb: ambientArgb)) }
             }
 
         case let .measureRepeat(count, origin):

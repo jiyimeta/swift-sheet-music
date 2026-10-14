@@ -139,7 +139,7 @@ extension LayoutEngine {
     private static func navigationYPoints(_ element: LayoutElement) -> [CGFloat] {
         if let box = LayoutElementShape.navigationLabelRect(for: element) { return [box.minY, box.maxY] }
         switch element {
-        case let .marker(_, _, origin, _, _), let .jump(_, origin, _, _): return [origin.y]
+        case let .marker(_, _, origin, _, _, _, _), let .jump(_, origin, _, _, _, _): return [origin.y]
         default: return []
         }
     }

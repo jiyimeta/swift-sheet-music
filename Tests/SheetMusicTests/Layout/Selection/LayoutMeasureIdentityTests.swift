@@ -307,10 +307,10 @@ extension LayoutMeasureIdentityTests {
             .jump(staff: owner, measureIndex: 2, index: 0),
             .jump(staff: owner, measureIndex: 2, index: 1),
         ])
-        guard case let .marker(_, _, segnoOrigin, _, _) = measure.markers[0],
-              case let .marker(codaKind, codaText, codaOrigin, _, codaRuns?) = measure.markers[1],
-              case let .jump(_, jumpOrigin, _, _) = measure.jumps[0],
-              case let .jump(jumpText, secondJumpOrigin, _, jumpRuns?) = measure.jumps[1]
+        guard case let .marker(_, _, segnoOrigin, _, _, _, _) = measure.markers[0],
+              case let .marker(codaKind, codaText, codaOrigin, _, codaRuns?, _, _) = measure.markers[1],
+              case let .jump(_, jumpOrigin, _, _, _, _) = measure.jumps[0],
+              case let .jump(jumpText, secondJumpOrigin, _, jumpRuns?, _, _) = measure.jumps[1]
         else {
             Issue.record("Expected typeset navigation elements")
             return
@@ -379,7 +379,7 @@ extension LayoutMeasureIdentityTests {
         #expect(measure.markers == single.markers)
         #expect(measure.jumps == single.jumps)
         // The segno prints its default glyph on either staff; the coda's words say whose staff is drawn.
-        guard case let .marker(_, coda, _, _, _) = measure.markers[1] else {
+        guard case let .marker(_, coda, _, _, _, _, _) = measure.markers[1] else {
             Issue.record("Expected a marker")
             return
         }

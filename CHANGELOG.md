@@ -87,6 +87,8 @@ and this project adheres to
 
 - **Breaking: `MarkerGlyph` is removed.** A marker draws its `displayedRichText`; there is no glyph-or-label choice to
   make any more.
+- **Breaking: `LayoutElement.marker` / `.jump` carry `color:` and `placement:`** (defaults nil), so a pattern match on
+  either case needs two more elements.
 - **Every marker and jump is measured, reserved and hit-tested by its runs.** Layout typesets each one's
   `displayedRichText` in MuseScore's repeat style (`TextStyleType.repeatLeft` / `.repeatRight`) and `LayoutElement.marker` /
   `.jump` always carry it; one built without `richText` has no ink, box or hit. The marker's `text` payload is the
@@ -149,6 +151,11 @@ and this project adheres to
 
 ### Fixed
 
+- **A marker's or jump's own properties are applied.** A hidden one draws nothing and takes no space — greyed and
+  selectable when invisible elements are shown — and still steers playback (a hidden To Coda or D.S. is common in files
+  arranged for playback); its offset moves it before autoplace, as MuseScore does; `<placement>below` sets it under the
+  staff; `<autoplace>0` keeps it where it was put; its color reaches every renderer and the draw program; "Center on
+  symbol" off aligns a segno or coda marker by its edge; `<musicSymbolSize>` sizes its symbols.
 - **PDF import labels its markers as MuseScore does (F3.7):** a Coda `codab`, a To Coda `coda`. To Coda was labeled
   `to-coda`, which no jump targets, and the Coda `coda`, which a D.S. al Coda took for its To Coda. An imported segno
   or coda keeps no text of its own, so it prints MuseScore's glyph for its type; Fine and To Coda keep the words the

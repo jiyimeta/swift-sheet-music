@@ -26,8 +26,8 @@ struct LayoutElementRichTextTests {
         switch element {
         case let .staffText(_, _, _, _, _, _, _, _, richText),
              let .rehearsalMark(_, _, _, _, _, _, _, richText),
-             let .marker(_, _, _, _, richText),
-             let .jump(_, _, _, richText),
+             let .marker(_, _, _, _, richText, _, _),
+             let .jump(_, _, _, richText, _, _),
              let .textMark(_, _, _, richText):
             richText
         default:

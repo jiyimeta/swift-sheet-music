@@ -477,14 +477,23 @@ extension LayoutEngine {
                 }
                 let navigation = navigationElements(
                     for: first.measures[measureIdx], measureIndex: measureIdx, staff: owner,
-                    contentWidth: w, metrics: metrics,
-                    barLines: NavigationBarLines(
-                        start: startBarLine(in: barElements, previous: previous, sp: metrics.sp),
-                        end: endBarLine(in: barElements, contentWidth: w, sp: metrics.sp) ?? BarLineSpan(at: w),
+                    frame: NavigationFrame(
+                        barLines: NavigationBarLines(
+                            start: startBarLine(in: barElements, previous: previous, sp: metrics.sp),
+                            end: endBarLine(in: barElements, contentWidth: w, sp: metrics.sp) ?? BarLineSpan(at: w),
+                        ),
+                        staffBottom: metrics.sp * 2 + staffHeights[0],
+                        metrics: metrics,
+                        showsInvisible: context.options.showsInvisibleElements,
                     ),
                 )
-                if !navigation.isEmpty {
-                    perStaff[0, default: []].append(contentsOf: navigation)
+                if !navigation.visible.isEmpty {
+                    perStaff[0, default: []].append(contentsOf: navigation.visible)
+                }
+                // Hidden marks ride the invisible buffer: translated in pass 2 into `invisibleElements`, never in the
+                // skyline, the staff pads or the autoplace pass.
+                if !navigation.hidden.isEmpty {
+                    perStaffInvisible[0, default: []].append(contentsOf: navigation.hidden)
                 }
             }
             let staff0Measure: Measure? = measureIdx

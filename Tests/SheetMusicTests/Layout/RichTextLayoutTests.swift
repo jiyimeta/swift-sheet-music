@@ -87,10 +87,10 @@ struct RichTextLayoutTests {
                 if case .rehearsalMark(_, _, _, _, _, _, _, .some) = element { true } else { false }
             })
             #expect(elements.contains { element in
-                if case .marker(_, _, _, _, .some) = element { true } else { false }
+                if case .marker(_, _, _, _, .some, _, _) = element { true } else { false }
             })
             #expect(elements.contains { element in
-                if case .jump(_, _, _, .some) = element { true } else { false }
+                if case .jump(_, _, _, .some, _, _) = element { true } else { false }
             })
             #expect(elements.contains { element in
                 if case .textMark(.lyrics, _, _, .some) = element { true } else { false }

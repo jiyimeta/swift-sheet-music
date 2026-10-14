@@ -81,32 +81,64 @@ extension LayoutEngine {
         return BarLineSpan(minX: end.minX - previous.width, maxX: end.maxX - previous.width)
     }
 
-    /// A bar's markers, then its jumps, set the way MuseScore sets repeat text and emitted into the top staff's pass-1
-    /// buffer — X measure-local, Y staff-local with the top line at `sp * 2` — where `SkylineAutoplacePass` places
-    /// them above the staff, last of everything, as `SystemLayout::layoutSystemElements` does (`markersAndJumps`,
-    /// `rendering/score/systemlayout.cpp:1360-1362`).
+    /// Where a bar's marks are set: its barlines, its staff's bottom line (staff-local; the top line is `sp * 2`),
+    /// and whether hidden marks are laid out at all.
+    struct NavigationFrame {
+        let barLines: NavigationBarLines
+        let staffBottom: CGFloat
+        let metrics: StaffMetrics
+        let showsInvisible: Bool
+
+        /// A block hung from its bottom edge (anchor y = 1): above the staff its bottom starts on the top line, below
+        /// it its top starts on the bottom line; the authored offset, in spaces, is added; autoplace moves it on from
+        /// there. MuseScore autoplaces `pos() + offset` (`Autoplace::autoplaceMeasureElement`, `autoplace.cpp:128`),
+        /// and staff text here does the same (`LayoutEngine.placedTextOrigin`).
+        func origin(x: CGFloat, height: CGFloat, properties: ElementProperties) -> CGPoint {
+            let y = properties.placement == .below ? staffBottom + height : metrics.sp * 2
+            return CGPoint(
+                x: x + CGFloat(properties.offset?.x ?? 0) * metrics.sp,
+                y: y + CGFloat(properties.offset?.y ?? 0) * metrics.sp,
+            )
+        }
+
+        /// The side `SkylineAutoplacePass` places the mark on and whether it may move it at all.
+        func placement(_ properties: ElementProperties) -> TextPlacementMetadata {
+            TextPlacementMetadata(side: properties.placement ?? .above, autoplace: properties.autoplace ?? true)
+        }
+    }
+
+    /// A bar's markers, then its jumps, set the way MuseScore sets repeat text. `visible` go into the top staff's
+    /// pass-1 buffer — X measure-local, Y staff-local with the top line at `sp * 2` — where `SkylineAutoplacePass`
+    /// places them, last of everything, as `SystemLayout::layoutSystemElements` does (`markersAndJumps`,
+    /// `rendering/score/systemlayout.cpp:1360-1362`). `hidden` are the marks whose `<visible>` is off: dropped unless
+    /// the frame shows invisible elements, then parked greyed in the invisible buffer — out of the skyline, still
+    /// selectable — as every hidden staff text is. Playback reads the model, so a hidden To Coda steers the
+    /// unwinding either way. Identities count every mark, hidden or not, so they name the model's own indices.
     ///
     /// Each block starts with its bottom on the top line and is lifted from there: MuseScore starts a repeat text's
     /// baseline on the top line (`AlignV::BASELINE`, `TextLayout::layoutBaseTextBase1`, `textlayout.cpp:111-119`) and
     /// `Autoplace::autoplaceMeasureElement` pushes it clear by `Sid::repeatMinDistance`, 0.5 sp.
     static func navigationElements(
-        for measure: Measure, measureIndex: Int, staff: StaffAddress, contentWidth: CGFloat, metrics: StaffMetrics,
-        barLines: NavigationBarLines? = nil,
-    ) -> [LayoutElement] {
-        let barLines = barLines ?? NavigationBarLines(end: BarLineSpan(at: contentWidth))
-        let markers = measure.markers.enumerated().map { index, marker in
-            markerElement(
-                marker, metrics: metrics, barLines: barLines,
-                identity: .marker(staff: staff, measureIndex: measureIndex, index: index),
-            )
+        for measure: Measure, measureIndex: Int, staff: StaffAddress, frame: NavigationFrame,
+    ) -> (visible: [LayoutElement], hidden: [LayoutElement]) {
+        var visible: [LayoutElement] = []
+        var hidden: [LayoutElement] = []
+        func file(_ element: LayoutElement, shown: Bool) {
+            if shown {
+                visible.append(element)
+            } else if frame.showsInvisible {
+                hidden.append(element)
+            }
         }
-        let jumps = measure.jumps.enumerated().map { index, jump in
-            jumpElement(
-                jump, metrics: metrics, barLines: barLines,
-                identity: .jump(staff: staff, measureIndex: measureIndex, index: index),
-            )
+        for (index, marker) in measure.markers.enumerated() {
+            let identity = ScoreElementID.marker(staff: staff, measureIndex: measureIndex, index: index)
+            file(markerElement(marker, frame: frame, identity: identity), shown: marker.elementProperties.visible)
         }
-        return markers + jumps
+        for (index, jump) in measure.jumps.enumerated() {
+            let identity = ScoreElementID.jump(staff: staff, measureIndex: measureIndex, index: index)
+            file(jumpElement(jump, frame: frame, identity: identity), shown: jump.elementProperties.visible)
+        }
+        return (visible, hidden)
     }
 
     /// `MarkerLayout::doLayoutMarker` (`rendering/score/markerlayout.cpp:66-105`): a right marker hangs from its bar's
@@ -116,39 +148,47 @@ extension LayoutEngine {
     /// one by all of it (`xAdj -= blWidth / 2`, `xAdj -= blWidth`, `:97-100`), and a right-aligned one ends at the
     /// bar's width, which holds the barline — so a final or end-repeat barline's thick stroke is cleared.
     private static func markerElement(
-        _ marker: Marker, metrics: StaffMetrics, barLines: NavigationBarLines, identity: ScoreElementID,
+        _ marker: Marker, frame: NavigationFrame, identity: ScoreElementID,
     ) -> LayoutElement {
         let displayed = marker.displayedRichText
         let isRight = marker.kind.isRightMarker
-        let rich = LayoutRichText(marker: displayed, style: isRight ? .repeatRight : .repeatLeft, metrics: metrics)
+        let rich = LayoutRichText(
+            marker: displayed, style: isRight ? .repeatRight : .repeatLeft, metrics: frame.metrics,
+            symbolSize: marker.musicSymbolSize,
+        )
         let anchor = LayoutRichText.anchor(for: .forMarker(marker.kind))
         let width = rich.ink?.width ?? 0
-        let barLine = isRight ? barLines.end : barLines.start
+        let barLine = isRight ? frame.barLines.end : frame.barLines.start
         let left: CGFloat
-        if let symbolX = rich.repeatSymbolX(anchor: anchor) {
+        if marker.centersOnSymbol, let symbolX = rich.repeatSymbolX(anchor: anchor) {
             left = barLine.center - symbolX
         } else {
             left = isRight ? barLine.maxX - width : barLine.minX
         }
+        let properties = marker.elementProperties
         return .marker(
             kind: marker.kind, text: displayed.plainText,
-            origin: CGPoint(x: left + anchor.x * width, y: metrics.sp * 2),
-            identity: identity, richText: rich,
+            origin: frame.origin(x: left + anchor.x * width, height: rich.size.height, properties: properties),
+            identity: identity, richText: rich, color: properties.color, placement: frame.placement(properties),
         )
     }
 
     /// `TLayout::layoutJump` (`rendering/score/tlayout.cpp:3316-3349`): right-aligned on its bar's end barline's right
     /// edge — `bl->segment()->x() + bl->ldata()->bbox().width()` (`:3328`).
     private static func jumpElement(
-        _ jump: Jump, metrics: StaffMetrics, barLines: NavigationBarLines, identity: ScoreElementID,
+        _ jump: Jump, frame: NavigationFrame, identity: ScoreElementID,
     ) -> LayoutElement {
-        let rich = LayoutRichText(jump.displayedRichText, style: .repeatRight, metrics: metrics)
+        let rich = LayoutRichText(jump.displayedRichText, style: .repeatRight, metrics: frame.metrics)
         let anchor = LayoutRichText.anchor(for: .jump)
         let width = rich.ink?.width ?? 0
+        let properties = jump.elementProperties
         return .jump(
             text: jump.text,
-            origin: CGPoint(x: barLines.end.maxX - width + anchor.x * width, y: metrics.sp * 2),
-            identity: identity, richText: rich,
+            origin: frame.origin(
+                x: frame.barLines.end.maxX - width + anchor.x * width,
+                height: rich.size.height, properties: properties,
+            ),
+            identity: identity, richText: rich, color: properties.color, placement: frame.placement(properties),
         )
     }
 }

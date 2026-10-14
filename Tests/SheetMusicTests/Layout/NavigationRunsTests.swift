@@ -34,7 +34,7 @@ struct NavigationRunsTests {
     ])
     func markerIsItsRuns(kind: Marker.Kind) throws {
         let element = Self.marker(kind, kind == .user ? "Solo" : kind.defaultXMLText)
-        guard case let .marker(_, _, origin, _, rich?) = element else {
+        guard case let .marker(_, _, origin, _, rich?, _, _) = element else {
             Issue.record("no runs")
             return
         }
@@ -79,11 +79,11 @@ struct NavigationRunsTests {
         let document = LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 800)
         let laid = try #require(document.systems.first?.measures.first)
         let contents = laid.markers.map { element -> [LayoutRichTextRun.Content] in
-            guard case let .marker(_, _, _, _, rich?) = element else { return [] }
+            guard case let .marker(_, _, _, _, rich?, _, _) = element else { return [] }
             return rich.lines.flatMap(\.runs).map(\.content)
         }
         #expect(contents == [[.symbol(codepoint: 0xE048), .symbol(codepoint: 0xE048)], [.text("Fine")], []])
-        guard case let .jump(_, _, _, jumpRich?) = laid.jumps.first else {
+        guard case let .jump(_, _, _, jumpRich?, _, _) = laid.jumps.first else {
             Issue.record("a jump without runs")
             return
         }

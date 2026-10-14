@@ -248,10 +248,16 @@ extension LayoutEngine {
                 anchor: anchor,
                 richText: richText,
             )
-        case let .marker(kind, text, origin, identity, richText):
-            return .marker(kind: kind, text: text, origin: shift(origin), identity: identity, richText: richText)
-        case let .jump(text, origin, identity, richText):
-            return .jump(text: text, origin: shift(origin), identity: identity, richText: richText)
+        case let .marker(kind, text, origin, identity, richText, color, placement):
+            return .marker(
+                kind: kind, text: text, origin: shift(origin), identity: identity, richText: richText, color: color,
+                placement: placement,
+            )
+        case let .jump(text, origin, identity, richText, color, placement):
+            return .jump(
+                text: text, origin: shift(origin), identity: identity, richText: richText, color: color,
+                placement: placement,
+            )
         case let .staffName(text, origin):
             return .staffName(text: text, origin: shift(origin))
         case .note, .tieArc:

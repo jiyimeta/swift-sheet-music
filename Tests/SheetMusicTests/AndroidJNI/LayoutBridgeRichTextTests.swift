@@ -259,7 +259,7 @@
         func markerRunsUseTheMarkerAnchor() throws {
             let (document, commands) = try Self.renderKinds()
             let found = try #require(Self.find(in: document) { element in
-                guard case let .marker(_, _, origin, _, rich?) = element else { return nil }
+                guard case let .marker(_, _, origin, _, rich?, _, _) = element else { return nil }
                 return (origin, rich, .none)
             })
             let anchor = LayoutRichText.anchor(for: .forMarker(.fine)) // the fixture's marker is a Fine
@@ -270,7 +270,7 @@
         func jumpRunsUseTheJumpAnchor() throws {
             let (document, commands) = try Self.renderKinds()
             let found = try #require(Self.find(in: document) { element in
-                guard case let .jump(_, origin, _, rich?) = element else { return nil }
+                guard case let .jump(_, origin, _, rich?, _, _) = element else { return nil }
                 return (origin, rich, .none)
             })
             let anchor = LayoutRichText.anchor(for: .jump)
@@ -309,7 +309,7 @@
                 id: "P1", instrument: Instrument(id: "voice"), staves: [Staff(measures: [measure])],
             )]))
             let found = try #require(Self.find(in: document) { element in
-                guard case let .marker(_, _, origin, _, rich?) = element else { return nil }
+                guard case let .marker(_, _, origin, _, rich?, _, _) = element else { return nil }
                 return (origin, rich, .none)
             })
             let runs = found.rich.positionedRuns(at: found.origin, anchor: LayoutRichText.anchor(for: .marker))
@@ -323,6 +323,19 @@
                 }
                 #expect(drawn)
             }
+        }
+
+        @Test("a jump's author color brackets its runs, and the ambient black comes back after")
+        func jumpColorBracketsItsRuns() throws {
+            let (_, commands) = try Self.render(MSCXParser.parse(MSCXFixtureLoader.mscxData("marker-properties")))
+            let red = try #require(commands.firstIndex(of: .setColor(argb: 0xFFC8_0000)))
+            let next = commands[(red + 1)...].firstIndex { if case .setColor = $0 { true } else { false } }
+            let restore = try #require(next)
+            #expect(commands[restore] == .setColor(argb: 0xFF00_0000))
+            let painted = commands[red ..< restore].contains { command in
+                if case let .text(text, _, _, _, _) = command { text == "D.S. al Coda" } else { false }
+            }
+            #expect(painted)
         }
 
         @Test("the stream keeps the v8 wire: nothing new to decode")

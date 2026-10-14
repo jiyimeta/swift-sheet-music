@@ -28,9 +28,9 @@ extension LayoutElementShape {
     /// rich text whose lines hold none — which draws nothing.
     static func navigationLabelRect(for element: LayoutElement) -> CGRect? {
         switch element {
-        case let .marker(kind, _, origin, _, rich?) where hasRuns(rich):
+        case let .marker(kind, _, origin, _, rich?, _, _) where hasRuns(rich):
             textRect(rich: rich, origin: origin, kind: .forMarker(kind))
-        case let .jump(_, origin, _, rich?) where hasRuns(rich):
+        case let .jump(_, origin, _, rich?, _, _) where hasRuns(rich):
             textRect(rich: rich, origin: origin, kind: .jump)
         default:
             nil
