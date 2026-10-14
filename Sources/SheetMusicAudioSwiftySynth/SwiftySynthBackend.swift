@@ -115,7 +115,17 @@ public final class SwiftySynthBackend: SynthBackend {
     private struct LoadedSynths: @unchecked Sendable {
         let score: (synth: Synthesizer, sequencer: MidiFileSequencer)?
         let metronome: (synth: Synthesizer, sequencer: MidiFileSequencer)?
+        let scoreFont: SoundFontCache.Loaded?
     }
+
+    // MARK: Sample prefetch (`SwiftySynthBackend+Prefetch.swift`)
+
+    /// The score synth's font, kept so the instruments a sequence plays can be read in ahead of the render thread.
+    var scoreSoundFont: SoundFontCache.Loaded?
+    /// The presets the loaded sequence sounds, read in again whenever a new score font lands.
+    var sequencePresets: Set<PlayedPreset> = []
+    /// Bumped per loaded sequence, so a slow scan of an older sequence cannot overwrite a newer one's presets.
+    var sequencePresetGeneration = 0
 
     public let sourceNode: AVAudioSourceNode
     public var outputNode: AVAudioNode {
@@ -173,6 +183,7 @@ public final class SwiftySynthBackend: SynthBackend {
                 shared.scratchR = [Float](repeating: 0, count: Self.scratchCapacity)
             }
         }
+        scoreSoundFont = nil
         let sampleRate = sampleRate
         // `Task.detached` guarantees the heavy read/parse/build runs off the main
         // actor regardless of the caller-isolation default; cheap `isCancelled`
@@ -182,12 +193,13 @@ public final class SwiftySynthBackend: SynthBackend {
         loadTask = Task.detached(priority: .userInitiated) { [weak self] in
             if Task.isCancelled { return }
             /// Through `SoundFontCache`: a font another backend already has loaded — live playback while an export
-            /// renders, or several part renders at once — is the same parse, not another ~200 MB copy.
-            func read(_ url: URL?) async -> SoundFont? {
+            /// renders, or several part renders at once — is the same parse.
+            func read(_ url: URL?) async -> SoundFontCache.Loaded? {
                 guard let url else { return nil }
-                return await SoundFontCache.shared.soundFont(at: url)?.font
+                return await SoundFontCache.shared.soundFont(at: url)
             }
-            let soundFont = await read(soundfontURL)
+            let scoreFont = await read(soundfontURL)
+            let soundFont = scoreFont?.font
             if Task.isCancelled { return }
             // A generated click SF2 is a few tens of KB, so the extra parse is
             // negligible next to the score font. Falling back to `soundFont`
@@ -195,7 +207,7 @@ public final class SwiftySynthBackend: SynthBackend {
             // click font that fails to parse.
             let clickFont = await metronomeSoundfontURL == soundfontURL
                 ? soundFont
-                : (read(metronomeSoundfontURL) ?? soundFont)
+                : (read(metronomeSoundfontURL)?.font ?? soundFont)
             if Task.isCancelled { return }
             let loaded = LoadedSynths(
                 score: Self.makeSynth(
@@ -206,6 +218,7 @@ public final class SwiftySynthBackend: SynthBackend {
                     soundFont: clickFont, sampleRate: sampleRate,
                     maximumPolyphony: 8, enableReverbAndChorus: false,
                 ),
+                scoreFont: scoreFont,
             )
             await self?.install(loaded, generation: generation)
         }
@@ -229,6 +242,9 @@ public final class SwiftySynthBackend: SynthBackend {
             shared.metronomeSynthesizer = loaded.metronome?.synth
             shared.metronomeSequencer = loaded.metronome?.sequencer
         }
+        scoreSoundFont = loaded.scoreFont
+        // A sequence loaded while the font was still loading has its presets recorded but not yet read in.
+        prefetchInBackground(sequencePresets)
         applyRateAndTuning()
         setReady(true)
     }
@@ -288,6 +304,7 @@ public final class SwiftySynthBackend: SynthBackend {
         }
         // `sequencer.play` resets the synthesizer, so re-assert rate + tuning.
         applyRateAndTuning()
+        prefetchPresets(of: midi)
     }
 
     public func loadMetronomeSequence(
@@ -528,6 +545,7 @@ public final class SwiftySynthBackend: SynthBackend {
                 channel: Int(channel), command: 0xC0, data1: Int(program), data2: 0,
             )
         }
+        prefetchInBackground([PlayedPreset(channel: Int(channel), bank: 0, program: Int(program))])
     }
 
     public func sendVolume(channel: UInt8, cc7: UInt8) {
@@ -582,5 +600,7 @@ public final class SwiftySynthBackend: SynthBackend {
             shared.metronomeSequencer = nil
             shared.metronomeSynthesizer = nil
         }
+        scoreSoundFont = nil
+        sequencePresets = []
     }
 }

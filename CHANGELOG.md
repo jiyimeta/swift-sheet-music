@@ -36,6 +36,12 @@ and this project adheres to
 - **A system that only moved keeps its layers.** The incremental renderer rebuilt every system below an edit that
   changed one system's height, because it compared each system's `origin`; the layer tree is drawn in system-local
   coordinates and never reads it.
+- **The SwiftySynth backend no longer holds its SoundFont's samples in memory** (swiftysynth 0.3.0). The font is read
+  in place from a mapping of its file, so only the samples a score actually plays are paged in, as clean pages that do
+  not count toward the app's memory footprint. With the ~200 MB General MIDI font, that was ~205 MB of dirty memory
+  for as long as any score was open. To keep a not-yet-played instrument from reading the disk on the render thread,
+  the backend reads in every preset a loaded sequence sounds, and every program the mixer sets, on a utility thread
+  first.
 
 ## [4.9.0] - 2026-10-13
 

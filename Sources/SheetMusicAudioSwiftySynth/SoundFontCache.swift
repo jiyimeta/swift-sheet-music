@@ -3,11 +3,13 @@ import SwiftySynth
 
 /// Parsed SoundFonts shared by every `SwiftySynthBackend` that loads the same file.
 ///
-/// A parsed General-MIDI font is its whole sample pool in memory — the high-quality one is ~200 MB — and every backend
-/// used to parse its own. That was already two copies while an export rendered beside live playback, and it is what
-/// made rendering several parts in parallel cost a font per render. A `SoundFont` is immutable once loaded (every
-/// stored property is a `let`, and a `Synthesizer` only reads it), so one instance serves any number of synths on any
-/// number of threads.
+/// A font's sample pool is read in place from a mapping of its file (`SoundFont(url:)`, swiftysynth 0.3.0): only the
+/// samples voices play are paged in, and as clean pages, so they do not count toward the app's memory footprint. Before
+/// that, a parsed General-MIDI font was its whole pool in memory — the high-quality one is ~200 MB — and every backend
+/// used to parse its own, which was two copies while an export rendered beside live playback and a font per render for
+/// parts rendered in parallel. Sharing one parse still saves the parse and the preset tables. A `SoundFont` is
+/// immutable once loaded (every stored property is a `let`, and a `Synthesizer` only reads it), so one instance serves
+/// any number of synths on any number of threads.
 ///
 /// **Held weakly.** The cache never keeps a font alive on its own: it lives exactly as long as some synth still uses
 /// it, and the next load after the last one lets go parses the file again.
@@ -60,9 +62,7 @@ actor SoundFontCache {
             return await pending.value
         }
         let parse = Task.detached(priority: .userInitiated) { () -> Loaded? in
-            guard let data = try? Data(contentsOf: url, options: .mappedIfSafe),
-                  let font = try? SoundFont(data: data)
-            else { return nil }
+            guard let font = try? SoundFont(url: url) else { return nil }
             return Loaded(font: font)
         }
         inFlight[key] = parse
