@@ -76,8 +76,10 @@ and this project adheres to
 - **Formatted text draws formatted on Android, Windows, the web and in the portable PDF writer.** The draw program
   carries each run as the opcodes it already had — a `.text` per text run inside its own `setTextStyle`, a SMuFL
   `.glyph` per symbol, a stroked line per underline or strike-through — at the positions layout measured, anchored as
-  the Apple renderers anchor each kind. No opcode was added and the wire stays v8, so no reader changes. A `<font
-  face>` override reaches the wire only as the face id `TextFontMapping` can name; Apple honors the face itself.
+  the Apple renderers anchor each kind. Staff text, lyrics, rehearsal marks, markers, jumps and title lines are
+  covered; tempo and expression text marks still emit plain text on the wire, and their formatting arrives with the
+  tempo and dynamics workstreams. No opcode was added and the wire stays v8, so no reader changes. A `<font face>`
+  override reaches the wire only as the face id `TextFontMapping` can name; Apple honors the face itself.
 
 ## [4.9.0] - 2026-10-13
 

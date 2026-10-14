@@ -179,5 +179,44 @@
             #expect(texts.contains { $0.0 == " Title" && $0.1 & DrawCommand.TextStyleFlag.bold == 0 })
             #expect(Self.textCommand("Big Title", in: commands) == nil)
         }
+
+        /// A two-line rich title whose second line is set larger. Its baseline is where layout's `placedLines()`
+        /// puts it (one of that line's OWN ascents below its top), which is lower than the plain twin's second
+        /// line, whose baseline is one ascent of the block's face below the same top.
+        @Test("a larger second title line is emitted where layout placed it, not where a plain line would sit")
+        func richTitleSecondLineFollowsPlacement() throws {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let markup = PreservedTextMarkup(
+                content: [
+                    .characters("Top"), .element(.init(name: "br")),
+                    .element(.init(name: "font", attributes: ["size": "60"])), .characters("Big"),
+                ],
+                derivedText: "Top\nBig",
+            )
+            func score(_ entry: FrameText) -> Score {
+                let measure = Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+                return Score(
+                    division: 480,
+                    parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [measure])])],
+                    systemMeasures: [SystemMeasure()],
+                    titleFrame: ScoreFrame(heightSp: 12, texts: [entry]),
+                )
+            }
+            let richEntry = FrameText(style: .title, text: "Top\nBig", preservedTextMarkup: markup)
+            let richDocument = Self.layout(score(richEntry))
+            let frame = try #require(richDocument.titleFrame)
+            let second = try #require(frame.placedLines().first { $0.entryIndex == 0 && $0.lineIndex == 1 })
+            let run = try #require(second.positionedRuns.first)
+            let expectedY = Double(run.baseline.y) * Self.ptToMM
+
+            let richCommands = LayoutBridge.buildCommands(layout: richDocument)
+            let richY = try #require(Self.textCommand("Big", in: richCommands)).y
+            #expect(Self.approxEq(richY, expectedY, eps: 0.001))
+
+            let plainDocument = Self.layout(score(FrameText(style: .title, text: "Top\nBig")))
+            let plainY = try #require(Self.textCommand("Big", in: LayoutBridge.buildCommands(layout: plainDocument))).y
+            // 60 pt against the title's own size: the larger ascent alone moves the baseline by several millimetres.
+            #expect(richY - plainY > 1)
+        }
     }
 #endif
