@@ -105,11 +105,17 @@ enum MeasureLayerDiffPlanner {
     /// barline), which would otherwise pass this predicate, diff only
     /// that measure, and leave the staff lines up to ~0.5 sp short of
     /// the new barline glyph (Task 8 review finding 3).
+    ///
+    /// Deliberately leaves out `origin`. The layer tree is built in
+    /// system-local coordinates (`ScoreLayerBuilder` never reads
+    /// `system.origin`); the host view's own frame is what places the
+    /// system on the page. Comparing it rebuilt every system below an
+    /// edit that changed one system's height, since each of them only
+    /// moved down.
     static func systemFrameIsUnchanged(
         _ a: LayoutSystem, _ b: LayoutSystem,
     ) -> Bool {
         a.size == b.size
-            && a.origin == b.origin
             && a.staffOrigins == b.staffOrigins
             && a.staffAddresses == b.staffAddresses
             && a.partLabels == b.partLabels

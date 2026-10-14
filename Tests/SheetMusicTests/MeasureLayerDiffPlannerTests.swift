@@ -288,7 +288,7 @@
         /// conjunct from the predicate (e.g. dropping
         /// `&& a.spanners == b.spanners`) fails exactly the
         /// corresponding case instead of leaving the suite silently
-        /// green — before this, only 2 of the then-11 (now 13, with
+        /// green — before this, only 2 of the then-11 (now 12, with
         /// `staffLineEndX` and the hidden-element `origin.x` guard)
         /// conjuncts had any pinning test at all
         /// (Task 8 review finding 4). Verified load-bearing by
@@ -296,7 +296,7 @@
         /// confirming only its own case failed; see the fix-round
         /// report for the full log.
         enum FrameConjunct: String, CaseIterable, CustomStringConvertible {
-            case size, origin, staffOrigins, staffAddresses, partLabels,
+            case size, staffOrigins, staffAddresses, partLabels,
                  brackets, spanners, invisibleSpanners, sp,
                  showsInvisibleElements, invisibleElements, trailingBarLine,
                  measureOriginXUnderInvisible
@@ -317,6 +317,21 @@
                 !MeasureLayerDiffPlanner.systemFrameIsUnchanged(base, mutated),
                 "changing \(field) alone should force a full rebuild",
             )
+        }
+
+        /// A system that only moved — every system below an edit that changed one system's height — keeps its
+        /// layers: they are drawn in system-local coordinates and the host view's frame places them.
+        @Test("a system that only moved keeps its layers")
+        func movedSystemIsUnchanged() {
+            let base = fullSystem()
+            let moved = rebuild(base, origin: CGPoint(
+                x: base.origin.x + 7, y: base.origin.y + 120,
+            ))
+            #expect(MeasureLayerDiffPlanner.systemFrameIsUnchanged(base, moved))
+            let plan = MeasureLayerDiffPlanner.plan(previous: base, system: moved)
+            #expect(plan.removed.isEmpty)
+            #expect(plan.updates.count == base.measures.count)
+            #expect(plan.updates.values.allSatisfy { $0 == .reposition(newOriginX: nil) })
         }
 
         @Test("fullSystem() compared to an identical copy is unchanged")
@@ -408,10 +423,6 @@
             case .size:
                 rebuild(base, size: CGSize(
                     width: base.size.width + 10, height: base.size.height,
-                ))
-            case .origin:
-                rebuild(base, origin: CGPoint(
-                    x: base.origin.x + 1, y: base.origin.y,
                 ))
             case .staffOrigins:
                 rebuild(base, staffOrigins: base.staffOrigins + [CGPoint(x: 0, y: 80)])
