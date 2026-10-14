@@ -2,6 +2,9 @@ extension Score {
     /// The tempo marking governing `cursor` — the most recent `SystemElement.tempo` at or before the cursor's measure
     /// and in-measure tick — or `nil` when none precedes the position (or the score carries none). A `nil` cursor is
     /// treated as the very start of the score, so it yields the opening marking.
+    ///
+    /// This is the marking, not what plays — a muted marking, an "a tempo" and a "tempo primo" govern with a number
+    /// the score does not play there; `effectiveTempo(at:)` is what plays.
     public func governingTempo(at cursor: ScoreCursor?) -> Tempo? {
         guard !systemMeasures.isEmpty else { return nil }
         let cursorMeasure = cursor?.measureIndex ?? 0
@@ -21,11 +24,17 @@ extension Score {
         return governing
     }
 
-    /// Quarter-note BPM in force at `cursor`, read from the score's tempo map (`resolvedTempoMap()`); MuseScore's 120
-    /// BPM default where nothing is in force. A `nil` cursor yields the opening tempo.
-    public func effectiveQuarterBpm(at cursor: ScoreCursor?) -> Double {
+    /// What plays at `cursor`: the tempo map's point in force there (`resolvedTempoMap()`), with the beat to count it
+    /// in; `nil` before the first point. A `nil` cursor is the start of the score. `governingTempo(at:)` answers a
+    /// different question — which marking governs the position: an "a tempo" governs with a number it does not play.
+    public func effectiveTempo(at cursor: ScoreCursor?) -> ResolvedTempoMap.Point? {
         let map = resolvedTempoMap()
-        guard let cursor else { return map.beatsPerSecond(atMeasure: 0, tickInMeasure: 0) * 60 }
-        return map.beatsPerSecond(atMeasure: cursor.measureIndex, tickInMeasure: tickInMeasure(of: cursor)) * 60
+        guard let cursor else { return map.point(inForceAtMeasure: 0, tickInMeasure: 0) }
+        return map.point(inForceAtMeasure: cursor.measureIndex, tickInMeasure: tickInMeasure(of: cursor))
+    }
+
+    /// Quarter-note BPM in force at `cursor` (`effectiveTempo(at:)`); MuseScore's 120 BPM default where nothing is.
+    public func effectiveQuarterBpm(at cursor: ScoreCursor?) -> Double {
+        (effectiveTempo(at: cursor)?.beatsPerSecond ?? ResolvedTempoMap.defaultBeatsPerSecond) * 60
     }
 }

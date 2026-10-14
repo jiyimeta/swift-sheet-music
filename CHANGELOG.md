@@ -83,6 +83,12 @@ and this project adheres to
 
 ### Fixed
 
+- **"a tempo", "tempo primo" and a muted marking play as in MuseScore** (import-fidelity F2.1, F2.2, F2.6). The tempo
+  map takes MuseScore's text pass: "a tempo" that follows its text reinstates the tempo in force where it stands,
+  "tempo primo" the first ordinary marking (or 120 BPM), a marking with `<play>0</play>` sets nothing, and one position
+  holds one tempo, the last marking there winning. The SMF, the cursor timeline, the notated clock and the count-in
+  all follow. `Score.effectiveTempo(at:)` returns what plays at a position, with the beat to count it in;
+  `governingTempo(at:)` still returns the governing marking.
 - **A tempo marking draws what it says** (import-fidelity F2.1–F2.5): "a tempo", "tempo primo", Italian terms,
   "Allegro ♩ = 144" and "♩ = ♪" draw their own text and formatting instead of a regenerated "♩ = N". Every marking is
   typeset from runs (`LayoutRichText`) on the layer tree, the Canvas and the draw program alike, so its ink, its skyline
