@@ -113,7 +113,9 @@ public struct LayoutRichTextDecoration: Sendable, Equatable {
 /// of the difference further right — left-, center- or right-aligned against the longest for an anchor x of 0, 0.5 or
 /// 1. The anchor stands in for MuseScore's horizontal alignment: its default styles pair each text's alignment with its
 /// position (`Sid::staffTextAlign` / `staffTextPosition`, `engraving/style/styledef.cpp:1316, 1328`; lyrics at 109,
-/// 116), and the anchor is where this layout hangs the text off its reference point. A consumer places the block with
+/// 116), and the anchor is where this layout hangs the text off its reference point. Where a style's alignment and
+/// position differ (tempo, the marker roles) a multi-line text aligns its lines by position, not by MuseScore's
+/// alignment; a one-line text, the common case, is unaffected. A consumer places the block with
 /// `blockOrigin(at:anchor:)`, the rule `TextInkGeometry.baselineOrigin` applies to plain text: horizontally by ink,
 /// vertically by the typographic stack.
 public struct LayoutRichText: Sendable, Equatable {
@@ -126,9 +128,9 @@ public struct LayoutRichText: Sendable, Equatable {
     /// Each line's baseline, down from the block's top: the first line's ascent, then each next one the previous line's
     /// descent, the leading and its own ascent further — `TextInkGeometry.typographicSize`'s stacking line by line, so
     /// single-font text measures exactly as plain text does.
-    public let lineBaselines: [CGFloat]
-    /// The widest line and the whole stack.
-    public let size: CGSize
+    let lineBaselines: [CGFloat]
+    /// The widest line's advance and the whole stack.
+    let size: CGSize
     /// Each line's ink and decorations, x from the line's own pen start; `nil` for a line with none.
     private let lineInks: [CGRect?]
 
