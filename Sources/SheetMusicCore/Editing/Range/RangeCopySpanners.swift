@@ -51,7 +51,7 @@ enum RangeCopySpanners {
     static func isShortenedOutOfGaps(_ kind: Spanner.Kind) -> Bool {
         switch kind {
         case .hairpin, .ottava, .trill, .vibrato: true
-        case .volta, .slur, .pedal, .textLine, .glissando, .palmMute, .letRing, .other: false
+        case .volta, .slur, .pedal, .textLine, .glissando, .palmMute, .letRing, .gradualTempoChange, .other: false
         }
     }
 

@@ -49,6 +49,11 @@ and this project adheres to
   writer's tempo metas, the fermata bookends, the `PlaybackTimeline` cursor timeline, the notated clock and the
   quarter-BPM readout (`effectiveQuarterBpm(at:)`) read it now; the voice walker's breath / arpeggio arithmetic and
   `governingTempo` still walk the lane's `<Tempo>`s.
+- **Gradual tempo changes are their own spanner kind** — `Spanner.Kind.gradualTempoChange` with a
+  `GradualTempoChangePayload` (`GradualTempoChangeType`, an optional factor and its MuseScore default, the easing
+  `Spanner.ChangeMethod`, `playsBack`) whose other children (hooks, line style, `<Segment>` offsets) are kept and
+  written back. They used to decode as `.other` and lose their whole payload on save. Every line spanner now models
+  `continueText` and `endText` beside `beginText`.
 
 ### Changed
 

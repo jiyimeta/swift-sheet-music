@@ -38,24 +38,13 @@ extension Spanner {
             )
         }
 
-        var vibrato: Spanner.VibratoPayload?
-        if kind == .vibrato, let vib = node.first("Vibrato") {
-            let subtypeText = vib.first("subtype")?.text ?? ""
-            if let vibratoType = VibratoType(rawValue: subtypeText) {
-                vibrato = Spanner.VibratoPayload(type: vibratoType)
-            } else {
-                mscxDecoderWarn(
-                    code: "mscx.vibrato.unknownSubtype",
-                    message: "Unknown Vibrato subtype '\(subtypeText)'; defaulting to guitarVibrato",
-                )
-                vibrato = Spanner.VibratoPayload(type: .guitarVibrato)
-            }
-        }
+        let vibrato = kind == .vibrato ? node.first("Vibrato").map(decodeVibrato) : nil
 
         var trill: Spanner.TrillPayload?
         if kind == .trill, let tr = node.first("Trill") {
             trill = decodeTrill(tr)
         }
+        let gradualTempoChange = kind == .gradualTempoChange ? node.first(raw).map(decodeGradualTempoChange) : nil
 
         let elementProperties = decodeElementProperties(node, payloadName: raw)
         var spanner = Spanner(
@@ -65,12 +54,15 @@ extension Spanner {
             nextFractionsOffset: nextFractions,
             voltaEndings: voltaEndings,
             visible: elementProperties.visible,
-            beginText: decodeBeginText(node),
+            beginText: decodeLineText(node, named: "beginText"),
             placement: elementProperties.placement,
             hairpin: hairpin,
             ottava: ottava,
             vibrato: vibrato,
             trill: trill,
+            gradualTempoChange: gradualTempoChange,
+            continueText: decodeLineText(node, named: "continueText"),
+            endText: decodeLineText(node, named: "endText"),
             preservedMarkup: node.preservedMarkup(
                 consuming: consumedSpannerChildren.union([raw]),
             ),
@@ -79,24 +71,55 @@ extension Spanner {
         return spanner
     }
 
-    /// `<beginText>` lives on the subtype payload child, not on the
-    /// `<Spanner>` wrapper, and MuseScore writes it on any
-    /// `TextLineBase` subclass — so scan every payload child rather
-    /// than special-casing `<TextLine>`. `next` / `prev` are location
-    /// records and never carry one. Unlike `decodeVisible` below, this
-    /// walk has no `<eid>` exclusion: `child.first("beginText")` on an
-    /// `<eid>` leaf node (no children of its own) is always nil, so the
-    /// wrapper's identifier is harmless here without special-casing it —
-    /// the asymmetry with `decodeVisible` is not accidental.
-    private static func decodeBeginText(_ node: XMLTreeNode) -> String? {
+    private static func decodeVibrato(_ vib: XMLTreeNode) -> Spanner.VibratoPayload {
+        let subtypeText = vib.first("subtype")?.text ?? ""
+        if let vibratoType = VibratoType(rawValue: subtypeText) {
+            return Spanner.VibratoPayload(type: vibratoType)
+        }
+        mscxDecoderWarn(
+            code: "mscx.vibrato.unknownSubtype",
+            message: "Unknown Vibrato subtype '\(subtypeText)'; defaulting to guitarVibrato",
+        )
+        return Spanner.VibratoPayload(type: .guitarVibrato)
+    }
+
+    /// A `TextLineBase` text property — `<beginText>`, `<continueText>`, `<endText>` — lives on the subtype payload
+    /// child, not on the `<Spanner>` wrapper, and MuseScore writes it on any `TextLineBase` subclass — so scan every
+    /// payload child rather than special-casing `<TextLine>`. `next` / `prev` are location records and never carry
+    /// one. Unlike `decodeVisible` below, this walk has no `<eid>` exclusion: `child.first(name)` on an `<eid>` leaf
+    /// node (no children of its own) is always nil, so the wrapper's identifier is harmless here without
+    /// special-casing it — the asymmetry with `decodeVisible` is not accidental.
+    private static func decodeLineText(_ node: XMLTreeNode, named name: String) -> String? {
         for child in node.children
             where child.name != "next" && child.name != "prev"
         {
-            if let text = child.first("beginText")?.text, !text.isEmpty {
+            if let text = child.first(name)?.text, !text.isEmpty {
                 return text
             }
         }
         return nil
+    }
+
+    /// The children `decodeGradualTempoChange` and the spanner itself read off the payload — its own properties
+    /// (`TWrite::write(const GradualTempoChange*)`, `rw/write/twrite.cpp:1651-1661`), the three line texts and the
+    /// element properties — so the payload's bag keeps exactly the rest.
+    private static let consumedGradualTempoChangeChildren: Set = [
+        "tempoChangeType", "tempoEasingMethod", "tempoChangeFactor", "play",
+        "beginText", "continueText", "endText",
+        "visible", "color", "offset", "placement", "autoplace",
+    ]
+
+    /// Decode a `<GradualTempoChange>` payload. An absent `<tempoChangeType>` is MuseScore's `Undefined`, an absent
+    /// `<tempoChangeFactor>` the type's default, an absent `<tempoEasingMethod>` `normal` (`gradualtempochange.cpp:
+    /// 243-248`).
+    private static func decodeGradualTempoChange(_ payload: XMLTreeNode) -> Spanner.GradualTempoChangePayload {
+        Spanner.GradualTempoChangePayload(
+            type: payload.first("tempoChangeType").flatMap { GradualTempoChangeType(rawValue: $0.text) } ?? .undefined,
+            factor: payload.first("tempoChangeFactor").flatMap { Double($0.text) },
+            easing: payload.first("tempoEasingMethod").flatMap { Spanner.ChangeMethod(rawValue: $0.text) } ?? .normal,
+            playsBack: (payload.first("play").flatMap { Int($0.text) } ?? 1) != 0,
+            preservedMarkup: payload.preservedMarkup(consuming: consumedGradualTempoChangeChildren),
+        )
     }
 
     /// Base properties ride on the payload child (`<Volta>`, `<Slur>`, …),

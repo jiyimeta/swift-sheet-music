@@ -233,8 +233,8 @@ enum MSCXPreservation {
         //      the voice-level, identified form is pinned separately in
         //      EIDPersistenceTests because this gate cannot tell the two
         //      apart).
-        //   4. An open gap, not a design decision — GuitarBend,
-        //      GuitarBendHold, and Tie (spannerPayloadEIDReason): the
+        //   4. An open gap, not a design decision — GradualTempoChange,
+        //      GuitarBend, GuitarBendHold, and Tie (spannerPayloadEIDReason): the
         //      identifier lives on a spanner's payload child, which this
         //      project does not model the identity of yet (Task 4a
         //      reverted `.spanner` to `.invalid` rather than guess at the
@@ -249,7 +249,7 @@ enum MSCXPreservation {
         allow(["KeySig/eid"], because: keySigEIDMaskedReason, into: &result)
         allow(["Symbol/eid"], because: noteAttachedSymbolEIDReason, into: &result)
         allow([
-            "GuitarBend/eid", "GuitarBendHold/eid", "Tie/eid",
+            "GradualTempoChange/eid", "GuitarBend/eid", "GuitarBendHold/eid", "Tie/eid",
         ], because: spannerPayloadEIDReason, into: &result)
         // `LaissezVib/eid` is deliberately NOT here. `<LaissezVib>` is
         // itself preserved whole, and the exclusion list only fires at
@@ -272,11 +272,13 @@ enum MSCXPreservation {
         allow([
             "Style/Spatium",
         ], because: spatiumReason, into: &result)
-        // `Note/Spanner`, `Spanner/prev`, `location/fractions` and `next/location` used to sit here too: the only
-        // fixture that lost them was a glissando, whose begin side was written with a bare `<next/>` and whose end
-        // side was not written at all. Both sides now carry their `<location>`, so the entries would be stale.
+        // `Note/Spanner`, `Spanner/prev` and `next/location` used to sit here too: the only fixture that lost them
+        // was a glissando, whose begin side was written with a bare `<next/>` and whose end side was not written at
+        // all. Both sides now carry their `<location>`, so the entries would be stale. `location/fractions` is back
+        // for a different reason: a voice-level end side that ends mid-measure loses it again, by the same endpoint
+        // design.
         allow([
-            "location/measures", "prev/location",
+            "location/fractions", "location/measures", "prev/location",
         ], because: endpointReason, into: &result)
         allow([
             "location/voices",

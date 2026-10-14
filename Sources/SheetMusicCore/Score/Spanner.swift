@@ -17,6 +17,7 @@ public struct Spanner: Sendable, Equatable {
         case trill = "Trill"
         case palmMute = "PalmMute"
         case letRing = "LetRing"
+        case gradualTempoChange = "GradualTempoChange"
         case other
     }
 
@@ -69,6 +70,12 @@ public struct Spanner: Sendable, Equatable {
     /// so it round-trips as characters. `RichText(xmlText:)` reads its formatting; a label drawn as plain text draws
     /// that `plainText`, never the tags.
     public var beginText: String?
+    /// MuseScore `<continueText>` — the label a line spanner repeats at the start of each later system, a
+    /// `TextLineBase` property like `beginText` and stored the same way (MuseScore xml text). `nil` = the style
+    /// default.
+    public var continueText: String?
+    /// MuseScore `<endText>` — the label at the line's right end. Same storage as `beginText`.
+    public var endText: String?
     /// MuseScore `<placement>` sugar over `elementProperties.placement`.
     /// See the shared field for absent-tag and styled-side semantics.
     public var placement: Placement? {
@@ -89,6 +96,8 @@ public struct Spanner: Sendable, Equatable {
     /// Meaningful only when `kind == .trill`. Selects the SMuFL glyph
     /// pair repeated along the line during rendering.
     public var trill: TrillPayload?
+    /// MuseScore `<GradualTempoChange>` payload. Meaningful only when `kind == .gradualTempoChange`.
+    public var gradualTempoChange: GradualTempoChangePayload?
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
 
@@ -105,6 +114,9 @@ public struct Spanner: Sendable, Equatable {
         ottava: OttavaPayload? = nil,
         vibrato: VibratoPayload? = nil,
         trill: TrillPayload? = nil,
+        gradualTempoChange: GradualTempoChangePayload? = nil,
+        continueText: String? = nil,
+        endText: String? = nil,
         preservedMarkup: [PreservedXML] = [],
     ) {
         self.kind = kind
@@ -120,6 +132,9 @@ public struct Spanner: Sendable, Equatable {
         self.ottava = ottava
         self.vibrato = vibrato
         self.trill = trill
+        self.gradualTempoChange = gradualTempoChange
+        self.continueText = continueText
+        self.endText = endText
         self.preservedMarkup = preservedMarkup
     }
 

@@ -56,11 +56,13 @@ extension Spanner {
         // child for every line-shaped spanner. Authored `<placement>` is
         // emitted from `ElementProperties` under MuseScore's "write when no
         // longer styled" rule.
-        let beginTextNode: [XMLTreeNode] = beginText.map {
-            [XMLTreeNode(name: "beginText", text: $0)]
-        } ?? []
-        let leading = beginTextNode + elementProperties.mscxChildren()
+        let lineTexts: [XMLTreeNode] = [("beginText", beginText), ("continueText", continueText), ("endText", endText)]
+            .compactMap { name, text in text.map { XMLTreeNode(name: name, text: $0) } }
+        let leading = lineTexts + elementProperties.mscxChildren()
         let trailing = elementProperties.mscxTrailingChildren()
+        if kind == .gradualTempoChange, let gradualTempoChange {
+            return gradualTempoChangePayload(gradualTempoChange, leading: leading, trailing: trailing, options: options)
+        }
         if kind == .volta, !voltaEndings.isEmpty {
             let endingsText = voltaEndings.map(String.init).joined(separator: ", ")
             return XMLTreeNode(name: rawType, children: leading + [
@@ -96,6 +98,31 @@ extension Spanner {
             return XMLTreeNode(name: rawType, children: children)
         }
         return XMLTreeNode(name: rawType, children: leading + trailing)
+    }
+
+    /// `<GradualTempoChange>` in `TWrite`'s order (`rw/write/twrite.cpp:1651-1661`): the type, a non-default easing,
+    /// an explicit factor; then the line texts and element properties, `<play>0</play>` for a muted change, and the
+    /// payload's children nothing models, as read.
+    private func gradualTempoChangePayload(
+        _ change: GradualTempoChangePayload, leading: [XMLTreeNode], trailing: [XMLTreeNode],
+        options: MSCXEncoderOptions,
+    ) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        if change.type != .undefined {
+            children.append(XMLTreeNode(name: "tempoChangeType", text: change.type.rawValue))
+        }
+        if change.easing != .normal {
+            children.append(XMLTreeNode(name: "tempoEasingMethod", text: change.easing.rawValue))
+        }
+        if let factor = change.factor {
+            children.append(XMLTreeNode(name: "tempoChangeFactor", text: formatDouble(factor)))
+        }
+        children += leading
+        if !change.playsBack {
+            children.append(XMLTreeNode(name: "play", text: "0"))
+        }
+        appendPreservedMarkup(change.preservedMarkup, to: &children, options: options)
+        return XMLTreeNode(name: rawType, children: children + trailing)
     }
 
     /// `<next><location>…</location></next>`. Returns nil when both

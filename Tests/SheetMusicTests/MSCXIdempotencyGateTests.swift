@@ -174,6 +174,8 @@ struct MSCXIdempotencyTests {
     ///   all until now.
     /// - `tempo-texts` — authored tempo texts written back verbatim (words, a modulation, bold runs, a type, a play
     ///   flag, a preserved child) and a tempo with no text, which the encoder synthesizes on pass 1.
+    /// - `tempo-gradual` — gradual tempo payloads whose unmodeled children (hooks, a begin-text offset) ride a
+    ///   payload-level bag, a continue text, and a voice-level end side that ends mid-measure.
     @Test("committed MSCX fixtures encode to a fixed point", arguments: [
         "testVoltaTemp",
         "testSingleNoteDynamics",
@@ -185,6 +187,7 @@ struct MSCXIdempotencyTests {
         "slur_ms3_exchangevoices",
         "guitarbend_simple",
         "tempo-texts",
+        "tempo-gradual",
     ])
     func mscxFixtureIsAFixedPoint(_ name: String) throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData(name))
