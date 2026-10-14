@@ -30,9 +30,10 @@ struct MarkerTypeEncodeTests {
         for (kind, name) in cases {
             let xml = try Self.xml(Marker(kind: kind, text: "x"))
             #expect(xml.contains("<markerType>\(name)</markerType>"), "\(kind): \(xml)")
-            let text = try Self.offset(of: "<text>", in: xml)
-            let label = try Self.offset(of: "<label>", in: xml)
-            let type = try Self.offset(of: "<markerType>", in: xml)
+            // An empty label serializes as `<label/>`, so match the tag's opening, not `<label>`.
+            let text = try Self.offset(of: "<text", in: xml)
+            let label = try Self.offset(of: "<label", in: xml)
+            let type = try Self.offset(of: "<markerType", in: xml)
             #expect(text < label && label < type)
         }
     }

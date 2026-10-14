@@ -47,6 +47,12 @@ struct MusicXMLMarkerTests {
             "<direction><direction-type><coda smufl=\"codaSquare\"/></direction-type></direction>",
         )
         #expect(square.markers == [Marker(kind: .varcoda, label: "varcoda")])
+        // A label naming a different kind loses to the glyph's own smufl name.
+        let conflicting = try Self.decode(
+            "<direction><direction-type><coda smufl=\"codaSquare\"/></direction-type>"
+                + "<sound coda=\"codetta\"/></direction>",
+        )
+        #expect(conflicting.markers.map(\.kind) == [.varcoda])
     }
 
     /// Pins today's output for one `<direction>` carrying both; a later pass that dedupes the two replaces it.
