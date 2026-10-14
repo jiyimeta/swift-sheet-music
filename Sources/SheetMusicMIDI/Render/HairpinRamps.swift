@@ -65,7 +65,7 @@ enum HairpinRamps {
         staff: Staff,
         instrument: Instrument,
         division: Int,
-        tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
+        tempoMap: ResolvedTempoMap,
     ) -> [HairpinRamp] {
         var dynList: [DynPoint] = []
         var pending: [Pending] = []

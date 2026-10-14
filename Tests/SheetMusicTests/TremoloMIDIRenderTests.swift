@@ -86,6 +86,7 @@ struct TremoloVoiceRenderTests {
             route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: 480,
             plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
+            tempoMap: ResolvedTempoMap(),
         )
         let noteOns = events.filter {
             if case .noteOn = $0.event { return true }
@@ -117,6 +118,7 @@ struct TremoloVoiceRenderTests {
             route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: 480,
             plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
+            tempoMap: ResolvedTempoMap(),
         )
         let pitchOns = events.compactMap { e -> Int? in
             if case let .noteOn(_, p, _) = e.event { return p }
@@ -162,6 +164,7 @@ struct TremoloVoiceRenderTests {
             route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: 480,
             plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
+            tempoMap: ResolvedTempoMap(),
         )
         let strokes = events
             .filter { $0.tick >= 1440 && $0.tick < 1920 }
@@ -217,6 +220,7 @@ struct TremoloVoiceRenderTests {
             route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: 480,
             plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
+            tempoMap: ResolvedTempoMap(),
         )
         let strokeVelocities = events
             .filter { $0.tick < 1920 }

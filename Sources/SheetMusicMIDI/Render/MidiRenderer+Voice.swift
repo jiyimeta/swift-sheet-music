@@ -21,7 +21,7 @@ extension MidiRenderer {
         plan: [PlaybackEntry],
         swingMap: SwingMap = .empty,
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
-        tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
+        tempoMap: ResolvedTempoMap,
         emitsTempoEvents: Bool = false,
         bookends: BookendTempoTrack = BookendTempoTrack(),
     ) throws -> (events: [TimedMidiEvent], endTick: Int, lyricAnchors: [LyricMidiCodec.Anchor]) {

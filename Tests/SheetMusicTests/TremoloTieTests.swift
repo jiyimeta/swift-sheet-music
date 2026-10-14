@@ -75,6 +75,7 @@ struct TremoloTieTests {
             route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: division,
             plan: MidiRenderer.playbackPlan(for: staff.measures, division: division),
+            tempoMap: ResolvedTempoMap(),
         )
         let intervals = Self.soundingIntervals(events)[pitch] ?? []
         // The last sounding interval is m3's quarter note. It must end at
@@ -113,6 +114,7 @@ struct TremoloTieTests {
             route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: division,
             plan: MidiRenderer.playbackPlan(for: staff.measures, division: division),
+            tempoMap: ResolvedTempoMap(),
         )
         let intervals = Self.soundingIntervals(events)[pitch] ?? []
         // The last tremolo stroke's note-off is suppressed, so the final

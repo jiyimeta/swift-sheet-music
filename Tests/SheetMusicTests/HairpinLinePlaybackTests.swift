@@ -40,6 +40,7 @@ struct HairpinLinePlaybackTests {
             route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: 480,
             plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
+            tempoMap: ResolvedTempoMap(),
         )
         return events.compactMap {
             if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }

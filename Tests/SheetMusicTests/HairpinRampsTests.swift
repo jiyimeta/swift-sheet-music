@@ -132,6 +132,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         #expect(ramps.filter { $0.role == .wedge }.count == 1)
         #expect(ramps.first?.startVelocity == 64)
@@ -149,6 +150,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         #expect(ramps.first?.endVelocity == 84) // 64 + 20
     }
@@ -171,6 +173,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         #expect(ramps.first?.startVelocity == 64)
         #expect(ramps.first?.endVelocity == 64)
@@ -190,6 +193,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         #expect(ramps.first?.startVelocity == 96)
         #expect(ramps.first?.endVelocity == 49)
@@ -214,6 +218,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         let wedges = ramps.filter { $0.role == .wedge }
         #expect(wedges.count == 2)
@@ -247,6 +252,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         #expect(ramps.first?.endVelocity == 64)
     }
@@ -269,6 +275,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         #expect(ramps.first?.endVelocity == 64)
     }
@@ -289,6 +296,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         #expect(ramps.first?.endVelocity == 96)
     }
@@ -311,6 +319,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         #expect(ramps.first?.endVelocity == 84) // 64 + 20, not the f's 96
     }
@@ -338,6 +347,7 @@ struct HairpinRampsCollectTests {
             route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: division,
             plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+            tempoMap: ResolvedTempoMap(),
         )
         let velocities: [Int] = events.compactMap {
             if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }
@@ -387,6 +397,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         let wedge = ramps.first { $0.role == .wedge }
         #expect(wedge?.startTick == 1440)
@@ -421,6 +432,7 @@ struct HairpinRampsCollectTests {
             ),
             division: division,
             plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+            tempoMap: ResolvedTempoMap(),
         )
         let velocities: [Int] = events.compactMap {
             if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }
@@ -457,6 +469,7 @@ struct HairpinRampsCollectTests {
             ),
             division: division,
             plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+            tempoMap: ResolvedTempoMap(),
         )
         let velocities: [Int] = events.compactMap {
             if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }
@@ -484,6 +497,7 @@ struct HairpinRampsCollectTests {
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
+            tempoMap: ResolvedTempoMap(),
         )
         let wedges = ramps.filter { $0.role == .wedge }
         #expect(wedges.count == 2)
@@ -519,6 +533,7 @@ struct HairpinRampsCollectTests {
             ),
             division: division,
             plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+            tempoMap: ResolvedTempoMap(),
         )
         let velocities: [Int] = events.compactMap {
             if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }
@@ -617,6 +632,7 @@ struct HairpinCheckpointTests {
             ),
             division: division,
             plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+            tempoMap: ResolvedTempoMap(),
         )
         let v: [Int] = events.compactMap {
             if case let .noteOn(_, _, x) = $0.event { return x } else { return nil }
@@ -664,6 +680,7 @@ struct HairpinCheckpointTests {
             ),
             division: division,
             plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+            tempoMap: ResolvedTempoMap(),
         )
         let v: [Int] = events.compactMap {
             if case let .noteOn(_, _, x) = $0.event { return x } else { return nil }

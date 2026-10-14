@@ -130,6 +130,15 @@ extension ResolvedTempoMap {
 }
 
 extension Score {
+    /// Whether `voice` holds a gradual tempo change's spanner — the cheap test that lets the walk below skip the voices
+    /// that cannot start a ramp.
+    private static func hasGradualTempoChange(_ voice: Voice) -> Bool {
+        voice.elements.contains { element in
+            if case let .spanner(spanner) = element { return spanner.kind == .gradualTempoChange }
+            return false
+        }
+    }
+
     /// Every playing gradual tempo change, in start order — staff and voice order within one start: MuseScore keeps its
     /// spanners in a multimap keyed by start tick. Positions are walked as the MIDI ramps walk a voice (chords and
     /// `<location>` shifts advance the tick).
@@ -147,9 +156,14 @@ extension Score {
         }
         var ramps: [ResolvedTempoMap.Ramp] = []
         for entry in allStaves {
-            let durations = entry.staff.measures.effectiveMeasureDurations()
-            for (measureIndex, measure) in entry.staff.measures.enumerated() where measureIndex < durations.count {
-                for voice in measure.voices {
+            // Most scores have no gradual change at all, so a voice is only walked tick by tick — and a staff's measure
+            // durations only derived — once a gradual-change spanner shows up in it. The scan reads kinds, not ticks.
+            var staffDurations: [Fraction]?
+            for (measureIndex, measure) in entry.staff.measures.enumerated() {
+                for voice in measure.voices where Self.hasGradualTempoChange(voice) {
+                    let durations = staffDurations ?? entry.staff.measures.effectiveMeasureDurations()
+                    staffDurations = durations
+                    guard measureIndex < durations.count else { continue }
                     var tick = 0
                     for element in voice.elements {
                         switch element {
