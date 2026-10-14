@@ -21,7 +21,7 @@ extension Glissando {
             XMLTreeNode(name: "easeInSpin", text: String(easeIn)),
             XMLTreeNode(name: "easeOutSpin", text: String(easeOut)),
         ]
-        if let text, !text.isEmpty {
+        if let text, !text.isEmpty || (options.emitPreservedMarkup && preservedTextMarkup?.derivedText == text) {
             children.append(encodeText(
                 text,
                 preservedTextMarkup: preservedTextMarkup,

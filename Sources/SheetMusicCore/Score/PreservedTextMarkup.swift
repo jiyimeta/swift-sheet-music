@@ -2,9 +2,8 @@ import SheetMusicFoundation
 
 /// Opaque inline markup captured from a MuseScore `<text>` element.
 ///
-/// This preserves XML structure for read → write fidelity only. Inline tags
-/// such as `<font>` are state changes rather than necessarily being wrappers,
-/// so no semantic text-run model is inferred from them.
+/// This preserves XML structure for read → write fidelity. Inline tags such as `<font>` are state changes rather than
+/// necessarily being wrappers; `RichText(markup:)` interprets them the way MuseScore does.
 /// `Hashable` so that `FrameText`, which carries one and is itself `Hashable`,
 /// keeps a synthesized hash.
 ///
@@ -42,17 +41,10 @@ public struct PreservedTextMarkup: Sendable, Equatable, Hashable {
 
     public let content: [ContentItem]
 
-    /// The plain text the decoder derived from this markup, recorded so the
-    /// encoder can tell whether the model's text has moved since.
-    ///
-    /// It is supplied by the decoder rather than computed here because the
-    /// decoders do not all flatten the same way: `StaffText` concatenates
-    /// descendants, `Marker` reads only the `<text>` element's own character
-    /// data, so `<text><sym>coda</sym></text>` is "coda" to one and "" to the
-    /// other. Comparing against one global flattening would force every
-    /// element onto the same convention — which is a modeling change, and a
-    /// wrong one for `Marker`, whose plain text upstream is the glyph, not the
-    /// SymId spelling.
+    /// The plain text the decoder derived from this markup, recorded so the encoder can tell whether the model's text
+    /// has moved since. Every decoder now derives it the same way — `RichText.plainText`, characters in source order —
+    /// but it stays supplied by the decoder: a decoder may still post-process it (the title block strips MuseScore 2's
+    /// escaped tags), and what matters is that it equals what that decoder stored.
     public let derivedText: String
 
     public init(content: [ContentItem], derivedText: String) {

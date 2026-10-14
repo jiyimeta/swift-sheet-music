@@ -250,11 +250,10 @@ extension Measure {
         let kind = Marker.Kind(rawValue: markerType) ?? .other
         let rawLabel = node.first("label")?.text ?? ""
         let textNode = node.first("text")
-        // Only this element's own character data, not its descendants'.
-        // `<text><sym>coda</sym></text>` has no plain text, and flattening
-        // the SymId spelling into it would put "coda" where MuseScore has a
-        // glyph. `PreservedTextMarkup` carries the sym so it still round-trips.
-        let text = textNode?.text ?? ""
+        // The plain projection: `<text><sym>coda</sym></text>` stays "" — the sym is a glyph, preserved in the markup
+        // and drawn from `Marker.richText` — while formatted words (`<b>D.S. al Coda</b>`) keep the characters that
+        // reading only the element's own character data dropped.
+        let text = textNode.map(StaffText.plainText(of:)) ?? ""
         return Marker(
             kind: kind,
             // MuseScore instantiates markers with the type's default
@@ -271,8 +270,8 @@ extension Measure {
 
     private static func decodeJump(_ node: XMLTreeNode) -> Jump {
         let textNode = node.first("text")
-        // Own character data only, like `decodeMarker` above.
-        let text = textNode?.text ?? ""
+        // The plain projection, as `decodeMarker` above reads it.
+        let text = textNode.map(StaffText.plainText(of:)) ?? ""
         return Jump(
             jumpTo: node.first("jumpTo")?.text ?? "",
             playUntil: node.first("playUntil")?.text ?? "",

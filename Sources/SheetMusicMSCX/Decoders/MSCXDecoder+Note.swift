@@ -389,7 +389,9 @@ extension Note {
             return visualType == .straight ? "gliss." : nil
         }
         let raw = StaffText.plainText(of: textNode)
-        return raw.isEmpty ? nil : raw
+        // `<text><sym>…</sym></text>` projects to "" but is a label, not a cleared one: keep it so its markup is
+        // written back (`Glissando.encode`) and drawn.
+        return raw.isEmpty && textNode.children.isEmpty ? nil : raw
     }
 
     private static func parseGlissandoStyle(_ text: String) -> Glissando.Style? {

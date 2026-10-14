@@ -15,6 +15,20 @@ and this project adheres to
   the same markup held as a string (`init(xmlText:)`, the `<beginText>` form). `plainText` is the projection a text
   carrier stores: characters in source order, a line break per line, nothing for a symbol.
   `PreservedTextMarkup.richText(ifCurrentFor:)` reads the markup only while it still describes the text.
+- **`richText`** on every text carrier — `StaffText`, `Swing`, `InstrumentChange`, `RehearsalMark`, `ExpressionText`,
+  `Fingering`, `Sticking`, `Capo`, `StringTunings`, `Marker`, `Jump`, `Lyric`, `FrameText`, `Glissando` — the formatted
+  text its preserved markup describes, while the plain `text` is unedited; `nil` otherwise.
+
+### Fixed
+
+- **Formatted text keeps its characters in order and its line breaks.** A `<text>` holding markup read its own
+  characters first and its tags' afterwards, so `<b>Solo</b> ad lib.` read "ad lib.Solo", a `<br/>` vanished ("poco a
+  pococresc."), and a `<sym>`'s SMuFL name leaked in as text. Staff and system text, swing and instrument-change text,
+  rehearsal marks, expression, fingering, sticking, capo, string tunings, figured bass and glissando labels now read
+  characters in source order, `<br/>` as a line break and `<sym>` as nothing — it is a glyph. Markers and jumps, which
+  read only the `<text>` element's own characters, keep formatted words (`<b>D.S. al Coda</b>`). An unedited text still
+  writes its markup back byte for byte.
+- **A glissando label that is only a symbol survives a save.**
 
 ## [4.9.0] - 2026-10-13
 
