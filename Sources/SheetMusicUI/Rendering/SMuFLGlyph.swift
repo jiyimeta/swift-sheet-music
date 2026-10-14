@@ -97,8 +97,6 @@ enum SMuFLGlyph {
 
     // MARK: - Navigation marks
 
-    static let segno: Character = scalar(SMuFLCodepoint.segno)
-    static let coda: Character = scalar(SMuFLCodepoint.coda)
     static let fermataAbove: Character = scalar(SMuFLCodepoint.fermataAbove)
     static let fermataBelow: Character = scalar(SMuFLCodepoint.fermataBelow)
 

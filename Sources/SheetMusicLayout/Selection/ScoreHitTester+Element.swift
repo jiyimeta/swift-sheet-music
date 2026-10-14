@@ -147,7 +147,7 @@ extension ScoreHitTester {
     /// Arcs and glissandi measure the ink they are drawn with, in their own frame; see `ScoreHitTester+Arc.swift`
     /// and `ScoreHitTester+Glissando.swift`, which also own their hit rule — neither falls back to a rectangle.
     /// Barlines use stroke/dot ink bounds; pedals, key signatures and time signatures use glyph ink bounds.
-    /// Navigation uses unpadded shipped text rectangles or centered glyph ink, according to its renderer.
+    /// Markers and jumps use the box of their typeset runs (`navigationLabelRect`).
     /// Remaining kinds use skyline measurements: fermatas, breaths and articulations use glyph path bounds
     /// with the skyline helper's fallback; dynamics and tempo mix glyph and font metrics; hairpins, ottavas
     /// and voltas use coarse span reservations. No universal ink-coverage claim follows.
