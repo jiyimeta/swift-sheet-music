@@ -247,10 +247,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 showsInvisibleElements: showsInvisibleElements,
                 into: &context,
             )
-        case let .textMark(.dynamic, text, p, _):
+        case let .textMark(.dynamic, text, p, richText):
             TextMarkRenderer.drawDynamic(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics,
+                origin: shift(p), richText: richText, metrics: metrics,
             )
         case let .textMark(.tempo(_, tempoColor, properties), text, p, richText):
             TextMarkRenderer.drawTempo(

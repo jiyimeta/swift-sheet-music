@@ -107,11 +107,19 @@ extension ScoreLayerBuilder {
                 metrics: chordMetrics, height: height,
                 context: &context, into: parent,
             )
-        case let .textMark(.dynamic, text, p, _):
+        case let .textMark(.dynamic, text, p, richText):
+            // A dynamic's own text → its runs (`LayoutRichText.dynamic`).
             // Standard dynamics → Bravura SMuFL glyphs at 4 sp.
             // Free-form text dynamics → Edwin italic 10 pt fallback.
             // See `TextMarkRenderer.drawDynamic` for the rationale.
-            if let glyphString = DynamicSymbolMap.glyphString(for: text) {
+            if let richText {
+                if let layer = richTextLayer(
+                    richText, at: shift(p), anchor: LayoutRichText.anchor(for: .dynamic), color: inkColor,
+                    height: height,
+                ) {
+                    parent.addSublayer(layer)
+                }
+            } else if let glyphString = DynamicSymbolMap.glyphString(for: text) {
                 let glyphSize = metrics.sp * 4
                 let bravura = CTFontCreateWithName(
                     SMuFLFamily.bravura as CFString, glyphSize, nil,

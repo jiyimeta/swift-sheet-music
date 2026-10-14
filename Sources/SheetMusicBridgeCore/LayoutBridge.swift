@@ -583,13 +583,21 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             // emit the literal letters in Edwin (the bug this fixes).
             // Non-symbol / other text marks keep the generic path.
             if case .dynamic = kind {
-                emitDynamic(
-                    text: text,
-                    originX: mox + Double(origin.x),
-                    originY: moy + Double(origin.y),
-                    sp: sp,
-                    into: &out,
-                )
+                if let richText {
+                    // A dynamic's own text: its runs, placed as layout typeset them (`LayoutRichText.dynamic`).
+                    emitRichText(
+                        richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
+                        anchor: LayoutRichText.anchor(for: .dynamic), into: &out,
+                    )
+                } else {
+                    emitDynamic(
+                        text: text,
+                        originX: mox + Double(origin.x),
+                        originY: moy + Double(origin.y),
+                        sp: sp,
+                        into: &out,
+                    )
+                }
             } else if case let .lyrics(color, _, _, _, properties) = kind {
                 // Color and font override as the Apple renderers draw them. The face is not on the wire, so
                 // it stays the bundled one; size and bold/italic are.

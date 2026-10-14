@@ -15,14 +15,22 @@ enum TextMarkRenderer {
     /// Reference: `dom/dynamic.cpp:49-101` (DYN_LIST templates) and
     /// `dom/textbase.cpp:879-913` (music-font selection at draw
     /// time, size = MUSICAL_SYMBOLS_DEFAULT_FONT_SIZE × 2 = 20 pt
-    /// at default spatium ≈ 4 sp).
+    /// at default spatium ≈ 4 sp). A dynamic with its own text draws its runs (`LayoutRichText.dynamic`) instead.
     static func drawDynamic(
         context: inout GraphicsContext,
         text: String,
         origin: CGPoint,
         properties: TextProperties = TextProperties(),
+        richText: LayoutRichText? = nil,
         metrics: StaffMetrics,
     ) {
+        if let richText {
+            TextInkRenderer.drawRich(
+                context: &context, richText: richText, origin: origin, anchor: LayoutRichText.anchor(for: .dynamic),
+                color: .primary,
+            )
+            return
+        }
         if let glyphString = DynamicSymbolMap.glyphString(for: text) {
             drawDynamicGlyphs(
                 context: &context, glyphString: glyphString,

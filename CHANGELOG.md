@@ -160,6 +160,12 @@ and this project adheres to
 
 ### Fixed
 
+- **A dynamic with its own text draws it** (import-fidelity F4.1, F4.2): "subito p", "più ⟨f⟩" and an
+  `other-dynamics` word are typeset from their runs (`LayoutRichText.ElementKind.dynamic`) — words in the dynamics style
+  (Edwin 10 italic, the dynamic's font override), `<sym>` glyphs in Bravura at the plain glyphs' 4 sp — starting where a
+  plain dynamic starts, on its baseline. They drew the bare subtype before, and `other-dynamics` its name. Measured,
+  hit-tested, autoplaced and hairpin-snapped by the runs; drawn by both Apple renderers and the draw program (no new
+  opcode). A dynamic printing its subtype is laid out exactly as before.
 - **A MuseScore dynamic's own text, `<play>` and `<veloChangeSpeed>` are read and saved as the model's**
   (import-fidelity F4.1–F4.3): `<text>` (words, `<sym>` glyphs, formatting) becomes `Dynamic.text` and its markup,
   `<play>0</play>` `playsBack`, `<veloChangeSpeed>` `velocityChangeSpeed`; they are written back where MuseScore writes

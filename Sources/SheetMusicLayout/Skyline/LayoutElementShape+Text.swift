@@ -230,6 +230,7 @@ extension LayoutElementShape {
                 origin: origin, anchor: .center,
             )
         case .dynamic:
+            if let rich { return textRect(rich: rich, origin: origin, kind: .dynamic) }
             // Standard dynamics render as Bravura glyphs at 4 sp
             // (`TextMarkRenderer.drawDynamic`); custom text falls back
             // to the Edwin dynamics style.

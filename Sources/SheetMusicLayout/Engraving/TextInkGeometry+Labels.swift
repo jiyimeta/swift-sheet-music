@@ -6,7 +6,10 @@ import SheetMusicCore
 extension TextInkGeometry {
     static func labelRects(for element: LayoutElement, metrics: StaffMetrics) -> [CGRect]? {
         switch element {
-        case let .textMark(.dynamic, text, origin, _):
+        case let .textMark(.dynamic, text, origin, richText):
+            if let richText {
+                return richText.inkRect(at: origin, anchor: LayoutRichText.anchor(for: .dynamic)).map { [$0] } ?? []
+            }
             let glyphs = DynamicSymbolMap.glyphString(for: text)
             let font = glyphs == nil ? font(for: .dynamics, metrics: metrics)
                 : LayoutFont(face: SMuFLFamily.bravura, pointSize: metrics.sp * 4)

@@ -1211,13 +1211,9 @@ extension LayoutEngine {
                         ?? -.infinity
                     let chordAvoid = chordSouth + metrics.sp * 2.5
                     let dynY = max(defaultDynY, chordAvoid)
-                    let dynamicElement = LayoutElement.textMark(
-                        kind: .dynamic(anchor: attachmentAnchor(at: elementAddress, in: voice)),
-                        text: d.subtype,
-                        origin: CGPoint(
-                            x: baseX - metrics.sp,
-                            y: dynY,
-                        ),
+                    let dynamicElement = Self.dynamicElement(
+                        d, anchor: attachmentAnchor(at: elementAddress, in: voice),
+                        origin: CGPoint(x: baseX - metrics.sp, y: dynY), metrics: metrics,
                     )
                     if d.visible {
                         out.append(dynamicElement)

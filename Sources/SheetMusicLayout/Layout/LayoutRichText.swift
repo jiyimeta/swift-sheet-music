@@ -253,6 +253,10 @@ extension LayoutRichText {
         /// aligns it LEFT, BASELINE (`tempoChangeAlign`), which no fractional anchor can say for text of any height, so
         /// `SpannerGeometry.gradualTempoChange` hands out the origin that puts the first baseline on the line's y.
         case gradualTempoChangeLabel
+        /// A dynamic's own text, hung leading and vertically centered on its origin, as a plain dynamic's glyphs are;
+        /// layout picks the origin that puts its first baseline on those glyphs' baseline
+        /// (`LayoutEngine.dynamicElement`).
+        case dynamic
 
         /// The kind a marker of `kind` is placed as.
         package static func forMarker(_ kind: Marker.Kind) -> ElementKind {
@@ -278,6 +282,7 @@ extension LayoutRichText {
         case .marker: CGPoint(x: 0, y: 1)
         case .rightMarker, .jump: CGPoint(x: 1, y: 1)
         case .tempo, .gradualTempoChangeLabel: CGPoint(x: 0, y: 0)
+        case .dynamic: CGPoint(x: 0, y: 0.5)
         }
     }
 }
