@@ -67,9 +67,25 @@ struct MarkerPropertiesIOTests {
         #expect(again.jumps.first?.elementProperties.offset == jump.elementProperties.offset)
     }
 
-    /// Color and symbol size go after `<style>`, which MuseScore applies as it reads it and which resets both
-    /// (`ElementProperties.mscxTrailingChildren`; the 4.6.0–4.6.2 symbol-size bug `TRead::read(Marker*)` works around);
-    /// `<markerType>` and `<markerCenterOnSymbol>` close the element, as MuseScore writes them.
+    /// MuseScore applies `<markerType>` as it reads it, and a type whose side differs from the style read so far
+    /// re-applies the other repeat style (`Marker::setMarkerType`, `dom/marker.cpp:86-106`), which resets the offset
+    /// and the color read before it: a Fine read with `repeat_left`, or with no `<style>` at all, lost both when
+    /// MuseScore reopened this library's save. Both follow the type.
+    @Test("a marker's offset and color follow its type, which can re-apply the repeat style")
+    func offsetAndColorFollowTheType() throws {
+        var fine = Marker(kind: .fine)
+        fine.elementProperties.offset = ScoreOffset(x: 0, y: 1)
+        fine.elementProperties.color = ScoreColor(red: 200, green: 0, blue: 0)
+        let xml = try Self.xml(fine.encode())
+        let type = try Self.position(of: "<markerType>", in: xml)
+        let offset = try Self.position(of: "<offset ", in: xml)
+        let color = try Self.position(of: "<color ", in: xml)
+        #expect(type < offset && type < color, "\(xml)")
+    }
+
+    /// Symbol size goes after `<style>`, which MuseScore applies as it reads it and which resets it (the 4.6.0–4.6.2
+    /// symbol-size bug `TRead::read(Marker*)` works around); `<markerType>` follows, then the offset and color it
+    /// could reset, and `<markerCenterOnSymbol>` closes the element, as MuseScore writes it.
     @Test("a marker's and a jump's properties are written where MuseScore reads them")
     func encodesInOrder() throws {
         let bar = try XMLTreeParser.parse(Data("""
@@ -86,7 +102,7 @@ struct MarkerPropertiesIOTests {
         for tag in ["<visible>0</visible>", "<offset ", "<placement>below</placement>", "<autoplace>0</autoplace>"] {
             #expect(marker.contains(tag), "\(tag): \(marker)")
         }
-        let tags = ["<style>", "<color ", "<musicSymbolSize>24", "<markerType>", "<markerCenterOnSymbol>0"]
+        let tags = ["<style>", "<musicSymbolSize>24", "<markerType>", "<color ", "<markerCenterOnSymbol>0"]
         let order = try tags.map { try Self.position(of: $0, in: marker) }
         #expect(order == order.sorted(), "\(marker)")
         let jumpNode = try #require(measure.jumps.first).encode()

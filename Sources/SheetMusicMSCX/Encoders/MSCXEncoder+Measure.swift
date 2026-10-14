@@ -142,8 +142,13 @@ extension Marker {
     /// (`dom/marker.cpp:86-106`), so a type read first had both wiped by the `<text>` and `<label>` after it (F3.5).
     /// `<label>` is the effective label, as MuseScore always writes one; `<markerType>` is MuseScore's name
     /// (`Kind.mscxName`), written for Fine too — MuseScore omits its default, but this library's 3.02 exports are read
-    /// by it. The element properties follow `<text>`; color and symbol size follow the preserved `<style>`, which
-    /// MuseScore would let reset them; `<markerCenterOnSymbol>` closes the element when off.
+    /// by it. The element properties follow `<text>`; symbol size follows the preserved `<style>`, which MuseScore
+    /// would let reset it. Offset and color follow `<markerType>` itself: a type whose side differs from the style
+    /// read so far re-applies the other repeat style (`Marker::setMarkerType`, `dom/marker.cpp:86-106`), which resets
+    /// both — a Fine read with `repeat_left`, or with no `<style>`, lost them. `<markerCenterOnSymbol>` closes the
+    /// element when off. MuseScore 3 and 4.0–4.5 files apply the type after the whole element
+    /// (`read400/tread.cpp:1631-1646`), so there a right marker keeps its offset and color only with its side's
+    /// `<style>`, which this library writes only when the file it read had one.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let text = encodedText(options: options) {
@@ -152,11 +157,11 @@ extension Marker {
         children += elementProperties.mscxRepeatTextLeadingChildren()
         children.append(XMLTreeNode(name: "label", text: effectiveLabel))
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
-        children += elementProperties.mscxRepeatTextTrailingChildren()
         if let musicSymbolSize {
             children.append(XMLTreeNode(name: "musicSymbolSize", text: formatDouble(musicSymbolSize)))
         }
         children.append(XMLTreeNode(name: "markerType", text: kind.mscxName))
+        children += elementProperties.mscxRepeatTextTrailingChildren()
         if !centersOnSymbol {
             children.append(XMLTreeNode(name: "markerCenterOnSymbol", text: "0"))
         }
@@ -225,7 +230,8 @@ extension ElementProperties {
         mscxChildren().filter { $0.name != "offset" }
     }
 
-    /// `<offset>` and `<color>`, written after the preserved markup so a `<style>` cannot reset them.
+    /// `<offset>` and `<color>`, written after the preserved markup so a `<style>` cannot reset them (and, on a marker,
+    /// after `<markerType>`, which can re-apply the repeat style too).
     func mscxRepeatTextTrailingChildren() -> [XMLTreeNode] {
         mscxChildren().filter { $0.name == "offset" } + mscxTrailingChildren()
     }

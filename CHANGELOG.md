@@ -12,8 +12,10 @@ and this project adheres to
 - **Markers and jumps keep their own properties.** `Marker.elementProperties` / `Jump.elementProperties` read and write
   `<visible>`, `<color>`, `<offset>`, `<placement>` and `<autoplace>`; `Marker.centersOnSymbol` is MuseScore's "Center on
   symbol" (`<markerCenterOnSymbol>`) and `Marker.musicSymbolSize` its `<musicSymbolSize>`. They were kept as unread
-  markup. Offset, color and symbol size are written after `<style>`, which would reset them in MuseScore. Layout and
-  the renderers apply these properties from the layout changes of this release on.
+  markup. Offset, color and symbol size are written after `<style>`, which would reset them in MuseScore, and a
+  marker's offset and color after `<markerType>` too: a type whose side differs from the style read so far re-applies
+  the other repeat style, so a Fine read with `repeat_left` or no `<style>` lost both. Layout and the renderers apply
+  these properties from the layout changes of this release on.
 - **`TextStyleType.repeatLeft` / `.repeatRight`** — MuseScore's repeat text styles (Edwin 10, regular, spatium-dependent,
   18-point symbols), the styles markers and jumps are set in. **Breaking** for an exhaustive switch over `TextStyleType`.
 - **MuseScore's Da Coda, Da Doppia Coda and Custom markers** — `Marker.Kind.daCoda`, `.daDoubleCoda` and `.user`,
@@ -87,8 +89,8 @@ and this project adheres to
 
 - **Breaking: `MarkerGlyph` is removed.** A marker draws its `displayedRichText`; there is no glyph-or-label choice to
   make any more.
-- **Breaking: `LayoutElement.marker` / `.jump` carry `color:` and `placement:`** (defaults nil), so a pattern match on
-  either case needs two more elements.
+- **`LayoutElement.marker` / `.jump` carry `color:` and `placement:`** (defaults nil). Construction sites compile
+  unchanged; a positional pattern on either case needs two more `_`.
 - **Every marker and jump is measured, reserved and hit-tested by its runs.** Layout typesets each one's
   `displayedRichText` in MuseScore's repeat style (`TextStyleType.repeatLeft` / `.repeatRight`) and `LayoutElement.marker` /
   `.jump` always carry it; one built without `richText` has no ink, box or hit. The marker's `text` payload is the
@@ -120,8 +122,7 @@ and this project adheres to
   mark, marker, jump or lyric whose markup is current carries its `LayoutRichText`. A staff text's and a rehearsal
   mark's placement, and every such element's ink rects, skyline box, rehearsal frame and vertical extent, come from the
   runs; the skyline box takes in the runs' ink, so a symbol taller than its line's text (a segno inside a text marker)
-  stays inside it and inside the marker's hit rect. A segno or coda marker, which draws its glyph whatever its markup
-  says, takes neither ink nor box from its runs. `TextInkGeometry.rehearsalFrame(text:font:origin:sp:frame:rich:)` takes
+  stays inside it and inside the marker's hit rect. `TextInkGeometry.rehearsalFrame(text:font:origin:sp:frame:rich:)` takes
   the runs as a new last parameter, `rich: LayoutRichText? = nil`. A lyric's ink and skyline box follow its runs, and
   its horizontal spacing, hyphens and melisma rule clear the wider of its plain text and its runs — an elision
   (`<sym>lyricsElision</sym>`) widens the syllable, and a syllable of symbols alone is laid out instead of skipped —
