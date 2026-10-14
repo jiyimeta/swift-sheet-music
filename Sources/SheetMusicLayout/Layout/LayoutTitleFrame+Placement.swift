@@ -22,6 +22,8 @@ extension LayoutTitleFrame {
         /// How much of the line lies to the LEFT of `position.x`: 0 leading, 0.5 centered, 1 trailing.
         public let horizontalAnchor: CGFloat
         public let fontSize: CGFloat
+        /// The line's typeset runs, for an entry that has them (`LayoutFrameText.richText`).
+        public let richLine: LayoutRichTextLine?
     }
 
     /// The vertical step between two lines of one entry. SwiftUI's `Text` resolves with the system line-height
@@ -55,18 +57,21 @@ extension LayoutTitleFrame {
 
     private static func placedLines(of entry: LayoutFrameText, entryIndex: Int, origin: CGPoint) -> [PlacedLine] {
         let lines = entry.text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let richLines = entry.richText?.lines
+        let count = richLines?.count ?? lines.count
         let lineHeight = lineHeight(fontSize: entry.fontSize)
         let x = origin.x + entry.position.x
         let y = origin.y + entry.position.y
-        let topY = entry.anchor.isBottom ? y - CGFloat(lines.count) * lineHeight : y
-        return lines.enumerated().map { lineIndex, line in
+        let topY = entry.anchor.isBottom ? y - CGFloat(count) * lineHeight : y
+        return (0 ..< count).map { lineIndex in
             PlacedLine(
-                text: line,
+                text: lineIndex < lines.count ? lines[lineIndex] : "",
                 entryIndex: entryIndex,
                 lineIndex: lineIndex,
                 position: CGPoint(x: x, y: topY + CGFloat(lineIndex) * lineHeight),
                 horizontalAnchor: entry.anchor.horizontalFraction,
                 fontSize: entry.fontSize,
+                richLine: richLines?[lineIndex],
             )
         }
     }
@@ -87,5 +92,25 @@ extension LayoutFrameText.Anchor {
         case .bottomLeading, .bottom, .bottomTrailing: true
         case .topLeading, .top, .topTrailing: false
         }
+    }
+}
+
+extension LayoutTitleFrame.PlacedLine {
+    /// The rich line's runs on the page, or none for a plain line: pen start `position.x` less `horizontalAnchor` of
+    /// the line's advance width (how a plain line is anchored too), baseline one ascent below the top edge — where the
+    /// renderers put a plain line's baseline (`TitleFrameLayerBuilder`, `LayoutBridge.appendTitleEntry`).
+    public var positionedRuns: [LayoutRichTextPositionedRun] {
+        guard let richLine else { return [] }
+        return richLine.positionedRuns(
+            leftX: position.x - horizontalAnchor * richLine.width, baselineY: position.y + richLine.ascent,
+        )
+    }
+
+    /// The underline and strike-through bars for the same placement.
+    public var decorations: [LayoutRichTextDecoration] {
+        guard let richLine else { return [] }
+        return richLine.decorations(
+            leftX: position.x - horizontalAnchor * richLine.width, baselineY: position.y + richLine.ascent,
+        )
     }
 }

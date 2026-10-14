@@ -37,6 +37,11 @@ and this project adheres to
 - **`LayoutElement`'s text cases carry their formatted text.** `.staffText`, `.rehearsalMark`, `.marker`, `.jump` and
   `.textMark` gain a last associated value `richText: LayoutRichText? = nil`. Construction sites compile unchanged; a
   positional pattern needs one more `_` (a new payload member is a minor change for `LayoutElement`, `CONTRIBUTING.md`).
+- **Layout measures formatted text by its runs.** A staff or system text, swing or instrument-change text, rehearsal
+  mark, marker, jump or lyric whose markup is current carries its `LayoutRichText`, and its placement, ink rects,
+  skyline box, rehearsal frame and vertical extent come from the runs. Lyric spacing still measures the plain text.
+  `LayoutFrameText.richText` and `LayoutTitleFrame.PlacedLine.richLine` / `positionedRuns` / `decorations` carry a title
+  block's runs line by line.
 
 ### Fixed
 

@@ -269,6 +269,7 @@ public enum LayoutEngine {
                     ),
                     fontSize: text.fontSize,
                     anchor: text.anchor,
+                    richText: text.richText,
                 )
             },
         )
@@ -346,10 +347,31 @@ public enum LayoutEngine {
                 position: CGPoint(x: baseX + dx, y: baseY + dy),
                 fontSize: fontSize,
                 anchor: anchor(for: layout.align),
+                richText: t.richText.map { titleRichText($0, style: t.style, fontSize: fontSize) },
             ))
         }
         return LayoutTitleFrame(
             height: frameHeight, texts: laidOut,
+        )
+    }
+
+    /// A title-block text's runs, in the face the block is set in (`LayoutTitleFrame.font(size:)`). Title-block styles
+    /// are not spatium dependent, so a `<font size>` is literal points; symbols take the style's musical-symbol size.
+    private static func titleRichText(
+        _ richText: RichText, style: FrameText.Style, fontSize: CGFloat,
+    ) -> LayoutRichText {
+        let textStyle: TextStyleType = switch style {
+        case .title: .title
+        case .subtitle: .subtitle
+        case .composer: .composer
+        case .lyricist: .lyricist
+        case .other: .staffText
+        }
+        return LayoutRichText(
+            richText,
+            baseFont: FontMetrics.provider.renderingTextFont(LayoutTitleFrame.font(size: fontSize)),
+            pointScale: 1,
+            symbolPointSize: LayoutRichText.musicalSymbolSize(for: textStyle),
         )
     }
 

@@ -1063,6 +1063,7 @@ extension LayoutEngine {
                             x: 4, y: staffTopY - metrics.sp,
                         ),
                         identity: .marker(staff: sourceStaff, measureIndex: measureIdx, index: index),
+                        richText: marker.richText.map { LayoutRichText($0, role: .markerText, metrics: metrics) },
                     ))
                 }
                 for (index, jump) in m.jumps.enumerated() {
@@ -1073,6 +1074,7 @@ extension LayoutEngine {
                             y: staffBottomY + metrics.sp,
                         ),
                         identity: .jump(staff: sourceStaff, measureIndex: measureIdx, index: index),
+                        richText: jump.richText.map { LayoutRichText($0, role: .jump, metrics: metrics) },
                     ))
                 }
             }

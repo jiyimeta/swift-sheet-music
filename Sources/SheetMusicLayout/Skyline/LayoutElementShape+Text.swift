@@ -175,13 +175,13 @@ extension LayoutElementShape {
     ) -> [CGRect] {
         let sp = metrics.sp
         switch element {
-        case let .textMark(markKind, text, origin, _):
+        case let .textMark(markKind, text, origin, richText):
             return [textMarkRect(
                 markKind: markKind, text: text, origin: origin,
-                kind: kind, metrics: metrics,
+                kind: kind, metrics: metrics, rich: richText,
             )]
-        case let .staffText(text, origin, _, style, _, _, properties, _, _):
-            return [textRect(
+        case let .staffText(text, origin, _, style, _, _, properties, _, richText):
+            return [richText.map { textRect(rich: $0, origin: origin, anchor: .bottomLeading) } ?? textRect(
                 text: text, font: TextInkGeometry.font(for: style, overrides: properties, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
             )]
@@ -190,15 +190,15 @@ extension LayoutElementShape {
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
             )]
-        case let .marker(_, text, origin, _, _), let .jump(text, origin, _, _):
-            return [textRect(
+        case let .marker(_, text, origin, _, richText), let .jump(text, origin, _, richText):
+            return [richText.map { textRect(rich: $0, origin: origin, anchor: .leadingCenter) } ?? textRect(
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .leadingCenter,
             )]
-        case let .rehearsalMark(text, origin, frame, _, _, _, properties, _):
+        case let .rehearsalMark(text, origin, frame, _, _, _, properties, richText):
             return [rehearsalMarkRect(
                 text: text, origin: origin, frame: frame, properties: properties,
-                metrics: metrics,
+                metrics: metrics, rich: richText,
             )]
         case let .harmony(lh):
             let f = font(for: .harmony, metrics: metrics)
@@ -230,10 +230,11 @@ extension LayoutElementShape {
 
     private static func textMarkRect(
         markKind: LayoutElement.TextMarkKind, text: String,
-        origin: CGPoint, kind: ShapeItemKind, metrics: StaffMetrics,
+        origin: CGPoint, kind: ShapeItemKind, metrics: StaffMetrics, rich: LayoutRichText?,
     ) -> CGRect {
         switch markKind {
         case let .lyrics(_, _, _, _, properties):
+            if let rich { return textRect(rich: rich, origin: origin, anchor: .center) }
             return textRect(
                 text: text,
                 font: properties.hasFontOverride
@@ -356,16 +357,18 @@ extension LayoutElementShape {
 
     private static func rehearsalMarkRect(
         text: String, origin: CGPoint,
-        frame: TextFrameType, properties: TextProperties, metrics: StaffMetrics,
+        frame: TextFrameType, properties: TextProperties, metrics: StaffMetrics, rich: LayoutRichText?,
     ) -> CGRect {
         let f = styleFont(.rehearsalMark, overrides: properties, sp: metrics.sp)
         let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)
-        let inner = textRect(
-            text: text, font: f, origin: CGPoint(x: origin.x + pad, y: origin.y - pad), anchor: .bottomLeading,
-        )
+        let innerOrigin = CGPoint(x: origin.x + pad, y: origin.y - pad)
+        let inner = rich.map { textRect(rich: $0, origin: innerOrigin, anchor: .bottomLeading) }
+            ?? textRect(text: text, font: f, origin: innerOrigin, anchor: .bottomLeading)
         guard frame != .none else { return inner }
         let stroke = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp) / 2
-        switch TextInkGeometry.rehearsalFrame(text: text, font: f, origin: origin, sp: metrics.sp, frame: frame) {
+        switch TextInkGeometry.rehearsalFrame(
+            text: text, font: f, origin: origin, sp: metrics.sp, frame: frame, rich: rich,
+        ) {
         case .none: return inner
         case let .rectangle(rect), let .ellipse(rect): return rect.insetBy(dx: -stroke, dy: -stroke)
         }

@@ -35,6 +35,10 @@ public struct LayoutFrameText: Sendable, Equatable {
     public let position: CGPoint
     public let fontSize: CGFloat
     public let anchor: Anchor
+    /// The entry's typeset runs, while its source markup still describes `text` (`FrameText.richText`); `nil` for a
+    /// plain entry. Set in the title block's face (`LayoutTitleFrame.font(size:)`); the block's own line stacking
+    /// places each line (`LayoutTitleFrame.placedLines`).
+    public let richText: LayoutRichText?
 
     public init(
         text: String,
@@ -42,11 +46,13 @@ public struct LayoutFrameText: Sendable, Equatable {
         position: CGPoint,
         fontSize: CGFloat,
         anchor: Anchor,
+        richText: LayoutRichText? = nil,
     ) {
         self.text = text
         self.style = style
         self.position = position
         self.fontSize = fontSize
         self.anchor = anchor
+        self.richText = richText
     }
 }

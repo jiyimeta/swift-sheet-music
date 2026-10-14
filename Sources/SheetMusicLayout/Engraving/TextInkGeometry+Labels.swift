@@ -22,11 +22,13 @@ extension TextInkGeometry {
             return notationRects(text: text, role: .measureNumber, origin: origin, metrics: metrics)
         case let .staffName(text, origin):
             return notationRects(text: text, role: .staffName, origin: origin, metrics: metrics)
-        case let .jump(text, origin, _, _):
-            return notationRects(text: text, role: .jump, origin: origin, metrics: metrics)
-        case let .marker(kind, text, origin, _, _):
+        case let .jump(text, origin, _, richText):
+            return richRects(richText, origin: origin, role: .jump)
+                ?? notationRects(text: text, role: .jump, origin: origin, metrics: metrics)
+        case let .marker(kind, text, origin, _, richText):
             guard case let .text(label) = MarkerGlyph.variant(for: kind, text: text) else { return nil }
-            return notationRects(text: label, role: .markerText, origin: origin, metrics: metrics)
+            return richRects(richText, origin: origin, role: .markerText)
+                ?? notationRects(text: label, role: .markerText, origin: origin, metrics: metrics)
         default: return nil
         }
     }
@@ -37,6 +39,13 @@ extension TextInkGeometry {
         let font = NotationTextStyle.font(for: role, sp: metrics.sp)
         let anchor = NotationTextStyle.anchorPoint(for: role)
         return rect(text: text, font: font, origin: origin, anchor: anchor).map { [$0] } ?? []
+    }
+
+    /// A navigation label's typeset runs, placed by its role's anchor; `nil` for a plain label.
+    private static func richRects(
+        _ rich: LayoutRichText?, origin: CGPoint, role: NotationTextStyle.Role,
+    ) -> [CGRect]? {
+        rich.map { $0.inkRect(at: origin, anchor: NotationTextStyle.anchorPoint(for: role)).map { [$0] } ?? [] }
     }
 
     package struct PositionedRun {

@@ -19,16 +19,32 @@ extension LayoutEngine {
         )
     }
 
+    /// `textPlacementOrigin(text:font:…)` for typeset runs: the same rule, with the first line's own ascent and
+    /// descent and the whole stack's height standing in for one font's.
+    static func textPlacementOrigin(
+        rich: LayoutRichText, baseline: CGPoint, center: Bool, padding: CGFloat = 0,
+    ) -> CGPoint {
+        let ascent = rich.lines.first?.ascent ?? 0
+        let descent = rich.lines.first?.descent ?? 0
+        let extra = rich.size.height - ascent - descent
+        return CGPoint(
+            x: baseline.x,
+            y: baseline.y + (center ? -(ascent - descent) / 2 + extra / 2 : descent + extra) + padding,
+        )
+    }
+
     static func placedTextOrigin(
         text: String, role: TextPlacementRole, properties: ElementProperties,
         style: TextPlacementStyles, x: CGFloat, lineGeometry: StaffLineGeometry,
         metrics: StaffMetrics, font: LayoutFont, center: Bool, padding: CGFloat = 0,
+        rich: LayoutRichText? = nil,
     ) -> CGPoint {
         let side = style.side(for: role, element: properties)
         let position = style.position(for: role, side: side)
         let edge = metrics.sp * 2 + (side == .above ? 0 : lineGeometry.height(sp: metrics.sp))
         let baseline = CGPoint(x: x + CGFloat(position.x) * metrics.sp, y: edge + CGFloat(position.y) * metrics.sp)
-        let origin = textPlacementOrigin(text: text, font: font, baseline: baseline, center: center, padding: padding)
+        let origin = rich.map { textPlacementOrigin(rich: $0, baseline: baseline, center: center, padding: padding) }
+            ?? textPlacementOrigin(text: text, font: font, baseline: baseline, center: center, padding: padding)
         return CGPoint(
             x: origin.x + CGFloat(properties.offset?.x ?? 0) * metrics.sp,
             y: origin.y + CGFloat(properties.offset?.y ?? 0) * metrics.sp,

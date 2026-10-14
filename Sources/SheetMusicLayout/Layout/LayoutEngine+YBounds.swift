@@ -78,8 +78,8 @@ extension LayoutEngine {
              let .rest(_, p, _, _, _),
              let .note(_, _, _, _, p, _, _, _):
             return [p.y]
-        case let .staffText(text, p, _, style, _, _, properties, _, _):
-            return staffTextYPoints(text: text, origin: p, style: style, properties: properties, sp: sp)
+        case let .staffText(text, p, _, style, _, _, properties, _, rich):
+            return staffTextYPoints(text: text, origin: p, style: style, properties: properties, sp: sp, rich: rich)
         case let .chord(notes, _, _, so, _, _, _, _, _, _, _):
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
@@ -143,7 +143,12 @@ extension LayoutEngine {
     /// representative Y and get the anchor alone.
     private static func staffTextYPoints(
         text: String, origin: CGPoint, style: TextStyleType, properties: TextProperties, sp: CGFloat?,
+        rich: LayoutRichText?,
     ) -> [CGFloat] {
+        if let rich, let first = rich.lines.first {
+            guard sp != nil, rich.lines.count > 1 else { return [origin.y] }
+            return [origin.y, origin.y - (rich.size.height - first.ascent - first.descent)]
+        }
         guard let sp, text.contains("\n") else { return [origin.y] }
         let font = TextInkGeometry.font(for: style, overrides: properties, metrics: StaffMetrics(staffSize: sp * 4))
         let provider = FontMetrics.provider

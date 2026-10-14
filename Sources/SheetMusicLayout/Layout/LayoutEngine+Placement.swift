@@ -1107,6 +1107,9 @@ extension LayoutEngine {
                             ),
                             text: lyric.text,
                             origin: origin,
+                            richText: lyric.richText.map {
+                                LayoutRichText($0, style: .lyricsOdd, overrides: lyric.properties, metrics: metrics)
+                            },
                         )
                         if lyric.visible {
                             out.append(lyricElement)
@@ -2116,13 +2119,16 @@ extension LayoutEngine {
                 guard st.visible || options.showsInvisibleElements else { break }
                 let role: TextPlacementRole = st.isSystemText ? .systemText : .staffText
                 let side = textPlacementStyle.side(for: role, element: st.elementProperties)
+                let rich = st.richText.map {
+                    LayoutRichText($0, style: st.styleType, overrides: st.properties, metrics: metrics)
+                }
                 let element = LayoutElement.staffText(
                     text: st.text,
                     origin: placedTextOrigin(
                         text: st.text, role: role, properties: st.elementProperties,
                         style: textPlacementStyle, x: xAtTick, lineGeometry: lineGeometry, metrics: metrics,
                         font: TextInkGeometry.font(for: st.styleType, overrides: st.properties, metrics: metrics),
-                        center: false,
+                        center: false, rich: rich,
                     ),
                     color: st.color,
                     style: st.styleType,
@@ -2136,6 +2142,7 @@ extension LayoutEngine {
                     ),
                     placement: TextPlacementMetadata(side: side, autoplace: st.elementProperties.autoplace ?? true),
                     properties: st.properties.fontOverrides,
+                    richText: rich,
                 )
                 if st.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .swing(s):
@@ -2167,6 +2174,9 @@ extension LayoutEngine {
                         measureDuration: measureDuration,
                         division: division,
                     ).map { ScoreElementID.swing(anchor: $0) },
+                    richText: s.richText.map {
+                        LayoutRichText($0, style: s.isSystemText ? .systemText : .staffText, metrics: metrics)
+                    },
                 )
                 if s.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .instrumentChange(ic):
@@ -2188,25 +2198,30 @@ extension LayoutEngine {
                     // No anchor, for `<Swing>`'s reason: an instrument-change instruction is a separate model
                     // element that no text-entry command writes.
                     anchor: nil,
+                    richText: ic.richText.map { LayoutRichText($0, style: .instrumentChange, metrics: metrics) },
                 )
                 if ic.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .rehearsalMark(rm):
                 guard rm.visible || options.showsInvisibleElements else { break }
                 let originX = metrics.sp * 0.5
                 let side = textPlacementStyle.side(for: .rehearsalMark, element: rm.elementProperties)
+                let rich = rm.richText.map {
+                    LayoutRichText($0, style: .rehearsalMark, overrides: rm.properties, metrics: metrics)
+                }
                 let rehearsalElement = LayoutElement.rehearsalMark(
                     text: rm.text,
                     origin: placedTextOrigin(
                         text: rm.text, role: .rehearsalMark, properties: rm.elementProperties,
                         style: textPlacementStyle, x: originX, lineGeometry: lineGeometry, metrics: metrics,
                         font: TextInkGeometry.font(for: .rehearsalMark, overrides: rm.properties, metrics: metrics),
-                        center: false, padding: RehearsalMarkFrame.paddingSp(sp: metrics.sp),
+                        center: false, padding: RehearsalMarkFrame.paddingSp(sp: metrics.sp), rich: rich,
                     ),
                     frame: rm.drawnFrame,
                     color: rm.color,
                     measureIndex: measureIndex,
                     placement: TextPlacementMetadata(side: side, autoplace: rm.elementProperties.autoplace ?? true),
                     properties: rm.properties.fontOverrides,
+                    richText: rich,
                 )
                 if rm.visible {
                     out.append(rehearsalElement)

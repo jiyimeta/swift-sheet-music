@@ -48,26 +48,33 @@ public enum TextInkGeometry {
     }
 
     public static func rehearsalBox(text: String, font: LayoutFont, origin: CGPoint, sp: CGFloat) -> CGRect {
-        let size = typographicSize(text: text, font: font)
-        return RehearsalMarkFrame.boxRect(
+        rehearsalBox(size: typographicSize(text: text, font: font), font: font, origin: origin, sp: sp)
+    }
+
+    /// The frame box around a text block of `size` — plain text's typographic size, or a rich text's (its advance
+    /// width, like the plain size's).
+    public static func rehearsalBox(size: CGSize, font: LayoutFont, origin: CGPoint, sp: CGFloat) -> CGRect {
+        RehearsalMarkFrame.boxRect(
             textWidth: max(size.width, font.pointSize * 0.5), textHeight: size.height,
             origin: origin, pad: RehearsalMarkFrame.paddingSp(sp: sp),
         )
     }
 
     /// The same frame for rendering, hit bounds, and skyline. Circle clearance is measured
-    /// from the actual positioned ink to the inner stroke, including all lines of text.
+    /// from the actual positioned ink to the inner stroke, including all lines of text. `rich` is the mark's typeset
+    /// runs, when it has them: the box and the ink are then theirs.
     public static func rehearsalFrame(
         text: String, font: LayoutFont, origin: CGPoint, sp: CGFloat, frame: TextFrameType,
+        rich: LayoutRichText? = nil,
     ) -> RehearsalMarkFrame.Shape {
         let pad = RehearsalMarkFrame.paddingSp(sp: sp)
-        let ink = rect(
-            text: text, font: font, origin: CGPoint(x: origin.x + pad, y: origin.y - pad),
-            anchor: CGPoint(x: 0, y: 1),
-        )
+        let inkOrigin = CGPoint(x: origin.x + pad, y: origin.y - pad)
+        let ink = rich.map { $0.inkRect(at: inkOrigin, anchor: CGPoint(x: 0, y: 1)) }
+            ?? rect(text: text, font: font, origin: inkOrigin, anchor: CGPoint(x: 0, y: 1))
+        let box = rich.map { rehearsalBox(size: $0.size, font: font, origin: origin, sp: sp) }
+            ?? rehearsalBox(text: text, font: font, origin: origin, sp: sp)
         return RehearsalMarkFrame.shape(
-            for: frame, around: rehearsalBox(text: text, font: font, origin: origin, sp: sp),
-            enclosing: ink, clearance: pad + RehearsalMarkFrame.strokeWidthSp(sp: sp) / 2,
+            for: frame, around: box, enclosing: ink, clearance: pad + RehearsalMarkFrame.strokeWidthSp(sp: sp) / 2,
         )
     }
 
@@ -75,22 +82,30 @@ public enum TextInkGeometry {
     /// but no painted ink, so callers must not substitute an anchor-sized fallback.
     public static func rects(for element: LayoutElement, metrics: StaffMetrics) -> [CGRect]? {
         switch element {
-        case let .textMark(.lyrics(_, _, _, _, properties), text, origin, _):
+        case let .textMark(.lyrics(_, _, _, _, properties), text, origin, richText):
+            if let richText {
+                return richText.inkRect(at: origin, anchor: CGPoint(x: 0.5, y: 0.5)).map { [$0] } ?? []
+            }
             return rect(
                 text: text,
                 font: font(for: .lyricsOdd, overrides: properties, metrics: metrics),
                 origin: origin,
                 anchor: CGPoint(x: 0.5, y: 0.5),
             ).map { [$0] } ?? []
-        case let .staffText(text, origin, _, style, _, _, properties, _, _):
+        case let .staffText(text, origin, _, style, _, _, properties, _, richText):
+            if let richText {
+                return richText.inkRect(at: origin, anchor: CGPoint(x: 0, y: 1)).map { [$0] } ?? []
+            }
             return rect(
                 text: text,
                 font: font(for: style, overrides: properties, metrics: metrics),
                 origin: origin,
                 anchor: CGPoint(x: 0, y: 1),
             ).map { [$0] } ?? []
-        case let .rehearsalMark(text, origin, frame, _, _, _, properties, _):
-            return rehearsalRects(text: text, origin: origin, frame: frame, properties: properties, metrics: metrics)
+        case let .rehearsalMark(text, origin, frame, _, _, _, properties, richText):
+            return rehearsalRects(
+                text: text, origin: origin, frame: frame, properties: properties, metrics: metrics, rich: richText,
+            )
         case let .harmony(harmony):
             return harmonyRects(harmony, metrics: metrics)
         default: return labelRects(for: element, metrics: metrics)
@@ -99,18 +114,16 @@ public enum TextInkGeometry {
 
     private static func rehearsalRects(
         text: String, origin: CGPoint, frame: TextFrameType, properties: TextProperties,
-        metrics: StaffMetrics,
+        metrics: StaffMetrics, rich: LayoutRichText?,
     ) -> [CGRect] {
-        guard !text.isEmpty else { return [] }
+        guard !text.isEmpty || rich != nil else { return [] }
         let font = font(for: .rehearsalMark, overrides: properties, metrics: metrics)
         let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)
-        var result = rect(
-            text: text,
-            font: font,
-            origin: CGPoint(x: origin.x + pad, y: origin.y - pad),
-            anchor: CGPoint(x: 0, y: 1),
-        ).map { [$0] } ?? []
-        switch rehearsalFrame(text: text, font: font, origin: origin, sp: metrics.sp, frame: frame) {
+        let inkOrigin = CGPoint(x: origin.x + pad, y: origin.y - pad)
+        let ink = rich.map { $0.inkRect(at: inkOrigin, anchor: CGPoint(x: 0, y: 1)) }
+            ?? rect(text: text, font: font, origin: inkOrigin, anchor: CGPoint(x: 0, y: 1))
+        var result = ink.map { [$0] } ?? []
+        switch rehearsalFrame(text: text, font: font, origin: origin, sp: metrics.sp, frame: frame, rich: rich) {
         case .none: break
         case let .rectangle(rect), let .ellipse(rect):
             let halfStroke = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp) / 2
