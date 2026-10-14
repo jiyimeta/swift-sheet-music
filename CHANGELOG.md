@@ -89,6 +89,11 @@ and this project adheres to
 
 ### Fixed
 
+- **After a repeat jump the SMF plays the notated tempo** (import-fidelity F2.10). At a jump's target the first track
+  re-states the tempo in force there when the sequence stands at another one and nothing on that downbeat states it,
+  so audio and the cursor (which already replayed each span at its notated tempo, as MuseScore's playback does) no
+  longer drift apart after a rit. or a tempo change before a repeat. MuseScore's own export carries the previous tempo
+  across the jump; `testVoltaTemp`'s reference differs from this SMF by exactly that one event.
 - **Gradual tempo changes play** (import-fidelity F2.7): rit., rall., accel. and the other eight MuseScore types ramp
   the tempo map as MuseScore does — from the tempo in force where the change starts to that times its factor
   (`<tempoChangeFactor>` or the type's default), in `max(8, ticks / division)` eased steps (`<tempoEasingMethod>`), a

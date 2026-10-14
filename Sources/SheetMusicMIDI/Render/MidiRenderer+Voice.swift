@@ -35,6 +35,8 @@ extension MidiRenderer {
         var velocity = effectiveVelocity(forDynamic: nil, instrument: part.instrument)
         // Tempo in beats-per-second; default is 2 bps (120 BPM = MuseScore's DEFAULT_TEMPO).
         var currentTempoBps = 2.0
+        // The tempo the first track's sequence stands at, carried from plan entry to plan entry.
+        var sequenceMicros = defaultMicrosPerQuarter
 
         let hairpinRamps = HairpinRamps.collect(
             voiceIndex: voiceIndex,
@@ -107,6 +109,7 @@ extension MidiRenderer {
         var lastProcessedEntry: PlaybackEntry?
         for entry in plan {
             guard entry.measureIndex < staff.measures.count else { continue }
+            let jumped = lastProcessedEntry.map { $0.measureIndex + 1 != entry.measureIndex } ?? false
             lastProcessedEntry = entry
             // Splice in the source measure's notes if this measure is a
             // measure-repeat. Returns nil only when neither the current
@@ -151,6 +154,7 @@ extension MidiRenderer {
                         microsecondsPerQuarter: defaultMicrosPerQuarter,
                     ))))
                     currentTempoBps = 2.0
+                    sequenceMicros = defaultMicrosPerQuarter
                 }
                 // Reset dynamic state too: starting a fresh section means notes
                 // play at the score's default (mf) velocity until a Dynamic re-asserts.
@@ -165,12 +169,9 @@ extension MidiRenderer {
             // Rehearsal marks still come from the lifted system elements below, at their
             // measure-relative positions; only voice 0 emits them so they don't fan out across voices.
             if emitsTempoEvents {
-                for point in tempoMap.points(inMeasure: entry.measureIndex) {
-                    events.append(TimedMidiEvent(
-                        tick: entry.tickOffset + point.tickInMeasure,
-                        event: .meta(.tempo(microsecondsPerQuarter: point.microsecondsPerQuarter)),
-                    ))
-                }
+                events += tempoEvents(
+                    for: entry, jumped: jumped, tempoMap: tempoMap, sequenceMicros: &sequenceMicros,
+                )
             }
             if voiceIndex == 0,
                entry.measureIndex < systemElementsByMeasure.count
