@@ -60,6 +60,11 @@ extension LayoutEngine {
         _ element: LayoutElement, sp: CGFloat? = nil,
     ) -> [CGFloat] {
         switch element {
+        case let .textMark(.tempo, _, p, rich):
+            // A tempo's origin is the block's top-left, so its first (and last) baseline stand in for the text, as a
+            // staff text's baseline-side origin does — the top would reserve a line of height the text never fills.
+            guard let rich else { return [p.y] }
+            return [p.y + rich.firstBaseline, p.y + (rich.lineBaselines.last ?? 0)]
         case let .clef(_, p, _, _),
              let .keySignature(_, _, _, _, p, _),
              let .timeSignature(_, _, _, p, _),
@@ -81,13 +86,9 @@ extension LayoutEngine {
         case let .staffText(text, p, _, style, _, _, properties, _, rich):
             return staffTextYPoints(text: text, origin: p, style: style, properties: properties, sp: sp, rich: rich)
         case let .chord(notes, _, _, so, _, _, _, _, _, _, _):
-            var ys = notes.map(\.origin.y)
-            ys.append(so.y)
-            return ys
+            return notes.map(\.origin.y) + [so.y]
         case let .graceChord(notes, _, _, so, _, _, _, _):
-            var ys = notes.map(\.origin.y)
-            ys.append(so.y)
-            return ys
+            return notes.map(\.origin.y) + [so.y]
         case let .beam(from, to, _, _, _):
             // fromOrigin, toOrigin, direction, level — only endpoints
             // contribute to the bbox at the primary-beam y; secondary

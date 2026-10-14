@@ -242,8 +242,10 @@ extension LayoutRichText {
         /// A text marker's runs; a segno or coda draws its glyph instead (`MarkerGlyph.variant`).
         case marker
         case jump
-        /// A tempo marking, hung leading and vertically centered on its origin — where every tempo was placed before
-        /// it was typeset from runs.
+        /// A tempo marking, hung by its top-left. MuseScore aligns it LEFT, BASELINE (`tempoAlign`), which no
+        /// fractional anchor can say for text of any height, so `LayoutEngine.tempoOrigin` hands out the origin that
+        /// puts the first baseline at `tempoPosAbove` / `tempoPosBelow` — the line a gradual tempo change's label hangs
+        /// on.
         case tempo
         /// A gradual tempo change line's label (`<beginText>` / `<continueText>`), hung by its top-left. MuseScore
         /// aligns it LEFT, BASELINE (`tempoChangeAlign`), which no fractional anchor can say for text of any height, so
@@ -263,8 +265,7 @@ extension LayoutRichText {
         case .lyric: CGPoint(x: 0.5, y: 0.5)
         case .marker: NotationTextStyle.anchorPoint(for: .markerText)
         case .jump: NotationTextStyle.anchorPoint(for: .jump)
-        case .tempo: CGPoint(x: 0, y: 0.5)
-        case .gradualTempoChangeLabel: CGPoint(x: 0, y: 0)
+        case .tempo, .gradualTempoChangeLabel: CGPoint(x: 0, y: 0)
         }
     }
 }

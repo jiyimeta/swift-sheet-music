@@ -106,7 +106,6 @@ struct AutoplaceRulesTests {
     @Test func defaultSideTable() {
         #expect(AutoplaceRules.defaultSide(for: .dynamics) == .below)
         #expect(AutoplaceRules.defaultSide(for: .lyrics) == .below)
-        #expect(AutoplaceRules.defaultSide(for: .tempo) == .above)
         #expect(AutoplaceRules.defaultSide(for: .volta) == .above)
         #expect(AutoplaceRules.defaultSide(for: .rehearsalMark) == .above)
     }
@@ -119,7 +118,7 @@ struct AutoplaceRulesTests {
     /// a hairpin flipped above the staff back down through it.
     @Test func spannerSidesFollowTheElement() {
         for kind: ShapeItemKind in [
-            .hairpin, .pedal, .ottava, .textLine,
+            .hairpin, .pedal, .ottava, .textLine, .tempo,
         ] {
             #expect(AutoplaceRules.defaultSide(for: kind) == nil)
             #expect(AutoplaceRules.isAutoplaced(kind))
@@ -132,7 +131,7 @@ struct AutoplaceRulesTests {
     /// other would compile and silently mis-place.
     @Test func everyAutoplacedKindResolvesToASide() {
         let byPosition: Set<ShapeItemKind> = [
-            .hairpin, .pedal, .ottava, .textLine,
+            .hairpin, .pedal, .ottava, .textLine, .tempo,
         ]
         for kind in ShapeItemKind.allCases
             where AutoplaceRules.isAutoplaced(kind)

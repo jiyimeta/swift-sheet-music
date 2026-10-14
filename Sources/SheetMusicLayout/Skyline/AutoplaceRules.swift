@@ -68,8 +68,10 @@ public enum AutoplaceRules {
         return sideFollowsPosition.contains(kind)
     }
 
-    /// Spanner kinds whose side is read off the element rather than
-    /// fixed by the kind.
+    /// Kinds whose side is read off the element rather than fixed by the
+    /// kind. A tempo marking joins the spanners: it sits above the staff
+    /// unless `<placement>` puts it below (`tempoPlacement`), and its Y
+    /// already says which.
     ///
     /// `Autoplace::autoplaceSpannerSegment` takes it from the spanner
     /// itself — `bool above = item->spanner()->placeAbove()`
@@ -79,7 +81,7 @@ public enum AutoplaceRules {
     /// kind would push a hairpin flipped above the staff back down
     /// through it.
     private static let sideFollowsPosition: Set<ShapeItemKind> = [
-        .hairpin, .pedal, .ottava, .textLine,
+        .hairpin, .pedal, .ottava, .textLine, .tempo,
     ]
 
     /// Side of the staff `kind` is pushed toward, or `nil` when the
@@ -90,7 +92,7 @@ public enum AutoplaceRules {
         switch kind {
         case .dynamics, .lyrics, .lyricsMelisma, .lyricHyphen:
             .below
-        case .tempo, .measureNumber, .harmony, .staffText, .systemText,
+        case .measureNumber, .harmony, .staffText, .systemText,
              .rehearsalMark, .marker, .jump, .volta:
             .above
         default:

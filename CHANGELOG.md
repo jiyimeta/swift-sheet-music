@@ -107,6 +107,13 @@ and this project adheres to
 
 ### Fixed
 
+- **A tempo marking hangs on its first baseline, and `<sym>space</sym>` advances in the music font** (import-fidelity
+  W2): `tempoAlign` is LEFT, BASELINE, so the first baseline sits at `tempoPosAbove` (2 sp over the top line) or, with
+  `<placement>below`, `tempoPosBelow` (3 sp under the bottom one) — the line a gradual tempo change's label hangs on —
+  where ssm centered the text on that point and drew a tempo half a space lower than the `rit.` beside it. The tempo is
+  placed by its top-left like that label (`LayoutRichText.anchor(for: .tempo)` is `(0, 0)`), and autoplace takes its
+  side from where it sits. A `space` symbol is U+0020 in the ScoreText family at the symbol size
+  (`TextBase::createBlocks`), so a dotted tempo's note-to-dot gap is the music font's space, not the text font's.
 - **Gradual tempo changes draw as MuseScore draws them** (import-fidelity F2.7): the label in the tempo change style
   (Edwin 12 bold, symbols at 12) — `<beginText>`, `<continueText>` on a later system, nothing when the file has none —
   and a 0.15 sp line dashed at 6 / 9 line widths from half a space after it, above the staff

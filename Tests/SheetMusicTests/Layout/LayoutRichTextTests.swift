@@ -107,8 +107,34 @@ struct LayoutRichTextTests {
                 .symbol(name: "space", Self.plain), .text("b", Self.plain),
             ]])
             let runs = rich.lines[0].runs
-            #expect(runs.map(\.content) == [.text("a"), .text(" "), .text("b")])
+            #expect(runs.map(\.content) == [.text("a"), .symbol(codepoint: 0x20), .text("b")])
             #expect(Self.close(runs[1].x, 5) && Self.close(runs[2].x, 8))
+        }
+    }
+
+    /// `TextBase::createBlocks` inserts U+0020 under the ScoreText family for `SymId::space`
+    /// (`textbase.cpp:1731-1733`), so it advances by the music font's space at the symbol size. At `staffSize: 40` a
+    /// tempo's symbols are 40 pt and its text 24 pt; the stub advances a space 0.3 em, so 12 pt in Bravura against
+    /// 7.2 pt in the text font.
+    @Test("a `space` symbol advances the music font's space at the symbol size, not the text font's")
+    func spaceSymbolAdvancesInTheMusicFont() {
+        Self.stub {
+            let rich = LayoutRichText(
+                RichText(lines: [[
+                    .symbol(name: "metNoteQuarterUp", Self.plain), .symbol(name: "space", Self.plain),
+                    .symbol(name: "metAugmentationDot", Self.plain),
+                ]]),
+                style: .tempo, metrics: StaffMetrics(staffSize: 40),
+            )
+            let runs = rich.lines[0].runs
+            #expect(runs.count == 3)
+            let space = runs[1]
+            #expect(space.content == .symbol(codepoint: 0x20))
+            #expect(space.font == LayoutFont(face: SMuFLFamily.bravura, pointSize: 40))
+            let expected = FontMetrics.provider.typographicWidth(text: " ", font: space.font)
+            #expect(Self.close(space.advance, expected))
+            #expect(Self.close(space.advance, 12))
+            #expect(Self.close(runs[2].x, runs[1].x + space.advance))
         }
     }
 

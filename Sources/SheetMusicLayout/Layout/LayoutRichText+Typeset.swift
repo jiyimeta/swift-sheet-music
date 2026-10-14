@@ -104,6 +104,8 @@ private struct RichTextTypesetter {
     static let scoreTextFace = "ScoreText"
     /// SMuFL's code points: the Private Use Area.
     static let smuflScalars: ClosedRange<UInt32> = 0xE000 ... 0xF8FF
+    /// What `<sym>space</sym>` inserts (`textbase.cpp:1731-1732`).
+    static let spaceCodepoint: UInt32 = 0x20
 
     let baseFont: LayoutFont
     let pointScale: CGFloat
@@ -147,8 +149,10 @@ private struct RichTextTypesetter {
     }
 
     /// Only a fragment in a text face is underlined or struck through (`TextFragment::font`, `textbase.cpp:914-920`);
-    /// every `<sym>`, the `space` one included, is a ScoreText fragment. MuseScore inserts a plain space for
-    /// `SymId::space` and drops a name it has no glyph for (`TextBase::createBlocks`, `textbase.cpp:1724-1740`).
+    /// every `<sym>`, the `space` one included, is a ScoreText fragment. MuseScore inserts U+0020 for `SymId::space`
+    /// and sets the fragment's family to ScoreText, like any symbol, so its advance is the music font's space at the
+    /// symbol size, not the text font's; a name it has no glyph for is dropped (`TextBase::createBlocks`,
+    /// `textbase.cpp:1724-1740`). The space is therefore a symbol run, measured and drawn in Bravura.
     private static func pieces(of run: RichTextRun) -> [Piece] {
         switch run {
         case let .text(text, format) where format.face == scoreTextFace:
@@ -157,7 +161,7 @@ private struct RichTextTypesetter {
             return [Piece(content: .text(text), format: format, decorates: true)]
         case let .symbol(name, format):
             if name == "space" {
-                return [Piece(content: .text(" "), format: format, decorates: false)]
+                return [Piece(content: .symbol(codepoint: spaceCodepoint), format: format, decorates: false)]
             }
             guard let codepoint = SMuFLCodepoint.byName(name) else { return [] }
             return [Piece(content: .symbol(codepoint: codepoint), format: format, decorates: false)]

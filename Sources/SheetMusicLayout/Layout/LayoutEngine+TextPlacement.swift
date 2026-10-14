@@ -33,6 +33,26 @@ extension LayoutEngine {
         )
     }
 
+    /// Where a tempo marking's `LayoutRichText.anchor(for: .tempo)` (top-left) origin goes so its FIRST BASELINE sits
+    /// at MuseScore's tempo position: `tempoPosAbove` = (0, -2 sp) from the top staff line, `tempoPosBelow` = (0, 3 sp)
+    /// from the bottom one (`engraving/style/styledef.cpp:1149-1159`, `tempoAlign` = LEFT, BASELINE). The staff's top
+    /// line is at `2 sp` in a measure's frame, as for `placedTextOrigin`. `offset` is the authored offset in sp.
+    static func tempoOrigin(
+        rich: LayoutRichText, side: Placement, x: CGFloat, offset: CGPoint,
+        lineGeometry: StaffLineGeometry, metrics: StaffMetrics,
+    ) -> CGPoint {
+        let sp = metrics.sp
+        let baseline = side == .above
+            ? sp * 2 - sp * tempoPosAboveSp
+            : sp * 2 + lineGeometry.height(sp: sp) + sp * tempoPosBelowSp
+        return CGPoint(x: x + offset.x * sp, y: baseline - rich.firstBaseline + offset.y * sp)
+    }
+
+    /// `Sid::tempoPosAbove`'s distance above the top staff line, in spatiums (`styledef.cpp:1157`).
+    static let tempoPosAboveSp: CGFloat = 2
+    /// `Sid::tempoPosBelow`'s distance below the bottom staff line, in spatiums (`styledef.cpp:1158`).
+    static let tempoPosBelowSp: CGFloat = 3
+
     static func placedTextOrigin(
         text: String, role: TextPlacementRole, properties: ElementProperties,
         style: TextPlacementStyles, x: CGFloat, lineGeometry: StaffLineGeometry,

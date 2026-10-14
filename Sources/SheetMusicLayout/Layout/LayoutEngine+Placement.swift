@@ -2089,8 +2089,12 @@ extension LayoutEngine {
                 guard t.visible || options.showsInvisibleElements else { break }
                 // The marking draws from its runs: its authored text and formatting, or the derived "♩ = N" in
                 // MuseScore's palette spelling (`Tempo.displayedRichText`), typeset in the tempo style with the
-                // marking's font override. Color rides along for the renderers. Neither moves the origin, which is a
-                // fixed offset from the staff rather than a measured one.
+                // marking's font override. Color rides along for the renderers. The origin is the block's top-left
+                // (`LayoutRichText.anchor(for: .tempo)`) placed so the first baseline sits at `tempoPosAbove` /
+                // `tempoPosBelow` (`tempoOrigin`), the line a gradual tempo change's label hangs on.
+                let tempoRich = LayoutRichText(
+                    t.displayedRichText, style: .tempo, overrides: t.properties.fontOverrides, metrics: metrics,
+                )
                 let element = LayoutElement.textMark(
                     kind: .tempo(
                         anchor: systemLaneAnchor(
@@ -2101,15 +2105,12 @@ extension LayoutEngine {
                         properties: t.properties.fontOverrides,
                     ),
                     text: t.text ?? "\(t.beatGlyph) = \(Tempo.printedNumber(t.beatsPerMinute))",
-                    origin: CGPoint(
-                        x: xAtTick
-                            + CGFloat(t.offsetX) * metrics.sp,
-                        y: staffMidY - metrics.sp * 4
-                            + CGFloat(t.offsetY) * metrics.sp,
+                    origin: tempoOrigin(
+                        rich: tempoRich, side: t.elementProperties.placement ?? .above, x: xAtTick,
+                        offset: CGPoint(x: CGFloat(t.offsetX), y: CGFloat(t.offsetY)),
+                        lineGeometry: lineGeometry, metrics: metrics,
                     ),
-                    richText: LayoutRichText(
-                        t.displayedRichText, style: .tempo, overrides: t.properties.fontOverrides, metrics: metrics,
-                    ),
+                    richText: tempoRich,
                 )
                 if t.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .staffText(st):

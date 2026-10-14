@@ -114,6 +114,86 @@ struct TempoRichTextLayoutTests {
         #expect(Self.close(box, LayoutElementShape.textRect(rich: rich, origin: tempo.origin, kind: .tempo)))
     }
 
+    /// The top staff line in the measure frame, from the barline's span (a five-line staff, as the fixture is).
+    private static func topStaffLine(_ document: LayoutDocument) throws -> CGFloat {
+        let tops = document.systems.flatMap(\.measures).flatMap(\.elements).compactMap { element -> CGFloat? in
+            guard case let .barLine(_, origin, halfHeight, _, _) = element else { return nil }
+            return origin.y - halfHeight
+        }
+        return try #require(tops.first)
+    }
+
+    private static func firstBaselineY(_ found: Found) throws -> CGFloat {
+        let rich = try #require(found.rich)
+        let runs = rich.positionedRuns(at: found.origin, anchor: LayoutRichText.anchor(for: .tempo))
+        return try #require(runs.first).baseline.y
+    }
+
+    /// `tempoAlign` = LEFT, BASELINE and `tempoPosAbove` = (0, -2 sp) (`styledef.cpp:1154, 1157`): the first baseline
+    /// sits two spatiums over the top staff line.
+    @Test("a tempo's first baseline sits 2 sp above the top staff line")
+    func baselineTwoSpacesAboveTheStaff() throws {
+        let document = Self.layout(Self.score(Tempo(beatsPerSecond: 2, text: "Allegro")))
+        let tempo = try #require(Self.tempos(document).first)
+        let baseline = try Self.firstBaselineY(tempo)
+        let top = try Self.topStaffLine(document)
+        #expect(abs(baseline - (top - 2 * document.metrics.sp)) < 1e-6)
+        #expect(LayoutRichText.anchor(for: .tempo) == CGPoint(x: 0, y: 0))
+    }
+
+    /// `tempoPosBelow` = (0, 3 sp) (`styledef.cpp:1158`), from the bottom line.
+    @Test("a tempo placed below the staff has its first baseline 3 sp under the bottom line")
+    func belowStaffBaseline() throws {
+        var tempo = Tempo(beatsPerSecond: 2, text: "Allegro")
+        tempo.elementProperties.placement = .below
+        let document = Self.layout(Self.score(tempo))
+        let found = try #require(Self.tempos(document).first)
+        let baseline = try Self.firstBaselineY(found)
+        let bottom = try Self.topStaffLine(document) + 4 * document.metrics.sp
+        #expect(abs(baseline - (bottom + 3 * document.metrics.sp)) < 1e-6)
+    }
+
+    /// Both hang their first baseline at `tempoPosAbove` / `tempoChangePosAbove`, so side by side they share a line.
+    @Test("a tempo and a gradual tempo change label in one system share a baseline")
+    func tempoAndGradualLabelShareABaseline() throws {
+        var rit = TempoMapFixtures.ritardando(measures: 1)
+        rit.beginText = "rit."
+        var score = TempoMapFixtures.score(measures: 3, ramps: [(measure: 2, spanner: rit)])
+        score.systemMeasures = [
+            SystemMeasure(elements: [PositionedSystemElement(
+                position: .start, element: .tempo(Tempo(beatsPerSecond: 2, text: "Allegro")), originalStaff: Self.staff,
+            )]),
+            SystemMeasure(elements: []), SystemMeasure(elements: []),
+        ]
+        let document = Self.layout(score)
+        let tempo = try #require(Self.tempos(document).first)
+        let label = document.systems.flatMap(\.spanners).compactMap { element -> CGPoint? in
+            guard case let .spannerSegment(.gradualTempoChange, from, _, _, _, _, _, _) = element else { return nil }
+            return from
+        }
+        let line = try #require(label.first)
+        let baseline = try Self.firstBaselineY(tempo)
+        #expect(abs(baseline - line.y) < 1e-6)
+    }
+
+    @Test("a multi-line tempo keeps its first baseline on the line and stacks the rest below it")
+    func multiLineTempoStacksBelowTheFirstBaseline() {
+        let metrics = Self.metrics
+        let rich = LayoutRichText(
+            RichText(lines: [[.text("Allegro", RichTextFormat())], [.text("moderato", RichTextFormat())]]),
+            style: .tempo, metrics: metrics,
+        )
+        let origin = LayoutEngine.tempoOrigin(
+            rich: rich, side: .above, x: 40, offset: .zero, lineGeometry: .standard, metrics: metrics,
+        )
+        let runs = rich.positionedRuns(at: origin, anchor: LayoutRichText.anchor(for: .tempo))
+        #expect(runs.count == 2)
+        // The top line is at 2 sp in a measure's frame, so 2 sp above it is 0.
+        #expect(abs(runs[0].baseline.y) < 1e-6)
+        #expect(runs[1].baseline.y > runs[0].baseline.y)
+        #expect(abs(origin.x - 40) < 1e-6)
+    }
+
     @Test("a tempo element built without runs is typeset from its plain text the same way")
     func plainTempoElementIsTypesetLikeTheMarking() throws {
         let origin = CGPoint(x: 30, y: 0)
