@@ -167,6 +167,12 @@ and this project adheres to
 
 ### Fixed
 
+- **fp, pf, sfp and sfpp change between their two levels** (import-fidelity F4.4, MuseScore 4 playback — owner decision
+  c): the chord on the dynamic plays the first level (f, or p for pf), notes starting during the change take its six
+  steps, and the second level (p, pp, f) is the running level from then on. The change lasts MuseScore's
+  `velocityChangeLength` — 0.4 s, `<veloChangeSpeed>` slow 0.65 s, fast 0.25 s — at the tempo the map has where the
+  dynamic stands. A crescendo starting on one starts once the change is done, from the second level; one ending on one
+  aims for its first. Each played its stored velocity throughout before (fp 96, pf 49, sfp and sfpp 112).
 - **sf, sfz, rf, rfz, sff, sffz, sfff and sfffz accent their own chord** (import-fidelity F4.4, MuseScore 4 playback —
   owner decision c): the chord on the dynamic's tick plays the accent's level (f, ff, fff), every stroke and grace of
   it, and the level the dynamics had in force before it comes back with the next chord — as in MuseScore 4, not a

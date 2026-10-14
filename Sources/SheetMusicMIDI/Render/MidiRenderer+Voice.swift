@@ -392,6 +392,9 @@ extension MidiRenderer {
             switch dynamic.playbackRole {
             case let .level(level):
                 velocity = effectiveVelocity(level: level, instrument: instrument)
+            case let .transition(_, to):
+                // The second level is the running level; `HairpinRamps` sounds the first and the steps on the way.
+                velocity = effectiveVelocity(level: to, instrument: instrument)
             case .accent, .none:
                 // An accent sounds on its own chord through `HairpinRamps`; neither changes the running level.
                 break

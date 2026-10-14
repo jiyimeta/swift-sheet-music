@@ -17,6 +17,8 @@ struct HairpinRamp: Equatable {
         /// The chord an accent stands on: its level over that chord alone (`Dynamic.PlaybackRole.accent`). Outranks
         /// every other ramp at its ticks (`HairpinRamps.active(in:at:)`).
         case accent
+        /// One step of a two-level dynamic's change (`Dynamic.PlaybackRole.transition`).
+        case transition
     }
 
     let startTick: Int
@@ -155,7 +157,10 @@ enum HairpinRamps {
     ) -> [HairpinRamp] {
         wedges.compactMap { wedge in
             let from = wedge.endTick + 1
-            let nextMark = dynList.first { $0.tick >= from }?.tick ?? Int.max
+            // A two-level dynamic the wedge ends on moves on to its second level by itself: nothing holds after it.
+            let nextMark = dynList.first {
+                $0.tick >= from || ($0.startsTransition && $0.tick >= wedge.endTick)
+            }?.tick ?? Int.max
             // From `wedge.endTick`, not from `from`: a wedge split at its
             // checkpoints hands off to the next segment either on its own
             // end tick or one past it, and both must cancel the hold
@@ -175,7 +180,14 @@ enum HairpinRamps {
         }
     }
 
-    struct DynPoint { let tick: Int; let velocity: Int }
+    struct DynPoint {
+        let tick: Int
+        let velocity: Int
+        /// A two-level dynamic's mark: the level a wedge ending on it aims for is its first, and it moves on to its
+        /// second by itself, so no hold follows a wedge ending on it.
+        var startsTransition = false
+    }
+
     struct Pending {
         let startTick: Int
         let endTick: Int
@@ -199,7 +211,8 @@ enum HairpinRamps {
         for element in voice.elements {
             switch element {
             case let .dynamic(d):
-                walk.apply(d, atTick: runningTick, instrument: instrument)
+                let bps = tempoMap.beatsPerSecond(atMeasure: measureIdx, tickInMeasure: runningTick - measureBase)
+                walk.apply(d, atTick: runningTick, instrument: instrument, beatsPerSecond: bps, division: division)
             case let .spanner(s) where s.kind == .hairpin:
                 // Only the begin-side spanner carries a non-nil
                 // payload. End-side placeholders (`<prev>` only) have
