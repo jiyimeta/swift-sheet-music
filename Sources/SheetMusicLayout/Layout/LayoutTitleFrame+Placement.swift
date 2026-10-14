@@ -22,8 +22,9 @@ extension LayoutTitleFrame {
         /// How much of the line lies to the LEFT of `position.x`: 0 leading, 0.5 centered, 1 trailing.
         public let horizontalAnchor: CGFloat
         public let fontSize: CGFloat
-        /// The line's typeset runs, for an entry that has them (`LayoutFrameText.richText`).
-        public let richLine: LayoutRichTextLine?
+        /// The line's typeset runs, for an entry that has them (`LayoutFrameText.richText`). A renderer draws them
+        /// placed (`positionedRuns`, `decorations`).
+        let richLine: LayoutRichTextLine?
     }
 
     /// The vertical step between two lines of one plain entry. SwiftUI's `Text` resolves with the system line-height

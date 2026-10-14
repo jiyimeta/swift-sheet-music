@@ -22,7 +22,8 @@ public struct CreditTextLine: Sendable, Equatable {
     /// How much of the line lies to the left of `origin.x`: 0 leading, 0.5 centered, 1 trailing.
     public let horizontalAnchor: CGFloat
     /// The line's box in document coordinates: its measured ink width, aligned the way the renderer aligns it, and
-    /// the face's full ascent-plus-descent height below `origin.y`.
+    /// the face's full ascent-plus-descent height below `origin.y`. A formatted line (bold, a `<font size>`, a symbol)
+    /// takes the ink of the runs the renderers draw instead, so the box covers what is on the page.
     public let frame: CGRect
 
     /// The face the title block is drawn in. Title-block texts are set in the platform's system font at their
@@ -64,25 +65,52 @@ extension LayoutDocument {
     private static func creditTextLine(field: ScoreInfoWrite.Field, line: LayoutTitleFrame.PlacedLine)
         -> CreditTextLine
     {
-        let font = LayoutTitleFrame.font(size: line.fontSize)
-        let provider = FontMetrics.provider
-        // The layer renderer aligns a title line on its INK box (`ScoreLayerBuilder.textLayer`), so the box is
-        // measured the same way; an ink-less line (spaces only) falls back to its advance.
-        let width = provider.textInkBounds(text: line.text, font: font)?.width
-            ?? provider.typographicWidth(text: line.text, font: font)
-        let height = provider.ascent(font: font) + provider.descent(font: font)
-        return CreditTextLine(
+        CreditTextLine(
             field: field,
             text: line.text,
             fontSize: line.fontSize,
             origin: line.position,
             horizontalAnchor: line.horizontalAnchor,
-            frame: CGRect(
-                x: line.position.x - line.horizontalAnchor * width,
-                y: line.position.y,
-                width: width,
-                height: height,
-            ),
+            frame: richFrame(of: line) ?? plainFrame(of: line),
         )
+    }
+
+    /// A plain line's box. The layer renderer aligns a title line on its INK box (`ScoreLayerBuilder.textLayer`), so
+    /// the box is measured the same way; an ink-less line (spaces only) falls back to its advance.
+    private static func plainFrame(of line: LayoutTitleFrame.PlacedLine) -> CGRect {
+        let font = LayoutTitleFrame.font(size: line.fontSize)
+        let provider = FontMetrics.provider
+        let width = provider.textInkBounds(text: line.text, font: font)?.width
+            ?? provider.typographicWidth(text: line.text, font: font)
+        let height = provider.ascent(font: font) + provider.descent(font: font)
+        return CGRect(
+            x: line.position.x - line.horizontalAnchor * width, y: line.position.y, width: width, height: height,
+        )
+    }
+
+    /// A formatted line's box: the ink of the runs and bars the renderers draw for it (`PlacedLine.positionedRuns`,
+    /// `decorations`), over the band from the line's top edge down its own ascent and descent. A bold run, a
+    /// `<font size>` or a symbol inks wider or taller than the plain face the plain box is measured in, and the tap
+    /// target and the inline editor sit over what was drawn. `nil` for a plain line, and for one with no ink, which
+    /// falls back to the plain box.
+    private static func richFrame(of line: LayoutTitleFrame.PlacedLine) -> CGRect? {
+        guard let richLine = line.richLine else { return nil }
+        let provider = FontMetrics.provider
+        var ink: CGRect?
+        for run in line.positionedRuns {
+            guard let box = provider.textInkBounds(text: run.content.string, font: run.font) else { continue }
+            let rect = CGRect(
+                x: run.baseline.x + box.minX, y: run.baseline.y - box.maxY, width: box.width, height: box.height,
+            )
+            ink = ink.map { $0.union(rect) } ?? rect
+        }
+        for bar in line.decorations {
+            ink = ink.map { $0.union(bar.rect) } ?? bar.rect
+        }
+        guard let ink else { return nil }
+        let band = CGRect(
+            x: ink.minX, y: line.position.y, width: ink.width, height: richLine.ascent + richLine.descent,
+        )
+        return band.union(ink)
     }
 }

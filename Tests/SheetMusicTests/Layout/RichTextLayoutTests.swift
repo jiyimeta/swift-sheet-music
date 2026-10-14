@@ -363,9 +363,12 @@ struct RichTextLayoutTests {
             let text = RichText(lines: [[.text("mo", Self.plain)]])
             let lyric = LayoutRichText(text, style: .lyricsOdd, metrics: Self.metrics)
             let font = TextInkGeometry.font(for: .lyricsOdd, metrics: Self.metrics)
-            for anchor in [TextAnchorConvention.bottomLeading, .leadingCenter, .center] {
+            let kinds: [(TextAnchorConvention, LayoutRichText.ElementKind)] = [
+                (.bottomLeading, .staffText), (.leadingCenter, .jump), (.center, .lyric),
+            ]
+            for (anchor, kind) in kinds {
                 let plain = LayoutElementShape.textRect(text: "mo", font: font, origin: origin, anchor: anchor)
-                let rich = LayoutElementShape.textRect(rich: lyric, origin: origin, anchor: anchor)
+                let rich = LayoutElementShape.textRect(rich: lyric, origin: origin, kind: kind)
                 #expect(Self.same(rich, plain), "\(anchor): \(rich) vs \(plain)")
             }
             let staff = LayoutRichText(text, style: .staffText, metrics: Self.metrics)

@@ -1038,7 +1038,7 @@ extension LayoutBridge {
         let origin = CGPoint(x: CGFloat(originX), y: CGFloat(originY))
         let textOrigin = CGPoint(x: CGFloat(originX + pad), y: CGFloat(originY - pad))
         if let rich {
-            emitRichText(rich, origin: textOrigin, anchor: CGPoint(x: 0, y: 1), into: &out)
+            emitRichText(rich, origin: textOrigin, anchor: LayoutRichText.anchor(for: .rehearsalMark), into: &out)
         } else {
             emitAnchoredText(text: text, font: font, origin: textOrigin, anchor: CGPoint(x: 0, y: 1), into: &out)
         }

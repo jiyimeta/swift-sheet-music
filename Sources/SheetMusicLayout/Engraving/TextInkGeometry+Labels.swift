@@ -23,11 +23,11 @@ extension TextInkGeometry {
         case let .staffName(text, origin):
             return notationRects(text: text, role: .staffName, origin: origin, metrics: metrics)
         case let .jump(text, origin, _, richText):
-            return richRects(richText, origin: origin, role: .jump)
+            return richRects(richText, origin: origin, kind: .jump)
                 ?? notationRects(text: text, role: .jump, origin: origin, metrics: metrics)
         case let .marker(kind, text, origin, _, richText):
             guard case let .text(label) = MarkerGlyph.variant(for: kind, text: text) else { return nil }
-            return richRects(richText, origin: origin, role: .markerText)
+            return richRects(richText, origin: origin, kind: .marker)
                 ?? notationRects(text: label, role: .markerText, origin: origin, metrics: metrics)
         default: return nil
         }
@@ -41,11 +41,11 @@ extension TextInkGeometry {
         return rect(text: text, font: font, origin: origin, anchor: anchor).map { [$0] } ?? []
     }
 
-    /// A navigation label's typeset runs, placed by its role's anchor; `nil` for a plain label.
+    /// A navigation label's typeset runs, placed by its kind's anchor; `nil` for a plain label.
     private static func richRects(
-        _ rich: LayoutRichText?, origin: CGPoint, role: NotationTextStyle.Role,
+        _ rich: LayoutRichText?, origin: CGPoint, kind: LayoutRichText.ElementKind,
     ) -> [CGRect]? {
-        rich.map { $0.inkRect(at: origin, anchor: NotationTextStyle.anchorPoint(for: role)).map { [$0] } ?? [] }
+        rich.map { $0.inkRect(at: origin, anchor: LayoutRichText.anchor(for: kind)).map { [$0] } ?? [] }
     }
 
     package struct PositionedRun {

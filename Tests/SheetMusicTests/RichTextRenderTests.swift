@@ -30,20 +30,25 @@
             ),
         )
 
-        private static func score(_ text: StaffText) -> Score {
+        private static func score(_ element: SystemElement) -> Score {
             let chord = Chord(duration: .whole, notes: ChordNotes([Note(pitch: 72, tpc: 14)]))
             return Score(division: 480, parts: [Part(
                 id: "P1", instrument: Instrument(id: "voice"),
                 staves: [Staff(measures: [Measure(voices: [Voice(elements: [.chord(chord)])])])],
             )], systemMeasures: [SystemMeasure(elements: [
-                PositionedSystemElement(position: .start, element: .staffText(text), originalStaff: staff),
+                PositionedSystemElement(position: .start, element: element, originalStaff: staff),
             ])])
         }
 
         @available(macOS 15.0, *)
         private static func document(_ text: StaffText) -> LayoutDocument {
+            document(lane: .staffText(text))
+        }
+
+        @available(macOS 15.0, *)
+        private static func document(lane element: SystemElement) -> LayoutDocument {
             _ = BravuraFont.register
-            return LayoutEngine.layout(score: score(text), options: ScoreViewOptions(), availableWidth: 800)
+            return LayoutEngine.layout(score: score(element), options: ScoreViewOptions(), availableWidth: 800)
         }
 
         private static func staffText(in document: LayoutDocument) throws -> LayoutElement {
@@ -151,6 +156,25 @@
                 if case .jump(_, _, _, .some) = element { true } else { false }
             }
             try Self.expectDrawnInk(found.element, metrics: found.metrics)
+        }
+
+        /// The two model elements that print as staff text: their runs reach the layer as a staff text's do.
+        @available(macOS 15.0, *)
+        @Test("the CALayer swing marking and instrument change draw their runs where layout measured the ink")
+        func swingAndInstrumentChangeLayersMatchInk() throws {
+            let lanes: [SystemElement] = [
+                .swing(Swing(text: "Swing ", preservedTextMarkup: RichTextElementKindTests.swingMarkup)),
+                .instrumentChange(InstrumentChange(
+                    text: "To Flute", preservedTextMarkup: RichTextElementKindTests.changeMarkup,
+                )),
+            ]
+            for lane in lanes {
+                let document = Self.document(lane: lane)
+                let element = try Self.staffText(in: document)
+                let carriesRuns = if case .staffText(_, _, _, _, _, _, _, _, .some) = element { true } else { false }
+                #expect(carriesRuns, "\(lane) laid out without its runs")
+                try Self.expectDrawnInk(element, metrics: document.metrics)
+            }
         }
 
         @available(macOS 15.0, *)

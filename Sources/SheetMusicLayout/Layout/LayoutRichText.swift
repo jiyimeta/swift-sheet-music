@@ -25,13 +25,13 @@ public struct LayoutRichTextRun: Sendable, Equatable {
     /// does for plain text (`TextFontMapping`, `AppleFontMetricsProvider.renderingFont(for:)`).
     public let font: LayoutFont
     /// Pen position from the start of the line, in points.
-    public let x: CGFloat
+    let x: CGFloat
     /// Typographic advance, in points.
-    public let advance: CGFloat
+    let advance: CGFloat
     /// Y-down offset of the run's baseline from its line's: positive for a subscript, negative for a superscript.
-    public let baselineShift: CGFloat
-    public let underline: Bool
-    public let strike: Bool
+    let baselineShift: CGFloat
+    let underline: Bool
+    let strike: Bool
 }
 
 /// One line of a `LayoutRichText`.
@@ -48,7 +48,7 @@ public struct LayoutRichTextLine: Sendable, Equatable {
     public let descent: CGFloat
 
     /// The runs placed with the line's pen start at `leftX` and its baseline at `baselineY`.
-    public func positionedRuns(leftX: CGFloat, baselineY: CGFloat) -> [LayoutRichTextPositionedRun] {
+    func positionedRuns(leftX: CGFloat, baselineY: CGFloat) -> [LayoutRichTextPositionedRun] {
         runs.map { run in
             LayoutRichTextPositionedRun(
                 content: run.content, font: run.font,
@@ -58,7 +58,7 @@ public struct LayoutRichTextLine: Sendable, Equatable {
     }
 
     /// The underline and strike-through bars for the same placement.
-    public func decorations(leftX: CGFloat, baselineY: CGFloat) -> [LayoutRichTextDecoration] {
+    func decorations(leftX: CGFloat, baselineY: CGFloat) -> [LayoutRichTextDecoration] {
         var result: [LayoutRichTextDecoration] = []
         for run in runs where run.advance > 0 && (run.underline || run.strike) {
             let size = run.font.pointSize
@@ -115,13 +115,14 @@ public struct LayoutRichTextDecoration: Sendable, Equatable {
 /// position (`Sid::staffTextAlign` / `staffTextPosition`, `engraving/style/styledef.cpp:1316, 1328`; lyrics at 109,
 /// 116), and the anchor is where this layout hangs the text off its reference point. Where a style's alignment and
 /// position differ (tempo, the marker roles) a multi-line text aligns its lines by position, not by MuseScore's
-/// alignment; a one-line text, the common case, is unaffected. A consumer places the block with
-/// `blockOrigin(at:anchor:)`, the rule `TextInkGeometry.baselineOrigin` applies to plain text: horizontally by ink,
-/// vertically by the typographic stack.
+/// alignment; a one-line text, the common case, is unaffected. A consumer draws the block with
+/// `positionedRuns(at:anchor:)` and `decorations(at:anchor:)`, at the anchor its element kind names
+/// (`anchor(for:)`); both place it by `blockOrigin(at:anchor:)`, the rule `TextInkGeometry.baselineOrigin` applies to
+/// plain text: horizontally by ink, vertically by the typographic stack.
 public struct LayoutRichText: Sendable, Equatable {
     public let lines: [LayoutRichTextLine]
     /// The gap between consecutive lines, from the element's own font.
-    public let leading: CGFloat
+    let leading: CGFloat
     /// Every run's ink and every decoration, block-local, `nil` when nothing inks. Whatever the alignment, its `minX`
     /// is 0 and its width the longest line's ink.
     public let ink: CGRect?
@@ -153,11 +154,12 @@ public struct LayoutRichText: Sendable, Equatable {
     /// The block's top-left — the left edge of its ink, the top of its line stack — for an element whose `origin` names
     /// the point `anchor` divides the block at (UnitPoint convention: `(0, 1)` bottom-leading, `(0.5, 0.5)` center).
     /// A line's pen start sits its own ink's `minX` before that ink (`positionedRuns(at:anchor:)`).
-    public func blockOrigin(at origin: CGPoint, anchor: CGPoint) -> CGPoint {
+    func blockOrigin(at origin: CGPoint, anchor: CGPoint) -> CGPoint {
         CGPoint(x: origin.x - anchor.x * (ink?.width ?? 0), y: origin.y - anchor.y * size.height)
     }
 
-    public func inkRect(at origin: CGPoint, anchor: CGPoint) -> CGRect? {
+    /// `ink` placed on the page by the same rule as the runs.
+    func inkRect(at origin: CGPoint, anchor: CGPoint) -> CGRect? {
         guard let ink else { return nil }
         let block = blockOrigin(at: origin, anchor: anchor)
         return ink.offsetBy(dx: block.x, dy: block.y)
@@ -221,5 +223,34 @@ public struct LayoutRichText: Sendable, Equatable {
             }
         }
         return result
+    }
+}
+
+extension LayoutRichText {
+    /// The layout elements whose runs are placed off an origin by an anchor. A swing marking and an instrument change
+    /// lay out as `.staffText`; a title line is placed per line instead (`LayoutTitleFrame.PlacedLine`).
+    package enum ElementKind {
+        case staffText
+        case lyric
+        /// Placed at the mark's origin moved in by the frame's padding (`RehearsalMarkFrame.paddingSp`).
+        case rehearsalMark
+        /// A text marker's runs; a segno or coda draws its glyph instead (`MarkerGlyph.variant`).
+        case marker
+        case jump
+    }
+
+    /// The point of the block an element's `origin` names, for `blockOrigin(at:anchor:)` and everything placed by it
+    /// (UnitPoint convention: `(0, 1)` bottom-leading, `(0.5, 0.5)` center) — each kind's plain-text anchor.
+    ///
+    /// **The one statement of where an element hangs its runs.** Layout's ink rects and skyline boxes, the Apple
+    /// renderers (layer tree and Canvas) and the draw-program bridge all place runs by it, so where a text is measured
+    /// and where it is drawn cannot part.
+    package static func anchor(for kind: ElementKind) -> CGPoint {
+        switch kind {
+        case .staffText, .rehearsalMark: CGPoint(x: 0, y: 1)
+        case .lyric: CGPoint(x: 0.5, y: 0.5)
+        case .marker: NotationTextStyle.anchorPoint(for: .markerText)
+        case .jump: NotationTextStyle.anchorPoint(for: .jump)
+        }
     }
 }

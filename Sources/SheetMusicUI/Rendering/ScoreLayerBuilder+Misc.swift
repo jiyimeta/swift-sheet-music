@@ -276,7 +276,7 @@ extension ScoreLayerBuilder {
         case let .text(label):
             let layer = if let richText {
                 richTextLayer(
-                    richText, at: origin, anchor: NotationTextStyle.anchorPoint(for: .markerText),
+                    richText, at: origin, anchor: LayoutRichText.anchor(for: .marker),
                     color: inkColor, height: height,
                 )
             } else {
@@ -320,7 +320,10 @@ extension ScoreLayerBuilder {
 
         var built: [CAShapeLayer] = []
         let label: CAShapeLayer? = if let richText {
-            richTextLayer(richText, at: textOrigin, anchor: CGPoint(x: 0, y: 1), color: color, height: height)
+            richTextLayer(
+                richText, at: textOrigin, anchor: LayoutRichText.anchor(for: .rehearsalMark), color: color,
+                height: height,
+            )
         } else {
             textLayer(
                 text: text, at: textOrigin,

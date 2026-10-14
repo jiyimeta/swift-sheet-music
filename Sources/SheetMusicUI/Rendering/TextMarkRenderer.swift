@@ -79,7 +79,8 @@ enum TextMarkRenderer {
     ) {
         if let richText {
             TextInkRenderer.drawRich(
-                context: &context, richText: richText, origin: origin, anchor: CGPoint(x: 0.5, y: 0.5), color: color,
+                context: &context, richText: richText, origin: origin, anchor: LayoutRichText.anchor(for: .lyric),
+                color: color,
             )
             return
         }

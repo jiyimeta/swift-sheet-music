@@ -43,7 +43,7 @@ enum RehearsalMarkRenderer {
         if let richText {
             TextInkRenderer.drawRich(
                 context: &context, richText: richText, origin: textOrigin,
-                anchor: CGPoint(x: 0, y: 1), color: textColor,
+                anchor: LayoutRichText.anchor(for: .rehearsalMark), color: textColor,
             )
         } else {
             TextInkRenderer.draw(

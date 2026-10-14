@@ -598,7 +598,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 if let richText {
                     emitRichText(
                         richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
-                        anchor: TextInkPoint(x: 0.5, y: 0.5), into: &out,
+                        anchor: LayoutRichText.anchor(for: .lyric), into: &out,
                     )
                 } else {
                     emitRoleText(
@@ -638,7 +638,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             if let richText {
                 emitRichText(
                     richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
-                    anchor: TextInkPoint(x: 0, y: 1), into: &out,
+                    anchor: LayoutRichText.anchor(for: .staffText), into: &out,
                 )
             } else {
                 emitRoleText(
@@ -692,7 +692,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 if let richText {
                     emitRichText(
                         richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
-                        anchor: NotationTextStyle.anchorPoint(for: .markerText), into: &out,
+                        anchor: LayoutRichText.anchor(for: .marker), into: &out,
                     )
                 } else {
                     encodeNotationText(
@@ -722,7 +722,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             if let richText {
                 emitRichText(
                     richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
-                    anchor: NotationTextStyle.anchorPoint(for: .jump), into: &out,
+                    anchor: LayoutRichText.anchor(for: .jump), into: &out,
                 )
             } else {
                 encodeNotationText(

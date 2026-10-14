@@ -21,7 +21,8 @@ enum StaffTextRenderer {
             ?? .primary
         if let richText {
             TextInkRenderer.drawRich(
-                context: &context, richText: richText, origin: origin, anchor: CGPoint(x: 0, y: 1), color: swiftUIColor,
+                context: &context, richText: richText, origin: origin, anchor: LayoutRichText.anchor(for: .staffText),
+                color: swiftUIColor,
             )
             return
         }

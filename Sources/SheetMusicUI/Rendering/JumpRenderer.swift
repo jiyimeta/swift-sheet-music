@@ -13,7 +13,7 @@ enum JumpRenderer {
         if let richText {
             TextInkRenderer.drawRich(
                 context: &context, richText: richText, origin: origin,
-                anchor: NotationTextStyle.anchorPoint(for: .jump), color: .primary,
+                anchor: LayoutRichText.anchor(for: .jump), color: .primary,
             )
             return
         }

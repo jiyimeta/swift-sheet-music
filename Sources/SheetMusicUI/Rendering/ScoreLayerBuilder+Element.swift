@@ -152,7 +152,7 @@ extension ScoreLayerBuilder {
             let layer: CAShapeLayer?
             if let richText {
                 layer = richTextLayer(
-                    richText, at: shift(p), anchor: CGPoint(x: 0.5, y: 0.5), color: ink, height: height,
+                    richText, at: shift(p), anchor: LayoutRichText.anchor(for: .lyric), color: ink, height: height,
                 )
             } else {
                 let style = ResolvedTextStyle.resolve(.lyricsOdd, overrides: properties, metrics: metrics)
@@ -277,7 +277,7 @@ extension ScoreLayerBuilder {
         case let .jump(text, p, _, richText):
             let layer: CAShapeLayer? = if let richText {
                 richTextLayer(
-                    richText, at: shift(p), anchor: NotationTextStyle.anchorPoint(for: .jump),
+                    richText, at: shift(p), anchor: LayoutRichText.anchor(for: .jump),
                     color: Self.inkColor, height: height,
                 )
             } else if !text.isEmpty {
@@ -310,7 +310,9 @@ extension ScoreLayerBuilder {
             let ink = color.map(scoreColorToCGColor) ?? Self.inkColor
             let layer: CAShapeLayer?
             if let richText {
-                layer = richTextLayer(richText, at: shift(p), anchor: CGPoint(x: 0, y: 1), color: ink, height: height)
+                layer = richTextLayer(
+                    richText, at: shift(p), anchor: LayoutRichText.anchor(for: .staffText), color: ink, height: height,
+                )
             } else if !text.isEmpty {
                 let resolvedStyle = ResolvedTextStyle.resolve(style, overrides: properties, metrics: metrics)
                 layer = textLayer(

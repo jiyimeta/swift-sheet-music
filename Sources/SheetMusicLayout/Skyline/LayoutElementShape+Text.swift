@@ -181,7 +181,7 @@ extension LayoutElementShape {
                 kind: kind, metrics: metrics, rich: richText,
             )]
         case let .staffText(text, origin, _, style, _, _, properties, _, richText):
-            return [richText.map { textRect(rich: $0, origin: origin, anchor: .bottomLeading) } ?? textRect(
+            return [richText.map { textRect(rich: $0, origin: origin, kind: .staffText) } ?? textRect(
                 text: text, font: TextInkGeometry.font(for: style, overrides: properties, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
             )]
@@ -190,11 +190,8 @@ extension LayoutElementShape {
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
             )]
-        case let .marker(_, text, origin, _, richText), let .jump(text, origin, _, richText):
-            return [richText.map { textRect(rich: $0, origin: origin, anchor: .leadingCenter) } ?? textRect(
-                text: text, font: font(for: kind, metrics: metrics),
-                origin: origin, anchor: .leadingCenter,
-            )]
+        case .marker, .jump:
+            return navigationLabelRect(for: element, kind: kind, metrics: metrics).map { [$0] } ?? []
         case let .rehearsalMark(text, origin, frame, _, _, _, properties, richText):
             return [rehearsalMarkRect(
                 text: text, origin: origin, frame: frame, properties: properties,
@@ -234,7 +231,7 @@ extension LayoutElementShape {
     ) -> CGRect {
         switch markKind {
         case let .lyrics(_, _, _, _, properties):
-            if let rich { return textRect(rich: rich, origin: origin, anchor: .center) }
+            if let rich { return textRect(rich: rich, origin: origin, kind: .lyric) }
             return textRect(
                 text: text,
                 font: properties.hasFontOverride
@@ -362,7 +359,7 @@ extension LayoutElementShape {
         let f = styleFont(.rehearsalMark, overrides: properties, sp: metrics.sp)
         let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)
         let innerOrigin = CGPoint(x: origin.x + pad, y: origin.y - pad)
-        let inner = rich.map { textRect(rich: $0, origin: innerOrigin, anchor: .bottomLeading) }
+        let inner = rich.map { textRect(rich: $0, origin: innerOrigin, kind: .rehearsalMark) }
             ?? textRect(text: text, font: f, origin: innerOrigin, anchor: .bottomLeading)
         guard frame != .none else { return inner }
         let stroke = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp) / 2

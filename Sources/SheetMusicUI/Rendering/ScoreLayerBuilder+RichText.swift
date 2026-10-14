@@ -43,7 +43,7 @@ extension ScoreLayerBuilder {
     }
 
     /// A text element's runs placed at `origin` by `anchor` (`LayoutRichText.positionedRuns(at:anchor:)`). The anchor
-    /// is the one layout measured the element's ink with (`TextInkGeometry`).
+    /// is the element kind's `LayoutRichText.anchor(for:)`, the one layout measured the element's ink with.
     static func richTextPath(_ richText: LayoutRichText, origin: CGPoint, anchor: CGPoint) -> CGPath? {
         richTextPath(
             runs: richText.positionedRuns(at: origin, anchor: anchor),

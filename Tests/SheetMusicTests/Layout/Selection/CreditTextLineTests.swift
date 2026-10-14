@@ -90,6 +90,36 @@ struct CreditTextLineTests {
         #expect(document.creditTextLine(at: CGPoint(x: -100, y: -100)) == nil)
     }
 
+    /// A double-click lands on what the renderer drew, and a bold title draws its runs in the bold face, which inks
+    /// wider than the regular face the plain box is measured in. Relations only: the faces differ per provider.
+    @Test("a bold title's box is its runs' ink: wider than its plain twin's, and holding every run")
+    func boldTitleBoxIsItsRunsInk() throws {
+        let bold = PreservedTextMarkup(
+            content: [.element(.init(name: "b", content: [.characters("Sonata")]))], derivedText: "Sonata",
+        )
+        let document = Self.layout(Self.score(texts: [
+            FrameText(style: .title, text: "Sonata", preservedTextMarkup: bold),
+        ]))
+        let rich = try #require(document.creditTextLine(for: .title))
+        let plain = try #require(
+            Self.layout(Self.score(texts: [FrameText(style: .title, text: "Sonata")])).creditTextLine(for: .title),
+        )
+        #expect(rich.text == plain.text)
+        #expect(rich.frame.width > plain.frame.width)
+
+        let line = try #require(document.titleFrame?.placedLines().first { $0.entryIndex == 0 })
+        #expect(line.richLine?.runs.map(\.font.weight) == [.bold])
+        #expect(!line.positionedRuns.isEmpty)
+        let slack: CGFloat = 1e-6
+        for run in line.positionedRuns {
+            let box = try #require(FontMetrics.provider.textInkBounds(text: run.content.string, font: run.font))
+            let left = run.baseline.x + box.minX
+            let top = run.baseline.y - box.maxY
+            #expect(rich.frame.minX <= left + slack && left + box.width <= rich.frame.maxX + slack)
+            #expect(rich.frame.minY <= top + slack && top + box.height <= rich.frame.maxY + slack)
+        }
+    }
+
     @Test("a document with no title block offers nothing")
     func noTitleBlock() {
         var score = Self.score(texts: [])

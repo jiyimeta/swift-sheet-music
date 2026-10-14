@@ -69,7 +69,7 @@ public enum TextInkGeometry {
     ) -> RehearsalMarkFrame.Shape {
         let pad = RehearsalMarkFrame.paddingSp(sp: sp)
         let inkOrigin = CGPoint(x: origin.x + pad, y: origin.y - pad)
-        let ink = rich.map { $0.inkRect(at: inkOrigin, anchor: CGPoint(x: 0, y: 1)) }
+        let ink = rich.map { $0.inkRect(at: inkOrigin, anchor: LayoutRichText.anchor(for: .rehearsalMark)) }
             ?? rect(text: text, font: font, origin: inkOrigin, anchor: CGPoint(x: 0, y: 1))
         let box = rich.map { rehearsalBox(size: $0.size, font: font, origin: origin, sp: sp) }
             ?? rehearsalBox(text: text, font: font, origin: origin, sp: sp)
@@ -84,7 +84,7 @@ public enum TextInkGeometry {
         switch element {
         case let .textMark(.lyrics(_, _, _, _, properties), text, origin, richText):
             if let richText {
-                return richText.inkRect(at: origin, anchor: CGPoint(x: 0.5, y: 0.5)).map { [$0] } ?? []
+                return richText.inkRect(at: origin, anchor: LayoutRichText.anchor(for: .lyric)).map { [$0] } ?? []
             }
             return rect(
                 text: text,
@@ -94,7 +94,7 @@ public enum TextInkGeometry {
             ).map { [$0] } ?? []
         case let .staffText(text, origin, _, style, _, _, properties, _, richText):
             if let richText {
-                return richText.inkRect(at: origin, anchor: CGPoint(x: 0, y: 1)).map { [$0] } ?? []
+                return richText.inkRect(at: origin, anchor: LayoutRichText.anchor(for: .staffText)).map { [$0] } ?? []
             }
             return rect(
                 text: text,
@@ -120,7 +120,7 @@ public enum TextInkGeometry {
         let font = font(for: .rehearsalMark, overrides: properties, metrics: metrics)
         let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)
         let inkOrigin = CGPoint(x: origin.x + pad, y: origin.y - pad)
-        let ink = rich.map { $0.inkRect(at: inkOrigin, anchor: CGPoint(x: 0, y: 1)) }
+        let ink = rich.map { $0.inkRect(at: inkOrigin, anchor: LayoutRichText.anchor(for: .rehearsalMark)) }
             ?? rect(text: text, font: font, origin: inkOrigin, anchor: CGPoint(x: 0, y: 1))
         var result = ink.map { [$0] } ?? []
         switch rehearsalFrame(text: text, font: font, origin: origin, sp: metrics.sp, frame: frame, rich: rich) {

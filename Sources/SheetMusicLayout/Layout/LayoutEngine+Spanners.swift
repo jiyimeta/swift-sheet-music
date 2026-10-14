@@ -867,7 +867,7 @@ extension LayoutEngine {
     /// source overrode the style default, and otherwise fall back to
     /// MuseScore's own default text for that kind.
     static func layoutLabel(anchor: SpannerAnchor) -> String {
-        // `<beginText>` is MuseScore xml text held as a string (`Spanner.beginRichText`); the label is its plain
+        // `<beginText>` is MuseScore xml text held as a string (`RichText(xmlText:)`); the label is its plain
         // projection, never the tags.
         let authored = anchor.beginText.map { RichText(xmlText: $0).plainText }
         switch anchor.kind {

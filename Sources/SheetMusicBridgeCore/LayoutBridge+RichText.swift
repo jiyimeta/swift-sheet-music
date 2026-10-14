@@ -31,8 +31,8 @@ extension LayoutBridge {
         }
     }
 
-    /// A text element's runs placed at `origin` by `anchor`, with the same per-kind anchors the Apple renderers draw
-    /// them at (`LayoutRichText.positionedRuns(at:anchor:)`).
+    /// A text element's runs placed at `origin` by `anchor` (`LayoutRichText.positionedRuns(at:anchor:)`) — the element
+    /// kind's `LayoutRichText.anchor(for:)`, which the Apple renderers draw by and layout measures by.
     static func emitRichText(
         _ richText: LayoutRichText, origin: TextInkPoint, anchor: TextInkPoint, into out: inout [DrawCommand],
     ) {

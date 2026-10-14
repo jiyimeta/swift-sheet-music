@@ -1,5 +1,5 @@
 import Foundation
-import SheetMusicCore
+@testable import SheetMusicCore
 @testable import SheetMusicLayout
 @testable import SheetMusicMSCX
 @testable import SheetMusicXMLTools

@@ -23,7 +23,7 @@ enum MarkerRenderer {
             if let richText {
                 TextInkRenderer.drawRich(
                     context: &context, richText: richText, origin: origin,
-                    anchor: NotationTextStyle.anchorPoint(for: .markerText), color: .primary,
+                    anchor: LayoutRichText.anchor(for: .marker), color: .primary,
                 )
                 return
             }
