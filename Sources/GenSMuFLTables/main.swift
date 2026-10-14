@@ -6,6 +6,7 @@
 //   SMuFLCodepoints+Accidentals.swift (0xE260 … 0xE9FF)
 //   SMuFLCodepoints+Lines.swift       (>= 0xEA00)
 //   SMuFLCodepoints+ByName.swift      (byName resolver: subset names + Tools/smufl/glyphnames-text-symbols.json)
+// Names the subset does not carry live in SMuFLCodepoints+HandWritten.swift, which the generator never touches.
 import Foundation
 
 // MARK: - Paths (derived from #filePath so the binary is relocatable)

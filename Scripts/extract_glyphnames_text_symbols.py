@@ -24,17 +24,24 @@ PREFIXES = (
     "fretboard",           # fretboard diagrams
     "figbass",             # figured bass
     "artic",               # articulation names a <Symbol> carries
+    "text",                # tempo / swing text: textBlackNote*, textCont*Beam*, textTuplet*, textAugmentationDot, textTie
 )
 
-src, out = sys.argv[1], sys.argv[2]
-with open(src) as handle:
-    data = json.load(handle)
-subset = {
-    name: int(value["codepoint"][2:], 16)
-    for name, value in data.items()
-    if name.startswith(PREFIXES)
-}
-with open(out, "w") as handle:
-    json.dump(subset, handle, indent=0, sort_keys=True)
-    handle.write("\n")
-print(f"{len(subset)} glyphs")
+
+def main() -> None:
+    src, out = sys.argv[1], sys.argv[2]
+    with open(src, encoding="utf-8") as handle:
+        data = json.load(handle)
+    subset = {
+        name: int(value["codepoint"][2:], 16)
+        for name, value in data.items()
+        if name.startswith(PREFIXES)
+    }
+    with open(out, "w", encoding="utf-8") as handle:
+        json.dump(subset, handle, indent=0, sort_keys=True)
+        handle.write("\n")
+    print(f"{len(subset)} glyphs")
+
+
+if __name__ == "__main__":
+    main()

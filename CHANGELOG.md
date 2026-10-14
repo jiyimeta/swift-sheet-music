@@ -19,9 +19,12 @@ and this project adheres to
   `Fingering`, `Sticking`, `Capo`, `StringTunings`, `Marker`, `Jump`, `Lyric`, `FrameText`, `Glissando` — the formatted
   text its preserved markup describes, while the plain `text` is unedited; `nil` otherwise.
 - **`SMuFLCodepoint.byName(_:)` resolves the SMuFL names MuseScore writes inside text** — dynamics, metronome notes,
-  the segno/coda, fermata, caesura/breath, keyboard and harp pedal, fretboard, figured-bass and articulation families
-  (209 names, `Tools/smufl/glyphnames-text-symbols.json`, extracted by `Scripts/extract_glyphnames_text_symbols.py`).
+  the segno/coda, fermata, caesura/breath, keyboard and harp pedal, fretboard, figured-bass and articulation families,
+  and the `text*` family (tempo and swing text notes, beams and tuplets)
+  (236 names, `Tools/smufl/glyphnames-text-symbols.json`, extracted by `Scripts/extract_glyphnames_text_symbols.py`).
   `GenSMuFLTables` merges them into the by-name table only; it no longer writes `import Foundation` into the tables.
+  The 14 hand-written constants the subset lacks (trill sigils, ottava family) now live in
+  `SMuFLCodepoints+HandWritten.swift`, which the generator never touches.
 - **`LayoutRichText`** (SheetMusicLayout) — a `RichText` typeset once at layout time, as `LayoutHarmony` is: each run's
   font (the element's font with the run's bold / italic / face / size / script applied, or Bravura at the style's
   musical-symbol size for a `<sym>`), pen position and advance; each line's metrics; the ink and the underline /

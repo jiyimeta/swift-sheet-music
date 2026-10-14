@@ -10,10 +10,15 @@ struct SMuFLTextSymbolNameTests {
         ("dynamicForte", 0xE522), ("dynamicPiano", 0xE520), ("metNoteQuarterUp", 0xECA5),
         ("metAugmentationDot", 0xECB7), ("fermataAbove", 0xE4C0), ("caesura", 0xE4D1),
         ("harpPedalRaised", 0xE680), ("fretboard3String", 0xE850), ("figbass0", 0xEA50),
-        ("articAccentAbove", 0xE4A0),
+        ("articAccentAbove", 0xE4A0), ("textBlackNoteShortStem", 0xE1F0),
     ])
     func resolvesByName(name: String, codepoint: UInt32) {
         #expect(SMuFLCodepoint.byName(name) == codepoint)
+    }
+
+    @Test("a name in no table resolves to nil")
+    func unknownNameIsNil() {
+        #expect(SMuFLCodepoint.byName("notASymbolName") == nil)
     }
 
     @Test("a name that is also a hand-written constant resolves to the same codepoint")
