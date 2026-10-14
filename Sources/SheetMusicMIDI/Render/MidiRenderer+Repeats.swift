@@ -20,6 +20,10 @@ extension MidiRenderer {
     /// stripped, because those elements live only on the top staff
     /// and must be handled by the score-global plan
     /// (`MidiRenderer.render(score:)`), never per staff.
+    ///
+    /// Test-only: a bare measure list carries no tempo lane, so the navigation behind this reads an EMPTY tempo map
+    /// and lengthens a breath's pause at 120 BPM. `render(score:)` builds its plan from `ScoreNavigation(score:)`
+    /// instead, which reads the score's map; a caller that has a `Score` must never use this entry point.
     static func playbackPlan(for measures: [Measure], division: Int) -> [PlaybackEntry] {
         RepeatUnwinder.plan(
             navigation: ScoreNavigation(staffMeasures: measures, division: division),
@@ -36,13 +40,13 @@ extension MidiRenderer {
     /// Callers that may see non-4/4 measures must pass the effective
     /// duration; the 4/4 default is only safe when the measure contains no
     /// `.measure` rests. `measureIndex` and `tempoMap` place a breath's pause at the tempo where it
-    /// stands; their defaults are 120 BPM.
+    /// stands; both are required so no caller can fall back to 120 BPM by omission.
     static func measureTicks(
         measure: Measure,
         division: Int,
         measureDuration: Fraction = Fraction(numerator: 4, denominator: 4),
-        measureIndex: Int = 0,
-        tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
+        measureIndex: Int,
+        tempoMap: ResolvedTempoMap,
     ) -> Int {
         guard let voice = measure.voices.first else { return 4 * division }
         var ticks = 0

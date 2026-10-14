@@ -75,7 +75,7 @@ extension MidiRenderer {
     /// `originalStaff` (which falls back to the canonical staff
     /// (0,0) when `nil`).
     static func collectSwingMaps(
-        score: Score, division: Int,
+        score: Score, division: Int, tempoMap: ResolvedTempoMap,
     ) -> [SwingMap] {
         let initial = SwingState(style: score.style, division: division)
         let allStaves = score.allStaves
@@ -90,7 +90,6 @@ extension MidiRenderer {
         let referenceMeasures = allStaves.first?.staff.measures ?? []
         var measureBases: [Int] = []
         let measureDurations = referenceMeasures.effectiveMeasureDurations()
-        let tempoMap = score.resolvedTempoMap()
         do {
             var acc = 0
             for (i, m) in referenceMeasures.enumerated() {

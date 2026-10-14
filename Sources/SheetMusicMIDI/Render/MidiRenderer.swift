@@ -27,8 +27,10 @@ public enum MidiRenderer {
         // (score.cpp:6081): SystemText-flagged swing markers fan out to
         // every staff so the whole system swings; staff-flagged ones
         // stay on their owning staff.
+        // The tempo map, built once for the whole render: every bar-length walk below reads it.
+        let tempoMap = score.resolvedTempoMap()
         let swingMaps = collectSwingMaps(
-            score: score, division: score.division,
+            score: score, division: score.division, tempoMap: tempoMap,
         )
         // ONE score-global unroll plan shared by every staff.
         // Jumps/markers are written only on the top staff (MuseScore
@@ -38,9 +40,8 @@ public enum MidiRenderer {
         // spans are globally identical, so one plan is consistent
         // for all. Mirrors RepeatList being a Score-level singleton
         // in MuseScore (masterscore's repeatList()).
-        let navigation = ScoreNavigation(score: score)
+        let navigation = ScoreNavigation(score: score, tempoMap: tempoMap)
         let plan = RepeatUnwinder.plan(navigation: navigation)
-        let tempoMap = score.resolvedTempoMap()
         // ONE score-global set of fermata tempo bookends, emitted into the first track only.
         // Tempo metas are score-global once a sequencer merges the tracks, so a per-staff build was
         // wrong twice: it duplicated every system fermata's pair across staves, and — because
@@ -51,7 +52,7 @@ public enum MidiRenderer {
         // Bookends are collected at original (pre-repeat) ticks; projecting them through
         // `playbackPlan` makes each repeat iteration re-fire its own pair, so a fermata inside
         // `<startRepeat>…<endRepeat>` holds on every take rather than only the first.
-        let bookends = fermataBookendEvents(score: score)
+        let bookends = fermataBookendEvents(score: score, tempoMap: tempoMap)
         let canonicalLayout = measureBaseLayout(
             measures: score.parts.first?.staves.first?.measures ?? [], division: score.division,
             tempoMap: tempoMap,
@@ -368,7 +369,7 @@ public enum MidiRenderer {
     /// each measure's effective duration so `.measure` rests get the
     /// correct concrete fraction before tick computation.
     private static func measureBaseLayout(
-        measures: [Measure], division: Int, tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
+        measures: [Measure], division: Int, tempoMap: ResolvedTempoMap,
     ) -> (bases: [Int], spans: [Int]) {
         var bases: [Int] = []
         var spans: [Int] = []

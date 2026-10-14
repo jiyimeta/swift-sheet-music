@@ -16,7 +16,7 @@ extension MidiRenderer {
     public static func swingOnsetShifts(score: Score) -> [SheetMusicCore.ScoreItemID: Int] {
         let division = score.division
         let tempoMap = score.resolvedTempoMap()
-        let swingMaps = collectSwingMaps(score: score, division: division)
+        let swingMaps = collectSwingMaps(score: score, division: division, tempoMap: tempoMap)
         guard swingMaps.contains(where: { $0.initial.isOn || $0.entries.contains { $0.state.isOn } })
         else { return [:] }
 

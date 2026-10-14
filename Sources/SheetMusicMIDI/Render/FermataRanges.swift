@@ -87,7 +87,7 @@ struct TempoTimeline: Equatable {
         measures: [Measure],
         systemMeasures: [SystemMeasure],
         division: Int,
-        tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
+        tempoMap: ResolvedTempoMap,
     ) -> TempoTimeline {
         var entries: [(tick: Int, bps: Double)] = [(0, 2.0)]
         var measureBases: [Int] = []

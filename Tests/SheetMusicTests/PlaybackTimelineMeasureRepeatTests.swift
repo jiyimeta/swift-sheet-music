@@ -62,6 +62,7 @@ struct PlaybackTimelineMeasureRepeatTests {
                 measureDuration: i < durations.count
                     ? durations[i]
                     : Fraction(numerator: 4, denominator: 4),
+                measureIndex: i, tempoMap: score.resolvedTempoMap(),
             )
         }
     }

@@ -155,7 +155,7 @@ struct FermataRangesTests {
     @Test func tempoTimelineDefaultIsTwoBps() {
         let s = staff([[chord(60)]])
         let timeline = TempoTimeline.build(
-            measures: s.measures, systemMeasures: [], division: 480,
+            measures: s.measures, systemMeasures: [], division: 480, tempoMap: ResolvedTempoMap(),
         )
         #expect(timeline.bps(at: 0) == 2.0)
         #expect(timeline.bps(at: 1000) == 2.0)
@@ -182,6 +182,7 @@ struct FermataRangesTests {
             measures: s.measures,
             systemMeasures: systemMeasures,
             division: 480,
+            tempoMap: ResolvedTempoMap(),
         )
         #expect(timeline.bps(at: 0) == 2.0)
         #expect(timeline.bps(at: 479) == 2.0)

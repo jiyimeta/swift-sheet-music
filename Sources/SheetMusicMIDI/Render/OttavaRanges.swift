@@ -32,7 +32,7 @@ enum OttavaRanges {
         voiceIndex: Int,
         staff: Staff,
         division: Int,
-        tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
+        tempoMap: ResolvedTempoMap,
     ) -> [OttavaRange] {
         var ranges: [OttavaRange] = []
         var measureBase = 0

@@ -71,14 +71,15 @@ struct ScoreNavigation: Equatable {
 
 extension ScoreNavigation {
     /// Score-global view: union of every staff's facts, canonical
-    /// spans from `parts[0].staves[0]`.
-    init(score: Score) {
+    /// spans from `parts[0].staves[0]`. `tempoMap` is the score's own map (`Score.resolvedTempoMap()`); a caller that
+    /// already built it passes it down so the render builds it once, and `nil` builds it here.
+    init(score: Score, tempoMap: ResolvedTempoMap? = nil) {
         let staves = score.allStaves.map(\.staff.measures)
         self.init(
             staves: staves,
             canonicalMeasures: staves.first ?? [],
             division: score.division,
-            tempoMap: score.resolvedTempoMap(),
+            tempoMap: tempoMap ?? score.resolvedTempoMap(),
         )
     }
 
@@ -86,7 +87,8 @@ extension ScoreNavigation {
     /// the compatibility shape behind
     /// `MidiRenderer.playbackPlan(for:division:)`. Repeats and voltas
     /// replicate across staves, so a per-staff plan built from this
-    /// stays correct for legacy callers.
+    /// stays correct for legacy callers. Test-only: it has no `Score`, so it reads an empty tempo map
+    /// (a breath's pause at 120 BPM).
     init(staffMeasures: [Measure], division: Int) {
         self.init(
             staves: [staffMeasures],
