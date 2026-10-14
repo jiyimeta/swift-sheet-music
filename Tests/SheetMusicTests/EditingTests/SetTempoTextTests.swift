@@ -72,23 +72,48 @@ struct SetTempoTextTests {
 
     @Test("a number the markup cannot reach rewrites the words and drops only the stale formatting")
     func unreachableNumberKeepsWords() throws {
-        let markup = PreservedTextMarkup(
-            content: [
-                .characters("Allegro "),
-                .element(PreservedTextMarkup.Element(name: "sym", content: [.characters("metNoteQuarterUp")])),
-                .characters(" = 1"),
-                .element(PreservedTextMarkup.Element(name: "b", content: [.characters("44")])),
-            ],
-            derivedText: "Allegro  = 144",
-        )
-        let tempo = Tempo(beatsPerSecond: 2.4, text: "Allegro  = 144", preservedTextMarkup: markup)
+        let unreachable = Self.unreachable(prefix: "Allegro ", number: "144")
+        let tempo = Tempo(beatsPerSecond: 2.4, text: unreachable.text, preservedTextMarkup: unreachable.markup)
         let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
         #expect(edited.text == "Allegro  = 132")
         #expect(edited.preservedTextMarkup == nil)
         #expect(edited.beatsPerSecond == 2.2)
     }
 
+    @Test("a number split across runs is rewritten whole, and the run that held its first digit keeps the formatting")
+    func numberSplitAcrossRunsKeepsFormatting() throws {
+        let content: [Item] = [.characters("Allegro "), Self.quarter, .characters(" = 1"), Self.bold("44")]
+        let markup = PreservedTextMarkup(content: content, derivedText: "Allegro  = 144")
+        let tempo = Tempo(beatsPerSecond: 2.4, text: "Allegro  = 144", preservedTextMarkup: markup)
+        let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
+        #expect(edited.text == "Allegro  = 132")
+        let expected: [Item] = [.characters("Allegro "), Self.quarter, .characters(" = 132"), Self.bold("")]
+        #expect(edited.preservedTextMarkup?.content == expected)
+        #expect(edited.preservedTextMarkup?.derivedText == "Allegro  = 132")
+    }
+
+    @Test("a glyph with no anchor in the text regenerates the equation from the marking instead of guessing")
+    func unanchoredEquationIsRegenerated() throws {
+        // MuseScore's normalization drops "ca." before it reads the equation; the glyph and the equals sign are then
+        // adjacent for it, but not in the text, where nothing can be anchored.
+        let tempo = Tempo(beatsPerSecond: 2, text: "Allegro \u{ECA5} ca. = 120")
+        let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
+        #expect(edited.text == nil)
+        #expect(edited.preservedTextMarkup == nil)
+        #expect(edited.followText)
+        #expect(edited.metronomeMarking?.number == "132")
+    }
+
     private typealias Item = PreservedTextMarkup.ContentItem
+
+    /// A marking whose glyph sits inside a `<b>` with its equals sign, and whose number is outside it: the classifier
+    /// reads "prefix♩ = number", but no single element list holds all of it, so the markup cannot be rewritten.
+    private static func unreachable(prefix: String, number: String) -> (markup: PreservedTextMarkup, text: String) {
+        let group = Item.element(PreservedTextMarkup.Element(name: "b", content: [quarter, .characters(" =")]))
+        let text = "\(prefix) = \(number)"
+        let content: [Item] = [.characters(prefix), group, .characters(" \(number)")]
+        return (PreservedTextMarkup(content: content, derivedText: text), text)
+    }
 
     private static func sym(_ name: String) -> Item {
         .element(PreservedTextMarkup.Element(name: "sym", content: [.characters(name)]))
@@ -114,9 +139,8 @@ struct SetTempoTextTests {
 
     @Test("a number the markup cannot reach is found by the same equation in the text, not by the first equals sign")
     func unreachableNumberDoesNotTouchAnEarlierEquals() throws {
-        let content: [Item] = [.characters("x = 3 Allegro "), Self.quarter, .characters(" = 1"), Self.bold("20")]
-        let markup = PreservedTextMarkup(content: content, derivedText: "x = 3 Allegro  = 120")
-        let tempo = Tempo(beatsPerSecond: 2, text: "x = 3 Allegro  = 120", preservedTextMarkup: markup)
+        let unreachable = Self.unreachable(prefix: "x = 3 Allegro ", number: "120")
+        let tempo = Tempo(beatsPerSecond: 2, text: unreachable.text, preservedTextMarkup: unreachable.markup)
         let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
         #expect(edited.text == "x = 3 Allegro  = 132")
         #expect(edited.preservedTextMarkup == nil)
@@ -124,11 +148,11 @@ struct SetTempoTextTests {
 
     @Test("when the markup is dropped, a host beat change counts the number in the beat the text had")
     func droppedMarkupKeepsTheTextsBeat() throws {
-        let content: [Item] = [.characters("Allegro "), Self.quarter, .characters(" = 1"), Self.bold("44")]
-        let markup = PreservedTextMarkup(content: content, derivedText: "Allegro  = 144")
-        let tempo = Tempo(beatsPerSecond: 2.4, text: "Allegro  = 144", preservedTextMarkup: markup)
+        let unreachable = Self.unreachable(prefix: "Allegro ", number: "144")
+        let tempo = Tempo(beatsPerSecond: 2.4, text: unreachable.text, preservedTextMarkup: unreachable.markup)
         let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2, beatNote: .eighth))
-        // The glyph lived only in the markup, so there is none to rewrite: the equation stays true in the quarter.
+        // The markup is dropped because the number is outside the element that holds the glyph. The glyph lived only
+        // there, so the text has none to rewrite: the equation stays true in the quarter the text had.
         #expect(edited.text == "Allegro  = 132")
         #expect(edited.preservedTextMarkup == nil)
         #expect(edited.beatNote == .eighth)
@@ -255,19 +279,30 @@ struct SetTempoTextTests {
         #expect(SetTempo.current(at: anchor, in: score) == expected)
     }
 
+    @Test("undoing a successful markup rewrite restores the markup and the file bytes")
+    func undoRestoresARewrittenMarkup() throws {
+        var score = try Self.fixture()
+        let before = try MSCXEncoder.encode(score)
+        let original = try Self.tempo(score, measure: 8)
+        let anchor = Self.anchor(measure: 8)
+        let inverse = try SetTempo(anchor: anchor, marking: SetTempo.Marking(beatsPerSecond: 2.2)).apply(to: &score)
+        let changed = try Self.tempo(score, measure: 8)
+        #expect(changed.text == "Allegro  = 132")
+        #expect(changed.preservedTextMarkup != nil)
+        #expect(changed.preservedTextMarkup != original.preservedTextMarkup)
+        _ = try inverse.apply(to: &score)
+        let restored = try Self.tempo(score, measure: 8)
+        #expect(restored.text == original.text)
+        #expect(restored.preservedTextMarkup == original.preservedTextMarkup)
+        #expect(try MSCXEncoder.encode(score) == before)
+    }
+
     @Test("undo restores the text, markup, follow flag, play flag and type a rewrite changed")
     func undoRestoresEverything() throws {
-        let markup = PreservedTextMarkup(
-            content: [
-                .characters("Allegro "),
-                .element(PreservedTextMarkup.Element(name: "sym", content: [.characters("metNoteQuarterUp")])),
-                .characters(" = 1"),
-                .element(PreservedTextMarkup.Element(name: "b", content: [.characters("44")])),
-            ],
-            derivedText: "Allegro  = 144",
-        )
+        let unreachable = Self.unreachable(prefix: "Allegro ", number: "144")
+        let markup = unreachable.markup
         let original = Tempo(
-            beatsPerSecond: 2.4, text: "Allegro  = 144", preservedTextMarkup: markup,
+            beatsPerSecond: 2.4, text: unreachable.text, preservedTextMarkup: markup,
             followText: true, textType: .aTempo, playsBack: false,
         )
         var score = EditingFixtures.fourQuarterRests()

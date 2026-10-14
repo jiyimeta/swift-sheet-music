@@ -2,15 +2,19 @@ import SheetMusicFoundation
 
 extension PreservedTextMarkup {
     private enum Search { case searching, replaced, failed }
-    private enum Phase { case needSign, needNumber, done, failed }
+    /// `consuming*`: the number's digits ran to the end of a run, so the next runs' leading digits belong to it too.
+    private enum Phase { case needSign, needNumber, consuming, consumingAfterSeparator, done, failed }
 
     /// This markup with its tempo equation of beat `quarters` rewritten (`Tempo.applyNumberEdit`): the number replaced
     /// by `number`, and the beat glyph by `glyphs` (SMuFL names) when given. The equation is, in document order, the
     /// first of that beat: a run of metronome `<sym>` elements followed — in the same element list, through any
-    /// formatting elements — by an equals sign and a number, or a metronome codepoint written in one character run
-    /// ahead of its own " = number". `nil` when that first equation cannot be reached this way (its number sits outside
-    /// the list that holds the glyph, say): the search then stops rather than rewrite a later equation, and the caller
-    /// falls back to the plain text. `derivedText` is the caller's to set.
+    /// formatting elements — by an equals sign and a number (the new number goes in the run that holds the number's
+    /// first digit, and the rest of its digits are removed from the runs after it), or a metronome codepoint written
+    /// in one character run ahead of its own " = number". `nil` when no equation was rewritten: a symbol run of the
+    /// wanted beat whose number cannot be reached ends the search at once (the number sits outside the list that holds
+    /// the glyph, say). A codepoint glyph whose number sits in a later run does not — the search goes on, and
+    /// the caller's cross-check of the markup's plain text against the plain-text rewrite is what rejects a wrong
+    /// equation. The caller then falls back to the plain text. `derivedText` is the caller's to set.
     func replacingEquation(glyphs: [String]?, number: String, quarters: Double) -> PreservedTextMarkup? {
         var search = Search.searching
         let rewritten = Self.replacingEquation(
@@ -74,7 +78,7 @@ extension PreservedTextMarkup {
         }
         var phase = Phase.needSign
         let tail = replacingNumber(in: Array(items[end...]), number: number, phase: &phase)
-        guard phase == .done else {
+        guard phase == .done || phase == .consuming || phase == .consumingAfterSeparator else {
             search = .failed
             result += items[start...]
             return items.count
@@ -90,33 +94,74 @@ extension PreservedTextMarkup {
     private static func replacingNumber(in items: [ContentItem], number: String, phase: inout Phase) -> [ContentItem] {
         var result: [ContentItem] = []
         for item in items {
-            guard phase == .needSign || phase == .needNumber else {
+            guard phase != .done, phase != .failed else {
                 result.append(item)
                 continue
             }
             switch item {
             case let .characters(text):
-                switch Tempo.readEquationLeaf(text, afterSign: phase == .needNumber) {
-                case .blank:
-                    result.append(item)
-                case .signOnly:
-                    phase = .needNumber
-                    result.append(item)
-                case let .number(span):
-                    var rewritten = text
-                    rewritten.replaceSubrange(span, with: number)
-                    phase = .done
-                    result.append(.characters(rewritten))
-                case .unrelated:
-                    phase = .failed
-                    result.append(item)
-                }
+                result.append(.characters(rewritingLeaf(text, number: number, phase: &phase)))
             case let .element(element):
                 let inner = replacingNumber(in: element.content, number: number, phase: &phase)
                 result.append(.element(Element(name: element.name, attributes: element.attributes, content: inner)))
             }
         }
         return result
+    }
+
+    private static func rewritingLeaf(_ text: String, number: String, phase: inout Phase) -> String {
+        if phase == .consuming || phase == .consumingAfterSeparator {
+            return droppingLeadingDigits(of: text, phase: &phase)
+        }
+        switch Tempo.readEquationLeaf(text, afterSign: phase == .needNumber) {
+        case .blank:
+            return text
+        case .signOnly:
+            phase = .needNumber
+            return text
+        case let .number(span):
+            let hasSeparator = text[span].contains { $0 == "." || $0 == "," }
+            var rewritten = text
+            rewritten.replaceSubrange(span, with: number)
+            if span.upperBound == text.endIndex {
+                phase = hasSeparator ? .consumingAfterSeparator : .consuming
+            } else {
+                phase = .done
+            }
+            return rewritten
+        case .unrelated:
+            phase = .failed
+            return text
+        }
+    }
+
+    /// The rest of a number whose digits ran to the end of the previous run: `text` without its leading digits (and
+    /// one decimal point or comma between them, if the number has none yet). The number goes on only if the run is
+    /// all digits.
+    private static func droppingLeadingDigits(of text: String, phase: inout Phase) -> String {
+        guard !text.isEmpty else { return text }
+        var cursor = text.startIndex
+        var separatorSeen = phase == .consumingAfterSeparator
+        while cursor < text.endIndex {
+            let character = text[cursor]
+            let next = text.index(after: cursor)
+            if Tempo.isDigit(character) {
+                cursor = next
+            } else if character == "." || character == ",", !separatorSeen, next < text.endIndex,
+                      Tempo.isDigit(text[next])
+            {
+                separatorSeen = true
+                cursor = next
+            } else {
+                break
+            }
+        }
+        if cursor == text.endIndex {
+            phase = separatorSeen ? .consumingAfterSeparator : .consuming
+        } else {
+            phase = .done
+        }
+        return String(text[cursor...])
     }
 
     /// The name inside a `<sym>` of the metronome range (or the `space` between a note and its dots).

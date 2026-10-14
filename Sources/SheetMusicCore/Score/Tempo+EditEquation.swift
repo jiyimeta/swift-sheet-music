@@ -187,7 +187,7 @@ extension Tempo {
         return isSign(scalar)
     }
 
-    private static func isDigit(_ character: Character) -> Bool {
+    static func isDigit(_ character: Character) -> Bool {
         let scalars = character.unicodeScalars
         guard scalars.count == 1, let scalar = scalars.first else { return false }
         return TempoTextEquation.isDigit(scalar)
