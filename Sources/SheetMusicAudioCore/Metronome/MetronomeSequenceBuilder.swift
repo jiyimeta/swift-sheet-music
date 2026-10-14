@@ -84,9 +84,7 @@ public enum MetronomeSequenceBuilder {
             conductor.insert(
                 TimedMidiEvent(
                     tick: 0,
-                    event: .meta(.tempo(
-                        microsecondsPerQuarter: 60_000_000 / Int(plan.quarterBpm.rounded()),
-                    )),
+                    event: .meta(.tempo(microsecondsPerQuarter: plan.microsecondsPerQuarter)),
                 ),
                 at: 0,
             )

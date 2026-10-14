@@ -53,11 +53,23 @@ public struct Spanner: Sendable, Equatable {
     /// MuseScore `<visible>0</visible>` flag. When false the spanner
     /// is hidden — layout omits it entirely (no glyphs, no reserved
     /// space). Playback / MIDI continue to honor the spanner. Sugar over
-    /// `elementProperties.visible`.
+    /// `elementProperties.visible`. Means visibility only: whether this
+    /// is the begin or the end side of a pair is `isEndMarker`.
     public var visible: Bool {
         get { elementProperties.visible }
         set { elementProperties.visible = newValue }
     }
+
+    /// True for the end side of a voice-level pair: the payload-less `<Spanner type="X"><prev>…</prev></Spanner>`
+    /// MuseScore writes at the end tick (`ConnectorInfoWriter::write`, `connectorinfowriter.cpp:52-75`). It carries no
+    /// glyph, plays nothing and re-encodes as a bare `<prev/>`. A begin side keeps its payload and `<next>` whether or
+    /// not it is `visible`.
+    ///
+    /// Compatibility: not part of any wire format or `Codable` conformance. `Spanner.init` derives it from `visible`
+    /// when the argument is absent (`visible: false` was how an end marker used to be spelled), and the MSCX decoder
+    /// sets it from whether the wrapper has a payload child. The fingerprint hashes it only for a hidden begin side,
+    /// so existing fingerprints do not move.
+    public var isEndMarker: Bool
 
     /// MuseScore `<beginText>` — the label a line spanner prints at
     /// its left end. A `TextLineBase` property, so it can appear on
@@ -118,7 +130,9 @@ public struct Spanner: Sendable, Equatable {
         continueText: String? = nil,
         endText: String? = nil,
         preservedMarkup: [PreservedXML] = [],
+        isEndMarker: Bool? = nil,
     ) {
+        self.isEndMarker = isEndMarker ?? !visible
         self.kind = kind
         self.rawType = rawType
         self.nextMeasuresOffset = nextMeasuresOffset

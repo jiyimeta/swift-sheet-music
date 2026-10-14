@@ -66,9 +66,15 @@ extension Spanner {
         }
 
         /// The factor the change applies: its own, else its type's (`GradualTempoChange::tempoChangeFactor`,
-        /// `gradualtempochange.cpp:154-161`).
+        /// `gradualtempochange.cpp:154-161`). MuseScore applies a stored factor as is, so a `0` or negative one gives
+        /// it a zero tempo; here it reads as `minimumFactor` (the stored `factor` keeps the file's value) and a
+        /// non-finite one as the type's default, so the tempo map never sees a non-positive tempo.
         public var effectiveFactor: Double {
-            factor ?? type.defaultFactor
+            guard let factor, factor.isFinite else { return type.defaultFactor }
+            return max(factor, Self.minimumFactor)
         }
+
+        /// The smallest factor `effectiveFactor` returns.
+        static let minimumFactor = 0.01
     }
 }

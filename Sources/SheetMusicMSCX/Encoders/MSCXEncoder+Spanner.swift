@@ -8,10 +8,11 @@ extension Spanner {
     /// `<Volta>`, `<HairPin/>`, `<Slur/>`) plus a `<next>` location to
     /// the end tick, and an end-side placeholder with only `<prev>`.
     ///
-    /// We dispatch on `visible`: a begin-side preserves the payload
-    /// (and Volta endings / measures + fractions offsets), an
-    /// end-side emits just `<prev/>` so the parser recovers
-    /// `visible == false`.
+    /// We dispatch on `isEndMarker`, never on `visible`: a begin-side
+    /// preserves the payload (and Volta endings / measures + fractions
+    /// offsets) — a hidden one carrying `<visible>0</visible>` inside it,
+    /// as MuseScore writes it — and an end-side emits just `<prev/>` so
+    /// the parser recovers `isEndMarker == true`.
     ///
     /// **No `<eid>` here, deliberately.** The `<Spanner type="X">` wrapper
     /// this method builds is not itself an `EngravingItem` — MuseScore's
@@ -30,13 +31,13 @@ extension Spanner {
     /// itself, which is a shape no MuseScore file ever produces.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        if visible {
+        if isEndMarker {
+            children.append(XMLTreeNode(name: "prev"))
+        } else {
             children.append(payloadElement(options: options))
             if let next = nextLocationElement() {
                 children.append(next)
             }
-        } else {
-            children.append(XMLTreeNode(name: "prev"))
         }
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(
@@ -193,13 +194,12 @@ extension Spanner {
     /// loop at the tail of `TWrite::writeProperties(const ChordRest*, …)`
     /// (`rw/write/twrite.cpp:1093`, loop at `:1135`).
     ///
-    /// Unlike `encode(options:)` this never dispatches on `visible`. That
+    /// Unlike `encode(options:)` this never dispatches on the side. That
     /// dispatch exists because a *voice-level* end side is modeled as an
-    /// invisible `Spanner`; a chord-anchored one never is — `Chord.spanners`
+    /// end-marker `Spanner`; a chord-anchored one never is — `Chord.spanners`
     /// holds begin sides only, since `Chord.decodeChordSpanners` drops the
-    /// `<prev>`-only markers and the encoder recomputes them. Here
-    /// `<visible>` therefore means what it says, and an invisible slur still
-    /// writes its payload.
+    /// `<prev>`-only markers and the encoder recomputes them. An invisible
+    /// slur still writes its payload.
     ///
     /// `<next>` is emitted even when both offsets are at their defaults —
     /// as the bare `<next/>` the glissando writer also uses. The decoder

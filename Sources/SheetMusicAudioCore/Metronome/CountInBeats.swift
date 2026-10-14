@@ -17,6 +17,14 @@ public enum CountInBeats {
             self.beats = beats
             self.quarterBpm = quarterBpm
         }
+
+        /// `quarterBpm` as an SMF tempo (`60_000_000 / BPM`). The BPM is rounded to a whole number, as the engines
+        /// always did, but never below 1 or past what an `Int` holds: a sub-0.5 BPM tempo rounds to 0 and a plain
+        /// division would trap.
+        public var microsecondsPerQuarter: Int {
+            let rounded = quarterBpm.isFinite ? min(quarterBpm.rounded(), 1_000_000) : 120
+            return 60_000_000 / max(1, Int(rounded))
+        }
     }
 
     public static func compute(score: Score, startCursor: ScoreCursor?) -> Result? {

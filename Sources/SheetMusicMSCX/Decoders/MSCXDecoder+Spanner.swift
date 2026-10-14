@@ -66,6 +66,7 @@ extension Spanner {
             preservedMarkup: node.preservedMarkup(
                 consuming: consumedSpannerChildren.union([raw]),
             ),
+            isEndMarker: isEndMarker(node),
         )
         spanner.elementProperties = elementProperties
         return spanner
@@ -191,27 +192,32 @@ extension Spanner {
     /// end tick; the end-side is a placeholder with only a `<prev>`
     /// location pointing back. The end-side has no own glyph and
     /// would otherwise emit a duplicate zero-length anchor at the
-    /// end tick — treat it as hidden so the layout filter drops it.
+    /// end tick — it is an end marker (`Spanner.isEndMarker`), and
+    /// reads as not visible so layout drops it.
     ///
-    /// On the begin-side, MuseScore stores `<visible>0</visible>` on
-    /// the inner subtype child (not on the `<Spanner>` wrapper). We
-    /// honor either location and treat any `0` as hidden.
-    private static func decodeVisible(_ node: XMLTreeNode) -> Bool {
-        if (node.first("visible")?.text ?? "1") == "0" { return false }
-        var hasPayload = false
-        for child in node.children
+    /// The side is decided by the payload alone, never by `<visible>`: a begin side hidden with `<visible>0</visible>`
+    /// on its payload child (where MuseScore writes it, `twrite.cpp:572`) is still a begin side.
+    private static func isEndMarker(_ node: XMLTreeNode) -> Bool {
+        !node.children.contains {
             // `<eid>` is the wrapper's own identifier (see `EIDXML`), not a subtype payload.
             // `.spanner` was reverted to `.invalid` (Task 4a) and `Spanner.encode` writes no
             // `<eid>` of its own, and real MuseScore never puts one on the `<Spanner>` wrapper
             // either — so nothing should reach this exclusion today. Kept as defensive: some
             // intermediate commit of this phase did write that shape on the wrapper, and
-            // counting it here would have made every invisible end marker decode back as
-            // visible the moment it carried an identifier.
-            where child.name != "next" && child.name != "prev" && child.name != EIDXML.childName
-        {
-            hasPayload = true
-            if child.first("visible")?.text == "0" { return false }
+            // counting it here would have made every end marker decode back as a begin side
+            // the moment it carried an identifier.
+            $0.name != "next" && $0.name != "prev" && $0.name != EIDXML.childName
         }
-        return hasPayload
+    }
+
+    /// Visibility proper: an end marker reads as hidden; a begin side is hidden by `<visible>0</visible>` on the
+    /// wrapper or on any payload child (either location is honored).
+    private static func decodeVisible(_ node: XMLTreeNode) -> Bool {
+        if isEndMarker(node) { return false }
+        if (node.first("visible")?.text ?? "1") == "0" { return false }
+        return !node.children.contains {
+            $0.name != "next" && $0.name != "prev" && $0.name != EIDXML.childName
+                && $0.first("visible")?.text == "0"
+        }
     }
 }

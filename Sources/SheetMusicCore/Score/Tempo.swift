@@ -142,7 +142,16 @@ public struct Tempo: Sendable, Equatable {
 extension Tempo {
     /// The SMF tempo of a quarter-normalized tempo: microseconds per quarter (`microsecondsPerQuarter`'s body).
     static func microsecondsPerQuarter(beatsPerSecond: Double) -> Int {
-        Int((1.0 / beatsPerSecond * 1_000_000.0).rounded())
+        Int((1.0 / clampedBeatsPerSecond(beatsPerSecond) * 1_000_000.0).rounded())
+    }
+
+    /// `bps` limited to what MuseScore keeps: `TempoText::setTempo` clamps to 5...999 BPM
+    /// (`dom/tempotext.cpp:43-44`, `:324-330`), and a tempo is set that way on read. A non-finite value (`nan`, which
+    /// `Double(_:)` accepts) falls back to the default 120 BPM. This keeps a `<tempo>0</tempo>` from reaching the SMF
+    /// division `1 / bps`, which traps in the `Int` conversion.
+    public static func clampedBeatsPerSecond(_ bps: Double) -> Double {
+        guard bps.isFinite else { return 2.0 }
+        return min(max(bps, 5.0 / 60), 999.0 / 60)
     }
 
     /// A beat's length in quarter notes — quarter 1, eighth 0.5, dotted quarter 1.5 (`beatLengthInQuarters`' body).

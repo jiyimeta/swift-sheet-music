@@ -64,7 +64,7 @@ enum PreRollSequenceAssembler {
         // lives before any shifted score event — plays at the start position's tempo. 120 BPM → 500_000 µs/quarter.
         let tempoEvent = TimedMidiEvent(
             tick: 0,
-            event: .meta(.tempo(microsecondsPerQuarter: 60_000_000 / Int(plan.quarterBpm.rounded()))),
+            event: .meta(.tempo(microsecondsPerQuarter: plan.microsecondsPerQuarter)),
         )
         if midi.tracks.isEmpty {
             midi.tracks.append(MidiTrack(events: [tempoEvent]))

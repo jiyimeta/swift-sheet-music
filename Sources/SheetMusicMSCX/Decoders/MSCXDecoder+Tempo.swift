@@ -15,7 +15,9 @@ extension Tempo {
     /// text properties, and the text — derived when it is exactly the marking `metronomeMarking` prints for the decoded
     /// beat and number, authored otherwise. A marking with no text MuseScore opens hidden.
     static func decode(_ node: XMLTreeNode) throws -> Tempo {
-        let bps = Double(node.first("tempo")?.text ?? "2") ?? 2.0
+        // Clamped as `TempoText::setTempo` does on read (`dom/tempotext.cpp:324-330`): 0 or a negative would trap the
+        // SMF conversion downstream.
+        let bps = Tempo.clampedBeatsPerSecond(Double(node.first("tempo")?.text ?? "2") ?? 2.0)
         let beat = decodeBeatUnit(node, beatsPerSecond: bps)
         var tempo = Tempo(
             beatsPerSecond: bps,

@@ -86,10 +86,12 @@ extension LayoutEngine {
                     for (elementIndex, el) in voice.elements.enumerated() {
                         // Skip hidden spanners entirely — `<visible>0</visible>`
                         // on Pedal/HairPin/etc. should produce neither
-                        // glyph nor reserved space at the system level.
+                        // glyph nor reserved space at the system level —
+                        // and the payload-less end markers, which have no
+                        // glyph of their own.
                         // Playback / MIDI consumers read `voice.elements`
                         // directly and remain unaffected.
-                        if case let .spanner(sp) = el, sp.visible {
+                        if case let .spanner(sp) = el, sp.visible, !sp.isEndMarker {
                             // MuseScore's `<measures>N</measures>`
                             // means the spanner ends N measure
                             // boundaries forward — the end is at the
