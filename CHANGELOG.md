@@ -18,6 +18,10 @@ and this project adheres to
 - **`richText`** on every text carrier — `StaffText`, `Swing`, `InstrumentChange`, `RehearsalMark`, `ExpressionText`,
   `Fingering`, `Sticking`, `Capo`, `StringTunings`, `Marker`, `Jump`, `Lyric`, `FrameText`, `Glissando` — the formatted
   text its preserved markup describes, while the plain `text` is unedited; `nil` otherwise.
+- **`SMuFLCodepoint.byName(_:)` resolves the SMuFL names MuseScore writes inside text** — dynamics, metronome notes,
+  the segno/coda, fermata, caesura/breath, keyboard and harp pedal, fretboard, figured-bass and articulation families
+  (209 names, `Tools/smufl/glyphnames-text-symbols.json`, extracted by `Scripts/extract_glyphnames_text_symbols.py`).
+  `GenSMuFLTables` merges them into the by-name table only; it no longer writes `import Foundation` into the tables.
 
 ### Fixed
 
