@@ -248,4 +248,42 @@ struct FermataMidiTests {
             (480, micros(180)), // .tempo from voice
         ])
     }
+
+    /// 8. A fermata inside a rit. stretches the RAMPED tempo and restores the ramp's own step.
+    @Test func fermataInsideRitardandoStretchesTheRampedTempo() {
+        // 120 BPM (2 bps) at the start; a one-bar rit. over measure 1 (factor 0.75, linear): 8 steps of 240 ticks,
+        // step i at 2 + (-0.5)(i / 8) bps. The fermata (stretch 1.5) holds the third quarter of measure 1, ticks
+        // [2880, 3360) = steps 4 (1.75 bps) and 6 (1.625 bps).
+        // Open at 2880: 1e6 / (1.75 / 1.5) = 857142.86 -> 857143.
+        // Close at 3360: restores step 6, 1e6 / 1.625 = 615384.6 -> 615385.
+        // (Reading the text marking instead would give 666667 / 500000.)
+        let bar = Array(repeating: chord(60), count: 4)
+        let measures = [
+            Measure(voices: [Voice(elements: [.timeSignature(TimeSignature(numerator: 4, denominator: 4))] + bar)]),
+            Measure(voices: [Voice(elements: [
+                .spanner(TempoMapFixtures.ritardando(measures: 1)),
+                chord(60), chord(62), fermata("fermataAbove"), chord(64), chord(65),
+            ])]),
+        ]
+        let part = Part(
+            id: "P1", instrument: Instrument(id: "voice", articulations: [InstrumentArticulation()]),
+            staves: [Staff(measures: measures)],
+        )
+        let start = PositionedSystemElement(
+            position: MeasurePosition(numerator: 0, denominator: 4), element: .tempo(Tempo(beatsPerSecond: 2)),
+        )
+        let score = Score(
+            division: 480, parts: [part],
+            systemMeasures: IdentifiedArray([SystemMeasure(elements: [start]), SystemMeasure()]),
+        )
+        let events = MidiRenderer.fermataBookendEvents(score: score)
+        func tempos(_ list: [TimedMidiEvent]) -> [(Int, Int)] {
+            list.compactMap { event in
+                guard case let .meta(.tempo(value)) = event.event else { return nil }
+                return (event.tick, value)
+            }
+        }
+        #expect(tempos(events.openEvents) == [(2880, 857_143)])
+        #expect(tempos(events.closeEvents) == [(3360, 615_385)])
+    }
 }

@@ -72,13 +72,16 @@ struct TempoTimeline: Equatable {
         return entries[pick].bps
     }
 
-    /// Build a tempo timeline from a staff's measure tick budgets combined with the score-level tempo entries on
-    /// `systemMeasures`. The tempo entries are the score's text-only tempo map (`ResolvedTempoMap.markings`),
-    /// projected onto this staff's measure bases.
+    /// Build a tempo timeline from a staff's measure tick budgets combined with the score-level tempo entries.
+    /// The entries are `tempoMap`'s points — pass `Score.resolvedTempoMap()` so a fermata inside a gradual change
+    /// stretches the RAMPED tempo in force at its tick and restores that value, as MuseScore does — or, when `nil`,
+    /// the text-only map of `systemMeasures` (`ResolvedTempoMap.markings`). Either is projected onto this staff's
+    /// measure bases.
     static func build(
         measures: [Measure],
         systemMeasures: [SystemMeasure],
         division: Int,
+        tempoMap: ResolvedTempoMap? = nil,
     ) -> TempoTimeline {
         var entries: [(tick: Int, bps: Double)] = [(0, 2.0)]
         var measureBases: [Int] = []
@@ -96,9 +99,8 @@ struct TempoTimeline: Equatable {
                 )
             }
         }
-        for point in ResolvedTempoMap.markings(lane: systemMeasures, division: division).points
-            where point.measureIndex < measureBases.count
-        {
+        let map = tempoMap ?? ResolvedTempoMap.markings(lane: systemMeasures, division: division)
+        for point in map.points where point.measureIndex < measureBases.count {
             entries.append((tick: measureBases[point.measureIndex] + point.tickInMeasure, bps: point.beatsPerSecond))
         }
         entries.sort { $0.tick < $1.tick }

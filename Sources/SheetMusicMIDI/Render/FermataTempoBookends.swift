@@ -50,7 +50,9 @@ extension MidiRenderer {
     ///   per-staff build sees no tempo markings on staves 1…n and falls back to 120 BPM. That made
     ///   every non-canonical staff carrying a fermata emit a CLOSE event restoring 120 BPM, which
     ///   then overrode the real tempo in the merged map for the rest of the piece.
-    static func fermataBookendEvents(score: Score) -> FermataRanges.TempoEvents {
+    static func fermataBookendEvents(
+        score: Score, tempoMap: ResolvedTempoMap? = nil,
+    ) -> FermataRanges.TempoEvents {
         let division = score.division
         let holds = score.fermataHolds()
         guard !holds.isEmpty else {
@@ -89,6 +91,7 @@ extension MidiRenderer {
                 measures: measures,
                 systemMeasures: score.systemMeasures.values,
                 division: division,
+                tempoMap: tempoMap ?? score.resolvedTempoMap(),
             ),
         )
     }

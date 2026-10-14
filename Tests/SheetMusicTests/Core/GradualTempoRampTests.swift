@@ -139,6 +139,34 @@ struct GradualTempoRampTests {
         #expect(map.points(inMeasure: 5).isEmpty)
     }
 
+    /// Eight steps over 1920 ticks, amplitude 1: step `i` sits at tick `240 i` and `x = i / 8` is exact in Float, so
+    /// each expectation is the closed form below, hand-computed, to a tolerance that Float rounding (~3e-8) and any
+    /// libm drift in `pow` / `sqrt` (~1e-15) both sit far inside.
+    private static func easedStep(_ method: Spanner.ChangeMethod, index: Int) throws -> (offset: Int, delta: Double) {
+        let curve = ResolvedTempoMap.easedCurve(ticks: 1920, steps: 8, amplitude: 1, method: method)
+        return try #require(curve.first { $0.offset == 240 * index })
+    }
+
+    @Test("exponential easing: step 1 is 1 - 2^-1.25 and the last step lands on the full amplitude")
+    func exponentialEasingStepValues() throws {
+        // x = 1/8: 1 - 2^(-10/8) = 1 - 0.42044820762685725 = 0.57955179237314275.
+        let first = try Self.easedStep(.exponential, index: 1)
+        #expect(abs(first.delta - 0.579_551_792_373_142_75) < 1e-6)
+        // x == 1 is special-cased to exactly 1, not 1 - 2^-10.
+        let last = try Self.easedStep(.exponential, index: 8)
+        #expect(last.delta == 1)
+    }
+
+    @Test("ease-in-out: step 1 is on the ease-in arc, step 6 on the ease-out arc")
+    func easeInOutStepValues() throws {
+        // x = 1/8 < 0.5: (1 - sqrt(1 - 0.25^2)) / 2 = (1 - 0.96824583655185426) / 2.
+        let early = try Self.easedStep(.easeInOut, index: 1)
+        #expect(abs(early.delta - 0.015_877_081_724_072_87) < 1e-6)
+        // x = 6/8: (sqrt(1 - 0.5^2) + 1) / 2 = (0.86602540378443865 + 1) / 2.
+        let late = try Self.easedStep(.easeInOut, index: 6)
+        #expect(abs(late.delta - 0.933_012_701_892_219_3) < 1e-6)
+    }
+
     @Test("a ramp step counts in the beat of the marking in force")
     func rampStepsCarryTheBeatInForce() throws {
         let score = TempoMapFixtures.score(

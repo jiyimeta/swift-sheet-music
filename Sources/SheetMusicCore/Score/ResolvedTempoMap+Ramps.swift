@@ -133,6 +133,11 @@ extension Score {
     /// Every playing gradual tempo change, in start order — staff and voice order within one start: MuseScore keeps its
     /// spanners in a multimap keyed by start tick. Positions are walked as the MIDI ramps walk a voice (chords and
     /// `<location>` shifts advance the tick).
+    ///
+    /// Every staff is walked, whereas MuseScore keeps a spanner once. A change duplicated across staves is harmless:
+    /// `applyingRamps` writes a step only where no point stands, and the duplicate starts from the tempo in force at
+    /// its start, which is the first copy's own first step (offset 0, delta 0) — the same base — so every step it
+    /// computes is already taken.
     func gradualTempoRamps(measureLengths: [Int]) -> [ResolvedTempoMap.Ramp] {
         var bases: [Int] = []
         var accumulated = 0
