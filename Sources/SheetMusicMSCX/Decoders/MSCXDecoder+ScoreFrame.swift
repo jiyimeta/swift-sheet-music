@@ -84,10 +84,9 @@ extension FrameText {
     }
 }
 
-/// Drop the inline `<b>` / `<i>` / `<font …>` tags MuseScore emits
-/// inside `<text>` so callers see plain text. A future revision can
-/// expose a structured representation if styling matters; for now
-/// the renderer treats title-block text as plain.
+/// Drop tags that arrive as CHARACTERS inside a childless `<text>` — MuseScore 2 escaped its `<font …/>` as
+/// `&lt;font …/&gt;` — and trim, so that legacy shape reads as plain text. Markup that arrives as elements never comes
+/// here: `FrameText.decode` reads it in source order, and it is drawn from `FrameText.richText`.
 private func stripInlineMarkup(_ s: String) -> String {
     var result = ""
     var inTag = false

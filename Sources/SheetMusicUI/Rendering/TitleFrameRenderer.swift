@@ -82,10 +82,9 @@ public enum TitleFrameRenderer {
 
     // MARK: - Face
 
-    // The face is `LayoutTitleFrame.font(size:)` — the system face,
-    // regular, MuseScore's `FontStyle::Normal` for all four title-block
-    // styles. Per-text overrides via `<Text>` inline markup aren't
-    // modelled yet.
+    // A plain line's face is `LayoutTitleFrame.font(size:)` — the system face, regular, MuseScore's
+    // `FontStyle::Normal` for all four title-block styles. A line with inline markup (`<b>`, `<font size>`, `<sym>`)
+    // is drawn from its typeset runs instead (`richRuns`), each in the font layout set it in.
 
     /// `ctFont(size:)` as a SwiftUI font, so the PDF sets the title in
     /// the very `CTFont` the screen's layer tree draws.

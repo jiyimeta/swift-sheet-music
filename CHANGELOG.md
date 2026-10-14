@@ -9,15 +9,16 @@ and this project adheres to
 
 ### Added
 
-- **`RichText`** (SheetMusicCore) — MuseScore's formatted text: lines of runs, each a string or a SMuFL symbol with its
-  bold / italic / underline / strike, font face and size, and super- or subscript. Built by MuseScore's own format
-  state machine (`TextBase::createBlocks`) from a `<text>` element's markup (`init(markup:)`, `init(content:)`) or from
-  the same markup held as a string (`init(xmlText:)`, the `<beginText>` form). `plainText` is the projection a text
-  carrier stores: characters in source order, a line break per line, nothing for a symbol.
+- **`RichText`** (SheetMusicCore) — MuseScore's formatted text: lines of runs (`RichTextRun`: `.text` or `.symbol`),
+  each a string or a SMuFL symbol carrying a `RichTextFormat` — bold / italic / underline / strike, font face and size,
+  and super- or subscript (`RichTextFormat.VerticalAlign`). Built by MuseScore's own format state machine
+  (`TextBase::createBlocks`) from a `<text>` element's markup (`init(markup:)`, `init(content:)`) or from the same
+  markup held as a string (`init(xmlText:)`, the `<beginText>` form). `plainText` is the projection a text carrier
+  stores: characters in source order, a line break per line, nothing for a symbol.
   `PreservedTextMarkup.richText(ifCurrentFor:)` reads the markup only while it still describes the text.
-- **`richText`** on every text carrier — `StaffText`, `Swing`, `InstrumentChange`, `RehearsalMark`, `ExpressionText`,
-  `Fingering`, `Sticking`, `Capo`, `StringTunings`, `Marker`, `Jump`, `Lyric`, `FrameText`, `Glissando` — the formatted
-  text its preserved markup describes, while the plain `text` is unedited; `nil` otherwise.
+- **`richText`** on the text carriers layout draws from their runs — `StaffText`, `Swing`, `InstrumentChange`,
+  `RehearsalMark`, `Marker`, `Jump`, `Lyric`, `FrameText` — the formatted text its preserved markup describes, while
+  the plain `text` is unedited; `nil` otherwise.
 - **`SMuFLCodepoint.byName(_:)` resolves the SMuFL names MuseScore writes inside text** — dynamics, metronome notes,
   the segno/coda, fermata, caesura/breath, keyboard and harp pedal, fretboard, figured-bass and articulation families,
   the `text*` family (tempo and swing text notes, beams and tuplets) and the `lyrics*` elisions
@@ -25,12 +26,14 @@ and this project adheres to
   `GenSMuFLTables` merges them into the by-name table only; it no longer writes `import Foundation` into the tables.
   The 14 hand-written constants the subset lacks (trill sigils, ottava family) now live in
   `SMuFLCodepoints+HandWritten.swift`, which the generator never touches.
-- **`LayoutRichText`** (SheetMusicLayout) — a `RichText` typeset once at layout time, as `LayoutHarmony` is: each run's
-  font (the element's font with the run's bold / italic / face / size / script applied, or Bravura at the style's
-  musical-symbol size for a `<sym>`), pen position and advance; each line's metrics; the ink and the underline /
-  strike-through bars. `blockOrigin(at:anchor:)`, `inkRect(at:anchor:)`, `positionedRuns(at:anchor:)` and
-  `decorations(at:anchor:)` place it by the plain-text anchor rule, so a single unformatted run measures exactly as plain
-  text does.
+- **`LayoutRichText`** (SheetMusicLayout) — a `RichText` typeset once at layout time, as `LayoutHarmony` is: its
+  `lines` (`LayoutRichTextLine`: `runs`, `width`, `ascent`, `descent`), each run a `LayoutRichTextRun` with its
+  `content` (`.text` or `.symbol(codepoint:)`) and its `font` (the element's font with the run's bold / italic / face /
+  size / script applied, or Bravura at the style's musical-symbol size for a `<sym>`), and the block's `ink`.
+  `positionedRuns(at:anchor:)` (`LayoutRichTextPositionedRun`: content, font, baseline) and `decorations(at:anchor:)`
+  (`LayoutRichTextDecoration`: the underline and strike-through bars, with their `rect`) place it by the plain-text
+  anchor rule, so a single unformatted run measures exactly as plain text does. Pen positions, advances and line
+  metrics stay internal: a renderer draws the placed runs.
 
 ### Changed
 
@@ -40,14 +43,21 @@ and this project adheres to
 - **Layout measures formatted text by its runs.** A staff or system text, swing or instrument-change text, rehearsal
   mark, marker, jump or lyric whose markup is current carries its `LayoutRichText`. A staff text's and a rehearsal
   mark's placement, and every such element's ink rects, skyline box, rehearsal frame and vertical extent, come from the
-  runs; the skyline box takes in the runs' ink, so a symbol taller than its line's text (a segno in a marker) stays
-  inside it and inside the marker's hit rect. `TextInkGeometry.rehearsalFrame(text:font:origin:sp:frame:rich:)` takes
+  runs; the skyline box takes in the runs' ink, so a symbol taller than its line's text (a segno inside a text marker)
+  stays inside it and inside the marker's hit rect. A segno or coda marker, which draws its glyph whatever its markup
+  says, takes neither ink nor box from its runs. `TextInkGeometry.rehearsalFrame(text:font:origin:sp:frame:rich:)` takes
   the runs as a new last parameter, `rich: LayoutRichText? = nil`. A lyric's ink and skyline box follow its runs, and
   its horizontal spacing, hyphens and melisma rule clear the wider of its plain text and its runs — an elision
   (`<sym>lyricsElision</sym>`) widens the syllable, and a syllable of symbols alone is laid out instead of skipped —
   while its row baseline still comes from the plain lyric font. `LayoutFrameText.richText` and
-  `LayoutTitleFrame.PlacedLine.richLine` / `positionedRuns` / `decorations` carry a title block's runs line by line;
-  a rich line steps by its own ascent and descent, so a line set larger no longer runs into the next.
+  `LayoutTitleFrame.PlacedLine.positionedRuns` / `decorations` carry a title block's runs line by line; a rich line
+  steps by its own ascent and descent, so a line set larger no longer runs into the next. `CreditTextLine.frame` of a
+  formatted credit is the ink of the runs drawn, so a bold or resized title's tap target and inline editor cover it.
+- **The plain `text` of a formatted carrier changed.** It is now the characters in source order, with `<br/>` as a
+  line break and no `<sym>` names (see Fixed), so `Score.stableFingerprint` of a score holding formatted text differs
+  from 4.9.0's for the same file. The MSCX bytes written for unedited markup are unchanged.
+- **`FrameText.text` can hold `"\n"`.** A title-block text with a `<br/>` now keeps it as a line break instead of
+  joining the lines; a client showing a title, subtitle, composer or lyricist on one line has to handle it.
 
 ### Fixed
 
@@ -61,12 +71,15 @@ and this project adheres to
 - **A glissando label that is only a symbol survives a save.** It projected to empty text and was read back as a
   cleared label.
 - **A formatted lyric is sung and drawn.** `<text><i>Ah</i></text>` read as an empty syllable, which layout skipped.
+  A syllable of symbols alone is drawn and saved back with its markup, rather than skipped as an empty one.
+- **A chord symbol's `<name>` no longer takes in a symbol's name.** It read a child element's characters after its
+  own, so `C7<sym>coda</sym>` read "C7coda"; it now reads the characters in source order and nothing for a `<sym>`.
 - **The title block keeps its line breaks and its bold lines.** A `<br/>` in a title, subtitle, composer or lyricist
   text joined the lines, and a text written entirely inside `<b>` was dropped — from the score and from the saved file.
   A title line holding only symbols is now kept (with empty text) instead of dropped.
 - **A line spanner's begin text no longer prints its markup.** MuseScore writes `<beginText>` as an escaped string
   (`&lt;b&gt;rit.&lt;/b&gt;`), and a text line, palm mute or let-ring label drew the tags literally. The label is now
-  the text's plain projection, and `Spanner.beginRichText` reads its formatting.
+  the text's plain projection (`RichText(xmlText:)`).
 - **Formatted text draws formatted on Apple.** Bold, italic, underlined, struck-through, resized and super- or
   subscript runs, and SMuFL symbols inside text (`senza <sym>keyboardPedalPed</sym>`, a coda inside a marker), draw run
   by run in the CALayer tree, the Canvas / PDF path and the title block, at the positions layout measured. Every text

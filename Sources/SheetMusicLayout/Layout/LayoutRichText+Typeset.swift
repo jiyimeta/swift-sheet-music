@@ -77,7 +77,9 @@ extension LayoutRichText {
 
     /// MuseScore's musical-symbol size for a style's `<sym>` runs, in points at the reference spatium
     /// (`Sid::*MusicalSymbolSize`, `engraving/style/styledef.cpp:2019-2076`). Dynamics draw their symbols in the music
-    /// font at the dynamics scale instead (`textbase.cpp:881-905`); W4 passes that size to the base initializer.
+    /// font at the dynamics scale instead (`textbase.cpp:881-905`), so this table's `.dynamics` row is not that size:
+    /// formatted dynamics are not typeset yet, and when they are, their symbol size goes to the base initializer
+    /// (`symbolPointSize`) rather than coming from here.
     static func musicalSymbolSize(for style: TextStyleType) -> CGFloat {
         switch style {
         case .title: 22
