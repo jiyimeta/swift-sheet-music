@@ -66,13 +66,16 @@ extension Score {
         // decoders nested arbitrarily deep need it to tell "absent
         // because default" apart across wire-format generations.
         let version = detectVersion(root: root, scoreNode: scoreNode)
+        let revision = MSCXParserContext.formatRevision(versionAttribute: root.attributes["version"])
         return try MSCXParserContext.$version.withValue(version) {
-            try decodeBody(
-                scoreNode: scoreNode,
-                division: division,
-                version: version,
-                styleFileStyle: styleFileStyle,
-            )
+            try MSCXParserContext.$formatRevision.withValue(revision) {
+                try decodeBody(
+                    scoreNode: scoreNode,
+                    division: division,
+                    version: version,
+                    styleFileStyle: styleFileStyle,
+                )
+            }
         }
     }
 

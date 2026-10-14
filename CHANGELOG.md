@@ -144,6 +144,13 @@ and this project adheres to
 
 ### Fixed
 
+- **MuseScore's marker types read as MuseScore reads them (F3.1–F3.3).** A Coda (`<markerType>codab`) is a Coda — it
+  read as an unknown type and printed the word "codab"; a To Coda (`coda`) is a To Coda, no longer a Coda glyph;
+  `codasym`, `dacoda`, `dadblcoda` and `user` are their own kinds; a format-4.60 marker without `<markerType>` is a
+  Fine. A MuseScore 3 or 4.0–4.5 file, which writes no `<markerType>`, takes each marker's type from its `<label>` as
+  MuseScore does. Files this library saved with its old spellings (`toCoda`, `other`, a label-less `coda`) reopen as
+  what they were. A Fine now orders after its bar's segno in playback, as a right marker. MusicXML: `<coda/>` is a Coda
+  labeled `codab` (it was labeled `coda`, a To Coda's target), `<sound tocoda>` a To Coda.
 - **Markers and jumps stand where MuseScore puts them, autoplaced.** A jump ends on its bar's end barline above the
   staff (it hung below the staff from 4 sp before the barline, running past a final barline); a Fine, To Coda, Da Coda
   ends on the end barline; a segno or coda — and the coda of To ⟨coda⟩ — is centered on its barline; a custom marker

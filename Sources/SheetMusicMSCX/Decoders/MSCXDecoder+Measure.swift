@@ -40,10 +40,6 @@ extension Measure {
         "line", "page", "section",
     ]
 
-    private static let consumedMarkerChildren: Set = [
-        "label", "markerType", "text",
-    ]
-
     private static let consumedJumpChildren: Set = [
         "continueAt", "jumpTo", "playRepeats", "playUntil", "text",
     ]
@@ -245,32 +241,9 @@ extension Measure {
         }
     }
 
-    private static func decodeMarker(_ node: XMLTreeNode) -> Marker {
-        let markerType = node.first("markerType")?.text ?? ""
-        let kind = Marker.Kind(rawValue: markerType) ?? .other
-        let rawLabel = node.first("label")?.text ?? ""
-        let textNode = node.first("text")
-        // The plain projection: `<text><sym>coda</sym></text>` stays "" — the sym is a glyph, preserved in the markup
-        // and drawn from `Marker.richText` — while formatted words (`<b>D.S. al Coda</b>`) keep the characters that
-        // reading only the element's own character data dropped.
-        let text = textNode.map(StaffText.plainText(of:)) ?? ""
-        return Marker(
-            kind: kind,
-            // MuseScore instantiates markers with the type's default
-            // label (markerTypeTable, marker.cpp:51-62); a file that
-            // omits `<label>` still targets jumps by that default.
-            label: rawLabel.isEmpty ? kind.defaultLabel : rawLabel,
-            text: text,
-            preservedMarkup: node.preservedMarkup(consuming: consumedMarkerChildren),
-            preservedTextMarkup: textNode.flatMap {
-                StaffText.preservedTextMarkup(of: $0, derivedText: text)
-            },
-        )
-    }
-
     private static func decodeJump(_ node: XMLTreeNode) -> Jump {
         let textNode = node.first("text")
-        // The plain projection, as `decodeMarker` above reads it.
+        // The plain projection, as `decodeMarker` reads it.
         let text = textNode.map(StaffText.plainText(of:)) ?? ""
         return Jump(
             jumpTo: node.first("jumpTo")?.text ?? "",

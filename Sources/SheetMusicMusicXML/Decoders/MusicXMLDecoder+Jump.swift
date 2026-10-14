@@ -26,25 +26,12 @@ enum MusicXMLJumpDecoder {
         guard let directionType = direction.first("direction-type") else { return result }
         let sound = direction.first("sound")
 
-        // Markers attached to glyph children of <direction-type>. The `kind`
-        // is derived from the `<sound>` label when present so MSCX's
-        // MuseScore-specific variants ("codab", "varcoda") are preserved as
-        // `.other` rather than collapsing to `.coda`.
+        // A `<segno/>` or `<coda/>`: the glyph names the family, the `<sound>` label the member.
         if directionType.children.contains(where: { $0.name == "segno" }) {
-            let label = sound?.attributes["segno"] ?? "segno"
-            result.markers.append(Marker(
-                kind: Marker.Kind(rawValue: label) ?? .other,
-                label: label,
-                text: "",
-            ))
+            result.markers.append(glyphMarker(family: .segno, label: sound?.attributes["segno"]))
         }
         if directionType.children.contains(where: { $0.name == "coda" }) {
-            let label = sound?.attributes["coda"] ?? "coda"
-            result.markers.append(Marker(
-                kind: Marker.Kind(rawValue: label) ?? .other,
-                label: label,
-                text: "",
-            ))
+            result.markers.append(glyphMarker(family: .coda, label: sound?.attributes["coda"]))
         }
 
         // Word-based navigation ("To Coda", "D.C.", "D.S.", "Fine"): use
@@ -62,6 +49,16 @@ enum MusicXMLJumpDecoder {
         }
 
         return result
+    }
+
+    /// A segno or coda glyph's marker: MuseScore's variant when the `<sound>` label names one of the family
+    /// (`varsegno`; `varcoda`, `codetta`), else the family's plain kind; the label defaults to that kind's, as
+    /// MuseScore's importer gives it (`MusicXmlParserDirection::findMarker`, `importmusicxmlpass2.cpp:4772-4796`).
+    private static func glyphMarker(family: Marker.Kind, label: String?) -> Marker {
+        let members: [Marker.Kind] = family == .segno ? [.segno, .varsegno] : [.coda, .varcoda, .codetta]
+        let named = label.flatMap { Marker.Kind(mscxName: $0) }
+        let kind = named.flatMap { members.contains($0) ? $0 : nil } ?? family
+        return Marker(kind: kind, label: label ?? kind.defaultLabel, text: "")
     }
 
     // MARK: - sound-driven classifiers
@@ -88,11 +85,9 @@ enum MusicXMLJumpDecoder {
 
     private static func toCodaMarker(forSound sound: XMLTreeNode, words: String) -> Marker? {
         guard sound.attributes["tocoda"] != nil else { return nil }
-        // MuseScore stores "To Coda" as `<markerType>coda</markerType>` with
-        // the text distinguishing it from plain-coda variants (`codab` etc.).
-        // Match that mapping so semantic comparison passes.
+        // MuseScore's To Coda (`importmusicxmlpass2.cpp:4790-4794`).
         return Marker(
-            kind: .coda,
+            kind: .toCoda,
             label: sound.attributes["tocoda"] ?? "coda",
             text: words.isEmpty ? "To Coda" : words,
         )
