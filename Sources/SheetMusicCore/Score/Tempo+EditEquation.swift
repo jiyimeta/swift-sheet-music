@@ -9,9 +9,9 @@ import SheetMusicFoundation
 ///
 /// The classifier removes "ca." / "c." / "approx." before it reads, so they may stand anywhere in the equation; the
 /// locators skip them with the same function (`skippingSpacesAndPrefixes`) wherever the classifier would have them
-/// removed, and leave them in the text. A plain text the classifier accepts is therefore always located, with one
-/// exception: a glyph written as `<sym>`s that a text run splits ("♩", a typed space, then a dot symbol) reads as one
-/// beat to the classifier, but as separate runs here.
+/// removed, and leave them in the text. No known input that the classifier accepts is left unlocated (a quarter, a
+/// typed space and a dot symbol, which look like three runs, are located too); `Tempo.rewriteEquation` still carries a
+/// defensive fallback for it — the text is regenerated from the marking — that nothing is known to reach.
 extension Tempo {
     /// Where an equation sits in a plain text: its beat glyph (empty for a glyph written as `<sym>`s, which plain text
     /// drops — it is then the position the glyph would stand at) and its number.

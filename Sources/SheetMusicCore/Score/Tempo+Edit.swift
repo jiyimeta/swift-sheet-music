@@ -77,7 +77,8 @@ extension Tempo {
     /// alone, anchored on the same equation: a glyph that lives only in the markup (a `<sym>`) is not in the plain
     /// text, so there is nothing to rewrite and the number is counted in the text's own beat, which keeps the equation
     /// true to what plays. When no anchor can be established, the text is regenerated from the marking's beat and
-    /// number (derived) rather than a guessed number rewritten.
+    /// number (derived) rather than a guessed number rewritten. That is a defensive fallback: no known input reaches
+    /// it (the classifier and the locators read the same equations), so it has no test.
     private mutating func rewriteEquation(textBeatQuarters: Double) {
         let reading = displayedRichText
         let sameBeat = abs(textBeatQuarters - beatLengthInQuarters) < 1e-9

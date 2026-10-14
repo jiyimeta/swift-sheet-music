@@ -122,20 +122,21 @@ struct SetTempoTextTests {
         #expect(edited.preservedTextMarkup == nil)
     }
 
-    @Test("a glyph split by a typed space reads as one beat to the classifier only: the equation is regenerated")
-    func unanchoredEquationIsRegenerated() throws {
-        // "♩", a typed space and a dot symbol are three runs here but one dotted beat for MuseScore, so the classifier
-        // finds an equation the locator cannot place; nothing is guessed, and the text is regenerated.
+    @Test("a quarter, a typed space and a dot written as symbols is one dotted beat: the number is counted in it")
+    func splitGlyphIsStillLocated() throws {
         let dot = Self.sym("metAugmentationDot")
         let content: [Item] = [.characters("Allegro "), Self.quarter, .characters(" "), dot, .characters(" = 120")]
         let text = "Allegro   = 120"
         let markup = PreservedTextMarkup(content: content, derivedText: text)
         let tempo = Tempo(beatsPerSecond: 2, text: text, preservedTextMarkup: markup)
         let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
-        #expect(edited.text == nil)
-        #expect(edited.preservedTextMarkup == nil)
+        // The classifier reads a dotted quarter (1.5 quarters); 2.2 × 60 / 1.5 is 88. The words are kept, not derived.
+        #expect(edited.text == "Allegro   = 88")
         #expect(edited.followText)
-        #expect(edited.metronomeMarking?.number == "132")
+        // Whatever markup is left must describe the rewritten text (the cross-check drops one that would not).
+        if let kept = edited.preservedTextMarkup {
+            #expect(RichText(markup: kept).plainText == edited.text)
+        }
     }
 
     private typealias Item = PreservedTextMarkup.ContentItem
