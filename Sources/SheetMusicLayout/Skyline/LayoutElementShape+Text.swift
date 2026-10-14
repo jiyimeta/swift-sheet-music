@@ -144,18 +144,6 @@ extension LayoutElementShape {
                     for: .measureNumber, sp: sp,
                 ),
             )
-        case .marker:
-            return LayoutFont(
-                face: "Edwin",
-                pointSize: NotationTextStyle.fontSize(
-                    for: .markerText, sp: sp,
-                ),
-            )
-        case .jump:
-            return LayoutFont(
-                face: "Edwin",
-                pointSize: NotationTextStyle.fontSize(for: .jump, sp: sp),
-            )
         default:
             return styleFont(.staffText, sp: sp)
         }
@@ -191,7 +179,7 @@ extension LayoutElementShape {
                 origin: origin, anchor: .bottomLeading,
             )]
         case .marker, .jump:
-            return navigationLabelRect(for: element, kind: kind, metrics: metrics).map { [$0] } ?? []
+            return navigationLabelRect(for: element).map { [$0] } ?? []
         case let .rehearsalMark(text, origin, frame, _, _, _, properties, richText):
             return [rehearsalMarkRect(
                 text: text, origin: origin, frame: frame, properties: properties,

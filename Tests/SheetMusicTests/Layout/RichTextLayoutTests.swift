@@ -185,29 +185,27 @@ struct RichTextLayoutTests {
         }
     }
 
-    /// A jump "Fine" with the run set 40 pt (the label's own size is 2.5 sp = 12.5). Advance (0.65 + 0.5 + 0.5 + 0.5)
-    /// × 40 = 86, ascent 34, descent 10, so the block is 86 × 44 with ink (0, 0, 86, 44). A jump is anchored
-    /// leading-center (0, 0.5): the block's top-left is (40, 20 - 22) = (40, -2).
-    @Test("a jump's ink is the runs' ink placed by the role's anchor")
-    func jumpInkFollowsRuns() throws {
+    /// A "Fine" with the run set 40 pt: advance (0.65 + 0.5 + 0.5 + 0.5) × 40 = 86, ascent 34, descent 10, so the block
+    /// is 86 × 44 with ink (0, 0, 86, 44). A jump's and a left marker's ink is that block hung off the origin by the
+    /// anchor their kind is drawn at.
+    @Test("a jump's and a marker's ink is their runs' ink placed by their kind's anchor")
+    func navigationInkFollowsRuns() throws {
         try Self.stub {
             let rich = LayoutRichText(
-                RichText(lines: [[.text("Fine", RichTextFormat(size: 40))]]), role: .jump, metrics: Self.metrics,
+                RichText(lines: [[.text("Fine", RichTextFormat(size: 40))]]),
+                style: .repeatRight, metrics: Self.metrics,
             )
-            let element = LayoutElement.jump(text: "Fine", origin: CGPoint(x: 40, y: 20), richText: rich)
-            let ink = try #require(TextInkGeometry.rects(for: element, metrics: Self.metrics)?.first)
-            #expect(Self.close(ink.minX, 40) && Self.close(ink.minY, -2))
-            #expect(Self.close(ink.width, 86) && Self.close(ink.height, 44))
-
-            let marker = LayoutElement.marker(
-                kind: .other, text: "Fine", origin: CGPoint(x: 40, y: 20),
-                richText: LayoutRichText(
-                    RichText(lines: [[.text("Fine", RichTextFormat(size: 40))]]), role: .markerText,
-                    metrics: Self.metrics,
-                ),
-            )
-            let markerInk = try #require(TextInkGeometry.rects(for: marker, metrics: Self.metrics)?.first)
-            #expect(Self.close(markerInk.width, 86) && Self.close(markerInk.height, 44))
+            let origin = CGPoint(x: 40, y: 20)
+            let cases: [(LayoutElement, LayoutRichText.ElementKind)] = [
+                (.jump(text: "Fine", origin: origin, richText: rich), .jump),
+                (.marker(kind: .user, text: "Fine", origin: origin, richText: rich), .marker),
+            ]
+            for (element, kind) in cases {
+                let anchor = LayoutRichText.anchor(for: kind)
+                let ink = try #require(TextInkGeometry.rects(for: element, metrics: Self.metrics)?.first)
+                #expect(Self.close(ink.minX, 40 - anchor.x * 86) && Self.close(ink.minY, 20 - anchor.y * 44))
+                #expect(Self.close(ink.width, 86) && Self.close(ink.height, 44))
+            }
         }
     }
 

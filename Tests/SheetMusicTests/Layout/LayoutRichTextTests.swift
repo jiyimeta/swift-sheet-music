@@ -82,17 +82,17 @@ struct LayoutRichTextTests {
         }
     }
 
-    /// A marker's symbols take `Sid::repeatLeft/RightMusicalSymbolSize` (18) scaled by sp / 5, its text the role's
-    /// sp × 2.5 — at `staffSize: 40`, 36 pt and 25 pt.
+    /// A marker's symbols take `Sid::repeatLeft/RightMusicalSymbolSize` (18) scaled by sp / 5, its text the repeat
+    /// style's 10 pt scaled the same way — at `staffSize: 40`, 36 pt and 20 pt.
     @Test("a marker's symbol is Bravura at 18 pt per reference spatium")
     func markerSymbolSize() {
         Self.stub {
             let rich = LayoutRichText(
                 RichText(lines: [[.text("To Coda ", Self.plain), .symbol(name: "coda", Self.plain)]]),
-                role: .markerText, metrics: StaffMetrics(staffSize: 40),
+                style: .repeatLeft, metrics: StaffMetrics(staffSize: 40),
             )
             let runs = rich.lines[0].runs
-            #expect(Self.close(runs[0].font.pointSize, 25))
+            #expect(Self.close(runs[0].font.pointSize, 20))
             #expect(runs[1].content == .symbol(codepoint: 0xE048))
             #expect(runs[1].font == LayoutFont(face: SMuFLFamily.bravura, pointSize: 36))
         }
@@ -230,21 +230,21 @@ struct LayoutRichTextTests {
         }
     }
 
-    /// "To Coda " is 3.9 em of 12.5 pt marker text, 48.75; its baseline is the text's ascent, 10.625, and the underline
-    /// 0.12 em below it, at 12.125.
+    /// "To Coda " is 3.9 em of 10 pt repeat text, 39; its baseline is the text's ascent, 8.5, and the underline 0.12 em
+    /// below it, at 9.7.
     @Test("an underline spans the text runs only, never a symbol")
     func symbolIsNotUnderlined() {
         Self.stub {
             let underlined = RichTextFormat(underline: true)
             let rich = LayoutRichText(
                 RichText(lines: [[.text("To Coda ", underlined), .symbol(name: "coda", underlined)]]),
-                role: .markerText, metrics: Self.metrics,
+                style: .repeatLeft, metrics: Self.metrics,
             )
             #expect(rich.lines[0].runs.map(\.underline) == [true, false])
             let bars = rich.decorations(at: .zero, anchor: .zero)
             #expect(bars.count == 1)
-            #expect(Self.close(bars[0].from.x, 0) && Self.close(bars[0].to.x, 48.75))
-            #expect(Self.close(bars[0].from.y, 12.125))
+            #expect(Self.close(bars[0].from.x, 0) && Self.close(bars[0].to.x, 39))
+            #expect(Self.close(bars[0].from.y, 9.7))
         }
     }
 

@@ -84,15 +84,13 @@
         /// semibold — so the command has to name that face, or a reader draws Edwin at an x resolved for SF and a
         /// right- or center-anchored label misses its anchor. Drawn back in the face its id and style bits name, the
         /// command paints exactly the ink rect the layout reports.
-        @Test(arguments: 0 ... 2)
+        @Test(arguments: 0 ... 1)
         func notationLabelsPaintTheInkTheLayoutMeasured(kind: Int) throws {
             guard #available(macOS 15.0, *) else { return }
             let origin = ElementHitFixtures.origin
-            let element: LayoutElement = switch kind {
-            case 0: .measureNumber(text: "17", origin: origin)
-            case 1: .staffName(text: "Violin", origin: origin)
-            default: .jump(text: "D.S. al Fine", origin: origin)
-            }
+            let element: LayoutElement = kind == 0
+                ? .measureNumber(text: "17", origin: origin)
+                : .staffName(text: "Violin", origin: origin)
             let doc = ElementHitFixtures.document([element])
             let system = try #require(doc.systems.first)
             let measure = try #require(system.measures.first)

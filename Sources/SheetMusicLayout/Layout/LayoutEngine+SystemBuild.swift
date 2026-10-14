@@ -1052,16 +1052,20 @@ extension LayoutEngine {
                     staffHeights.first ?? 0, metrics.staffHeight,
                 )
                 for (index, marker) in m.markers.enumerated() {
-                    let labelText = marker.text.isEmpty
-                        ? marker.label : marker.text
+                    // What the marker prints — its markup, its words or its type's default — in MuseScore's repeat
+                    // style; never the label, which is a jump target, not text.
+                    let displayed = marker.displayedRichText
                     markers.append(.marker(
                         kind: marker.kind,
-                        text: labelText,
+                        text: displayed.plainText,
                         origin: CGPoint(
                             x: 4, y: staffTopY - metrics.sp,
                         ),
                         identity: .marker(staff: sourceStaff, measureIndex: measureIdx, index: index),
-                        richText: marker.richText.map { LayoutRichText($0, role: .markerText, metrics: metrics) },
+                        richText: LayoutRichText(
+                            marker: displayed, style: marker.kind.isRightMarker ? .repeatRight : .repeatLeft,
+                            metrics: metrics,
+                        ),
                     ))
                 }
                 for (index, jump) in m.jumps.enumerated() {
@@ -1072,7 +1076,7 @@ extension LayoutEngine {
                             y: staffBottomY + metrics.sp,
                         ),
                         identity: .jump(staff: sourceStaff, measureIndex: measureIdx, index: index),
-                        richText: jump.richText.map { LayoutRichText($0, role: .jump, metrics: metrics) },
+                        richText: LayoutRichText(jump.displayedRichText, style: .repeatRight, metrics: metrics),
                     ))
                 }
             }

@@ -239,8 +239,10 @@ extension LayoutRichText {
         case lyric
         /// Placed at the mark's origin moved in by the frame's padding (`RehearsalMarkFrame.paddingSp`).
         case rehearsalMark
-        /// A text marker's runs; a segno or coda draws its glyph instead (`MarkerGlyph.variant`).
+        /// A marker set at its bar's start in MuseScore's REPEAT_LEFT style — Segno, Coda, Custom.
         case marker
+        /// A marker set at its bar's end in REPEAT_RIGHT — Fine, To Coda, Da Coda (`Marker.Kind.isRightMarker`).
+        case rightMarker
         case jump
         /// A tempo marking, hung by its top-left. MuseScore aligns it LEFT, BASELINE (`tempoAlign`), which no
         /// fractional anchor can say for text of any height, so `LayoutEngine.tempoOrigin` hands out the origin that
@@ -251,6 +253,11 @@ extension LayoutRichText {
         /// aligns it LEFT, BASELINE (`tempoChangeAlign`), which no fractional anchor can say for text of any height, so
         /// `SpannerGeometry.gradualTempoChange` hands out the origin that puts the first baseline on the line's y.
         case gradualTempoChangeLabel
+
+        /// The kind a marker of `kind` is placed as.
+        package static func forMarker(_ kind: Marker.Kind) -> ElementKind {
+            kind.isRightMarker ? .rightMarker : .marker
+        }
     }
 
     /// The point of the block an element's `origin` names, for `blockOrigin(at:anchor:)` and everything placed by it
@@ -263,7 +270,7 @@ extension LayoutRichText {
         switch kind {
         case .staffText, .rehearsalMark: CGPoint(x: 0, y: 1)
         case .lyric: CGPoint(x: 0.5, y: 0.5)
-        case .marker: NotationTextStyle.anchorPoint(for: .markerText)
+        case .marker, .rightMarker: NotationTextStyle.anchorPoint(for: .markerText)
         case .jump: NotationTextStyle.anchorPoint(for: .jump)
         case .tempo, .gradualTempoChangeLabel: CGPoint(x: 0, y: 0)
         }

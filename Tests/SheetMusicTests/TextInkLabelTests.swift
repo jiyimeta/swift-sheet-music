@@ -91,11 +91,19 @@
             case 2: return .textMark(kind: .dynamic(anchor: nil), text: "g", origin: p)
             case 3: return .measureNumber(text: "17", origin: p)
             case 4: return .staffName(text: "g", origin: p)
-            case 5: return .jump(text: "D.S.", origin: p)
-            case 6: return .marker(kind: .fine, text: "Fine", origin: p)
+            case 5: return .jump(
+                    text: "D.S.", origin: p, richText: ElementHitFixtures.navigationText("D.S.", style: .repeatRight),
+                )
+            case 6: return .marker(
+                    kind: .fine, text: "Fine", origin: p,
+                    richText: ElementHitFixtures.navigationText("Fine", style: .repeatRight, marker: true),
+                )
             case 7: return .textMark(kind: .tempo(anchor: nil), text: "A\ng", origin: p)
             case 8: return .textMark(kind: .dynamic(anchor: nil), text: "A\ng", origin: p)
-            default: return .marker(kind: .other, text: "g", origin: p)
+            default: return .marker(
+                    kind: .user, text: "g", origin: p,
+                    richText: ElementHitFixtures.navigationText("g", style: .repeatLeft, marker: true),
+                )
             }
         }
 

@@ -17,9 +17,6 @@ extension LayoutRichText {
     static let underlineOffsetEm: CGFloat = 0.12
     static let strikeOffsetEm: CGFloat = 0.28
     static let decorationThicknessEm: CGFloat = 0.06
-    /// MuseScore's musical-symbol size for repeat text — markers and jumps (`repeatLeftMusicalSymbolSize`,
-    /// `repeatRightMusicalSymbolSize`, `engraving/style/styledef.cpp:2059, 2061`).
-    static let repeatTextSymbolSize: CGFloat = 18
 
     /// Typesets `richText` the way MuseScore lays a text element's fragments out (`TextLayout::layoutTextBlock`,
     /// `rendering/score/textlayout.cpp:300-389`): runs left to right from the line's start, each in the element's font
@@ -61,17 +58,6 @@ extension LayoutRichText {
             symbolPointSize: Self.musicalSymbolSize(for: style) * pointScale,
             underline: resolved.style.contains(.underline),
             strike: resolved.style.contains(.strike),
-        )
-    }
-
-    /// `richText` as a navigation label (`NotationTextStyle`) — a marker's or a jump's.
-    init(_ richText: RichText, role: NotationTextStyle.Role, metrics: StaffMetrics) {
-        let pointScale = metrics.sp / TextRoleStyle.referenceSpatiumInPoints
-        self.init(
-            richText,
-            baseFont: NotationTextStyle.font(for: role, sp: metrics.sp),
-            pointScale: pointScale,
-            symbolPointSize: Self.repeatTextSymbolSize * pointScale,
         )
     }
 

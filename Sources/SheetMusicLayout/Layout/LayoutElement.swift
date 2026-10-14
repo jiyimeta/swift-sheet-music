@@ -45,8 +45,9 @@ public enum TremoloAnchor: Sendable, Equatable {
 ///
 /// `richText` — the last member of `.staffText`, `.rehearsalMark`, `.marker`, `.jump` and `.textMark` — is the
 /// element's formatted text, typeset (`LayoutRichText`), while its source markup still describes `text`; `nil` for
-/// plain text. `text` stays the plain projection caret geometry, hit-testing and editing use, and every measurement and
-/// renderer draws the runs when they are present.
+/// plain text — except on `.marker` and `.jump`, which `LayoutEngine` always typesets. `text` stays the plain
+/// projection caret geometry, hit-testing and editing use, and every measurement and renderer draws the runs when they
+/// are present.
 public enum LayoutElement: Sendable, Equatable {
     /// `anchor` names the clef this glyph is: `.explicit` for a declared one, `.staffDefault` for the opening
     /// clef bar 0 synthesizes, and `.restatement` for the one a continuation system redraws at its head — which
@@ -281,6 +282,10 @@ public enum LayoutElement: Sendable, Equatable {
     /// Navigation owned by the first drawn staff's measure list, in the input score's coordinates.
     /// Same-origin marks retain distinct identities. At overlapping ink, only the first is
     /// point-hittable until engraving separates them; the hit tester visits storage order.
+    ///
+    /// `richText` is what draws: `LayoutEngine` always sets it — the mark's markup, its words, or a marker's type
+    /// default (`Marker.displayedRichText`) — and `text` is its plain projection. One built without `richText` draws
+    /// nothing and has no ink, box or hit.
     case marker(
         kind: Marker.Kind, text: String, origin: CGPoint, identity: ScoreElementID? = nil,
         richText: LayoutRichText? = nil,
@@ -315,6 +320,10 @@ public enum LayoutElement: Sendable, Equatable {
     /// Navigation owned by the first drawn staff's measure list, in the input score's coordinates.
     /// Same-origin jumps retain distinct identities. At overlapping ink, only the first is
     /// point-hittable until engraving separates them; the hit tester visits storage order.
+    ///
+    /// `richText` is what draws: `LayoutEngine` always sets it — the mark's markup, its words, or a marker's type
+    /// default (`Marker.displayedRichText`) — and `text` is its plain projection. One built without `richText` draws
+    /// nothing and has no ink, box or hit.
     case jump(text: String, origin: CGPoint, identity: ScoreElementID? = nil, richText: LayoutRichText? = nil)
     case measureRepeat(count: Int, origin: CGPoint)
     /// Multi-measure rest H-bar with a count printed above. Replaces

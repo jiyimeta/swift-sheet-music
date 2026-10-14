@@ -320,14 +320,19 @@ extension LayoutMeasureIdentityTests {
         #expect(markerOrigin.x == 4)
         #expect(jumpOrigin.x == measure.width - 28)
         #expect(abs(jumpOrigin.y - markerOrigin.y - 42) < 1e-9)
-        #expect(measure.markers[1] == .marker(
-            kind: .coda, text: "A coda", origin: markerOrigin,
-            identity: .marker(staff: owner, measureIndex: 2, index: 1),
-        ))
-        #expect(measure.jumps[1] == .jump(
-            text: "A jump", origin: jumpOrigin,
-            identity: .jump(staff: owner, measureIndex: 2, index: 1),
-        ))
+        // Every marker and jump carries the runs layout set it in; `text` is their plain projection.
+        guard case let .marker(codaKind, codaText, codaOrigin, codaID, codaRuns?) = measure.markers[1],
+              case let .jump(jumpText, secondJumpOrigin, secondJumpID, jumpRuns?) = measure.jumps[1]
+        else {
+            Issue.record("Expected typeset navigation elements")
+            return
+        }
+        let codaContent = codaRuns.lines.flatMap(\.runs).map(\.content)
+        let jumpContent = jumpRuns.lines.flatMap(\.runs).map(\.content)
+        #expect(codaKind == .coda && codaText == "A coda" && codaContent == [.text("A coda")])
+        #expect(codaOrigin == markerOrigin && codaID == .marker(staff: owner, measureIndex: 2, index: 1))
+        #expect(jumpText == "A jump" && jumpContent == [.text("A jump")])
+        #expect(secondJumpOrigin == jumpOrigin && secondJumpID == .jump(staff: owner, measureIndex: 2, index: 1))
         for element in measure.markers + measure.jumps {
             #expect(element.elementItemID == element.elementID.map(ScoreItemID.element))
             let translated = LayoutEngine.translate(element: element, dy: 17)
@@ -376,11 +381,12 @@ extension LayoutMeasureIdentityTests {
         let single = try Self.navigationMeasure(reference, index: 0)
         #expect(measure.markers == single.markers)
         #expect(measure.jumps == single.jumps)
-        guard case let .marker(_, label, _, _, _) = measure.markers[0] else {
+        // The segno prints its default glyph on either staff; the coda's words say whose staff is drawn.
+        guard case let .marker(_, coda, _, _, _) = measure.markers[1] else {
             Issue.record("Expected a marker")
             return
         }
-        #expect(label == (hiddenIndex == 0 ? "B segno" : "A segno"))
+        #expect(coda == (hiddenIndex == 0 ? "B coda" : "A coda"))
     }
 
     @Test("An empty first part does not become the navigation owner")

@@ -22,38 +22,17 @@ extension LayoutElementShape {
         return rich.inkRect(at: origin, anchor: unit).map { box.union($0) } ?? box
     }
 
-    /// A marker's or jump's skyline box: its runs' box when it draws them, else the plain label's, hung leading-center.
-    ///
-    /// A marker whose kind draws a glyph — a segno or coda (`MarkerGlyph.variant`) — draws that glyph whatever its
-    /// markup says, so its runs size nothing here, just as `TextInkGeometry.labelRects` takes no ink from them.
-    static func navigationLabelRect(
-        for element: LayoutElement, kind: ShapeItemKind, metrics: StaffMetrics,
-    ) -> CGRect? {
-        let text: String
-        let origin: CGPoint
-        let rich: LayoutRichText?
-        let richKind: LayoutRichText.ElementKind
+    /// A marker's or jump's skyline box: its runs' box (`textRect(rich:origin:kind:)`), hung by the anchor its kind is
+    /// drawn at. Every marker draws its runs — a segno or coda is a symbol run of its text, as in MuseScore — so the
+    /// marker's kind only decides which end of its bar it hangs from. `nil` for one without runs, which draws nothing.
+    static func navigationLabelRect(for element: LayoutElement) -> CGRect? {
         switch element {
-        case let .marker(markerKind, markerText, markerOrigin, _, richText):
-            text = markerText
-            origin = markerOrigin
-            if case .text = MarkerGlyph.variant(for: markerKind, text: markerText) {
-                rich = richText
-            } else {
-                rich = nil
-            }
-            richKind = .marker
-        case let .jump(jumpText, jumpOrigin, _, richText):
-            text = jumpText
-            origin = jumpOrigin
-            rich = richText
-            richKind = .jump
+        case let .marker(kind, _, origin, _, rich?):
+            textRect(rich: rich, origin: origin, kind: .forMarker(kind))
+        case let .jump(_, origin, _, rich?):
+            textRect(rich: rich, origin: origin, kind: .jump)
         default:
-            return nil
+            nil
         }
-        if let rich {
-            return textRect(rich: rich, origin: origin, kind: richKind)
-        }
-        return textRect(text: text, font: font(for: kind, metrics: metrics), origin: origin, anchor: .leadingCenter)
     }
 }

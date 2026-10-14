@@ -13,10 +13,10 @@ import Testing
 /// Element kinds whose runs ride on another kind's layout or are overridden by a glyph.
 ///
 /// A swing marking and an instrument change are model elements of their own that print as staff text
-/// (`LayoutEngine+Placement`), so they carry their runs on the `.staffText` they lay out as, in their own style. A
-/// segno or coda marker draws its glyph whatever its markup says. Measured with the installed provider
+/// (`LayoutEngine+Placement`), so they carry their runs on the `.staffText` they lay out as, in their own style. Every
+/// marker draws its runs, a segno or coda included. Measured with the installed provider
 /// (`LayoutEngine.layout` asserts it is not the stub), so the checks are relations.
-@Suite("Rich text on swing markings, instrument changes and glyph markers")
+@Suite("Rich text on swing markings, instrument changes and markers")
 struct RichTextElementKindTests {
     private let _installFontMetrics = TestSupport.installFontMetrics
 
@@ -110,23 +110,22 @@ struct RichTextElementKindTests {
         }
     }
 
-    /// A segno or coda draws its glyph whatever its markup says (`MarkerGlyph.variant`), so its runs size its skyline
-    /// box no more than they give it ink (`TextInkGeometry.labelRects`). The control: a text marker carrying the same
-    /// runs is boxed by them.
-    @Test("a glyph marker's skyline box ignores its runs; a text marker's is theirs")
-    func glyphMarkerSkylineIgnoresRuns() {
+    /// Every marker draws its runs — a segno or coda is a symbol run of its text, as in MuseScore — so its skyline box
+    /// is its runs' box whatever its kind, and a marker without runs reserves nothing.
+    @Test("a marker's skyline box is its runs' box, whatever its kind")
+    func markerSkylineIsItsRuns() {
         let metrics = StaffMetrics(staffSize: 20)
         let origin = CGPoint(x: 40, y: 20)
         let coda = LayoutRichText(
-            RichText(lines: [[.symbol(name: "coda", RichTextFormat())]]), role: .markerText, metrics: metrics,
+            marker: RichText(lines: [[.symbol(name: "coda", RichTextFormat())]]), style: .repeatLeft, metrics: metrics,
         )
         func boxes(_ kind: Marker.Kind, _ rich: LayoutRichText?) -> [CGRect] {
             LayoutElementShape.autoplacedRects(
                 for: .marker(kind: kind, text: "", origin: origin, richText: rich), kind: .marker, metrics: metrics,
             )
         }
-        #expect(boxes(.coda, coda) == boxes(.coda, nil))
-        #expect(boxes(.other, coda) != boxes(.other, nil))
-        #expect((boxes(.other, coda).first?.width ?? 0) > 0)
+        #expect(boxes(.coda, coda) == boxes(.user, coda))
+        #expect((boxes(.coda, coda).first?.width ?? 0) > 0)
+        #expect(boxes(.coda, nil).isEmpty)
     }
 }

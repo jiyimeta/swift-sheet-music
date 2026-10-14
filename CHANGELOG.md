@@ -80,6 +80,11 @@ and this project adheres to
 
 ### Changed
 
+- **Every marker and jump is measured, reserved and hit-tested by its runs.** Layout typesets each one's
+  `displayedRichText` in MuseScore's repeat style (`TextStyleType.repeatLeft` / `.repeatRight`) and `LayoutElement.marker` /
+  `.jump` always carry it; one built without `richText` has no ink, box or hit. The marker's `text` payload is the
+  printed text's plain projection, no longer its label. A segno or coda used to be hit by its glyph's ink but reserved
+  by its label word, and every label was measured in Edwin while drawn in the system face.
 - **Breaking: `Marker.Kind` has three more cases** (`.daCoda`, `.daDoubleCoda`, `.user`), so an exhaustive switch over
   it no longer compiles. The raw values of the existing cases are unchanged.
 - **`resolvedTempoMap()` skips voices with no gradual tempo change** when looking for ramps (performance).

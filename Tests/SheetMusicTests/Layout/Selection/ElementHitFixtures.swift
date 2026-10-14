@@ -1,6 +1,6 @@
 import SheetMusicCore
 import SheetMusicFoundation
-import SheetMusicLayout
+@testable import SheetMusicLayout
 
 #if !canImport(CoreGraphics)
     /// On Android and WebAssembly, SheetMusicCore and SheetMusicLayout both export portable
@@ -31,6 +31,16 @@ enum ElementHitFixtures {
     static let noteID = NoteID(
         staff: anchor.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
     )
+
+    /// A navigation mark's runs as layout sets them — `LayoutEngine` always does; a mark without them draws nothing.
+    /// Installs the suite's provider first: `selection3Samples` is evaluated as test arguments, before any suite's
+    /// `_installFontMetrics` runs, and would otherwise be typeset with the stub.
+    static func navigationText(_ xmlText: String, style: TextStyleType, marker: Bool = false) -> LayoutRichText {
+        _ = TestSupport.installFontMetrics
+        return marker
+            ? LayoutRichText(marker: RichText(xmlText: xmlText), style: style, metrics: metrics)
+            : LayoutRichText(RichText(xmlText: xmlText), style: style, metrics: metrics)
+    }
 
     struct Sample: Sendable {
         let element: LayoutElement

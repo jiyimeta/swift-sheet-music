@@ -25,13 +25,11 @@ extension TextInkGeometry {
             return notationRects(text: text, role: .measureNumber, origin: origin, metrics: metrics)
         case let .staffName(text, origin):
             return notationRects(text: text, role: .staffName, origin: origin, metrics: metrics)
-        case let .jump(text, origin, _, richText):
-            return richRects(richText, origin: origin, kind: .jump)
-                ?? notationRects(text: text, role: .jump, origin: origin, metrics: metrics)
-        case let .marker(kind, text, origin, _, richText):
-            guard case let .text(label) = MarkerGlyph.variant(for: kind, text: text) else { return nil }
-            return richRects(richText, origin: origin, kind: .marker)
-                ?? notationRects(text: label, role: .markerText, origin: origin, metrics: metrics)
+        // A marker or jump is its runs, which layout always sets; without them it has no ink.
+        case let .jump(_, origin, _, richText):
+            return richRects(richText, origin: origin, kind: .jump) ?? []
+        case let .marker(kind, _, origin, _, richText):
+            return richRects(richText, origin: origin, kind: .forMarker(kind)) ?? []
         default: return nil
         }
     }
