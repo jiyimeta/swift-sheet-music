@@ -201,9 +201,8 @@ public struct Spanner: Sendable, Equatable {
         }
 
         public var subtype: Subtype
-        /// `<veloChange>` value (1..127). Used when bracket Dynamics
-        /// don't pin both endpoints. MuseScore's default of 0 is
-        /// normalized to nil at decode time.
+        /// `<veloChange>` value (1..127). Kept and saved; playback does not read it, as MuseScore 4's does not
+        /// (`HairpinRamps.resolveRamp`). MuseScore's default of 0 is normalized to nil at decode time.
         public var veloChange: Int?
         public var veloChangeMethod: VeloChangeMethod
 

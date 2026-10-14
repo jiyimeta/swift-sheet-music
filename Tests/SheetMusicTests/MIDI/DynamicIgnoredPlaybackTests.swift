@@ -41,13 +41,13 @@ struct DynamicIgnoredPlaybackTests {
         #expect(try F.velocities(score) == [49, 37, 25, 13, 1, 1, 1, 1])
     }
 
-    @Test("a crescendo does not aim at a dynamic that does not play")
+    @Test("a crescendo does not aim at a dynamic that does not play: it climbs one level")
     func crescendoIgnoresAnIgnoredMark() throws {
         let score = F.score([
             [F.dynamic("p"), F.crescendo(), F.quarter, F.quarter, F.quarter, F.quarter],
             [F.dynamic("fz"), F.quarter, F.quarter, F.quarter, F.quarter],
         ])
-        #expect(try F.velocities(score) == [49, 49, 49, 49, 49, 49, 49, 49])
+        #expect(try F.velocities(score) == [49, 53, 57, 60, 64, 64, 64, 64])
     }
 
     @Test("the roles, by MuseScore 4's tables")

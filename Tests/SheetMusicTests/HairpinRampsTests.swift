@@ -139,7 +139,8 @@ struct HairpinRampsCollectTests {
         #expect(ramps.first?.endVelocity == 96)
     }
 
-    @Test func noBracketUsesVeloChange() {
+    /// MuseScore 4 reads no `<veloChange>`: with nothing at its end, a crescendo climbs one of its levels — mp to mf.
+    @Test func noEndDynamicClimbsOneLevelWhateverVeloChangeSays() {
         let s = staff([
             makeMeasure([
                 .dynamic(mp()), .spanner(cresc(veloChange: 20)),
@@ -152,17 +153,13 @@ struct HairpinRampsCollectTests {
             instrument: instrument(), division: division,
             tempoMap: ResolvedTempoMap(),
         )
-        #expect(ramps.first?.endVelocity == 84) // 64 + 20
+        #expect(ramps.first?.endVelocity == 80) // one level above mp, whatever <veloChange> says
     }
 
-    /// A wedge with nothing to aim at does nothing. MuseScore 3 defaults
-    /// `Hairpin::veloChange` to 0 and `ChangeMap::cleanupStage3` flattens
-    /// any ramp it cannot resolve to a neighbouring fix, so a crescendo
-    /// with no Dynamic in reach is silent there; MuseScore 4's MIDI
-    /// export, which runs the same `CompatMidiRender` path, agrees.
-    /// Inventing a level instead would put a number in the playback that
-    /// nobody wrote in the score.
-    @Test func noBracketNoVeloChangeDoesNotRamp() {
+    /// A wedge with nothing to aim at climbs one MuseScore 4 level (`PlaybackContext::handleHairpin`,
+    /// `playbackcontext.cpp:613-615`); MuseScore 3 and MuseScore 4's MIDI export leave it flat, MuseScore 4's playback
+    /// does not (owner decision c).
+    @Test func noEndDynamicClimbsOneLevel() {
         let s = staff([
             makeMeasure([
                 .dynamic(mp()), .spanner(cresc()),
@@ -176,7 +173,7 @@ struct HairpinRampsCollectTests {
             tempoMap: ResolvedTempoMap(),
         )
         #expect(ramps.first?.startVelocity == 64)
-        #expect(ramps.first?.endVelocity == 64)
+        #expect(ramps.first?.endVelocity == 80)
     }
 
     @Test func decrescendoSign() {
@@ -234,7 +231,7 @@ struct HairpinRampsCollectTests {
     /// `HairpinSegment::findElementToSnapAfter`), never from the next
     /// dynamic wherever it happens to be. A `ppp` four measures later
     /// describes a different passage, not this hairpin's target — so the
-    /// wedge is left with nothing to aim at and stays flat.
+    /// wedge is left with nothing at its end and climbs one level.
     @Test func distantDynamicDoesNotBracketTheHairpin() {
         let s = staff([
             makeMeasure([
@@ -254,13 +251,11 @@ struct HairpinRampsCollectTests {
             instrument: instrument(), division: division,
             tempoMap: ResolvedTempoMap(),
         )
-        #expect(ramps.first?.endVelocity == 64)
+        #expect(ramps.first?.endVelocity == 80)
     }
 
-    /// A bracketing Dynamic that contradicts the wedge — a crescendo
-    /// ending on a *quieter* mark — is not the hairpin's target either,
-    /// and MuseScore 3.6 flattens the ramp when the two disagree about
-    /// direction (`ChangeMap::cleanupStage3`). It never ramps backwards.
+    /// A crescendo running into a *quieter* mark does not aim at it: MuseScore 4 climbs one level instead, up to just
+    /// short of the mark (`playbackcontext.cpp:609-624`).
     @Test func endDynamicContradictingTheWedgeIsIgnored() {
         let s = staff([
             makeMeasure([
@@ -277,7 +272,7 @@ struct HairpinRampsCollectTests {
             instrument: instrument(), division: division,
             tempoMap: ResolvedTempoMap(),
         )
-        #expect(ramps.first?.endVelocity == 64)
+        #expect(ramps.first?.endVelocity == 80)
     }
 
     /// Mirror of `endDynamicContradictingTheWedgeIsIgnored` for a
@@ -298,14 +293,11 @@ struct HairpinRampsCollectTests {
             instrument: instrument(), division: division,
             tempoMap: ResolvedTempoMap(),
         )
-        #expect(ramps.first?.endVelocity == 96)
+        #expect(ramps.first?.endVelocity == 80)
     }
 
-    /// An explicit `<veloChange>` is MuseScore 3's own way of spelling
-    /// the ramp's size, and it wins over the bracketing Dynamic there:
-    /// `Score::updateHairpin` passes it straight to `addRamp`, and only
-    /// a change of `0` sends `ChangeMap` looking for a neighbouring fix.
-    @Test func explicitVeloChangeWinsOverBracketDynamic() {
+    /// MuseScore 4 reads no `<veloChange>`: the f at the end is the target.
+    @Test func theEndDynamicWinsOverVeloChange() {
         let s = staff([
             makeMeasure([
                 .dynamic(mp()), .spanner(cresc(veloChange: 20)),
@@ -321,7 +313,7 @@ struct HairpinRampsCollectTests {
             instrument: instrument(), division: division,
             tempoMap: ResolvedTempoMap(),
         )
-        #expect(ramps.first?.endVelocity == 84) // 64 + 20, not the f's 96
+        #expect(ramps.first?.endVelocity == 96)
     }
 
     /// End-to-end through MidiRenderer: the collected ramp is applied to
@@ -443,12 +435,10 @@ struct HairpinRampsCollectTests {
         #expect(Array(velocities[8...]) == Array(repeating: 96, count: 4))
     }
 
-    /// …and a part that never says where its wedges land keeps one
-    /// level throughout. A dozen `cresc.` and not one dynamic is the
-    /// shape of most hand-entered charts; MuseScore 3.6.2 and MuseScore
-    /// 4 both export such a part flat, and inventing a step per wedge
-    /// would ratchet it up with nothing in the score asking for it.
-    @Test func aPartWithNoWrittenTargetsStaysLevel() throws {
+    /// …and a part that never says where its wedges land climbs one MuseScore 4 level per wedge — MuseScore 4's
+    /// playback ratchets a dozen `cresc.` up a dozen levels; MuseScore 3.6.2 and MuseScore 4's MIDI export play it flat
+    /// (owner decision c: the playback).
+    @Test func aPartWithNoWrittenTargetsClimbsALevelPerWedge() throws {
         let s = staff([
             makeMeasure([
                 .dynamic(mp()), .spanner(cresc()),
@@ -475,7 +465,7 @@ struct HairpinRampsCollectTests {
             if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }
         }
         #expect(velocities.count == 16)
-        #expect(velocities.allSatisfy { $0 == 64 })
+        #expect(velocities == [64, 68, 72, 76, 80, 80, 80, 80, 80, 84, 88, 92, 96, 96, 96, 96])
     }
 
     /// A second hairpin picks up where the first left off. MS3 spells
@@ -501,11 +491,11 @@ struct HairpinRampsCollectTests {
         )
         let wedges = ramps.filter { $0.role == .wedge }
         #expect(wedges.count == 2)
-        let reached = 64 + 20 // the first wedge's own `<veloChange>`
+        let reached = 80 // one level above the mp; <veloChange> is not read
         #expect(wedges[1].startVelocity == reached)
-        // The second wedge has nothing to aim at, so it holds that level
-        // rather than falling back to the `mp`.
-        #expect(wedges[1].endVelocity == reached)
+        // The second wedge has nothing to aim at either, so it climbs one
+        // more level from there rather than starting over from the `mp`.
+        #expect(wedges[1].endVelocity == 96)
     }
 
     /// A Dynamic the wedge could not adopt still governs its own note.
@@ -693,5 +683,82 @@ struct HairpinCheckpointTests {
         // Past the last mark the wedge has nothing left to aim at, and
         // the level it reached holds beyond the wedge's end.
         #expect(Array(v[6...]) == Array(repeating: 112, count: v.count - 6))
+    }
+}
+
+/// MuseScore 4 plays a hairpin toward the dynamic at its end when that dynamic lies in the hairpin's direction, and
+/// otherwise one of its own levels (`DYNAMIC_LEVEL_STEP`, 5 %) past where it starts; it never reads `<veloChange>`
+/// (`PlaybackContext::handleHairpin`, `engraving/playback/playbackcontext.cpp:569-647`). This library's velocities
+/// stand for MuseScore 4's levels through `dynList` (`MuseScoreDynamicLevels`) (owner decision c).
+@Suite("Hairpin end level, as MuseScore 4 plays it")
+struct HairpinEndLevelTests {
+    private typealias F = DynamicPlaybackFixtures
+
+    @Test("one level is one ordinary dynamic", arguments: [
+        (49, true, 64), (64, true, 80), (80, true, 96), (96, true, 112), (112, true, 126), (126, true, 127),
+        (127, true, 127), (80, false, 64), (49, false, 33), (33, false, 16), (5, false, 1), (1, false, 1),
+    ] as [(Int, Bool, Int)])
+    func oneStepIsOneOrdinaryDynamic(from: Int, up: Bool, to: Int) {
+        #expect(MuseScoreDynamicLevels.oneStep(from: from, up: up) == to)
+    }
+
+    @Test("a velocity between two dynamics steps from where it stands")
+    func betweenTwoDynamics() {
+        // 60 is 11/15 of the way from p (49, 42.5 %) to mp (64, 47.5 %): 46.17 %. One level up, 51.17 %, is 0.733 of
+        // the way from mp to mf (80, 52.5 %): 75.7, so 76.
+        #expect(MuseScoreDynamicLevels.oneStep(from: 60, up: true) == 76)
+        #expect(MuseScoreDynamicLevels.level(ofVelocity: 80) == 5250)
+        #expect(MuseScoreDynamicLevels.velocity(ofLevel: 5750) == 96)
+    }
+
+    @Test("a crescendo with no dynamic at its end climbs one level, and holds it")
+    func crescendoWithNoEndDynamicClimbsOneLevel() throws {
+        let score = F.score([
+            [F.dynamic("p"), F.crescendo(), F.quarter, F.quarter, F.quarter, F.quarter],
+            [F.quarter, F.quarter, F.quarter, F.quarter],
+        ])
+        #expect(try F.velocities(score) == [49, 53, 57, 60, 64, 64, 64, 64])
+    }
+
+    @Test("a diminuendo with no dynamic at its end falls one level")
+    func diminuendoWithNoEndDynamicFallsOneLevel() throws {
+        let score = F.score([
+            [F.dynamic("f"), F.diminuendo(), F.quarter, F.quarter, F.quarter, F.quarter],
+            [F.quarter, F.quarter, F.quarter, F.quarter],
+        ])
+        #expect(try F.velocities(score) == [96, 92, 88, 84, 80, 80, 80, 80])
+    }
+
+    @Test("<veloChange> is not read: the end dynamic wins, and without one the change is one level")
+    func veloChangeIsNotRead() throws {
+        let withEnd = F.score([
+            [F.dynamic("p"), F.crescendo(veloChange: 10), F.quarter, F.quarter, F.quarter, F.quarter],
+            [F.dynamic("f"), F.quarter],
+        ])
+        #expect(try F.velocities(withEnd) == [49, 61, 73, 84, 96])
+        let withoutEnd = F.score([
+            [F.dynamic("p"), F.crescendo(veloChange: 40), F.quarter, F.quarter, F.quarter, F.quarter],
+            [F.quarter],
+        ])
+        #expect(try F.velocities(withoutEnd) == [49, 53, 57, 60, 64])
+    }
+
+    @Test("an end dynamic against the hairpin's direction: one level up to it, then the dynamic on its own beat")
+    func endDynamicAgainstTheDirection() throws {
+        let score = F.score([
+            [F.dynamic("mf"), F.crescendo(), F.quarter, F.quarter, F.quarter, F.quarter],
+            [F.dynamic("p"), F.quarter, F.quarter],
+        ])
+        #expect(try F.velocities(score) == [80, 84, 88, 92, 49, 49])
+    }
+
+    @Test("hairpins with no dynamics climb a level each")
+    func successiveHairpinsClimbALevelEach() throws {
+        let score = F.score([
+            [F.dynamic("mp"), F.crescendo(), F.quarter, F.quarter, F.quarter, F.quarter],
+            [F.crescendo(), F.quarter, F.quarter, F.quarter, F.quarter],
+            [F.quarter],
+        ])
+        #expect(try F.velocities(score) == [64, 68, 72, 76, 80, 84, 88, 92, 96])
     }
 }

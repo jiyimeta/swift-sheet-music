@@ -94,6 +94,10 @@ and this project adheres to
 
 ### Changed
 
+- **A hairpin aims where MuseScore 4's playback aims it** (import-fidelity, owner decision c): at the dynamic on its end
+  when that dynamic lies in its direction, otherwise one MuseScore 4 level past where it starts — p to mp, mf to f
+  (`MuseScoreDynamicLevels`) — instead of staying flat; `<veloChange>`, which MuseScore 4 does not read, no longer sets
+  the change. A part of hairpins with no dynamics now climbs a level per crescendo, as MuseScore 4 plays it.
 - **`Dynamic.defaultVelocity(for:)` is MuseScore's whole `dynList`** (import-fidelity F4.5): sf, sfz, sfp, sfpp, rf,
   rfz, fz, r and s are 112, sff and sffz 126, sfff and sfffz 127, fp and m 96, pf and n 49, z 80, pppppp 1, ffffff 127 —
   all 80 before but the plain levels. A palette `sf` is now saved with `<velocity>112</velocity>`, as MuseScore saves
