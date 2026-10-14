@@ -147,43 +147,6 @@ extension LayoutEngine {
         ))
     }
 
-    /// Build a map from every non-empty lyric syllable to its
-    /// "effective" melisma duration. Treats ties and melismas as
-    /// independent concepts (a tie spans two notes of the same
-    /// pitch played as one; a melisma is a syllable held over a
-    /// stretch of voice time). The melisma length comes solely from
-    /// `<ticks>`. We keep this helper so the layout pipeline still
-    /// has a single place to compute the per-lyric duration and the
-    /// per-measure continuation plan stays consistent.
-    static func computeEffectiveMelismaTicks(
-        score: Score, division: Int,
-    ) -> [MelismaLyricKey: Int] {
-        var map: [MelismaLyricKey: Int] = [:]
-        for (staffIdx, entry) in score.allStaves.enumerated() {
-            let staff = entry.staff
-            for (mIdx, measure) in staff.measures.enumerated() {
-                for (vIdx, voice) in measure.voices.enumerated() {
-                    for (eIdx, el) in voice.elements.enumerated() {
-                        guard case let .chord(chord) = el else { continue }
-                        for (verseIdx, lyric)
-                            in chord.lyrics.enumerated()
-                            where !lyric.text.isEmpty
-                        {
-                            map[MelismaLyricKey(
-                                staffIndex: staffIdx,
-                                measureIndex: mIdx,
-                                voiceIndex: vIdx,
-                                elementIndex: eIdx,
-                                verseIndex: verseIdx,
-                            )] = lyric.ticks
-                        }
-                    }
-                }
-            }
-        }
-        return map
-    }
-
     /// Walk the score once, identify every lyric with
     /// `ticks > chord.duration`, and compute the continuation lines
     /// that need to be drawn on every measure after the anchor.
@@ -203,7 +166,6 @@ extension LayoutEngine {
     ///   barline — the melisma continues to the NEXT measure.
     static func computeMelismaContinuations( // swiftlint:disable:this function_body_length
         score: Score, division: Int,
-        effectiveTicks: [MelismaLyricKey: Int],
     ) -> [[[MelismaContinuation]]] {
         var result: [[[MelismaContinuation]]] = score.allStaves.map { entry in
             Array(repeating: [], count: entry.staff.measures.count)
@@ -238,9 +200,7 @@ extension LayoutEngine {
                         : Fraction(numerator: 4, denominator: 4)
                     guard voiceIdx < measure.voices.count else { continue }
                     var tickInMeasure = 0
-                    for (eIdx, el)
-                        in measure.voices[voiceIdx].elements.enumerated()
-                    {
+                    for el in measure.voices[voiceIdx].elements {
                         switch el {
                         case let .chord(c):
                             let chordTicks = c.duration
@@ -250,15 +210,7 @@ extension LayoutEngine {
                                 in c.lyrics.enumerated()
                                 where lyric.visible && !lyric.text.isEmpty
                             {
-                                let key = MelismaLyricKey(
-                                    staffIndex: staffIdx,
-                                    measureIndex: mIdx,
-                                    voiceIndex: voiceIdx,
-                                    elementIndex: eIdx,
-                                    verseIndex: verseIdx,
-                                )
-                                let ticks = effectiveTicks[key]
-                                    ?? lyric.ticks
+                                let ticks = lyric.ticks
                                 guard ticks > 0 else { continue }
                                 appendContinuations(
                                     startMeasureIdx: mIdx,

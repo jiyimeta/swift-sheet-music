@@ -23,20 +23,7 @@ extension LayoutSystem {
     /// `attachGlissandi`. Each computes its own segments per system and
     /// then needs a system that is identical apart from carrying them.
     public func addingSpanners(_ extra: [LayoutElement]) -> LayoutSystem {
-        LayoutSystem(
-            origin: origin,
-            size: size,
-            measures: measures,
-            staffOrigins: staffOrigins,
-            staffAddresses: staffAddresses,
-            staffGeometries: staffGeometries,
-            partLabels: partLabels,
-            brackets: brackets,
-            spanners: spanners + extra,
-            sp: sp,
-            invisibleSpanners: invisibleSpanners,
-            showsInvisibleElements: showsInvisibleElements,
-        )
+        LayoutSystem(rebuilding: self, origin: origin, spanners: spanners + extra)
     }
 
     /// A copy of this system moved `dy` further down the document.
@@ -48,19 +35,6 @@ extension LayoutSystem {
     /// cheaply. A negative `dy` lifts it — that is how a page-mode
     /// renderer brings its first system to y ≈ 0.
     public func movedBy(dy: CGFloat) -> LayoutSystem {
-        LayoutSystem(
-            origin: CGPoint(x: origin.x, y: origin.y + dy),
-            size: size,
-            measures: measures,
-            staffOrigins: staffOrigins,
-            staffAddresses: staffAddresses,
-            staffGeometries: staffGeometries,
-            partLabels: partLabels,
-            brackets: brackets,
-            spanners: spanners,
-            sp: sp,
-            invisibleSpanners: invisibleSpanners,
-            showsInvisibleElements: showsInvisibleElements,
-        )
+        LayoutSystem(rebuilding: self, origin: CGPoint(x: origin.x, y: origin.y + dy), spanners: spanners)
     }
 }

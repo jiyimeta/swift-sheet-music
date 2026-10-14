@@ -105,6 +105,7 @@ extension LayoutEngine {
                             )
                             out.append(contentsOf: pairings(
                                 for: chord, start: start, staff: staff,
+                                durations: durations,
                                 startTick: tick, division: score.division,
                             ))
                             tick += chord.duration
@@ -133,6 +134,7 @@ extension LayoutEngine {
         for chord: Chord,
         start: ChordRestRef,
         staff: Staff,
+        durations: [Fraction],
         startTick: Int,
         division: Int,
     ) -> [SlurPairing] {
@@ -145,7 +147,7 @@ extension LayoutEngine {
             // Hidden and unresolved slurs still occupy an ordinal in their owner's storage.
             guard spanner.visible else { continue }
             guard let end = slurEnd(
-                spanner: spanner, staff: staff,
+                spanner: spanner, staff: staff, durations: durations,
                 startMeasureIndex: start.measureIndex,
                 startTick: startTick,
                 voiceIndex: start.voiceIndex,
@@ -187,6 +189,7 @@ extension LayoutEngine {
     private static func slurEnd(
         spanner: Spanner,
         staff: Staff,
+        durations: [Fraction],
         startMeasureIndex: Int,
         startTick: Int,
         voiceIndex: Int,
@@ -198,11 +201,11 @@ extension LayoutEngine {
             nextMeasuresOffset: spanner.nextMeasuresOffset,
             nextFractionsOffset: spanner.nextFractionsOffset,
             measures: staff.measures,
+            durations: durations,
             division: division,
         ) else { return nil }
         let measure = staff.measures[anchor.measureIndex]
         guard measure.voices.indices.contains(voiceIndex) else { return nil }
-        let durations = staff.measures.effectiveMeasureDurations()
         let measureDuration = durations.indices.contains(anchor.measureIndex)
             ? durations[anchor.measureIndex]
             : Fraction(numerator: 4, denominator: 4)
@@ -236,15 +239,18 @@ extension LayoutEngine {
     /// Returns `nil` when the offset lands outside the score — the "end
     /// past the last measure" case, dropped in silence like `resolveTies`'
     /// unmatched ties.
+    ///
+    /// `durations` is `measures.effectiveMeasureDurations()`, taken from the caller so every slur on a staff shares
+    /// one walk of it instead of repeating it per slur.
     static func slurEndAnchor(
         startMeasureIndex: Int,
         startTick: Int,
         nextMeasuresOffset: Int,
         nextFractionsOffset: Fraction?,
         measures: [Measure],
+        durations: [Fraction],
         division: Int,
     ) -> (measureIndex: Int, tick: Int)? {
-        let durations = measures.effectiveMeasureDurations()
         func width(_ index: Int) -> Int {
             let duration = durations.indices.contains(index)
                 ? durations[index]

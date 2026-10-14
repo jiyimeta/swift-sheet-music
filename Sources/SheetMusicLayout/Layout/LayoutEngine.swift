@@ -71,12 +71,8 @@ public enum LayoutEngine {
             spacing: options.spacing,
         )
         let margins = options.spacing.margins
-        let effectiveMelismaTicks = computeEffectiveMelismaTicks(
-            score: score, division: score.division,
-        )
         let melismas = computeMelismaContinuations(
             score: score, division: score.division,
-            effectiveTicks: effectiveMelismaTicks,
         )
         let multiMeasureRestPlan = MultiMeasureRestPlanner.plan(
             for: score, policy: options.multiMeasureRest,
@@ -105,7 +101,6 @@ public enum LayoutEngine {
             metrics: metrics,
             availableWidth: availableWidth,
             melismaContinuations: melismas,
-            effectiveMelismaTicks: effectiveMelismaTicks,
             cache: cache,
             spannerAnchors: anchors,
             multiMeasureRestPlan: multiMeasureRestPlan,
@@ -235,18 +230,9 @@ public enum LayoutEngine {
         _ system: LayoutSystem, byX dx: CGFloat,
     ) -> LayoutSystem {
         LayoutSystem(
+            rebuilding: system,
             origin: CGPoint(x: system.origin.x + dx, y: system.origin.y),
-            size: system.size,
-            measures: system.measures,
-            staffOrigins: system.staffOrigins,
-            staffAddresses: system.staffAddresses,
-            staffGeometries: system.staffGeometries,
-            partLabels: system.partLabels,
-            brackets: system.brackets,
             spanners: system.spanners,
-            sp: system.sp,
-            invisibleSpanners: system.invisibleSpanners,
-            showsInvisibleElements: system.showsInvisibleElements,
         )
     }
 
@@ -474,12 +460,6 @@ public enum LayoutEngine {
         /// handled by the per-chord `emitMelismaLine` path and is
         /// not included here.
         let melismaContinuations: [[[MelismaContinuation]]]
-        /// Per-lyric effective melisma duration (in ticks) that
-        /// accounts for tied-chain continuations past the anchor
-        /// note. Used by `placeMeasureElements` so that the
-        /// "melisma?" check is consistent with the continuation
-        /// plan from `computeMelismaContinuations`.
-        let effectiveMelismaTicks: [MelismaLyricKey: Int]
         /// Optional incremental-layout cache. When non-nil, the
         /// layout pass reads prior per-measure results from it and
         /// rebuilds it in place with this call's results. See

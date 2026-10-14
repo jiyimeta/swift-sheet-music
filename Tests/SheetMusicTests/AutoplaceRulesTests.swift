@@ -82,6 +82,31 @@ struct AutoplaceRulesTests {
         ))
     }
 
+    /// Every ordered pair of kinds answers what the rule answered when it compared `Set([a, b])` with
+    /// `Set([.dynamics, .hairpin])` — the formula the tuple match replaced because building the sets per rect pair
+    /// dominated a horizontal-mode relayout.
+    @Test func everyKindPairMatchesTheSetFormula() {
+        func reference(_ a: ShapeItem, _ b: ShapeItem) -> Bool {
+            if a.id == b.id { return true }
+            if Set([a.kind, b.kind]) == Set([ShapeItemKind.dynamics, .hairpin]) { return true }
+            guard a.kind == b.kind else { return false }
+            if a.kind == .dynamics { return true }
+            return !a.kind.isText
+        }
+        for first in ShapeItemKind.allCases {
+            for second in ShapeItemKind.allCases {
+                for ids in [(1, 2), (3, 3)] {
+                    let a = item(first, ids.0)
+                    let b = item(second, ids.1)
+                    #expect(
+                        AutoplaceRules.shouldIgnoreEachOther(a, b) == reference(a, b),
+                        "\(first) / \(second), ids \(ids)",
+                    )
+                }
+            }
+        }
+    }
+
     @Test func differentKindsCollide() {
         #expect(!AutoplaceRules.shouldIgnoreEachOther(
             item(.rehearsalMark, 1), item(.measureNumber, 2),

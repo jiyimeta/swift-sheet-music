@@ -169,15 +169,9 @@
                 score.suppressingRedundantAccidentals()
             }
             let metrics = StaffMetrics(staffSize: opts.staffSize)
-            let effTicks = time("computeEffectiveMelismaTicks") {
-                LayoutEngine.computeEffectiveMelismaTicks(
-                    score: suppressed, division: suppressed.division,
-                )
-            }
             let melismas = time("computeMelismaContinuations") {
                 LayoutEngine.computeMelismaContinuations(
                     score: suppressed, division: suppressed.division,
-                    effectiveTicks: effTicks,
                 )
             }
             let anchors = time("collectSpanners") {
@@ -200,7 +194,6 @@
                 metrics: metrics,
                 availableWidth: width,
                 melismaContinuations: melismas,
-                effectiveMelismaTicks: effTicks,
                 cache: cache,
                 spannerAnchors: anchors,
                 multiMeasureRestPlan: mmr,

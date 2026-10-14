@@ -33,17 +33,6 @@ struct MeasurePlacement {
     let synthesizedEndBarLineIndex: Int?
 }
 
-/// Identifies one lyric syllable across the score — used as the key
-/// for pre-computed per-lyric data (e.g. effective melisma ticks
-/// after following ties forward).
-struct MelismaLyricKey: Hashable {
-    let staffIndex: Int
-    let measureIndex: Int
-    let voiceIndex: Int
-    let elementIndex: Int
-    let verseIndex: Int
-}
-
 extension LayoutEngine {
     /// Place elements of a measure in local measure coordinates.
     /// Returns the placed elements, updated clef / key context, and the
@@ -76,7 +65,6 @@ extension LayoutEngine {
         endsRepeat: Bool = false,
         isFirstSystem: Bool = false,
         incomingMelismas: [MelismaContinuation] = [],
-        effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
         systemElements: [PositionedSystemElement] = [],
         textPlacementStyle: TextPlacementStyles = TextPlacementStyles(),
         maxAboveLyricVerse: Int = 0,
