@@ -319,15 +319,16 @@ extension LayoutMeasureIdentityTests {
         let jumpContent = jumpRuns.lines.flatMap(\.runs).map(\.content)
         #expect(codaKind == .coda && codaText == "A coda" && codaContent == [.text("A coda")])
         #expect(jumpText == "A jump" && jumpContent == [.text("A jump")])
-        // Placement (`NavigationPlacementTests` pins it): the segno centered on the bar's start barline, the coda's
-        // words starting on it and stacked clear above the segno, both jumps ending on the bar's end barline.
+        // Placement (`NavigationPlacementTests` pins it to the barline's ink): the segno centered on the bar's start
+        // barline, the coda's words starting on it and stacked clear above the segno, both jumps ending on the bar's
+        // end barline's right edge — within one space (sp 7) of the bar's edges here.
         #expect(segnoOrigin.x < 0)
-        #expect(codaOrigin.x == 0)
+        #expect(abs(codaOrigin.x) < 7)
         let segnoBox = try #require(LayoutElementShape.navigationLabelRect(for: measure.markers[0]))
         let codaBox = try #require(LayoutElementShape.navigationLabelRect(for: measure.markers[1]))
         #expect(codaBox.maxY <= segnoBox.minY + 1e-6)
-        #expect(abs(jumpOrigin.x - measure.width) < 1e-9)
-        #expect(abs(secondJumpOrigin.x - measure.width) < 1e-9)
+        #expect(abs(jumpOrigin.x - measure.width) < 7)
+        #expect(jumpOrigin.x == secondJumpOrigin.x)
         for element in measure.markers + measure.jumps {
             #expect(element.elementItemID == element.elementID.map(ScoreItemID.element))
             let translated = LayoutEngine.translate(element: element, dy: 17)

@@ -467,9 +467,16 @@ extension LayoutEngine {
             // skyline autoplace pass works on, and they are what it places last. Appended after the placement cache is
             // written, like the number. Pass 2 lifts them back out into `LayoutMeasure.markers` / `.jumps`.
             if let first = staves.first, measureIdx < first.measures.count, let owner = allStaves.first?.address {
+                let previous = untranslated.last.map {
+                    (elements: $0.perStaffElements[0], contentWidth: $0.contentWidth)
+                }
                 let navigation = navigationElements(
                     for: first.measures[measureIdx], measureIndex: measureIdx, staff: owner,
                     contentWidth: w, metrics: metrics,
+                    barLines: NavigationBarLines(
+                        start: startBarLine(in: perStaff[0], previous: previous, sp: metrics.sp),
+                        end: endBarLine(in: perStaff[0], contentWidth: w, sp: metrics.sp) ?? BarLineSpan(at: w),
+                    ),
                 )
                 if !navigation.isEmpty {
                     perStaff[0, default: []].append(contentsOf: navigation)

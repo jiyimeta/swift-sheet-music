@@ -31,11 +31,13 @@ struct NavigationPlacementTests {
     /// barline is a real one and its end barline the final one).
     private static func layout(
         markers: [Marker] = [], jumps: [Jump] = [], texts: [StaffText] = [], bar: Int = 1,
+        endRepeat: Bool = false, pitch: Int = 72,
     ) -> Found? {
-        let chord = Chord(duration: .whole, notes: ChordNotes([Note(pitch: 72, tpc: 14)]))
+        let chord = Chord(duration: .whole, notes: ChordNotes([Note(pitch: pitch, tpc: 14)]))
         var measures = (0 ..< 2).map { _ in Measure(voices: [Voice(elements: [.chord(chord)])]) }
         measures[bar].markers = markers
         measures[bar].jumps = jumps
+        if endRepeat { measures[bar].endRepeatCount = 2 }
         var lanes = (0 ..< 2).map { _ in SystemMeasure() }
         lanes[bar] = SystemMeasure(elements: texts.map {
             PositionedSystemElement(position: .start, element: .staffText($0), originalStaff: staff)
@@ -47,6 +49,28 @@ struct NavigationPlacementTests {
         guard let system = document.systems.first,
               let measure = system.measures.first(where: { $0.measureIndex == bar }) else { return nil }
         return Found(document: document, system: system, measure: measure)
+    }
+
+    /// The ink span of a measure's end barline (its rightmost barline element), measure-local: what MuseScore's
+    /// `bl->segment()->x() + bl->ldata()->bbox().width()` reaches (`tlayout.cpp:3328`), and the barline's origin.
+    private static func endBarLine(_ found: Found) throws -> (originX: CGFloat, span: LayoutEngine.BarLineSpan) {
+        var bars: [(x: CGFloat, subtype: String?)] = []
+        for element in found.measure.elements {
+            if case let .barLine(subtype, origin, _, _, _) = element { bars.append((origin.x, subtype)) }
+        }
+        let rightmost = bars.max { $0.x < $1.x }
+        let bar = try #require(rightmost)
+        let span = LayoutEngine.BarLineSpan(subtype: bar.subtype, originX: bar.x, sp: found.document.metrics.sp)
+        return (bar.x, span)
+    }
+
+    /// The center of the barline standing at the bar's start, measure-local: the previous bar's end barline, or none
+    /// (0) on a system's first bar.
+    private static func startBarLineCenter(_ found: Found) throws -> CGFloat {
+        guard let previous = found.system.measures.first(where: { $0.measureIndex == found.measure.measureIndex - 1 })
+        else { return 0 }
+        let span = try endBarLine(Found(document: found.document, system: found.system, measure: previous)).span
+        return previous.origin.x + span.center - found.measure.origin.x
     }
 
     private static func box(_ element: LayoutElement) throws -> CGRect {
@@ -75,10 +99,27 @@ struct NavigationPlacementTests {
         let found = try #require(Self.layout(jumps: [Jump(jumpTo: "start", playUntil: "fine", text: "D.C. al Fine")]))
         let jump = try #require(found.measure.jumps.first)
         let ink = try Self.ink(jump, found)
-        #expect(abs(ink.maxX - found.measure.width) < Self.tolerance)
+        let barLine = try Self.endBarLine(found)
+        #expect(abs(ink.maxX - barLine.span.maxX) < Self.tolerance)
         let staffTop = try #require(found.system.staffOrigins.first).y
         let box = try Self.box(jump)
         #expect(box.maxY <= staffTop - found.document.metrics.sp * 0.5 + Self.tolerance)
+    }
+
+    /// `bl->segment()->x() + bl->ldata()->bbox().width()` (`tlayout.cpp:3328`): the barline's RIGHT edge, so a jump on
+    /// a final or an end-repeat barline clears its thick stroke instead of ending on the thin one.
+    @Test("a jump on a final or end-repeat barline ends at the barline's right edge", arguments: [false, true])
+    func jumpClearsThickBarline(endRepeat: Bool) throws {
+        let found = try #require(Self.layout(
+            jumps: [Jump(jumpTo: "start", playUntil: "fine", text: "D.C. al Fine")],
+            bar: endRepeat ? 0 : 1, endRepeat: endRepeat,
+        ))
+        let jump = try #require(found.measure.jumps.first)
+        let ink = try Self.ink(jump, found)
+        let barLine = try Self.endBarLine(found)
+        let thickStrokeReach = found.document.metrics.sp * 0.2
+        #expect(barLine.span.maxX - barLine.originX > thickStrokeReach)
+        #expect(abs(ink.maxX - barLine.span.maxX) < Self.tolerance)
     }
 
     @Test("a segno is centered on its bar's start barline")
@@ -86,7 +127,23 @@ struct NavigationPlacementTests {
         let found = try #require(Self.layout(markers: [Marker(kind: .segno)]))
         let segno = try #require(found.measure.markers.first)
         let center = try Self.symbolCenterX(segno)
-        #expect(abs(center) < Self.tolerance)
+        let barLineCenter = try Self.startBarLineCenter(found)
+        #expect(abs(center - barLineCenter) < Self.tolerance)
+    }
+
+    /// `MarkerLayout::doLayoutMarker` lifts a mark clear of what stands under it — a note far above the staff
+    /// included (`Autoplace::autoplaceMeasureElement`, `autoplace.cpp:128-200`).
+    @Test("a marker above a tall note is lifted clear of it")
+    func markerClearsTallNote() throws {
+        let found = try #require(Self.layout(
+            markers: [Marker(kind: .user, text: String(repeating: "Maestoso ", count: 12))], pitch: 100,
+        ))
+        let marker = try #require(found.measure.markers.first)
+        let box = try Self.box(marker)
+        let chordElement = found.measure.elements.first { if case .chord = $0 { true } else { false } }
+        let chord = try #require(chordElement)
+        let noteTop = try #require(LayoutEngine.elementYPoints(chord).min())
+        #expect(box.maxY <= noteTop - found.document.metrics.sp * 0.5 + Self.tolerance)
     }
 
     @Test(
@@ -97,7 +154,8 @@ struct NavigationPlacementTests {
         let found = try #require(Self.layout(markers: [Marker(kind: kind)]))
         let marker = try #require(found.measure.markers.first)
         let ink = try Self.ink(marker, found)
-        #expect(abs(ink.maxX - found.measure.width) < Self.tolerance)
+        let barLine = try Self.endBarLine(found)
+        #expect(abs(ink.maxX - barLine.span.maxX) < Self.tolerance)
     }
 
     @Test("To ⟨coda⟩ centers its coda on the end barline")
@@ -105,15 +163,17 @@ struct NavigationPlacementTests {
         let found = try #require(Self.layout(markers: [Marker(kind: .toCodaSym)]))
         let marker = try #require(found.measure.markers.first)
         let center = try Self.symbolCenterX(marker)
-        #expect(abs(center - found.measure.width) < Self.tolerance)
+        let barLine = try Self.endBarLine(found)
+        #expect(abs(center - barLine.span.center) < Self.tolerance)
     }
 
-    @Test("a left marker of words starts at its bar's start")
+    @Test("a left marker of words starts at its bar's start barline")
     func wordsStartAtBarline() throws {
         let found = try #require(Self.layout(markers: [Marker(kind: .user, text: "Solo")]))
         let marker = try #require(found.measure.markers.first)
         let ink = try Self.ink(marker, found)
-        #expect(abs(ink.minX) < Self.tolerance)
+        let barLineCenter = try Self.startBarLineCenter(found)
+        #expect(abs(ink.minX - barLineCenter) < found.document.metrics.sp * 0.2)
     }
 
     /// Review Focus 5.
