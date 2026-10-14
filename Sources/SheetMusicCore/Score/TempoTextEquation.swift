@@ -4,7 +4,7 @@ import SheetMusicFoundation
 /// its plain text, in which every `<sym>` stands as its glyph's codepoint and `<sym>space</sym>` as a space.
 ///
 /// Read where the words of a marking decide what an edit does to them (`SetTempo`'s number-edit rule, spec §5.6).
-public enum TempoTextEquation: Sendable, Equatable {
+enum TempoTextEquation: Sendable, Equatable {
     /// No "beat = number" and no "beat = beat" anywhere: words alone ("Allegro", "a tempo").
     case words
     /// "beat = beat", a metric modulation. MuseScore resolves it once, when the text is typed, and stores the result.
@@ -12,7 +12,7 @@ public enum TempoTextEquation: Sendable, Equatable {
     /// "beat = number". `isWholeText` when, after MuseScore's normalization, nothing but the equation is written.
     case metronome(beatQuarters: Double, number: Double, isWholeText: Bool)
 
-    public init(_ text: RichText) {
+    init(_ text: RichText) {
         self = Self.classify(Self.normalized(text))
     }
 }
@@ -21,12 +21,12 @@ extension TempoTextEquation {
     /// One row of MuseScore's `tp` table (`tempotext.cpp:113-136`): a metronome note, the dots after it, and the beat's
     /// length in quarters. Kept in the table's order — longer patterns first, quarter notes before every other value.
     struct Pattern {
-        let note: Character
+        let note: Unicode.Scalar
         let dots: Int
         let quarters: Double
     }
 
-    static let dot: Character = "\u{ECB7}"
+    static let dot: Unicode.Scalar = "\u{ECB7}"
 
     static let patterns: [Pattern] = [
         Pattern(note: "\u{ECA5}", dots: 2, quarters: 1.75),
@@ -55,7 +55,7 @@ extension TempoTextEquation {
 
     /// The SMuFL metronome-mark range (U+ECA0–U+ECB7) by the names MuseScore writes inside a tempo's `<sym>`s. The
     /// stem-down notes are here so they read as glyphs, not words — MuseScore's table simply never matches them.
-    static let metronomeCodepoints: [String: Character] = [
+    static let metronomeCodepoints: [String: Unicode.Scalar] = [
         "metNoteDoubleWhole": "\u{ECA0}", "metNoteDoubleWholeSquare": "\u{ECA1}", "metNoteWhole": "\u{ECA2}",
         "metNoteHalfUp": "\u{ECA3}", "metNoteHalfDown": "\u{ECA4}", "metNoteQuarterUp": "\u{ECA5}",
         "metNoteQuarterDown": "\u{ECA6}", "metNote8thUp": "\u{ECA7}", "metNote8thDown": "\u{ECA8}",
@@ -71,39 +71,43 @@ extension TempoTextEquation {
         (",", "."), ("≒", "="), ("≈", "="), ("~", "="), ("ca.", ""), ("c.", ""), ("approx.", ""),
     ]
 
-    /// The text as `updateTempo` reads it: runs flattened in order, a line break as "\n", a metronome `<sym>` as its
-    /// codepoint, `space` as " ", any other symbol as U+FFFC (a non-blank stand-in — it is not whitespace to MuseScore
-    /// either), then MuseScore's replacements.
-    static func normalized(_ text: RichText) -> [Character] {
-        var characters: [Character] = []
+    /// The text as `updateTempo` reads it, as Unicode scalars (MuseScore's regexes see codepoints, so a combining mark
+    /// never fuses with the glyph or "=" before it): runs flattened in order, a line break as "\n", a metronome `<sym>`
+    /// as its codepoint, `space` as " ", any other symbol as nothing (MuseScore inserts nothing for an unknown id),
+    /// then MuseScore's replacements.
+    static func normalized(_ text: RichText) -> [Unicode.Scalar] {
+        var scalars: [Unicode.Scalar] = []
         for (index, line) in text.lines.enumerated() {
-            if index > 0 { characters.append("\n") }
+            if index > 0 { scalars.append("\n") }
             for run in line {
                 switch run {
                 case let .text(string, _):
-                    characters += Array(string)
+                    scalars += string.unicodeScalars
                 case let .symbol(name, _):
-                    characters.append(name == "space" ? " " : metronomeCodepoints[name] ?? "\u{FFFC}")
+                    if name == "space" {
+                        scalars.append(" ")
+                    } else if let codepoint = metronomeCodepoints[name] {
+                        scalars.append(codepoint)
+                    }
                 }
             }
         }
         for (target, replacement) in replacements {
-            characters = replacing(Array(target), with: Array(replacement), in: characters)
+            scalars = replacing(Array(target.unicodeScalars), with: Array(replacement.unicodeScalars), in: scalars)
         }
-        return characters
+        return scalars
     }
 
     /// `updateTempo`'s search: for each pattern in table order, "pattern = number" anywhere, else "pattern = any
     /// pattern" anywhere; the first that matches decides.
-    static func classify(_ text: [Character]) -> TempoTextEquation {
+    static func classify(_ text: [Unicode.Scalar]) -> TempoTextEquation {
         for pattern in patterns {
             let starts = text.indices.filter { text[$0] == pattern.note }
             for start in starts {
                 guard let afterEquals = equalsSign(after: pattern, at: start, in: text),
                       let number = number(at: afterEquals, in: text)
                 else { continue }
-                let isWhole = text[..<start].allSatisfy(\.isWhitespace)
-                    && text[number.end...].allSatisfy(\.isWhitespace)
+                let isWhole = text[..<start].allSatisfy(isSpace) && text[number.end...].allSatisfy(isSpace)
                 return .metronome(beatQuarters: pattern.quarters, number: number.value, isWholeText: isWhole)
             }
             for start in starts {
@@ -118,7 +122,7 @@ extension TempoTextEquation {
 
     /// Where `pattern`'s beat starting at `start` ends — the note, then exactly `pattern.dots` dots, each after
     /// optional whitespace (`\s*`) — or `nil` when the text there spells another beat.
-    static func beatEnd(of pattern: Pattern, at start: Int, in text: [Character]) -> Int? {
+    static func beatEnd(of pattern: Pattern, at start: Int, in text: [Unicode.Scalar]) -> Int? {
         guard start < text.count, text[start] == pattern.note else { return nil }
         var cursor = start + 1
         for _ in 0 ..< pattern.dots {
@@ -134,52 +138,66 @@ extension TempoTextEquation {
     }
 
     /// After `pattern`'s beat at `start`: optional whitespace, "=", optional whitespace — the index after them.
-    static func equalsSign(after pattern: Pattern, at start: Int, in text: [Character]) -> Int? {
+    static func equalsSign(after pattern: Pattern, at start: Int, in text: [Unicode.Scalar]) -> Int? {
         guard let end = beatEnd(of: pattern, at: start, in: text) else { return nil }
         let sign = skipWhitespace(from: end, in: text)
         guard sign < text.count, text[sign] == "=" else { return nil }
         return skipWhitespace(from: sign + 1, in: text)
     }
 
-    /// `\d+[.]{0,1}\d*` at `start`, then any whitespace: its value and the index after it all.
-    static func number(at start: Int, in text: [Character]) -> (value: Double, end: Int)? {
+    /// `\d+[.]{0,1}\d*` at `start`, then any whitespace: its value and the index after it all. The value is
+    /// `Double(digits)`, which is +infinity for an absurdly long run of digits; callers clamp what they do with it.
+    static func number(at start: Int, in text: [Unicode.Scalar]) -> (value: Double, end: Int)? {
         var cursor = start
         while cursor < text.count, isDigit(text[cursor]) {
             cursor += 1
         }
         guard cursor > start else { return nil }
-        var digits = String(text[start ..< cursor])
+        var digits = String(String.UnicodeScalarView(text[start ..< cursor]))
         if cursor < text.count, text[cursor] == "." {
             cursor += 1
             let fraction = cursor
             while cursor < text.count, isDigit(text[cursor]) {
                 cursor += 1
             }
-            if cursor > fraction { digits += "." + String(text[fraction ..< cursor]) }
+            if cursor > fraction { digits += "." + String(String.UnicodeScalarView(text[fraction ..< cursor])) }
         }
         guard let value = Double(digits) else { return nil }
         return (value, skipWhitespace(from: cursor, in: text))
     }
 
-    static func isDigit(_ character: Character) -> Bool {
-        ("0" ... "9").contains(character)
+    static func isDigit(_ scalar: Unicode.Scalar) -> Bool {
+        ("0" ... "9").contains(scalar)
     }
 
-    private static func skipWhitespace(from start: Int, in text: [Character]) -> Int {
+    /// The ASCII `\s` set: space, tab, line feed, vertical tab, form feed, carriage return.
+    static func isSpace(_ scalar: Unicode.Scalar) -> Bool {
+        scalar == " " || ("\t" ... "\r").contains(scalar)
+    }
+
+    private static func skipWhitespace(from start: Int, in text: [Unicode.Scalar]) -> Int {
         var cursor = start
-        while cursor < text.count, text[cursor].isWhitespace {
+        while cursor < text.count, isSpace(text[cursor]) {
             cursor += 1
         }
         return cursor
     }
 
+    private static func matches(_ target: [Unicode.Scalar], at index: Int, in text: [Unicode.Scalar]) -> Bool {
+        guard index + target.count <= text.count else { return false }
+        for offset in target.indices where text[index + offset] != target[offset] {
+            return false
+        }
+        return true
+    }
+
     private static func replacing(
-        _ target: [Character], with replacement: [Character], in text: [Character],
-    ) -> [Character] {
-        var result: [Character] = []
+        _ target: [Unicode.Scalar], with replacement: [Unicode.Scalar], in text: [Unicode.Scalar],
+    ) -> [Unicode.Scalar] {
+        var result: [Unicode.Scalar] = []
         var index = 0
         while index < text.count {
-            if index + target.count <= text.count, Array(text[index ..< index + target.count]) == target {
+            if matches(target, at: index, in: text) {
                 result += replacement
                 index += target.count
             } else {
