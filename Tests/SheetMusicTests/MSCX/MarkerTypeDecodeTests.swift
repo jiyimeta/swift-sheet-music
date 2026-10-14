@@ -121,6 +121,25 @@ struct MarkerTypeDecodeTests {
         #expect(kinds == [.toCoda, .toCodaSym, .daCapo, .dalSegno, .coda, .coda, .toCoda])
     }
 
+    /// Before W3 a Coda imported from MusicXML (`<coda/>`, labeled by `<sound coda>`, often `coda`) or from a PDF's
+    /// text layer (labeled `coda`, text "Coda") was saved as `<markerType>coda</markerType>` with that label and a
+    /// `<text>`, empty or "Coda" — the To Coda's type name and label. MuseScore never writes a To Coda that way: it
+    /// gives one words on reading (`Marker::setMarkerType`), and this library now writes a textless To Coda with no
+    /// `<text>`.
+    @Test("a pre-W3 Coda labeled `coda` is told from a To Coda by its text")
+    func legacyCodaLabeledCoda() throws {
+        let xml = """
+        <Marker><markerType>coda</markerType><label>coda</label><text></text></Marker>
+        <Marker><markerType>coda</markerType><label>coda</label><text>Coda</text></Marker>
+        <Marker><text>To Coda</text><label>coda</label><markerType>coda</markerType></Marker>
+        <Marker><label>coda</label><markerType>coda</markerType></Marker>
+        <Marker><text>To Coda</text><label/><markerType>coda</markerType></Marker>
+        <Marker><text><sym>coda</sym></text><label>coda</label><markerType>coda</markerType></Marker>
+        """
+        let kinds = try Self.markers(xml).map(\.kind)
+        #expect(kinds == [.coda, .coda, .toCoda, .toCoda, .toCoda, .toCoda])
+    }
+
     /// Review Focus 2.
     @Test("a pre-W3 `other` is recovered from its label, and the four `coda` labels from their text")
     func legacyOther() throws {

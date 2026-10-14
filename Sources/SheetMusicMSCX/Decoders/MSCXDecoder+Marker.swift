@@ -21,8 +21,8 @@ extension Measure {
         let text = textNode.map(StaffText.plainText(of:)) ?? ""
         let markup = textNode.flatMap { StaffText.preservedTextMarkup(of: $0, derivedText: text) }
         let kind = MarkerTypeDecoding.kind(
-            markerType: node.first("markerType")?.text, label: labelNode?.text, text: text, markup: markup,
-            formatRevision: MSCXParserContext.formatRevision,
+            markerType: node.first("markerType")?.text, label: labelNode?.text, text: textNode.map { _ in text },
+            markup: markup, formatRevision: MSCXParserContext.formatRevision,
         )
         var marker = Marker(
             kind: kind,
@@ -52,8 +52,9 @@ enum MarkerTypeDecoding {
     /// The format from which MuseScore reads `<markerType>` (`rw/rwregister.cpp:38-56`).
     private static let markerTypeFormat = 460
 
+    /// `text` is the plain projection of `<text>`, `nil` when the marker has no `<text>` element.
     static func kind(
-        markerType: String?, label: String?, text: String, markup: PreservedTextMarkup?, formatRevision: Int?,
+        markerType: String?, label: String?, text: String?, markup: PreservedTextMarkup?, formatRevision: Int?,
     ) -> Marker.Kind {
         // Not version-gated, and deliberately opposite to the oracle (a pre-4.60 MuseScore ignores `<markerType>` and
         // reads `<label>`): a `<markerType>` in an older file can only be this library's own 3.02 export.
@@ -66,7 +67,7 @@ enum MarkerTypeDecoding {
     }
 
     private static func kindFromType(
-        _ markerType: String, label: String, text: String, markup: PreservedTextMarkup?,
+        _ markerType: String, label: String, text: String?, markup: PreservedTextMarkup?,
     ) -> Marker.Kind {
         switch markerType {
         // This library's own spellings before W3, written from `Marker.Kind.rawValue`; MuseScore writes none of them.
@@ -74,12 +75,29 @@ enum MarkerTypeDecoding {
         case "toCodaSym": .toCodaSym
         case "daCapo": .daCapo
         case "dalSegno": .dalSegno
-        case "other": legacyKind(label: label, text: text, markup: markup)
-        // MuseScore's To Coda — and this library's old Coda, written with no label or with the default it filled in
-        // on reading. A To Coda is labeled `coda` unless renamed. The empty / `codab` label arm is for this library's
-        // own older files only, in any format version; MuseScore never writes `coda` with those labels.
-        case "coda" where label.isEmpty || label == Marker.Kind.coda.defaultLabel: .coda
+        case "other": legacyKind(label: label, text: text ?? "", markup: markup)
+        // MuseScore's To Coda — and this library's old Coda, written with the default label it filled in on reading.
+        // MuseScore never writes `coda` with the Coda's label.
+        case "coda" where label == Marker.Kind.coda.defaultLabel: .coda
+        case "coda" where isLegacyCoda(label: label, text: text, markup: markup): .coda
         default: Marker.Kind(mscxName: markerType) ?? .user
+        }
+    }
+
+    /// This library's old Coda as it saved one before W3: `<markerType>coda</markerType>`, no label (a Coda made in
+    /// code) or the `coda` its MusicXML and PDF importers gave one, and a `<text>` that is empty or the PDF's word
+    /// "Coda". MuseScore never writes a To Coda without words — it fills a textless one's default on reading
+    /// (`Marker::setMarkerType`, `dom/marker.cpp:86-106`) — and this library writes a textless To Coda with no
+    /// `<text>` at all, so neither reads as one.
+    private static func isLegacyCoda(label: String, text: String?, markup: PreservedTextMarkup?) -> Bool {
+        guard label.isEmpty || label == Marker.Kind.toCoda.defaultLabel, let text else { return false }
+        if text == "Coda" { return true }
+        return text.isEmpty && !(markup.map(holdsSymbol) ?? false)
+    }
+
+    private static func holdsSymbol(_ markup: PreservedTextMarkup) -> Bool {
+        RichText(markup: markup).lines.joined().contains { run in
+            if case .symbol = run { true } else { false }
         }
     }
 
