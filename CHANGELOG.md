@@ -22,6 +22,12 @@ and this project adheres to
   the segno/coda, fermata, caesura/breath, keyboard and harp pedal, fretboard, figured-bass and articulation families
   (209 names, `Tools/smufl/glyphnames-text-symbols.json`, extracted by `Scripts/extract_glyphnames_text_symbols.py`).
   `GenSMuFLTables` merges them into the by-name table only; it no longer writes `import Foundation` into the tables.
+- **`LayoutRichText`** (SheetMusicLayout) — a `RichText` typeset once at layout time, as `LayoutHarmony` is: each run's
+  font (the element's font with the run's bold / italic / face / size / script applied, or Bravura at the style's
+  musical-symbol size for a `<sym>`), pen position and advance; each line's metrics; the ink and the underline /
+  strike-through bars. `blockOrigin(at:anchor:)`, `inkRect(at:anchor:)`, `positionedRuns(at:anchor:)` and
+  `decorations(at:anchor:)` place it by the plain-text anchor rule, so a single unformatted run measures exactly as plain
+  text does.
 
 ### Fixed
 
