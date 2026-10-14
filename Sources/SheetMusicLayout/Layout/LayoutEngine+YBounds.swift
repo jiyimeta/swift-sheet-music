@@ -73,8 +73,6 @@ extension LayoutEngine {
              let .fermata(_, p, _),
              let .breath(_, p, _),
              let .articulation(_, p, _, _),
-             let .marker(_, _, p, _, _),
-             let .jump(_, p, _, _),
              let .measureRepeat(_, p),
              let .multiMeasureRest(_, p),
              let .measureNumber(_, p),
@@ -83,6 +81,8 @@ extension LayoutEngine {
              let .rest(_, p, _, _, _),
              let .note(_, _, _, _, p, _, _, _):
             return [p.y]
+        case .marker, .jump:
+            return navigationYPoints(element)
         case let .staffText(text, p, _, style, _, _, properties, _, rich):
             return staffTextYPoints(text: text, origin: p, style: style, properties: properties, sp: sp, rich: rich)
         case let .chord(notes, _, _, so, _, _, _, _, _, _, _):
@@ -129,6 +129,18 @@ extension LayoutEngine {
             return [from.y, to.y]
         case let .harmony(lh):
             return [CGFloat(lh.y)]
+        }
+    }
+
+    /// A marker's or jump's skyline box, top and bottom (`LayoutElementShape.navigationLabelRect(for:)`). Autoplace
+    /// lifts them in the per-staff pass-1 buffer and `buildSystem`'s top padding reads these points, so they must reach
+    /// the top of what is drawn — a coda stacked over a segno stands several spaces above its anchor. The origin alone
+    /// for a mark without runs.
+    private static func navigationYPoints(_ element: LayoutElement) -> [CGFloat] {
+        if let box = LayoutElementShape.navigationLabelRect(for: element) { return [box.minY, box.maxY] }
+        switch element {
+        case let .marker(_, _, origin, _, _), let .jump(_, origin, _, _): return [origin.y]
+        default: return []
         }
     }
 

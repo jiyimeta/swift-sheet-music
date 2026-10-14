@@ -18,20 +18,15 @@ import SheetMusicCore
 /// the per-tick chord-avoidance already applied to dynamics, fermatas
 /// all survive as better-than-default starting points.
 ///
-/// **Inert categories.** The `.hairpin` / `.pedal` / `.ottava` /
-/// `.textLine` / `.volta` / `.marker` / `.jump` entries in `categories`
-/// find nothing today: spanner segments are synthesized in a post-pass
-/// (`LayoutEngine+Spanners`) into `LayoutSystem.spanners`, and markers
-/// and jumps in pass 2 into `LayoutMeasure.markers` / `.jumps` — none
-/// of them ever land in the per-staff pass-1 buffer this operates on.
-/// They are listed so the ordering is complete when those emissions
-/// move. **Before routing any of them into the buffer, teach
-/// `LayoutEngine.translate` to shift them**, or the writeback below
-/// silently drops their `dy`. `.spannerSegment` is done; `.marker` and
-/// `.jump` are still in its no-op case list.
+/// **Where the categories come from.** Line spanners reach the per-staff
+/// pass-1 buffer through `LayoutEngine.synthesizeLineSpanners` before this
+/// pass runs, and markers and jumps through
+/// `LayoutEngine.navigationElements` (the top staff only), so their
+/// entries place what MuseScore places at that step. `LayoutEngine.translate`
+/// shifts all of them, which the writeback below relies on.
 ///
-/// Being inert is also what makes the ordering unverifiable by test or
-/// corpus, so it has to be read off the C++ rather than inferred — see
+/// The ordering itself is unverifiable by test or corpus for the rarer
+/// categories, so it has to be read off the C++ rather than inferred — see
 /// the citation table on `categories`.
 enum SkylineAutoplacePass {
     /// Address of one element inside the per-staff measure buffer.
@@ -70,6 +65,7 @@ enum SkylineAutoplacePass {
     ///     voltas               :1328
     ///     rehearsal marks      :1330
     ///     tempo text           :1335
+    ///     markers and jumps    :1360   (markersAndJumps, after rehearsal marks' autoplace)
     ///
     /// Two deliberate departures, both pre-existing: `.staffText` and
     /// `.systemText` share one entry (MuseScore separates them, and

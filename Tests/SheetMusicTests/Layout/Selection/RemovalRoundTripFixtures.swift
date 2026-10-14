@@ -73,10 +73,7 @@ enum RemovalRoundTripFixtures {
 
     static func navigation(filtered: Bool) -> Score {
         score([Measure(voices: [Voice(elements: [.rest(duration: .whole)])], markers: [
-            // Markers still stand at one fixed point until layout autoplaces them, so the two overlap. The first is
-            // far wider than the second so the centre of its box — where the removal test taps — lies outside the
-            // second's: the test is about removal and index shifting, not about overlap.
-            Marker(kind: .segno, label: "segno", text: "Segno Segno Segno Segno Segno Segno"),
+            Marker(kind: .segno, label: "segno", text: "Segno"),
             Marker(kind: .coda, label: "coda", text: "Coda"),
         ], jumps: [
             Jump(jumpTo: "segno", playUntil: "end", text: "D.S."),

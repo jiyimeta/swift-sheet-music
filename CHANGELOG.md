@@ -144,6 +144,11 @@ and this project adheres to
 
 ### Fixed
 
+- **Markers and jumps stand where MuseScore puts them, autoplaced.** A jump ends on its bar's end barline above the
+  staff (it hung below the staff from 4 sp before the barline, running past a final barline); a Fine, To Coda, Da Coda
+  ends on the end barline; a segno or coda — and the coda of To ⟨coda⟩ — is centered on its barline; a custom marker
+  starts at its bar's start. They are placed last by the skyline, as MuseScore does, so a mark no longer collides with
+  a staff text or another mark in its bar, and the system reserves the height they are lifted to.
 - **Varied segno, varied coda and codetta draw their own glyphs (F3.6)** — the serpent segno, the square coda, two
   codas — and every marker and jump draws in MuseScore's Edwin instead of the system's semibold face (jumps were also
   italic), the same on Apple and through the draw program: each draws its text's runs, a segno or coda being a symbol

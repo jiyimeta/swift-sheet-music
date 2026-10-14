@@ -307,22 +307,10 @@ extension LayoutMeasureIdentityTests {
             .jump(staff: owner, measureIndex: 2, index: 0),
             .jump(staff: owner, measureIndex: 2, index: 1),
         ])
-        let marker = try #require(measure.markers.first)
-        let jump = try #require(measure.jumps.first)
-        guard case let .marker(_, _, markerOrigin, _, _) = marker,
-              case let .jump(_, jumpOrigin, _, _) = jump
-        else {
-            Issue.record("Expected navigation elements")
-            return
-        }
-        // Default sp = 7. Markers use x = 4; jumps use width - 4 sp = width - 28.
-        // Their Y gap is the five-line band plus two margins: (4 + 1 + 1) * 7 = 42.
-        #expect(markerOrigin.x == 4)
-        #expect(jumpOrigin.x == measure.width - 28)
-        #expect(abs(jumpOrigin.y - markerOrigin.y - 42) < 1e-9)
-        // Every marker and jump carries the runs layout set it in; `text` is their plain projection.
-        guard case let .marker(codaKind, codaText, codaOrigin, codaID, codaRuns?) = measure.markers[1],
-              case let .jump(jumpText, secondJumpOrigin, secondJumpID, jumpRuns?) = measure.jumps[1]
+        guard case let .marker(_, _, segnoOrigin, _, _) = measure.markers[0],
+              case let .marker(codaKind, codaText, codaOrigin, _, codaRuns?) = measure.markers[1],
+              case let .jump(_, jumpOrigin, _, _) = measure.jumps[0],
+              case let .jump(jumpText, secondJumpOrigin, _, jumpRuns?) = measure.jumps[1]
         else {
             Issue.record("Expected typeset navigation elements")
             return
@@ -330,15 +318,23 @@ extension LayoutMeasureIdentityTests {
         let codaContent = codaRuns.lines.flatMap(\.runs).map(\.content)
         let jumpContent = jumpRuns.lines.flatMap(\.runs).map(\.content)
         #expect(codaKind == .coda && codaText == "A coda" && codaContent == [.text("A coda")])
-        #expect(codaOrigin == markerOrigin && codaID == .marker(staff: owner, measureIndex: 2, index: 1))
         #expect(jumpText == "A jump" && jumpContent == [.text("A jump")])
-        #expect(secondJumpOrigin == jumpOrigin && secondJumpID == .jump(staff: owner, measureIndex: 2, index: 1))
+        // Placement (`NavigationPlacementTests` pins it): the segno centered on the bar's start barline, the coda's
+        // words starting on it and stacked clear above the segno, both jumps ending on the bar's end barline.
+        #expect(segnoOrigin.x < 0)
+        #expect(codaOrigin.x == 0)
+        let segnoBox = try #require(LayoutElementShape.navigationLabelRect(for: measure.markers[0]))
+        let codaBox = try #require(LayoutElementShape.navigationLabelRect(for: measure.markers[1]))
+        #expect(codaBox.maxY <= segnoBox.minY + 1e-6)
+        #expect(abs(jumpOrigin.x - measure.width) < 1e-9)
+        #expect(abs(secondJumpOrigin.x - measure.width) < 1e-9)
         for element in measure.markers + measure.jumps {
             #expect(element.elementItemID == element.elementID.map(ScoreItemID.element))
             let translated = LayoutEngine.translate(element: element, dy: 17)
             #expect(translated.elementID == element.elementID)
-            #expect(LayoutEngine.elementYPoints(translated) == LayoutEngine.elementYPoints(element).map { $0 + 17 })
-            #expect(LayoutEngine.translate(element: translated, dy: -17) == element)
+            let moved = zip(LayoutEngine.elementYPoints(translated), LayoutEngine.elementYPoints(element))
+            let shifted = moved.allSatisfy { abs($0 - $1 - 17) < 1e-9 }
+            #expect(shifted)
         }
     }
 

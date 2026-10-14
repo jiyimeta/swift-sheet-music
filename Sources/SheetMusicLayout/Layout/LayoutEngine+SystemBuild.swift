@@ -463,6 +463,18 @@ extension LayoutEngine {
                     ),
                 ))
             }
+            // Markers and jumps — TOP STAFF ONLY, emitted here for the measure number's reason: this is the buffer the
+            // skyline autoplace pass works on, and they are what it places last. Appended after the placement cache is
+            // written, like the number. Pass 2 lifts them back out into `LayoutMeasure.markers` / `.jumps`.
+            if let first = staves.first, measureIdx < first.measures.count, let owner = allStaves.first?.address {
+                let navigation = navigationElements(
+                    for: first.measures[measureIdx], measureIndex: measureIdx, staff: owner,
+                    contentWidth: w, metrics: metrics,
+                )
+                if !navigation.isEmpty {
+                    perStaff[0, default: []].append(contentsOf: navigation)
+                }
+            }
             let staff0Measure: Measure? = measureIdx
                 < (staves.first?.measures.count ?? 0)
                 ? staves.first?.measures[measureIdx]
@@ -971,9 +983,15 @@ extension LayoutEngine {
                         firstStepBelow: geometry.firstLedgerStepBelow,
                         invisibleNotes: false,
                     )
-                    aggregated.append(contentsOf: withLedgers.map {
-                        translate(element: $0, dy: yOffset)
-                    })
+                    // Markers and jumps rode the top staff's buffer through autoplace; they leave it here for the
+                    // lists the renderers, hit-testing and the bridge read them from.
+                    for element in withLedgers.map({ translate(element: $0, dy: yOffset) }) {
+                        switch element {
+                        case .marker: markers.append(element)
+                        case .jump: jumps.append(element)
+                        default: aggregated.append(element)
+                        }
+                    }
                 }
                 // Hidden annotations get the same staff-local → system
                 // translation so renderers can draw them at the right Y.
@@ -1031,53 +1049,6 @@ extension LayoutEngine {
                     aggregatedInvisible.append(contentsOf: hidden.map {
                         translate(element: $0, dy: yOffset)
                     })
-                }
-            }
-            // Markers / jumps come from the first staff only — they
-            // apply to the whole system at this measure, not per
-            // staff. A piano grand staff repeats the same marker
-            // on both staves in MSCX; we draw it once above the
-            // top staff to match engraving convention.
-            if let m = um.staff0Measure, let sourceStaff = allStaves.first?.address {
-                let staffTopY = staffOrigins[0].y
-                // Jump text hangs 1 sp below staff 0. It has to clear
-                // the staff's INK, and noteheads keep occupying the
-                // five-line reference band no matter how many lines are
-                // drawn (`StaffLineGeometry.topStep`) — so on a
-                // one-line staff, whose drawn height is 0, the jump
-                // would land 1 sp above `step` 0 and collide with the
-                // notes. Take whichever band is taller: the drawn staff
-                // (for counts above five) or the reference one.
-                let staffBottomY = staffTopY + max(
-                    staffHeights.first ?? 0, metrics.staffHeight,
-                )
-                for (index, marker) in m.markers.enumerated() {
-                    // What the marker prints — its markup, its words or its type's default — in MuseScore's repeat
-                    // style; never the label, which is a jump target, not text.
-                    let displayed = marker.displayedRichText
-                    markers.append(.marker(
-                        kind: marker.kind,
-                        text: displayed.plainText,
-                        origin: CGPoint(
-                            x: 4, y: staffTopY - metrics.sp,
-                        ),
-                        identity: .marker(staff: sourceStaff, measureIndex: measureIdx, index: index),
-                        richText: LayoutRichText(
-                            marker: displayed, style: marker.kind.isRightMarker ? .repeatRight : .repeatLeft,
-                            metrics: metrics,
-                        ),
-                    ))
-                }
-                for (index, jump) in m.jumps.enumerated() {
-                    jumps.append(.jump(
-                        text: jump.text,
-                        origin: CGPoint(
-                            x: w - metrics.sp * 4,
-                            y: staffBottomY + metrics.sp,
-                        ),
-                        identity: .jump(staff: sourceStaff, measureIndex: measureIdx, index: index),
-                        richText: LayoutRichText(jump.displayedRichText, style: .repeatRight, metrics: metrics),
-                    ))
                 }
             }
             // Surface the source measure's break flags so the

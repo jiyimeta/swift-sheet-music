@@ -266,12 +266,17 @@ extension LayoutRichText {
     /// **The one statement of where an element hangs its runs.** Layout's ink rects and skyline boxes, the Apple
     /// renderers (layer tree and Canvas) and the draw-program bridge all place runs by it, so where a text is measured
     /// and where it is drawn cannot part.
+    ///
+    /// Markers and jumps hang from their block's bottom — MuseScore sets repeat text on its baseline and lifts it clear
+    /// of the staff — on the side their style aligns to: REPEAT_LEFT left, REPEAT_RIGHT right (`styledef.cpp:1406,
+    /// 1422`), which decides how a shorter line sits under a longer one. Layout computes the origin from MuseScore's
+    /// alignment rule (`LayoutEngine.navigationElements`).
     package static func anchor(for kind: ElementKind) -> CGPoint {
         switch kind {
         case .staffText, .rehearsalMark: CGPoint(x: 0, y: 1)
         case .lyric: CGPoint(x: 0.5, y: 0.5)
-        case .marker, .rightMarker: NotationTextStyle.anchorPoint(for: .markerText)
-        case .jump: NotationTextStyle.anchorPoint(for: .jump)
+        case .marker: CGPoint(x: 0, y: 1)
+        case .rightMarker, .jump: CGPoint(x: 1, y: 1)
         case .tempo, .gradualTempoChangeLabel: CGPoint(x: 0, y: 0)
         }
     }

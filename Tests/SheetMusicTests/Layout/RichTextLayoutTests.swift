@@ -349,9 +349,8 @@ struct RichTextLayoutTests {
     }
 
     /// A one-run, one-font block reserves exactly its plain twin's box at every anchor in use: bottom-leading (staff
-    /// text), leading-center (markers, jumps) and center (lyrics). "mo" inks inside its advance box, so the ink the
-    /// rich box takes in adds nothing. A marker's or jump's plain box is measured in Edwin while its runs are set in
-    /// the label face, so leading-center is compared on the shape itself; staff text and lyrics on their elements too.
+    /// text, a left marker) and center (lyrics) — a jump and a right marker hang bottom-trailing, which has no plain
+    /// twin. "mo" inks inside its advance box, so the ink the rich box takes in adds nothing.
     /// It passes because "mo" is upright and inks inside its advance; an italic face's overhang can make a rich box
     /// slightly wider than its plain twin, by design (the box is unioned with the runs' ink).
     @Test("a one-font rich block reserves its plain twin's box at every anchor")
@@ -362,7 +361,7 @@ struct RichTextLayoutTests {
             let lyric = LayoutRichText(text, style: .lyricsOdd, metrics: Self.metrics)
             let font = TextInkGeometry.font(for: .lyricsOdd, metrics: Self.metrics)
             let kinds: [(TextAnchorConvention, LayoutRichText.ElementKind)] = [
-                (.bottomLeading, .staffText), (.leadingCenter, .jump), (.center, .lyric),
+                (.bottomLeading, .staffText), (.bottomLeading, .marker), (.center, .lyric),
             ]
             for (anchor, kind) in kinds {
                 let plain = LayoutElementShape.textRect(text: "mo", font: font, origin: origin, anchor: anchor)
