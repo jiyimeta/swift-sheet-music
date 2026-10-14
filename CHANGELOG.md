@@ -89,6 +89,11 @@ and this project adheres to
 
 ### Fixed
 
+- **Gradual tempo changes play** (import-fidelity F2.7): rit., rall., accel. and the other eight MuseScore types ramp
+  the tempo map as MuseScore does — from the tempo in force where the change starts to that times its factor
+  (`<tempoChangeFactor>` or the type's default), in `max(8, ticks / division)` eased steps (`<tempoEasingMethod>`), a
+  step never overwriting a tempo text, `<play>0</play>` leaving the line silent. MuseScore's own `tempomap_tests.cpp`
+  expectations pass against its own scores. The SMF, the cursor timeline, the notated clock and the count-in follow.
 - **"a tempo", "tempo primo" and a muted marking play as in MuseScore** (import-fidelity F2.1, F2.2, F2.6). The tempo
   map takes MuseScore's text pass: "a tempo" that follows its text reinstates the tempo in force where it stands,
   "tempo primo" the first ordinary marking (or 120 BPM), a marking with `<play>0</play>` sets nothing, and one position

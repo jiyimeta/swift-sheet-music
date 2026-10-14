@@ -13,13 +13,17 @@ enum TempoMapFixtures {
         LaneEntry(measure: measure, quarter: quarter, element: .tempo(tempo))
     }
 
-    static func score(measures: Int, lane: [LaneEntry] = [], notes: Bool = false) -> Score {
+    /// `ramps` puts each spanner at the start of its measure's voice, before the beats.
+    static func score(
+        measures: Int, lane: [LaneEntry] = [], notes: Bool = false, ramps: [(measure: Int, spanner: Spanner)] = [],
+    ) -> Score {
         let beat: VoiceElement = notes
             ? .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)])))
             : .rest(duration: .quarter)
         let bars = (0 ..< measures).map { index -> Measure in
             let meter: [VoiceElement] = index == 0 ? [.timeSignature(TimeSignature(numerator: 4, denominator: 4))] : []
-            return Measure(voices: [Voice(elements: meter + Array(repeating: beat, count: 4))])
+            let lines = ramps.filter { $0.measure == index }.map { VoiceElement.spanner($0.spanner) }
+            return Measure(voices: [Voice(elements: meter + lines + Array(repeating: beat, count: 4))])
         }
         let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: bars)])
         let systemMeasures = (0 ..< measures).map { index in
@@ -30,5 +34,13 @@ enum TempoMapFixtures {
             })
         }
         return Score(division: 480, parts: [part], systemMeasures: IdentifiedArray(systemMeasures))
+    }
+
+    /// A rit. from its measure's downbeat, `measures` bars long, at MuseScore's default factor unless given one.
+    static func ritardando(measures: Int, factor: Double? = nil) -> Spanner {
+        Spanner(
+            kind: .gradualTempoChange, rawType: Spanner.Kind.gradualTempoChange.rawValue, nextMeasuresOffset: measures,
+            gradualTempoChange: Spanner.GradualTempoChangePayload(type: .ritardando, factor: factor),
+        )
     }
 }

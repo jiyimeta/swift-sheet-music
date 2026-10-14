@@ -17,12 +17,17 @@ fixtures taken from the upstream MuseScore repository:
   - single_note_multi_appoggiatura_post.mscx:
       src/engraving/tests/playback/playbackeventsrenderer_data/
       single_note_multi_appoggiatura_post/
+  - tempomap/gradual_tempo_change_{rallentando,accelerando,
+    doesnt_overwrite_other_tempo}.mscx:
+      src/engraving/tests/tempomap_data/<same name>/
 
 They are reproduced here to allow the swift-sheet-music test suite to
 verify equivalence of its MIDI export against MuseScore's own exporter
 output, to exercise the MusicXML importer against MuseScore's own
-MusicXML round-trip reference files, and — for the two grace fixtures —
-to pin how MuseScore itself lays grace notes out in a file, which this
+MusicXML round-trip reference files, to run MuseScore's own
+`tempomap_tests.cpp` expectations (for the three tempo-map scores)
+against this project's tempo map, and to pin how MuseScore itself lays
+grace notes out in a file (for the two grace fixtures), which this
 project's own round trip cannot observe.
 
 These files are licensed under the GNU General Public License version 3

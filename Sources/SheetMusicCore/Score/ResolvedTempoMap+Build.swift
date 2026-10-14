@@ -1,10 +1,12 @@
 import SheetMusicFoundation
 
 extension Score {
-    /// The score's tempo map (`ResolvedTempoMap`), built on each call — a consumer that reads it many times builds it
-    /// once.
+    /// The score's tempo map (`ResolvedTempoMap`): MuseScore's text pass over the markings, then its gradual pass over
+    /// the gradual tempo changes. Built on each call — a consumer that reads it many times builds it once.
     public func resolvedTempoMap() -> ResolvedTempoMap {
-        ResolvedTempoMap.markings(lane: systemMeasures.values, division: division)
+        let lengths = effectiveMeasureDurations().map { $0.ticks(division: division) }
+        return ResolvedTempoMap.markings(lane: systemMeasures.values, division: division)
+            .applyingRamps(gradualTempoRamps(measureLengths: lengths), measureLengths: lengths, division: division)
     }
 }
 
