@@ -92,7 +92,8 @@ struct RichTextBuilder {
     }
 
     /// The index of the `>` closing the tag opened at `start`, or `nil` when another `<` or the end comes first.
-    private static func tagEnd(in source: [Character], from start: Int) -> Int? {
+    /// Shared with `PreservedTextMarkup(xmlText:)`.
+    static func tagEnd(in source: [Character], from start: Int) -> Int? {
         var index = start + 1
         while index < source.count {
             switch source[index] {
@@ -110,7 +111,8 @@ struct RichTextBuilder {
     ]
 
     /// The entity starting at `start` and the index after its `;`, or `nil` when it names none of `entities`.
-    private static func entity(in source: [Character], at start: Int) -> (character: Character, next: Int)? {
+    /// Shared with `PreservedTextMarkup(xmlText:)`.
+    static func entity(in source: [Character], at start: Int) -> (character: Character, next: Int)? {
         let end = min(source.count, start + 6)
         guard start + 1 < end,
               let semicolon = source[(start + 1) ..< end].firstIndex(of: ";"),
@@ -120,7 +122,8 @@ struct RichTextBuilder {
     }
 
     /// `name="value"` pairs, either quote, values entity-decoded as MuseScore's `unEscape` decodes a face.
-    private static func attributes(in source: Substring) -> [String: String] {
+    /// Shared with `PreservedTextMarkup(xmlText:)`.
+    static func attributes(in source: Substring) -> [String: String] {
         var result: [String: String] = [:]
         var rest = source
         while let equals = rest.firstIndex(of: "=") {
