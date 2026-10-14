@@ -63,6 +63,41 @@ struct LayoutRichTextTests {
         }
     }
 
+    /// Staff text's symbol size is its text size at the reference spatium, so `symbolRun` cannot tell them apart. Tempo
+    /// can: `Sid::tempoMusicalSymbolSize` 20 against `tempoFontSize` 12 (`styledef.cpp:2074, 1149`), both spatium
+    /// dependent — at `staffSize: 40` the spatium is 10 pt, twice the reference, so 40 pt and 24 pt.
+    @Test("a tempo mark's symbol is Bravura at tempo's musical-symbol size, scaled with the spatium as its text is")
+    func tempoSymbolSize() {
+        Self.stub {
+            let rich = LayoutRichText(
+                RichText(lines: [[.symbol(name: "metNoteQuarterUp", Self.plain), .text(" = 120", Self.plain)]]),
+                style: .tempo, metrics: StaffMetrics(staffSize: 40),
+            )
+            let runs = rich.lines[0].runs
+            #expect(runs[0].content == .symbol(codepoint: 0xECA5))
+            #expect(runs[0].font == LayoutFont(face: SMuFLFamily.bravura, pointSize: 40))
+            #expect(Self.close(runs[1].font.pointSize, 24) && runs[1].font.weight == .bold)
+            // The stub advances a private-use codepoint 0.55 em: 0.55 × 40.
+            #expect(Self.close(runs[1].x, 22))
+        }
+    }
+
+    /// A marker's symbols take `Sid::repeatLeft/RightMusicalSymbolSize` (18) scaled by sp / 5, its text the role's
+    /// sp × 2.5 — at `staffSize: 40`, 36 pt and 25 pt.
+    @Test("a marker's symbol is Bravura at 18 pt per reference spatium")
+    func markerSymbolSize() {
+        Self.stub {
+            let rich = LayoutRichText(
+                RichText(lines: [[.text("To Coda ", Self.plain), .symbol(name: "coda", Self.plain)]]),
+                role: .markerText, metrics: StaffMetrics(staffSize: 40),
+            )
+            let runs = rich.lines[0].runs
+            #expect(Self.close(runs[0].font.pointSize, 25))
+            #expect(runs[1].content == .symbol(codepoint: 0xE048))
+            #expect(runs[1].font == LayoutFont(face: SMuFLFamily.bravura, pointSize: 36))
+        }
+    }
+
     /// Review Focus 4.
     @Test("a name with no glyph is dropped and MuseScore's `space` symbol advances like a space")
     func unknownSymbolAndSpace() {
@@ -166,6 +201,77 @@ struct LayoutRichTextTests {
             #expect(Self.close(bars[0].from.x, 0) && Self.close(bars[0].to.x, 10) && Self.close(bars[0].from.y, 9.7))
             #expect(Self.close(bars[1].from.x, 10) && Self.close(bars[1].to.x, 20) && Self.close(bars[1].from.y, 5.7))
             #expect(Self.close(bars[0].thickness, 0.6))
+        }
+    }
+
+    /// "To Coda " is 3.9 em of 12.5 pt marker text, 48.75; its baseline is the text's ascent, 10.625, and the underline
+    /// 0.12 em below it, at 12.125.
+    @Test("an underline spans the text runs only, never a symbol")
+    func symbolIsNotUnderlined() {
+        Self.stub {
+            let underlined = RichTextFormat(underline: true)
+            let rich = LayoutRichText(
+                RichText(lines: [[.text("To Coda ", underlined), .symbol(name: "coda", underlined)]]),
+                role: .markerText, metrics: Self.metrics,
+            )
+            #expect(rich.lines[0].runs.map(\.underline) == [true, false])
+            let bars = rich.decorations(at: .zero, anchor: .zero)
+            #expect(bars.count == 1)
+            #expect(Self.close(bars[0].from.x, 0) && Self.close(bars[0].to.x, 48.75))
+            #expect(Self.close(bars[0].from.y, 12.125))
+        }
+    }
+
+    /// "a" and "b" are 5 pt each and the space 3 between them; the strike sits 0.28 em above the 8.5 pt baseline.
+    @Test("MuseScore's `space` symbol is not struck through with the text around it")
+    func spaceSymbolIsNotStruck() {
+        Self.stub {
+            let struck = RichTextFormat(strike: true)
+            let rich = Self.staffText([[
+                .text("a", struck), .symbol(name: "space", struck), .text("b", struck),
+            ]])
+            #expect(rich.lines[0].runs.map(\.strike) == [true, false, true])
+            let bars = rich.decorations(at: .zero, anchor: .zero)
+            #expect(bars.count == 2)
+            #expect(Self.close(bars[0].from.x, 0) && Self.close(bars[0].to.x, 5))
+            #expect(Self.close(bars[1].from.x, 8) && Self.close(bars[1].to.x, 13))
+            #expect(Self.close(bars[1].from.y, 5.7))
+        }
+    }
+
+    /// "abcd" inks 20 pt and "ab" 10, so the block is 20 wide and the shorter line has 10 to share out; the stack is
+    /// 22 high, baselines 8.5 and 19.5 down it.
+    @Test("a shorter line is centered or right-aligned against the longest, as the anchor's x says")
+    func eachLineAligns() {
+        Self.stub {
+            let rich = Self.staffText([[.text("abcd", Self.plain)], [.text("ab", Self.plain)]])
+            let origin = CGPoint(x: 100, y: 200)
+            let centered = rich.positionedRuns(at: origin, anchor: CGPoint(x: 0.5, y: 0.5))
+            #expect(Self.close(centered[0].baseline.x, 90) && Self.close(centered[1].baseline.x, 95))
+            #expect(Self.close(centered[0].baseline.y, 197.5) && Self.close(centered[1].baseline.y, 208.5))
+            let ink = rich.inkRect(at: origin, anchor: CGPoint(x: 0.5, y: 0.5)) ?? .zero
+            #expect(Self.close(ink.minX, 90) && Self.close(ink.width, 20) && Self.close(ink.height, 22))
+            let right = rich.positionedRuns(at: origin, anchor: CGPoint(x: 1, y: 0.5))
+            #expect(Self.close(right[0].baseline.x, 80) && Self.close(right[1].baseline.x, 90))
+            let left = rich.positionedRuns(at: origin, anchor: CGPoint(x: 0, y: 1))
+            #expect(Self.close(left[0].baseline.x, 100) && Self.close(left[1].baseline.x, 100))
+        }
+    }
+
+    /// The stub inks a string from its pen even when it opens with a space (`inkBounds` has no left bearing), so only a
+    /// space that is a run of its own — which inks nothing — starts a line's ink after its pen: here at 3, the space's
+    /// advance, with "pizz." 23 wide.
+    @Test("a line whose ink starts after its pen is placed by its ink")
+    func leadingSpaceRun() {
+        Self.stub {
+            let rich = Self.staffText([[.text(" ", Self.plain), .text("pizz.", Self.plain)]])
+            #expect(Self.close(rich.ink?.minX ?? -1, 0) && Self.close(rich.ink?.width ?? 0, 23))
+            let origin = CGPoint(x: 40, y: 60)
+            let leading = rich.positionedRuns(at: origin, anchor: CGPoint(x: 0, y: 1))
+            #expect(Self.close(leading[0].baseline.x, 37) && Self.close(leading[1].baseline.x, 40))
+            #expect(Self.close(rich.inkRect(at: origin, anchor: CGPoint(x: 0, y: 1))?.minX ?? 0, 40))
+            let trailing = rich.positionedRuns(at: origin, anchor: CGPoint(x: 1, y: 1))
+            #expect(Self.close(trailing[1].baseline.x, 17))
         }
     }
 }

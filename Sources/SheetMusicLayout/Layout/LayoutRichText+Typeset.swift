@@ -30,8 +30,9 @@ extension LayoutRichText {
     ///   - pointScale: what turns a `<font size="…"/>` into points — the spatium scaling of a spatium-dependent style
     ///     (`sp / 5`), 1 for one that is not (`TextFragment::font`, `engraving/dom/textbase.cpp:859-905`).
     ///   - symbolPointSize: Bravura's size for `<sym>` runs, already scaled.
-    ///   - underline, strike: the style's own decorations, which a run keeps unless its markup set one.
-    public init(
+    ///   - underline, strike: the style's own decorations, which a text run keeps unless its markup set one. A symbol
+    ///     run never has one.
+    init(
         _ richText: RichText, baseFont: LayoutFont, pointScale: CGFloat, symbolPointSize: CGFloat,
         underline: Bool = false, strike: Bool = false,
     ) {
@@ -48,7 +49,7 @@ extension LayoutRichText {
     /// `richText` as a text element of `style` with the element's font override — in the font
     /// `TextInkGeometry.font(for:overrides:metrics:)` resolves, which plain text of the same element is measured and
     /// drawn in.
-    public init(
+    init(
         _ richText: RichText, style: TextStyleType, overrides: TextProperties = TextProperties(), metrics: StaffMetrics,
     ) {
         let resolved = overrides.resolved(against: style)
@@ -64,7 +65,7 @@ extension LayoutRichText {
     }
 
     /// `richText` as a navigation label (`NotationTextStyle`) — a marker's or a jump's.
-    public init(_ richText: RichText, role: NotationTextStyle.Role, metrics: StaffMetrics) {
+    init(_ richText: RichText, role: NotationTextStyle.Role, metrics: StaffMetrics) {
         let pointScale = metrics.sp / TextRoleStyle.referenceSpatiumInPoints
         self.init(
             richText,
@@ -77,7 +78,7 @@ extension LayoutRichText {
     /// MuseScore's musical-symbol size for a style's `<sym>` runs, in points at the reference spatium
     /// (`Sid::*MusicalSymbolSize`, `engraving/style/styledef.cpp:2019-2076`). Dynamics draw their symbols in the music
     /// font at the dynamics scale instead (`textbase.cpp:881-905`); W4 passes that size to the base initializer.
-    public static func musicalSymbolSize(for style: TextStyleType) -> CGFloat {
+    static func musicalSymbolSize(for style: TextStyleType) -> CGFloat {
         switch style {
         case .title: 22
         case .tempo: 20
@@ -110,14 +111,19 @@ private struct RichTextTypesetter {
         for run in source {
             let format: RichTextFormat
             let content: LayoutRichTextRun.Content
+            // Only a fragment in a text face is underlined or struck through (`TextFragment::font`,
+            // `textbase.cpp:914-920`); every `<sym>`, the `space` one included, is a ScoreText fragment.
+            let decorates: Bool
             switch run {
             case let .text(text, runFormat):
                 format = runFormat
                 content = .text(text)
+                decorates = true
             case let .symbol(name, runFormat):
                 format = runFormat
-                // MuseScore inserts a plain space for `SymId::space` and drops a name it has no glyph for
-                // (`TextBase::createBlocks`, `engraving/dom/textbase.cpp:1724-1740`).
+                decorates = false
+                // MuseScore inserts a plain space for `SymId::space`, as ScoreText like any symbol, and drops a name it
+                // has no glyph for (`TextBase::createBlocks`, `engraving/dom/textbase.cpp:1724-1740`).
                 if name == "space" {
                     content = .text(" ")
                 } else if let codepoint = SMuFLCodepoint.byName(name) {
@@ -131,7 +137,8 @@ private struct RichTextTypesetter {
             runs.append(LayoutRichTextRun(
                 content: content, font: runFont, x: pen, advance: advance,
                 baselineShift: baselineShift(format, font: runFont),
-                underline: format.underline ?? underline, strike: format.strike ?? strike,
+                underline: decorates && (format.underline ?? underline),
+                strike: decorates && (format.strike ?? strike),
             ))
             pen += advance
             if case .text = content {
