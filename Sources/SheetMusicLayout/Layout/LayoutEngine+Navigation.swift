@@ -58,9 +58,17 @@ extension LayoutEngine {
     }
 
     /// The start barline of a bar: its own start repeat, else the previous bar's end barline (which stands just left
-    /// of this bar's origin), else none — the first bar of a system draws no start barline.
+    /// of this bar's origin: the previous bar's full `width` back, the quantity the bars' X offsets accumulate), else
+    /// none.
+    ///
+    /// A system's first bar gets none: MuseScore uses `measure->startBarLine()`'s width there
+    /// (`markerlayout.cpp:84-87`, hence a hair of offset for a centered or left mark), but ssm draws no start barline
+    /// element at a system's head (the staff's left edge carries none), so a zero-width span at the origin approximates
+    /// it. `elements` and the previous bar's include hidden barlines, which MuseScore lays out with their width all the
+    /// same.
     static func startBarLine(
-        in elements: [LayoutElement]?, previous: (elements: [LayoutElement]?, contentWidth: CGFloat)?, sp: CGFloat,
+        in elements: [LayoutElement]?, previous: (elements: [LayoutElement]?, width: CGFloat, contentWidth: CGFloat)?,
+        sp: CGFloat,
     ) -> BarLineSpan {
         for element in elements ?? [] {
             if case let .barLine(subtype, origin, _, _, .startRepeat) = element, origin.x < sp {
@@ -70,7 +78,7 @@ extension LayoutEngine {
         guard let previous,
               let end = endBarLine(in: previous.elements, contentWidth: previous.contentWidth, sp: sp)
         else { return BarLineSpan(at: 0) }
-        return BarLineSpan(minX: end.minX - previous.contentWidth, maxX: end.maxX - previous.contentWidth)
+        return BarLineSpan(minX: end.minX - previous.width, maxX: end.maxX - previous.width)
     }
 
     /// A bar's markers, then its jumps, set the way MuseScore sets repeat text and emitted into the top staff's pass-1

@@ -64,13 +64,18 @@ struct NavigationPlacementTests {
         return (bar.x, span)
     }
 
-    /// The center of the barline standing at the bar's start, measure-local: the previous bar's end barline, or none
-    /// (0) on a system's first bar.
-    private static func startBarLineCenter(_ found: Found) throws -> CGFloat {
+    /// The ink span of the barline standing at the bar's start, measure-local: the previous bar's end barline, or none
+    /// (a span of no width at 0) on a system's first bar.
+    private static func startBarLine(_ found: Found) throws -> (minX: CGFloat, center: CGFloat) {
         guard let previous = found.system.measures.first(where: { $0.measureIndex == found.measure.measureIndex - 1 })
-        else { return 0 }
+        else { return (0, 0) }
         let span = try endBarLine(Found(document: found.document, system: found.system, measure: previous)).span
-        return previous.origin.x + span.center - found.measure.origin.x
+        let shift = previous.origin.x - found.measure.origin.x
+        return (shift + span.minX, shift + span.center)
+    }
+
+    private static func startBarLineCenter(_ found: Found) throws -> CGFloat {
+        try startBarLine(found).center
     }
 
     private static func box(_ element: LayoutElement) throws -> CGRect {
@@ -131,6 +136,24 @@ struct NavigationPlacementTests {
         #expect(abs(center - barLineCenter) < Self.tolerance)
     }
 
+    /// The bar's X offsets accumulate its full `width`, courtesy band included, so the previous bar's end barline
+    /// stands `width` — not `contentWidth` — left of the next bar's origin. A courtesy only ever ends a system, so
+    /// no laid-out bar has a previous one with a band; the rule is pinned on hand-built elements.
+    @Test("the start barline stands a full previous width back, a courtesy band included")
+    func startBarLineUsesPreviousWidth() {
+        let sp: CGFloat = 7
+        let originX: CGFloat = 100 - sp / 2
+        let bar = LayoutElement.barLine(
+            subtype: nil, origin: CGPoint(x: originX, y: 0), halfHeight: 14, measureIndex: 0, role: .trailing,
+        )
+        let span = LayoutEngine.startBarLine(
+            in: [], previous: (elements: [bar], width: 130, contentWidth: 100), sp: sp,
+        )
+        let expected = LayoutEngine.BarLineSpan(subtype: nil, originX: originX - 130, sp: sp)
+        #expect(abs(span.minX - expected.minX) < Self.tolerance)
+        #expect(abs(span.maxX - expected.maxX) < Self.tolerance)
+    }
+
     /// `MarkerLayout::doLayoutMarker` lifts a mark clear of what stands under it — a note far above the staff
     /// included (`Autoplace::autoplaceMeasureElement`, `autoplace.cpp:128-200`).
     @Test("a marker above a tall note is lifted clear of it")
@@ -172,8 +195,10 @@ struct NavigationPlacementTests {
         let found = try #require(Self.layout(markers: [Marker(kind: .user, text: "Solo")]))
         let marker = try #require(found.measure.markers.first)
         let ink = try Self.ink(marker, found)
-        let barLineCenter = try Self.startBarLineCenter(found)
-        #expect(abs(ink.minX - barLineCenter) < found.document.metrics.sp * 0.2)
+        let barLine = try Self.startBarLine(found)
+        // The barline's LEFT edge, not its center: they differ by half its stroke, which the tolerance excludes.
+        #expect(abs(ink.minX - barLine.minX) < Self.tolerance)
+        #expect(abs(barLine.center - barLine.minX) > Self.tolerance)
     }
 
     /// Review Focus 5.
