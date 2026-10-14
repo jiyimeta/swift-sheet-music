@@ -103,6 +103,7 @@ extension Spanner {
 }
 
 extension Tempo {
+    /// The authored marking's formatted text while its preserved markup still describes `text`; `nil` otherwise.
     public var richText: RichText? {
         text.flatMap { preservedTextMarkup?.richText(ifCurrentFor: $0) }
     }

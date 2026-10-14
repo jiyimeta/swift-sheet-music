@@ -65,6 +65,7 @@ extension FNV1a {
         }
         if tempo.textType != .normal {
             combine(113)
+            // The raw value is hashed, so `TempoTextType`'s raw values are frozen: renaming a case moves fingerprints.
             combine(tempo.textType.rawValue)
         }
         if !tempo.playsBack {
