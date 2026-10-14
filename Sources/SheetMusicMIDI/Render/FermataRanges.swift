@@ -72,16 +72,21 @@ struct TempoTimeline: Equatable {
         return entries[pick].bps
     }
 
-    /// Build a tempo timeline from a staff's measure tick budgets combined with the score-level tempo entries.
-    /// The entries are `tempoMap`'s points — pass `Score.resolvedTempoMap()` so a fermata inside a gradual change
-    /// stretches the RAMPED tempo in force at its tick and restores that value, as MuseScore does — or, when `nil`,
-    /// the text-only map of `systemMeasures` (`ResolvedTempoMap.markings`). Either is projected onto this staff's
-    /// measure bases.
+    /// Build a tempo timeline from a staff's measure tick budgets combined with the score-level tempo entries on
+    /// `systemMeasures`. The tempo entries are the score's text-only tempo map (`ResolvedTempoMap.markings`),
+    /// projected onto this staff's measure bases.
+    ///
+    /// Text-only because that is the map MuseScore measures a hold against: `Score::setUpTempoMap` clears its map
+    /// (`engraving/dom/score.cpp:434`) and runs `rebuildTempoAndTimeSigMaps` over every measure (:442-462), which
+    /// stretches the tempo in force at a held segment and restores it one tick before the hold ends (:605-627), before
+    /// the gradual pass ramps anything (:466-496). So a fermata inside a rit. stretches the marking's tempo, not the
+    /// ramped one, and restores the marking's. That pass writes a step only where no entry stands (:492): a step on a
+    /// hold's own tick is dropped, one strictly inside the hold plays unstretched until the restore. Here the walk's
+    /// step metas do the same — a step on the hold's first tick sorts before the open, one inside it after.
     static func build(
         measures: [Measure],
         systemMeasures: [SystemMeasure],
         division: Int,
-        tempoMap: ResolvedTempoMap? = nil,
     ) -> TempoTimeline {
         var entries: [(tick: Int, bps: Double)] = [(0, 2.0)]
         var measureBases: [Int] = []
@@ -99,8 +104,9 @@ struct TempoTimeline: Equatable {
                 )
             }
         }
-        let map = tempoMap ?? ResolvedTempoMap.markings(lane: systemMeasures, division: division)
-        for point in map.points where point.measureIndex < measureBases.count {
+        for point in ResolvedTempoMap.markings(lane: systemMeasures, division: division).points
+            where point.measureIndex < measureBases.count
+        {
             entries.append((tick: measureBases[point.measureIndex] + point.tickInMeasure, bps: point.beatsPerSecond))
         }
         entries.sort { $0.tick < $1.tick }

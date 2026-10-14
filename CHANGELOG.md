@@ -90,10 +90,15 @@ and this project adheres to
 ### Fixed
 
 - **After a repeat jump the SMF plays the notated tempo** (import-fidelity F2.10). At a jump's target the first track
-  re-states the tempo in force there when the sequence stands at another one and nothing on that downbeat states it,
+  re-states the tempo in force there when the track plays another one there and nothing on that downbeat states it,
   so audio and the cursor (which already replayed each span at its notated tempo, as MuseScore's playback does) no
-  longer drift apart after a rit. or a tempo change before a repeat. MuseScore's own export carries the previous tempo
-  across the jump; `testVoltaTemp`'s reference differs from this SMF by exactly that one event.
+  longer drift apart after a rit. or a tempo change before a repeat — or after a fermata ending the bar before the
+  jump, whose restore takes the tempo of the bar that follows in notation. MuseScore's own export carries the previous
+  tempo across the jump; `testVoltaTemp`'s reference differs from this SMF by exactly that one event.
+- **A fermata on a bar's first chord holds on every pass of that bar, and only there.** The SMF filed its hold's
+  start under the bar ENDING on that barline, so it fired wherever that bar ended: a fermata on the bar after `:‖`
+  slowed the whole repeated pass from the jump back, and one on a repeat target's or a second ending's downbeat did not
+  hold on the pass that jumped there. The cursor, which times each pass by its own bar, already played it this way.
 - **Gradual tempo changes play** (import-fidelity F2.7): rit., rall., accel. and the other eight MuseScore types ramp
   the tempo map as MuseScore does — from the tempo in force where the change starts to that times its factor
   (`<tempoChangeFactor>` or the type's default), in `max(8, ticks / division)` eased steps (`<tempoEasingMethod>`), a

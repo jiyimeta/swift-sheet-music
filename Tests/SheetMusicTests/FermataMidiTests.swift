@@ -249,14 +249,11 @@ struct FermataMidiTests {
         ])
     }
 
-    /// 8. A fermata inside a rit. stretches the RAMPED tempo and restores the ramp's own step.
-    @Test func fermataInsideRitardandoStretchesTheRampedTempo() {
-        // 120 BPM (2 bps) at the start; a one-bar rit. over measure 1 (factor 0.75, linear): 8 steps of 240 ticks,
-        // step i at 2 + (-0.5)(i / 8) bps. The fermata (stretch 1.5) holds the third quarter of measure 1, ticks
-        // [2880, 3360) = steps 4 (1.75 bps) and 6 (1.625 bps).
-        // Open at 2880: 1e6 / (1.75 / 1.5) = 857142.86 -> 857143.
-        // Close at 3360: restores step 6, 1e6 / 1.625 = 615384.6 -> 615385.
-        // (Reading the text marking instead would give 666667 / 500000.)
+    /// 120 BPM (2 bps) at the start; a one-bar rit. over measure 1 (factor 0.75, linear): 8 steps of 240 ticks, step i
+    /// at tick 1920 + 240 i and 2 + (-0.5)(i / 8) bps. The fermata (stretch 1.5) holds the third quarter of measure 1,
+    /// ticks [2880, 3360): step 4 (1.75 bps) stands at its start, step 5 (1.6875 bps) inside it, step 6 (1.625 bps) at
+    /// its end.
+    private func fermataInsideRitardando() -> Score {
         let bar = Array(repeating: chord(60), count: 4)
         let measures = [
             Measure(voices: [Voice(elements: [.timeSignature(TimeSignature(numerator: 4, denominator: 4))] + bar)]),
@@ -272,18 +269,39 @@ struct FermataMidiTests {
         let start = PositionedSystemElement(
             position: MeasurePosition(numerator: 0, denominator: 4), element: .tempo(Tempo(beatsPerSecond: 2)),
         )
-        let score = Score(
+        return Score(
             division: 480, parts: [part],
             systemMeasures: IdentifiedArray([SystemMeasure(elements: [start]), SystemMeasure()]),
         )
-        let events = MidiRenderer.fermataBookendEvents(score: score)
+    }
+
+    /// 8. A fermata inside a rit. stretches the MARKING's tempo and restores it, as MuseScore does: it measures a hold
+    /// before its gradual pass ramps anything (`engraving/dom/score.cpp:442-462` ahead of :466-496).
+    @Test func fermataInsideRitardandoStretchesTheMarkingsTempo() {
+        // Open at 2880: 1e6 / (2 / 1.5) = 750000.
+        // Close at 3360: restores the marking, 1e6 / 2 = 500000.
+        // (The ramped steps would give 857143 / 615385.)
+        let events = MidiRenderer.fermataBookendEvents(score: fermataInsideRitardando())
         func tempos(_ list: [TimedMidiEvent]) -> [(Int, Int)] {
             list.compactMap { event in
                 guard case let .meta(.tempo(value)) = event.event else { return nil }
                 return (event.tick, value)
             }
         }
-        #expect(tempos(events.openEvents) == [(2880, 857_143)])
-        #expect(tempos(events.closeEvents) == [(3360, 615_385)])
+        #expect(tempos(events.openEvents) == [(2880, 750_000)])
+        #expect(tempos(events.closeEvents) == [(3360, 500_000)])
+    }
+
+    /// 9. A ramp step strictly inside the hold is not stretched: it plays its own tempo from its tick until the close,
+    /// as in MuseScore, whose gradual pass writes a step wherever no tempo entry stands yet
+    /// (`engraving/dom/score.cpp:492`) — after the per-measure pass wrote only the hold's own two (:605-627).
+    @Test func rampStepInsideTheHoldPlaysUnstretched() throws {
+        // At 2880 the walk's step 4 (1e6 / 1.75 = 571428.6 -> 571429), then the open (750000), which sorts after the
+        // walk's metas and wins; at 3120 step 5, 1e6 / 1.6875 = 592592.6 -> 592593, unstretched; at 3360 the close
+        // (the marking, 500000) ahead of the walk's step 6 (1e6 / 1.625 = 615384.6 -> 615385), which plays on —
+        // MuseScore restores one tick earlier, at 3359, and takes step 6 at 3360 the same way.
+        let tempos = try tempoEvents(MidiRenderer.render(score: fermataInsideRitardando()))
+            .filter { (2880 ... 3360).contains($0.0) }
+        #expect(tempos == [(2880, 571_429), (2880, 750_000), (3120, 592_593), (3360, 500_000), (3360, 615_385)])
     }
 }

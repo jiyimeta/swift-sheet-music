@@ -10,7 +10,8 @@ extension MidiRenderer {
     /// voltas, jumps and markers are already expanded into it.
     /// `<MeasureRepeat>` group replay still resolves per-staff (via
     /// `resolvedVoice`). `emitsTempoEvents` is set for the first track's voice 0, which carries the score's tempo
-    /// map as MuseScore's export does (`importexport/midi/internal/midiexport/exportmidi.cpp:177-204`).
+    /// map as MuseScore's export does (`importexport/midi/internal/midiexport/exportmidi.cpp:177-204`); `bookends`
+    /// are that track's fermata bookends, which decide with it whether a jump's target needs its tempo re-stated.
     static func renderVoice( // swiftlint:disable:this function_body_length cyclomatic_complexity
         voiceIndex: Int,
         staff: Staff,
@@ -22,6 +23,7 @@ extension MidiRenderer {
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
         tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
         emitsTempoEvents: Bool = false,
+        bookends: BookendTempoTrack = BookendTempoTrack(),
     ) throws -> (events: [TimedMidiEvent], endTick: Int, lyricAnchors: [LyricMidiCodec.Anchor]) {
         let measureDurations = staff.measures.effectiveMeasureDurations()
         // Swing reads a beat position out of a tick, so its grid has to be measured from the BAR rather than from
@@ -35,8 +37,8 @@ extension MidiRenderer {
         var velocity = effectiveVelocity(forDynamic: nil, instrument: part.instrument)
         // Tempo in beats-per-second; default is 2 bps (120 BPM = MuseScore's DEFAULT_TEMPO).
         var currentTempoBps = 2.0
-        // The tempo the first track's sequence stands at, carried from plan entry to plan entry.
-        var sequenceMicros = defaultMicrosPerQuarter
+        // The last tempo meta this walk wrote on the first track, carried from plan entry to plan entry.
+        var tempoSequence = TempoSequence()
 
         let hairpinRamps = HairpinRamps.collect(
             voiceIndex: voiceIndex,
@@ -154,7 +156,7 @@ extension MidiRenderer {
                         microsecondsPerQuarter: defaultMicrosPerQuarter,
                     ))))
                     currentTempoBps = 2.0
-                    sequenceMicros = defaultMicrosPerQuarter
+                    tempoSequence = TempoSequence(tick: entry.tickOffset)
                 }
                 // Reset dynamic state too: starting a fresh section means notes
                 // play at the score's default (mf) velocity until a Dynamic re-asserts.
@@ -170,7 +172,7 @@ extension MidiRenderer {
             // measure-relative positions; only voice 0 emits them so they don't fan out across voices.
             if emitsTempoEvents {
                 events += tempoEvents(
-                    for: entry, jumped: jumped, tempoMap: tempoMap, sequenceMicros: &sequenceMicros,
+                    for: entry, jumped: jumped, tempoMap: tempoMap, bookends: bookends, sequence: &tempoSequence,
                 )
             }
             if voiceIndex == 0,

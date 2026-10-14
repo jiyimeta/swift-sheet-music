@@ -56,11 +56,11 @@ public enum MidiRenderer {
             measures: score.parts.first?.staves.first?.measures ?? [], division: score.division,
         )
         let projectedFermataClose = projectBookends(
-            bookends.closeEvents, plan: plan,
+            bookends.closeEvents, opening: false, plan: plan,
             measureBases: canonicalLayout.bases, measureSpans: canonicalLayout.spans,
         )
         let projectedFermataOpen = projectBookends(
-            bookends.openEvents, plan: plan,
+            bookends.openEvents, opening: true, plan: plan,
             measureBases: canonicalLayout.bases, measureSpans: canonicalLayout.spans,
         )
         for (partIndex, part) in score.parts.enumerated() {
@@ -264,6 +264,8 @@ public enum MidiRenderer {
 
         var voiceEventBuckets: [[TimedMidiEvent]] = []
         var lyricAnchors: [LyricMidiCodec.Anchor] = []
+        // What the tempo-writing walk reads to tell what the track plays at a repeat jump (`tempoEvents`).
+        let bookends = BookendTempoTrack(close: fermataCloseEvents, open: fermataOpenEvents)
         let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
         for voiceIndex in 0 ..< voiceCount {
             let (voiceEvents, _, anchors) = try renderVoice(
@@ -277,6 +279,7 @@ public enum MidiRenderer {
                 systemElementsByMeasure: systemElementsByMeasure,
                 tempoMap: tempoMap,
                 emitsTempoEvents: isFirstTrack && voiceIndex == 0,
+                bookends: bookends,
             )
             voiceEventBuckets.append(voiceEvents)
             lyricAnchors.append(contentsOf: anchors)
@@ -326,13 +329,16 @@ public enum MidiRenderer {
     /// owning measure, a copy is emitted at the playback tick
     /// `entry.tickOffset + (event.tick - measureBases[mi])`.
     ///
-    /// Close events sit on the boundary between measures; an event
-    /// at `measureBases[mi] + measureSpans[mi]` is attributed to
-    /// measure `mi` (the bar that just ended) rather than `mi + 1`.
-    /// This matches how a fermata's anchor chord ends the bar it
-    /// lives in.
+    /// An event on a barline belongs to the bar its hold sits in: a close (`opening` false) to the bar that ends
+    /// there, whose last chord the hold was on, and an open to the bar that starts there, whose first chord it holds.
+    /// No hold crosses a barline, so the sweep's events on one are exactly these. Giving the open to the ending bar too
+    /// fired it wherever that bar ended, whatever came next: a fermata on the final bar after `:‖` stretched the whole
+    /// second pass from the jump back, and a fermata on a jump target's downbeat held only when the bar before it led
+    /// in. Each bar's own hold now plays on every pass of that bar, as the cursor (`UnrolledTimeMap`, which times each
+    /// pass by its own bar's notated span) already assumed.
     private static func projectBookends(
         _ bookends: [TimedMidiEvent],
+        opening: Bool,
         plan: [PlaybackEntry],
         measureBases: [Int],
         measureSpans: [Int],
@@ -342,6 +348,7 @@ public enum MidiRenderer {
         for event in bookends {
             guard let mi = ownerMeasureIndex(
                 forTick: event.tick,
+                opening: opening,
                 measureBases: measureBases,
                 measureSpans: measureSpans,
             ) else { continue }
@@ -381,12 +388,14 @@ public enum MidiRenderer {
         return (bases, spans)
     }
 
-    /// Half-open lookup `[base, base + span)` with one tweak: a tick
-    /// sitting exactly on the closing boundary belongs to the
-    /// measure that just ended (so close bookends at endTick stay
-    /// with their anchor chord's bar).
+    /// Half-open lookup `[base, base + span)` with one tweak for a
+    /// close (`opening` false): a tick sitting exactly on the closing
+    /// boundary belongs to the measure that just ended (so close
+    /// bookends at endTick stay with their anchor chord's bar). An
+    /// open on a barline falls through to the bar that starts there.
     private static func ownerMeasureIndex(
         forTick tick: Int,
+        opening: Bool,
         measureBases: [Int],
         measureSpans: [Int],
     ) -> Int? {
@@ -396,7 +405,7 @@ public enum MidiRenderer {
             if tick >= base && tick < end {
                 return i
             }
-            if tick == end {
+            if tick == end && !opening {
                 return i
             }
         }
