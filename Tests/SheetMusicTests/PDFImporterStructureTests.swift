@@ -194,7 +194,59 @@
             #expect(result.markers.count == 1)
             #expect(result.markers.first?.measureIndex == 1)
             #expect(result.markers.first?.marker.kind == .segno)
-            #expect(result.markers.first?.marker.text == "Segno")
+            // No text of its own: it prints its type's default, the segno glyph.
+            #expect(result.markers.first?.marker.text.isEmpty == true)
+        }
+
+        @Test("An imported segno and coda print MuseScore's glyphs, not the words the PDF used for them")
+        func segnoAndCodaPrintGlyphs() {
+            let measures: [(index: Int, xRange: ClosedRange<CGFloat>)] = [
+                (0, 100 ... 200),
+                (1, 200 ... 300),
+            ]
+            let result = PDFImporter.detectMarkersAndJumps(
+                texts: [
+                    text("Segno", at: CGPoint(x: 105, y: 470), fontSize: 10),
+                    text("Coda", at: CGPoint(x: 205, y: 470), fontSize: 10),
+                ],
+                measures: measures,
+                systemTopY: 480, pageIndex: 0,
+            )
+            let segno = result.markers.first { $0.marker.kind == .segno }?.marker
+            let coda = result.markers.first { $0.marker.kind == .coda }?.marker
+            #expect(segno?.displayedRichText == Marker(kind: .segno).displayedRichText)
+            #expect(coda?.displayedRichText == Marker(kind: .coda).displayedRichText)
+            let segnoRuns = segno?.displayedRichText.lines.flatMap(\.self) ?? []
+            let codaRuns = coda?.displayedRichText.lines.flatMap(\.self) ?? []
+            #expect(segnoRuns.count == 1)
+            #expect(codaRuns.count == 1)
+            if case let .symbol(name, _)? = segnoRuns.first { #expect(name == "segno") } else {
+                Issue.record("segno does not print a symbol run")
+            }
+            if case let .symbol(name, _)? = codaRuns.first { #expect(name == "coda") } else {
+                Issue.record("coda does not print a symbol run")
+            }
+        }
+
+        @Test("Coda and To Coda carry MuseScore's labels — the ones a D.S. al Coda targets (F3.7)")
+        func codaLabels() {
+            let measures: [(index: Int, xRange: ClosedRange<CGFloat>)] = [
+                (0, 100 ... 200),
+                (1, 200 ... 300),
+            ]
+            let result = PDFImporter.detectMarkersAndJumps(
+                texts: [
+                    text("Coda", at: CGPoint(x: 105, y: 470), fontSize: 10),
+                    text("To Coda", at: CGPoint(x: 205, y: 470), fontSize: 10),
+                ],
+                measures: measures,
+                systemTopY: 480, pageIndex: 0,
+            )
+            let kinds = result.markers.map(\.marker.kind)
+            let labels = result.markers.map(\.marker.label)
+            #expect(kinds == [.coda, .toCoda])
+            // `D.S. al Coda` plays until `coda` and continues at `codab` (`parseJump` below).
+            #expect(labels == ["codab", "coda"])
         }
     }
 #endif

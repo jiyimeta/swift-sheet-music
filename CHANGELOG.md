@@ -144,6 +144,10 @@ and this project adheres to
 
 ### Fixed
 
+- **PDF import labels its markers as MuseScore does (F3.7):** a Coda `codab`, a To Coda `coda`. To Coda was labeled
+  `to-coda`, which no jump targets, and the Coda `coda`, which a D.S. al Coda took for its To Coda. An imported segno
+  or coda keeps no text of its own, so it prints MuseScore's glyph for its type; Fine and To Coda keep the words the
+  PDF printed, which are their default text too.
 - **Saved markers open in MuseScore as the same type, label and text (F3.4, F3.5).** `<markerType>` is MuseScore's name
   (`codab`, `coda`, `codasym`, `dacoda`, `dadblcoda`, `user` for the types MuseScore lacks) where it was this library's
   raw value, which MuseScore read as Custom; it comes after `<text>` and `<label>`, as MuseScore writes it; `<label>` is

@@ -232,14 +232,17 @@ extension PDFImporter {
         return (markers.map { ($0.0, $0.1) }, jumps.map { ($0.0, $0.1) })
     }
 
+    /// The markers a PDF prints as words. Each takes its kind's default label, MuseScore's
+    /// (`Marker.Kind.defaultLabel`), which is what the jumps `parseJump` reads target: `D.S. al Coda` plays until
+    /// `coda` (a To Coda) and continues at `codab` (the Coda). Segno and Coda keep no text of their own, so they print
+    /// their type's default, MuseScore's glyph; Fine and To Coda keep the words, which are their default text too.
     private static func parseMarker(_ text: String) -> Marker? {
         switch text {
-        case "Segno": return Marker(kind: .segno, label: "segno", text: "Segno")
-        case "Coda": return Marker(kind: .coda, label: "coda", text: "Coda")
-        case "Fine": return Marker(kind: .fine, label: "fine", text: "Fine")
-        case "To Coda":
-            return Marker(kind: .toCoda, label: "to-coda", text: "To Coda")
-        default: return nil
+        case "Segno": Marker(kind: .segno, label: Marker.Kind.segno.defaultLabel)
+        case "Coda": Marker(kind: .coda, label: Marker.Kind.coda.defaultLabel)
+        case "Fine": Marker(kind: .fine, label: Marker.Kind.fine.defaultLabel, text: text)
+        case "To Coda": Marker(kind: .toCoda, label: Marker.Kind.toCoda.defaultLabel, text: text)
+        default: nil
         }
     }
 
