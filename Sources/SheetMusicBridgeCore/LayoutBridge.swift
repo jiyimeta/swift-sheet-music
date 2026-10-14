@@ -927,7 +927,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             )
 
         case let .spannerSegment(
-            kind, fromOrigin, toOrigin, continuesLeft, continuesRight, text, _, _,
+            kind, fromOrigin, toOrigin, continuesLeft, continuesRight, text, _, richText,
         ):
             encodeSpanner(
                 kind: kind,
@@ -940,6 +940,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 text: text,
                 sp: sp,
                 glyphSize: glyphSize,
+                richText: richText,
                 into: &out,
             )
 

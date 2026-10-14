@@ -209,11 +209,11 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height, into: parent,
             )
         case let .spannerSegment(
-            kind, from, to, cl, cr, text, _, _,
+            kind, from, to, cl, cr, text, _, richText,
         ):
             drawSpanner(
                 kind: kind, from: shift(from), to: shift(to),
-                continuesLeft: cl, continuesRight: cr, text: text,
+                continuesLeft: cl, continuesRight: cr, text: text, richText: richText,
                 metrics: metrics, height: height, into: parent,
             )
         case let .tieArc(from, to, above, _):

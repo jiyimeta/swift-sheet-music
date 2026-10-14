@@ -12,6 +12,7 @@ enum SpannerRenderer {
         continuesLeft: Bool,
         continuesRight: Bool,
         text: String,
+        richText: LayoutRichText? = nil,
         metrics: StaffMetrics,
     ) {
         switch kind {
@@ -66,6 +67,8 @@ enum SpannerRenderer {
                 type: type, continuesLeft: continuesLeft,
                 metrics: metrics,
             )
+        case .gradualTempoChange:
+            drawGradualTempoChange(context: &context, from: from, to: to, richText: richText, metrics: metrics)
         }
     }
 

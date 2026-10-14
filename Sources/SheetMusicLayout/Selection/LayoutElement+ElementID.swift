@@ -36,7 +36,7 @@ extension LayoutElement {
             case .ottava: return .spanner(anchor: anchor, kind: .ottava)
             case .volta: return .spanner(anchor: anchor, kind: .volta)
             case .slur: return .slur(.voice(anchor))
-            case .vibrato, .trill, .textLine, .palmMute, .letRing: return nil
+            case .vibrato, .trill, .textLine, .palmMute, .letRing, .gradualTempoChange: return nil
             }
         default:
             return nil

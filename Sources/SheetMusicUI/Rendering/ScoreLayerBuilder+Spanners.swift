@@ -12,11 +12,11 @@ import SheetMusicLayout
 extension ScoreLayerBuilder {
     // MARK: - Spanners
 
-    static func drawSpanner(
+    static func drawSpanner( // swiftlint:disable:this function_body_length
         kind: LayoutElement.SpannerKind,
         from: CGPoint, to: CGPoint,
         continuesLeft: Bool, continuesRight: Bool,
-        text: String, metrics: StaffMetrics,
+        text: String, richText: LayoutRichText? = nil, metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer,
     ) {
@@ -75,6 +75,10 @@ extension ScoreLayerBuilder {
                 from: from, to: to, type: type,
                 continuesLeft: continuesLeft,
                 metrics: metrics, height: height, into: parent,
+            )
+        case .gradualTempoChange:
+            drawGradualTempoChange(
+                from: from, to: to, richText: richText, metrics: metrics, height: height, into: parent,
             )
         }
     }

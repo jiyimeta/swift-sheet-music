@@ -52,6 +52,8 @@ public enum SpannerGeometry {
             sp * ottavaLabelSizeSp
         case .textLine, .palmMute, .letRing:
             sp * textLineLabelSizeSp
+        case .gradualTempoChange:
+            sp * gradualTempoChangeHeightSp
         case .pedal:
             sp * 1.5
         case .slur, .vibrato, .trill:

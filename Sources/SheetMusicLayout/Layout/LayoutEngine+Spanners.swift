@@ -56,6 +56,8 @@ extension LayoutEngine {
         /// Authored `<beginText>`, when the source overrode the style
         /// default for this spanner's left-hand label.
         let beginText: String?
+        /// Authored `<continueText>`: the label a later system's segment shows.
+        let continueText: String?
         /// Trill subtype. Meaningful only when `kind == .trill`.
         let trillType: TrillType?
         /// Authored `<placement>` override, or `nil` to keep the side
@@ -121,6 +123,7 @@ extension LayoutEngine {
                                 hairpinSubtype: sp.hairpin?.subtype,
                                 ottavaSubtype: sp.ottava?.subtype,
                                 beginText: sp.beginText,
+                                continueText: sp.continueText,
                                 trillType: sp.trill?.type,
                                 placement: sp.placement,
                                 ottavaNumbersOnly: sp.ottava?.numbersOnly,
@@ -851,7 +854,8 @@ extension LayoutEngine {
         case .trill: return .trill(anchor.trillType ?? .trill)
         case .palmMute: return .palmMute
         case .letRing: return .letRing
-        case .glissando, .gradualTempoChange, .other: return .textLine
+        case .gradualTempoChange: return .gradualTempoChange
+        case .glissando, .other: return .textLine
         }
     }
 

@@ -468,6 +468,7 @@ extension LayoutBridge {
         text: String,
         sp: Double,
         glyphSize: Double,
+        richText: LayoutRichText? = nil,
         into out: inout [DrawCommand],
     ) {
         let from = CGPoint(x: CGFloat(fromX), y: CGFloat(fromY))
@@ -629,6 +630,9 @@ extension LayoutBridge {
             )
             out.append(.setDash(onMM: 0, offMM: 0))
 
+        case .gradualTempoChange:
+            encodeGradualTempoChange(from: from, to: to, richText: richText, sp: sp, into: &out)
+
         case .textLine, .palmMute, .letRing:
             let parts = SpannerGeometry.textLine(
                 from: from, to: to, text: text, sp: CGFloat(sp),
@@ -748,7 +752,7 @@ extension LayoutBridge {
         out.append(.stroke(width: lineWidth * ptToMMScale))
     }
 
-    private static func emitSegment(
+    static func emitSegment(
         from: CGPoint, to: CGPoint, lineWidth: Double,
         into out: inout [DrawCommand],
     ) {

@@ -33,5 +33,8 @@ extension LayoutElement {
         case palmMute
         /// "let ring" over a dashed line, below the staff.
         case letRing
+        /// A gradual tempo change (rit., accel., …): its label in the tempo change style and a dashed line, above the
+        /// staff.
+        case gradualTempoChange
     }
 }

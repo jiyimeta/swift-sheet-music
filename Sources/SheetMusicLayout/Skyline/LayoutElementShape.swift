@@ -73,7 +73,7 @@ public enum LayoutElementShape {
             case .hairpinOpen, .hairpinClose, .hairpinLine: .hairpin
             case .pedal: .pedal
             case .ottava: .ottava
-            case .textLine, .palmMute, .letRing: .textLine
+            case .textLine, .palmMute, .letRing, .gradualTempoChange: .textLine
             }
         }
     }

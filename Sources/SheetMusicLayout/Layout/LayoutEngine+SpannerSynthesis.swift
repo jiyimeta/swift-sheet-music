@@ -58,7 +58,7 @@ extension LayoutEngine {
     ) -> Bool {
         switch kind {
         case .hairpinOpen, .hairpinClose, .hairpinLine,
-             .pedal, .ottava, .textLine, .palmMute, .letRing:
+             .pedal, .ottava, .textLine, .palmMute, .letRing, .gradualTempoChange:
             true
         case .slur, .vibrato, .trill, .volta:
             false
@@ -169,8 +169,20 @@ extension LayoutEngine {
                     continuesRight: clip.continuesRight,
                     text: layoutLabel(anchor: anchor),
                     anchor: anchor.selectionAnchor,
+                    richText: lineLabelRuns(kind: kind, anchor: anchor, clip: clip, metrics: metrics),
                 ))
         }
+    }
+
+    /// The typeset label of a kind that draws formatted text — a gradual tempo change's `<beginText>`, or on a later
+    /// system its `<continueText>`; `nil` for every other kind, whose `text` is the label.
+    static func lineLabelRuns(
+        kind: LayoutElement.SpannerKind, anchor: SpannerAnchor, clip: SystemClip, metrics: StaffMetrics,
+    ) -> LayoutRichText? {
+        guard kind == .gradualTempoChange else { return nil }
+        return LayoutRichText.gradualTempoChangeLabel(
+            clip.continuesLeft ? anchor.continueText : anchor.beginText, metrics: metrics,
+        )
     }
 
     /// Line geometry for `staffIndex`, falling back to five lines when
