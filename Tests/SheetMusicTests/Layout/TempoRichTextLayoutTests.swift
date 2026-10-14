@@ -194,6 +194,29 @@ struct TempoRichTextLayoutTests {
         #expect(abs(origin.x - 40) < 1e-6)
     }
 
+    /// Like a hidden staff text, dynamic or fermata: laid out only when invisibles are shown, then parked in
+    /// `invisibleElements` (not `elements`), so it reserves no space.
+    @Test("a hidden tempo lays out nothing, or parks as an invisible element when invisibles are shown")
+    func hiddenTempoFollowsTheInvisibleElementsOption() {
+        var tempo = Tempo(beatsPerSecond: 2, text: "Allegro")
+        tempo.visible = false
+        let score = Self.score(tempo)
+        let off = LayoutEngine.layout(
+            score: score, options: ScoreViewOptions(showsInvisibleElements: false), availableWidth: 1200,
+        )
+        #expect(Self.tempos(off).isEmpty)
+        #expect(off.systems.flatMap(\.measures).flatMap(\.invisibleElements).isEmpty)
+        let on = LayoutEngine.layout(
+            score: score, options: ScoreViewOptions(showsInvisibleElements: true), availableWidth: 1200,
+        )
+        #expect(Self.tempos(on).isEmpty)
+        let parked = on.systems.flatMap(\.measures).flatMap(\.invisibleElements).filter { element in
+            if case .textMark(.tempo, _, _, _) = element { return true }
+            return false
+        }
+        #expect(parked.count == 1)
+    }
+
     @Test("a tempo element built without runs is typeset from its plain text the same way")
     func plainTempoElementIsTypesetLikeTheMarking() throws {
         let origin = CGPoint(x: 30, y: 0)

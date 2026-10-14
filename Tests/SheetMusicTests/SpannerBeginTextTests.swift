@@ -69,6 +69,23 @@ struct SpannerBeginTextTests {
         ))
     }
 
+    @Test func emptyLineTextsAreNotWritten() throws {
+        let line = Spanner(
+            kind: .textLine, rawType: "TextLine", nextMeasuresOffset: 1,
+            beginText: "", continueText: "", endText: "",
+        )
+        let encoded = try #require(String(bytes: XMLTreeSerializer.serialize(line.encode()), encoding: .utf8))
+        #expect(!encoded.contains("beginText"))
+        #expect(!encoded.contains("continueText"))
+        #expect(!encoded.contains("endText"))
+        let labelled = Spanner(
+            kind: .textLine, rawType: "TextLine", nextMeasuresOffset: 1, beginText: "", endText: "end",
+        )
+        let written = try #require(String(bytes: XMLTreeSerializer.serialize(labelled.encode()), encoding: .utf8))
+        #expect(!written.contains("beginText"))
+        #expect(written.contains("<endText>end</endText>"))
+    }
+
     @Test func theDrawnLabelIsThePlainProjection() throws {
         let line = Spanner(kind: .textLine, rawType: "TextLine", nextMeasuresOffset: 1, beginText: "<b>rit.</b> poco")
         let chord = Chord(duration: .whole, notes: ChordNotes([Note(pitch: 72, tpc: 14)]))

@@ -79,6 +79,17 @@ struct GradualTempoChangeCodecTests {
         #expect(rit.encode().first("GradualTempoChange")?.children.first?.name == "tempoChangeType")
     }
 
+    @Test("a change ending mid-measure keeps its end offsets through decode(encode(score))")
+    func midMeasureEndSurvivesTheRoundTrip() throws {
+        let data = try MSCXEncoder.encode(Self.fixture())
+        let reparsed = try MSCXParser.parse(data)
+        let changes = Self.changes(reparsed)
+        try #require(changes.count == 3)
+        #expect(changes[1].nextMeasuresOffset == 1)
+        #expect(changes[1].nextFractionsOffset == Fraction(numerator: 1, denominator: 2))
+        #expect(changes[1].gradualTempoChange?.factor == 1.5)
+    }
+
     @Test("continue and end text round-trip on any line spanner")
     func continueAndEndTextOnAnyLine() throws {
         var line = Spanner(kind: .textLine, rawType: "TextLine", nextMeasuresOffset: 1, beginText: "cresc.")

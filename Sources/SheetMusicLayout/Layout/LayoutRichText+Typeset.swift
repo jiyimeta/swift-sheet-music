@@ -224,6 +224,8 @@ extension LayoutRichText {
     /// A tempo marking's plain text typeset as the marking draws — its SMuFL characters (`Tempo.beatGlyph`'s, or a
     /// MuseScore 2/3 metronome character) as glyphs, the rest in the tempo font — for a `.textMark(.tempo)` built
     /// without runs. Layout always supplies runs; this keeps a hand-built element measured and drawn alike everywhere.
+    /// The element's face, size and style overrides reach the text through `properties` (the typesetter's base font
+    /// resolves them; the ScoreText pieces drop only the run-level face, never the base one).
     package static func tempoText(
         _ text: String, properties: TextProperties = TextProperties(), metrics: StaffMetrics,
     ) -> LayoutRichText {

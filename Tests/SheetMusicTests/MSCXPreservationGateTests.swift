@@ -276,7 +276,9 @@ enum MSCXPreservation {
         // was a glissando, whose begin side was written with a bare `<next/>` and whose end side was not written at
         // all. Both sides now carry their `<location>`, so the entries would be stale. `location/fractions` is back
         // for a different reason: a voice-level end side that ends mid-measure loses it again, by the same endpoint
-        // design.
+        // design (a gradual tempo change's `<prev>` / `<next>` hit it too). The entry is broader than that path,
+        // because the gate keys on the immediate parent and child names only (`"\(parent)/\(node.name)"`) and so
+        // cannot say "`fractions` under a spanner's `<prev>` / `<next>`" — `location` is the parent everywhere.
         allow([
             "location/fractions", "location/measures", "prev/location",
         ], because: endpointReason, into: &result)

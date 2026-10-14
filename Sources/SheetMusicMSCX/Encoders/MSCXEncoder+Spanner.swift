@@ -56,8 +56,12 @@ extension Spanner {
         // child for every line-shaped spanner. Authored `<placement>` is
         // emitted from `ElementProperties` under MuseScore's "write when no
         // longer styled" rule.
+        // An empty text is omitted, as MuseScore omits it: an empty element would read back as an empty text.
         let lineTexts: [XMLTreeNode] = [("beginText", beginText), ("continueText", continueText), ("endText", endText)]
-            .compactMap { name, text in text.map { XMLTreeNode(name: name, text: $0) } }
+            .compactMap { name, text in
+                guard let text, !text.isEmpty else { return nil }
+                return XMLTreeNode(name: name, text: text)
+            }
         let leading = lineTexts + elementProperties.mscxChildren()
         let trailing = elementProperties.mscxTrailingChildren()
         if kind == .gradualTempoChange, let gradualTempoChange {
