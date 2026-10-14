@@ -229,6 +229,41 @@ struct MSCXTextMarkupTests {
         #expect(try Self.xml(glissando.encode()).contains("<text><sym>keyboardPedalPed</sym></text>"))
     }
 
+    private static func symbolGlissando() throws -> Glissando {
+        let root = try Self.parse("""
+        <root><Note><pitch>60</pitch><tpc>14</tpc>
+          <Spanner type="Glissando"><Glissando><text><sym>keyboardPedalPed</sym></text></Glissando><next/></Spanner>
+        </Note></root>
+        """)
+        let note = try Note.decode(#require(root.first("Note")))
+        return try #require(note.glissando)
+    }
+
+    @Test("a cleared glissando label reports no rich text")
+    func clearedGlissandoLabelHasNoRichText() throws {
+        var glissando = try Self.symbolGlissando()
+        #expect(glissando.richText != nil)
+        glissando.text = nil
+        #expect(glissando.richText == nil)
+    }
+
+    @Test("a symbol-only glissando label writes no <text> when preserved markup is off")
+    func symbolGlissandoLabelWithoutPreservedMarkup() throws {
+        let glissando = try Self.symbolGlissando()
+        var options = MSCXEncoderOptions()
+        options.emitPreservedMarkup = false
+        #expect(try !Self.xml(glissando.encode(options: options)).contains("<text"))
+    }
+
+    @Test("a Harmony <name> with a <sym> or <br/> child reads its own characters, then the tags' (legacy shape)")
+    func harmonyNameWithChildren() throws {
+        // `<name>` is not parsed with mixed content, so the walker sees own characters first, then each child.
+        let symbol = try Harmony.decode(Self.parse("<Harmony><name>C7<sym>coda</sym></name></Harmony>"))
+        #expect(symbol.name == "C7")
+        let lineBreak = try Harmony.decode(Self.parse("<Harmony><name>C7<br/>x</name></Harmony>"))
+        #expect(lineBreak.name == "C7x\n")
+    }
+
     @Test("a formatted lyric is read, not skipped (F1.3)")
     func formattedLyric() throws {
         let chord = try Chord.decode(Self.parse("""

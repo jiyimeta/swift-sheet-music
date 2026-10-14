@@ -83,8 +83,9 @@ extension FrameText {
 }
 
 extension Glissando {
-    /// `text` is optional; a label whose plain projection is empty (only a `<sym>`) is `""`.
+    /// `text` is optional; a label whose plain projection is empty (only a `<sym>`) is `""`. A cleared label (`text`
+    /// is `nil`) has no rich text: the encoder writes no `<text>` for it.
     public var richText: RichText? {
-        preservedTextMarkup?.richText(ifCurrentFor: text ?? "")
+        text.flatMap { preservedTextMarkup?.richText(ifCurrentFor: $0) }
     }
 }
