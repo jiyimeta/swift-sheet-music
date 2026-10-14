@@ -314,20 +314,16 @@
 
         // MARK: - Jump text
 
-        /// Jump text hangs 1 sp below staff 0 and has to clear its INK.
-        /// Noteheads keep occupying the five-line reference band at every
-        /// line count, so unlike the cursor or the barline this distance
-        /// must NOT shrink with the drawn height — on a one-line staff it
-        /// would otherwise land 1 sp ABOVE `step` 0, inside the notes.
+        /// A jump stands above staff 0, autoplaced as MuseScore autoplaces it (`Sid::repeatMinDistance`, 0.5 sp), and
+        /// ends on its bar's end barline. It is measured from the staff origin (the reference top line, `sp * 2`
+        /// staff-local, at every line count), and it must clear that band at every line count: noteheads keep
+        /// occupying the five-line reference band, so a jump must never land inside it.
         ///
-        /// **A forward guard, not a regression test.** The placement is
-        /// `max(0, 4 sp)` against the pre-branch `max(4 sp, 4 sp)`, so
-        /// this passes identically before and after the line-count work
-        /// and caught nothing when it was written. What it is for is the
-        /// next person who sees a `metrics.staffHeight` here, assumes it
-        /// was missed by the sweep that replaced the others, and swaps
-        /// in the drawn height — which is the one edit that breaks it.
-        @Test("Jump text keeps clearing the reference band")
+        /// Five lines: 0.5 sp above the top line. One line: the end barline of a one-line staff reaches 2 sp above its
+        /// line (`BARLINE_SPAN_1LINESTAFF_FROM = -4` half-spaces, `engraving/dom/barline.h:37`), and the jump's ink
+        /// meets it at the barline, so autoplace lifts the jump 2 sp + 0.5 sp. So the two lift differently, exactly by
+        /// that barline, and neither follows `metrics.staffHeight` (which would lift a one-line jump by 0.5 sp).
+        @Test("Jump text clears the reference band, and a one-line staff's tall barline")
         func jumpTextDoesNotFollowTheDrawnHeight() throws {
             guard #available(macOS 15.0, *) else { return }
             func jumpDy(lineCount: Int) throws -> CGFloat {
@@ -365,7 +361,11 @@
                 )
                 return (y - origin) / system.sp
             }
-            #expect(try abs(jumpDy(lineCount: 1) - jumpDy(lineCount: 5)) < 0.001)
+            let oneLine = try jumpDy(lineCount: 1)
+            let fiveLines = try jumpDy(lineCount: 5)
+            #expect(abs(fiveLines + 0.5) < 0.001)
+            #expect(abs(oneLine + 2.5) < 0.001)
+            #expect(oneLine <= fiveLines)
         }
     }
 
