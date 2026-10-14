@@ -104,6 +104,7 @@ extension LayoutEngine {
                                 nextMeasuresOffset: sp.nextMeasuresOffset,
                                 nextFractionsOffset: sp.nextFractionsOffset,
                                 measures: staff.measures,
+                                measureDurations: measureDurations,
                                 division: score.division,
                             )
                             out.append(SpannerAnchor(
@@ -582,17 +583,20 @@ extension LayoutEngine {
     /// negative, subtracts) F worth of ticks. We resolve the result
     /// to a (measureIndex, in-measure tick) pair, with `endTick = 0`
     /// signalling an end-of-previous-measure (right-edge) anchor.
+    ///
+    /// `measureDurations` is `measures.effectiveMeasureDurations()`, taken from the caller so every spanner on a
+    /// staff shares one walk of it instead of repeating it per spanner.
     static func endAnchor(
         startMeasureIdx: Int,
         startTickInMeasure: Int,
         nextMeasuresOffset: Int,
         nextFractionsOffset: Fraction?,
         measures: [Measure],
+        measureDurations: [Fraction],
         division: Int,
     ) -> (endMeasure: Int, endTick: Int) {
         let nMeas = max(0, nextMeasuresOffset)
         let fracTicks = nextFractionsOffset?.ticks(division: division) ?? 0
-        let measureDurations = measures.effectiveMeasureDurations()
 
         if fracTicks == 0 {
             if nMeas > 0 {

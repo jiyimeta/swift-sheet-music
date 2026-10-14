@@ -238,8 +238,16 @@
         /// `richText: nil` stripped from the new digest, those 8 lines are the only difference, and a word diff of
         /// them finds additions only: no origin, size or system height moved anywhere (markers are inert in the
         /// skyline autoplace pass, so the segno glyph's taller ink moves nothing).
+        ///
+        /// **Re-recorded 2026-10-14 when the corpus gained lyrics.** Until then it held no lyric at all — no
+        /// `lyricHyphen`, no `lyricsMelisma`, no sung syllable — so every change to lyric layout, including 4.10.0's
+        /// removal of the melisma table from the cache keys, rested on other evidence. `lyrics_verses_melisma.mscx`
+        /// adds two verses, words hyphenated within and across bars, and melismas inside a bar, across a barline and
+        /// across a forced system break. The digest was diffed against the one written just before the fixture was
+        /// added (which hashed to the previous `4135ad82…`): the 66 existing blocks are identical to the character,
+        /// and the only change is the new fixture's two blocks, 174 lines.
         private static let expectedDigestSHA256 =
-            "7400ac3a85d746f17f933f0cba1c42270e0ec3263c960578c1cca28a002a0bce"
+            "d7d2f72f2adb168221837ef8570f9ceaaae38dd47b35c5e7ed94592f56a70c1c"
 
         @Test("write digest")
         func writeDigest() throws {

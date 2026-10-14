@@ -192,6 +192,50 @@ and this project adheres to
   tempo and dynamics workstreams. No opcode was added and the wire stays v8, so no reader changes. A `<font face>`
   override reaches the wire only as the face id `TextFontMapping` can name; Apple honors the face itself.
 
+## [4.10.0] - 2026-10-14
+
+### Added
+
+- **`ScoreView(document:…, visibleRect:)`** mounts only the systems whose frame meets `visibleRect`, in document
+  coordinates. The view keeps the document's full size, so scrolling, hit testing and overlays that map document
+  coordinates are unaffected; an unmounted system is simply not drawn. `nil`, the default, mounts every system, as
+  before. A host scrolling a long score passes its viewport grown by however much it wants ready beyond it: every
+  mounted system is a full layer tree, and a 500-measure, six-staff score came to 65,000 layers and about 100 MB with
+  all of them mounted.
+
+### Changed
+
+- **Relayout of a long score is several times faster**, with identical output. Measured on a 508-measure, six-staff
+  score with 4,300 lyrics, interleaved against 4.9.0 on the same machine: a one-note edit in vertical mode
+  58–64 → 18–22 ms, a relayout that hits the cache throughout 51–56 → 18–21 ms, and a one-note edit in horizontal mode
+  3.9–4.0 s → 0.28 s. Four costs went:
+  - The system and placement cache keys compared a score-wide table of every lyric's melisma length on every lookup.
+    The table held nothing but each lyric's own `ticks`, which the keys already carry in their measures; it is gone.
+  - `LayoutSystem` rebuilt its `eventColumns` index on every copy — once when packing moves a system down, and once for
+    each spanner pass. A copy now keeps its base's index, which depends only on the measures and spatium it shares.
+  - The skyline pass built two `Set`s for every pair of shape rects it compared, to ask whether they were a dynamic and
+    a hairpin.
+  - Every slur and line spanner re-derived its staff's measure durations to resolve its end.
+- **Opening a score and changing its width is faster**: `AppleFontMetricsProvider` caches its per-string answers —
+  `typographicWidth`, `inkBounds`, `textInkBounds` — by text and font, and the layer renderer caches Bravura fonts per
+  size, SMuFL glyph outlines and set lines of text. Each used to build a fresh `CTLine` or glyph path per occurrence.
+  Each cache empties itself at a fixed size.
+- **A system that only moved keeps its layers.** The incremental renderer rebuilt every system below an edit that
+  changed one system's height, because it compared each system's `origin`; the layer tree is drawn in system-local
+  coordinates and never reads it.
+- **The SwiftySynth backend no longer holds its SoundFont's samples in memory** (swiftysynth 0.3.0). The font is read
+  in place from a mapping of its file, so only the samples a score actually plays are paged in, as clean pages that do
+  not count toward the app's memory footprint. With the ~200 MB General MIDI font, that was ~205 MB of dirty memory
+  for as long as any score was open. To keep a not-yet-played instrument from reading the disk on the render thread,
+  the backend reads in every preset a loaded sequence sounds, and every program the mixer sets, on a utility thread
+  first.
+
+### Fixed
+
+- **A metronome turned down to zero and back up mid-playback stays on the beat** (SwiftySynth backend). At zero gain
+  the click is not rendered, so its transport froze exactly as a mute freezes it, but only un-muting reseeked it to
+  the score's position; every click after turning the volume back up came late by however long it had been silent.
+
 ## [4.9.0] - 2026-10-13
 
 ### Added

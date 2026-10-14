@@ -170,9 +170,6 @@ public final class LayoutCache: @unchecked Sendable {
         /// bit-identical. Without it a system-lane-only edit serves a
         /// stale cached system and the mark never reaches the page.
         let systemMeasuresForRange: [SystemMeasure]
-        /// The score-wide melisma data — `placeMeasureElements` reads
-        /// it via `effectiveMelismaTicks` keys that touch this range.
-        let effectiveMelismaTicks: [MelismaLyricKey: Int]
         /// Sliced to this range: `[staffIdx][localMeasureIdx]`.
         let melismaContinuationsForRange: [[[MelismaContinuation]]]
         /// Drum maps per staff. Static for the score; included so a
@@ -261,7 +258,6 @@ public final class LayoutCache: @unchecked Sendable {
         let endsRepeat: Bool
         let isFirstSystem: Bool
         let incomingMelismas: [MelismaContinuation]
-        let effectiveMelismaTicks: [MelismaLyricKey: Int]
         let graceNoteMag: CGFloat
         /// Whether a visible below-staff spanner (hairpin/pedal) covers
         /// this measure for this staff. Affects lyric Y placement.

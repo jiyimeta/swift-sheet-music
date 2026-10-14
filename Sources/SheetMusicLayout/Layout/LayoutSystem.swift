@@ -90,6 +90,29 @@ public struct LayoutSystem: Sendable, Equatable {
             .max() ?? 0
     }
 
+    /// `base` with a new `origin` and `spanners`, for the two rebuilds in `LayoutSystem+Rebuild.swift`.
+    ///
+    /// It takes `base.eventColumns` instead of rebuilding them: they are a function of `measures` and `sp` alone, and
+    /// neither changes here. Rebuilding them on every copy — packing moves each system down once, and three
+    /// spanner passes append to it — was a fifth of a warm relayout. Listing every stored property keeps the
+    /// compiler checking that a new field is carried forward.
+    init(rebuilding base: LayoutSystem, origin: CGPoint, spanners: [LayoutElement]) {
+        self.origin = origin
+        size = base.size
+        measures = base.measures
+        staffOrigins = base.staffOrigins
+        staffAddresses = base.staffAddresses
+        staffGeometries = base.staffGeometries
+        partLabels = base.partLabels
+        brackets = base.brackets
+        self.spanners = spanners
+        invisibleSpanners = base.invisibleSpanners
+        eventColumns = base.eventColumns
+        maxBBoxHalfWidth = base.maxBBoxHalfWidth
+        sp = base.sp
+        showsInvisibleElements = base.showsInvisibleElements
+    }
+
     /// Flat index (= index into `staffOrigins`) for the given address.
     /// Returns `nil` when the address is not present in this system.
     public func flatIndex(for address: StaffAddress) -> Int? {

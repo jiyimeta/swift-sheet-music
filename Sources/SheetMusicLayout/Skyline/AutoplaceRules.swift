@@ -52,9 +52,12 @@ public enum AutoplaceRules {
     ) -> Bool {
         // An item never pushes itself.
         if a.id == b.id { return true }
-        // Dynamics and hairpins snap into one chain instead.
-        let pair = Set([a.kind, b.kind])
-        if pair == Set([ShapeItemKind.dynamics, .hairpin]) { return true }
+        // Dynamics and hairpins snap into one chain instead. Matched as a tuple rather than by comparing two `Set`s:
+        // the skyline pass asks this once per rect pair, and building the sets dominated a horizontal-mode relayout.
+        switch (a.kind, b.kind) {
+        case (.dynamics, .hairpin), (.hairpin, .dynamics): return true
+        default: break
+        }
         guard a.kind == b.kind else { return false }
         // Same kind: non-text kinds ignore each other; text kinds
         // collide — except dynamics, which align as a chain.

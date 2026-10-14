@@ -3,6 +3,7 @@
         import Foundation
         import SheetMusicAudioCore
         @testable import SheetMusicAudioSwiftySynth
+        import SwiftySynth
         import Testing
 
         /// Backends loading one SoundFont share one parse — what keeps parallel part renders from costing a font each.
@@ -49,6 +50,15 @@
                 let new = try #require(await cache.soundFont(at: url))
 
                 #expect(old.font !== new.font)
+            }
+
+            @Test func `a loaded font reads its samples in place from the file`() async throws {
+                let url = try Self.writeFont(samples: 2205)
+                defer { try? FileManager.default.removeItem(at: url) }
+
+                let loaded = try #require(await SoundFontCache().soundFont(at: url))
+
+                #expect(loaded.font.waveData.isMemoryMapped)
             }
 
             @Test func `a missing file loads nothing`() async {

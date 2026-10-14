@@ -610,7 +610,6 @@ extension LayoutEngine {
             division: context.score.division,
             measuresPerStaff: measuresPerStaff,
             systemMeasuresForRange: systemMeasuresForRange,
-            effectiveMelismaTicks: context.effectiveMelismaTicks,
             melismaContinuationsForRange: melismaForRange,
             drumLineMaps: drumLineMaps,
             percussionGroups: staves.map { $0.group == "percussion" },

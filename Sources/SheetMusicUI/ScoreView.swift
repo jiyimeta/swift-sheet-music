@@ -37,6 +37,7 @@ public struct ScoreView: View {
     private let voiceColors: [Int: Color]
     private let playbackCursor: ScoreCursor?
     private let playbackCursorColor: Color
+    private let visibleRect: CGRect?
 
     public init(
         score: Score,
@@ -56,6 +57,7 @@ public struct ScoreView: View {
         self.voiceColors = voiceColors
         self.playbackCursor = playbackCursor
         self.playbackCursorColor = playbackCursorColor
+        visibleRect = nil
     }
 
     /// Render a pre-computed `LayoutDocument` instead of running the
@@ -71,6 +73,16 @@ public struct ScoreView: View {
     /// `breakPolicy` (used by the indicator overlay). Pass the same
     /// options you used to build `document` so toggles like
     /// "hide break badges" survive the doc handoff.
+    ///
+    /// `visibleRect`, in `document` coordinates, limits which systems
+    /// are mounted in a vertical document: only those whose frame meets
+    /// it get a layer tree. Pass the viewport already grown by however
+    /// much should be ready beyond it — the view adds no margin of its
+    /// own. `nil`, the default, mounts every system. The view keeps the
+    /// document's full size either way, so scrolling, hit testing and
+    /// anything else that maps document coordinates is unaffected; an
+    /// unmounted system is simply not drawn. A horizontal document is
+    /// one system and is always mounted.
     public init(
         document: LayoutDocument,
         score: Score,
@@ -79,6 +91,7 @@ public struct ScoreView: View {
         voiceColors: [Int: Color] = [:],
         playbackCursor: ScoreCursor? = nil,
         playbackCursorColor: Color = Color.blue.opacity(0.15),
+        visibleRect: CGRect? = nil,
     ) {
         _ = SheetMusicLayoutApple.install
         self.score = score
@@ -89,6 +102,7 @@ public struct ScoreView: View {
         self.voiceColors = voiceColors
         self.playbackCursor = playbackCursor
         self.playbackCursorColor = playbackCursorColor
+        self.visibleRect = visibleRect
     }
 
     public var body: some View {
@@ -161,7 +175,11 @@ public struct ScoreView: View {
                     frame: titleFrame, width: doc.size.width,
                 )
             }
-            ForEach(Array(doc.systems.enumerated()), id: \.offset) { _, sys in
+            // Identified by the system's index in the WHOLE document, so
+            // a system keeps its view (and its layer tree) as others
+            // mount and unmount around it.
+            ForEach(Self.mountedSystemIndices(of: doc, in: visibleRect), id: \.self) { index in
+                let sys = doc.systems[index]
                 SystemLayerView(
                     system: sys, metrics: doc.metrics,
                     selection: selection,
@@ -248,6 +266,19 @@ public struct ScoreView: View {
 
 @available(macOS 15.0, *)
 extension ScoreView {
+    /// Indices of the systems whose frame meets `visibleRect`, in document
+    /// order — every index when it is `nil`. A system's frame is one point
+    /// taller than its `size`, matching the overlap `SystemLayerView`
+    /// draws to hide the seam between stacked systems.
+    nonisolated static func mountedSystemIndices(of doc: LayoutDocument, in visibleRect: CGRect?) -> [Int] {
+        guard let visibleRect else { return Array(doc.systems.indices) }
+        return doc.systems.indices.filter { index in
+            let system = doc.systems[index]
+            return system.origin.y + system.size.height + 1 >= visibleRect.minY
+                && system.origin.y <= visibleRect.maxY
+        }
+    }
+
     /// The wrap width when it can be decided without measuring the
     /// container, with the minimum-width floor already applied.
     ///
