@@ -28,7 +28,7 @@ extension LayoutElement {
             return anchor.map { .breath(anchor: $0) }
         case let .articulation(kind, _, _, anchor):
             return anchor.map { .articulation(anchor: $0, kind: kind.modelKind) }
-        case let .spannerSegment(kind, _, _, _, _, _, anchor):
+        case let .spannerSegment(kind, _, _, _, _, _, anchor, _):
             guard let anchor else { return nil }
             switch kind {
             case .hairpinOpen, .hairpinClose, .hairpinLine: return .spanner(anchor: anchor, kind: .hairpin)

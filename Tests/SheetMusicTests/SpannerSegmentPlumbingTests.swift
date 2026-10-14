@@ -45,7 +45,7 @@ struct SpannerSegmentPlumbingTests {
             element: Self.segment(y: 40), dy: 7,
         )
         guard case let .spannerSegment(
-            kind, from, to, continuesLeft, continuesRight, text, _,
+            kind, from, to, continuesLeft, continuesRight, text, _, _,
         ) = moved else {
             Issue.record("expected a spannerSegment, got \(moved)")
             return
@@ -60,6 +60,23 @@ struct SpannerSegmentPlumbingTests {
         #expect(text == "8")
         if case .ottava = kind {} else {
             Issue.record("kind was rewritten: \(kind)")
+        }
+    }
+
+    @Test("translate carries a segment's typeset runs")
+    func translateKeepsTheRuns() {
+        FontMetrics.$scopedProvider.withValue(StubFontMetricsProvider()) {
+            let rich = LayoutRichText.tempoText("rit.", metrics: StaffMetrics(staffSize: 20))
+            let segment = LayoutElement.spannerSegment(
+                kind: .textLine, fromOrigin: CGPoint(x: 10, y: 40), toOrigin: CGPoint(x: 90, y: 40),
+                continuesLeft: false, continuesRight: false, text: "rit.", anchor: nil, richText: rich,
+            )
+            let moved = LayoutEngine.translate(element: segment, dy: 7)
+            guard case let .spannerSegment(_, _, _, _, _, _, _, carried) = moved else {
+                Issue.record("expected a spannerSegment, got \(moved)")
+                return
+            }
+            #expect(carried == rich)
         }
     }
 

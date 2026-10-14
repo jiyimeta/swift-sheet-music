@@ -58,6 +58,9 @@ and this project adheres to
 
 ### Changed
 
+- **`LayoutElement.spannerSegment` gains a trailing `richText: LayoutRichText?`** (default `nil`): the typeset label of
+  a kind that draws formatted text (a gradual tempo change). Constructions are unchanged; a positional pattern needs one
+  more `_` (`case let .spannerSegment(kind, from, to, _, _, _, _, _)`). `LayoutElement` is non-exhaustive by contract.
 - **`LayoutElement`'s text cases carry their formatted text.** `.staffText`, `.rehearsalMark`, `.marker`, `.jump` and
   `.textMark` gain a last associated value `richText: LayoutRichText? = nil`. Construction sites compile unchanged; a
   positional pattern needs one more `_` (a new payload member is a minor change for `LayoutElement`, `CONTRIBUTING.md`).

@@ -46,7 +46,7 @@ extension ScoreHitTester {
                 sp: sp,
             )
             return ArcBezier(points: [controls.p0, controls.p1, controls.p2, controls.p3])
-        case let .spannerSegment(.slur, from, to, _, _, _, _):
+        case let .spannerSegment(.slur, from, to, _, _, _, _, _):
             return ArcBezier(points: [from, SpannerGeometry.slurControlPoint(from: from, to: to, sp: sp), to])
         default:
             return nil

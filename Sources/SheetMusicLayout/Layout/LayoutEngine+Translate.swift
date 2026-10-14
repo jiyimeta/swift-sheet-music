@@ -233,7 +233,7 @@ extension LayoutEngine {
             // shift onto the system's actual top-staff y.
             return .measureNumber(text: text, origin: shift(p))
         case let .spannerSegment(
-            kind, from, to, continuesLeft, continuesRight, text, anchor,
+            kind, from, to, continuesLeft, continuesRight, text, anchor, richText,
         ):
             // Both endpoints share one anchor Y, but shifting them
             // independently is what keeps this correct if a sloped
@@ -246,6 +246,7 @@ extension LayoutEngine {
                 continuesRight: continuesRight,
                 text: text,
                 anchor: anchor,
+                richText: richText,
             )
         case let .marker(kind, text, origin, identity, richText):
             return .marker(kind: kind, text: text, origin: shift(origin), identity: identity, richText: richText)

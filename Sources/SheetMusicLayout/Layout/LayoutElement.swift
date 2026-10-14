@@ -341,6 +341,8 @@ public enum LayoutElement: Sendable, Equatable {
     case staffName(text: String, origin: CGPoint)
     /// `anchor` names the source spanner slot, shared by every system segment.
     /// Unsupported identities are explicitly absent; geometry and continuation flags never name a spanner.
+    /// `richText` is the label's typeset runs where the kind draws a formatted label (a gradual tempo change); `nil`
+    /// elsewhere, where `text` is the label.
     case spannerSegment(
         kind: SpannerKind,
         fromOrigin: CGPoint,
@@ -349,6 +351,7 @@ public enum LayoutElement: Sendable, Equatable {
         continuesRight: Bool,
         text: String,
         anchor: VoiceElementID?,
+        richText: LayoutRichText? = nil,
     )
     case tieArc(
         fromOrigin: CGPoint,

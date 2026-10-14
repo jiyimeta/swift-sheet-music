@@ -257,7 +257,7 @@ extension LayoutEngine {
                 for el in els {
                     guard case let .spannerSegment(
                         kind, from, to, continuesLeft, continuesRight,
-                        text, anchor,
+                        text, anchor, richText,
                     ) = el else {
                         kept.append(el)
                         continue
@@ -274,6 +274,7 @@ extension LayoutEngine {
                         continuesRight: continuesRight,
                         text: text,
                         anchor: anchor,
+                        richText: richText,
                     ))
                 }
                 untranslated[idx].perStaffElements[staffIdx] = kept

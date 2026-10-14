@@ -209,7 +209,7 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height, into: parent,
             )
         case let .spannerSegment(
-            kind, from, to, cl, cr, text, _,
+            kind, from, to, cl, cr, text, _, _,
         ):
             drawSpanner(
                 kind: kind, from: shift(from), to: shift(to),
