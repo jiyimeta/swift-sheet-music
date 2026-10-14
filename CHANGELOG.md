@@ -80,6 +80,8 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking: `MarkerGlyph` is removed.** A marker draws its `displayedRichText`; there is no glyph-or-label choice to
+  make any more.
 - **Every marker and jump is measured, reserved and hit-tested by its runs.** Layout typesets each one's
   `displayedRichText` in MuseScore's repeat style (`TextStyleType.repeatLeft` / `.repeatRight`) and `LayoutElement.marker` /
   `.jump` always carry it; one built without `richText` has no ink, box or hit. The marker's `text` payload is the
@@ -142,6 +144,10 @@ and this project adheres to
 
 ### Fixed
 
+- **Varied segno, varied coda and codetta draw their own glyphs (F3.6)** — the serpent segno, the square coda, two
+  codas — and every marker and jump draws in MuseScore's Edwin instead of the system's semibold face (jumps were also
+  italic), the same on Apple and through the draw program: each draws its text's runs, a segno or coda being a symbol
+  run of its marker's default text.
 - **A hidden spanner (hairpin, pedal, volta, ottava, rit./accel., …) no longer loses its payload on save.** A begin
   side hidden with `<visible>0</visible>` used to be re-encoded as a bare `<prev/>` end marker, which dropped its type,
   factor, easing, text and `<next>`, so MuseScore reopened the score with no ramp. `Spanner.isEndMarker` now carries

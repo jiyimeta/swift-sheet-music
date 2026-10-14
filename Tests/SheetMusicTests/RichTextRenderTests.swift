@@ -104,10 +104,8 @@
             #expect(abs(drawn.height - ink.height) < 0.5)
         }
 
-        private static func isTextMarker(_ element: LayoutElement) -> Bool {
-            guard case let .marker(kind, text, _, _, .some) = element else { return false }
-            if case .text = MarkerGlyph.variant(for: kind, text: text) { return true }
-            return false
+        private static func isMarkerWithRuns(_ element: LayoutElement) -> Bool {
+            if case .marker(_, _, _, _, .some) = element { true } else { false }
         }
 
         /// The first element of the `rich-text` fixture `match` accepts, with the document's metrics.
@@ -145,7 +143,7 @@
         @available(macOS 15.0, *)
         @Test("the CALayer text marker draws its runs where layout measured the ink")
         func markerLayerMatchesInk() throws {
-            let found = try Self.fixtureElement(Self.isTextMarker)
+            let found = try Self.fixtureElement(Self.isMarkerWithRuns)
             try Self.expectDrawnInk(found.element, metrics: found.metrics)
         }
 
@@ -179,8 +177,11 @@
 
         @available(macOS 15.0, *)
         private static func canvasInkWidth(_ document: LayoutDocument) throws -> Int {
-            let element = try staffText(in: document)
-            let metrics = document.metrics
+            try canvasInkWidth(of: staffText(in: document), metrics: document.metrics)
+        }
+
+        @available(macOS 15.0, *)
+        private static func canvasInkWidth(of element: LayoutElement, metrics: StaffMetrics) throws -> Int {
             let view = Canvas { context, _ in
                 ScoreCanvasDrawing.drawElement(element, base: CGPoint(x: 150, y: 180), metrics: metrics, into: &context)
             }
@@ -221,6 +222,37 @@
             let rich = try Self.canvasInkWidth(Self.document(Self.senzaPed))
             let plain = try Self.canvasInkWidth(Self.document(StaffText(text: "senza ")))
             #expect(rich > plain + 4)
+        }
+
+        /// One whole-note bar carrying `markers`.
+        @available(macOS 15.0, *)
+        private static func navigationDocument(markers: [Marker]) -> LayoutDocument {
+            _ = BravuraFont.register
+            let chord = Chord(duration: .whole, notes: ChordNotes([Note(pitch: 72, tpc: 14)]))
+            let measure = Measure(voices: [Voice(elements: [.chord(chord)])], markers: markers)
+            let score = Score(division: 480, parts: [Part(
+                id: "P1", instrument: Instrument(id: "voice"), staves: [Staff(measures: [measure])],
+            )])
+            return LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 800)
+        }
+
+        @available(macOS 15.0, *)
+        @Test("the CALayer draws a segno marker's symbol run where layout measured it (F3.6)")
+        func segnoLayerMatchesInk() throws {
+            let document = Self.navigationDocument(markers: [Marker(kind: .segno)])
+            let element = try #require(document.systems.first?.measures.first?.markers.first)
+            try Self.expectDrawnInk(element, metrics: document.metrics)
+        }
+
+        @available(macOS 15.0, *)
+        @Test("the Canvas draws a codetta's two codas where a coda draws one (F3.6)")
+        func canvasDrawsCodetta() throws {
+            let document = Self.navigationDocument(markers: [Marker(kind: .codetta), Marker(kind: .coda)])
+            let markers = try #require(document.systems.first?.measures.first?.markers)
+            try #require(markers.count == 2)
+            let codetta = try Self.canvasInkWidth(of: markers[0], metrics: document.metrics)
+            let coda = try Self.canvasInkWidth(of: markers[1], metrics: document.metrics)
+            #expect(Double(codetta) > Double(coda) * 1.6)
         }
 
         @available(macOS 15.0, *)

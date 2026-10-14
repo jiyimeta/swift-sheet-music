@@ -24,15 +24,20 @@ extension LayoutElementShape {
 
     /// A marker's or jump's skyline box: its runs' box (`textRect(rich:origin:kind:)`), hung by the anchor its kind is
     /// drawn at. Every marker draws its runs — a segno or coda is a symbol run of its text, as in MuseScore — so the
-    /// marker's kind only decides which end of its bar it hangs from. `nil` for one without runs, which draws nothing.
+    /// marker's kind only decides which end of its bar it hangs from. `nil` for one without runs — no rich text, or
+    /// rich text whose lines hold none — which draws nothing.
     static func navigationLabelRect(for element: LayoutElement) -> CGRect? {
         switch element {
-        case let .marker(kind, _, origin, _, rich?):
+        case let .marker(kind, _, origin, _, rich?) where hasRuns(rich):
             textRect(rich: rich, origin: origin, kind: .forMarker(kind))
-        case let .jump(_, origin, _, rich?):
+        case let .jump(_, origin, _, rich?) where hasRuns(rich):
             textRect(rich: rich, origin: origin, kind: .jump)
         default:
             nil
         }
+    }
+
+    private static func hasRuns(_ rich: LayoutRichText) -> Bool {
+        rich.lines.contains { !$0.runs.isEmpty }
     }
 }

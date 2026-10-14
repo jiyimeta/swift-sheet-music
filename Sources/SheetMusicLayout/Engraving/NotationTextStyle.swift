@@ -4,9 +4,10 @@
 import SheetMusicFoundation
 
 /// Font size / italic / anchor constants for the small set of text
-/// labels that aren't covered by `TextStyleType` (which mirrors
-/// MuseScore's `Sid::*FontSize` table): measure numbers, staff names,
-/// part labels, and D.C./D.S./Fine jumps.
+/// labels that aren't covered by `TextStyleType`: measure numbers, staff names and
+/// part labels — and, in the bridge only, the labels of voltas (`.markerText`) and of hairpin and text lines
+/// (`.jump`). Markers and jumps themselves are MuseScore repeat text
+/// (`TextStyleType.repeatLeft` / `.repeatRight`).
 ///
 /// Defined in `SheetMusicLayout` so the SwiftUI renderer, the CALayer
 /// renderer, and the Android `LayoutBridge` resolve these constants
@@ -30,10 +31,9 @@ public enum NotationTextStyle {
     }
 
     public enum Role: Sendable, Equatable {
+        /// A hairpin line's and a text line's label in the draw program.
         case jump
-        /// Fallback text label for non-glyph markers (Fine, D.C.,
-        /// D.S., To Coda). The glyph markers (segno, coda) use
-        /// `MarkerGlyph` instead.
+        /// A volta's label in the draw program (`LayoutBridge+Engraving`); named for the marker labels it once set.
         case markerText
         case measureNumber
         case staffName

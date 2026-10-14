@@ -257,12 +257,14 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height,
                 context: &context, into: parent,
             )
-        case let .marker(kind, text, p, _, richText):
-            drawMarker(
-                kind: kind, text: text, origin: shift(p),
-                richText: richText,
-                metrics: metrics, height: height, into: parent,
-            )
+        case let .marker(kind, _, p, _, richText):
+            // A marker is its text's runs — a segno or coda included — hung by its kind's anchor.
+            if let richText, let layer = richTextLayer(
+                richText, at: shift(p), anchor: LayoutRichText.anchor(for: .forMarker(kind)),
+                color: Self.inkColor, height: height,
+            ) {
+                parent.addSublayer(layer)
+            }
         case let .rehearsalMark(text, p, frame, color, _, _, properties, richText):
             // The frame is attached alongside the letter: MuseScore
             // tints a selected text's frame too, from the same
@@ -276,18 +278,11 @@ extension ScoreLayerBuilder {
             ) {
                 attachText(element, layer, context: &context)
             }
-        case let .jump(text, p, _, richText):
-            let layer: CAShapeLayer? = if let richText {
-                richTextLayer(
-                    richText, at: shift(p), anchor: LayoutRichText.anchor(for: .jump),
-                    color: Self.inkColor, height: height,
-                )
-            } else if !text.isEmpty {
-                notationTextLayer(text: text, role: .jump, origin: shift(p), metrics: metrics, height: height)
-            } else {
-                nil
-            }
-            if let layer {
+        case let .jump(_, p, _, richText):
+            if let richText, let layer = richTextLayer(
+                richText, at: shift(p), anchor: LayoutRichText.anchor(for: .jump),
+                color: Self.inkColor, height: height,
+            ) {
                 parent.addSublayer(layer)
             }
         case let .measureNumber(text, p):

@@ -675,31 +675,13 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .marker(kind, text, origin, _, richText):
-            switch MarkerGlyph.variant(for: kind, text: text) {
-            case let .glyph(codepoint):
-                emitCenterAnchoredGlyph(
-                    codepoint: codepoint,
-                    cxPt: mox + Double(origin.x),
-                    cyPt: moy + Double(origin.y),
-                    sizePt: glyphSize,
-                    into: &out,
+        case let .marker(kind, _, origin, _, richText):
+            // A marker is its text's runs, a segno or coda included; Android, Windows and the web draw them as is.
+            if let richText {
+                emitRichText(
+                    richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
+                    anchor: LayoutRichText.anchor(for: .forMarker(kind)), into: &out,
                 )
-            case let .text(label):
-                if let richText {
-                    emitRichText(
-                        richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
-                        anchor: LayoutRichText.anchor(for: .marker), into: &out,
-                    )
-                } else {
-                    encodeNotationText(
-                        text: label, role: .markerText,
-                        originX: mox + Double(origin.x),
-                        originY: moy + Double(origin.y),
-                        sp: sp,
-                        into: &out,
-                    )
-                }
             }
 
         case let .rehearsalMark(text, origin, frame, color, _, _, properties, richText):
@@ -715,19 +697,11 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .jump(text, origin, _, richText):
+        case let .jump(_, origin, _, richText):
             if let richText {
                 emitRichText(
                     richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
                     anchor: LayoutRichText.anchor(for: .jump), into: &out,
-                )
-            } else {
-                encodeNotationText(
-                    text: text, role: .jump,
-                    originX: mox + Double(origin.x),
-                    originY: moy + Double(origin.y),
-                    sp: sp,
-                    into: &out,
                 )
             }
 

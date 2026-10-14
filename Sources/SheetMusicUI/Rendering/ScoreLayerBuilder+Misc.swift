@@ -254,40 +254,6 @@ extension ScoreLayerBuilder {
         return from.y + (to.y - from.y) * t
     }
 
-    // MARK: - Marker
-
-    static func drawMarker(
-        kind: Marker.Kind, text: String, origin: CGPoint,
-        richText: LayoutRichText? = nil,
-        metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer,
-    ) {
-        switch MarkerGlyph.variant(for: kind, text: text) {
-        case let .glyph(codepoint):
-            // swiftlint:disable:next force_unwrapping
-            let glyph = Character(UnicodeScalar(codepoint)!)
-            if let layer = glyphLayer(
-                glyph, at: origin,
-                size: metrics.glyphFontSize,
-                height: height,
-            ) {
-                parent.addSublayer(layer)
-            }
-        case let .text(label):
-            let layer = if let richText {
-                richTextLayer(
-                    richText, at: origin, anchor: LayoutRichText.anchor(for: .marker),
-                    color: inkColor, height: height,
-                )
-            } else {
-                notationTextLayer(text: label, role: .markerText, origin: origin, metrics: metrics, height: height)
-            }
-            if let layer {
-                parent.addSublayer(layer)
-            }
-        }
-    }
-
     // MARK: - Rehearsal mark
 
     static func drawRehearsalMark( // swiftlint:disable:this function_body_length

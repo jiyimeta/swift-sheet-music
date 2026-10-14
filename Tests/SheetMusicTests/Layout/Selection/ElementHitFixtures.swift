@@ -65,9 +65,17 @@ enum ElementHitFixtures {
                 fromOrigin: origin, toOrigin: CGPoint(x: 180, y: 80), above: false, identity: chordSlur,
             ), id: chordSlur),
             Sample(element: spanner(.slur), id: .slur(.voice(anchor))),
-            Sample(element: .jump(text: "D.S.", origin: origin, identity: jump), id: jump),
-            Sample(element: .marker(kind: .segno, text: "", origin: origin, identity: glyph), id: glyph),
-            Sample(element: .marker(kind: .fine, text: "", origin: origin, identity: text), id: text),
+            Sample(element: .jump(
+                text: "D.S.", origin: origin, identity: jump, richText: navigationText("D.S.", style: .repeatRight),
+            ), id: jump),
+            Sample(element: .marker(
+                kind: .segno, text: "", origin: origin, identity: glyph,
+                richText: navigationText("<sym>segno</sym>", style: .repeatLeft, marker: true),
+            ), id: glyph),
+            Sample(element: .marker(
+                kind: .fine, text: "Fine", origin: origin, identity: text,
+                richText: navigationText("Fine", style: .repeatRight, marker: true),
+            ), id: text),
         ]
     }()
 

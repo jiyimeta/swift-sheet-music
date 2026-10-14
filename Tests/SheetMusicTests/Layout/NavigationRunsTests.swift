@@ -56,6 +56,13 @@ struct NavigationRunsTests {
         #expect(LayoutElementShape.autoplacedRects(for: jump, kind: .jump, metrics: Self.metrics).isEmpty)
     }
 
+    @Test("a mark whose text has no runs reserves nothing, though its LayoutRichText exists")
+    func emptyRunsReserveNothing() {
+        let element = Self.marker(.user, "")
+        #expect(LayoutElementShape.navigationLabelRect(for: element) == nil)
+        #expect(LayoutElementShape.autoplacedRects(for: element, kind: .marker, metrics: Self.metrics).isEmpty)
+    }
+
     /// Review Focus 1: what layout hands every renderer — a marker's type default when it has no text, set in
     /// MuseScore's repeat style.
     @Test("layout typesets every mark: a codetta's two codas, a Fine, a bare custom marker, a jump in Edwin")

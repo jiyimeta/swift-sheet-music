@@ -21,7 +21,7 @@ public func installWindowsFontMetrics(tableBytes: Data) throws {
 }
 
 /// The table provider, except for the empty face — the platform UI face that notation labels (part labels, measure
-/// numbers, staff names, jumps) ask for in semibold — which it measures with DirectWrite.
+/// numbers, staff names, line labels) ask for in semibold — which it measures with DirectWrite.
 ///
 /// A label's x is anchored on its measured ink (right-aligned part labels, `TextInkGeometry.baselineOrigin`), and the
 /// renderer cannot move it again, so what is measured has to be what is drawn. The table cannot promise that for Segoe

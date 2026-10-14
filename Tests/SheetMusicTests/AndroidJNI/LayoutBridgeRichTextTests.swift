@@ -14,7 +14,7 @@
     /// Positions are checked against the layout's own `LayoutRichText`: a run lands at
     /// `positionedRuns(at: measureOrigin + elementOrigin, anchor:)` converted to millimetres, with the anchor each kind
     /// is drawn at by the Apple renderers (staff text (0, 1), lyric (0.5, 0.5), rehearsal (0, 1) inside its padding,
-    /// marker `.markerText`, jump `.jump`).
+    /// markers and jumps by `LayoutRichText.anchor(for:)`).
     @Suite("LayoutBridge rich text")
     struct LayoutBridgeRichTextTests {
         /// Registers Edwin, which `LayoutEngine.layout` asserts a real provider for in DEBUG.
@@ -262,7 +262,7 @@
                 guard case let .marker(_, _, origin, _, rich?) = element else { return nil }
                 return (origin, rich, .none)
             })
-            let anchor = NotationTextStyle.anchorPoint(for: .markerText)
+            let anchor = LayoutRichText.anchor(for: .forMarker(.fine)) // the fixture's marker is a Fine
             #expect(Self.drawsFirstRun(of: found.rich, at: found.origin, anchor: anchor, in: commands))
         }
 
@@ -273,7 +273,7 @@
                 guard case let .jump(_, origin, _, rich?) = element else { return nil }
                 return (origin, rich, .none)
             })
-            let anchor = NotationTextStyle.anchorPoint(for: .jump)
+            let anchor = LayoutRichText.anchor(for: .jump)
             #expect(Self.drawsFirstRun(of: found.rich, at: found.origin, anchor: anchor, in: commands))
             // The control: a left-baseline anchor lands elsewhere when the jump anchor is not (0, 1).
             let leading = CGPoint(x: 0, y: 1)
@@ -299,6 +299,30 @@
             #expect(commands.contains { command in
                 if case let .stroke(width) = command { abs(width - frameWidth) < 1e-9 } else { false }
             })
+        }
+
+        @Test("a codetta is its two coda runs, each a SMuFL glyph where layout put it (F3.6)")
+        func codettaRuns() throws {
+            let chord = Chord(duration: .whole, notes: ChordNotes([Note(pitch: 72, tpc: 14)]))
+            let measure = Measure(voices: [Voice(elements: [.chord(chord)])], markers: [Marker(kind: .codetta)])
+            let (document, commands) = try Self.render(Score(division: 480, parts: [Part(
+                id: "P1", instrument: Instrument(id: "voice"), staves: [Staff(measures: [measure])],
+            )]))
+            let found = try #require(Self.find(in: document) { element in
+                guard case let .marker(_, _, origin, _, rich?) = element else { return nil }
+                return (origin, rich, .none)
+            })
+            let runs = found.rich.positionedRuns(at: found.origin, anchor: LayoutRichText.anchor(for: .marker))
+            try #require(runs.count == 2)
+            for run in runs {
+                let x = Double(run.baseline.x) * Self.mm
+                let y = Double(run.baseline.y) * Self.mm
+                let drawn = commands.contains { command in
+                    guard case let .glyph(codepoint, cx, cy, _, fontId) = command else { return false }
+                    return codepoint == 0xE048 && fontId == .smufl && abs(cx - x) < 0.001 && abs(cy - y) < 0.001
+                }
+                #expect(drawn)
+            }
         }
 
         @Test("the stream keeps the v8 wire: nothing new to decode")
