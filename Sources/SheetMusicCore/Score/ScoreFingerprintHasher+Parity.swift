@@ -210,6 +210,7 @@ extension FNV1a {
         combine(dynamic.subtype)
         combine(dynamic.velocity)
         combine(dynamic.visible)
+        combineOccupiedDynamicText(dynamic)
     }
 
     mutating func combine(_ fermata: Fermata) {

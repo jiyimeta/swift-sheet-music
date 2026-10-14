@@ -44,7 +44,9 @@ import SheetMusicFoundation
 ///   rehearsal mark (visible tag 63, color 64) and on a staff / system text (65, 66), which `SetTextVisible`
 ///   writes, and a tempo's color (105), which `SetElementColor` writes; the lane's other cases still carry theirs
 ///   unhashed. A tempo's text fields — authored text (111), follow-text off (112), text type (113) and play off
-///   (114) — are covered by occupants as well, because `SetTempo` writes them; its preserved markup is not.
+///   (114) — are covered by occupants as well, because `SetTempo` writes them; its preserved markup is not. A
+///   dynamic's own text is covered by occupant 115 — as MuseScore xml text, markup included, because `SetDynamic`
+///   writes both.
 /// - The walk's own shape: it emits a flat sequence of staff blocks with no part/staff-count delimiter, so two
 ///   scores whose staves are grouped into parts differently — but which total the same number of staves — hash
 ///   identically.

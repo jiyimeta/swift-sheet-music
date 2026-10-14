@@ -108,3 +108,10 @@ extension Tempo {
         text.flatMap { preservedTextMarkup?.richText(ifCurrentFor: $0) }
     }
 }
+
+extension Dynamic {
+    /// The dynamic's own formatted text while its preserved markup still describes `text`; `nil` otherwise.
+    public var richText: RichText? {
+        text.flatMap { preservedTextMarkup?.richText(ifCurrentFor: $0) }
+    }
+}

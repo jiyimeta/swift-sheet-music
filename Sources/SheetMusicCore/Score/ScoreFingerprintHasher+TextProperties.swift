@@ -72,4 +72,14 @@ extension FNV1a {
             combine(114)
         }
     }
+
+    /// A dynamic's own text by occupant: tag 115, then the text as MuseScore xml text (`Dynamic.customXMLText`) —
+    /// formatting included, because `SetDynamic` writes the markup with the words. A dynamic printing its subtype feeds
+    /// nothing, so every dynamic built in code keeps the hash it had. The play flag and the change speed stay out: no
+    /// edit writes them.
+    mutating func combineOccupiedDynamicText(_ dynamic: Dynamic) {
+        guard let xmlText = dynamic.customXMLText else { return }
+        combine(115)
+        combine(xmlText)
+    }
 }

@@ -279,7 +279,9 @@ private func strippingPreservedMarkup(from element: VoiceElement) -> VoiceElemen
     }
     if case var .clef(value) = element { value.preservedMarkup = []; return .clef(value) }
     if case var .barLine(value) = element { value.preservedMarkup = []; return .barLine(value) }
-    if case var .dynamic(value) = element { value.preservedMarkup = []; return .dynamic(value) }
+    if case var .dynamic(value) = element {
+        value.preservedMarkup = []; value.preservedTextMarkup = nil; return .dynamic(value)
+    }
     if case var .spanner(value) = element {
         value.preservedMarkup = []
         value.gradualTempoChange?.preservedMarkup = []

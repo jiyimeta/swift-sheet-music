@@ -9,6 +9,10 @@ and this project adheres to
 
 ### Added
 
+- **A dynamic keeps its own text, `<play>` and `<veloChangeSpeed>`** — `Dynamic.text` and `preservedTextMarkup`
+  (`nil` while it prints its subtype), `playsBack`, `velocityChangeSpeed` (`Dynamic.VelocityChangeSpeed`), all
+  defaulted; `richText`, `displayedRichText` (what it prints when it is not its glyphs) and `customXMLText` (its text as
+  MuseScore xml text, what a copy carries).
 - **Markers and jumps keep their own properties.** `Marker.elementProperties` / `Jump.elementProperties` read and write
   `<visible>`, `<color>`, `<offset>`, `<placement>` and `<autoplace>`; `Marker.centersOnSymbol` is MuseScore's "Center on
   symbol" (`<markerCenterOnSymbol>`) and `Marker.musicSymbolSize` its `<musicSymbolSize>`. They were kept as unread
@@ -87,6 +91,10 @@ and this project adheres to
 
 ### Changed
 
+- **`Dynamic.defaultVelocity(for:)` is MuseScore's whole `dynList`** (import-fidelity F4.5): sf, sfz, sfp, sfpp, rf,
+  rfz, fz, r and s are 112, sff and sffz 126, sfff and sfffz 127, fp and m 96, pf and n 49, z 80, pppppp 1, ffffff 127 —
+  all 80 before but the plain levels. A palette `sf` is now saved with `<velocity>112</velocity>`, as MuseScore saves
+  it.
 - **Breaking: `MarkerGlyph` is removed.** A marker draws its `displayedRichText`; there is no glyph-or-label choice to
   make any more.
 - **`LayoutElement.marker` / `.jump` carry `color:` and `placement:`** (defaults nil). Construction sites compile
