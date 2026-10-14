@@ -21,9 +21,11 @@ extension Score {
         return governing
     }
 
-    /// Quarter-note BPM in force at `cursor` — falls back to MuseScore's 120 BPM default when no marking governs the
-    /// position. A `nil` cursor yields the opening tempo.
+    /// Quarter-note BPM in force at `cursor`, read from the score's tempo map (`resolvedTempoMap()`); MuseScore's 120
+    /// BPM default where nothing is in force. A `nil` cursor yields the opening tempo.
     public func effectiveQuarterBpm(at cursor: ScoreCursor?) -> Double {
-        (governingTempo(at: cursor)?.beatsPerSecond ?? 2.0) * 60
+        let map = resolvedTempoMap()
+        guard let cursor else { return map.beatsPerSecond(atMeasure: 0, tickInMeasure: 0) * 60 }
+        return map.beatsPerSecond(atMeasure: cursor.measureIndex, tickInMeasure: tickInMeasure(of: cursor)) * 60
     }
 }

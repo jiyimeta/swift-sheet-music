@@ -72,14 +72,9 @@ struct TempoTimeline: Equatable {
         return entries[pick].bps
     }
 
-    /// Build a tempo timeline from a staff's measure tick budgets
-    /// combined with the score-level tempo entries on
-    /// `systemMeasures`. Tempo events are filtered to ones that
-    /// would render against this staff: system-level (originalStaff
-    /// = nil) maps to the canonical staff 0; staff-bound tempo
-    /// markers map to their originating staff. Currently the
-    /// fermata renderer is invoked once per staff, so the filter is
-    /// done at the call site by passing the matching staff address.
+    /// Build a tempo timeline from a staff's measure tick budgets combined with the score-level tempo entries on
+    /// `systemMeasures`. The tempo entries are the score's text-only tempo map (`ResolvedTempoMap.markings`),
+    /// projected onto this staff's measure bases.
     static func build(
         measures: [Measure],
         systemMeasures: [SystemMeasure],
@@ -101,14 +96,10 @@ struct TempoTimeline: Equatable {
                 )
             }
         }
-        for (measureIndex, systemMeasure) in systemMeasures.enumerated() {
-            guard measureIndex < measureBases.count else { continue }
-            let measureBase = measureBases[measureIndex]
-            for positioned in systemMeasure.elements {
-                guard case let .tempo(tempo) = positioned.element else { continue }
-                let tick = measureBase + positioned.position.ticks(division: division)
-                entries.append((tick: tick, bps: tempo.beatsPerSecond))
-            }
+        for point in ResolvedTempoMap.markings(lane: systemMeasures, division: division).points
+            where point.measureIndex < measureBases.count
+        {
+            entries.append((tick: measureBases[point.measureIndex] + point.tickInMeasure, bps: point.beatsPerSecond))
         }
         entries.sort { $0.tick < $1.tick }
         return TempoTimeline(entries: entries)

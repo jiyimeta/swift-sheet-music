@@ -18,9 +18,9 @@ extension Score {
         return extra
     }
 
-    /// Seconds a measure of `ticks` length occupies at the quarter-BPM governing its downbeat.
-    private func measureSeconds(measureIndex: Int, ticks: Double) -> Double {
-        let bpm = max(1, effectiveQuarterBpm(at: .beat(measureIndex: measureIndex, tickInMeasure: 0)))
+    /// Seconds a measure of `ticks` length occupies at the quarter-BPM in force at its downbeat.
+    private func measureSeconds(measureIndex: Int, ticks: Double, map: ResolvedTempoMap) -> Double {
+        let bpm = max(1, map.beatsPerSecond(atMeasure: measureIndex, tickInMeasure: 0) * 60)
         let secondsPerTick = (60.0 / bpm) / Double(max(1, division))
         return ticks * secondsPerTick
     }
@@ -28,10 +28,11 @@ extension Score {
     /// Total notated duration in seconds (each measure counted once — no repeat expansion), fermata
     /// holds included.
     public var notatedDurationSeconds: Double {
+        let map = resolvedTempoMap()
         let holds = measureHoldTicks()
         return measureTickLengths().enumerated().reduce(0.0) { acc, pair in
             acc + measureSeconds(
-                measureIndex: pair.offset, ticks: Double(pair.element) + holds[pair.offset],
+                measureIndex: pair.offset, ticks: Double(pair.element) + holds[pair.offset], map: map,
             )
         }
     }
@@ -43,19 +44,20 @@ extension Score {
     /// halfway by time. Resolving *where inside the bar* the hold falls would need the tick map
     /// this measure-granular API deliberately doesn't build.
     public func seconds(at cursor: ScoreCursor) -> Double {
+        let map = resolvedTempoMap()
         let lengths = measureTickLengths()
         guard !lengths.isEmpty else { return 0 }
         let holds = measureHoldTicks()
         let measure = min(max(cursor.measureIndex, 0), lengths.count - 1)
         var seconds = 0.0
         for i in 0 ..< measure {
-            seconds += measureSeconds(measureIndex: i, ticks: Double(lengths[i]) + holds[i])
+            seconds += measureSeconds(measureIndex: i, ticks: Double(lengths[i]) + holds[i], map: map)
         }
         let measureTicks = lengths[measure]
         guard measureTicks > 0 else { return seconds }
         let tick = min(max(tickInMeasure(of: cursor), 0), measureTicks)
         let span = measureSeconds(
-            measureIndex: measure, ticks: Double(measureTicks) + holds[measure],
+            measureIndex: measure, ticks: Double(measureTicks) + holds[measure], map: map,
         )
         seconds += Double(tick) / Double(measureTicks) * span
         return seconds
@@ -64,6 +66,7 @@ extension Score {
     /// Inverse of `seconds(at:)`: the `.beat` cursor at `seconds` from the start, clamped to
     /// `0 ... notatedDurationSeconds`.
     public func cursor(atSeconds seconds: Double) -> ScoreCursor {
+        let map = resolvedTempoMap()
         let lengths = measureTickLengths()
         guard !lengths.isEmpty else { return .beat(measureIndex: 0, tickInMeasure: 0) }
         let holds = measureHoldTicks()
@@ -71,7 +74,7 @@ extension Score {
         var elapsed = 0.0
         for (i, ticks) in lengths.enumerated() {
             let measureDuration = measureSeconds(
-                measureIndex: i, ticks: Double(ticks) + holds[i],
+                measureIndex: i, ticks: Double(ticks) + holds[i], map: map,
             )
             let isLast = i == lengths.count - 1
             if target < elapsed + measureDuration || isLast {

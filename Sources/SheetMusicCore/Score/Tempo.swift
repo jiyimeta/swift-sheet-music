@@ -115,16 +115,13 @@ public struct Tempo: Sendable, Equatable {
 
     /// Microseconds per quarter note for SMF tempo meta event.
     public var microsecondsPerQuarter: Int {
-        Int((1.0 / beatsPerSecond * 1_000_000.0).rounded())
+        Self.microsecondsPerQuarter(beatsPerSecond: beatsPerSecond)
     }
 
     /// `beatNote`'s length as a multiple of a quarter note (quarter = 1, eighth = 0.5, dotted quarter = 1.5). Bridges
     /// the quarter-normalized `beatsPerSecond` and the beat the marking is drawn in.
     public var beatLengthInQuarters: Double {
-        let beat = beatNote.dotted(beatDots).asFraction
-        // A quarter note is 1/4 of a whole note, so dividing the beat's whole-note fraction by 1/4 gives its length in
-        // quarters.
-        return (Double(beat.numerator) / Double(beat.denominator)) / 0.25
+        Self.lengthInQuarters(of: beatNote, dots: beatDots)
     }
 
     /// Tempo expressed in `beatNote` units — the number the marking prints (the 80 of "♩. = 80"). Inverse of
@@ -138,7 +135,27 @@ public struct Tempo: Sendable, Equatable {
     /// draw the engraved "♩. = …" beat token. Non-standard beat notes (a raw `.fraction` / `.measure`) fall back to a
     /// quarter.
     public var beatGlyph: String {
-        let note = switch beatNote {
+        Self.beatGlyph(note: beatNote, dots: beatDots)
+    }
+}
+
+extension Tempo {
+    /// The SMF tempo of a quarter-normalized tempo: microseconds per quarter (`microsecondsPerQuarter`'s body).
+    static func microsecondsPerQuarter(beatsPerSecond: Double) -> Int {
+        Int((1.0 / beatsPerSecond * 1_000_000.0).rounded())
+    }
+
+    /// A beat's length in quarter notes — quarter 1, eighth 0.5, dotted quarter 1.5 (`beatLengthInQuarters`' body).
+    static func lengthInQuarters(of note: NoteDuration, dots: Int) -> Double {
+        let beat = note.dotted(dots).asFraction
+        // A quarter note is 1/4 of a whole note, so dividing the beat's whole-note fraction by 1/4 gives its length in
+        // quarters.
+        return (Double(beat.numerator) / Double(beat.denominator)) / 0.25
+    }
+
+    /// A beat as Bravura "Individual notes" glyphs (`beatGlyph`'s body): a non-standard note falls back to a quarter.
+    static func beatGlyph(note: NoteDuration, dots: Int) -> String {
+        let head = switch note {
         case .whole: "\u{E1D2}" // noteWhole
         case .half: "\u{E1D3}" // noteHalfUp
         case .quarter: "\u{E1D5}" // noteQuarterUp
@@ -148,6 +165,6 @@ public struct Tempo: Sendable, Equatable {
         default: "\u{E1D5}" // noteQuarterUp (fallback)
         }
         // augmentationDot (U+E1E7), one per dot.
-        return note + String(repeating: "\u{E1E7}", count: max(0, beatDots))
+        return head + String(repeating: "\u{E1E7}", count: max(0, dots))
     }
 }

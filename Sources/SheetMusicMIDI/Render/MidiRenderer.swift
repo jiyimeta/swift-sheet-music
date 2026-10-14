@@ -1,6 +1,8 @@
 import SheetMusicCore
 import SheetMusicFoundation
 
+// swiftlint:disable file_length
+
 /// Renders a `Score` into a `MidiFile`. The implementation is split across
 /// `MidiRenderer+*.swift` extensions for: header emission, channel allocation,
 /// per-voice walking (with arpeggio), repeat-list expansion, MeasureRepeat
@@ -38,6 +40,7 @@ public enum MidiRenderer {
         // in MuseScore (masterscore's repeatList()).
         let navigation = ScoreNavigation(score: score)
         let plan = RepeatUnwinder.plan(navigation: navigation)
+        let tempoMap = score.resolvedTempoMap()
         // ONE score-global set of fermata tempo bookends, emitted into the first track only.
         // Tempo metas are score-global once a sequencer merges the tracks, so a per-staff build was
         // wrong twice: it duplicated every system fermata's pair across staves, and — because
@@ -86,6 +89,7 @@ public enum MidiRenderer {
                         ? swingMaps[trackIndex]
                         : .empty,
                     systemElementsByMeasure: systemElementsForStaff,
+                    tempoMap: tempoMap,
                     fermataCloseEvents: trackIndex == 0 ? projectedFermataClose : [],
                     fermataOpenEvents: trackIndex == 0 ? projectedFermataOpen : [],
                 )
@@ -226,6 +230,7 @@ public enum MidiRenderer {
         division: Int,
         swingMap: SwingMap,
         systemElementsByMeasure: [[PositionedSystemElement]],
+        tempoMap: ResolvedTempoMap,
         fermataCloseEvents: [TimedMidiEvent],
         fermataOpenEvents: [TimedMidiEvent],
     ) throws -> MidiTrack {
@@ -270,6 +275,8 @@ public enum MidiRenderer {
                 plan: plan,
                 swingMap: swingMap,
                 systemElementsByMeasure: systemElementsByMeasure,
+                tempoMap: tempoMap,
+                emitsTempoEvents: isFirstTrack && voiceIndex == 0,
             )
             voiceEventBuckets.append(voiceEvents)
             lyricAnchors.append(contentsOf: anchors)

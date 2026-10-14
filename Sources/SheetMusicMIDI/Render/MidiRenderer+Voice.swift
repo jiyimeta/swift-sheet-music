@@ -9,7 +9,8 @@ extension MidiRenderer {
     /// playback order computed once by `render(score:)` — repeats,
     /// voltas, jumps and markers are already expanded into it.
     /// `<MeasureRepeat>` group replay still resolves per-staff (via
-    /// `resolvedVoice`).
+    /// `resolvedVoice`). `emitsTempoEvents` is set for the first track's voice 0, which carries the score's tempo
+    /// map as MuseScore's export does (`importexport/midi/internal/midiexport/exportmidi.cpp:177-204`).
     static func renderVoice( // swiftlint:disable:this function_body_length cyclomatic_complexity
         voiceIndex: Int,
         staff: Staff,
@@ -19,6 +20,8 @@ extension MidiRenderer {
         plan: [PlaybackEntry],
         swingMap: SwingMap = .empty,
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
+        tempoMap: ResolvedTempoMap = ResolvedTempoMap(),
+        emitsTempoEvents: Bool = false,
     ) throws -> (events: [TimedMidiEvent], endTick: Int, lyricAnchors: [LyricMidiCodec.Anchor]) {
         let measureDurations = staff.measures.effectiveMeasureDurations()
         // Swing reads a beat position out of a tick, so its grid has to be measured from the BAR rather than from
@@ -163,6 +166,14 @@ extension MidiRenderer {
             // injection so the same tempo / rehearsal doesn't fan out
             // across voices of the same staff (mirrors the previous
             // `voiceIndex == 0` guard).
+            if emitsTempoEvents {
+                for point in tempoMap.points(inMeasure: entry.measureIndex) {
+                    events.append(TimedMidiEvent(
+                        tick: entry.tickOffset + point.tickInMeasure,
+                        event: .meta(.tempo(microsecondsPerQuarter: point.microsecondsPerQuarter)),
+                    ))
+                }
+            }
             if voiceIndex == 0,
                entry.measureIndex < systemElementsByMeasure.count
             {
@@ -171,13 +182,9 @@ extension MidiRenderer {
                         + positioned.position.ticks(division: division)
                     switch positioned.element {
                     case let .tempo(tempo):
+                        // The meta comes from the tempo map above; the arpeggio and breath
+                        // arithmetic still read the marking here.
                         currentTempoBps = tempo.beatsPerSecond
-                        events.append(TimedMidiEvent(
-                            tick: tickAt,
-                            event: .meta(.tempo(
-                                microsecondsPerQuarter: tempo.microsecondsPerQuarter,
-                            )),
-                        ))
                     case let .rehearsalMark(rm):
                         if !rm.text.isEmpty {
                             events.append(TimedMidiEvent(

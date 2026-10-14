@@ -553,20 +553,12 @@ extension PlaybackTimeline {
             }
             return $0.sortKey.1 < $1.sortKey.1
         }
-        // Pull tempo events from the score-level `systemMeasures`.
-        // Each entry's `MeasurePosition` is relative to its measure
-        // start, so we add `measureStarts[measureIdx]` to land at
-        // the absolute spine tick.
-        for (measureIdx, systemMeasure) in score.systemMeasures.enumerated() {
-            guard measureIdx < measureStarts.count else { continue }
-            let measureStart = measureStarts[measureIdx]
-            for positioned in systemMeasure.elements {
-                guard case let .tempo(t) = positioned.element else { continue }
-                let tick = measureStart + positioned.position.ticks(
-                    division: division,
-                )
-                tempoEvents.append((tick, t.microsecondsPerQuarter, TempoRank.score))
-            }
+        // The tempo map's points (`Score.resolvedTempoMap()`) are measure-relative; `measureStarts` lands each on the
+        // absolute spine tick.
+        for point in score.resolvedTempoMap().points where point.measureIndex < measureStarts.count {
+            tempoEvents.append((
+                measureStarts[point.measureIndex] + point.tickInMeasure, point.microsecondsPerQuarter, TempoRank.score,
+            ))
         }
         // Fold in the fermata holds. A fermata carries no notated duration — the SMF
         // `MidiRenderer.render` produces realises the hold by slowing the tempo across the held

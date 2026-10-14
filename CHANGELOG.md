@@ -43,6 +43,11 @@ and this project adheres to
   runs, its authored plain text, or the derived marking in MuseScore's palette spelling (the beat's `metNote…` glyph, a
   `space` and `metAugmentationDot`s for a dotted beat, then " = N"). `Tempo.printedNumber(_:)` spells the number to two
   decimals, without a point when integral, and as the empty string when it is not finite.
+- **`ResolvedTempoMap`** — the tempo a score plays at, position by position (MuseScore's `TempoMap`): measure-relative
+  `Point`s (bps, role `.marking` / `.ramp`, the beat to count it in) with `point(inForceAtMeasure:tickInMeasure:)`,
+  `beatsPerSecond(atMeasure:tickInMeasure:)` and `points(inMeasure:)`; `Score.resolvedTempoMap()` builds it. The SMF
+  writer, the fermata bookends, `PlaybackTimeline`, `effectiveQuarterBpm(at:)` and the notated clock all read it now
+  instead of each walking the `<Tempo>`s on its own.
 
 ### Changed
 
@@ -72,6 +77,9 @@ and this project adheres to
   text says. A text run in MuseScore's `ScoreText` face typesets as music glyphs, so a MuseScore 2/3 metronome mark
   draws as the note it is in every formatted text. `TextInkGeometry.tempoRuns` and `TextInkGeometry.PositionedRun`
   (package) are removed; `MusicTextRuns` stays public, unused by the package's renderers.
+- **SMF tempo metas are written into the first track only**, as MuseScore's export does; a `<Tempo>` whose
+  `originalStaff` is another staff used to put its meta on that staff's track (and so did not reach a player that
+  reads the conductor track alone).
 
 ### Fixed
 
