@@ -30,7 +30,16 @@ extension ScoreLayerBuilder {
         for bar in decorations {
             bars.addRect(bar.rect)
         }
-        return composite.isEmpty ? bars : composite.union(bars)
+        guard !composite.isEmpty else { return bars }
+        // `union` answers an empty path when the boolean operation fails. Neither input was empty, so that is a
+        // failure, not a result: fall back to one path holding glyphs and bars (the old behavior, holes and all) over
+        // drawing nothing.
+        let united = composite.union(bars)
+        if united.isEmpty {
+            composite.addPath(bars)
+            return composite
+        }
+        return united
     }
 
     /// A text element's runs placed at `origin` by `anchor` (`LayoutRichText.positionedRuns(at:anchor:)`). The anchor

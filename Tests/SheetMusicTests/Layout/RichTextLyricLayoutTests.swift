@@ -26,9 +26,44 @@ struct RichTextLyricLayoutTests {
     }
 
     /// A syllable whose preserved markup is `content` and still describes `text`.
-    private static func lyric(_ text: String, markup content: [PreservedTextMarkup.ContentItem]) -> Lyric {
-        Lyric(text: text, preservedTextMarkup: PreservedTextMarkup(content: content, derivedText: text))
+    private static func lyric(
+        _ text: String, markup content: [PreservedTextMarkup.ContentItem], syllabic: Syllabic = .single, ticks: Int = 0,
+    ) -> Lyric {
+        Lyric(
+            text: text, syllabic: syllabic, ticks: ticks,
+            preservedTextMarkup: PreservedTextMarkup(content: content, derivedText: text),
+        )
     }
+
+    /// One bar of quarter chords, `lyrics[i]` on chord `i`, laid out with the installed provider.
+    private static func document(_ lyrics: [Lyric?]) -> LayoutDocument {
+        let chords = lyrics.enumerated().map { index, lyric in
+            VoiceElement.chord(Chord(
+                duration: .quarter, notes: ChordNotes([Note(pitch: 60 + index, tpc: 14)]),
+                lyrics: lyric.map { [$0] } ?? [],
+            ))
+        }
+        let staff = Staff(measures: [Measure(voices: [Voice(elements: chords)])])
+        let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "voice"), staves: [staff])])
+        return LayoutEngine.layout(score: score, options: ScoreViewOptions(staffSize: 28), availableWidth: 900)
+    }
+
+    /// Every lyric syllable of the first measure: its text, its center x (measure-local) and its runs.
+    private static func marks(_ document: LayoutDocument) -> [(text: String, x: CGFloat, rich: LayoutRichText?)] {
+        (document.systems.first?.measures.first?.elements ?? []).compactMap { element in
+            guard case let .textMark(.lyrics, text, origin, rich) = element else { return nil }
+            return (text, origin.x, rich)
+        }
+    }
+
+    /// The quantities lyric widths feed: every measure's width and every syllable's x.
+    private static func spacing(_ document: LayoutDocument) -> [CGFloat] {
+        document.systems.flatMap(\.measures).map(\.width) + marks(document).map(\.x)
+    }
+
+    private static let elided: [PreservedTextMarkup.ContentItem] = [
+        .characters("glo"), symbol("lyricsElision"), .characters("ria"),
+    ]
 
     private static func symbol(_ name: String) -> PreservedTextMarkup.ContentItem {
         .element(.init(name: "sym", content: [.characters(name)]))
@@ -78,5 +113,64 @@ struct RichTextLyricLayoutTests {
             )
             #expect(Self.close(pair, 36.75) && pair >= (rich?.size.width ?? .infinity))
         }
+    }
+
+    /// A one-run formatted syllable is spaced like its plain twin: `lyricsTextWidth(_:properties:rich:metrics:)` takes
+    /// the larger of the plain stand-in (system semibold) and the runs, so runs no wider than it change nothing. Real
+    /// `LayoutEngine.layout`, installed provider: every measure width and every syllable x must be bit-identical. If
+    /// the face makes the runs wider than the stand-in, this fails and says so; that is a finding, not a flake.
+    @Test("a one-run formatted lyric is spaced exactly like its plain twin", arguments: ["i", "b"])
+    func oneRunLyricSpacesLikePlain(tag: String) {
+        let plain = Self.document([Lyric(text: "Ah"), nil, Lyric(text: "oh"), nil])
+        let formatted = Self.lyric("Ah", markup: [.element(.init(name: tag, content: [.characters("Ah")]))])
+        let rich = Self.document([formatted, nil, Lyric(text: "oh"), nil])
+        #expect(Self.marks(rich).filter { $0.rich != nil }.count == 1, "<\(tag)> must reach layout as runs")
+        #expect(Self.marks(plain).count == 2 && Self.marks(rich).count == 2)
+        #expect(Self.spacing(rich) == Self.spacing(plain))
+    }
+
+    /// The hyphen after an elided syllable starts past the RUNS' right edge. "gloria" with the elision glyph is wider
+    /// than its plain text (the first expectation guards that, or the test could not tell the two widths apart); the
+    /// connecting dash is emitted from `centerX + width / 2 + 0.3 sp`, and a dash never starts left of that.
+    @Test("the hyphen after an elided syllable starts past its rich width")
+    func hyphenStartsAfterRichWidth() throws {
+        let begin = Self.lyric("gloria", markup: Self.elided, syllabic: .begin)
+        let document = Self.document([begin, nil, Lyric(text: "a", syllabic: .end), nil])
+        let mark = try #require(Self.marks(document).first { $0.text == "gloria" })
+        let rich = try #require(mark.rich)
+        let plainWidth = LayoutEngine.lyricsTextWidth("gloria", properties: TextProperties(), metrics: document.metrics)
+        #expect(rich.size.width > plainWidth, "the elision glyph must make the runs wider than the plain text")
+
+        let elements = try #require(document.systems.first?.measures.first?.elements)
+        let dashes = elements.compactMap { element -> CGFloat? in
+            guard case let .lyricHyphen(from, to, _) = element else { return nil }
+            return min(from.x, to.x)
+        }
+        let dashStart = try #require(dashes.min())
+        let richRight = mark.x + rich.size.width / 2 + document.metrics.sp * 0.3
+        let plainRight = mark.x + plainWidth / 2 + document.metrics.sp * 0.3
+        #expect(dashStart >= richRight - 1e-6, "dash at \(dashStart), rich right edge \(richRight)")
+        #expect(richRight > plainRight)
+    }
+
+    /// The melisma rule of an elided syllable starts at `centerX + richWidth / 2 + 0.25 sp` (`emitMelismaLine`), not at
+    /// the narrower plain text's edge. Three ticks of 480 end the rule on the fourth chord's column.
+    @Test("a melisma line starts after the rich width")
+    func melismaStartsAfterRichWidth() throws {
+        let held = Self.lyric("gloria", markup: Self.elided, ticks: 1440)
+        let document = Self.document([held, nil, nil, nil])
+        let mark = try #require(Self.marks(document).first { $0.text == "gloria" })
+        let rich = try #require(mark.rich)
+        let plainWidth = LayoutEngine.lyricsTextWidth("gloria", properties: TextProperties(), metrics: document.metrics)
+        #expect(rich.size.width > plainWidth, "the elision glyph must make the runs wider than the plain text")
+
+        let elements = try #require(document.systems.first?.measures.first?.elements)
+        let starts = elements.compactMap { element -> CGFloat? in
+            guard case let .lyricsMelisma(from, _, _) = element else { return nil }
+            return from.x
+        }
+        #expect(starts.count == 1)
+        let start = try #require(starts.first)
+        #expect(Self.close(start, mark.x + rich.size.width / 2 + document.metrics.sp * 0.25), "\(start)")
     }
 }

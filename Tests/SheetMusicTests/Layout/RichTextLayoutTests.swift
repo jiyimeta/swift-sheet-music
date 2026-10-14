@@ -332,10 +332,30 @@ struct RichTextLayoutTests {
         }
     }
 
+    /// Installed provider: a title entry whose runs are all in the block face steps exactly like the plain entry. A
+    /// rich line steps its own ascent + descent + (lineHeight - face ascent - face descent), which is lineHeight when
+    /// its metrics are the face's; the runs are typeset in `renderingTextFont` of the block face, as the engine does.
+    @Test("a title entry in the block's face steps exactly like its plain twin")
+    func blockFaceTitleLineStepsMatchPlain() {
+        Self.installed {
+            let face = FontMetrics.provider.renderingTextFont(LayoutTitleFrame.font(size: 10))
+            let lines: [[RichTextRun]] = ["One", "Two", "Three"].map { [.text($0, Self.plain)] }
+            let rich = LayoutRichText(RichText(lines: lines), baseFont: face, pointScale: 1, symbolPointSize: 10)
+            for (anchor, y) in [(LayoutFrameText.Anchor.topLeading, CGFloat(0)), (.bottomLeading, 100)] {
+                let plain = Self.titleTops(anchor, y: y, rich: nil)
+                let tops = Self.titleTops(anchor, y: y, rich: rich)
+                #expect(tops.count == 3 && plain.count == 3)
+                #expect(zip(tops, plain).allSatisfy { Self.close($0, $1) }, "\(anchor): \(tops) vs \(plain)")
+            }
+        }
+    }
+
     /// A one-run, one-font block reserves exactly its plain twin's box at every anchor in use: bottom-leading (staff
     /// text), leading-center (markers, jumps) and center (lyrics). "mo" inks inside its advance box, so the ink the
     /// rich box takes in adds nothing. A marker's or jump's plain box is measured in Edwin while its runs are set in
     /// the label face, so leading-center is compared on the shape itself; staff text and lyrics on their elements too.
+    /// It passes because "mo" is upright and inks inside its advance; an italic face's overhang can make a rich box
+    /// slightly wider than its plain twin, by design (the box is unioned with the runs' ink).
     @Test("a one-font rich block reserves its plain twin's box at every anchor")
     func oneFontBoxMatchesPlain() {
         Self.installed {

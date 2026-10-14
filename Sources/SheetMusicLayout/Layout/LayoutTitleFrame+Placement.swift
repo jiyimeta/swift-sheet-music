@@ -87,7 +87,9 @@ extension LayoutTitleFrame {
     /// top (`positionedRuns`), so it steps by its own ascent and descent plus the gap a plain line leaves below its
     /// face's — `lineHeight(fontSize:)` less that face's ascent and descent. A line in the block's face therefore steps
     /// exactly as a plain line does, and one with a larger `<font size>` run pushes the next line down instead of into
-    /// it. A bottom-anchored entry rises by the sum of the steps, as a plain one rises by `count` line heights.
+    /// it. A bottom-anchored entry rises by the sum of the steps, as a plain one rises by `count` line heights. The
+    /// equality assumes the runs were typeset in `renderingTextFont(font(size:))` (`LayoutEngine.titleRichText` does),
+    /// so a plain-format line's ascent and descent are that face's own.
     private static func richLineTops(
         _ lines: [LayoutRichTextLine], fontSize: CGFloat, y: CGFloat, isBottom: Bool,
     ) -> [CGFloat] {
