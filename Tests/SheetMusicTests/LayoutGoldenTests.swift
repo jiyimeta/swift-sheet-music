@@ -246,8 +246,19 @@
         /// across a forced system break. The digest was diffed against the one written just before the fixture was
         /// added (which hashed to the previous `4135ad82…`): the 66 existing blocks are identical to the character,
         /// and the only change is the new fixture's two blocks, 174 lines.
+        ///
+        /// **Re-recorded 2026-10-14 for import-fidelity W2 (tempo) and its merge with 4.10.0, after reading the
+        /// diff** block by block (fixture and wrap mode). Against the W1 digest of the 33 older fixtures, 658 of their
+        /// lines changed, all of them explained: 52 `spannerSegment` lines gain Task 12's `richText: nil` (40 with
+        /// nothing else; the 12 voltas of `repeat52`, `repeat53` and `testVoltaTemp` also move with their system);
+        /// 32 tempo `textMark` lines gain their typeset runs, the MuseScore 2/3 markings now drawing their ♩; and the
+        /// other 574 lines, every one in the twelve fixtures with a `<Tempo>`, move by a single y offset per block
+        /// (+6.61 to +10.73 pt): a tempo now hangs by its baseline 2 sp above the staff (`tempoPosAbove`) and its
+        /// metronome glyph is Bravura at `tempoMusicalSymbolSize` 20, so the box is taller and pushes the system down.
+        /// No fixture without a tempo changed except by `richText: nil`. Against 4.10.0's own digest, the lyrics
+        /// fixture's 52 changed lines gain W1's `richText: nil` and nothing else.
         private static let expectedDigestSHA256 =
-            "d7d2f72f2adb168221837ef8570f9ceaaae38dd47b35c5e7ed94592f56a70c1c"
+            "f5d31d2477b7955a67d59fe2122e18e05223f4469d539cf7029b37c2f7e2c49b"
 
         @Test("write digest")
         func writeDigest() throws {
