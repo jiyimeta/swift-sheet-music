@@ -58,6 +58,22 @@ struct MarkerTypeEncodeTests {
         #expect(xml.contains("<text>D.C.</text>") && xml.contains("<markerType>user</markerType>"))
     }
 
+    /// MuseScore 3 types a marker by its label alone, and To Coda, To ⟨coda⟩, Da Coda and Da Doppia Coda share "coda".
+    @Test("a textless Da Coda, To ⟨coda⟩ and Da Doppia Coda write their words in a 3.02 file only")
+    func textlessSharedLabelKindsWriteTextForMuseScore3() throws {
+        let v3 = MSCXEncoderOptions(targetVersion: .v3)
+        let daCoda = try Self.xml(Marker(kind: .daCoda), options: v3)
+        #expect(daCoda.contains("<text>Da Coda</text>"))
+        let double = try Self.xml(Marker(kind: .daDoubleCoda), options: v3)
+        #expect(double.contains("<text>Da Doppia Coda</text>"))
+        let sym = try Self.xml(Marker(kind: .toCodaSym), options: v3)
+        #expect(sym.contains("<text>To <sym>coda</sym></text>"))
+        for kind in [Marker.Kind.daCoda, .daDoubleCoda, .toCodaSym] {
+            let v4 = try Self.xml(Marker(kind: kind))
+            #expect(!v4.contains("<text"), "\(kind): \(v4)")
+        }
+    }
+
     /// Every kind saved and reopened: MuseScore's own types come back as themselves, this library's type-less ones as
     /// Custom markers with the same words.
     @Test("a saved marker reopens as its kind, in this library's 4.60 and 3.02 files alike")

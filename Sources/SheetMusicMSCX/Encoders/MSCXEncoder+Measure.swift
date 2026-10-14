@@ -163,6 +163,19 @@ extension Marker {
             return encodeText(text, preservedTextMarkup: preservedTextMarkup, options: options)
         }
         let words = kind.defaultXMLText
+        if kind == .toCodaSym, options.targetVersion == .v3 {
+            // MuseScore 3 types a marker by its label alone, and these three share "coda" with To Coda, so without
+            // its own text each would open there as "To Coda".
+            let markup = PreservedTextMarkup(
+                content: [.characters("To "), .element(.init(name: "sym", content: [.characters("coda")]))],
+                derivedText: "To ",
+            )
+            return encodeText("To ", preservedTextMarkup: markup, options: options)
+        }
+        let sharesToCodaLabel = kind == .daCoda || kind == .daDoubleCoda
+        if sharesToCodaLabel, options.targetVersion == .v3 {
+            return XMLTreeNode(name: "text", text: words)
+        }
         guard kind.mscxName == Kind.user.mscxName, !words.isEmpty else { return nil }
         return XMLTreeNode(name: "text", text: words)
     }
