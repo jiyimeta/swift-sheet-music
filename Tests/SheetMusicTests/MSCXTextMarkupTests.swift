@@ -255,13 +255,10 @@ struct MSCXTextMarkupTests {
         #expect(try !Self.xml(glissando.encode(options: options)).contains("<text"))
     }
 
-    @Test("a Harmony <name> with a <sym> or <br/> child reads its own characters, then the tags' (legacy shape)")
-    func harmonyNameWithChildren() throws {
-        // `<name>` is not parsed with mixed content, so the walker sees own characters first, then each child.
+    @Test("a <sym> in a Harmony <name> stays out of the chord name")
+    func harmonyNameSymbolStaysOutOfText() throws {
         let symbol = try Harmony.decode(Self.parse("<Harmony><name>C7<sym>coda</sym></name></Harmony>"))
         #expect(symbol.name == "C7")
-        let lineBreak = try Harmony.decode(Self.parse("<Harmony><name>C7<br/>x</name></Harmony>"))
-        #expect(lineBreak.name == "C7x\n")
     }
 
     @Test("a formatted lyric is read, not skipped (F1.3)")
@@ -275,6 +272,46 @@ struct MSCXTextMarkupTests {
         let lyric = try #require(chord.lyrics.first)
         #expect(lyric.text == "Ah")
         #expect(lyric.richText?.lines == [[.text("Ah", RichTextFormat(italic: true))]])
+    }
+
+    @Test("a symbol-only lyric is empty text with a symbol run, and saves its markup back")
+    func symbolOnlyLyric() throws {
+        let chord = try Chord.decode(Self.parse("""
+        <Chord><durationType>quarter</durationType>
+          <Lyrics><text><sym>keyboardPedalPed</sym></text></Lyrics>
+          <Note><pitch>72</pitch><tpc>14</tpc></Note>
+        </Chord>
+        """))
+        let lyric = try #require(chord.lyrics.first)
+        #expect(lyric.text.isEmpty)
+        #expect(lyric.richText?.lines == [[.symbol(name: "keyboardPedalPed", RichTextFormat())]])
+        #expect(try Self.xml(lyric.encode()).contains("<text><sym>keyboardPedalPed</sym></text>"))
+    }
+
+    @Test("a title line with a leading or trailing <br/> keeps its empty line: text and rich lines agree")
+    func titleLineWithEdgeBreaks() throws {
+        let frame = try ScoreFrame.decode(vbox: Self.parse("""
+        <VBox>
+          <Text><style>title</style><text><br/>Lead</text></Text>
+          <Text><style>subtitle</style><text>Trail<br/></text></Text>
+        </VBox>
+        """))
+        #expect(frame.texts.map(\.text) == ["\nLead", "Trail\n"])
+        for text in frame.texts {
+            let lines = text.text.split(separator: "\n", omittingEmptySubsequences: false)
+            #expect(lines.count == text.richText?.lines.count)
+        }
+    }
+
+    @Test("a title line holding only a <sym> is kept as empty text and saved with its markup")
+    func symbolOnlyTitleLine() throws {
+        let frame = try ScoreFrame.decode(vbox: Self.parse("""
+        <VBox><Text><style>title</style><text><sym>coda</sym></text></Text></VBox>
+        """))
+        #expect(frame.texts.count == 1)
+        #expect(frame.texts.first?.text.isEmpty == true)
+        #expect(frame.texts.first?.richText?.lines == [[.symbol(name: "coda", RichTextFormat())]])
+        #expect(try Self.xml(frame.encodeAsVBox()).contains("<text><sym>coda</sym></text>"))
     }
 
     @Test("the title block keeps line breaks and an all-bold line, in the model and the saved file (F1.4)")

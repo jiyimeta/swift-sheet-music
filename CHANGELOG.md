@@ -33,6 +33,7 @@ and this project adheres to
 - **A formatted lyric is sung and drawn.** `<text><i>Ah</i></text>` read as an empty syllable, which layout skipped.
 - **The title block keeps its line breaks and its bold lines.** A `<br/>` in a title, subtitle, composer or lyricist
   text joined the lines, and a text written entirely inside `<b>` was dropped — from the score and from the saved file.
+  A title line holding only symbols is now kept (with empty text) instead of dropped.
 - **A line spanner's begin text no longer prints its markup.** MuseScore writes `<beginText>` as an escaped string
   (`&lt;b&gt;rit.&lt;/b&gt;`), and a text line, palm mute or let-ring label drew the tags literally. The label is now
   the text's plain projection, and `Spanner.beginRichText` reads its formatting.
