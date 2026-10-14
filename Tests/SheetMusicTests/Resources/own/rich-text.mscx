@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="piano">
+        <longName>Piano</longName>
+        <trackName>Piano</trackName>
+        <Channel>
+          <program value="0"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <Text>
+          <style>title</style>
+          <text><b>Rich Title</b></text>
+        </Text>
+        <Text>
+          <style>subtitle</style>
+          <text>First line<br/>arr. Second</text>
+        </Text>
+        <Text>
+          <style>composer</style>
+          <text><i>A. Composer</i></text>
+        </Text>
+      </VBox>
+      <Measure>
+        <voice>
+          <TimeSig>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+          </TimeSig>
+          <RehearsalMark>
+            <text><b>A</b><i>bis</i></text>
+          </RehearsalMark>
+          <StaffText>
+            <text>poco a poco<br/>cresc.</text>
+          </StaffText>
+          <Spanner type="TextLine">
+            <TextLine>
+              <beginText>&lt;b&gt;rit.&lt;/b&gt; poco</beginText>
+            </TextLine>
+            <next>
+              <location>
+                <measures>1</measures>
+              </location>
+            </next>
+          </Spanner>
+          <Chord>
+            <durationType>whole</durationType>
+            <Lyrics>
+              <text><i>Ah</i></text>
+            </Lyrics>
+            <Note>
+              <pitch>72</pitch>
+              <tpc>14</tpc>
+            </Note>
+          </Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Spanner type="TextLine">
+            <prev>
+              <location>
+                <measures>-1</measures>
+              </location>
+            </prev>
+          </Spanner>
+          <SystemText>
+            <text><b>Solo</b> ad lib.</text>
+          </SystemText>
+          <Rest>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+          </Rest>
+        </voice>
+      </Measure>
+      <Measure>
+        <Marker>
+          <style>Repeat Text Left</style>
+          <text><sym>coda</sym></text>
+          <label>codab</label>
+          <markerType>codab</markerType>
+        </Marker>
+        <voice>
+          <StaffText>
+            <text>senza <sym>keyboardPedalPed</sym></text>
+          </StaffText>
+          <Rest>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+          </Rest>
+        </voice>
+      </Measure>
+      <Measure>
+        <Jump>
+          <text><i>D.C.</i> al Fine</text>
+          <jumpTo>start</jumpTo>
+          <playUntil>end</playUntil>
+        </Jump>
+        <voice>
+          <StaffText>
+            <text><u>under</u>, <s>strike</s>, H<sub>2</sub>O</text>
+          </StaffText>
+          <Rest>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+          </Rest>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

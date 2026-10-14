@@ -29,6 +29,9 @@ and this project adheres to
   read only the `<text>` element's own characters, keep formatted words (`<b>D.S. al Coda</b>`). An unedited text still
   writes its markup back byte for byte.
 - **A glissando label that is only a symbol survives a save.**
+- **A formatted lyric is sung and drawn.** `<text><i>Ah</i></text>` read as an empty syllable, which layout skipped.
+- **The title block keeps its line breaks and its bold lines.** A `<br/>` in a title, subtitle, composer or lyricist
+  text joined the lines, and a text written entirely inside `<b>` was dropped — from the score and from the saved file.
 
 ## [4.9.0] - 2026-10-13
 

@@ -256,9 +256,11 @@ extension Chord {
         for lyricsNode in node.all("Lyrics") {
             let verse = Int(lyricsNode.first("no")?.text ?? "0") ?? 0
             let textNode = lyricsNode.first("text")
-            // Own character data only. Reading descendants would fold a
-            // `<sym>`'s SymId spelling into the sung syllable.
-            let text = textNode?.text ?? ""
+            // The plain projection: `<text><i>Ah</i></text>` is "Ah" — reading only the element's own character data
+            // made it empty, and an empty syllable is skipped. A `<sym>` contributes nothing; its markup is preserved
+            // and drawn from `Lyric.richText` beside the syllable's characters (a symbol-only syllable projects to ""
+            // and is still skipped by layout, as before).
+            let text = textNode.map(StaffText.plainText(of:)) ?? ""
             let syllabic = (lyricsNode.first("syllabic")?.text)
                 .flatMap(Syllabic.init(mscxValue:)) ?? .single
             let ticks = Int(lyricsNode.first("ticks")?.text ?? "0") ?? 0
@@ -269,9 +271,7 @@ extension Chord {
                 preservedMarkup: lyricsNode.preservedMarkup(
                     consuming: consumedLyricsChildren,
                 ),
-                preservedTextMarkup: textNode.flatMap {
-                    StaffText.preservedTextMarkup(of: $0, derivedText: text)
-                },
+                preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
             )
             lyric.elementProperties = ElementProperties(decodingMSCXChildrenOf: lyricsNode)
             lyricsMap[verse] = lyric

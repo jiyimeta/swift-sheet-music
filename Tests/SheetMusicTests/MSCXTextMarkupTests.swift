@@ -181,7 +181,6 @@ struct MSCXTextMarkupTests {
         #expect(staffText.richText?.lines.first?.last == .symbol(name: "keyboardPedalPed", RichTextFormat()))
     }
 
-    /// Review Focus 2.
     @Test("an edited carrier is plain text: no runs, and it saves plain")
     func editedCarrierIsPlain() throws {
         var staffText = try StaffText.decode(
@@ -228,5 +227,75 @@ struct MSCXTextMarkupTests {
         #expect(glissando.text?.isEmpty == true)
         #expect(glissando.richText?.lines == [[.symbol(name: "keyboardPedalPed", RichTextFormat())]])
         #expect(try Self.xml(glissando.encode()).contains("<text><sym>keyboardPedalPed</sym></text>"))
+    }
+
+    @Test("a formatted lyric is read, not skipped (F1.3)")
+    func formattedLyric() throws {
+        let chord = try Chord.decode(Self.parse("""
+        <Chord><durationType>quarter</durationType>
+          <Lyrics><text><i>Ah</i></text></Lyrics>
+          <Note><pitch>72</pitch><tpc>14</tpc></Note>
+        </Chord>
+        """))
+        let lyric = try #require(chord.lyrics.first)
+        #expect(lyric.text == "Ah")
+        #expect(lyric.richText?.lines == [[.text("Ah", RichTextFormat(italic: true))]])
+    }
+
+    @Test("the title block keeps line breaks and an all-bold line, in the model and the saved file (F1.4)")
+    func titleBlockText() throws {
+        let frame = try ScoreFrame.decode(vbox: Self.parse("""
+        <VBox><height>10</height>
+          <Text><style>title</style><text><b>Rich Title</b></text></Text>
+          <Text><style>subtitle</style><text>First line<br/>arr. Second</text></Text>
+        </VBox>
+        """))
+        #expect(frame.texts.map(\.text) == ["Rich Title", "First line\narr. Second"])
+        #expect(frame.texts.first?.richText?.lines == [[.text("Rich Title", RichTextFormat(bold: true))]])
+        let xml = try Self.xml(frame.encodeAsVBox())
+        #expect(xml.contains("<text><b>Rich Title</b></text>"))
+        #expect(xml.contains("<text>First line<br/>arr. Second</text>"))
+    }
+
+    @Test("MuseScore 2's escaped tags in a title are still stripped")
+    func legacyEscapedTitleMarkup() throws {
+        let frame = try ScoreFrame.decode(vbox: Self.parse("""
+        <VBox><Text><style>Title</style><text>&lt;font size="24"/&gt;Old Title</text></Text></VBox>
+        """))
+        #expect(frame.texts.map(\.text) == ["Old Title"])
+    }
+
+    @Test("the rich-text fixture decodes every carrier in source order and re-saves its markup")
+    func richTextFixture() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("rich-text"))
+        #expect(score.titleFrame?.texts.map(\.text) == ["Rich Title", "First line\narr. Second", "A. Composer"])
+        var laneTexts: Set<String> = []
+        for column in score.systemMeasures {
+            for positioned in column.elements {
+                switch positioned.element {
+                case let .staffText(text): laneTexts.insert(text.text)
+                case let .rehearsalMark(mark): laneTexts.insert(mark.text)
+                default: break
+                }
+            }
+        }
+        #expect(laneTexts == ["Abis", "poco a poco\ncresc.", "Solo ad lib.", "senza ", "under, strike, H2O"])
+        let staff = try #require(score.parts.first?.staves.first)
+        #expect(staff.measures[2].markers.first?.richText?.lines == [[.symbol(name: "coda", RichTextFormat())]])
+        #expect(staff.measures[3].jumps.first?.text == "D.C. al Fine")
+        let lyric = staff.measures[0].voices[0].elements.lazy.compactMap { element -> Lyric? in
+            if case let .chord(chord) = element { chord.lyrics.first } else { nil }
+        }.first
+        #expect(lyric?.text == "Ah")
+
+        let xml = try #require(String(bytes: MSCXEncoder.encode(score), encoding: .utf8))
+        for subtree in [
+            "<text><b>Rich Title</b></text>", "<text>First line<br/>arr. Second</text>",
+            "<text><i>Ah</i></text>", "<text>senza <sym>keyboardPedalPed</sym></text>",
+            "<text><u>under</u>, <s>strike</s>, H<sub>2</sub>O</text>",
+            "<beginText>&lt;b&gt;rit.&lt;/b&gt; poco</beginText>",
+        ] {
+            #expect(xml.contains(subtree), "missing \(subtree)")
+        }
     }
 }

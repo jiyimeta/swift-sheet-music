@@ -31,9 +31,8 @@ extension ScoreFrame {
         if let raw = node.first("height")?.text, let parsed = Double(raw) {
             height = CGFloat(parsed)
         }
-        // `FrameText.decode` returns nil for empty text. `Text` must still be
-        // consumed to avoid duplicating modeled text, so an empty `<Text>` is
-        // a pre-existing loss that this score-block slice does not fix.
+        // `FrameText.decode` returns nil only for a `<Text>` with neither text nor markup; `Text` is consumed either
+        // way, so such an empty block is the one thing not written back.
         let texts = node.all("Text").compactMap(FrameText.decode(_:))
         return ScoreFrame(
             heightSp: height,
@@ -46,14 +45,20 @@ extension ScoreFrame {
 extension FrameText {
     static func decode(_ node: XMLTreeNode) -> FrameText? {
         let textNode = node.first("text")
-        // Deliberately the element's own character data, run through the
-        // string-level stripper below, rather than `plainText(of:)`. Reading
-        // descendants would start admitting a title written entirely inside
-        // `<b>`, which this decoder has always dropped — a real improvement,
-        // but a behaviour change that belongs in its own commit with its own
-        // test, not folded into carrying the markup.
-        let stripped = stripInlineMarkup(textNode?.text ?? "")
-        guard !stripped.isEmpty else { return nil }
+        // A `<text>` with child elements reads as its plain projection (`StaffText.plainText(of:)`), untouched:
+        // `X<br/>arr. Y` keeps its line break, a line written entirely inside `<b>` keeps its characters, and neither a
+        // trim nor the stripper runs — a trim would drop a leading or trailing `<br/>` line that `richText` keeps (the
+        // title layout pairs text lines with rich lines by index), and the stripper would eat a decoded `&lt;`. A
+        // `<text>` without children keeps the legacy path: `stripInlineMarkup` removes tags that arrive as characters
+        // — MuseScore 2's escaped `&lt;font …/&gt;` — and trims, exactly as before.
+        let stripped = if let textNode, !textNode.children.isEmpty {
+            StaffText.plainText(of: textNode)
+        } else {
+            stripInlineMarkup(textNode?.text ?? "")
+        }
+        // A line whose markup holds only a symbol projects to "" but is still a line: dropping it lost it from the
+        // saved file.
+        guard !stripped.isEmpty || textNode?.children.isEmpty == false else { return nil }
         let style = (node.first("style")?.text)
             .flatMap(decodeStyle(_:)) ?? .other
         var offsetMm: CGPoint?
