@@ -153,8 +153,8 @@ struct LayoutElementShapeTests {
     /// pinned here, against the same runtime metrics the renderer
     /// positions the glyph with. A positive-area assertion alone
     /// cannot tell ink-on-baseline from ink-centred-on-origin,
-    /// which is exactly the bug `smuflRunRect` / `tempoRect`
-    /// carried through nine tasks before it was caught.
+    /// which is exactly the bug `smuflRunRect` and the old
+    /// tempo-rect helper carried through nine tasks before it was caught.
     @Test func fermataShapeInkMatchesGlyphMetrics() throws {
         let fermata = LayoutElement.fermata(
             subtype: "fermataAbove", origin: CGPoint(x: 40, y: 0), anchor: nil,
@@ -283,10 +283,10 @@ struct LayoutElementAutoplacedShapeTests {
         #expect(box.minY < 60 && box.maxY > 60)
     }
 
-    /// `.leadingCenter` anchor (tempo): starts at origin.x,
+    /// Tempo ink comes from the typeset runs: it starts at origin.x,
     /// straddles origin.y, and the Bravura beat glyph counts
     /// toward the width.
-    @Test func tempoRectUsesMixedRunWidths() throws {
+    @Test func tempoInkUsesTypesetRunWidths() throws {
         let el = LayoutElement.textMark(
             kind: .tempo(anchor: nil), text: "\u{E1D5} = 120",
             origin: CGPoint(x: 20, y: -14),
@@ -360,7 +360,7 @@ struct LayoutElementAutoplacedShapeTests {
     /// provider and the table answer the same numbers and the whole test runs
     /// on every shape. That agreement is what the tight tolerance is for: it
     /// fails the moment one platform's text metrics drift from another's.
-    @Test func tempoRectDoesNotInheritTheBravuraEmBox() throws {
+    @Test func tempoInkFromTypesetRunsDoesNotInheritTheBravuraEmBox() throws {
         let el = LayoutElement.textMark(
             kind: .tempo(anchor: nil), text: "\u{E1D5} = 120",
             origin: CGPoint(x: 20, y: -14),
