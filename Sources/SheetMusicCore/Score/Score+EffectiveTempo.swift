@@ -25,8 +25,9 @@ extension Score {
     }
 
     /// What plays at `cursor`: the tempo map's point in force there (`resolvedTempoMap()`), with the beat to count it
-    /// in; `nil` before the first point. A `nil` cursor is the start of the score. `governingTempo(at:)` answers a
-    /// different question — which marking governs the position: an "a tempo" governs with a number it does not play.
+    /// in; `nil` before the first point, and everywhere in a score with no playing marking (`effectiveQuarterBpm(at:)`
+    /// falls back to 120 there). A `nil` cursor is the start of the score. `governingTempo(at:)` answers a different
+    /// question — which marking governs the position: an "a tempo" governs with a number it does not play.
     public func effectiveTempo(at cursor: ScoreCursor?) -> ResolvedTempoMap.Point? {
         let map = resolvedTempoMap()
         guard let cursor else { return map.point(inForceAtMeasure: 0, tickInMeasure: 0) }

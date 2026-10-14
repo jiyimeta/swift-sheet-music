@@ -29,7 +29,7 @@ public struct ResolvedTempoMap: Sendable, Equatable {
         public let beatNote: NoteDuration
         public let beatDots: Int
 
-        public init(
+        package init(
             measureIndex: Int, tickInMeasure: Int, beatsPerSecond: Double, role: Role,
             beatNote: NoteDuration = .quarter, beatDots: Int = 0,
         ) {
@@ -59,7 +59,14 @@ public struct ResolvedTempoMap: Sendable, Equatable {
 
     public let points: [Point]
 
-    public init(points: [Point] = []) {
+    /// `points` must already be in score order: the lookups binary-search them.
+    package init(points: [Point] = []) {
+        assert(
+            zip(points, points.dropFirst()).allSatisfy {
+                ($0.measureIndex, $0.tickInMeasure) <= ($1.measureIndex, $1.tickInMeasure)
+            },
+            "ResolvedTempoMap points must be sorted by position",
+        )
         self.points = points
     }
 }

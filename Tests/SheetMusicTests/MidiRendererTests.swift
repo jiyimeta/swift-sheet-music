@@ -50,4 +50,37 @@ struct MidiRendererTests {
         // EndOfTrack is last.
         #expect(track.events.last?.event == .endOfTrack)
     }
+
+    /// MuseScore writes all tempo into the first track (`exportmidi.cpp:55`, `:186-199`), whichever staff the
+    /// `<Tempo>` belongs to: a tempo whose `originalStaff` is the second staff still lands on track 0, once.
+    @Test func tempoOfTheSecondStaffIsWrittenOnTrackZeroOnly() throws {
+        let bar = Measure(voices: [Voice(elements: Array(repeating: VoiceElement.rest(duration: .quarter), count: 4))])
+        let part = Part(
+            id: "P1",
+            instrument: Instrument(id: "piano"),
+            staves: [Staff(measures: [bar]), Staff(measures: [bar])],
+        )
+        let score = Score(
+            division: 480,
+            parts: [part],
+            systemMeasures: [SystemMeasure(elements: [PositionedSystemElement(
+                position: MeasurePosition(numerator: 1, denominator: 4),
+                element: .tempo(Tempo(beatsPerSecond: 3)),
+                originalStaff: StaffAddress(partIndex: 0, staffIndexInPart: 1),
+            )])],
+        )
+        let file = try MidiRenderer.render(score: score)
+        #expect(file.tracks.count == 2)
+        func tempos(_ track: MidiTrack) -> [(tick: Int, micros: Int)] {
+            track.events.compactMap { timed in
+                guard case let .meta(.tempo(micros)) = timed.event else { return nil }
+                return (timed.tick, micros)
+            }
+        }
+        // Track 0: the 120 BPM header at tick 0, then 180 BPM (3 bps; 60_000_000 / 180 = 333_333) at the quarter.
+        let first = tempos(file.tracks[0])
+        #expect(first.map(\.tick) == [0, 480])
+        #expect(first.map(\.micros) == [500_000, 333_333])
+        #expect(tempos(file.tracks[1]).isEmpty)
+    }
 }

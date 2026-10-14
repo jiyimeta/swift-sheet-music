@@ -89,6 +89,42 @@ struct ResolvedTempoMapRulesTests {
         #expect(map.points.map(\.beatsPerSecond) == [1])
     }
 
+    /// MuseScore `score.cpp`: `A_TEMPO` reads `tempomap()->tempo(ticks)`, the last text-pass entry at or before its
+    /// tick.
+    @Test("a tempo after a words-only Allegro plays the Allegro's tempo, 144")
+    func aTempoAfterWordsOnlyAllegroPlays144() throws {
+        let allegro = Tempo(beatsPerSecond: 2.4, text: "Allegro", followText: false)
+        let aTempo = Tempo(beatsPerSecond: 2, text: "a tempo", textType: .aTempo)
+        let map = Self.map([TempoMapFixtures.tempo(0, 0, allegro), TempoMapFixtures.tempo(1, 0, aTempo)])
+        let point = try #require(map.point(inForceAtMeasure: 1, tickInMeasure: 0))
+        #expect(point.beatsPerSecond == 2.4)
+        #expect(abs(point.beatsPerMinute - 144) < 0.001)
+        #expect(map.points.count == 2)
+    }
+
+    @Test("an ordinary marking and an a tempo at one position make one point; the last in lane order wins")
+    func ordinaryMarkingAndATempoAtOnePosition() {
+        let base = Tempo(beatsPerSecond: 1)
+        let ordinary = Tempo(beatsPerSecond: 1.5)
+        let aTempo = Tempo(beatsPerSecond: 2, text: "a tempo", textType: .aTempo)
+        // Ordinary first: the a tempo reinstates the tempo in force at that tick — the ordinary marking's.
+        let ordinaryFirst = Self.map([
+            TempoMapFixtures.tempo(0, 0, base),
+            TempoMapFixtures.tempo(1, 0, ordinary),
+            TempoMapFixtures.tempo(1, 0, aTempo),
+        ])
+        #expect(ordinaryFirst.points.map(\.measureIndex) == [0, 1])
+        #expect(ordinaryFirst.points.map(\.beatsPerSecond) == [1, 1.5])
+        // A tempo first: it reinstates the base, then the ordinary marking replaces that point.
+        let aTempoFirst = Self.map([
+            TempoMapFixtures.tempo(0, 0, base),
+            TempoMapFixtures.tempo(1, 0, aTempo),
+            TempoMapFixtures.tempo(1, 0, ordinary),
+        ])
+        #expect(aTempoFirst.points.map(\.measureIndex) == [0, 1])
+        #expect(aTempoFirst.points.map(\.beatsPerSecond) == [1, 1.5])
+    }
+
     @Test("what plays is the map's point; the governing marking is still the marking")
     func effectiveTempoIsWhatPlays() throws {
         let score = TempoMapFixtures.score(measures: 3, lane: [

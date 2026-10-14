@@ -71,14 +71,4 @@ extension ResolvedTempoMap {
         }
         return result
     }
-
-    /// `points` sorted by position; two at one position keep the order they came in.
-    static func inScoreOrder(_ points: [Point]) -> [Point] {
-        points.enumerated()
-            .sorted { lhs, rhs in
-                (lhs.element.measureIndex, lhs.element.tickInMeasure, lhs.offset)
-                    < (rhs.element.measureIndex, rhs.element.tickInMeasure, rhs.offset)
-            }
-            .map(\.element)
-    }
 }

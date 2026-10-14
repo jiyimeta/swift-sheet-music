@@ -46,8 +46,9 @@ and this project adheres to
 - **`ResolvedTempoMap`** — the tempo a score plays at, position by position (MuseScore's `TempoMap`): measure-relative
   `Point`s (bps, role `.marking` / `.ramp`, the beat to count it in) with `point(inForceAtMeasure:tickInMeasure:)`,
   `beatsPerSecond(atMeasure:tickInMeasure:)` and `points(inMeasure:)`; `Score.resolvedTempoMap()` builds it. The SMF
-  writer, the fermata bookends, `PlaybackTimeline`, `effectiveQuarterBpm(at:)` and the notated clock all read it now
-  instead of each walking the `<Tempo>`s on its own.
+  writer's tempo metas, the fermata bookends, the `PlaybackTimeline` cursor timeline, the notated clock and the
+  quarter-BPM readout (`effectiveQuarterBpm(at:)`) read it now; the voice walker's breath / arpeggio arithmetic and
+  `governingTempo` still walk the lane's `<Tempo>`s.
 
 ### Changed
 

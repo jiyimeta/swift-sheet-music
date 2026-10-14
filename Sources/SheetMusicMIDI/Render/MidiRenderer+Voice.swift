@@ -160,12 +160,10 @@ extension MidiRenderer {
             var localTick = entry.tickOffset
             var currentKey = firstKeySignature(in: staff)?.concertKey ?? 0
             let originalTickDelta = originalMeasureBase[entry.measureIndex] - entry.tickOffset
-            // Inject lifted system elements at their measure-relative
-            // positions before walking voice elements. Only voice 0
-            // emits the meta events; non-zero voices skip the
-            // injection so the same tempo / rehearsal doesn't fan out
-            // across voices of the same staff (mirrors the previous
-            // `voiceIndex == 0` guard).
+            // Tempo metas come from the resolved tempo map, written once on track 0 / voice 0
+            // (`emitsTempoEvents`; MuseScore writes all tempo into the first track, exportmidi.cpp:55).
+            // Rehearsal marks still come from the lifted system elements below, at their
+            // measure-relative positions; only voice 0 emits them so they don't fan out across voices.
             if emitsTempoEvents {
                 for point in tempoMap.points(inMeasure: entry.measureIndex) {
                     events.append(TimedMidiEvent(
