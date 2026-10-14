@@ -1056,7 +1056,12 @@ extension LayoutEngine {
                         // flag, so `showsInvisibleElements` must not bring it
                         // back.
                         guard options.lyricsVisible else { break }
-                        guard !lyric.text.isEmpty else { continue }
+                        // A syllable of symbols alone has empty plain text and still prints: its runs do.
+                        let rich = Self.lyricRichText(lyric, metrics: metrics)
+                        guard !lyric.text.isEmpty || rich != nil else { continue }
+                        let textWidth = Self.lyricsTextWidth(
+                            lyric.text, properties: lyric.properties, rich: rich, metrics: metrics,
+                        )
                         // A side change interrupts this verse's trail; it must not reconnect
                         // to an earlier syllable if a later syllable returns to that side.
                         previousLyric.removeValue(forKey: LyricRow(
@@ -1078,9 +1083,6 @@ extension LayoutEngine {
                         // back to an earlier visible syllable.
                         guard lyric.visible || options.showsInvisibleElements
                         else {
-                            let textWidth = Self.lyricsTextWidth(
-                                lyric.text, properties: lyric.properties, metrics: metrics,
-                            )
                             previousLyric[row] = LyricTrail(
                                 centerX: origin.x,
                                 textWidth: textWidth,
@@ -1107,18 +1109,13 @@ extension LayoutEngine {
                             ),
                             text: lyric.text,
                             origin: origin,
-                            richText: lyric.richText.map {
-                                LayoutRichText($0, style: .lyricsOdd, overrides: lyric.properties, metrics: metrics)
-                            },
+                            richText: rich,
                         )
                         if lyric.visible {
                             out.append(lyricElement)
                         } else {
                             invisibleOut.append(lyricElement)
                         }
-                        let textWidth = Self.lyricsTextWidth(
-                            lyric.text, properties: lyric.properties, metrics: metrics,
-                        )
                         // Hyphens between this syllable and the
                         // previous one in the same verse. Only the
                         // CURRENT syllable must be visible; the
@@ -1183,8 +1180,7 @@ extension LayoutEngine {
                                 + Self.melismaLineYOffset(sp: metrics.sp)
                             emitMelismaLine(
                                 chordX: origin.x,
-                                lyricText: lyric.text,
-                                lyricProperties: lyric.properties,
+                                lyricWidth: textWidth,
                                 lyricTicks: lyric.ticks,
                                 lyricsY: melismaLineY,
                                 tickCursor: tickCursor,

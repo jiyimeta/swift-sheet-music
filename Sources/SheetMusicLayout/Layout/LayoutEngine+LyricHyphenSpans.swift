@@ -111,9 +111,10 @@ extension LayoutEngine {
         for (slot, measure) in untranslated.enumerated() {
             guard let elements = measure.perStaffElements[staffIdx] else { continue }
             for element in elements {
-                guard case let .textMark(.lyrics(_, verse, anchor, placement, properties), text, origin, _) = element,
-                      let anchor, !text.isEmpty,
-                      let syllabic = syllabic(of: anchor, verse: verse, in: score)
+                guard
+                    case let .textMark(.lyrics(_, verse, anchor, placement, properties), text, origin, rich) = element,
+                    let anchor, !text.isEmpty || rich != nil,
+                    let syllabic = syllabic(of: anchor, verse: verse, in: score)
                 else { continue }
                 let resolved = placement ?? TextPlacementMetadata(side: .below, verse: verse)
                 lanes[
@@ -126,7 +127,7 @@ extension LayoutEngine {
                     elementIndex: anchor.elementIndex,
                     verse: verse,
                     centerX: xOffsets[slot] + origin.x,
-                    width: lyricsTextWidth(text, properties: properties, metrics: metrics),
+                    width: lyricsTextWidth(text, properties: properties, rich: rich, metrics: metrics),
                     y: origin.y,
                     syllabic: syllabic,
                     placement: resolved,
@@ -141,7 +142,7 @@ extension LayoutEngine {
     }
 
     /// The word-continuation state of the syllable `anchor` names in `verse`, or `nil` when the anchor names
-    /// no chord, the verse is absent, or its text is empty.
+    /// no chord, the verse is absent, or the syllable prints nothing (`lyricHasContent`).
     private static func syllabic(
         of anchor: VoiceElementID, verse: Int, in score: Score,
     ) -> Syllabic? {
@@ -149,7 +150,7 @@ extension LayoutEngine {
               chord.lyrics.indices.contains(verse)
         else { return nil }
         let lyric = chord.lyrics[verse]
-        return lyric.text.isEmpty ? nil : lyric.syllabic
+        return lyricHasContent(lyric) ? lyric.syllabic : nil
     }
 
     // MARK: - The three kinds of span
@@ -260,7 +261,7 @@ extension LayoutEngine {
                       chord.lyrics.indices.contains(syllable.verse)
                 else { continue }
                 let neighbour = chord.lyrics[syllable.verse]
-                guard !neighbour.text.isEmpty else { continue }
+                guard lyricHasContent(neighbour) else { continue }
                 guard score.style.textPlacement.side(for: .lyrics, element: neighbour.elementProperties) == syllable
                     .placement.side else { return nil }
                 let connected = direction == .forward

@@ -53,7 +53,7 @@ public enum TextInkGeometry {
 
     /// The frame box around a text block of `size` — plain text's typographic size, or a rich text's (its advance
     /// width, like the plain size's).
-    public static func rehearsalBox(size: CGSize, font: LayoutFont, origin: CGPoint, sp: CGFloat) -> CGRect {
+    static func rehearsalBox(size: CGSize, font: LayoutFont, origin: CGPoint, sp: CGFloat) -> CGRect {
         RehearsalMarkFrame.boxRect(
             textWidth: max(size.width, font.pointSize * 0.5), textHeight: size.height,
             origin: origin, pad: RehearsalMarkFrame.paddingSp(sp: sp),

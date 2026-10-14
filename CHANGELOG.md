@@ -20,8 +20,8 @@ and this project adheres to
   text its preserved markup describes, while the plain `text` is unedited; `nil` otherwise.
 - **`SMuFLCodepoint.byName(_:)` resolves the SMuFL names MuseScore writes inside text** — dynamics, metronome notes,
   the segno/coda, fermata, caesura/breath, keyboard and harp pedal, fretboard, figured-bass and articulation families,
-  and the `text*` family (tempo and swing text notes, beams and tuplets)
-  (236 names, `Tools/smufl/glyphnames-text-symbols.json`, extracted by `Scripts/extract_glyphnames_text_symbols.py`).
+  the `text*` family (tempo and swing text notes, beams and tuplets) and the `lyrics*` elisions
+  (242 names, `Tools/smufl/glyphnames-text-symbols.json`, extracted by `Scripts/extract_glyphnames_text_symbols.py`).
   `GenSMuFLTables` merges them into the by-name table only; it no longer writes `import Foundation` into the tables.
   The 14 hand-written constants the subset lacks (trill sigils, ottava family) now live in
   `SMuFLCodepoints+HandWritten.swift`, which the generator never touches.
@@ -38,10 +38,16 @@ and this project adheres to
   `.textMark` gain a last associated value `richText: LayoutRichText? = nil`. Construction sites compile unchanged; a
   positional pattern needs one more `_` (a new payload member is a minor change for `LayoutElement`, `CONTRIBUTING.md`).
 - **Layout measures formatted text by its runs.** A staff or system text, swing or instrument-change text, rehearsal
-  mark, marker, jump or lyric whose markup is current carries its `LayoutRichText`, and its placement, ink rects,
-  skyline box, rehearsal frame and vertical extent come from the runs. Lyric spacing still measures the plain text.
-  `LayoutFrameText.richText` and `LayoutTitleFrame.PlacedLine.richLine` / `positionedRuns` / `decorations` carry a title
-  block's runs line by line.
+  mark, marker, jump or lyric whose markup is current carries its `LayoutRichText`. A staff text's and a rehearsal
+  mark's placement, and every such element's ink rects, skyline box, rehearsal frame and vertical extent, come from the
+  runs; the skyline box takes in the runs' ink, so a symbol taller than its line's text (a segno in a marker) stays
+  inside it and inside the marker's hit rect. `TextInkGeometry.rehearsalFrame(text:font:origin:sp:frame:rich:)` takes
+  the runs as a new last parameter, `rich: LayoutRichText? = nil`. A lyric's ink and skyline box follow its runs, and
+  its horizontal spacing, hyphens and melisma rule clear the wider of its plain text and its runs — an elision
+  (`<sym>lyricsElision</sym>`) widens the syllable, and a syllable of symbols alone is laid out instead of skipped —
+  while its row baseline still comes from the plain lyric font. `LayoutFrameText.richText` and
+  `LayoutTitleFrame.PlacedLine.richLine` / `positionedRuns` / `decorations` carry a title block's runs line by line;
+  a rich line steps by its own ascent and descent, so a line set larger no longer runs into the next.
 
 ### Fixed
 

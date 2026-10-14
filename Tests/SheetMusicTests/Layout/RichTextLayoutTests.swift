@@ -41,6 +41,10 @@ struct RichTextLayoutTests {
         abs(a - b) < 1e-6
     }
 
+    private static func same(_ a: CGRect, _ b: CGRect) -> Bool {
+        close(a.minX, b.minX) && close(a.minY, b.minY) && close(a.width, b.width) && close(a.height, b.height)
+    }
+
     private static func fixtureDocument() throws -> LayoutDocument {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("rich-text"))
         return LayoutEngine.layout(
@@ -91,7 +95,6 @@ struct RichTextLayoutTests {
             #expect(elements.contains { element in
                 if case .textMark(.lyrics, _, _, .some) = element { true } else { false }
             })
-            // Compile-only until Task 8 Step 7 adds `LayoutFrameText.richText`.
             let frame = try #require(document.titleFrame)
             #expect(!frame.texts.isEmpty && frame.texts.allSatisfy { $0.richText != nil })
         }
@@ -252,26 +255,114 @@ struct RichTextLayoutTests {
         }
     }
 
-    /// Compile-only until Task 8 Step 7 adds `PlacedLine.richLine` / `positionedRuns` / `decorations`.
-    @Test("a rich title line is placed with its runs; a broken subtitle is two placed lines")
+    /// The rich lines against their plain twin: the same entries without runs, placed by the plain path. The title and
+    /// subtitle hang from their top edges in the block's face, so every one of their lines lands where its twin does —
+    /// the subtitle's second line too, stepped by its unformatted first line's own metrics. (The composer is italic and
+    /// bottom-anchored, so it rises by its italic line's height, which need not equal the plain line height.)
+    @Test("a rich title line is placed where its plain twin is; a broken subtitle is two placed lines")
     func titleLines() throws {
         try Self.installed {
             let document = try Self.fixtureDocument()
-            let lines = try #require(document.titleFrame).placedLines()
+            let frame = try #require(document.titleFrame)
+            let lines = frame.placedLines()
+            let plainTexts = frame.texts.map { text in
+                LayoutFrameText(
+                    text: text.text, style: text.style, position: text.position, fontSize: text.fontSize,
+                    anchor: text.anchor,
+                )
+            }
+            let twin = LayoutTitleFrame(height: frame.height, texts: plainTexts).placedLines()
+            #expect(lines.map(\.text) == twin.map(\.text))
+            for (rich, plain) in zip(lines, twin) where rich.entryIndex < 2 {
+                #expect(Self.close(rich.position.x, plain.position.x) && Self.close(rich.position.y, plain.position.y))
+            }
             let title = try #require(lines.first { $0.entryIndex == 0 })
             #expect(title.richLine?.runs.map(\.font.weight) == [.bold])
             #expect(title.positionedRuns.count == 1)
             #expect(title.decorations.isEmpty)
-            // The run's pen starts `horizontalAnchor` of the line's width left of `position.x`, on a baseline one
-            // ascent below the line's top edge (where a plain line's baseline sits).
+            // The bold run's advance is centered on the twin's anchor, as the title style centers the plain line.
             let line = try #require(title.richLine)
             let run = try #require(title.positionedRuns.first)
-            #expect(Self.close(run.baseline.x, title.position.x - title.horizontalAnchor * line.width))
-            #expect(Self.close(run.baseline.y, title.position.y + line.ascent))
+            let plainTitle = try #require(twin.first { $0.entryIndex == 0 })
+            #expect(plainTitle.horizontalAnchor == 0.5)
+            #expect(Self.close(run.baseline.x + line.width / 2, plainTitle.position.x))
 
             let subtitle = lines.filter { $0.entryIndex == 1 }
             #expect(subtitle.map(\.text) == ["First line", "arr. Second"])
             #expect(subtitle.allSatisfy { $0.richLine != nil })
+            // An unformatted run sits on its twin's baseline: one ascent of the block's face below the line's top.
+            let plainSubtitle = try #require(twin.first { $0.entryIndex == 1 })
+            let face = FontMetrics.provider.renderingTextFont(LayoutTitleFrame.font(size: plainSubtitle.fontSize))
+            let subtitleRun = try #require(subtitle.first?.positionedRuns.first)
+            let plainBaseline = plainSubtitle.position.y + FontMetrics.provider.ascent(font: face)
+            #expect(Self.close(subtitleRun.baseline.y, plainBaseline))
+        }
+    }
+
+    /// Each line's top edge of a three-line 10 pt title entry `One / Two / Three` positioned at `y`.
+    private static func titleTops(_ anchor: LayoutFrameText.Anchor, y: CGFloat, rich: LayoutRichText?) -> [CGFloat] {
+        LayoutTitleFrame(height: 100, texts: [LayoutFrameText(
+            text: "One\nTwo\nThree", style: .subtitle, position: CGPoint(x: 0, y: y), fontSize: 10, anchor: anchor,
+            richText: rich,
+        )]).placedLines().map(\.position.y)
+    }
+
+    /// The middle line set at twice the block's 10 pt. Stub: the block face's ascent and descent are 8.5 and 2.5, and
+    /// a plain line steps `lineHeight(fontSize: 10)` = 12, a gap of 1 below its descent. The 20 pt line's ascent and
+    /// descent are 17 and 5, so it steps 17 + 5 + 1 = 23: tops 0, 12, 35, where the plain 0, 12, 24 would start the
+    /// third line above the large line's own baseline (12 + 17 = 29). Bottom-anchored at 100, the block rises by
+    /// 12 + 23 + 12 = 47 to 53, 65, 88; the plain block by 3 × 12 = 36 to 64, 76, 88.
+    @Test("a title line set larger pushes the next line down by its own height")
+    func richTitleLineSteps() {
+        Self.stub {
+            let lines: [[RichTextRun]] = [
+                [.text("One", Self.plain)], [.text("Two", RichTextFormat(size: 20))], [.text("Three", Self.plain)],
+            ]
+            let rich = LayoutRichText(
+                RichText(lines: lines), baseFont: LayoutTitleFrame.font(size: 10), pointScale: 1, symbolPointSize: 10,
+            )
+            let cases: [(LayoutFrameText.Anchor, CGFloat, LayoutRichText?, [CGFloat])] = [
+                (.topLeading, 0, nil, [0, 12, 24]), (.topLeading, 0, rich, [0, 12, 35]),
+                (.bottomLeading, 100, nil, [64, 76, 88]), (.bottomLeading, 100, rich, [53, 65, 88]),
+            ]
+            for (anchor, y, runs, expected) in cases {
+                let tops = Self.titleTops(anchor, y: y, rich: runs)
+                #expect(tops.count == 3 && zip(tops, expected).allSatisfy { Self.close($0, $1) }, "\(tops)")
+            }
+        }
+    }
+
+    /// A one-run, one-font block reserves exactly its plain twin's box at every anchor in use: bottom-leading (staff
+    /// text), leading-center (markers, jumps) and center (lyrics). "mo" inks inside its advance box, so the ink the
+    /// rich box takes in adds nothing. A marker's or jump's plain box is measured in Edwin while its runs are set in
+    /// the label face, so leading-center is compared on the shape itself; staff text and lyrics on their elements too.
+    @Test("a one-font rich block reserves its plain twin's box at every anchor")
+    func oneFontBoxMatchesPlain() {
+        Self.installed {
+            let origin = CGPoint(x: 40, y: 30)
+            let text = RichText(lines: [[.text("mo", Self.plain)]])
+            let lyric = LayoutRichText(text, style: .lyricsOdd, metrics: Self.metrics)
+            let font = TextInkGeometry.font(for: .lyricsOdd, metrics: Self.metrics)
+            for anchor in [TextAnchorConvention.bottomLeading, .leadingCenter, .center] {
+                let plain = LayoutElementShape.textRect(text: "mo", font: font, origin: origin, anchor: anchor)
+                let rich = LayoutElementShape.textRect(rich: lyric, origin: origin, anchor: anchor)
+                #expect(Self.same(rich, plain), "\(anchor): \(rich) vs \(plain)")
+            }
+            let staff = LayoutRichText(text, style: .staffText, metrics: Self.metrics)
+            let staffBoxes = [nil, staff].map { runs in
+                let element = LayoutElement.staffText(
+                    text: "mo", origin: origin, color: nil, style: .staffText, anchor: nil, richText: runs,
+                )
+                return LayoutElementShape.autoplacedRects(for: element, kind: .staffText, metrics: Self.metrics)
+            }
+            let lyricBoxes = [nil, lyric].map { runs in
+                let element = LayoutElement.textMark(kind: .lyrics(), text: "mo", origin: origin, richText: runs)
+                return LayoutElementShape.autoplacedRects(for: element, kind: .lyrics, metrics: Self.metrics)
+            }
+            for boxes in [staffBoxes, lyricBoxes] {
+                #expect(boxes.allSatisfy { $0.count == 1 })
+                #expect(zip(boxes[1], boxes[0]).allSatisfy { Self.same($0, $1) }, "\(boxes)")
+            }
         }
     }
 }

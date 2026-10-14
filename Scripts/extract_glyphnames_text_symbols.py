@@ -25,6 +25,7 @@ PREFIXES = (
     "figbass",             # figured bass
     "artic",               # articulation names a <Symbol> carries
     "text",                # tempo / swing text: textBlackNote*, textCont*Beam*, textTuplet*, textAugmentationDot, textTie
+    "lyrics",              # lyric elisions: the editor inserts <sym>lyricsElision</sym> (editing/textedit.cpp:738)
 )
 
 

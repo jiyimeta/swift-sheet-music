@@ -26,8 +26,9 @@ extension LayoutTitleFrame {
         public let richLine: LayoutRichTextLine?
     }
 
-    /// The vertical step between two lines of one entry. SwiftUI's `Text` resolves with the system line-height
-    /// factor (~1.2 × point size), and the renderers stack lines at exactly that, so this is the number they share.
+    /// The vertical step between two lines of one plain entry. SwiftUI's `Text` resolves with the system line-height
+    /// factor (~1.2 × point size), and the renderers stack lines at exactly that, so this is the number they share. An
+    /// entry with runs steps each line by that line's own metrics instead (`richLineTops`).
     public static func lineHeight(fontSize: CGFloat) -> CGFloat {
         fontSize * 1.2
     }
@@ -59,21 +60,48 @@ extension LayoutTitleFrame {
         let lines = entry.text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         let richLines = entry.richText?.lines
         let count = richLines?.count ?? lines.count
-        let lineHeight = lineHeight(fontSize: entry.fontSize)
         let x = origin.x + entry.position.x
         let y = origin.y + entry.position.y
-        let topY = entry.anchor.isBottom ? y - CGFloat(count) * lineHeight : y
+        let tops: [CGFloat]
+        if let richLines {
+            tops = richLineTops(richLines, fontSize: entry.fontSize, y: y, isBottom: entry.anchor.isBottom)
+        } else {
+            let lineHeight = lineHeight(fontSize: entry.fontSize)
+            let topY = entry.anchor.isBottom ? y - CGFloat(count) * lineHeight : y
+            tops = (0 ..< count).map { topY + CGFloat($0) * lineHeight }
+        }
         return (0 ..< count).map { lineIndex in
             PlacedLine(
                 text: lineIndex < lines.count ? lines[lineIndex] : "",
                 entryIndex: entryIndex,
                 lineIndex: lineIndex,
-                position: CGPoint(x: x, y: topY + CGFloat(lineIndex) * lineHeight),
+                position: CGPoint(x: x, y: tops[lineIndex]),
                 horizontalAnchor: entry.anchor.horizontalFraction,
                 fontSize: entry.fontSize,
                 richLine: richLines?[lineIndex],
             )
         }
+    }
+
+    /// The top edge of each line of an entry with runs. A rich line's baseline sits one of its OWN ascents below its
+    /// top (`positionedRuns`), so it steps by its own ascent and descent plus the gap a plain line leaves below its
+    /// face's — `lineHeight(fontSize:)` less that face's ascent and descent. A line in the block's face therefore steps
+    /// exactly as a plain line does, and one with a larger `<font size>` run pushes the next line down instead of into
+    /// it. A bottom-anchored entry rises by the sum of the steps, as a plain one rises by `count` line heights.
+    private static func richLineTops(
+        _ lines: [LayoutRichTextLine], fontSize: CGFloat, y: CGFloat, isBottom: Bool,
+    ) -> [CGFloat] {
+        let provider = FontMetrics.provider
+        let face = provider.renderingTextFont(font(size: fontSize))
+        let gap = lineHeight(fontSize: fontSize) - provider.ascent(font: face) - provider.descent(font: face)
+        let steps = lines.map { $0.ascent + $0.descent + gap }
+        var top = isBottom ? y - steps.reduce(0, +) : y
+        var tops: [CGFloat] = []
+        for step in steps {
+            tops.append(top)
+            top += step
+        }
+        return tops
     }
 }
 

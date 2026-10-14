@@ -109,7 +109,7 @@ extension LayoutEngine {
                     for element in voice.elements {
                         guard case let .chord(chord) = element else { continue }
                         for (verse, lyric) in chord.lyrics.enumerated()
-                            where (lyric.visible || showsInvisibleElements) && !lyric.text.isEmpty
+                            where (lyric.visible || showsInvisibleElements) && lyricHasContent(lyric)
                             && style.side(for: .lyrics, element: lyric.elementProperties) == .above
                         {
                             maximum = max(maximum, verse)

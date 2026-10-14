@@ -1357,7 +1357,7 @@ extension LayoutEngine {
         let nextWidth = chordLyricMaxWidth(next.lyrics, metrics: metrics)
         guard nextWidth > 0 else { return 0 }
         let dashForce = currentLyrics.contains { lyric in
-            !lyric.text.isEmpty
+            lyricHasContent(lyric)
                 && (lyric.syllabic == .begin || lyric.syllabic == .middle)
         }
         let inter: CGFloat = dashForce
@@ -1368,16 +1368,18 @@ extension LayoutEngine {
     }
 
     /// Widest rendered lyric in a chord (verse-aware: takes the max
-    /// across verses). Returns 0 when no syllable has text.
+    /// across verses). Returns 0 when no syllable prints anything.
+    /// A syllable with typeset runs is as wide as they are when they
+    /// are the wider (`lyricsTextWidth(_:properties:rich:metrics:)`):
+    /// an elision glyph, or a syllable of symbols alone.
     static func chordLyricMaxWidth(
         _ lyrics: [Lyric], metrics: StaffMetrics,
     ) -> CGFloat {
         var widest: CGFloat = 0
-        for lyric in lyrics where !lyric.text.isEmpty {
-            widest = max(
-                widest,
-                lyricsTextWidth(lyric.text, properties: lyric.properties, metrics: metrics),
-            )
+        for lyric in lyrics where lyricHasContent(lyric) {
+            let rich = lyricRichText(lyric, metrics: metrics)
+            let width = lyricsTextWidth(lyric.text, properties: lyric.properties, rich: rich, metrics: metrics)
+            widest = max(widest, width)
         }
         return widest
     }
@@ -1405,7 +1407,7 @@ extension LayoutEngine {
             switch elements[j] {
             case let .chord(nc):
                 if !nc.notes.isEmpty,
-                   nc.lyrics.contains(where: { !$0.text.isEmpty })
+                   nc.lyrics.contains(where: lyricHasContent)
                 {
                     return (nc.lyrics, gaps)
                 }

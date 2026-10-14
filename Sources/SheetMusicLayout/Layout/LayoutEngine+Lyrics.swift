@@ -167,7 +167,7 @@ extension LayoutEngine {
                         guard case let .chord(chord) = el else { continue }
                         for (verseIdx, lyric)
                             in chord.lyrics.enumerated()
-                            where !lyric.text.isEmpty
+                            where lyricHasContent(lyric)
                         {
                             map[MelismaLyricKey(
                                 staffIndex: staffIdx,
@@ -248,7 +248,7 @@ extension LayoutEngine {
                                 .ticks(division: division)
                             for (verseIdx, lyric)
                                 in c.lyrics.enumerated()
-                                where lyric.visible && !lyric.text.isEmpty
+                                where lyric.visible && lyricHasContent(lyric)
                             {
                                 let key = MelismaLyricKey(
                                     staffIndex: staffIdx,
@@ -405,6 +405,33 @@ extension LayoutEngine {
         )
     }
 
+    /// The width a syllable is spaced, hyphenated and melisma-ruled by: `lyricsTextWidth(_:properties:metrics:)`,
+    /// widened to the advance of its typeset runs when that is the larger.
+    ///
+    /// The runs are what draws, and they can be wider than the plain text: MuseScore's lyric editor joins two syllables
+    /// sung on one note with `<sym>lyricsElision</sym>` (`engraving/editing/textedit.cpp:738`), a glyph the plain
+    /// projection leaves out, and a syllable of symbols alone has no plain text at all. The larger of the two rather
+    /// than the runs alone, because the plain measurement is the stand-in every unformatted syllable is spaced by (the
+    /// system semibold face, not the face the runs are set in): a formatted syllable whose runs are no wider, such as
+    /// `<i>Ah</i>`, keeps its plain spacing to the bit and stays spaced like its unformatted neighbors.
+    static func lyricsTextWidth(
+        _ text: String, properties: TextProperties, rich: LayoutRichText?, metrics: StaffMetrics,
+    ) -> CGFloat {
+        max(lyricsTextWidth(text, properties: properties, metrics: metrics), rich?.size.width ?? 0)
+    }
+
+    /// A syllable's runs, typeset as its layout element carries them; `nil` for a plain syllable.
+    static func lyricRichText(_ lyric: Lyric, metrics: StaffMetrics) -> LayoutRichText? {
+        lyric.richText.map { LayoutRichText($0, style: .lyricsOdd, overrides: lyric.properties, metrics: metrics) }
+    }
+
+    /// Whether a syllable prints anything: its text or, for a syllable of symbols alone (empty plain text, a `<sym>`
+    /// in its markup), its runs. Every pass that skips empty syllables asks this, so such a syllable is spaced, drawn,
+    /// hyphenated and ruled like any other.
+    static func lyricHasContent(_ lyric: Lyric) -> Bool {
+        !lyric.text.isEmpty || lyric.richText != nil
+    }
+
     /// Y offset from the lyric text's center anchor down to where
     /// the melisma rule should be drawn. MuseScore positions the
     /// rule at the lyric font's underline level, i.e. baseline +
@@ -448,8 +475,7 @@ extension LayoutEngine {
     /// `emitMelismaContinuation`.
     static func emitMelismaLine(
         chordX: CGFloat,
-        lyricText: String,
-        lyricProperties: TextProperties = TextProperties(),
+        lyricWidth: CGFloat,
         lyricTicks: Int,
         lyricsY: CGFloat,
         tickCursor: Int,
@@ -491,16 +517,14 @@ extension LayoutEngine {
         }
 
         // The lyric glyph is rendered with a center anchor at
-        // `chordX`. Use CoreText to measure its actual rendered
-        // width — a hard-coded "X sp per character" approximation
+        // `chordX`. `lyricWidth` is its measured width
+        // (`lyricsTextWidth(_:properties:rich:metrics:)`, runs
+        // included) — a hard-coded "X sp per character" approximation
         // overestimates Latin (creating a visible gap before the
         // rule) and underestimates CJK (running the rule under the
         // glyph). MuseScore matches the rule to the syllable's
         // bbox right edge plus a quarter-staff-space.
-        let textWidth = Self.lyricsTextWidth(
-            lyricText, properties: lyricProperties, metrics: metrics,
-        )
-        let lineStartX = chordX + textWidth / 2 + metrics.sp * 0.25
+        let lineStartX = chordX + lyricWidth / 2 + metrics.sp * 0.25
         // Only emit if there is actually a visible line to draw —
         // avoids a one-pixel stub when the estimate pushes
         // `lineStartX` past `endX`.
