@@ -163,6 +163,11 @@ and this project adheres to
 
 ### Fixed
 
+- **Dynamics MuseScore 4 does not play no longer change the level** (import-fidelity F4.2–F4.4): fz, m, r, s, z,
+  `other-dynamics`, a token MuseScore does not know, and any dynamic with `<play>0</play>` leave the running level, the
+  hairpins' targets and their held levels alone (`Dynamic.PlaybackRole.none`); fz, r and s set 112 before,
+  `other-dynamics` 80. Niente (`n`) is MuseScore 4's softest level — velocity 1 — so a diminuendo to it fades out; it
+  played p (49) before.
 - **A dynamic with its own text draws it** (import-fidelity F4.1, F4.2): "subito p", "più ⟨f⟩" and an
   `other-dynamics` word are typeset from their runs (`LayoutRichText.ElementKind.dynamic`) — words in the dynamics style
   (Edwin 10 italic, the dynamic's font override), `<sym>` glyphs in Bravura at the plain glyphs' 4 sp — starting where a

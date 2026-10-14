@@ -15,6 +15,9 @@ struct DynamicsWalk {
             let velocity = MidiRenderer.effectiveVelocity(level: level, instrument: instrument)
             marks.append(HairpinRamps.DynPoint(tick: tick, velocity: velocity))
             runningVelocity = velocity
+        case .none:
+            // No effect: no level, no mark, no hold ends here.
+            break
         }
     }
 }

@@ -392,6 +392,9 @@ extension MidiRenderer {
             switch dynamic.playbackRole {
             case let .level(level):
                 velocity = effectiveVelocity(level: level, instrument: instrument)
+            case .none:
+                // No effect: the running level stays.
+                break
             }
         case let .chord(chord) where chord.notes.isEmpty:
             // Rest: advance the tick cursor, emit no note events.
