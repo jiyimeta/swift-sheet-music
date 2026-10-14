@@ -428,8 +428,11 @@ extension LayoutEngine {
     /// Whether a syllable prints anything: its text or, for a syllable of symbols alone (empty plain text, a `<sym>`
     /// in its markup), its runs. Every pass that skips empty syllables asks this, so such a syllable is spaced, drawn,
     /// hyphenated and ruled like any other.
+    ///
+    /// Answered without building the runs: `Lyric.richText` is non-nil exactly when the preserved markup still
+    /// describes the text (`PreservedTextMarkup.richText(ifCurrentFor:)`), and every pass asks this of every syllable.
     static func lyricHasContent(_ lyric: Lyric) -> Bool {
-        !lyric.text.isEmpty || lyric.richText != nil
+        !lyric.text.isEmpty || lyric.preservedTextMarkup?.derivedText == lyric.text
     }
 
     /// Y offset from the lyric text's center anchor down to where

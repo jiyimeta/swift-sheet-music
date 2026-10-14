@@ -144,5 +144,34 @@
             )
             #expect(withDash - withoutDash == Self.metrics.sp * 0.25)
         }
+
+        /// The spacing walks measure each chord once and carry the width to the chord's own pair
+        /// (`VoiceLyricSpacing`). Whatever they save, each gap must be asked for exactly what the pair rule asks:
+        /// across a note without a syllable, a rest, and a syllable of symbols alone (which only its runs give width).
+        @Test("a voice walk asks each gap for exactly what the pair rule asks")
+        func voiceWalkMatchesThePairRule() {
+            let elision = Lyric(text: "", preservedTextMarkup: PreservedTextMarkup(
+                content: [.element(.init(name: "sym", content: [.characters("lyricsElision")]))], derivedText: "",
+            ))
+            let elements: [VoiceElement] = [
+                Self.chord(Self.syllable("Al", .begin)), Self.chord(), Self.rest(), Self.chord([elision]),
+                Self.chord(Self.syllable("lu", .middle)), Self.chord(Self.syllable("ia", .end)), Self.chord(),
+            ]
+            var walk = VoiceLyricSpacing(elements, metrics: Self.metrics)
+            var asked: [CGFloat] = []
+            for (index, element) in elements.enumerated() {
+                guard case let .chord(chord) = element, !chord.notes.isEmpty else { continue }
+                let next = LayoutEngine.nextLyricBearingChord(in: elements, after: index)
+                let expected = LayoutEngine.lyricsPairWidth(
+                    currentLyrics: chord.lyrics, next: next.map { (lyrics: $0.lyrics, gaps: $0.gaps) },
+                    metrics: Self.metrics,
+                )
+                let width = walk.pairWidth(at: index, lyrics: chord.lyrics)
+                #expect(width == expected, "chord \(index): \(width) vs \(expected)")
+                asked.append(width)
+            }
+            // "Al", the elision and "lu" each have a syllable after them; "ia" and the bare notes do not.
+            #expect(asked.map { $0 > 0 } == [true, false, true, true, false, false])
+        }
     }
 #endif
