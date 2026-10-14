@@ -4,10 +4,9 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-/// `Tempo.encode()` synthesizes the `<text>` MuseScore 4 needs to show a derived tempo, from `beatNote`
-/// / `beatDots` / bps (an authored text is written back as read — `TempoTextRoundTripTests`), and `Tempo.decode` reads
-/// the beat back out of it — so encode → parse → encode is a fixed
-/// point, which is what the corpus 2-pass gate measures.
+/// `Tempo.encode()` synthesizes the `<text>` MuseScore 4 needs to show a derived tempo, from `beatNote` / `beatDots` /
+/// bps (an authored text is written back as read — `TempoTextRoundTripTests`), and `Tempo.decode` reads the beat back
+/// out of it — so encode → parse → encode is a fixed point, which is what the corpus 2-pass gate measures.
 @Suite("Tempo <text> encode")
 struct TempoTextEncodeTests {
     private static func text(of tempo: Tempo) -> XMLTreeNode? {

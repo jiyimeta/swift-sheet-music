@@ -96,6 +96,51 @@ struct TempoTextRoundTripTests {
         #expect(!hidden.followText)
     }
 
+    /// A one-measure score whose only `<Tempo>` holds `children`.
+    private static func inlineTempo(_ children: String) throws -> Tempo {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60"><Score><Division>480</Division>
+        <Part><Staff id="1"/><Instrument id="piano"><longName>Piano</longName><trackName>Piano</trackName>
+        <Channel><program value="0"/></Channel></Instrument></Part>
+        <Staff id="1"><Measure><voice>
+        <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+        <Tempo>\(children)</Tempo>
+        <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice></Measure></Staff></Score></museScore>
+        """
+        let score = try MSCXParser.parse(Data(xml.utf8))
+        return try #require(tempo(score, measure: 1))
+    }
+
+    /// `TConv::fromXml(e.readAsciiText(), Constants::DEFAULT_TEMPO)` (`tread.cpp:627`): 120 bpm, i.e. 2 bps, when the
+    /// value does not parse — and when the tag is absent, since the reader starts from the default.
+    @Test("a garbage or missing <tempo> falls back to 2 beats per second", arguments: [
+        "<tempo>fast</tempo><text>Allegro</text>", "<text>Allegro</text>",
+    ])
+    func unparsableTempoFallsBackToDefault(children: String) throws {
+        let tempo = try Self.inlineTempo(children)
+        #expect(tempo.beatsPerSecond == 2)
+        #expect(tempo.text == "Allegro")
+    }
+
+    /// An unrecognised `<type>` is `e.unknown()` (`tread.cpp:638-640`), leaving the default `NORMAL`.
+    @Test("an unknown <type> reads as normal")
+    func unknownTypeReadsAsNormal() throws {
+        let tempo = try Self.inlineTempo("<tempo>2</tempo><type>bogus</type><text>Allegro</text>")
+        #expect(tempo.textType == .normal)
+        #expect(tempo.text == "Allegro")
+    }
+
+    /// MuseScore parses with `parse_default` (`xmlstreamreader.cpp:109`), which creates no whitespace-only PCDATA
+    /// node, so `readXml()` returns "" and the sanity check at `tread.cpp:648` hides the marking, as for `<text/>`.
+    @Test("a whitespace-only <text> opens hidden, like an empty one")
+    func whitespaceTextOpensHidden() throws {
+        let tempo = try Self.inlineTempo("<tempo>2</tempo><text>   </text>")
+        #expect(!tempo.visible)
+        #expect(tempo.text == nil)
+    }
+
     @Test("children nothing models are kept and written back")
     func unmodeledChildrenAreKept() throws {
         let score = try Self.fixture()

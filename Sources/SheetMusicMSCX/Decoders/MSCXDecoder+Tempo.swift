@@ -40,7 +40,10 @@ extension Tempo {
 
     /// An empty `<text>` is what MuseScore replaces with "♩ = N" and hides (`tread.cpp:648-651`); a text equal to the
     /// derived marking stays derived, so a marking saved by this library or MuseScore's palette edits like one made
-    /// here.
+    /// here. A text of only whitespace counts as empty: MuseScore parses with `parse_default`
+    /// (`xmlstreamreader.cpp:109`), which omits `parse_ws_pcdata`, so pugixml creates no character node for it and
+    /// `readXml()` returns "". The hidden marking's replacement text is left derived rather than spelled with
+    /// MuseScore's integer `lrint`: it is never drawn, and a save writes the derived spelling for it either way.
     private static func decodeText(_ textNode: XMLTreeNode?, into tempo: inout Tempo) {
         guard let textNode, !textNode.children.isEmpty || !textNode.text.isEmpty else {
             tempo.visible = false
