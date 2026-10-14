@@ -1,5 +1,18 @@
 import SheetMusicFoundation
 
+/// What a tempo marking's text claims — MuseScore's `TempoTextType` (`engraving/dom/tempotext.h:30-35`), written as
+/// `<type>aTempo</type>` / `<type>tempoPrimo</type>` and absent for an ordinary marking.
+public enum TempoTextType: String, Sendable {
+    /// States a tempo: the marking's own number is the tempo from here on.
+    case normal
+    /// "a tempo": while it follows its text, it brings back the tempo in force before it, undoing a gradual change
+    /// (`Score::rebuildTempoAndTimeSigMaps`, `engraving/dom/score.cpp:593-596`).
+    case aTempo
+    /// "tempo primo": while it follows its text, it brings back the score's first ordinary marking, or 120 BPM when
+    /// there is none (`score.cpp:597-598`).
+    case tempoPrimo
+}
+
 /// Tempo change. mscx `<tempo>` is in beats per second (a float).
 /// C++: `mu::engraving::TempoText` / `mu::engraving::Tempo`.
 public struct Tempo: Sendable, Equatable {
@@ -50,6 +63,23 @@ public struct Tempo: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
+    /// The marking as written, as plain text — the projection of `<text>` every text carrier stores
+    /// (`RichText.plainText`). `nil` while the text is derived: a marking built in code, or one whose `<text>` is
+    /// exactly the marking `metronomeMarking` prints for its beat and number, which then draws and saves as that.
+    public var text: String?
+    /// The `<text>` markup as read, written back verbatim while it still describes `text` (`richText`).
+    public var preservedTextMarkup: PreservedTextMarkup?
+    /// MuseScore `<followText>`: the number written in the text is the tempo. A marking built in code follows its
+    /// derived text; a decoded one follows only when the file says so, as MuseScore reads it.
+    public var followText: Bool
+    /// MuseScore `<type>`.
+    public var textType: TempoTextType
+    /// MuseScore `<play>`: `false` keeps the marking on the page and out of the tempo map (`score.cpp:582-584`).
+    public var playsBack: Bool
+    /// Source children the model does not represent (`<musicSymbolSize>`, `<style>`, `<align>`, …), written back as
+    /// they were read.
+    public var preservedMarkup: [PreservedXML]
+
     public init(
         beatsPerSecond: Double,
         offsetX: Double = 0,
@@ -58,11 +88,23 @@ public struct Tempo: Sendable, Equatable {
         visible: Bool = true,
         beatNote: NoteDuration = .quarter,
         beatDots: Int = 0,
+        text: String? = nil,
+        preservedTextMarkup: PreservedTextMarkup? = nil,
+        followText: Bool = true,
+        textType: TempoTextType = .normal,
+        playsBack: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.beatsPerSecond = beatsPerSecond
         self.properties = properties
         self.beatNote = beatNote
         self.beatDots = beatDots
+        self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
+        self.followText = followText
+        self.textType = textType
+        self.playsBack = playsBack
+        self.preservedMarkup = preservedMarkup
         let offset: ScoreOffset? = if offsetX == 0 && offsetY == 0 {
             nil
         } else {

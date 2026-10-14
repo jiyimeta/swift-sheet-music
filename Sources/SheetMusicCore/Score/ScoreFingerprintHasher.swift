@@ -322,6 +322,7 @@ struct FNV1a {
             combine(tempo.beatDots)
             combineOccupiedColor(tempo.elementProperties.color, tag: 105)
             combineOccupied(tempo.properties, firstTag: 106)
+            combineOccupiedTempoText(tempo)
         case let .rehearsalMark(mark):
             combine(1)
             combine(mark.text)

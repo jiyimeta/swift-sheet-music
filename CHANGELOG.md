@@ -34,6 +34,11 @@ and this project adheres to
   (`LayoutRichTextDecoration`: the underline and strike-through bars, with their `rect`) place it by the plain-text
   anchor rule, so a single unformatted run measures exactly as plain text does. Pen positions, advances and line
   metrics stay internal: a renderer draws the placed runs.
+- **`Tempo` keeps what MuseScore writes beside the number** — `text` (the authored marking as plain text; `nil` while
+  derived), `preservedTextMarkup`, `followText`, `textType` (`TempoTextType`: `.normal`, `.aTempo`, `.tempoPrimo`),
+  `playsBack` and `preservedMarkup`, all defaulted so every existing initializer is unchanged; `richText` reads the
+  authored formatting while it is current. The fingerprint covers the four fields `SetTempo` writes (occupant tags
+  111–114), so a score whose tempos are all derived hashes exactly as before.
 
 ### Changed
 

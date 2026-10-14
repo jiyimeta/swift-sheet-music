@@ -50,4 +50,25 @@ extension FNV1a {
         combine(color.blue)
         combine(color.alpha)
     }
+
+    /// A tempo marking's text fields, by occupants: authored text 111, a marking that does not follow its text 112, a
+    /// text type other than `.normal` 113 and a marking left out of playback 114 — the four things `SetTempo` writes
+    /// beside the number. A derived, playing, ordinary marking that follows its text feeds nothing, so every tempo
+    /// built in code keeps the hash it had. The preserved markup is source-only and stays out, as on every carrier.
+    mutating func combineOccupiedTempoText(_ tempo: Tempo) {
+        if let text = tempo.text {
+            combine(111)
+            combine(text)
+        }
+        if !tempo.followText {
+            combine(112)
+        }
+        if tempo.textType != .normal {
+            combine(113)
+            combine(tempo.textType.rawValue)
+        }
+        if !tempo.playsBack {
+            combine(114)
+        }
+    }
 }

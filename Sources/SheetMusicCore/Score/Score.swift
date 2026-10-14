@@ -204,9 +204,8 @@ public struct Score: Sendable, Equatable {
 /// that its `StringData` and its channels. A mid-score change to a TAB
 /// instrument really does write
 /// `<InstrumentChange><Instrument><StringData>`, so this is a reachable
-/// path and not a theoretical one. Every case but `.tempo` also carries
-/// inline `<text>` markup; `Tempo` does not, because its `<text>` is
-/// regenerated from the modeled tempo rather than round-tripped.
+/// path and not a theoretical one. Every case carries inline `<text>`
+/// markup, `.tempo` since its authored text is kept (import-fidelity W2).
 ///
 /// The switch is written over every case rather than as a single
 /// `if case` so that a new `SystemElement` case that does carry a
@@ -229,8 +228,10 @@ private func stripPreservedMarkup(from element: inout SystemElement) {
     case var .swing(swing):
         swing.preservedTextMarkup = nil
         element = .swing(swing)
-    case .tempo:
-        break
+    case var .tempo(tempo):
+        tempo.preservedMarkup = []
+        tempo.preservedTextMarkup = nil
+        element = .tempo(tempo)
     }
 }
 

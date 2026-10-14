@@ -101,3 +101,9 @@ extension Spanner {
         beginText.map { RichText(xmlText: $0) }
     }
 }
+
+extension Tempo {
+    public var richText: RichText? {
+        text.flatMap { preservedTextMarkup?.richText(ifCurrentFor: $0) }
+    }
+}
