@@ -67,10 +67,8 @@ enum HairpinRamps {
         division: Int,
         tempoMap: ResolvedTempoMap,
     ) -> [HairpinRamp] {
-        var dynList: [DynPoint] = []
-        var pending: [Pending] = []
-        var runningVel = MidiRenderer.effectiveVelocity(
-            forDynamic: nil, instrument: instrument,
+        var walk = DynamicsWalk(
+            runningVelocity: MidiRenderer.effectiveVelocity(forDynamic: nil, instrument: instrument),
         )
         var measureBase = 0
         let measureDurations = staff.measures.effectiveMeasureDurations()
@@ -98,16 +96,14 @@ enum HairpinRamps {
                     measures: staff.measures,
                     division: division,
                     tempoMap: tempoMap,
-                    runningVel: &runningVel,
-                    dynList: &dynList,
-                    pending: &pending,
+                    walk: &walk,
                 )
             }
             measureBase += mTicks
         }
 
-        let wedges = resolveChained(pending, dynList: dynList)
-        return wedges + holds(after: wedges, dynList: dynList)
+        let wedges = resolveChained(walk.pending, dynList: walk.marks)
+        return wedges + holds(after: wedges, dynList: walk.marks)
     }
 
     /// Resolve the wedges in tick order, each starting from whatever the
@@ -173,8 +169,8 @@ enum HairpinRamps {
         }
     }
 
-    private struct DynPoint { let tick: Int; let velocity: Int }
-    private struct Pending {
+    struct DynPoint { let tick: Int; let velocity: Int }
+    struct Pending {
         let startTick: Int
         let endTick: Int
         let startVelocity: Int
@@ -191,19 +187,13 @@ enum HairpinRamps {
         measures: [Measure],
         division: Int,
         tempoMap: ResolvedTempoMap,
-        runningVel: inout Int,
-        dynList: inout [DynPoint],
-        pending: inout [Pending],
+        walk: inout DynamicsWalk,
     ) {
         var runningTick = measureBase
         for element in voice.elements {
             switch element {
             case let .dynamic(d):
-                let v = MidiRenderer.effectiveVelocity(
-                    forDynamic: d, instrument: instrument,
-                )
-                dynList.append(DynPoint(tick: runningTick, velocity: v))
-                runningVel = v
+                walk.apply(d, atTick: runningTick, instrument: instrument)
             case let .spanner(s) where s.kind == .hairpin:
                 // Only the begin-side spanner carries a non-nil
                 // payload. End-side placeholders (`<prev>` only) have
@@ -219,10 +209,10 @@ enum HairpinRamps {
                     division: division,
                     tempoMap: tempoMap,
                 )
-                pending.append(Pending(
+                walk.pending.append(Pending(
                     startTick: runningTick,
                     endTick: endTick,
-                    startVelocity: runningVel,
+                    startVelocity: walk.runningVelocity,
                     payload: payload,
                 ))
             case let .chord(chord):

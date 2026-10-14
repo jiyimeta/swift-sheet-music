@@ -389,7 +389,10 @@ extension MidiRenderer {
             // `LayoutEngine`'s placement-side handling.
             localTick += delta.ticks(division: division)
         case let .dynamic(dynamic):
-            velocity = effectiveVelocity(forDynamic: dynamic, instrument: instrument)
+            switch dynamic.playbackRole {
+            case let .level(level):
+                velocity = effectiveVelocity(level: level, instrument: instrument)
+            }
         case let .chord(chord) where chord.notes.isEmpty:
             // Rest: advance the tick cursor, emit no note events.
             localTick += chord.duration
@@ -517,9 +520,14 @@ extension MidiRenderer {
     // `emitNoteEventsForGrace` in `MidiRenderer+Grace.swift`.
 
     static func effectiveVelocity(forDynamic dynamic: Dynamic?, instrument: Instrument) -> Int {
-        let base = dynamic?.velocity ?? defaultDynamicVelocity
+        effectiveVelocity(level: dynamic?.velocity ?? defaultDynamicVelocity, instrument: instrument)
+    }
+
+    /// A `dynList` level velocity (`Dynamic.PlaybackRole`) on this instrument: scaled by its default articulation's
+    /// velocity percentage, as every dynamic's velocity is.
+    static func effectiveVelocity(level: Int, instrument: Instrument) -> Int {
         let scale = defaultArticulationVelocityScale(for: instrument)
-        return min(127, max(1, base * scale / 100))
+        return min(127, max(1, level * scale / 100))
     }
 
     static func defaultArticulationVelocityScale(for instrument: Instrument) -> Int {

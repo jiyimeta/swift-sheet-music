@@ -9,6 +9,9 @@ and this project adheres to
 
 ### Added
 
+- **`Dynamic.playbackRole`** — what a dynamic does to playback, MuseScore 4's classification (`Dynamic.PlaybackRole`),
+  read in one place by the SMF's voice walk and by the hairpin ramps. A dynamic is a running level at its velocity, as
+  before.
 - **A dynamic keeps its own text, `<play>` and `<veloChangeSpeed>`** — `Dynamic.text` and `preservedTextMarkup`
   (`nil` while it prints its subtype), `playsBack`, `velocityChangeSpeed` (`Dynamic.VelocityChangeSpeed`), all
   defaulted; `richText`, `displayedRichText` (what it prints when it is not its glyphs) and `customXMLText` (its text as
