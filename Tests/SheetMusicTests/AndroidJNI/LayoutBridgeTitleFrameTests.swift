@@ -151,5 +151,33 @@
             let firstPage = try #require(pages.first)
             #expect(Self.textCommand("My Title", in: firstPage.commands) != nil)
         }
+
+        @Test("a rich title line emits its runs with their own style")
+        func richTitleRuns() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let markup = PreservedTextMarkup(
+                content: [.element(.init(name: "b", content: [.characters("Big")])), .characters(" Title")],
+                derivedText: "Big Title",
+            )
+            let measure = Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+            let score = Score(
+                division: 480,
+                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [measure])])],
+                systemMeasures: [SystemMeasure()],
+                titleFrame: ScoreFrame(heightSp: 12, texts: [
+                    FrameText(style: .title, text: "Big Title", preservedTextMarkup: markup),
+                ]),
+            )
+            let commands = LayoutBridge.buildCommands(layout: Self.layout(score))
+            var style = DrawCommand.TextStyleFlag.none
+            var texts: [(String, UInt8)] = []
+            for command in commands {
+                if case let .setTextStyle(flags) = command { style = flags }
+                if case let .text(text, _, _, _, _) = command { texts.append((text, style)) }
+            }
+            #expect(texts.contains { $0.0 == "Big" && $0.1 & DrawCommand.TextStyleFlag.bold != 0 })
+            #expect(texts.contains { $0.0 == " Title" && $0.1 & DrawCommand.TextStyleFlag.bold == 0 })
+            #expect(Self.textCommand("Big Title", in: commands) == nil)
+        }
     }
 #endif

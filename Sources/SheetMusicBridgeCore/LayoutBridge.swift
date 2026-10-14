@@ -576,7 +576,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 out.append(.setColor(argb: ambientArgb))
             }
 
-        case let .textMark(kind, text, origin, _):
+        case let .textMark(kind, text, origin, richText):
             // Standard dynamics (p, mf, ff, sfz, …) render as bold
             // Bravura SMuFL glyphs, NOT Edwin text — mirrors Apple's
             // `TextMarkRenderer.drawDynamic`. `emitText` alone would
@@ -595,11 +595,18 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 // it stays the bundled one; size and bold/italic are.
                 let argb = color.flatMap(LayoutBridge.argb(from:))
                 if let argb { out.append(.setColor(argb: argb)) }
-                emitRoleText(
-                    text: text, style: .lyricsOdd, properties: properties,
-                    originX: mox + Double(origin.x), originY: moy + Double(origin.y),
-                    sp: sp, anchor: CGPoint(x: 0.5, y: 0.5), into: &out,
-                )
+                if let richText {
+                    emitRichText(
+                        richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
+                        anchor: TextInkPoint(x: 0.5, y: 0.5), into: &out,
+                    )
+                } else {
+                    emitRoleText(
+                        text: text, style: .lyricsOdd, properties: properties,
+                        originX: mox + Double(origin.x), originY: moy + Double(origin.y),
+                        sp: sp, anchor: CGPoint(x: 0.5, y: 0.5), into: &out,
+                    )
+                }
                 if argb != nil { out.append(.setColor(argb: ambientArgb)) }
             } else if case let .tempo(_, color, properties) = kind {
                 let argb = color.flatMap(LayoutBridge.argb(from:))
@@ -625,19 +632,26 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .staffText(text, origin, color, style, _, _, properties, _, _):
+        case let .staffText(text, origin, color, style, _, _, properties, _, richText):
             let argb = color.flatMap(LayoutBridge.argb(from:))
             if let argb { out.append(.setColor(argb: argb)) }
-            emitRoleText(
-                text: text,
-                style: style,
-                properties: properties,
-                originX: mox + Double(origin.x),
-                originY: moy + Double(origin.y),
-                sp: sp,
-                anchor: CGPoint(x: 0, y: 1),
-                into: &out,
-            )
+            if let richText {
+                emitRichText(
+                    richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
+                    anchor: TextInkPoint(x: 0, y: 1), into: &out,
+                )
+            } else {
+                emitRoleText(
+                    text: text,
+                    style: style,
+                    properties: properties,
+                    originX: mox + Double(origin.x),
+                    originY: moy + Double(origin.y),
+                    sp: sp,
+                    anchor: CGPoint(x: 0, y: 1),
+                    into: &out,
+                )
+            }
             if argb != nil {
                 out.append(.setColor(argb: 0xFF00_0000))
             }
@@ -664,7 +678,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .marker(kind, text, origin, _, _):
+        case let .marker(kind, text, origin, _, richText):
             switch MarkerGlyph.variant(for: kind, text: text) {
             case let .glyph(codepoint):
                 emitCenterAnchoredGlyph(
@@ -675,16 +689,23 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     into: &out,
                 )
             case let .text(label):
-                encodeNotationText(
-                    text: label, role: .markerText,
-                    originX: mox + Double(origin.x),
-                    originY: moy + Double(origin.y),
-                    sp: sp,
-                    into: &out,
-                )
+                if let richText {
+                    emitRichText(
+                        richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
+                        anchor: NotationTextStyle.anchorPoint(for: .markerText), into: &out,
+                    )
+                } else {
+                    encodeNotationText(
+                        text: label, role: .markerText,
+                        originX: mox + Double(origin.x),
+                        originY: moy + Double(origin.y),
+                        sp: sp,
+                        into: &out,
+                    )
+                }
             }
 
-        case let .rehearsalMark(text, origin, frame, color, _, _, properties, _):
+        case let .rehearsalMark(text, origin, frame, color, _, _, properties, richText):
             encodeRehearsalMark(
                 text: text,
                 originX: mox + Double(origin.x),
@@ -692,18 +713,26 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 frame: frame,
                 color: color,
                 properties: properties,
+                rich: richText,
                 sp: sp,
                 into: &out,
             )
 
-        case let .jump(text, origin, _, _):
-            encodeNotationText(
-                text: text, role: .jump,
-                originX: mox + Double(origin.x),
-                originY: moy + Double(origin.y),
-                sp: sp,
-                into: &out,
-            )
+        case let .jump(text, origin, _, richText):
+            if let richText {
+                emitRichText(
+                    richText, origin: TextInkPoint(x: mox + Double(origin.x), y: moy + Double(origin.y)),
+                    anchor: NotationTextStyle.anchorPoint(for: .jump), into: &out,
+                )
+            } else {
+                encodeNotationText(
+                    text: text, role: .jump,
+                    originX: mox + Double(origin.x),
+                    originY: moy + Double(origin.y),
+                    sp: sp,
+                    into: &out,
+                )
+            }
 
         case let .measureRepeat(count, origin):
             emitCenterAnchoredGlyph(

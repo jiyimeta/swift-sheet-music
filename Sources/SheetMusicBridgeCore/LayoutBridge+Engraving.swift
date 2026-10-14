@@ -1006,10 +1006,11 @@ extension LayoutBridge {
         frame: TextFrameType,
         color: ScoreColor?,
         properties: TextProperties = TextProperties(),
+        rich: LayoutRichText? = nil,
         sp: Double,
         into out: inout [DrawCommand],
     ) {
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty || rich != nil else { return }
         let argb = color.flatMap(argb(from:))
         if let argb { out.append(.setColor(argb: argb)) }
         let pad = Double(RehearsalMarkFrame.paddingSp(sp: CGFloat(sp)))
@@ -1035,13 +1036,14 @@ extension LayoutBridge {
             )
         }
         let origin = CGPoint(x: CGFloat(originX), y: CGFloat(originY))
-        emitAnchoredText(
-            text: text, font: font,
-            origin: CGPoint(x: CGFloat(originX + pad), y: CGFloat(originY - pad)),
-            anchor: CGPoint(x: 0, y: 1), into: &out,
-        )
+        let textOrigin = CGPoint(x: CGFloat(originX + pad), y: CGFloat(originY - pad))
+        if let rich {
+            emitRichText(rich, origin: textOrigin, anchor: CGPoint(x: 0, y: 1), into: &out)
+        } else {
+            emitAnchoredText(text: text, font: font, origin: textOrigin, anchor: CGPoint(x: 0, y: 1), into: &out)
+        }
         let shape = TextInkGeometry.rehearsalFrame(
-            text: text, font: font, origin: origin, sp: CGFloat(sp), frame: frame,
+            text: text, font: font, origin: origin, sp: CGFloat(sp), frame: frame, rich: rich,
         )
         let strokeWidth = Double(
             RehearsalMarkFrame.strokeWidthSp(sp: CGFloat(sp)),

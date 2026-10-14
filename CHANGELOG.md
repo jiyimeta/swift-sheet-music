@@ -73,6 +73,11 @@ and this project adheres to
   used to draw in one font. A marker whose text is only a symbol (`<text><sym>segno</sym></text>` with no
   `<markerType>`) drew its `<label>` as a word ("segno") — its plain text is empty, so layout fell back to the label;
   it now draws the glyph.
+- **Formatted text draws formatted on Android, Windows, the web and in the portable PDF writer.** The draw program
+  carries each run as the opcodes it already had — a `.text` per text run inside its own `setTextStyle`, a SMuFL
+  `.glyph` per symbol, a stroked line per underline or strike-through — at the positions layout measured, anchored as
+  the Apple renderers anchor each kind. No opcode was added and the wire stays v8, so no reader changes. A `<font
+  face>` override reaches the wire only as the face id `TextFontMapping` can name; Apple honors the face itself.
 
 ## [4.9.0] - 2026-10-13
 

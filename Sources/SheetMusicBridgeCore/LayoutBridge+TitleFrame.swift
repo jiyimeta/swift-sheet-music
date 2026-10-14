@@ -29,8 +29,18 @@ extension LayoutBridge {
         _ frame: LayoutTitleFrame,
         into out: inout [DrawCommand],
     ) {
-        for entry in frame.texts {
-            appendTitleEntry(entry, into: &out)
+        // Only a rich entry needs layout's placement; a plain one keeps its own byte-identical stacking below.
+        let placed = frame.texts.contains { $0.richText != nil } ? frame.placedLines() : []
+        for (index, entry) in frame.texts.enumerated() {
+            guard entry.richText != nil else {
+                appendTitleEntry(entry, into: &out)
+                continue
+            }
+            // A rich entry draws the runs layout placed per line (`LayoutTitleFrame.PlacedLine.positionedRuns`), so
+            // a `<font size>` line steps further exactly as it does in the Apple renderers.
+            for line in placed where line.entryIndex == index {
+                emitRichRuns(line.positionedRuns, decorations: line.decorations, into: &out)
+            }
         }
     }
 
