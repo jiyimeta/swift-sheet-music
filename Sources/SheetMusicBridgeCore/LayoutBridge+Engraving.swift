@@ -752,8 +752,10 @@ extension LayoutBridge {
         out.append(.stroke(width: lineWidth * ptToMMScale))
     }
 
+    /// Shared with the gradual tempo line's file, so it spells its points `TextInkPoint`: on platforms without
+    /// CoreGraphics this file's `CGPoint` alias is private and could not appear in an internal signature.
     static func emitSegment(
-        from: CGPoint, to: CGPoint, lineWidth: Double,
+        from: TextInkPoint, to: TextInkPoint, lineWidth: Double,
         into out: inout [DrawCommand],
     ) {
         out.append(.moveTo(

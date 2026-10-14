@@ -4,14 +4,13 @@ import SheetMusicLayout
 
 #if !canImport(CoreGraphics)
     private typealias CGFloat = SheetMusicLayout.CGFloat
-    private typealias CGPoint = SheetMusicLayout.CGPoint
 #endif
 
 extension LayoutBridge {
     /// A gradual tempo line in the draw program, with the opcodes it already had: the label's runs
     /// (`emitRichText`), then `setDash` at MuseScore's pattern, the line, and the dash reset.
     static func encodeGradualTempoChange(
-        from: CGPoint, to: CGPoint, richText: LayoutRichText?, sp: Double, into out: inout [DrawCommand],
+        from: TextInkPoint, to: TextInkPoint, richText: LayoutRichText?, sp: Double, into out: inout [DrawCommand],
     ) {
         let parts = SpannerGeometry.gradualTempoChange(from: from, to: to, label: richText, sp: CGFloat(sp))
         if let richText {
