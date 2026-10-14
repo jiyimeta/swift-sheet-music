@@ -39,6 +39,13 @@ and this project adheres to
   `playsBack` and `preservedMarkup`, all defaulted so every existing initializer is unchanged; `richText` reads the
   authored formatting while it is current. The fingerprint covers the four fields `SetTempo` writes (occupant tags
   111–114), so a score whose tempos are all derived hashes exactly as before.
+- **A tempo marking's text, derived or authored.** `Tempo.metronomeMarking` is the marking an unauthored tempo prints
+  in MuseScore's palette spelling (the beat's `metNote…` glyph, a `space` and `metAugmentationDot`s for a dotted beat,
+  then " = N" to two decimals, `Tempo.printedNumber(_:)`); `synthesizedRichText` is the same as runs and
+  `displayedRichText` what the marking prints — its authored runs, its authored plain text, or the derived marking.
+  `TempoTextEquation` reads a marking's text the way MuseScore's `TempoText::updateTempo` does (its pattern table,
+  its normalization of "≈", "~", "ca." and decimal commas): words alone, a beat = beat modulation, or a beat = number
+  equation, alone or among words.
 
 ### Changed
 
