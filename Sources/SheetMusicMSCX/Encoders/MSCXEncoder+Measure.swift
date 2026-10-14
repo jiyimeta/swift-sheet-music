@@ -149,10 +149,10 @@ extension Marker {
         if let text = encodedText(options: options) {
             children.append(text)
         }
-        children += elementProperties.mscxChildren()
+        children += elementProperties.mscxRepeatTextLeadingChildren()
         children.append(XMLTreeNode(name: "label", text: effectiveLabel))
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
-        children += elementProperties.mscxTrailingChildren()
+        children += elementProperties.mscxRepeatTextTrailingChildren()
         if let musicSymbolSize {
             children.append(XMLTreeNode(name: "musicSymbolSize", text: formatDouble(musicSymbolSize)))
         }
@@ -210,9 +210,23 @@ extension Jump {
             preservedTextMarkup: preservedTextMarkup,
             options: options,
         ))
-        children += elementProperties.mscxChildren()
+        children += elementProperties.mscxRepeatTextLeadingChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
-        children += elementProperties.mscxTrailingChildren()
+        children += elementProperties.mscxRepeatTextTrailingChildren()
         return XMLTreeNode(name: "Jump", children: children)
+    }
+}
+
+extension ElementProperties {
+    /// A marker's or jump's properties that can precede a preserved `<style>`. `<offset>` cannot: it is a property of
+    /// MuseScore's repeat text styles (`markerPosAbove` / `jumpPosAbove`, `style/textstyle.cpp`), and reading
+    /// `<style>` re-applies every styled property (`TextBase::initTextStyleType`, `dom/textbase.cpp:3073-3100`).
+    func mscxRepeatTextLeadingChildren() -> [XMLTreeNode] {
+        mscxChildren().filter { $0.name != "offset" }
+    }
+
+    /// `<offset>` and `<color>`, written after the preserved markup so a `<style>` cannot reset them.
+    func mscxRepeatTextTrailingChildren() -> [XMLTreeNode] {
+        mscxChildren().filter { $0.name == "offset" } + mscxTrailingChildren()
     }
 }

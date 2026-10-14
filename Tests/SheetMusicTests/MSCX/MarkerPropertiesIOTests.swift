@@ -39,6 +39,34 @@ struct MarkerPropertiesIOTests {
         #expect(markup.isEmpty)
     }
 
+    /// `<offset>` belongs to the repeat text styles, so a `<style>` read after it resets it in MuseScore
+    /// (`TextBase::initTextStyleType`, `dom/textbase.cpp:3073-3100`): it is written after the preserved `<style>`.
+    @Test("an offset is written after the preserved style and survives a round trip")
+    func offsetFollowsStyle() throws {
+        let bar = try XMLTreeParser.parse(Data("""
+        <Measure><Marker><offset x="1.5" y="-2"/><style>Repeat Text Left</style><text>Fine</text><label>fine</label>\
+        <markerType>fine</markerType></Marker>\
+        <Jump><offset x="-3" y="1"/><text>D.C.</text><jumpTo>start</jumpTo><playUntil>end</playUntil>\
+        <style>Repeat Text Right</style></Jump><voice></voice></Measure>
+        """.utf8), preservingMixedContentIn: ["text"])
+        let measure = try Measure.decode(bar)
+        let marker = try #require(measure.markers.first)
+        let jump = try #require(measure.jumps.first)
+        #expect(marker.elementProperties.offset == ScoreOffset(x: 1.5, y: -2))
+        #expect(jump.elementProperties.offset == ScoreOffset(x: -3, y: 1))
+        let markerXML = try Self.xml(marker.encode())
+        let jumpXML = try Self.xml(jump.encode())
+        let markerStyle = try Self.position(of: "<style>", in: markerXML)
+        let markerOffset = try Self.position(of: "<offset ", in: markerXML)
+        let jumpStyle = try Self.position(of: "<style>", in: jumpXML)
+        let jumpOffset = try Self.position(of: "<offset ", in: jumpXML)
+        #expect(markerStyle < markerOffset && jumpStyle < jumpOffset)
+        let reparsed = try XMLTreeParser.parse(Data("<Measure>\(markerXML)\(jumpXML)<voice></voice></Measure>".utf8))
+        let again = try Measure.decode(reparsed)
+        #expect(again.markers.first?.elementProperties.offset == marker.elementProperties.offset)
+        #expect(again.jumps.first?.elementProperties.offset == jump.elementProperties.offset)
+    }
+
     /// Color and symbol size go after `<style>`, which MuseScore applies as it reads it and which resets both
     /// (`ElementProperties.mscxTrailingChildren`; the 4.6.0–4.6.2 symbol-size bug `TRead::read(Marker*)` works around);
     /// `<markerType>` and `<markerCenterOnSymbol>` close the element, as MuseScore writes them.
