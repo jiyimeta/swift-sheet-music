@@ -37,4 +37,10 @@ public struct Jump: Sendable, Equatable {
         self.preservedTextMarkup = preservedTextMarkup
         self.preservedMarkup = preservedMarkup
     }
+
+    /// What the jump prints: its formatted text while the markup is current, else its plain text — nothing when it has
+    /// none. MuseScore gives a jump no default text on reading (only its palette sets one, `Jump::setJumpType`).
+    public var displayedRichText: RichText {
+        richText ?? RichText(plainText: text)
+    }
 }

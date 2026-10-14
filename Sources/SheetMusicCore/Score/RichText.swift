@@ -106,6 +106,16 @@ extension RichText {
     }
 }
 
+extension RichText {
+    /// Plain text as runs: a line per `"\n"`, each one unformatted text run, an empty line none — the shape
+    /// `init(content:)` gives the same characters without markup.
+    init(plainText: String) {
+        self.init(lines: plainText.split(separator: "\n", omittingEmptySubsequences: false).map { line in
+            line.isEmpty ? [] : [.text(String(line), RichTextFormat())]
+        })
+    }
+}
+
 extension PreservedTextMarkup {
     /// This markup as `RichText` while it still describes `text` — the encoder's own condition for writing it back
     /// (`derivedText == text`, `MSCXEncoder+TextMarkup.swift`). `nil` once the text has been edited: the element is

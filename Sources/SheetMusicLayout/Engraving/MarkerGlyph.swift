@@ -20,7 +20,7 @@ public enum MarkerGlyph {
             return .glyph(codepoint: SMuFLCodepoint.segno)
         case .coda, .varcoda, .codetta, .toCodaSym:
             return .glyph(codepoint: SMuFLCodepoint.coda)
-        case .fine, .toCoda, .daCapo, .dalSegno, .other:
+        case .fine, .toCoda, .daCapo, .dalSegno, .other, .daCoda, .daDoubleCoda, .user:
             let label = text.isEmpty ? fallbackLabel(for: kind) : text
             return .text(label: label)
         }

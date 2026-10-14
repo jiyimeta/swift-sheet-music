@@ -112,11 +112,12 @@ struct PlaybackNavigationModelTests {
     }
 
     @Test func rightMarkerClassificationMirrorsMuseScore() {
-        // RIGHT_MARKERS (marker.h:87-93): FINE, TOCODA, TOCODASYM
-        // (+ DA_CODA / DA_DBLCODA, which our Kind doesn't model).
+        // RIGHT_MARKERS (marker.h:87-93): FINE, TOCODA, TOCODASYM, DA_CODA, DA_DBLCODA.
         #expect(Marker(kind: .fine).isRightMarker)
         #expect(Marker(kind: .toCoda).isRightMarker)
         #expect(Marker(kind: .toCodaSym).isRightMarker)
+        #expect(Marker(kind: .daCoda).isRightMarker)
+        #expect(Marker(kind: .daDoubleCoda).isRightMarker)
         #expect(!Marker(kind: .segno).isRightMarker)
         #expect(!Marker(kind: .varsegno).isRightMarker)
         #expect(!Marker(kind: .coda).isRightMarker)

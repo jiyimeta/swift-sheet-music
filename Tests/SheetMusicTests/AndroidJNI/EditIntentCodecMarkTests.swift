@@ -108,4 +108,13 @@ struct EditIntentCodecMarkTests {
         let bytes = EditIntentWire.setMarkers(wire).encodeToData()
         #expect(throws: WireFormatError.unknownChoiceDiscriminator(0)) { try EditIntentCodec.decode(bytes) }
     }
+
+    /// The kinds import fidelity W3 added cross as their raw values, like every other kind: nothing on the wire
+    /// changes, and a client older than ssm 5.0.0 refuses them as `an unknown marker kind inside a list` shows.
+    @Test func `the Da Coda, Da Doppia Coda and custom markers survive the round trip`() throws {
+        let intent = EditIntent.setMarkers(at: Self.measure, markers: [
+            Marker(kind: .daCoda), Marker(kind: .daDoubleCoda, label: "dd"), Marker(kind: .user, text: "Solo"),
+        ])
+        #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
+    }
 }

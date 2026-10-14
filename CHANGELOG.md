@@ -9,6 +9,11 @@ and this project adheres to
 
 ### Added
 
+- **MuseScore's Da Coda, Da Doppia Coda and Custom markers** — `Marker.Kind.daCoda`, `.daDoubleCoda` and `.user`,
+  which read as `.other` before. `Marker.Kind.isRightMarker` names the types that stand at their bar's end,
+  `Marker.Kind.defaultXMLText` the text MuseScore gives a marker of each type, and `Marker.displayedRichText` /
+  `Jump.displayedRichText` what one prints: its markup's runs, its words, or for a marker without text its type's
+  default — a codetta's two codas, "To ⟨coda⟩", "Fine".
 - **`RichText`** (SheetMusicCore) — MuseScore's formatted text: lines of runs (`RichTextRun`: `.text` or `.symbol`),
   each a string or a SMuFL symbol carrying a `RichTextFormat` — bold / italic / underline / strike, font face and size,
   and super- or subscript (`RichTextFormat.VerticalAlign`). Built by MuseScore's own format state machine
@@ -73,6 +78,8 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking: `Marker.Kind` has three more cases** (`.daCoda`, `.daDoubleCoda`, `.user`), so an exhaustive switch over
+  it no longer compiles. The raw values of the existing cases are unchanged.
 - **`resolvedTempoMap()` skips voices with no gradual tempo change** when looking for ramps (performance).
   `HairpinRamps.collect(tempoMap:)` and `MidiRenderer.renderVoice(tempoMap:)` now require the tempo map; the silent
   120 BPM default is gone. Both are internal, so this is not a public API break.
