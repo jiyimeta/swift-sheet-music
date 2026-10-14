@@ -181,6 +181,8 @@ struct MSCXIdempotencyTests {
     /// - `markers-jumps` — every MuseScore marker type, a marker without `<text>` and two marks to a bar.
     /// - `marker-properties` — a marker's and a jump's own visible, offset, placement, autoplace, color,
     ///   center-on-symbol and symbol size.
+    /// - `dynamics` — a dynamic's own text (words, runs with glyphs, an other-dynamics word), `<play>0</play>` and
+    ///   `<veloChangeSpeed>`, written back in MuseScore's order (import fidelity W4).
     @Test("committed MSCX fixtures encode to a fixed point", arguments: [
         "testVoltaTemp",
         "testSingleNoteDynamics",
@@ -196,6 +198,7 @@ struct MSCXIdempotencyTests {
         "repeat53",
         "markers-jumps",
         "marker-properties",
+        "dynamics",
     ])
     func mscxFixtureIsAFixedPoint(_ name: String) throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData(name))

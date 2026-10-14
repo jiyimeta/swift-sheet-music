@@ -160,6 +160,11 @@ and this project adheres to
 
 ### Fixed
 
+- **A MuseScore dynamic's own text, `<play>` and `<veloChangeSpeed>` are read and saved as the model's**
+  (import-fidelity F4.1–F4.3): `<text>` (words, `<sym>` glyphs, formatting) becomes `Dynamic.text` and its markup,
+  `<play>0</play>` `playsBack`, `<veloChangeSpeed>` `velocityChangeSpeed`; they are written back where MuseScore writes
+  them — `<play>` and `<veloChangeSpeed>` after `<velocity>`, `<text>` last — instead of riding as unmodeled XML that an
+  edit could leave stale.
 - **A marker's or jump's own properties are applied.** A hidden one draws nothing and takes no space — greyed and
   selectable when invisible elements are shown — and still steers playback (a hidden To Coda or D.S. is common in files
   arranged for playback); its offset moves it before autoplace, as MuseScore does; `<placement>below` sets it under the
