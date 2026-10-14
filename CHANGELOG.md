@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.10.0] - 2026-10-14
+
 ### Added
 
 - **`ScoreView(document:…, visibleRect:)`** mounts only the systems whose frame meets `visibleRect`, in document
