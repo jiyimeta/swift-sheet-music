@@ -14,6 +14,9 @@ import SwiftUI
 /// when the reader zooms. What the two share is `placedLines`
 /// below: every decision about WHERE a line goes is made once, so
 /// the screen and the PDF cannot drift apart.
+///
+/// A formatted line (one with `richRuns`) is drawn as filled glyph outlines, not as `Text`, so in an exported PDF
+/// it is not searchable or selectable text, unlike a plain line. Recorded, not fixed.
 @available(macOS 15.0, *)
 public enum TitleFrameRenderer {
     public static func draw(

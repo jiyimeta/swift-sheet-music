@@ -20,10 +20,17 @@ extension ScoreLayerBuilder {
                 outline, transform: CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: run.baseline.x, ty: run.baseline.y),
             )
         }
+        guard !decorations.isEmpty else { return composite.isEmpty ? nil : composite }
+        // The bars are united with the glyphs rather than added to their path: both fills (CAShapeLayer,
+        // GraphicsContext) are non-zero winding, and the flipped outline of a PostScript (CFF) font winds opposite to
+        // `addRect`, so where a bar crossed a stroke the winding summed to 0 and left a hole. `union` resolves each
+        // operand on its own first, so the result fills the same whatever the contour direction. Only decorated text
+        // pays for it.
+        let bars = CGMutablePath()
         for bar in decorations {
-            composite.addRect(bar.rect)
+            bars.addRect(bar.rect)
         }
-        return composite.isEmpty ? nil : composite
+        return composite.isEmpty ? bars : composite.union(bars)
     }
 
     /// A text element's runs placed at `origin` by `anchor` (`LayoutRichText.positionedRuns(at:anchor:)`). The anchor
