@@ -14,6 +14,9 @@ struct HairpinRamp: Equatable {
     enum Role: Equatable {
         case wedge
         case hold
+        /// The chord an accent stands on: its level over that chord alone (`Dynamic.PlaybackRole.accent`). Outranks
+        /// every other ramp at its ticks (`HairpinRamps.active(in:at:)`).
+        case accent
     }
 
     let startTick: Int
@@ -45,12 +48,13 @@ enum HairpinRamps {
         }
     }
 
-    /// Latest-starting ramp containing `tick`. Well-formed scores
-    /// don't overlap hairpins; this is a defensive choice.
+    /// The ramp in force at `tick`: an accent's, which outranks the rest — an accent sounds over a wedge or a hold, as
+    /// a mark under a wedge does (`resolveRamp`) — else the latest-starting ramp containing it (well-formed scores do
+    /// not overlap hairpins; this is a defensive choice; of two starting together, the first in `collect`'s order).
     static func active(in ramps: [HairpinRamp], at tick: Int) -> HairpinRamp? {
-        ramps
-            .filter { tick >= $0.startTick && tick <= $0.endTick }
-            .max(by: { $0.startTick < $1.startTick })
+        let containing = ramps.filter { tick >= $0.startTick && tick <= $0.endTick }
+        if let accent = containing.first(where: { $0.role == .accent }) { return accent }
+        return containing.max(by: { $0.startTick < $1.startTick })
     }
 
     /// Walk one voice in original (pre-repeat) ticks and resolve every `<HairPin>` into a concrete `HairpinRamp`. The
@@ -98,8 +102,14 @@ enum HairpinRamps {
             measureBase += mTicks
         }
 
-        let wedges = resolveChained(walk.pending, dynList: walk.marks)
-        return wedges + holds(after: wedges, dynList: walk.marks)
+        // A wedge ending on an accent aims for the accent's level (MuseScore 4's `findNominalEndDynamicLevel`,
+        // `playbackcontext.cpp:124-142`); an accent anywhere else is no mark for a wedge. The level coming back after
+        // an accent's chord ends a hold, as a mark does (`DynamicsWalk.restores`).
+        let endingAccents = walk.accents.filter { accent in walk.pending.contains { $0.endTick == accent.tick } }
+        let targets = endingAccents.isEmpty ? walk.marks : (walk.marks + endingAccents).sorted { $0.tick < $1.tick }
+        let wedges = resolveChained(walk.pending, dynList: targets)
+        let holdEnds = walk.restores.isEmpty ? walk.marks : (walk.marks + walk.restores).sorted { $0.tick < $1.tick }
+        return wedges + holds(after: wedges, dynList: holdEnds) + walk.ramps
     }
 
     /// Resolve the wedges in tick order, each starting from whatever the
@@ -205,16 +215,20 @@ enum HairpinRamps {
                     division: division,
                     tempoMap: tempoMap,
                 )
+                // A wedge starting on an accent starts from its level (`DynamicsWalk.wedgeStart`). One that would start
+                // at or past its own end plays nothing, as MuseScore's does (`playbackcontext.cpp:626-629`).
+                let start = walk.wedgeStart(at: runningTick)
+                guard start.tick < endTick else { break }
                 walk.pending.append(Pending(
-                    startTick: runningTick,
+                    startTick: start.tick,
                     endTick: endTick,
-                    startVelocity: walk.runningVelocity,
+                    startVelocity: start.velocity,
                     payload: payload,
                 ))
             case let .chord(chord):
-                runningTick += chord.duration
-                    .resolved(in: measureDuration)
-                    .ticks(division: division)
+                let ticks = chord.duration.resolved(in: measureDuration).ticks(division: division)
+                walk.close(chordAt: runningTick, ticks: ticks)
+                runningTick += ticks
             case let .locationShift(delta):
                 runningTick += delta.ticks(division: division)
             default:
@@ -301,47 +315,5 @@ enum HairpinRamps {
             segments.append(segment(from: tick, to: p.endTick, start: velocity, end: end))
         }
         return segments
-    }
-
-    /// End tick = startTick + Σ (next-measures-worth of measure ticks)
-    /// + nextFractions delta. MuseScore's `<location>` (the `<next>`
-    /// child) is **relative to the begin spanner's own tick**, so the
-    /// offset is added to `startTick` rather than re-derived from a
-    /// measure base: a hairpin written from beat 4 to the next downbeat
-    /// carries `<measures>1</measures><fractions>-7/8</fractions>`, and
-    /// measuring that from the measure base instead of from beat 4
-    /// lands the end before the start. Falls back to `startTick + 1` so
-    /// the range stays non-empty.
-    ///
-    /// Same resolution as `OttavaRanges.computeEndTick` and
-    /// `LayoutEngine.endAnchor`.
-    private static func computeEndTick(
-        startTick: Int,
-        startMeasureIndex: Int,
-        spanner: Spanner,
-        measures: [Measure],
-        division: Int,
-        tempoMap: ResolvedTempoMap,
-    ) -> Int {
-        var measureSpan = 0
-        let endIndex = min(
-            measures.count,
-            startMeasureIndex + max(0, spanner.nextMeasuresOffset),
-        )
-        if startMeasureIndex < endIndex {
-            let measureDurations = measures.effectiveMeasureDurations()
-            for i in startMeasureIndex ..< endIndex {
-                let mDuration = i < measureDurations.count
-                    ? measureDurations[i]
-                    : Fraction(numerator: 4, denominator: 4)
-                measureSpan += MidiRenderer.measureTicks(
-                    measure: measures[i], division: division,
-                    measureDuration: mDuration,
-                    measureIndex: i, tempoMap: tempoMap,
-                )
-            }
-        }
-        let fractionDelta = spanner.nextFractionsOffset?.ticks(division: division) ?? 0
-        return max(startTick + 1, startTick + measureSpan + fractionDelta)
     }
 }

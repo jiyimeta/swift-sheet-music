@@ -167,6 +167,12 @@ and this project adheres to
 
 ### Fixed
 
+- **sf, sfz, rf, rfz, sff, sffz, sfff and sfffz accent their own chord** (import-fidelity F4.4, MuseScore 4 playback —
+  owner decision c): the chord on the dynamic's tick plays the accent's level (f, ff, fff), every stroke and grace of
+  it, and the level the dynamics had in force before it comes back with the next chord — as in MuseScore 4, not a
+  hairpin's held level: an accent after a crescendo drops back to the level the crescendo started from. A crescendo
+  starting on an accent starts from its level; one ending on it climbs to it. Each set a running level until the next
+  dynamic before, at MuseScore 3's velocity.
 - **Dynamics MuseScore 4 does not play no longer change the level** (import-fidelity F4.2–F4.4): fz, m, r, s, z,
   `other-dynamics`, a token MuseScore does not know, and any dynamic with `<play>0</play>` leave the running level, the
   hairpins' targets and their held levels alone (`Dynamic.PlaybackRole.none`); fz, r and s set 112 before,
