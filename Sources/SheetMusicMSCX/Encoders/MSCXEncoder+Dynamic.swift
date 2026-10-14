@@ -20,6 +20,11 @@ extension Dynamic {
         if velocityChangeSpeed != .normal {
             children.append(XMLTreeNode(name: "veloChangeSpeed", text: velocityChangeSpeed.rawValue))
         }
+        // `TWrite::writeProperties(const TextBase*)` opens with `<voiceAssignment>`, right after the dynamic's own
+        // properties (`rw/write/twrite.cpp:1320-1325`).
+        if let child = voiceAssignment.mscxChild(options: options) {
+            children.append(child)
+        }
         // `<eid>` sits here, not first: `TWrite::write(const Dynamic*, ...)`
         // (`rw/write/twrite.cpp:1288-1307`) writes `<subtype>`/`<velocity>`
         // (and other unmodeled Dynamic-only properties) before calling

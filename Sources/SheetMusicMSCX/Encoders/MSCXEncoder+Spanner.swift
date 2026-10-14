@@ -87,6 +87,10 @@ extension Spanner {
                     text: hairpin.veloChangeMethod.rawValue,
                 ))
             }
+            // `TWrite::write(const Hairpin*)`: after `<veloChangeMethod>` (`rw/write/twrite.cpp:1683-1697`).
+            if let child = hairpin.voiceAssignment.mscxChild(options: options) {
+                children.append(child)
+            }
             children += trailing
             return XMLTreeNode(name: rawType, children: children)
         }

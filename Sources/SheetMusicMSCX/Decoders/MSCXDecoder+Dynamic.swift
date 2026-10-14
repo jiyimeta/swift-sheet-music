@@ -6,7 +6,7 @@ extension Dynamic {
     private static let consumedDynamicChildren: Set = [
         "bold", "color", "face", "framePadding", "frameType", "italic", "size",
         "offset", "autoplace", "placement", "strike", "subtype", "underline", "velocity", "visible",
-        "text", "play", "veloChangeSpeed",
+        "text", "play", "veloChangeSpeed", "voiceAssignment", "dynType",
     ]
 
     /// Decode one `<Dynamic>`. `<text>` is the dynamic's own text: MuseScore writes it only when it differs from the
@@ -32,6 +32,7 @@ extension Dynamic {
             preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
             playsBack: node.first("play").map { $0.text != "0" } ?? true,
             velocityChangeSpeed: speed,
+            voiceAssignment: VoiceAssignment.decode(node),
         )
         dynamic.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return dynamic

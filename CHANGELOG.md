@@ -9,6 +9,10 @@ and this project adheres to
 
 ### Added
 
+- **`VoiceAssignment`, on `Dynamic` and `Spanner.HairpinPayload`** (import-fidelity W4): MuseScore's
+  `<voiceAssignment>` — the whole instrument (the default), the staff, or the voice it is written in — and an older
+  file's `<dynType>`, read as MuseScore 4 reads them and saved where MuseScore writes them (`<dynType>0</dynType>` for
+  the staff when saving for MuseScore 3).
 - **`Dynamic.playbackRole`** — what a dynamic does to playback, MuseScore 4's classification (`Dynamic.PlaybackRole`),
   read in one place by the SMF's voice walk and by the hairpin ramps. A dynamic is a running level at its velocity, as
   before.

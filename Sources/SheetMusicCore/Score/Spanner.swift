@@ -205,15 +205,19 @@ public struct Spanner: Sendable, Equatable {
         /// (`HairpinRamps.resolveRamp`). MuseScore's default of 0 is normalized to nil at decode time.
         public var veloChange: Int?
         public var veloChangeMethod: VeloChangeMethod
+        /// MuseScore `<voiceAssignment>` (or an older file's `<dynType>`): the voices the hairpin plays in.
+        public var voiceAssignment: VoiceAssignment
 
         public init(
             subtype: Subtype,
             veloChange: Int? = nil,
             veloChangeMethod: VeloChangeMethod = .normal,
+            voiceAssignment: VoiceAssignment = .allInInstrument,
         ) {
             self.subtype = subtype
             self.veloChange = veloChange
             self.veloChangeMethod = veloChangeMethod
+            self.voiceAssignment = voiceAssignment
         }
     }
 

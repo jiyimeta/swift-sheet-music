@@ -183,6 +183,7 @@ extension Spanner {
             subtype: subtype,
             veloChange: veloChangeRaw == 0 ? nil : veloChangeRaw,
             veloChangeMethod: .init(rawValue: methodRaw) ?? .normal,
+            voiceAssignment: VoiceAssignment.decode(hp),
         )
     }
 

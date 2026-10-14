@@ -147,9 +147,9 @@ struct MSCXIdempotencyTests {
     /// - `spanner_offsets_score_end` — a spanner ending at the score end, the boundary where MuseScore's own
     ///   `measureByTick` steps BACK onto the last measure instead of past it.
     /// - `slur_ms3_exchangevoices` — 4 `<voice>` nodes and 6 `<location>` nodes across 3 measures, none of them
-    ///   single-voice. The gate's other fixtures are ALL single-voice (`<voice>` count == `<Measure>` count,
-    ///   measured — every one of them), so without this one the gate could not even in principle catch a bug
-    ///   confined to a second voice. **What this fixture actually covers: multi-voice `<location>` MARKER
+    ///   single-voice. The gate's other fixtures were ALL single-voice before `dynamics-voices` (`<voice>` count ==
+    ///   `<Measure>` count, measured — every one of them), so without this one the gate could not even in principle
+    ///   catch a bug confined to a second voice. **What this fixture actually covers: multi-voice `<location>` MARKER
     ///   writing** — the six `<location>` nodes here are all `<Spanner><next>/<prev>` slur begin/end markers
     ///   spanning several voices in one measure (`MSCXEncoder+ChordSlur.swift`'s `pendingSlurEnds` walk, and
     ///   the cross-voice `<voices>` field it deliberately does NOT place — see that file's doc comment).
@@ -183,6 +183,7 @@ struct MSCXIdempotencyTests {
     ///   center-on-symbol and symbol size.
     /// - `dynamics` — a dynamic's own text (words, runs with glyphs, an other-dynamics word), `<play>0</play>` and
     ///   `<veloChangeSpeed>`, written back in MuseScore's order (import fidelity W4).
+    /// - `dynamics-voices` — dynamics assigned to the instrument, the staff and one voice (import fidelity W4).
     @Test("committed MSCX fixtures encode to a fixed point", arguments: [
         "testVoltaTemp",
         "testSingleNoteDynamics",
@@ -199,6 +200,7 @@ struct MSCXIdempotencyTests {
         "markers-jumps",
         "marker-properties",
         "dynamics",
+        "dynamics-voices",
     ])
     func mscxFixtureIsAFixedPoint(_ name: String) throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData(name))

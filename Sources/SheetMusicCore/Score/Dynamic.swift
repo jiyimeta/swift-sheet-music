@@ -38,6 +38,8 @@ public struct Dynamic: Sendable, Equatable {
     public var playsBack: Bool
     /// MuseScore `<veloChangeSpeed>`.
     public var velocityChangeSpeed: VelocityChangeSpeed
+    /// MuseScore `<voiceAssignment>` (or an older file's `<dynType>`): the voices it plays in (`VoiceAssignment`).
+    public var voiceAssignment: VoiceAssignment
 
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
@@ -52,6 +54,7 @@ public struct Dynamic: Sendable, Equatable {
         preservedTextMarkup: PreservedTextMarkup? = nil,
         playsBack: Bool = true,
         velocityChangeSpeed: VelocityChangeSpeed = .normal,
+        voiceAssignment: VoiceAssignment = .allInInstrument,
     ) {
         self.subtype = subtype
         self.velocity = velocity
@@ -61,6 +64,7 @@ public struct Dynamic: Sendable, Equatable {
         self.preservedTextMarkup = preservedTextMarkup
         self.playsBack = playsBack
         self.velocityChangeSpeed = velocityChangeSpeed
+        self.voiceAssignment = voiceAssignment
         elementProperties = ElementProperties(visible: visible)
     }
 
