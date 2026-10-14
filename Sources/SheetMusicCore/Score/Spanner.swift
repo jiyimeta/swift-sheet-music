@@ -64,6 +64,10 @@ public struct Spanner: Sendable, Equatable {
     /// and MuseScore only writes it when it differs from the style
     /// default. `nil` = "use whatever this spanner kind defaults to".
     /// C++: `mu::engraving::TextLineBase::beginText`.
+    ///
+    /// The value is MuseScore xml text (`<sym>keyboardPedalPed</sym>`, `<b>rit.</b>`): MuseScore escapes it on write,
+    /// so it round-trips as characters. `beginRichText` reads its formatting; a label drawn as plain text draws
+    /// `beginRichText?.plainText`, never the tags.
     public var beginText: String?
     /// MuseScore `<placement>` sugar over `elementProperties.placement`.
     /// See the shared field for absent-tag and styled-side semantics.

@@ -867,15 +867,18 @@ extension LayoutEngine {
     /// source overrode the style default, and otherwise fall back to
     /// MuseScore's own default text for that kind.
     static func layoutLabel(anchor: SpannerAnchor) -> String {
+        // `<beginText>` is MuseScore xml text held as a string (`Spanner.beginRichText`); the label is its plain
+        // projection, never the tags.
+        let authored = anchor.beginText.map { RichText(xmlText: $0).plainText }
         switch anchor.kind {
         case .textLine, .glissando, .other:
-            return anchor.beginText ?? ""
+            return authored ?? ""
         // `Sid::palmMuteText` / `Sid::letRingText`
         // (`styledef.cpp:1943,1891`).
         case .palmMute:
-            return anchor.beginText ?? "P.M."
+            return authored ?? "P.M."
         case .letRing:
-            return anchor.beginText ?? "let ring"
+            return authored ?? "let ring"
         case .hairpin, .volta, .slur, .pedal, .ottava, .vibrato, .trill:
             return ""
         }

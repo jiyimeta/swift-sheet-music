@@ -1,5 +1,6 @@
 import Foundation
 import SheetMusicCore
+@testable import SheetMusicLayout
 @testable import SheetMusicMSCX
 @testable import SheetMusicXMLTools
 import Testing
@@ -51,5 +52,34 @@ struct SpannerBeginTextTests {
         """)
         let reparsed = try Spanner.decode(original.encode())
         #expect(reparsed.beginText == "rit.")
+    }
+
+    @Test func escapedMarkupIsMuseScoreXMLText() throws {
+        let sp = try spanner("""
+        <Spanner type="TextLine"><TextLine>
+        <beginText>&lt;sym&gt;keyboardPedalPed&lt;/sym&gt; &lt;b&gt;rit.&lt;/b&gt;</beginText></TextLine>
+        <next><location><measures>1</measures></location></next></Spanner>
+        """)
+        #expect(sp.beginText == "<sym>keyboardPedalPed</sym> <b>rit.</b>")
+        #expect(sp.beginRichText?.plainText == " rit.")
+        #expect(sp.beginRichText?.lines.first?.first == .symbol(name: "keyboardPedalPed", RichTextFormat()))
+        let encoded = try #require(String(bytes: XMLTreeSerializer.serialize(sp.encode()), encoding: .utf8))
+        #expect(encoded.contains(
+            "<beginText>&lt;sym&gt;keyboardPedalPed&lt;/sym&gt; &lt;b&gt;rit.&lt;/b&gt;</beginText>",
+        ))
+    }
+
+    @Test func theDrawnLabelIsThePlainProjection() throws {
+        let line = Spanner(kind: .textLine, rawType: "TextLine", nextMeasuresOffset: 1, beginText: "<b>rit.</b> poco")
+        let chord = Chord(duration: .whole, notes: ChordNotes([Note(pitch: 72, tpc: 14)]))
+        let score = Score(division: 480, parts: [Part(
+            id: "P1", instrument: Instrument(id: "voice"),
+            staves: [Staff(measures: [
+                Measure(voices: [Voice(elements: [.spanner(line), .chord(chord)])]),
+                Measure(voices: [Voice(elements: [.chord(chord)])]),
+            ])],
+        )])
+        let anchor = try #require(LayoutEngine.collectSpanners(score: score).first)
+        #expect(LayoutEngine.layoutLabel(anchor: anchor) == "rit. poco")
     }
 }

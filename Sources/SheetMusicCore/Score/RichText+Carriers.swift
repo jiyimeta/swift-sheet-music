@@ -89,3 +89,11 @@ extension Glissando {
         text.flatMap { preservedTextMarkup?.richText(ifCurrentFor: $0) }
     }
 }
+
+extension Spanner {
+    /// `beginText` read as what it is: MuseScore xml text held as a string — it writes a `TextLineBase`'s
+    /// `<beginText>` escaped (`XmlWriter::tagProperty`), so `<sym>` and `<b>` arrive here as characters.
+    public var beginRichText: RichText? {
+        beginText.map { RichText(xmlText: $0) }
+    }
+}
