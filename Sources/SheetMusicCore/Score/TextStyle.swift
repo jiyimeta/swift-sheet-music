@@ -36,6 +36,10 @@ public enum TextStyleType: String, Sendable, CaseIterable {
     /// Bend-amount label ("full", "1/2", …) on a legacy MuseScore 3
     /// `<Bend>`. C++: `mu::engraving::TextStyleType::BEND`.
     case bend
+    /// A marker set at its bar's start — Segno, Coda, Custom. C++: `TextStyleType::REPEAT_LEFT`.
+    case repeatLeft
+    /// A marker set at its bar's end, and every jump — Fine, To Coda, D.C. al Fine. C++: `TextStyleType::REPEAT_RIGHT`.
+    case repeatRight
 }
 
 /// Frame around a text element. Mirrors MuseScore's `FrameType`
@@ -182,6 +186,9 @@ extension TextStyleType {
             return TextStyleDefaults(
                 face: "Edwin", size: 8, style: [],
             )
+        // Sid::repeatLeft/RightFontFace = "Edwin", size 10, normal, spatium-dependent (styledef.cpp:1400-1430).
+        case .repeatLeft, .repeatRight:
+            return TextStyleDefaults(face: "Edwin", size: 10, style: [])
         }
     }
 }

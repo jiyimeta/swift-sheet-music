@@ -9,6 +9,8 @@ and this project adheres to
 
 ### Added
 
+- **`TextStyleType.repeatLeft` / `.repeatRight`** — MuseScore's repeat text styles (Edwin 10, regular, spatium-dependent,
+  18-point symbols), the styles markers and jumps are set in. **Breaking** for an exhaustive switch over `TextStyleType`.
 - **MuseScore's Da Coda, Da Doppia Coda and Custom markers** — `Marker.Kind.daCoda`, `.daDoubleCoda` and `.user`,
   which read as `.other` before. `Marker.Kind.isRightMarker` names the types that stand at their bar's end,
   `Marker.Kind.defaultXMLText` the text MuseScore gives a marker of each type, and `Marker.displayedRichText` /

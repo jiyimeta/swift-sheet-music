@@ -83,6 +83,8 @@ extension LayoutRichText {
     static func musicalSymbolSize(for style: TextStyleType) -> CGFloat {
         switch style {
         case .title: 22
+        // `Sid::repeatLeftMusicalSymbolSize` / `repeatRightMusicalSymbolSize` (styledef.cpp:2059, 2061).
+        case .repeatLeft, .repeatRight: 18
         case .tempo: 20
         case .subtitle, .rehearsalMark: 14
         case .chordSymbolRomanNumeral: 12

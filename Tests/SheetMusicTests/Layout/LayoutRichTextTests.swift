@@ -301,3 +301,120 @@ struct LayoutRichTextTests {
         }
     }
 }
+
+/// MuseScore's repeat text — the REPEAT_LEFT / REPEAT_RIGHT styles markers and jumps are set in
+/// (`engraving/style/styledef.cpp:1400-1430, 2059-2061`) — and the two things a marker's text does that no other text
+/// does: its symbols sit on half the cap height of the words beside them (`TextLayout::musicSymbolBaseLineAdjust`,
+/// `rendering/score/textlayout.cpp:391-414`), and its barline is its symbol's center (`Marker::symbolString`,
+/// `MarkerLayout::computeCustomTextOffset`). Measured with the installed provider, so every check is a relation.
+@Suite("Marker typesetting")
+struct MarkerTypesetTests {
+    private let _installFontMetrics = TestSupport.installFontMetrics
+    /// sp = 10: repeat text is 10 × 10 / 5 = 20 pt, its symbols 18 × 10 / 5 = 36 pt.
+    private static let metrics = StaffMetrics(staffSize: 40)
+    private static let left = CGPoint(x: 0, y: 1)
+    private static let right = CGPoint(x: 1, y: 1)
+
+    private static func close(_ a: CGFloat, _ b: CGFloat) -> Bool {
+        abs(a - b) < 1e-6
+    }
+
+    /// Half the cap height MuseScore centers a marker's symbol on: half the ink top of "H" in `font`.
+    private static func halfCap(_ font: LayoutFont) throws -> CGFloat {
+        try #require(FontMetrics.provider.textInkBounds(text: "H", font: font)).maxY / 2
+    }
+
+    /// Where a run's ink center sits, up from its line's baseline.
+    private static func inkCenterUp(_ run: LayoutRichTextRun) throws -> CGFloat {
+        let ink = try #require(FontMetrics.provider.textInkBounds(text: run.content.string, font: run.font))
+        return ink.midY - run.baselineShift
+    }
+
+    private static func marker(_ xmlText: String, _ style: TextStyleType = .repeatLeft) -> LayoutRichText {
+        LayoutRichText(marker: RichText(xmlText: xmlText), style: style, metrics: metrics)
+    }
+
+    @Test("repeat text is Edwin 10 regular, spatium-dependent, with 18-point symbols")
+    func repeatStyle() {
+        for style in [TextStyleType.repeatLeft, .repeatRight] {
+            let defaults = style.museScoreDefault
+            #expect(defaults.face == "Edwin" && defaults.size == 10 && defaults.style == [])
+            #expect(defaults.spatiumDependent)
+            #expect(LayoutRichText.musicalSymbolSize(for: style) == 18)
+        }
+        let rich = LayoutRichText(RichText(xmlText: "To <sym>coda</sym>"), style: .repeatRight, metrics: Self.metrics)
+        let runs = rich.lines[0].runs
+        #expect(Self.close(runs[0].font.pointSize, 20) && runs[0].font.weight == .regular && !runs[0].font.isItalic)
+        #expect(runs[1].font == LayoutFont(face: SMuFLFamily.bravura, pointSize: 36))
+    }
+
+    @Test("a marker's symbol is centered on half the cap height of the words beside it")
+    func symbolBesideWords() throws {
+        let runs = Self.marker("To <sym>coda</sym>", .repeatRight).lines[0].runs
+        try #require(runs.count == 2)
+        let center = try Self.inkCenterUp(runs[1])
+        let halfCap = try Self.halfCap(runs[0].font)
+        #expect(Self.close(center, halfCap))
+        #expect(runs[0].baselineShift == 0)
+    }
+
+    @Test("a lone symbol takes the marker's own cap height; a jump's symbol stays on the baseline")
+    func loneSymbolAndJump() throws {
+        let segno = try #require(Self.marker("<sym>segno</sym>").lines.first?.runs.first)
+        let base = TextInkGeometry.font(for: .repeatLeft, metrics: Self.metrics)
+        let center = try Self.inkCenterUp(segno)
+        let halfCap = try Self.halfCap(base)
+        #expect(Self.close(center, halfCap))
+        #expect(segno.baselineShift != 0)
+        // The control: the same text set as plain repeat text — a jump's — leaves the symbol on its baseline.
+        let jump = LayoutRichText(RichText(xmlText: "<sym>segno</sym>"), style: .repeatRight, metrics: Self.metrics)
+        #expect(jump.lines.first?.runs.first?.baselineShift == 0)
+    }
+
+    @Test("a codetta's two codas share the marker's own reference, as one fragment does in MuseScore")
+    func codettaSymbols() throws {
+        let runs = Self.marker("<sym>coda</sym><sym>coda</sym>").lines[0].runs
+        try #require(runs.count == 2)
+        #expect(runs[0].baselineShift == runs[1].baselineShift)
+        let base = TextInkGeometry.font(for: .repeatLeft, metrics: Self.metrics)
+        let center = try Self.inkCenterUp(runs[0])
+        let halfCap = try Self.halfCap(base)
+        #expect(Self.close(center, halfCap))
+    }
+
+    @Test("a lone segno is its own center; To ⟨coda⟩ puts its coda's center on the barline; words have none")
+    func symbolX() throws {
+        let segno = Self.marker("<sym>segno</sym>")
+        let segnoX = try #require(segno.repeatSymbolX(anchor: Self.left))
+        let segnoInk = try #require(segno.ink)
+        #expect(Self.close(segnoX, segnoInk.width / 2))
+
+        let toCoda = Self.marker("To <sym>coda</sym>", .repeatRight)
+        let codaX = try #require(toCoda.repeatSymbolX(anchor: Self.right))
+        let placed = toCoda.positionedRuns(at: .zero, anchor: .zero)
+        try #require(placed.count == 2)
+        let codaRun = placed[1]
+        let codaInk = try #require(FontMetrics.provider.textInkBounds(text: codaRun.content.string, font: codaRun.font))
+        #expect(Self.close(codaX, codaRun.baseline.x + codaInk.midX))
+        let toCodaInk = try #require(toCoda.ink)
+        #expect(codaX > toCodaInk.width / 2)
+
+        // A codetta's codas are one fragment in MuseScore, which matches no single coda: centered as a pair.
+        let codetta = Self.marker("<sym>coda</sym><sym>coda</sym>")
+        let codettaX = try #require(codetta.repeatSymbolX(anchor: Self.left))
+        let codettaInk = try #require(codetta.ink)
+        #expect(Self.close(codettaX, codettaInk.width / 2))
+
+        #expect(Self.marker("Fine", .repeatRight).repeatSymbolX(anchor: Self.right) == nil)
+    }
+
+    @Test("with a segno and a coda, the coda is the one centered: MuseScore's order, not the text's")
+    func symbolPriority() throws {
+        let both = Self.marker("<sym>segno</sym> and <sym>coda</sym>")
+        let x = try #require(both.repeatSymbolX(anchor: Self.left))
+        let placed = both.positionedRuns(at: .zero, anchor: .zero)
+        let last = try #require(placed.last)
+        let ink = try #require(FontMetrics.provider.textInkBounds(text: last.content.string, font: last.font))
+        #expect(Self.close(x, last.baseline.x + ink.midX))
+    }
+}
