@@ -74,6 +74,33 @@ struct MarkerTypeEncodeTests {
         }
     }
 
+    @Test("a textless Da Coda saved to 3.02 reopens with its words and saves to the same bytes again")
+    func textlessDaCodaReopensWithItsWordsInV3() throws {
+        let measure = Measure(
+            voices: [Voice(elements: [.chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]))])],
+            markers: [Marker(kind: .daCoda)],
+        )
+        let score = Score(division: 480, parts: [Part(
+            id: "1", instrument: Instrument(id: "piano"), staves: [Staff(measures: [measure])],
+        )])
+        let options = MSCXEncoderOptions(targetVersion: .v3)
+        let first = try MSCXEncoder.encode(score, options: options)
+        let reopened = try MSCXParser.parse(first)
+        let marker = try #require(reopened.parts.first?.staves.first?.measures.first?.markers.first)
+        #expect(marker.kind == .daCoda)
+        #expect(marker.text == "Da Coda")
+        let second = try MSCXEncoder.encode(reopened, options: options)
+        #expect(second == first)
+    }
+
+    @Test("without preserved markup a 3.02 textless To ⟨coda⟩ writes plain To Coda")
+    func toCodaSymWithoutMarkupWritesPlainWords() throws {
+        var options = MSCXEncoderOptions(targetVersion: .v3)
+        options.emitPreservedMarkup = false
+        let xml = try Self.xml(Marker(kind: .toCodaSym), options: options)
+        #expect(xml.contains("<text>To Coda</text>"))
+    }
+
     /// Every kind saved and reopened: MuseScore's own types come back as themselves, this library's type-less ones as
     /// Custom markers with the same words.
     @Test("a saved marker reopens as its kind, in this library's 4.60 and 3.02 files alike")
