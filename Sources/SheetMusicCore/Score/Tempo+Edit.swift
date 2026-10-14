@@ -67,156 +67,42 @@ extension Tempo {
         }
     }
 
-    /// Rewrites the equation in the words. While the marking's beat is the text's own, only the number is written,
-    /// counted in that beat; when the host changed the beat, the glyph is rewritten too (the table the derived text
-    /// uses) and the number counted in the new beat. A glyph that cannot be found to rewrite leaves the text's beat
-    /// standing, with the number counted in it.
+    /// Rewrites the equation the classifier matched (`TempoTextEquation`): the first one in document order whose beat
+    /// is `textBeatQuarters`. While the marking's beat is the text's own, only the number is written, counted in that
+    /// beat; when the host changed the beat, the glyph is rewritten too (the table the derived text uses) and the
+    /// number counted in the new beat.
+    ///
+    /// The markup is rewritten only when its plain text then equals the plain-text rewrite — the two sides change the
+    /// same equation or neither does. Otherwise the markup (stale now) is dropped and the plain text is rewritten
+    /// alone, anchored on the same equation: a glyph that lives only in the markup (a `<sym>`) is not in the plain
+    /// text, so there is nothing to rewrite and the number is counted in the text's own beat, which keeps the equation
+    /// true to what plays. When no anchor can be established, the text is regenerated from the marking's beat and
+    /// number (derived) rather than a guessed number rewritten.
     private mutating func rewriteEquation(textBeatQuarters: Double) {
+        let reading = displayedRichText
         let sameBeat = abs(textBeatQuarters - beatLengthInQuarters) < 1e-9
         let inTextBeat = Self.printedNumber(beatsPerSecond * 60 / textBeatQuarters)
         let replacement = sameBeat ? nil : metronomeMarking
         let glyphs = replacement?.symbolNames
         let number = replacement?.number ?? inTextBeat
-        if let markup = preservedTextMarkup?.replacingEquation(glyphs: glyphs, number: number) {
-            let plain = RichText(markup: markup).plainText
-            preservedTextMarkup = PreservedTextMarkup(content: markup.content, derivedText: plain)
-            text = plain
+        guard let plain = text else { return }
+        guard let match = Self.equationMatch(in: plain, reading: reading, quarters: textBeatQuarters) else {
+            text = nil
+            preservedTextMarkup = nil
+            followText = true
+            return
+        }
+        if let markup = preservedTextMarkup,
+           let rewritten = markup.replacingEquation(glyphs: glyphs, number: number, quarters: textBeatQuarters),
+           RichText(markup: rewritten).plainText == Self.spliced(plain, match, glyphs: glyphs, number: number)
+        {
+            let rewrittenPlain = RichText(markup: rewritten).plainText
+            preservedTextMarkup = PreservedTextMarkup(content: rewritten.content, derivedText: rewrittenPlain)
+            text = rewrittenPlain
             return
         }
         preservedTextMarkup = nil
-        guard var rewritten = text else { return }
-        if let anchored = Self.rewrittenEquation(in: rewritten, glyphs: glyphs, number: number) {
-            rewritten = anchored
-        } else if let span = Self.numberSpan(in: rewritten) {
-            rewritten.replaceSubrange(span, with: inTextBeat)
-        }
-        text = rewritten
-    }
-
-    /// The number of a "beat = number" in `text` whose beat glyph is not in the text (the glyph is a `<sym>` that plain
-    /// text drops): after the first equals sign MuseScore reads (=, ≒, ≈, ~) that has one — past spaces and "ca." /
-    /// "c." / "approx." — the digits, with at most one decimal point or comma inside them.
-    static func numberSpan(in text: String) -> Range<String.Index>? {
-        var searchStart = text.startIndex
-        while let sign = text[searchStart...].firstIndex(where: { isSign(of: $0) }) {
-            if let span = numberAfter(sign, in: text) {
-                return span
-            }
-            searchStart = text.index(after: sign)
-        }
-        return nil
-    }
-
-    /// The number after `text`'s first non-space character when that is an equals sign: the span of a character run
-    /// that follows a metronome glyph written as `<sym>`s.
-    static func numberSpanAfterLeadingSign(in text: String) -> Range<String.Index>? {
-        guard let sign = text.firstIndex(where: { !$0.isWhitespace }), isSign(of: text[sign]) else { return nil }
-        return numberAfter(sign, in: text)
-    }
-
-    /// `text` with the equation whose beat glyph is written in it as metronome codepoints (U+ECA0–U+ECB7) rewritten:
-    /// its number replaced by `number`, and its glyph by `glyphs` (SMuFL names) when given. `nil` when the text holds
-    /// no such equation. Anchoring on the glyph is what keeps "2 Allegro ♩ = 120" and "x = 3 ♩ = 120" from rewriting
-    /// the wrong number.
-    static func rewrittenEquation(in text: String, glyphs: [String]?, number: String) -> String? {
-        guard let spans = equationSpans(in: text) else { return nil }
-        let scalars = text.unicodeScalars
-        let glyph = glyphs.map(glyphString) ?? String(scalars[spans.glyph])
-        return String(scalars[..<spans.glyph.lowerBound]) + glyph
-            + String(scalars[spans.glyph.upperBound ..< spans.number.lowerBound]) + number
-            + String(scalars[spans.number.upperBound...])
-    }
-
-    /// The beat glyph written as `names` (SMuFL metronome names, `space` as a space) in codepoints.
-    private static func glyphString(_ names: [String]) -> String {
-        var result = String.UnicodeScalarView()
-        for name in names {
-            if name == "space" {
-                result.append(" ")
-            } else if let codepoint = TempoTextEquation.metronomeCodepoints[name] {
-                result.append(codepoint)
-            }
-        }
-        return String(result)
-    }
-
-    /// The first "glyph = number" in `text`: a metronome note, up to two dots after it, an equals sign, the number.
-    private static func equationSpans(in text: String) -> (glyph: Range<String.Index>, number: Range<String.Index>)? {
-        let scalars = text.unicodeScalars
-        var index = scalars.startIndex
-        while index < scalars.endIndex {
-            defer { index = scalars.index(after: index) }
-            guard TempoTextEquation.patterns.contains(where: { $0.note == scalars[index] }) else { continue }
-            var glyphEnd = scalars.index(after: index)
-            for _ in 0 ..< 2 {
-                let probe = skippingSpaces(from: glyphEnd, in: scalars)
-                guard probe < scalars.endIndex, scalars[probe] == TempoTextEquation.dot else { break }
-                glyphEnd = scalars.index(after: probe)
-            }
-            let sign = skippingSpaces(from: glyphEnd, in: scalars)
-            if sign < scalars.endIndex, isSign(scalars[sign]), let number = numberAfter(sign, in: text) {
-                return (index ..< glyphEnd, number)
-            }
-        }
-        return nil
-    }
-
-    private static func skippingSpaces(from start: String.Index, in scalars: String.UnicodeScalarView) -> String.Index {
-        var cursor = start
-        while cursor < scalars.endIndex, TempoTextEquation.isSpace(scalars[cursor]) {
-            cursor = scalars.index(after: cursor)
-        }
-        return cursor
-    }
-
-    /// The equals signs MuseScore reads: =, ≒, ≈, ~.
-    private static func isSign(_ scalar: Unicode.Scalar) -> Bool {
-        switch scalar {
-        case "=", "≒", "≈", "~": true
-        default: false
-        }
-    }
-
-    private static func isSign(of character: Character) -> Bool {
-        let scalars = character.unicodeScalars
-        guard scalars.count == 1, let scalar = scalars.first else { return false }
-        return isSign(scalar)
-    }
-
-    private static func isDigit(_ character: Character) -> Bool {
-        let scalars = character.unicodeScalars
-        guard scalars.count == 1, let scalar = scalars.first else { return false }
-        return TempoTextEquation.isDigit(scalar)
-    }
-
-    private static func numberAfter(_ sign: String.Index, in text: String) -> Range<String.Index>? {
-        var cursor = text.index(after: sign)
-        var skipping = true
-        while skipping {
-            while cursor < text.endIndex, text[cursor].isWhitespace {
-                cursor = text.index(after: cursor)
-            }
-            if let prefix = ["approx.", "ca.", "c."].first(where: { text[cursor...].hasPrefix($0) }) {
-                cursor = text.index(cursor, offsetBy: prefix.count)
-            } else {
-                skipping = false
-            }
-        }
-        let start = cursor
-        var end = cursor
-        var separatorSeen = false
-        while cursor < text.endIndex {
-            let character = text[cursor]
-            if isDigit(character) {
-                cursor = text.index(after: cursor)
-                end = cursor
-            } else if character == "." || character == ",", !separatorSeen, end > start {
-                separatorSeen = true
-                cursor = text.index(after: cursor)
-            } else {
-                break
-            }
-        }
-        return end > start ? start ..< end : nil
+        let glyphInText = glyphs != nil && !match.glyph.isEmpty
+        text = Self.spliced(plain, match, glyphs: glyphs, number: glyphInText ? number : inTextBeat)
     }
 }

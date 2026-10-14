@@ -71,7 +71,10 @@ and this project adheres to
   only. Editing "Allegro ♩ = 144" no longer saves the old 144 beside the new `<tempo>`. A deliberate deviation from
   MuseScore, whose `updateTempo` never changes a marking's type: an "a tempo" or "tempo primo" whose number is edited
   becomes an ordinary marking with the same words, because an edited number that playback ignored would be worse.
-  A host that only toggles `playsBack` on such a marking no longer counts as editing its number.
+  A host that only toggles `playsBack` on such a marking no longer counts as editing its number. The equation
+  rewritten is the one the classifier matched (the first of its beat in document order), in the markup and in the
+  plain text alike: a number behind a formatting tag is reached, and one the markup cannot reach drops the stale
+  markup and rewrites the same equation in the plain text, never an earlier "x = 3".
 - **`LayoutElement.spannerSegment` gains a trailing `richText: LayoutRichText?`** (default `nil`): the typeset label of
   a kind that draws formatted text (a gradual tempo change). Constructions are unchanged; a positional pattern needs one
   more `_` (`case let .spannerSegment(kind, from, to, _, _, _, _, _)`). `LayoutElement` is non-exhaustive by contract.

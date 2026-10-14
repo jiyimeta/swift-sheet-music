@@ -76,8 +76,8 @@ struct SetTempoTextTests {
             content: [
                 .characters("Allegro "),
                 .element(PreservedTextMarkup.Element(name: "sym", content: [.characters("metNoteQuarterUp")])),
-                .characters(" = "),
-                .element(PreservedTextMarkup.Element(name: "b", content: [.characters("144")])),
+                .characters(" = 1"),
+                .element(PreservedTextMarkup.Element(name: "b", content: [.characters("44")])),
             ],
             derivedText: "Allegro  = 144",
         )
@@ -86,6 +86,67 @@ struct SetTempoTextTests {
         #expect(edited.text == "Allegro  = 132")
         #expect(edited.preservedTextMarkup == nil)
         #expect(edited.beatsPerSecond == 2.2)
+    }
+
+    private typealias Item = PreservedTextMarkup.ContentItem
+
+    private static func sym(_ name: String) -> Item {
+        .element(PreservedTextMarkup.Element(name: "sym", content: [.characters(name)]))
+    }
+
+    private static let quarter = sym("metNoteQuarterUp")
+
+    private static func bold(_ text: String) -> Item {
+        .element(PreservedTextMarkup.Element(name: "b", content: [.characters(text)]))
+    }
+
+    @Test("a number behind another tag is rewritten in the text and in the markup, and an earlier equals sign is left")
+    func numberBehindATagIsReached() throws {
+        let content: [Item] = [.characters("x = 3 Allegro "), Self.quarter, .characters(" = "), Self.bold("120")]
+        let markup = PreservedTextMarkup(content: content, derivedText: "x = 3 Allegro  = 120")
+        let tempo = Tempo(beatsPerSecond: 2, text: "x = 3 Allegro  = 120", preservedTextMarkup: markup)
+        let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
+        #expect(edited.text == "x = 3 Allegro  = 132")
+        let expected: [Item] = [.characters("x = 3 Allegro "), Self.quarter, .characters(" = "), Self.bold("132")]
+        #expect(edited.preservedTextMarkup?.content == expected)
+        #expect(edited.preservedTextMarkup?.derivedText == "x = 3 Allegro  = 132")
+    }
+
+    @Test("a number the markup cannot reach is found by the same equation in the text, not by the first equals sign")
+    func unreachableNumberDoesNotTouchAnEarlierEquals() throws {
+        let content: [Item] = [.characters("x = 3 Allegro "), Self.quarter, .characters(" = 1"), Self.bold("20")]
+        let markup = PreservedTextMarkup(content: content, derivedText: "x = 3 Allegro  = 120")
+        let tempo = Tempo(beatsPerSecond: 2, text: "x = 3 Allegro  = 120", preservedTextMarkup: markup)
+        let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
+        #expect(edited.text == "x = 3 Allegro  = 132")
+        #expect(edited.preservedTextMarkup == nil)
+    }
+
+    @Test("when the markup is dropped, a host beat change counts the number in the beat the text had")
+    func droppedMarkupKeepsTheTextsBeat() throws {
+        let content: [Item] = [.characters("Allegro "), Self.quarter, .characters(" = 1"), Self.bold("44")]
+        let markup = PreservedTextMarkup(content: content, derivedText: "Allegro  = 144")
+        let tempo = Tempo(beatsPerSecond: 2.4, text: "Allegro  = 144", preservedTextMarkup: markup)
+        let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2, beatNote: .eighth))
+        // The glyph lived only in the markup, so there is none to rewrite: the equation stays true in the quarter.
+        #expect(edited.text == "Allegro  = 132")
+        #expect(edited.preservedTextMarkup == nil)
+        #expect(edited.beatNote == .eighth)
+    }
+
+    @Test("with two equations, the one the classifier reads is the one rewritten")
+    func firstOfTheClassifiedBeat() throws {
+        let content: [Item] = [
+            Self.sym("metNote8thUp"), .characters(" = 60 and "), Self.sym("metNoteQuarterUp"), .characters(" = 120"),
+        ]
+        let markup = PreservedTextMarkup(content: content, derivedText: " = 60 and  = 120")
+        let tempo = Tempo(beatsPerSecond: 2, text: " = 60 and  = 120", preservedTextMarkup: markup)
+        let edited = try Self.edited(tempo, to: SetTempo.Marking(beatsPerSecond: 2.2))
+        #expect(edited.text == " = 60 and  = 132")
+        let expected: [Item] = [
+            Self.sym("metNote8thUp"), .characters(" = 60 and "), Self.sym("metNoteQuarterUp"), .characters(" = 132"),
+        ]
+        #expect(edited.preservedTextMarkup?.content == expected)
     }
 
     @Test("words alone keep their words; a tempo becomes an ordinary marking with them")
@@ -200,8 +261,8 @@ struct SetTempoTextTests {
             content: [
                 .characters("Allegro "),
                 .element(PreservedTextMarkup.Element(name: "sym", content: [.characters("metNoteQuarterUp")])),
-                .characters(" = "),
-                .element(PreservedTextMarkup.Element(name: "b", content: [.characters("144")])),
+                .characters(" = 1"),
+                .element(PreservedTextMarkup.Element(name: "b", content: [.characters("44")])),
             ],
             derivedText: "Allegro  = 144",
         )
