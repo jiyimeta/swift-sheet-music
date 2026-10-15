@@ -30,7 +30,7 @@ import SheetMusicCore
 /// the citation table on `categories`.
 enum SkylineAutoplacePass {
     /// Address of one element inside the per-staff measure buffer.
-    private struct Address {
+    struct Address {
         let measure: Int
         let index: Int
     }
@@ -201,27 +201,6 @@ enum SkylineAutoplacePass {
 }
 
 extension SkylineAutoplacePass {
-    /// Every element the categories can autoplace, in staff order, with its kind.
-    private static func autoplaceCandidates(
-        in measures: [[LayoutElement]],
-    ) -> [(address: Address, kind: ShapeItemKind)] {
-        var result: [(address: Address, kind: ShapeItemKind)] = []
-        for (mIdx, elements) in measures.enumerated() {
-            for (i, el) in elements.enumerated() {
-                guard let kind = LayoutElementShape.kind(of: el),
-                      el.textPlacement?.autoplace != false else { continue }
-                result.append((Address(measure: mIdx, index: i), kind))
-            }
-        }
-        return result
-    }
-
-    private static func collect(
-        kinds: [ShapeItemKind], from candidates: [(address: Address, kind: ShapeItemKind)],
-    ) -> [Address] {
-        candidates.filter { kinds.contains($0.kind) }.map(\.address)
-    }
-
     private static func group(
         _ addresses: [Address], by grouping: Grouping,
         in measures: [[LayoutElement]], sp: CGFloat,
