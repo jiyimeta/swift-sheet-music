@@ -54,9 +54,13 @@ package enum PlayTechniqueSound {
     /// `articulationSounds` by the instrument's MuseScore id, grouped the way MuseScore's id tables group them
     /// (`windssetupdataresolver.cpp`, `stringssetupdataresolver.cpp`): a family is a whole id or a whole hyphen segment
     /// of one, so a contrabassoon is no contrabass and steel drums are no guitar. A solo bowed string has its
-    /// pizzicato only — its mute row names its own normal program, or an MS Basic sound (a cello's) a General MIDI font
-    /// does not have — and bass guitars, the plucked and folk strings MuseScore files under strings, and the cornet and
-    /// flugelhorn (sounds of their own, outside its brass section) keep their normal sound.
+    /// pizzicato only: the violin's, viola's and double bass's mute rows name their own normal program, and the
+    /// cello's an MS Basic sound whose bank-0 program (49) is a string ensemble. The cornet and flugelhorn are sounds
+    /// of their own outside MuseScore's brass section and keep theirs, as MuseScore does.
+    ///
+    /// Two deliberate departures keep their instrument's sound where MuseScore would not: bass guitars, whose rows name
+    /// acoustic and electric instruments these ids do not tell apart, and the harp, plucked and folk strings, which
+    /// MuseScore's last strings rule (`BASIC_STRING_SECTION`) would turn into a string ensemble's pizzicato and mute.
     ///
     /// Always bank 0. The table's other banks — 20/30/40/50 for the bowed solo and section sounds, 8 for an acoustic
     /// guitar's harmonics — are MS Basic's own, and a General MIDI font (folino ships GeneralUser GS) has none of them.
@@ -93,13 +97,14 @@ package enum PlayTechniqueSound {
         case solo, section, group
     }
 
+    /// `cello` is not a MuseScore id but one this package's own part plans use.
     private static func bowedStrings(_ id: String) -> BowedStrings? {
         switch id {
         case "violin", "viola", "violoncello", "cello", "contrabass", "double-bass": .solo
         case "violins", "violas", "violoncellos", "contrabasses", "treble-viol", "alto-viol", "pardessus-de-viole",
              "tenor-viol", "baryton", "viola-da-gamba", "viola-da-gamba-tablature", "violone", "d-violone": .section
-        case "strings": .group
-        default: id.hasPrefix("strings.") ? .group : nil
+        case "strings", "octobass": .group
+        default: nil
         }
     }
 

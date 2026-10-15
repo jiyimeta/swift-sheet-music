@@ -7,10 +7,11 @@ extension LiveChannelPlan {
     /// technique's sound takes a strip only while a melodic channel is left — past that it plays on its instrument's
     /// strip, as the rendered SMF plays it on its instrument's channel (`MidiRenderer.assignChannels`).
     ///
-    /// The two run out at different points. The live synth has one port's 15 melodic channels, counted per strip; the
-    /// SMF has 15 per declared `<midiPort>`, counted per `<Channel>`. So in a score that fills the live synth, a
-    /// technique can sound in the exported file and as its instrument live — as an instrument past the fifteenth
-    /// already shares a live channel there.
+    /// On one port the SMF runs out no later: its instruments share one round-robin of 15 counted per `<Channel>`, the
+    /// live synth's 15 are counted per strip. A technique takes an SMF channel free on its own port, though, so a score
+    /// whose instruments declare a second `<midiPort>` (or pin `<midiChannel>`s) can leave a technique a channel in the
+    /// exported file once the live synth is full — and then it sounds as its instrument live, as an instrument past the
+    /// fifteenth already shares a live channel there.
     struct Builder {
         private let timelines: [[Score.SoundPoint]]
         private let assignments: [[MidiRenderer.ChannelAssignment]]

@@ -114,6 +114,11 @@ struct SoundTimelineTests {
         #expect(resolve(.mute, "violoncello") == .keep)
         #expect(resolve(.tremolo, "strings") == .keep)
         #expect(resolve(.mute, "strings") == .generalMIDI(program: 49))
+        #expect(resolve(.pizzicato, "octobass") == .generalMIDI(program: 45))
+        #expect(resolve(.tremolo, "octobass") == .keep)
+        // Deliberately not MuseScore's last strings rule: a harp or a mandolin is no string ensemble.
+        #expect(resolve(.pizzicato, "harp") == .keep)
+        #expect(resolve(.mute, "mandolin") == .keep)
     }
 
     @Test("detaché, vibrato, legato and the handbell techniques sound as before")
