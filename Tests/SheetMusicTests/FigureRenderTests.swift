@@ -43,5 +43,22 @@
             #expect(abs(turned.boundingBox.height - plain.boundingBox.width) < 0.5)
             #expect(abs(turned.boundingBox.midX - center.x) < 0.5)
         }
+
+        /// The renderer turns the same way layout measures: clockwise on screen for a positive angle.
+        @available(macOS 15.0, *)
+        @Test("a positive rotation swings a glyph right of its pivot down, as layout's ink does")
+        func rotationDirectionMatchesLayout() throws {
+            let run = LayoutRichTextPositionedRun(
+                content: .symbol(codepoint: SMuFLCodepoint.byName("ornamentTrill") ?? 0xE566),
+                font: LayoutFont(face: SMuFLFamily.bravura, pointSize: 28), baseline: CGPoint(x: 100, y: 50),
+            )
+            let figure = LayoutFigure(primitives: [.run(run, rotation: 0.3, pivot: CGPoint(x: 0, y: 50))])
+            let plain = try #require(FigureRenderer.parts(for: LayoutFigure(primitives: [
+                .run(run, rotation: 0, pivot: .zero),
+            ])).fill)
+            let turned = try #require(FigureRenderer.parts(for: figure).fill)
+            #expect(turned.boundingBox.midY > plain.boundingBox.midY + 20)
+            #expect(abs(turned.boundingBox.midY - figure.ink.midY) < 1)
+        }
     }
 #endif

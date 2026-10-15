@@ -106,6 +106,8 @@ extension MidiRenderer {
         // or per plan entry) because a tie chain routinely spans a
         // bar line.
         var sustainedChannel: Int?
+        // The capo an open tie chain's head sounded through (`.some(nil)` for none), for the same reason.
+        var sustainedCapo: CapoPoint??
 
         // The timeline the run being played hears (`DynamicsTimeline.pass(startingAt:carrying:)`): all of it until a
         // repeat or a jump starts a new run.
@@ -264,15 +266,21 @@ extension MidiRenderer {
                 // FORWARD (`tieForward != nil`) publishes the channel
                 // it just resolved to for the next link in the chain;
                 // a chord with no forward tie ends any open chain.
+                // The capo works the same way: a tie's continuation keeps the pitch its head sounded, so a capo
+                // that changes under a tie neither retunes the held note nor leaves the head's note-on unreleased.
+                var capo = CapoRanges.active(in: capoPoints, at: localTick + originalTickDelta)
                 if case let .chord(chord) = element {
                     if chord.notes.contains(where: { $0.tieBack != nil }),
                        let sustained = sustainedChannel
                     {
                         channel = sustained
                     }
-                    sustainedChannel = chord.notes.contains(where: { $0.tieForward != nil })
-                        ? channel
-                        : nil
+                    if chord.notes.contains(where: { $0.tieBack != nil }), let sustained = sustainedCapo {
+                        capo = sustained
+                    }
+                    let continues = chord.notes.contains(where: { $0.tieForward != nil })
+                    sustainedChannel = continues ? channel : nil
+                    sustainedCapo = continues ? .some(capo) : nil
                 }
                 // Tremolo branch: when a chord carries a `Tremolo`,
                 // expand to per-stroke note events via the
@@ -292,7 +300,7 @@ extension MidiRenderer {
                         events: &events,
                         dynamics: dynamics,
                         ottavaRanges: ottavaRanges,
-                        capoPoints: capoPoints,
+                        capo: capo,
                         originalTickDelta: originalTickDelta,
                     )
                     continue
@@ -319,7 +327,7 @@ extension MidiRenderer {
                     lyricAnchors: &lyricAnchors,
                     dynamics: dynamics,
                     ottavaRanges: ottavaRanges,
-                    capoPoints: capoPoints,
+                    capo: capo,
                     originalTickDelta: originalTickDelta,
                 )
                 if case .breath = element { pauseTicksInMeasure += localTick - tickBeforeElement }
@@ -371,7 +379,7 @@ extension MidiRenderer {
         lyricAnchors: inout [LyricMidiCodec.Anchor],
         dynamics: DynamicsTimeline,
         ottavaRanges: [OttavaRange],
-        capoPoints: [CapoPoint],
+        capo: CapoPoint?,
         originalTickDelta: Int,
     ) {
         switch element {
@@ -392,8 +400,8 @@ extension MidiRenderer {
                 events.append(TimedMidiEvent(tick: localTick, event: .meta(meta)))
             }
         // Text annotations, string tunings, and ambitus range indicators
-        // produce no MIDI events. A capo changes sounding pitch upstream, but
-        // this library does not apply it yet. A dynamic reaches the chords through `DynamicsTimeline`.
+        // produce no MIDI events. A capo reaches the chords through `CapoRanges` (the `capo` the walk resolved), a
+        // dynamic through `DynamicsTimeline`.
         case .clef, .barLine, .spanner, .measureRepeat, .harmony,
              .sticking, .expression, .capo, .stringTunings, .ambitus, .figuredBass, .symbol, .fretDiagram,
              .preserved, .dynamic:
@@ -480,7 +488,6 @@ extension MidiRenderer {
                 in: ottavaRanges, at: onsetOriginalTick,
             )
             // At the chord's notated tick, as MuseScore reads the capo at its segment's.
-            let capo = CapoRanges.active(in: capoPoints, at: localTick + originalTickDelta)
             renderChordWithGraces(
                 capo.map { CapoRanges.compensate(chord, for: $0) } ?? chord,
                 tick: localTick + adjust.onsetShift,

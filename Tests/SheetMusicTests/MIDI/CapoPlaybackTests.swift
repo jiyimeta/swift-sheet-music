@@ -66,6 +66,33 @@ struct CapoPlaybackTests {
         #expect(bars[0] == [54, 66])
     }
 
+    /// MuseScore sounds a tied note once, at the pitch its head's capo gives; the tail is not retuned. A tail read at
+    /// its own capo would key its note-off to another pitch and leave the head's note-on sounding.
+    @Test("a note tied across a capo change keeps its head's pitch, on and off")
+    func tieAcrossCapoChange() throws {
+        func bar(_ capo: Capo, _ note: Note) -> Measure {
+            let chord = Chord(duration: .whole, notes: ChordNotes([note]))
+            return Measure(voices: [Voice(elements: [.capo(capo), .chord(chord)])])
+        }
+        let score = Score(division: 480, parts: [Part(
+            id: "P1", instrument: Instrument(id: "guitar-steel"),
+            staves: [Staff(lineCount: 5, measures: [
+                bar(Capo(fretPosition: 3, text: "Capo 3"), Note(pitch: 60, tpc: 14, tieForward: 1)),
+                bar(Capo(fretPosition: 2, text: "Capo 2"), Note(pitch: 60, tpc: 14, tieBack: 1)),
+            ])],
+        )], systemMeasures: [SystemMeasure(), SystemMeasure()])
+        let events = try MidiRenderer.render(score: score).tracks.flatMap(\.events)
+        let notes = events.compactMap { timed -> String? in
+            switch timed.event {
+            case let .noteOn(_, pitch, _): "on \(pitch) @\(timed.tick)"
+            case let .noteOff(_, pitch, _): "off \(pitch) @\(timed.tick)"
+            default: nil
+            }
+        }
+        // One attack, released at the tied span's end (the renderer releases a tick early).
+        #expect(notes == ["on 63 @0", "off 63 @\(2 * Self.bar - 1)"])
+    }
+
     @Test("collect and active read the staff's capos in tick order")
     func ranges() throws {
         let score = try AnnotationFixtures.load("w5-capo-playback")

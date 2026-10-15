@@ -88,14 +88,13 @@ extension MidiRenderer {
         events: inout [TimedMidiEvent],
         dynamics: DynamicsTimeline,
         ottavaRanges: [OttavaRange],
-        capoPoints: [CapoPoint],
+        capo: CapoPoint?,
         originalTickDelta: Int,
     ) throws {
         let chordTicks = chord.duration
             .resolved(in: measureDuration)
             .ticks(division: division)
         // The strokes sound the chord, and a two-note tremolo's follower, through the capo at the chord's tick.
-        let capo = CapoRanges.active(in: capoPoints, at: localTick + originalTickDelta)
         let chord = capo.map { CapoRanges.compensate(chord, for: $0) } ?? chord
         var followerChord: Chord?
         if chord.tremolo?.span == .between {

@@ -76,4 +76,20 @@ struct LayoutFigureTests {
         #expect(abs(turned.height - plain.width) < 0.01)
         #expect(abs(turned.midX - center.x) < 0.01 && abs(turned.midY - center.y) < 0.01)
     }
+
+    /// The sign every renderer must agree on: a positive angle turns clockwise on screen (Qt's `rotate`, which
+    /// `symbolAngle` feeds), so in this y-down space a glyph to the right of its pivot swings down.
+    @Test("a positive rotation turns clockwise on screen: right of the pivot moves down")
+    func rotationDirection() {
+        let run = LayoutRichTextPositionedRun(
+            content: .symbol(codepoint: SMuFLCodepoint.byName("ornamentTrill") ?? 0xE566),
+            font: LayoutFont(face: SMuFLFamily.bravura, pointSize: 28), baseline: CGPoint(x: 100, y: 50),
+        )
+        let pivot = CGPoint(x: 0, y: 50)
+        let plain = LayoutFigure(primitives: [.run(run, rotation: 0, pivot: pivot)]).ink
+        let clockwise = LayoutFigure(primitives: [.run(run, rotation: 0.3, pivot: pivot)]).ink
+        let counter = LayoutFigure(primitives: [.run(run, rotation: -0.3, pivot: pivot)]).ink
+        #expect(clockwise.midY > plain.midY + 20)
+        #expect(counter.midY < plain.midY - 20)
+    }
 }

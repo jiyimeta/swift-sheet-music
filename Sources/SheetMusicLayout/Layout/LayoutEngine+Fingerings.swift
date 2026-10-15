@@ -145,13 +145,23 @@ extension LayoutEngine {
         }
     }
 
-    /// Right-aligned left of the chord's leftmost note (with its accidental), each on its own note's line.
+    /// Right-aligned left of the chord's leftmost note shape — its head, or its accidental hanging
+    /// `accidentalNoteDistance` 0.25 sp further left — each on its own note's line: MuseScore places each left of its
+    /// own note and then aligns a chord's all on the leftmost (`ChordLayout::layoutChords1`,
+    /// `chordlayout.cpp:312-333`).
     private static func placeLeftHand(
         _ blocks: [FingeringBlock], chord: FingeringChord, sp: CGFloat,
     ) -> [(FingeringBlock, CGPoint, Placement)] {
         guard !blocks.isEmpty else { return [] }
         let leftmost = chord.notes.map { note in
-            noteheadLeftEdge(note.origin.x, sp: sp) - (note.accidental == nil ? 0 : sp)
+            let head = noteheadLeftEdge(note.origin.x, sp: sp)
+            guard let accidental = note.accidental,
+                  let scalar = Unicode.Scalar(AccidentalGlyph.codepoint(accidental)),
+                  let box = FontMetrics.provider.textInkBounds(
+                      text: String(Character(scalar)), font: LayoutFont(face: SMuFLFamily.bravura, pointSize: 4 * sp),
+                  )
+            else { return head }
+            return head - 0.25 * sp - box.width
         }.min() ?? chord.column
         let rightEdge = leftmost - 0.5 * sp
         return blocks.map { block in
