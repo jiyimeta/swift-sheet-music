@@ -36,7 +36,9 @@ extension LayoutEngine {
         }
     }
 
-    /// One fingering, typeset: its text block's size and first-line ascent.
+    /// One fingering, typeset: its width, and the height and first-baseline depth of its ink. MuseScore's text box is
+    /// its fragments' tight ink (`TextLayout`, `textlayout.cpp:362`), so a fingering stacks, clears its chord and
+    /// takes its string-number circle by its ink, not by its line box.
     private struct FingeringBlock {
         let fingering: Fingering
         let note: LayoutChordNote
@@ -44,20 +46,39 @@ extension LayoutEngine {
         let rich: LayoutRichText?
         let font: LayoutFont
         let width: CGFloat
+        /// The ink's height.
         let height: CGFloat
+        /// The first baseline's depth under the ink's top.
         let ascent: CGFloat
+        /// How far the `.staffText` origin sits under the first baseline.
+        let originDrop: CGFloat
 
         init(_ fingering: Fingering, note: LayoutChordNote, style: TextStyleType, metrics: StaffMetrics) {
             self.fingering = fingering
             self.note = note
             self.style = style
             let overrides = fingering.fontOverrides
-            rich = fingering.richText.map { LayoutRichText($0, style: style, overrides: overrides, metrics: metrics) }
+            let rich = fingering.richText.map {
+                LayoutRichText($0, style: style, overrides: overrides, metrics: metrics)
+            }
+            self.rich = rich
             font = TextInkGeometry.font(for: style, overrides: overrides, metrics: metrics)
             let size = rich?.size ?? TextInkGeometry.typographicSize(text: fingering.text, font: font)
             width = size.width
-            height = size.height
-            ascent = rich?.lines.first?.ascent ?? FontMetrics.provider.ascent(font: font)
+            if let rich, let ink = rich.ink {
+                height = ink.height
+                ascent = (rich.lineBaselines.first ?? 0) - ink.minY
+            } else if rich == nil, let ink = FontMetrics.provider.textInkBounds(text: fingering.text, font: font) {
+                height = ink.height
+                ascent = ink.maxY
+            } else {
+                height = size.height
+                ascent = rich?.lines.first?.ascent ?? FontMetrics.provider.ascent(font: font)
+            }
+            originDrop = rich.map { LayoutEngine.textPlacementOrigin(rich: $0, baseline: .zero, center: false) }?.y
+                ?? LayoutEngine.textPlacementOrigin(
+                    text: fingering.text, font: font, baseline: .zero, center: false,
+                ).y
         }
 
         /// The height a stack reserves: a string number's circle adds its padding top and bottom.
@@ -219,8 +240,9 @@ extension LayoutEngine {
             richText: block.rich,
         )]
         if block.style == .stringNumber {
-            // `STRING_NUMBER`'s circle frame: padding 0.2 sp, line 0.1 sp (`styledef.cpp:996-1003`).
-            var box = CGRect(x: placed.x, y: placed.y - block.height, width: block.width, height: block.height)
+            // `STRING_NUMBER`'s circle frame around the ink: padding 0.2 sp, line 0.1 sp (`styledef.cpp:996-1003`).
+            let inkTop = placed.y - block.originDrop - block.ascent
+            var box = CGRect(x: placed.x, y: inkTop, width: block.width, height: block.height)
                 .insetBy(dx: -0.2 * sp, dy: -0.2 * sp)
             if box.width < box.height { box = box.insetBy(dx: -(box.height - box.width) / 2, dy: 0) }
             elements.append(.figure(

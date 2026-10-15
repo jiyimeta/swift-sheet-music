@@ -65,6 +65,25 @@ struct FingeringLayoutTests {
         #expect(abs(one.origin.x + width / 2 - noteX) < 0.6)
     }
 
+    /// Measured off MuseScore 4.7's engraving of this fixture at 600 dpi (41.25 px a space): the "1" sits on its
+    /// baseline 0.53 sp over the top line — the E5's head top — and the "3" stacks 1.45 sp higher, baseline to
+    /// baseline: a quarter of the digit's tight ink height beyond it, not of its line box.
+    @Test("the stack is MuseScore's: the 3's baseline 1.45 sp over the 1's, the 1 half a space over its note")
+    func stackCalibratedAgainstMuseScore() throws {
+        let document = try F.layout(F.load("w5-fingering-staves"))
+        let fingerings = Self.texts(document, style: .fingering)
+        let one = try #require(fingerings.first { $0.text == "1" })
+        let three = try #require(fingerings.first { $0.text == "3" })
+        let font = TextInkGeometry.font(for: .fingering, metrics: F.metrics)
+        let drop = LayoutEngine.textPlacementOrigin(text: "1", font: font, baseline: .zero, center: false).y
+        let baselineOne = one.origin.y - drop
+        let baselineThree = three.origin.y - drop
+        #expect(abs((baselineOne - baselineThree) - 1.45 * F.sp) < 0.1 * F.sp)
+        // The chord's top note, E5, a space above its first-listed C5: its head top half a space above its center.
+        let noteTop = try #require(F.chordNoteY(document, nth: 0)) - 1.5 * F.sp
+        #expect(abs((noteTop - baselineOne) - 0.53 * F.sp) < 0.1 * F.sp)
+    }
+
     @Test("the lower staff of a grand staff puts its fingering below its chord")
     func grandStaffLowerStaffBelow() throws {
         let document = try F.layout(F.load("w5-fingering-staves"))
@@ -113,8 +132,13 @@ struct FingeringLayoutTests {
         #expect(!fill)
         #expect(abs(width - 0.1 * F.sp) < 0.001)
         #expect(rect.width >= rect.height)
-        // The circle surrounds the digit's box.
-        #expect(rect.contains(CGPoint(x: number.origin.x + 1, y: number.origin.y - 1)))
+        // The circle frames the digit's tight ink with MuseScore's 0.2 sp padding: the ink's middle is its middle.
+        let font = TextInkGeometry.font(for: .stringNumber, metrics: F.metrics)
+        let ink = try #require(FontMetrics.provider.textInkBounds(text: "3", font: font))
+        let drop = LayoutEngine.textPlacementOrigin(text: "3", font: font, baseline: .zero, center: false).y
+        let inkMidY = number.origin.y - drop - ink.midY
+        #expect(abs(rect.midY - inkMidY) < 0.01)
+        #expect(abs(rect.height - (ink.height + 0.4 * F.sp)) < 0.01 || rect.width > rect.height)
     }
 
     @Test("an offset moves a right-hand fingering, a hidden one is a ghost, an unknown style is not drawn")
