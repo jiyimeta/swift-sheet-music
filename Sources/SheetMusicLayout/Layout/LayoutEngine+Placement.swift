@@ -1396,9 +1396,26 @@ extension LayoutEngine {
                         kind: .ambitus, figure: figure, color: ambitus.elementProperties.color,
                     )
                     if ambitus.visible { out.append(element) } else { invisibleOut.append(element) }
-                case .figuredBass, .fretDiagram, .preserved:
-                    // Figured bass (W5 Task 11) and fret diagrams (12) get their passes in their own tasks;
-                    // source-only preserved markup has no layout behavior.
+                case let .figuredBass(figuredBass):
+                    guard figuredBass.visible || options.showsInvisibleElements else { break }
+                    let columnX = timedX(atTick: tickCursor)
+                    let figure = FiguredBassGeometry.figure(
+                        figuredBass, columnX: columnX,
+                        // `figuredBassYOffset`: 6 sp below the top line; MuseScore fixes it, `<placement>` aside.
+                        topY: staffMidY - metrics.sp * 2 + 6 * metrics.sp,
+                        lineEndX: figuredBassLineEnd(
+                            figuredBass, tick: tickCursor, columnX: columnX, division: division,
+                            tickColumns: tickColumns, sp: metrics.sp,
+                        ),
+                        sp: metrics.sp,
+                    )
+                    let element = LayoutElement.figure(
+                        kind: .figuredBass, figure: figure, color: figuredBass.elementProperties.color,
+                        placement: TextPlacementMetadata(side: .below, autoplace: false),
+                    )
+                    if figuredBass.visible { out.append(element) } else { invisibleOut.append(element) }
+                case .fretDiagram, .preserved:
+                    // Fret diagrams get their pass in W5 Task 12; source-only preserved markup has no layout behavior.
                     break
                 case let .locationShift(delta):
                     // Voice-level cursor shift. Adds the location's

@@ -49,6 +49,12 @@ and this project adheres to
   and mirror honored), the accidentals the key calls for (computed at layout, as MuseScore does), the connecting line
   (0.12 sp, 0.8 sp short of each head; off with `hasLine`) and the ledger lines, in a header column between the key and
   the time signature padded by MuseScore's 0.5 sp `ambitusMargin`. Scores without an ambitus lay out exactly as before.
+- **Figured bass is drawn** — a `<FiguredBass>` draws its figures under the staff (6 sp from the top line), the digit
+  of each centered under its note, items stacked a line apart, with accidentals, crosses, slashed digits, parentheses
+  and continuation lines (to 1.5 sp past the last chord of the figure's length, within its bar). MuseScore's own MScoreBC
+  font is not shipped, so the glyphs are SMuFL's `figbass*` set sized to MScoreBC's digit: a slashed or backslashed digit
+  is the raised form where SMuFL has one, the digit with a combining mark elsewhere. Text that did not parse as figures
+  draws as its lines.
 - **`LayoutElement.figure`** — one layout case for strokes, ellipses and glyph runs (`LayoutFigure`): `<Symbol>`s now,
   and the ambitus, figured bass, fret diagrams and string numbers next. Every renderer draws it from its primitives —
   the draw program with the opcodes it already has. Adding a case breaks exhaustive switches over `LayoutElement`.
