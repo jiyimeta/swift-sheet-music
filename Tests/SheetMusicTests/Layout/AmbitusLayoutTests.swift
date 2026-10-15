@@ -134,4 +134,32 @@ struct AmbitusLayoutTests {
         let ghosts = F.layout(score, showsInvisible: true).systems.flatMap(\.measures).flatMap(\.invisibleElements)
         #expect(ghosts.count { if case .figure = $0 { true } else { false } } == 1)
     }
+
+    /// The figure's glyphs — its two heads, since F5 and C4 need no accidental in C major.
+    private static func headGlyphs(_ ambitus: Ambitus) throws -> [UInt32] {
+        let figure = try #require(Self.figure(F.layout(F.score([.ambitus(ambitus), F.whole()]))))
+        return figure.primitives.compactMap { primitive -> UInt32? in
+            guard case let .run(run, _, _) = primitive, case let .symbol(codepoint) = run.content else { return nil }
+            return codepoint
+        }
+    }
+
+    /// MuseScore's `Ambitus::noteHead`: the `<head>` group's up-stem column at the head type, a 4.6 file's ordinal
+    /// (5, triangle up — the fixture's second bar) or a name token alike; an unknown group is the normal head.
+    @Test("the head group picks the glyph: the fixture's triangles, a name token, an unknown group")
+    func headGroup() throws {
+        var triangles = Self.ambitus
+        triangles.noteHeadGroup = "5"
+        triangles.noteHeadType = .quarter
+        let triangle = SMuFLCodepoint.noteheadTriangleUpBlack
+        #expect(try Self.headGlyphs(triangles) == [triangle, triangle])
+        var named = Self.ambitus
+        named.noteHeadGroup = "diamond"
+        named.noteHeadType = .half
+        let diamond = try #require(SMuFLCodepoint.byName("noteheadDiamondHalf"))
+        #expect(try Self.headGlyphs(named) == [diamond, diamond])
+        var unknown = Self.ambitus
+        unknown.noteHeadGroup = "99"
+        #expect(try Self.headGlyphs(unknown) == [SMuFLCodepoint.noteheadBlack, SMuFLCodepoint.noteheadBlack])
+    }
 }

@@ -111,13 +111,34 @@ enum AmbitusGeometry {
         return bottom - top
     }
 
-    private static func headCodepoint(_ type: Ambitus.NoteHeadType?) -> UInt32 {
-        switch type {
-        case .half: SMuFLCodepoint.noteheadHalf
-        case .whole: SMuFLCodepoint.noteheadWhole
-        case .brevis: SMuFLCodepoint.noteheadDoubleWhole
-        default: SMuFLCodepoint.noteheadBlack
+    /// `Ambitus::noteHead` (`ambitus.cpp:243-258`): the `<head>` group's up-stem column at the head type, a quarter
+    /// head when the type is auto, the normal group's when the cell is empty or the group unknown.
+    private static func headCodepoint(_ ambitus: Ambitus) -> UInt32 {
+        let kind: NoteHeadKind = switch ambitus.noteHeadType {
+        case .half: .half
+        case .whole: .whole
+        case .brevis: .doubleWhole
+        default: .quarter
         }
+        let group = ambitus.noteHeadGroup.flatMap(headGroup) ?? .normal
+        return SMuFLCodepoint.byName(NoteHeadGroup.symName(group: group, kind: kind, stemUp: true))
+            ?? SMuFLCodepoint.byName(NoteHeadGroup.symName(group: .normal, kind: kind, stemUp: true))
+            ?? SMuFLCodepoint.noteheadBlack
+    }
+
+    /// MuseScore's `NoteHeadGroup` in ordinal order (`types/types.h:470-499`), which a 4.6 file writes in `<head>`.
+    private static let headGroupsByOrdinal: [NoteHeadGroup] = [
+        .normal, .cross, .plus, .xcircle, .withX, .triangleUp, .triangleDown, .slashed1, .slashed2, .diamond,
+        .diamondOld, .circled, .circledLarge, .largeArrow, .brevisAlt, .slash, .largeDiamond, .sol, .la, .fa, .mi,
+        .doShape, .reShape, .tiShape, .heavyCross, .heavyCrossHat,
+    ]
+
+    /// `<head>` as a 4.6 ordinal or a name token.
+    private static func headGroup(_ token: String) -> NoteHeadGroup? {
+        if let ordinal = Int(token) {
+            return headGroupsByOrdinal.indices.contains(ordinal) ? headGroupsByOrdinal[ordinal] : nil
+        }
+        return NoteHeadGroup.from(token: token)
     }
 
     /// A glyph's ink box at the staff's glyph size, Y-up from the baseline; `nil` when the provider has none.
@@ -132,7 +153,7 @@ enum AmbitusGeometry {
     /// them — the bottom one pushed further left when the top one reaches down past its top (`tlayout.cpp:686-731`).
     /// The accidental type is MuseScore's: computed from the tpc and the key at layout, whatever the file stored.
     private static func arrangement(_ ambitus: Ambitus, key: Int, rowDifference: CGFloat, sp: CGFloat) -> Arrangement {
-        let head = headCodepoint(ambitus.noteHeadType)
+        let head = headCodepoint(ambitus)
         let headWidth = glyphBox(head, sp: sp)?.width ?? GuitarBendGeometry.noteheadWidthSp * sp
         let topAccidental = PitchSpelling.displayedAccidental(forTpc: ambitus.topTpc, in: key)
         let bottomAccidental = PitchSpelling.displayedAccidental(forTpc: ambitus.bottomTpc, in: key)

@@ -10,9 +10,9 @@ import SheetMusicFoundation
 ///
 /// **Open note-head group.** `noteHeadGroup` keeps the `<head>` text exactly as
 /// written. MuseScore 4.6 writes the `NoteHeadGroup` ordinal, while MuseScore 5
-/// may write its name. This library does not otherwise model the roughly thirty
-/// note-head groups, so their semantic mapping is deferred until noteheads have
-/// a shared model rather than introducing a partial enum here.
+/// may write its name. Layout reads either into SheetMusicLayout's
+/// `NoteHeadGroup` to pick the glyph (`AmbitusGeometry`); the model keeps the
+/// text so a token neither form knows survives a round trip.
 ///
 /// **Nested accidental limitation.** Each accidental wrapper contains a full
 /// `<Accidental>`, but only its `<subtype>` is modeled. Any other child in that
