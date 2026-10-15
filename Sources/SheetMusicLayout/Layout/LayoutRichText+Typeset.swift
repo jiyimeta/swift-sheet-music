@@ -75,10 +75,14 @@ extension LayoutRichText {
         case .subtitle, .rehearsalMark: 14
         case .chordSymbolRomanNumeral: 12
         case .pageNumber: 11
-        case .header, .footer: 9
-        case .glissando, .bend: 8
+        case .header, .footer, .stringTunings: 9
+        // `Sid::fingeringMusicalSymbolSize` … `harpPedalTextDiagramMusicalSymbolSize` (styledef.cpp:2019-2076).
+        case .glissando, .bend, .fingering, .lhGuitarFingering, .rhGuitarFingering, .stringNumber,
+             .harpPedalTextDiagram:
+            8
+        case .fretDiagramFretNumber: 6
         case .composer, .lyricist, .lyricsOdd, .lyricsEven, .dynamics, .staffText, .systemText,
-             .instrumentChange, .pedal, .chordSymbolA, .chordSymbolB:
+             .instrumentChange, .pedal, .chordSymbolA, .chordSymbolB, .expression, .sticking, .harpPedalDiagram:
             10
         }
     }

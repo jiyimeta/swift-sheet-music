@@ -40,6 +40,26 @@ public enum TextStyleType: String, Sendable, CaseIterable {
     case repeatLeft
     /// A marker set at its bar's end, and every jump — Fine, To Coda, D.C. al Fine. C++: `TextStyleType::REPEAT_RIGHT`.
     case repeatRight
+    /// Expression text ("dolce"). C++: `TextStyleType::EXPRESSION` (`styledef.cpp:1128-1146`).
+    case expression
+    /// Drum / hand sticking ("R", "L"). C++: `TextStyleType::STICKING` (`styledef.cpp:1633-1651`).
+    case sticking
+    /// Piano finger number. C++: `TextStyleType::FINGERING` (`styledef.cpp:894-908`).
+    case fingering
+    /// Left-hand guitar fingering. C++: `LH_GUITAR_FINGERING` (`styledef.cpp:925-939`).
+    case lhGuitarFingering
+    /// Right-hand guitar fingering (p, i, m, a). C++: `RH_GUITAR_FINGERING` (`styledef.cpp:941-955`).
+    case rhGuitarFingering
+    /// Circled string number. C++: `STRING_NUMBER` (`styledef.cpp:989-1003`).
+    case stringNumber
+    /// String-tunings text. C++: `STRING_TUNINGS` (`style/textstyle.cpp:288-306`).
+    case stringTunings
+    /// Harp pedal diagram, glyph mode. C++: `HARP_PEDAL_DIAGRAM` (`styledef.cpp:1007-1026`).
+    case harpPedalDiagram
+    /// Harp pedal diagram, text mode. C++: `HARP_PEDAL_TEXT_DIAGRAM` (`styledef.cpp:1028-1046`).
+    case harpPedalTextDiagram
+    /// The fret-offset number beside a fret diagram. C++: `FRET_DIAGRAM_FRET_NUMBER` (`styledef.cpp:1346-1353`).
+    case fretDiagramFretNumber
 }
 
 /// Frame around a text element. Mirrors MuseScore's `FrameType`
@@ -189,6 +209,37 @@ extension TextStyleType {
         // Sid::repeatLeft/RightFontFace = "Edwin", size 10, normal, spatium-dependent (styledef.cpp:1400-1430).
         case .repeatLeft, .repeatRight:
             return TextStyleDefaults(face: "Edwin", size: 10, style: [])
+        // Sid::expressionFontFace "Edwin", size 10, italic (styledef.cpp:1128-1132).
+        case .expression:
+            return TextStyleDefaults(face: "Edwin", size: 10, style: [.italic])
+        // Sid::stickingFontFace "Edwin", size 10, normal (styledef.cpp:1633-1637).
+        case .sticking:
+            return TextStyleDefaults(face: "Edwin", size: 10, style: [])
+        // Sid::fingeringFontFace "Edwin", size 8, normal (styledef.cpp:894-898).
+        case .fingering:
+            return TextStyleDefaults(face: "Edwin", size: 8, style: [])
+        // Sid::LHGuitarFingeringFontFace "Edwin", size 8, normal (styledef.cpp:925-929).
+        case .lhGuitarFingering:
+            return TextStyleDefaults(face: "Edwin", size: 8, style: [])
+        // Sid::RHGuitarFingeringFontFace "Edwin", size 8, italic (styledef.cpp:941-945).
+        case .rhGuitarFingering:
+            return TextStyleDefaults(face: "Edwin", size: 8, style: [.italic])
+        // Sid::stringNumberFontFace "Edwin", size 8; frame CIRCLE, padding 0.2 sp (styledef.cpp:989-997).
+        case .stringNumber:
+            return TextStyleDefaults(face: "Edwin", size: 8, style: [], frameType: .circle, framePadding: 0.2)
+        // Sid::stringTuningsFontSize 9, otherwise the staff-text row (styledef.cpp:1005, textstyle.cpp:288-306).
+        case .stringTunings:
+            return TextStyleDefaults(face: "Edwin", size: 9, style: [])
+        // Sid::harpPedalDiagramFontFace "Edwin", size 10, normal (styledef.cpp:1007-1011).
+        case .harpPedalDiagram:
+            return TextStyleDefaults(face: "Edwin", size: 10, style: [])
+        // Sid::harpPedalTextDiagramFontFace "Edwin", size 8, normal (styledef.cpp:1028-1032).
+        case .harpPedalTextDiagram:
+            return TextStyleDefaults(face: "Edwin", size: 8, style: [])
+        // Sid::fretDiagramFretNumberFontSize 6 (styledef.cpp:1346-1353); MuseScore's FreeSans face is not shipped, so
+        // the text face stands in for it.
+        case .fretDiagramFretNumber:
+            return TextStyleDefaults(face: "Edwin", size: 6, style: [])
         }
     }
 }

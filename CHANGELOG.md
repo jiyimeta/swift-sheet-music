@@ -9,6 +9,15 @@ and this project adheres to
 
 ### Added
 
+- **Annotation text styles and placement roles** — `TextStyleType` gains `expression`, `sticking`, `fingering`,
+  `lhGuitarFingering`, `rhGuitarFingering`, `stringNumber`, `stringTunings`, `harpPedalDiagram`, `harpPedalTextDiagram`
+  and `fretDiagramFretNumber` with MuseScore 4's fonts, sizes and symbol sizes, and `TextPlacementRole` gains
+  `expression`, `sticking`, `harpPedalDiagram` and `harpPedalTextDiagram`, whose `<…Placement>` / `<…PosAbove>` /
+  `<…PosBelow>` style keys a score can now carry. Adding cases to these public enums breaks exhaustive switches over them
+  (ssm 5.0.0).
+- **SMuFL names for annotations** — `SMuFLCodepoint.byName` resolves `ornament*`, `csymAccidental*`, `guitarString*`,
+  `strings*`, `fingering*` and `tremolo*` (207 names), so `<sym>` in a harp or string-tunings text and a `<Symbol>`
+  naming an ornament draw as glyphs.
 - **`VoiceAssignment`, on `Dynamic` and `Spanner.HairpinPayload`** (import-fidelity W4): MuseScore's
   `<voiceAssignment>` — the whole instrument (the default), the staff, or the voice it is written in — and an older
   file's `<dynType>`, read as MuseScore 4 reads them and saved where MuseScore writes them (`<dynType>0</dynType>` for

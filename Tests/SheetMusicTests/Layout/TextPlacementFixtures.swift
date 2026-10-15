@@ -38,6 +38,13 @@ enum TextPlacementFixtures {
             if role == .nashvilleNumber { harmony.harmonyType = .nashville }
             harmony.elementProperties = properties
             voice = [.harmony(harmony)]
+        case .expression:
+            voice = [.expression(ExpressionText(text: text, elementProperties: properties))]
+        case .sticking:
+            voice = [.sticking(Sticking(text: text, elementProperties: properties))]
+        case .harpPedalDiagram, .harpPedalTextDiagram:
+            // A harp pedal diagram is a staff text's annotation (W5 Task 5); no placement test builds one here.
+            break
         }
         voice.append(.chord(chord))
         var result = Score(division: 480, parts: [Part(

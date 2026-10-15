@@ -11,6 +11,10 @@ extension TextPlacementStyles {
         (.harmonyB, "chordSymbolB", nil),
         (.romanNumeral, "romanNumeral", nil),
         (.nashvilleNumber, "nashvilleNumber", nil),
+        (.expression, "expression", "expressionPlacement"),
+        (.sticking, "sticking", "stickingPlacement"),
+        (.harpPedalDiagram, "harpPedalDiagram", "harpPedalDiagramPlacement"),
+        (.harpPedalTextDiagram, "harpPedalTextDiagram", "harpPedalTextDiagramPlacement"),
     ]
 
     static var consumedTags: Set<String> {

@@ -26,6 +26,12 @@ PREFIXES = (
     "artic",               # articulation names a <Symbol> carries
     "text",                # tempo / swing text: textBlackNote*, textCont*Beam*, textTuplet*, textAugmentationDot, textTie
     "lyrics",              # lyric elisions: the editor inserts <sym>lyricsElision</sym> (editing/textedit.cpp:738)
+    "ornament",            # <Symbol> ornaments (ornamentTrill, ornamentTurn, ...)
+    "csymAccidental",      # harp pedal text diagrams: B<sym>csymAccidentalNatural</sym>
+    "guitarString",        # string-tunings text: guitarString1 ... guitarString13
+    "strings",             # bow marks and harmonics a <Symbol> names (stringsUpBow, ...)
+    "fingering",           # the fingering glyph palette (fingering1, fingeringPLower, ...)
+    "tremolo",             # tremolo glyphs a <Symbol> names (tremoloFingered1, ...)
 )
 
 

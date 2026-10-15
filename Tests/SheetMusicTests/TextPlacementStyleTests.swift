@@ -16,6 +16,10 @@ struct TextPlacementStyleTests {
             "chordSymbolB",
             "romanNumeral",
             "nashvilleNumber",
+            "expression",
+            "sticking",
+            "harpPedalDiagram",
+            "harpPedalTextDiagram",
         ]
         var children = prefixes.flatMap { prefix in
             [
@@ -23,7 +27,10 @@ struct TextPlacementStyleTests {
                 XMLTreeNode(name: prefix + "PosBelow", attributes: ["x": "2.25", "y": "8.5"]),
             ]
         }
-        children += ["lyrics", "staffText", "systemText", "rehearsalMark", "harmony"].map {
+        children += [
+            "lyrics", "staffText", "systemText", "rehearsalMark", "harmony", "expression", "sticking",
+            "harpPedalDiagram", "harpPedalTextDiagram",
+        ].map {
             XMLTreeNode(name: $0 + "Placement", text: "below")
         }
         let style = ScoreStyle.decode(style: XMLTreeNode(name: "Style", children: children))
