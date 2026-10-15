@@ -24,12 +24,18 @@ public struct FermataGlyphOffsets: Sendable {
 public enum FermataGlyphMetrics {
     /// fermataAbove (U+E4C0).
     public static var above: FermataGlyphOffsets {
-        offsets(for: 0xE4C0)
+        offsets(forSubtype: "fermataAbove")
     }
 
     /// fermataBelow (U+E4C1).
     public static var below: FermataGlyphOffsets {
-        offsets(for: 0xE4C1)
+        offsets(forSubtype: "fermataBelow")
+    }
+
+    /// Offsets measured on the glyph `FermataGlyph.codepoint(forSubtype:)` picks for `subtype`.
+    public static func offsets(forSubtype subtype: String) -> FermataGlyphOffsets {
+        let codepoint = UInt16(truncatingIfNeeded: FermataGlyph.codepoint(forSubtype: subtype))
+        return offsets(for: codepoint)
     }
 
     private static func offsets(for codepoint: UInt16) -> FermataGlyphOffsets {

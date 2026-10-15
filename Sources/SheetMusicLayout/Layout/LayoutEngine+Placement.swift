@@ -1290,7 +1290,7 @@ extension LayoutEngine {
                     // the chord skyline by the visual gap.
                     let anchorTick = forwardChordTick
                         ?? lastEmittedChordTick
-                    let isBelow = f.subtype.hasSuffix("Below")
+                    let isBelow = FermataGlyph.isBelow(f.subtype)
                     let visualGap = metrics.sp * 0.5
                     let anchorY: CGFloat
                     if isBelow {
@@ -1301,7 +1301,7 @@ extension LayoutEngine {
                         // glyph TOP in screen = origin.y + topOffset.
                         // Want: origin.y + topOffset >= chordSouth + gap.
                         let topOffset =
-                            FermataGlyphMetrics.below.topOffset * metrics.sp
+                            FermataGlyphMetrics.offsets(forSubtype: f.subtype).topOffset * metrics.sp
                         let needed = chordSouth + visualGap - topOffset
                         anchorY = max(defaultY, needed)
                     } else {
@@ -1312,7 +1312,7 @@ extension LayoutEngine {
                         // glyph BOTTOM in screen = origin.y + bottomOffset.
                         // Want: origin.y + bottomOffset <= chordNorth - gap.
                         let bottomOffset =
-                            FermataGlyphMetrics.above.bottomOffset * metrics.sp
+                            FermataGlyphMetrics.offsets(forSubtype: f.subtype).bottomOffset * metrics.sp
                         let needed = chordNorth - visualGap - bottomOffset
                         anchorY = min(defaultY, needed)
                     }
@@ -1986,14 +1986,14 @@ extension LayoutEngine {
                     if entry.isBelow {
                         // glyph TOP = origin.y + topOffset.
                         // Want origin.y + topOffset >= stemTip + gap.
-                        let topOffset = FermataGlyphMetrics.below.topOffset
+                        let topOffset = FermataGlyphMetrics.offsets(forSubtype: subtype).topOffset
                             * metrics.sp
                         let needed = stemTip + visualGap - topOffset
                         newY = max(fermataDefaultBelowY, max(oldOrigin.y, needed))
                     } else {
                         // glyph BOTTOM = origin.y + bottomOffset.
                         // Want origin.y + bottomOffset <= stemTip - gap.
-                        let bottomOffset = FermataGlyphMetrics.above.bottomOffset
+                        let bottomOffset = FermataGlyphMetrics.offsets(forSubtype: subtype).bottomOffset
                             * metrics.sp
                         let needed = stemTip - visualGap - bottomOffset
                         newY = min(fermataDefaultAboveY, min(oldOrigin.y, needed))
