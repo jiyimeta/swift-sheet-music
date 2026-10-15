@@ -49,11 +49,12 @@ extension LayoutRichText {
     /// reference spaces — for the elements MuseScore's `hasSymbolScale` names, rather than the style's symbol size.
     init(
         _ richText: RichText, style: TextStyleType, overrides: TextProperties = TextProperties(), metrics: StaffMetrics,
-        symbolsScaled: Bool = false,
+        symbolsScaled: Bool = false, symbolSize symbolSizeOverride: CGFloat? = nil,
     ) {
         let resolved = overrides.resolved(against: style)
         let pointScale = resolved.spatiumDependent ? metrics.sp / TextRoleStyle.referenceSpatiumInPoints : 1
-        let symbolSize = symbolsScaled ? 4 * TextRoleStyle.referenceSpatiumInPoints : Self.musicalSymbolSize(for: style)
+        let symbolSize = symbolSizeOverride
+            ?? (symbolsScaled ? 4 * TextRoleStyle.referenceSpatiumInPoints : Self.musicalSymbolSize(for: style))
         self.init(
             richText,
             baseFont: TextInkGeometry.font(for: style, overrides: overrides, metrics: metrics),

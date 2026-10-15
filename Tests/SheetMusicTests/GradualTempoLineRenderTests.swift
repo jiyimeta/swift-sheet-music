@@ -38,13 +38,15 @@
             )
             let shapes = (parent.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
             let line = try #require(shapes.first { $0.lineDashPattern != nil })
-            #expect(line.lineDashPattern?.map(\.doubleValue)
-                == [Double(Self.metrics.sp * 0.9), Double(Self.metrics.sp * 1.35)])
-            #expect(abs(line.lineWidth - Self.metrics.sp * 0.15) < 1e-9)
-            let lineBox = try #require(line.path?.boundingBoxOfPath)
             let parts = SpannerGeometry.gradualTempoChange(
                 from: Self.from, to: Self.to, label: label, sp: Self.metrics.sp,
             )
+            // MuseScore's dash (0.9 sp) with the gap stretched so a dash ends the line (`distributedDashPattern`,
+            // `tdraw.cpp:1541-1547`): the layer draws the geometry's own pattern.
+            #expect(abs(parts.dashPattern[0] - Self.metrics.sp * 0.9) < 1e-9)
+            #expect(line.lineDashPattern?.map(\.doubleValue) == parts.dashPattern.map(Double.init))
+            #expect(abs(line.lineWidth - Self.metrics.sp * 0.15) < 1e-9)
+            let lineBox = try #require(line.path?.boundingBoxOfPath)
             #expect(abs(lineBox.minX - parts.lineStart.x) < 0.01)
             #expect(shapes.contains { $0.fillColor != nil })
             // MuseScore strokes a text line with flat caps (`tdraw.cpp:1777`).

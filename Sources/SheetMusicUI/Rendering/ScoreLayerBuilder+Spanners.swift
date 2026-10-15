@@ -21,15 +21,15 @@ extension ScoreLayerBuilder {
         into parent: CALayer,
     ) {
         switch kind {
-        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine:
+        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine, .hairpinLine:
             drawTextLineBase(
                 kind: kind, from: from, to: to, richText: richText, lineDetail: lineDetail,
                 metrics: metrics, height: height, into: parent,
             )
-        case .slur, .volta, .hairpinOpen, .hairpinClose, .hairpinLine, .ottava:
+        case .slur, .volta, .hairpinOpen, .hairpinClose, .ottava:
             drawMarkSpanner(
                 kind: kind, from: from, to: to, continuesLeft: continuesLeft, continuesRight: continuesRight,
-                metrics: metrics, height: height, into: parent,
+                richText: richText, lineDetail: lineDetail, metrics: metrics, height: height, into: parent,
             )
         case .vibrato, .trill, .gradualTempoChange:
             drawLineSpanner(
@@ -44,6 +44,7 @@ extension ScoreLayerBuilder {
         kind: LayoutElement.SpannerKind,
         from: CGPoint, to: CGPoint,
         continuesLeft: Bool, continuesRight: Bool,
+        richText: LayoutRichText?, lineDetail: LayoutLineDetail?,
         metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer,
@@ -59,17 +60,14 @@ extension ScoreLayerBuilder {
                 from: from, to: to, endings: endings,
                 continuesLeft: continuesLeft,
                 continuesRight: continuesRight,
+                richText: richText,
                 metrics: metrics, height: height, into: parent,
             )
         case .hairpinOpen, .hairpinClose:
             drawHairpin(
                 from: from, to: to,
                 open: kind == .hairpinOpen,
-                metrics: metrics, height: height, into: parent,
-            )
-        case let .hairpinLine(crescendo):
-            drawHairpinLine(
-                from: from, to: to, crescendo: crescendo,
+                richText: richText, endRichText: lineDetail?.endRichText,
                 metrics: metrics, height: height, into: parent,
             )
         case let .ottava(subtype, numbersOnly):
@@ -78,7 +76,8 @@ extension ScoreLayerBuilder {
                 numbersOnly: numbersOnly,
                 metrics: metrics, height: height, into: parent,
             )
-        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine, .vibrato, .trill, .gradualTempoChange:
+        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine, .hairpinLine, .vibrato, .trill,
+             .gradualTempoChange:
             break // `drawLineSpanner` and `drawTextLineBase`
         }
     }
@@ -172,6 +171,7 @@ extension ScoreLayerBuilder {
         from: CGPoint, to: CGPoint,
         endings: [Int],
         continuesLeft: Bool, continuesRight: Bool,
+        richText: LayoutRichText?,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
@@ -192,29 +192,39 @@ extension ScoreLayerBuilder {
             path: p, height: height,
             lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
         ))
-        if let label = SpannerGeometry.voltaLabel(
-            from: from, to: to, endings: endings,
-            continuesLeft: continuesLeft, sp: metrics.sp,
-        ),
-            let layer = textLayer(
-                text: label.text,
-                at: label.origin,
-                size: metrics.sp * label.sizeSp, italic: false,
-                anchor: CGPoint(x: 0, y: 0.5),
-                height: height,
+        let origin = SpannerGeometry.voltaLabelOrigin(from: from, to: to, sp: metrics.sp)
+        let anchor = CGPoint(x: 0, y: 0.5)
+        // The label is the segment's typeset text: authored, or the endings label layout synthesized. Only a segment
+        // that carries none (hand-built) falls back to the endings here, and never in addition to authored text.
+        let layer: CAShapeLayer? = if let richText {
+            richTextLayer(richText, at: origin, anchor: anchor, color: inkColor, height: height)
+        } else if !continuesLeft, let text = SpannerGeometry.voltaLabelText(endings: endings) {
+            textLayer(
+                text: text, at: origin, size: metrics.sp * SpannerGeometry.voltaLabelSizeSp, italic: false,
+                anchor: anchor, height: height,
             )
-        {
-            parent.addSublayer(layer)
+        } else {
+            nil
         }
+        if let layer { parent.addSublayer(layer) }
     }
 
     private static func drawHairpin(
-        from: CGPoint, to: CGPoint, open: Bool,
+        from: CGPoint, to: CGPoint, open: Bool, richText: LayoutRichText?, endRichText: LayoutRichText?,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
+        let wedge = SpannerGeometry.wedgeText(
+            from: from, to: to, begin: richText, end: endRichText, sp: metrics.sp,
+        )
+        let anchor = LayoutRichText.anchor(for: .lineLabel)
+        for case let (label?, origin?) in [(richText, wedge.beginOrigin), (endRichText, wedge.endOrigin)] {
+            if let layer = richTextLayer(label, at: origin, anchor: anchor, color: inkColor, height: height) {
+                parent.addSublayer(layer)
+            }
+        }
         let segs = SpannerGeometry.hairpin(
-            from: from, to: to, open: open, sp: metrics.sp,
+            from: wedge.from, to: wedge.to, open: open, sp: metrics.sp,
         )
         let p = CGMutablePath()
         p.move(to: segs.upperFrom)
@@ -224,33 +234,6 @@ extension ScoreLayerBuilder {
         parent.addSublayer(strokeLayer(
             path: p, height: height,
             lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
-        ))
-    }
-
-    private static func drawHairpinLine(
-        from: CGPoint, to: CGPoint, crescendo: Bool,
-        metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer,
-    ) {
-        let parts = SpannerGeometry.hairpinLine(
-            from: from, to: to, crescendo: crescendo, sp: metrics.sp,
-        )
-        if let layer = textLayer(
-            text: parts.label, at: parts.labelOrigin,
-            size: metrics.sp * parts.labelSizeSp, italic: true,
-            anchor: CGPoint(x: 0, y: 0.5),
-            height: height,
-        ) {
-            parent.addSublayer(layer)
-        }
-        guard parts.lineEnd.x > parts.lineStart.x else { return }
-        let p = CGMutablePath()
-        p.move(to: parts.lineStart)
-        p.addLine(to: parts.lineEnd)
-        parent.addSublayer(strokeLayer(
-            path: p, height: height,
-            lineWidth: metrics.sp * parts.lineThicknessSp,
-            dashPattern: parts.dashPattern.map { NSNumber(value: Double($0)) },
         ))
     }
 

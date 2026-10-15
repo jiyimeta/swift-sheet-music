@@ -1,3 +1,6 @@
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
 extension LayoutEngine {
@@ -11,13 +14,28 @@ extension LayoutEngine {
     }
 
     /// The label a segment laid out by `attachSpanners` (the post-pass: voltas and the kinds with no skyline shape)
-    /// carries. Only a volta draws typeset text there, and only an authored `<beginText>` (MuseScore has no automatic
-    /// volta label).
+    /// carries. Only a volta draws typeset text there: its authored `<beginText>` (MuseScore's volta label IS its begin
+    /// text, `dom/volta.cpp:139-151`) or, with none, the synthesized endings label folino-made voltas rely on. An
+    /// authored empty text yields an empty block, so a renderer draws nothing rather than the synthesized label.
     static func attachedLabelRuns(
         kind: LayoutElement.SpannerKind, anchor: SpannerAnchor, continuesLeft: Bool, metrics: StaffMetrics,
     ) -> LayoutRichText? {
-        guard case .volta = kind else { return nil }
-        return labelRuns(kind: kind, anchor: anchor, continuesLeft: continuesLeft, metrics: metrics)
+        guard case let .volta(endings) = kind else { return nil }
+        let labels = anchor.lineLabels
+        if continuesLeft { return typesetLineLabel(labels?.continuation, kind: kind, metrics: metrics) }
+        guard let begin = labels?.begin else {
+            return typesetLineLabel(SpannerGeometry.voltaLabelText(endings: endings), kind: kind, metrics: metrics)
+        }
+        if begin.isEmpty { return emptyBlock(kind, metrics) }
+        return typesetLineLabel(begin, kind: kind, metrics: metrics)
+    }
+
+    private static func emptyBlock(_ kind: LayoutElement.SpannerKind, _ metrics: StaffMetrics) -> LayoutRichText {
+        let face = labelFace(for: kind)
+        return LayoutRichText(
+            RichText(xmlText: ""), style: .staffText, overrides: face.overrides, metrics: metrics,
+            symbolSize: face.symbolSize,
+        )
     }
 
     private static func labelRuns(
@@ -29,21 +47,41 @@ extension LayoutEngine {
             )
         }
         guard drawsLabelRuns(kind: kind), let labels = anchor.lineLabels else { return nil }
-        return typesetLineLabel(continuesLeft ? labels.continuation : labels.begin, metrics: metrics)
+        return typesetLineLabel(continuesLeft ? labels.continuation : labels.begin, kind: kind, metrics: metrics)
     }
 
-    /// The kinds whose label is typeset text (a wedge, an ottava, a slur, a vibrato and a trill draw their own).
+    /// The kinds whose label is typeset text (an ottava, a slur, a vibrato and a trill draw their own).
     private static func drawsLabelRuns(kind: LayoutElement.SpannerKind) -> Bool {
         switch kind {
-        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine, .hairpinLine, .volta: true
-        case .slur, .hairpinOpen, .hairpinClose, .ottava, .vibrato, .trill, .gradualTempoChange: false
+        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine, .hairpinLine, .hairpinOpen, .hairpinClose,
+             .volta: true
+        case .slur, .ottava, .vibrato, .trill, .gradualTempoChange: false
         }
     }
 
-    /// MuseScore xml text as runs in the staff-text style (Edwin 10, symbols 10); `nil` for none or empty text.
-    private static func typesetLineLabel(_ xmlText: String?, metrics: StaffMetrics) -> LayoutRichText? {
+    /// A line label's face: the staff-text row (Edwin 10, symbols 10) except where MuseScore's style says otherwise —
+    /// a hairpin line and a wedge are italic (`hairpinFontStyle`, `styledef.cpp:293`), a volta is Edwin 11 bold with
+    /// symbols 11 (`voltaFontSize` / `voltaFontStyle`, `styledef.cpp:619-623`).
+    private static func labelFace(
+        for kind: LayoutElement.SpannerKind,
+    ) -> (overrides: TextProperties, symbolSize: CGFloat) {
+        switch kind {
+        case .hairpinLine, .hairpinOpen, .hairpinClose: (TextProperties(style: .italic), 10)
+        case .volta: (TextProperties(size: 11, style: .bold), 11)
+        default: (TextProperties(), 10)
+        }
+    }
+
+    /// MuseScore xml text as runs in the kind's face; `nil` for none or empty text.
+    private static func typesetLineLabel(
+        _ xmlText: String?, kind: LayoutElement.SpannerKind, metrics: StaffMetrics,
+    ) -> LayoutRichText? {
         guard let xmlText, !xmlText.isEmpty else { return nil }
-        let rich = LayoutRichText(RichText(xmlText: xmlText), style: .staffText, metrics: metrics)
+        let face = labelFace(for: kind)
+        let rich = LayoutRichText(
+            RichText(xmlText: xmlText), style: .staffText, overrides: face.overrides, metrics: metrics,
+            symbolSize: face.symbolSize,
+        )
         return rich.lines.contains { !$0.runs.isEmpty } ? rich : nil
     }
 
@@ -69,11 +107,18 @@ extension LayoutEngine {
         kind: LayoutElement.SpannerKind, lineProperties: Spanner.LineProperties?, endText: String?,
         placedBelow: Bool, metrics: StaffMetrics,
     ) -> LayoutLineDetail? {
+        // A wedge is two strokes of its own, but its end text rides here like every other line's.
+        if kind == .hairpinOpen || kind == .hairpinClose {
+            return LayoutLineDetail(
+                endRichText: typesetLineLabel(endText, kind: kind, metrics: metrics),
+                placedBelow: placedBelow, labelAlignment: .center,
+            )
+        }
         guard let base = TextLineBaseStyle.style(for: kind) else { return nil }
         let props = lineProperties ?? Spanner.LineProperties()
         let width = props.lineWidth ?? base.lineWidthSp
         return LayoutLineDetail(
-            endRichText: typesetLineLabel(endText, metrics: metrics),
+            endRichText: typesetLineLabel(endText, kind: kind, metrics: metrics),
             beginHook: props.beginHook ?? .none,
             endHook: props.endHook ?? base.defaultEndHook,
             beginHookHeightSp: props.beginHookHeight ?? base.hookHeightSp,

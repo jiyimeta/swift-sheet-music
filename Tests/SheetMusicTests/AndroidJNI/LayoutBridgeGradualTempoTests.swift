@@ -29,8 +29,13 @@
                 return nil
             }
             try #require(dash.count == 1)
+            // MuseScore's 0.9 sp dash with the gap distributed over the line (`tdraw.cpp:1541-1547`), as the Apple
+            // renderers draw it: the geometry's own pattern, in mm.
+            let pattern = SpannerGeometry.gradualTempoChange(
+                from: CGPoint(x: 20, y: 50), to: CGPoint(x: 220, y: 50), label: label, sp: CGFloat(sp),
+            ).dashPattern
             #expect(abs(dash[0].0 - sp * 0.9 * Self.mm) < 1e-9)
-            #expect(abs(dash[0].1 - sp * 1.35 * Self.mm) < 1e-9)
+            #expect(abs(dash[0].1 - Double(pattern[1]) * Self.mm) < 1e-9)
             #expect(out.contains { if case let .text(text, _, _, _, _) = $0 { text == "rit." } else { false } })
             #expect(out.contains(.setTextStyle(flags: DrawCommand.TextStyleFlag.bold)))
             #expect(out.last == .setDash(onMM: 0, offMM: 0))

@@ -25,19 +25,16 @@ enum SpannerRenderer {
                 endings: endings,
                 continuesLeft: continuesLeft,
                 continuesRight: continuesRight,
+                richText: richText,
                 metrics: metrics,
             )
         case .hairpinOpen, .hairpinClose:
             drawHairpin(
                 context: &context, from: from, to: to,
-                open: kind == .hairpinOpen, metrics: metrics,
+                open: kind == .hairpinOpen, richText: richText, endRichText: lineDetail?.endRichText,
+                metrics: metrics,
             )
-        case let .hairpinLine(crescendo):
-            drawHairpinLine(
-                context: &context, from: from, to: to,
-                crescendo: crescendo, metrics: metrics,
-            )
-        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine:
+        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine, .hairpinLine:
             drawTextLineBase(
                 context: &context, kind: kind, from: from, to: to,
                 richText: richText, lineDetail: lineDetail, metrics: metrics,
@@ -115,6 +112,7 @@ enum SpannerRenderer {
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
         endings: [Int],
         continuesLeft: Bool, continuesRight: Bool,
+        richText: LayoutRichText?,
         metrics: StaffMetrics,
     ) {
         let pts = SpannerGeometry.voltaBracketPoints(
@@ -134,25 +132,35 @@ enum SpannerRenderer {
             p, with: .color(.primary),
             lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
         )
-        if let label = SpannerGeometry.voltaLabel(
-            from: from, to: to, endings: endings,
-            continuesLeft: continuesLeft, sp: metrics.sp,
-        ) {
+        let origin = SpannerGeometry.voltaLabelOrigin(from: from, to: to, sp: metrics.sp)
+        // The label is the segment's typeset text: authored, or the endings label layout synthesized. Only a segment
+        // that carries none (hand-built) falls back to the endings here, and never in addition to authored text.
+        if let richText {
+            TextInkRenderer.drawRich(
+                context: &context, richText: richText, origin: origin, anchor: CGPoint(x: 0, y: 0.5), color: .primary,
+            )
+        } else if !continuesLeft, let text = SpannerGeometry.voltaLabelText(endings: endings) {
             context.drawExpressionText(
-                label.text,
-                at: label.origin,
-                size: metrics.sp * label.sizeSp,
-                italic: false,
+                text, at: origin, size: metrics.sp * SpannerGeometry.voltaLabelSizeSp, italic: false,
             )
         }
     }
 
     private static func drawHairpin(
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
-        open: Bool, metrics: StaffMetrics,
+        open: Bool, richText: LayoutRichText?, endRichText: LayoutRichText?, metrics: StaffMetrics,
     ) {
+        let wedge = SpannerGeometry.wedgeText(
+            from: from, to: to, begin: richText, end: endRichText, sp: metrics.sp,
+        )
+        let anchor = LayoutRichText.anchor(for: .lineLabel)
+        for case let (label?, origin?) in [(richText, wedge.beginOrigin), (endRichText, wedge.endOrigin)] {
+            TextInkRenderer.drawRich(
+                context: &context, richText: label, origin: origin, anchor: anchor, color: .primary,
+            )
+        }
         let segs = SpannerGeometry.hairpin(
-            from: from, to: to, open: open, sp: metrics.sp,
+            from: wedge.from, to: wedge.to, open: open, sp: metrics.sp,
         )
         var p = Path()
         p.move(to: segs.upperFrom)
@@ -162,30 +170,6 @@ enum SpannerRenderer {
         context.stroke(
             p, with: .color(.primary),
             lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
-        )
-    }
-
-    private static func drawHairpinLine(
-        context: inout GraphicsContext, from: CGPoint, to: CGPoint,
-        crescendo: Bool, metrics: StaffMetrics,
-    ) {
-        let parts = SpannerGeometry.hairpinLine(
-            from: from, to: to, crescendo: crescendo, sp: metrics.sp,
-        )
-        context.drawExpressionText(
-            parts.label, at: parts.labelOrigin,
-            size: metrics.sp * parts.labelSizeSp, italic: true,
-        )
-        guard parts.lineEnd.x > parts.lineStart.x else { return }
-        var p = Path()
-        p.move(to: parts.lineStart)
-        p.addLine(to: parts.lineEnd)
-        context.stroke(
-            p, with: .color(.primary),
-            style: StrokeStyle(
-                lineWidth: metrics.sp * parts.lineThicknessSp,
-                dash: parts.dashPattern,
-            ),
         )
     }
 

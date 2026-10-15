@@ -43,13 +43,19 @@ extension SpannerGeometry {
         let gap = sp * gradualTempoChangeLabelGapSp
         let lineEndX = endLabel == nil ? to.x : to.x - gap
         let endX = max(to.x, label.map { from.x + $0.size.width + gap } ?? to.x)
+        let lineStartX = min(start, to.x)
+        let lineStopX = max(lineStartX, lineEndX)
         return GradualTempoChangeParts(
             labelOrigin: CGPoint(x: from.x, y: from.y - (label?.firstBaseline ?? 0)),
             endLabelOrigin: endLabel.map { CGPoint(x: endX, y: from.y - $0.firstBaseline) },
-            lineStart: CGPoint(x: min(start, to.x), y: lineY),
-            lineEnd: CGPoint(x: max(min(start, to.x), lineEndX), y: lineY),
+            lineStart: CGPoint(x: lineStartX, y: lineY),
+            lineEnd: CGPoint(x: lineStopX, y: lineY),
             lineThickness: thickness,
-            dashPattern: [sp * gradualTempoChangeDashSp, sp * gradualTempoChangeGapSp],
+            // MuseScore strokes this line through `drawTextLineBaseSegment` (`tdraw.cpp:1880`), which stretches the gap
+            // so a dash starts and ends the line (`distributedDashPattern`, `tdraw.cpp:1541-1547`).
+            dashPattern: distributedDashPattern(
+                dash: sp * gradualTempoChangeDashSp, gap: sp * gradualTempoChangeGapSp, length: lineStopX - lineStartX,
+            ),
         )
     }
 

@@ -70,12 +70,31 @@ struct GradualTempoLineLayoutTests {
         let parts = SpannerGeometry.gradualTempoChange(from: from, to: to, label: label, sp: metrics.sp)
         #expect(abs(parts.lineStart.x - (20 + label.size.width + metrics.sp * 0.5)) < 1e-9)
         #expect(parts.lineEnd.x == to.x)
-        #expect(parts.dashPattern == [metrics.sp * 0.9, metrics.sp * 1.35])
         #expect(abs(parts.lineThickness - metrics.sp * 0.15) < 1e-9)
         let bare = SpannerGeometry.gradualTempoChange(from: from, to: to, label: nil, sp: metrics.sp)
         #expect(bare.lineStart == from)
         #expect(bare.lineEnd == to)
         #expect(LayoutRichText.gradualTempoChangeLabel("", metrics: metrics) == nil)
+    }
+
+    @Test("the dash pattern is stretched over the line's length so a dash starts and ends it (tdraw.cpp:1541-1547)")
+    func dashesAreDistributed() throws {
+        let metrics = StaffMetrics(staffSize: 20)
+        let dash = metrics.sp * SpannerGeometry.gradualTempoChangeDashSp
+        let gap = metrics.sp * SpannerGeometry.gradualTempoChangeGapSp
+        for width in [137.3, 200, 311.9] as [CGFloat] {
+            let parts = SpannerGeometry.gradualTempoChange(
+                from: CGPoint(x: 20, y: 50), to: CGPoint(x: 20 + width, y: 50), label: nil, sp: metrics.sp,
+            )
+            let length = parts.lineEnd.x - parts.lineStart.x
+            let pattern = try #require(parts.dashPattern.count == 2 ? parts.dashPattern : nil)
+            let pairs = CGFloat(Int(length / (dash + gap)))
+            // n + 1 dashes and n gaps fill the line exactly; the dash keeps its length, the gap absorbs the slack.
+            #expect(abs(pattern[0] - dash) < 1e-9)
+            #expect(abs(pattern[0] * (pairs + 1) + pattern[1] * pairs - length) < 1e-6)
+            // The undistributed pattern (`[dash, gap]` at any length) is what this test exists to rule out.
+            #expect(abs(pattern[1] - gap) > 1e-6)
+        }
     }
 
     @Test("the end label starts at the segment end (tempoChangePosition LEFT) and the line stops half a space short")

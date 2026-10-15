@@ -515,61 +515,18 @@ extension LayoutBridge {
                 sp: CGFloat(sp),
             )
             emitPolyline(pts, lineWidth: stroke, into: &out)
-            if let label = SpannerGeometry.voltaLabel(
-                from: from, to: to, endings: endings,
-                continuesLeft: continuesLeft, sp: CGFloat(sp),
-            ) {
-                encodeNotationText(
-                    text: label.text, role: .markerText,
-                    originX: Double(label.origin.x),
-                    originY: Double(label.origin.y),
-                    sp: sp,
-                    into: &out,
-                )
-            }
+            encodeVoltaLabel(
+                from: from, to: to, endings: endings, continuesLeft: continuesLeft, richText: richText, sp: sp,
+                into: &out,
+            )
 
         case .hairpinOpen, .hairpinClose:
-            let segs = SpannerGeometry.hairpin(
-                from: from, to: to,
-                open: kind == .hairpinOpen,
-                sp: CGFloat(sp),
-            )
-            emitSegment(
-                from: segs.upperFrom, to: segs.upperTo,
-                lineWidth: stroke, into: &out,
-            )
-            emitSegment(
-                from: segs.lowerFrom, to: segs.lowerTo,
-                lineWidth: stroke, into: &out,
+            encodeWedge(
+                from: from, to: to, open: kind == .hairpinOpen, richText: richText,
+                endRichText: lineDetail?.endRichText, sp: sp, lineWidth: stroke, into: &out,
             )
 
-        case let .hairpinLine(crescendo):
-            let parts = SpannerGeometry.hairpinLine(
-                from: from, to: to,
-                crescendo: crescendo, sp: CGFloat(sp),
-            )
-            encodeNotationText(
-                text: parts.label, role: .jump,
-                originX: Double(parts.labelOrigin.x),
-                originY: Double(parts.labelOrigin.y),
-                sp: sp, into: &out,
-            )
-            if parts.lineEnd.x > parts.lineStart.x {
-                let onMM = Double(parts.dashPattern.first ?? 3) * ptToMMScale
-                let offMM = Double(
-                    parts.dashPattern.count > 1
-                        ? parts.dashPattern[1]
-                        : (parts.dashPattern.first ?? 3),
-                ) * ptToMMScale
-                out.append(.setDash(onMM: onMM, offMM: offMM))
-                emitSegment(
-                    from: parts.lineStart, to: parts.lineEnd,
-                    lineWidth: line, into: &out,
-                )
-                out.append(.setDash(onMM: 0, offMM: 0))
-            }
-
-        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine:
+        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine, .hairpinLine:
             // One geometry for the whole family (`SpannerGeometry.textLineBase`), as the Apple renderers draw it.
             if let detail = SpannerGeometry.resolvedLineDetail(kind: kind, detail: lineDetail, sp: CGFloat(sp)) {
                 encodeTextLineBase(from: from, to: to, richText: richText, lineDetail: detail, sp: sp, into: &out)

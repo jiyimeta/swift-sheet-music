@@ -1,6 +1,6 @@
 #if os(macOS)
     import Foundation
-    import SheetMusicCore
+    @testable import SheetMusicCore
     @testable import SheetMusicLayout
     @testable import SheetMusicMSCX
     import Testing
@@ -105,14 +105,17 @@
             guard #available(macOS 15.0, *) else { return }
             // `Sid::hairpinCrescText` / `Sid::hairpinDecrescText`
             // (styledef.cpp:304-305).
-            #expect(SpannerGeometry.hairpinLine(
-                from: .zero, to: CGPoint(x: 100, y: 0),
-                crescendo: true, sp: 7,
-            ).label == "cresc.")
-            #expect(SpannerGeometry.hairpinLine(
-                from: .zero, to: CGPoint(x: 100, y: 0),
-                crescendo: false, sp: 7,
-            ).label == "dim.")
+            func labels(_ subtype: Spanner.HairpinPayload.Subtype) -> Spanner.LineLabels {
+                var spanner = Spanner(kind: .hairpin, rawType: "HairPin")
+                spanner.hairpin = Spanner.HairpinPayload(subtype: subtype)
+                return spanner.lineLabels
+            }
+            #expect(labels(.crescLine).begin == "cresc.")
+            #expect(labels(.crescLine).continuation == "(cresc.)")
+            #expect(labels(.dimLine).begin == "dim.")
+            #expect(labels(.dimLine).continuation == "(dim.)")
+            // A wedge carries no text of its own.
+            #expect(labels(.crescendo).begin == nil)
         }
 
         // MARK: - Ottava subtype

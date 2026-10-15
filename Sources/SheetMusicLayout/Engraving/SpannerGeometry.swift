@@ -77,14 +77,6 @@ public enum SpannerGeometry {
 
     // MARK: - Volta
 
-    public struct VoltaLabel: Sendable, Equatable {
-        public let text: String
-        /// Origin at vertical-center, leading-edge (matching Apple's
-        /// `(0, 0.5)` anchor convention).
-        public let origin: CGPoint
-        public let sizeSp: CGFloat
-    }
-
     /// Volta bracket polyline: optional left hook, top run, optional
     /// right hook. `continuesLeft` / `continuesRight` suppress the
     /// hooks at the corresponding ends (system-spanning voltas).
@@ -106,27 +98,6 @@ public enum SpannerGeometry {
             pts.append(CGPoint(x: to.x, y: top + sp))
         }
         return pts
-    }
-
-    /// The volta's "1." / "2." label, or `nil` when the volta is
-    /// continuing from the previous system (label suppressed) or has
-    /// no endings.
-    public static func voltaLabel(
-        from: CGPoint, to: CGPoint,
-        endings: [Int],
-        continuesLeft: Bool,
-        sp: CGFloat,
-    ) -> VoltaLabel? {
-        guard !endings.isEmpty, !continuesLeft else { return nil }
-        let top = min(from.y, to.y)
-        let text = endings
-            .map(String.init)
-            .joined(separator: ", ") + "."
-        return VoltaLabel(
-            text: text,
-            origin: CGPoint(x: from.x + sp, y: top + sp / 2),
-            sizeSp: voltaLabelSizeSp,
-        )
     }
 
     // MARK: - Hairpin
@@ -163,61 +134,9 @@ public enum SpannerGeometry {
 
     // MARK: - Hairpin line ("cresc." / "dim.")
 
-    public struct HairpinLineParts: Sendable, Equatable {
-        public let label: String
-        /// Origin at vertical-center, leading-edge.
-        public let labelOrigin: CGPoint
-        public let labelSizeSp: CGFloat
-        public let lineStart: CGPoint
-        public let lineEnd: CGPoint
-        public let lineThicknessSp: CGFloat
-        public let dashPattern: [CGFloat]
-    }
-
-    /// Label point size for a hairpin line's "cresc." / "dim." text.
+    /// Label height, in spatia, a hairpin line reserves where no label has been measured (`segmentThickness`). The
+    /// line itself is `textLineBase`'s.
     public static let hairpinLineLabelSizeSp: CGFloat = 2.2
-
-    /// MuseScore renders `CRESC_LINE` / `DIM_LINE` as begin text plus a
-    /// dashed continuation line, not as a wedge.
-    ///
-    /// C++: begin text comes from `Sid::hairpinCrescText` / `
-    /// Sid::hairpinDecrescText` — "cresc." / "dim."
-    /// (`styledef.cpp:304-305`, selected in `hairpin.cpp:717-724`);
-    /// the line style from `Sid::hairpinLineLineStyle` = DASHED
-    /// (`styledef.cpp:311`).
-    public static func hairpinLine(
-        from: CGPoint, to: CGPoint, crescendo: Bool, sp: CGFloat,
-    ) -> HairpinLineParts {
-        HairpinLineParts(
-            label: crescendo ? "cresc." : "dim.",
-            labelOrigin: from,
-            labelSizeSp: hairpinLineLabelSizeSp,
-            lineStart: CGPoint(x: from.x + sp * 4, y: from.y),
-            lineEnd: to,
-            lineThicknessSp: lineThicknessSp,
-            dashPattern: [3, 3],
-        )
-    }
-
-    // MARK: - Pedal
-
-    public struct PedalGlyphs: Sendable, Equatable {
-        public let downCodepoint: UInt32
-        public let downOrigin: CGPoint
-        public let upCodepoint: UInt32
-        public let upOrigin: CGPoint
-    }
-
-    public static func pedal(
-        from: CGPoint, to: CGPoint,
-    ) -> PedalGlyphs {
-        PedalGlyphs(
-            downCodepoint: SMuFLCodepoint.keyboardPedalPed,
-            downOrigin: from,
-            upCodepoint: SMuFLCodepoint.keyboardPedalUp,
-            upOrigin: to,
-        )
-    }
 
     // MARK: - Ottava
 
@@ -354,40 +273,5 @@ public enum SpannerGeometry {
             CGPoint(x: from.x + CGFloat(i) * advance, y: from.y)
         }
         return (codepoint, origins)
-    }
-
-    // MARK: - Text line
-
-    public struct TextLineParts: Sendable, Equatable {
-        public let label: String
-        public let labelOrigin: CGPoint
-        public let labelSizeSp: CGFloat
-        public let lineStart: CGPoint
-        public let lineEnd: CGPoint
-        public let lineThicknessSp: CGFloat
-        /// Empty for a solid line. MuseScore dashes the palm-mute and
-        /// let-ring lines (`palmMuteLineStyle` / `letRingLineStyle` =
-        /// DASHED, `styledef.cpp:1888,1940`).
-        public let dashPattern: [CGFloat]
-    }
-
-    public static func textLine(
-        from: CGPoint, to: CGPoint, text: String, sp: CGFloat,
-        dashed: Bool = false,
-    ) -> TextLineParts {
-        // A label needs clearance before the line starts, or the line
-        // strikes through the text.
-        let lineStartX = text.isEmpty
-            ? from.x
-            : from.x + sp * CGFloat(text.count) * 0.9
-        return TextLineParts(
-            label: text,
-            labelOrigin: from,
-            labelSizeSp: textLineLabelSizeSp,
-            lineStart: CGPoint(x: min(lineStartX, to.x), y: from.y),
-            lineEnd: to,
-            lineThicknessSp: lineThicknessSp,
-            dashPattern: dashed ? [3, 3] : [],
-        )
     }
 }

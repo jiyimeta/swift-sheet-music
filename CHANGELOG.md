@@ -300,8 +300,16 @@ and this project adheres to
 - **`MusicTextRuns`** (SheetMusicLayout) — the public splitter of a string into Bravura and text runs. No renderer in
   the package used it once tempo markings were typeset from runs (`LayoutRichText`); a host that split such strings
   itself reads `LayoutRichText` (or `SMuFLCodepoint`) instead.
+- **`SpannerGeometry.pedal`, `.hairpinLine`, `.textLine`, `.voltaLabel` and `PedalInkGeometry`** (with `PedalGlyphs`,
+  `HairpinLineParts`, `TextLineParts`, `VoltaLabel`) — superseded by `SpannerGeometry.textLineBase`,
+  `SpannerGeometry.wedgeText` and `SpannerGeometry.voltaLabelOrigin`.
 
 ### Fixed
+
+- **A hairpin line and a wedge draw their authored text, and a volta its authored text** ('poco a poco cresc.', 'Last
+  time'); hairpin lines use MuseScore's dashed line and `(cresc.)` continuation; volta labels are MuseScore's bold 11.
+  A volta with authored text draws only that text; one without keeps its synthesized endings label. A gradual tempo
+  line's dashes are distributed over its length, as MuseScore draws them.
 
 - **Chord-symbol root and bass case follow MuseScore.** `<rootCase>` / `<bassCase>` were decoded with the wrong
   numbers (MuseScore: -1 auto, 0 capital, 1 lower, 2 upper), and the stored case was always honored, where MuseScore

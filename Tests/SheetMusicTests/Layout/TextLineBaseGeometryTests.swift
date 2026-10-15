@@ -239,6 +239,21 @@ struct TextLineBaseGeometryTests {
         #expect(abs(line.height - thickness) < 1e-9)
     }
 
+    @Test("a piece shorter than two dashes gets one dash and no gap; the pattern is never negative")
+    func negativeGapIsClamped() {
+        // MuseScore's formula `(length - dash * (numPairs + 1)) / numPairs` goes negative here: numPairs is 1 and the
+        // piece is shorter than two dashes (`tdraw.cpp:1541-1547`).
+        for length in [0, 1, 5, 9.5] as [CGFloat] {
+            let pattern = SpannerGeometry.distributedDashPattern(dash: 6, gap: 9, length: length)
+            #expect(pattern == [6, 0])
+        }
+        // At exactly two dashes the formula gives a zero gap by itself, and a longer piece a positive one.
+        #expect(SpannerGeometry.distributedDashPattern(dash: 6, gap: 9, length: 12) == [6, 0])
+        let longer = SpannerGeometry.distributedDashPattern(dash: 6, gap: 9, length: 40)
+        #expect(longer.count == 2 && longer[0] == 6 && longer[1] > 0)
+        #expect(longer.filter { $0 < 0 }.isEmpty)
+    }
+
     @Test("the ink is the labels' ink and the stroke, expanded by half the width")
     func ink() {
         let ped = Self.label("<sym>keyboardPedalPed</sym>")

@@ -91,12 +91,47 @@
             #expect(!tail.contains { if case .setDash = $0 { true } else { false } })
         }
 
+        @Test("a dotted line is square dots, setDash on == off == the line width: the program has no round cap")
+        func dotted() {
+            let out = Self.encode(.pedal, xml: nil) { $0.lineType = .dotted }
+            let lineWidthMM = Self.sp * 0.11 * Self.mm
+            let dashes = out.compactMap { command -> (Double, Double)? in
+                if case let .setDash(on, off) = command, on > 0 { return (on, off) }
+                return nil
+            }
+            #expect(dashes.count == 1)
+            #expect(abs((dashes.first?.0 ?? .nan) - lineWidthMM) < 1e-9)
+            #expect(abs((dashes.first?.1 ?? .nan) - lineWidthMM) < 1e-9)
+            #expect(out.contains(.setDash(onMM: 0, offMM: 0)))
+        }
+
         @Test("an end hook is a second point of the polyline; a 90T hook is a second stroke")
         func hooks() {
             let hooked = Self.encode(.pedal, xml: nil) { $0.endHook = .hook90 }
             #expect(hooked.filter { if case .lineTo = $0 { true } else { false } }.count == 2)
             let tee = Self.encode(.letRing, xml: nil) { $0.endHook = .hook90T }
             #expect(Self.strokes(tee) == 2)
+        }
+
+        /// The strings of every `.text` command a volta segment encodes.
+        private static func voltaTexts(richXML: String?) -> [String] {
+            let rich = richXML.map { LayoutRichText(RichText(xmlText: $0), style: .staffText, metrics: metrics) }
+            var out: [DrawCommand] = []
+            LayoutBridge.encodeSpanner(
+                kind: .volta(endings: [1]), fromX: 20, fromY: 50, toX: 220, toY: 50,
+                continuesLeft: false, continuesRight: false,
+                text: "1.", sp: sp, glyphSize: sp * 4, richText: rich, lineDetail: nil, into: &out,
+            )
+            return out.compactMap { command -> String? in
+                if case let .text(text, _, _, _, _) = command { return text }
+                return nil
+            }
+        }
+
+        @Test("a volta with authored text draws only that text; one without draws its endings label")
+        func voltaDrawsOneLabel() {
+            #expect(Self.voltaTexts(richXML: "Last time") == ["Last time"])
+            #expect(Self.voltaTexts(richXML: nil) == ["1."])
         }
 
         @Test("an invisible line draws its labels and no stroke")
