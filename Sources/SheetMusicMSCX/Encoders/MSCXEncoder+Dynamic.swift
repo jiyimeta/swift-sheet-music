@@ -3,17 +3,19 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Dynamic {
-    /// Build a `<Dynamic>` element. Mirrors `Dynamic.decode(_:)`: `<subtype>`, `<velocity>` (always, so the
-    /// default-velocity table on the decoder side is bypassed), `<play>` and `<veloChangeSpeed>` when they are not
-    /// MuseScore's defaults — where `TWrite::write(const Dynamic*)` writes them (`rw/write/twrite.cpp:1294-1304`) —
+    /// Build a `<Dynamic>` element. Mirrors `Dynamic.decode(_:)`: `<subtype>`, `<velocity>` (so the default-velocity
+    /// table on the decoder side is bypassed — except for an `other-dynamics` at the decoder's stand-in, which in
+    /// MuseScore has no velocity and so writes none, `Dynamic::velocity`, `dom/dynamic.cpp:142-145`), `<play>` and
+    /// `<veloChangeSpeed>` when they are not MuseScore's defaults — where `TWrite::write(const Dynamic*)` writes them
+    /// (`rw/write/twrite.cpp:1294-1304`) —
     /// then the per-element properties, and the dynamic's own `<text>` last, as `TWrite::writeProperties(const
     /// TextBase*)` writes it (`twrite.cpp:1344-1348`). After `<subtype>` is what matters: MuseScore applies a subtype
     /// by resetting the text to the subtype's own (`Dynamic::setDynamicType`, `dom/dynamic.cpp:230-240`).
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children: [XMLTreeNode] = [
-            XMLTreeNode(name: "subtype", text: subtype),
-            XMLTreeNode(name: "velocity", text: String(velocity)),
-        ]
+        var children = [XMLTreeNode(name: "subtype", text: subtype)]
+        if subtype != "other-dynamics" || velocity != Dynamic.defaultVelocity(for: subtype) {
+            children.append(XMLTreeNode(name: "velocity", text: String(velocity)))
+        }
         if !playsBack {
             children.append(XMLTreeNode(name: "play", text: "0"))
         }

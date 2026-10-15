@@ -80,6 +80,10 @@ struct DynamicTextRoundTripTests {
         #expect(try Self.children(data, measure: 2) == [["subtype", "velocity", "text"]])
         #expect(try Self.children(data, measure: 5) == [["subtype", "velocity", "play"]])
         #expect(try Self.children(data, measure: 8) == [["subtype", "velocity", "veloChangeSpeed"]])
+        // MuseScore's `other-dynamics` has no velocity (`DYN_LIST`'s -1, `dom/dynamic.cpp:51`) and writes `<velocity>`
+        // only when there is one (`Dynamic::velocity`, `:142-145`): the fixture's "dolce" has none, nor does
+        // MuseScore's save of it.
+        #expect(try Self.children(data, measure: 4) == [["subtype", "text"]])
         let xml = try #require(String(bytes: data, encoding: .utf8))
         #expect(xml.contains("<text>subito p</text>"))
         #expect(xml.contains("<text>più <sym>dynamicForte</sym></text>"))

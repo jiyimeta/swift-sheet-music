@@ -178,6 +178,9 @@ and this project adheres to
 
 - **Changing a dynamic's subtype drops its old text** (import-fidelity F4.6): `SetDynamic` kept the preserved `<text>`,
   so MuseScore went on showing "subito p" over a dynamic changed to f.
+- **An `other-dynamics` dynamic saves without `<velocity>`** (import-fidelity): MuseScore's other dynamics have no
+  velocity and it writes none; this library wrote the 80 its decoder stands in, so a word like "dolce" gained a tag on
+  every save that MuseScore never writes.
 - **A dynamic plays in every voice its assignment reaches — both hands of a piano by default** (import-fidelity,
   MuseScore 4 playback — owner decision c): a dynamic or a hairpin plays in every staff and voice of its instrument
   unless its `<voiceAssignment>` narrows it to its staff or its own voice, and on one tick the narrower assignment wins
