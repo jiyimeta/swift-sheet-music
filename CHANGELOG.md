@@ -38,8 +38,10 @@ and this project adheres to
   theirs, so a technique never moves another instrument's channel or mixer row; with the 15 melodic channels spent it
   plays as its instrument rather than sharing another instrument's channel. Instrument families are matched by whole
   MuseScore id (a contrabassoon is no contrabass).
-  Annotations with the play flag off, and techniques with no General MIDI sound (détaché, martelé, col legno,
-  sul ponticello, sul tasto, vibrato, legato, the handbell techniques), change nothing.
+  Annotations with the play flag off change nothing; techniques with no sound of their own (détaché, martelé, col
+  legno, sul ponticello, sul tasto, vibrato, legato, the handbell techniques) play the instrument's normal sound, so
+  one after a pizzicato ends it, as natural does. A breath earlier in the bar no longer carries a note across a
+  technique switch, an instrument change or a capo.
 - **A capo transposes playback** — a `<Capo>` that is active and transposes playback (every MuseScore 4.6 file, and
   4.7's "playback" mode) adds its fret to the sounding pitch of the notes of its staff, in every voice, from its beat
   until the next capo, except on the strings it skips (MuseScore `Note::ottaveCapoFret`). A capo that transposes the
@@ -177,6 +179,11 @@ and this project adheres to
   `barres:` instead of `barre:`. `barre` stays as the first barre: setting it replaces or removes the first only, so
   `barre = nil` on a two-barre diagram leaves one. `fretOffset`, `showNut` and `orientation` are modeled too, optional
   so an absent tag stays absent. A second barre used to be dropped on save.
+- **`LiveChannelPlan.dedupedOrdinal(partIndex:timelineIndex:)` indexes the sound timeline** — the part's instrument
+  points and its play techniques' sounds. Without a technique that is the instrument timeline, index for index; with
+  one, an `instrumentTimeline(forPart:)` index names another point. Technique strips are numbered after the part's
+  instruments in first-appearance order, so a technique added earlier in the score renumbers the technique strips
+  after it (instrument strips never move).
 - **Staff-text edits and range copies leave play techniques and harp diagrams alone** — `SetStaffText` (and the
   `.setStaffText` intent) never reads, writes, renames or removes an annotated staff text: writing beside "pizz." adds a
   second element, and removing the beat's words — or an empty text-entry commit on a beat whose only text is a

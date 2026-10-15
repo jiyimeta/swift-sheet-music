@@ -66,6 +66,27 @@ struct CapoPlaybackTests {
         #expect(bars[0] == [54, 66])
     }
 
+    /// A capo stands at its bar's nominal position; the walk's tick also counts the breath pause earlier in the bar.
+    /// At 120 BPM a half-second breath is a beat, so read with the pause the beat-2 note would land on beat 3's capo.
+    @Test("a breath earlier in the bar does not bring a later capo forward")
+    func breathDoesNotShiftTheCapo() throws {
+        func quarter(_ pitch: Int) -> VoiceElement {
+            .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: pitch, tpc: 14)])))
+        }
+        let voice = Voice(elements: [
+            quarter(60), .breath(Breath(kind: .caesura(.normal), pause: 0.5)), quarter(62),
+            .capo(Capo(fretPosition: 2, text: "Capo 2")), quarter(64), quarter(65),
+        ])
+        let score = Score(division: 480, parts: [Part(
+            id: "P1", instrument: Instrument(id: "guitar-steel"),
+            staves: [Staff(lineCount: 5, measures: [Measure(voices: [voice])])],
+        )], systemMeasures: [SystemMeasure()])
+        let pitches = try MidiRenderer.render(score: score).tracks.flatMap(\.events).compactMap { timed -> Int? in
+            if case let .noteOn(_, pitch, _) = timed.event { pitch } else { nil }
+        }
+        #expect(pitches == [60, 62, 66, 67])
+    }
+
     /// MuseScore sounds a tied note once, at the pitch its head's capo gives; the tail is not retuned. A tail read at
     /// its own capo would key its note-off to another pitch and leave the head's note-on sounding.
     @Test("a note tied across a capo change keeps its head's pitch, on and off")

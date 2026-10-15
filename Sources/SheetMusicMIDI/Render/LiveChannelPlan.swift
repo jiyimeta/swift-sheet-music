@@ -61,8 +61,9 @@ public struct LiveChannelPlan: Sendable, Equatable {
     public let strips: [Strip]
     /// Rendered `(port, channel)` → live single-port channel.
     public let remap: [MidiChannelKey: Int]
-    /// Timeline index → deduped ordinal, per part. Lets a caller that
-    /// knows "the 3rd change in part 1" find the strip it merged into.
+    /// Sound-timeline index → deduped ordinal, per part. Lets a caller that
+    /// knows "the 3rd point of part 1's sound timeline" find the strip it
+    /// merged into.
     private let ordinalByTimelineIndex: [[Int]]
 
     /// Memberwise init at `internal` access. The synthesized memberwise
@@ -90,6 +91,9 @@ public struct LiveChannelPlan: Sendable, Equatable {
         strips.first { $0.partIndex == partIndex && $0.ordinal == ordinal }
     }
 
+    /// The strip ordinal of point `timelineIndex` of the part's SOUND timeline (`Score.soundTimeline(forPart:)`): its
+    /// instrument points and its play techniques' sounds. With no technique that is the instrument timeline, index for
+    /// index; with one, an `instrumentTimeline(forPart:)` index no longer names the same point.
     public func dedupedOrdinal(partIndex: Int, timelineIndex: Int) -> Int? {
         guard ordinalByTimelineIndex.indices.contains(partIndex),
               ordinalByTimelineIndex[partIndex].indices.contains(timelineIndex)

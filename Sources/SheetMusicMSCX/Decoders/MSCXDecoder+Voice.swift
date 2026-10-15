@@ -332,7 +332,8 @@ extension Voice {
                     )
                 } else {
                     var staffText = try StaffText.decode(child, isSystemText: false)
-                    // A MuseScore 3 "pizz." is the technique MuseScore 4 converts it into on load.
+                    // A MuseScore 3 staff text reading "pizzicato" (or switching to that channel) is the technique
+                    // MuseScore 4 converts it into on load. MuseScore converts a `<SystemText>` too; not done here.
                     if let revision = MSCXParserContext.formatRevision, revision < 400,
                        let technique = StaffText.legacyTechnique(of: child)
                     {

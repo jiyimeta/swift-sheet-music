@@ -42,6 +42,31 @@ struct StaffTextAnnotationRoundTripTests {
         ])
     }
 
+    /// MuseScore's palette writes "tremolo" in the expression style (`palettecreator.cpp:1556-1572`). Before 5.0 the
+    /// whole element was kept verbatim, so what the model does not cover must still come back — and `<style>` ahead
+    /// of the offset, since reading it re-applies the style in MuseScore.
+    @Test("an annotation's unmodeled children survive a save, <style> ahead of the overrides")
+    func unmodeledChildrenSurvive() throws {
+        let xml = """
+        <PlayTechAnnotation><playTechType>tremolo</playTechType><style>expression</style>\
+        <align>left,baseline</align><frameFgColor r="255" g="0" b="0" a="255"/><offset x="0" y="2"/>\
+        <text>trem.</text></PlayTechAnnotation>
+        """
+        let text = try StaffText.decodeAnnotated(XMLTreeParser.parse(Data(xml.utf8)))
+        #expect(text.annotationStyle == .expression)
+        let node = try #require(text.encodeAnnotation(eid: .invalid, options: MSCXEncoderOptions()))
+        let names = node.children.map(\.name)
+        #expect(names.count { $0 == "style" } == 1)
+        #expect(names.contains("align") && names.contains("frameFgColor"))
+        let style = try #require(names.firstIndex(of: "style"))
+        let offset = try #require(names.firstIndex(of: "offset"))
+        let body = try #require(names.firstIndex(of: "text"))
+        #expect(style < offset && style < body)
+        // A second pass writes the same children.
+        let again = try #require(StaffText.decodeAnnotated(node).encodeAnnotation(eid: .invalid, options: .init()))
+        #expect(again.children.map(\.name) == names)
+    }
+
     @Test("they are no longer preserved markup")
     func notPreserved() throws {
         let score = try AnnotationFixtures.load("w5-play-techniques")

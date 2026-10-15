@@ -97,6 +97,16 @@ struct AnnotationStaffTextLayoutTests {
         #expect(abs(tuningSymbol.font.pointSize - 4 * F.sp) < 0.01)
     }
 
+    @Test("a technique written in the expression style is drawn as an expression: italic, below the staff")
+    func expressionStyledTechnique() throws {
+        var trem = StaffText(text: "trem.")
+        trem.annotation = .playTechnique(.tremolo, playsBack: true)
+        trem.annotationMarkup = [PreservedXML(name: "style", attributes: [:], text: "expression", children: [])]
+        let drawn = try #require(F.staffTexts(F.layout(F.score([F.whole()], system: Self.lane(trem)))).first)
+        #expect(drawn.style == .expression)
+        #expect(drawn.placement?.side == .below)
+    }
+
     @Test("a diagram with no text draws nothing")
     func emptyDiagramDrawsNothing() {
         var bare = StaffText(text: "")

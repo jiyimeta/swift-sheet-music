@@ -247,9 +247,10 @@ extension MidiRenderer {
                     tickInMeasure: localTick - entry.tickOffset - pauseTicksInMeasure,
                 )
                 let tickBeforeElement = localTick
-                var channel = channel(
-                    atOriginalTick: localTick + originalTickDelta,
-                )
+                // Channel switches and capos stand at a bar's nominal positions; the walk's tick also counts the
+                // breath pauses earlier in the bar, which must not carry an element across a switch.
+                let nominalOriginalTick = localTick + originalTickDelta - pauseTicksInMeasure
+                var channel = channel(atOriginalTick: nominalOriginalTick)
                 if case let .keySignature(k) = element { currentKey = k.concertKey }
                 if consumedByTremolo.contains(elementIndex) {
                     consumedByTremolo.remove(elementIndex)
@@ -270,7 +271,7 @@ extension MidiRenderer {
                 // that changes under a tie neither retunes the held note nor leaves the head's note-on unreleased.
                 // Like the channel, it is resolved per chord: a fresh note struck beside a tied one, on the very tick
                 // a capo changes, sounds through the tie head's capo too.
-                var capo = CapoRanges.active(in: capoPoints, at: localTick + originalTickDelta)
+                var capo = CapoRanges.active(in: capoPoints, at: nominalOriginalTick)
                 if case let .chord(chord) = element {
                     if chord.notes.contains(where: { $0.tieBack != nil }),
                        let sustained = sustainedChannel

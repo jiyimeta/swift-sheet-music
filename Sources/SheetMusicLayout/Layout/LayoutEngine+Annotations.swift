@@ -84,13 +84,20 @@ extension LayoutEngine {
         guard let annotation = staffText.annotation,
               !staffText.text.isEmpty || staffText.richText != nil
         else { return nil }
+        var style = staffText.styleType
         let role: TextPlacementRole
         let alignment: AnnotationAlignment
         let verticalCenter: Bool
         let symbolsScaled: Bool
         switch annotation {
         case .playTechnique:
-            role = staffText.isSystemText ? .systemText : .staffText
+            // A kept `<style>` the technique was written in — expression, from MuseScore's palette — is drawn as one.
+            style = staffText.annotationStyle ?? style
+            role = switch style {
+            case .expression: .expression
+            case .systemText: .systemText
+            default: .staffText
+            }
             alignment = .leading
             verticalCenter = false
             symbolsScaled = true
@@ -102,7 +109,7 @@ extension LayoutEngine {
             symbolsScaled = diagram.isDiagram
         }
         var spec = AnnotationTextSpec(
-            text: staffText.text, richText: staffText.richText, style: staffText.styleType, role: role,
+            text: staffText.text, richText: staffText.richText, style: style, role: role,
             properties: staffText.elementProperties, overrides: staffText.properties,
             alignment: alignment, anchorsAtMeasureStart: false,
         )

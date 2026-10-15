@@ -39,6 +39,16 @@ extension StaffText {
             ))
             own = children
         }
-        return XMLTreeNode(name: name, children: own + body.children)
+        // The unmodeled children go right after `<eid>`: MuseScore writes `<style>` after the item properties and
+        // before the overrides (`TWrite::writeProperties(TextBase*)`, `twrite.cpp:1320-1335`), and reading `<style>`
+        // re-applies the style, so it must come before the offset and font children this encoder writes.
+        var children = body.children
+        if options.emitPreservedMarkup, !annotationMarkup.isEmpty {
+            let afterEID = children.first?.name == EIDXML.childName ? 1 : 0
+            let written = Set(children.map(\.name))
+            let kept = annotationMarkup.filter { !written.contains($0.name) }.map(XMLTreeNode.init(preserved:))
+            children.insert(contentsOf: kept, at: afterEID)
+        }
+        return XMLTreeNode(name: name, children: own + children)
     }
 }

@@ -9,6 +9,7 @@ extension StaffText {
     /// `tread.cpp:3038-3059`).
     static func decodeAnnotated(_ node: XMLTreeNode) throws -> StaffText {
         var text = try decode(node, isSystemText: false)
+        text.annotationMarkup = node.preservedMarkup(consuming: consumedAnnotatedChildren)
         switch node.name {
         case "PlayTechAnnotation":
             // An absent `<playTechType>` is MuseScore's property default, natural; `<play>` defaults to true.
@@ -47,6 +48,13 @@ extension StaffText {
         guard let channel, !channel.isEmpty else { return nil }
         return legacyTechniques[channel.lowercased()]
     }
+
+    /// Every annotation child `decodeAnnotated` reads: the staff text's (`decode`, `TextProperties.decode`,
+    /// `ElementProperties(decodingMSCXChildrenOf:)`) and the annotation's own. Everything else is kept.
+    private static let consumedAnnotatedChildren: Set = [
+        "text", "color", "offset", "autoplace", "placement", "visible", "face", "size", "bold", "italic", "underline",
+        "strike", "frameType", "framePadding", "playTechType", "play", "isDiagram", "pedalState",
+    ]
 
     private static let legacyTechniques: [String: PlayingTechnique] = [
         "natural": .natural, "normal": .natural, "open": .open, "mute": .mute, "distortion": .distortion,
