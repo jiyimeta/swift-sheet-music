@@ -89,6 +89,24 @@ struct EditIntentCodecTests {
         return intent
     }
 
+    /// Decodes `bytes` on a thread with a main thread's 8 MiB stack — `nil` when the decode throws. Swift Testing
+    /// runs a test on a 512 KiB cooperative thread, and in a Debug build one level of this parse takes about 55 KiB
+    /// (`EditIntentWire.init(decodingPayload:)`'s frame alone is 54,560 B, measured 2026-10-15): the nine levels the
+    /// depth tests reach left no room for the backtrace Swift Testing captures at the throw, and the whole run died
+    /// with SIGBUS. These tests pin the bound, not the host's stack size. WebAssembly has no threads to spare and does
+    /// not need one — a level costs 8-10 KiB of its 128 KiB there — so it decodes in place.
+    private static func decodedOnFullStack(_ bytes: Data) async -> EditIntent? {
+        #if os(WASI)
+            return try? EditIntentCodec.decode(bytes)
+        #else
+            return await withCheckedContinuation { continuation in
+                let thread = Thread { continuation.resume(returning: try? EditIntentCodec.decode(bytes)) }
+                thread.stackSize = 8 << 20
+                thread.start()
+            }
+        #endif
+    }
+
     /// A malformed payload nesting far past what a real composite ever does (production nests at most 2 deep) must
     /// be refused *before* the parse recurses into it, not after.
     ///
@@ -98,24 +116,20 @@ struct EditIntentCodecTests {
     /// hundreds of tests later inside an unrelated `malloc`. So this test is exactly the crash that already
     /// happened, and it only passes while the bound sits on the parse.
     @Test("a composite nested past the depth limit throws instead of overflowing the stack")
-    func deeplyNestedCompositeThrows() {
+    func deeplyNestedCompositeThrows() async {
         let bytes = EditIntentCodec.encode(Self.nestedComposite(levels: 20))
-        #expect(throws: (any Error).self) {
-            try EditIntentCodec.decode(bytes)
-        }
+        #expect(await Self.decodedOnFullStack(bytes) == nil)
     }
 
     /// Pins the limit itself. Without this, moving the bound onto the parse could quietly refuse one level too
     /// early and no other test would notice — every composite the app actually writes is one level deep.
     @Test("the depth limit admits exactly eight levels and refuses the ninth")
-    func compositeDepthBoundaryIsEightLevels() throws {
+    func compositeDepthBoundaryIsEightLevels() async {
         let atLimit = Self.nestedComposite(levels: 8)
-        #expect(try EditIntentCodec.decode(EditIntentCodec.encode(atLimit)) == atLimit)
+        #expect(await Self.decodedOnFullStack(EditIntentCodec.encode(atLimit)) == atLimit)
 
         let pastLimit = EditIntentCodec.encode(Self.nestedComposite(levels: 9))
-        #expect(throws: (any Error).self) {
-            try EditIntentCodec.decode(pastLimit)
-        }
+        #expect(await Self.decodedOnFullStack(pastLimit) == nil)
     }
 
     // swiftlint:disable:next function_body_length
