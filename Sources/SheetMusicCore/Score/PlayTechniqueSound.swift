@@ -51,20 +51,22 @@ package enum PlayTechniqueSound {
             ?? .keep
     }
 
-    /// `articulationSounds` by the instrument's id family. A family is a whole MuseScore id or a whole hyphen segment
-    /// of one (`share/instruments/instruments.xml`), so a contrabassoon is no contrabass and steel drums are no guitar.
-    /// Bass guitars, a solo cello's mute and a solo double bass are left on their normal sound: their MuseScore rows
-    /// name instruments these ids do not tell apart.
+    /// `articulationSounds` by the instrument's MuseScore id, grouped the way MuseScore's id tables group them
+    /// (`windssetupdataresolver.cpp`, `stringssetupdataresolver.cpp`): a family is a whole id or a whole hyphen segment
+    /// of one, so a contrabassoon is no contrabass and steel drums are no guitar. A solo bowed string has its
+    /// pizzicato only — its mute row names its own normal program, or an MS Basic sound (a cello's) a General MIDI font
+    /// does not have — and bass guitars, the plucked and folk strings MuseScore files under strings, and the cornet and
+    /// flugelhorn (sounds of their own, outside its brass section) keep their normal sound.
     ///
     /// Always bank 0. The table's other banks — 20/30/40/50 for the bowed solo and section sounds, 8 for an acoustic
     /// guitar's harmonics — are MS Basic's own, and a General MIDI font (folino ships GeneralUser GS) has none of them.
     private static func generalMIDIProgram(_ technique: PlayingTechnique, instrumentID id: String) -> Int? {
         let segments = id.split(separator: "-").map(String.init)
-        if let section = bowedStringSection(id) {
+        if let strings = bowedStrings(id) {
             switch technique {
             case .pizzicato: return 45
-            case .tremolo where section: return 44
-            case .mute where section: return 49
+            case .tremolo where strings == .section: return 44
+            case .mute where strings != .solo: return 49
             default: return nil
             }
         }
@@ -85,21 +87,27 @@ package enum PlayTechniqueSound {
         return nil
     }
 
-    /// `true` for a bowed string section (a plural id, or the strings group), `false` for a solo bowed string, `nil`
-    /// for anything else.
-    private static func bowedStringSection(_ id: String) -> Bool? {
+    /// MuseScore's bowed-string rows: `VIOLIN` and its kin for a solo, the `…_SECTION` rows (and `BASIC_VIOL_SECTION`
+    /// for the viols) for a section, `BASIC_STRING_SECTION` — no tremolo — for the strings group.
+    private enum BowedStrings {
+        case solo, section, group
+    }
+
+    private static func bowedStrings(_ id: String) -> BowedStrings? {
         switch id {
-        case "violin", "viola", "violoncello", "cello", "contrabass", "double-bass": false
-        case "violins", "violas", "violoncellos", "contrabasses", "strings": true
-        default: id.hasPrefix("strings.") ? true : nil
+        case "violin", "viola", "violoncello", "cello", "contrabass", "double-bass": .solo
+        case "violins", "violas", "violoncellos", "contrabasses", "treble-viol", "alto-viol", "pardessus-de-viole",
+             "tenor-viol", "baryton", "viola-da-gamba", "viola-da-gamba-tablature", "violone", "d-violone": .section
+        case "strings": .group
+        default: id.hasPrefix("strings.") ? .group : nil
         }
     }
 
-    /// MuseScore's brass section (`BRASS_SECTION`: bugle, euphonium, horn, trumpet, trombone, tuba) plus the cornet
-    /// and flugelhorn; the English horn and the basset horn are reeds.
+    /// MuseScore's `BRASS_SECTION`: the bugles, euphoniums, horns, trumpets, trombones and tubas. The English horn
+    /// and the basset horn are reeds, and the euphonium and mellophone bugles are sounds of their own.
     private static func isBrass(_ id: String, segments: [String]) -> Bool {
-        let families: Set = ["trumpet", "cornet", "flugelhorn", "trombone", "tuba", "euphonium", "horn", "bugle"]
-        guard id != "english-horn", id != "basset-horn" else { return false }
+        let families: Set = ["trumpet", "trombone", "tuba", "euphonium", "horn", "bugle"]
+        guard !["english-horn", "basset-horn", "euphonium-bugle", "mellophon-bugle"].contains(id) else { return false }
         return segments.contains(where: families.contains)
     }
 

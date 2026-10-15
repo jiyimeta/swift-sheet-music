@@ -60,7 +60,7 @@ struct SoundTimelineTests {
         #expect(PlayTechniqueSound.resolve(.pizzicato, for: violin) == .channel(violin.channels[1]))
         #expect(PlayTechniqueSound.resolve(.tremolo, for: violin) == .keep)
         #expect(PlayTechniqueSound.resolve(.natural, for: violin) == .keep)
-        let strings = Instrument(id: "strings.group", channels: [InstrumentChannel(program: 48)])
+        let strings = Instrument(id: "violins", channels: [InstrumentChannel(program: 48)])
         #expect(PlayTechniqueSound.resolve(.pizzicato, for: strings) == .generalMIDI(program: 45))
         #expect(PlayTechniqueSound.resolve(.tremolo, for: strings) == .generalMIDI(program: 44))
         #expect(PlayTechniqueSound.resolve(.mute, for: strings) == .generalMIDI(program: 49))
@@ -86,22 +86,34 @@ struct SoundTimelineTests {
         func resolve(_ technique: PlayingTechnique, _ id: String) -> PlayTechniqueSound.Outcome {
             PlayTechniqueSound.resolve(technique, for: Instrument(id: id, channels: [InstrumentChannel(program: 0)]))
         }
-        for id in ["contrabassoon", "contrabass-clarinet", "contrabass-flute", "viola-da-gamba", "cornett"] {
+        for id in [
+            "contrabassoon", "contrabass-clarinet", "contrabass-flute", "cornett", "cornettino", "tubaphone",
+            "cello-steel-drums", "guitar-steel-drums",
+        ] {
             #expect(resolve(.pizzicato, id) == .keep, "\(id)")
             #expect(resolve(.mute, id) == .keep, "\(id)")
         }
-        #expect(resolve(.mute, "guitar-steel-drums") == .keep)
-        #expect(resolve(.mute, "english-horn") == .keep)
-        #expect(resolve(.mute, "basset-horn") == .keep)
-        for id in ["contrabass-trombone", "piccolo-trumpet", "bb-cornet", "f-tuba", "eb-horn", "baritone-horn"] {
+        // Reeds, and brass with sounds of their own outside MuseScore's brass section.
+        for id in ["english-horn", "basset-horn", "bb-cornet", "flugelhorn", "euphonium-bugle", "mellophon-bugle"] {
+            #expect(resolve(.mute, id) == .keep, "\(id)")
+        }
+        for id in [
+            "contrabass-trombone", "piccolo-trumpet", "f-tuba", "wagner-tuba", "eb-horn", "baritone-horn", "bugle",
+            "euphonium",
+        ] {
             #expect(resolve(.mute, id) == .generalMIDI(program: 59), "\(id)")
         }
-        for id in ["violins", "violas", "violoncellos", "contrabasses"] {
+        for id in ["violins", "violas", "violoncellos", "contrabasses", "viola-da-gamba", "violone", "treble-viol"] {
+            #expect(resolve(.pizzicato, id) == .generalMIDI(program: 45), "\(id)")
             #expect(resolve(.tremolo, id) == .generalMIDI(program: 44), "\(id)")
             #expect(resolve(.mute, id) == .generalMIDI(program: 49), "\(id)")
         }
+        // A solo has its pizzicato only; the strings group has no tremolo row.
         #expect(resolve(.pizzicato, "double-bass") == .generalMIDI(program: 45))
         #expect(resolve(.tremolo, "double-bass") == .keep)
+        #expect(resolve(.mute, "violoncello") == .keep)
+        #expect(resolve(.tremolo, "strings") == .keep)
+        #expect(resolve(.mute, "strings") == .generalMIDI(program: 49))
     }
 
     @Test("detaché, vibrato, legato and the handbell techniques sound as before")

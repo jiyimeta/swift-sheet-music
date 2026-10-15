@@ -6,6 +6,11 @@ extension LiveChannelPlan {
     /// instrument's strip and live channel are therefore the ones it had before techniques sounded, and a
     /// technique's sound takes a strip only while a melodic channel is left — past that it plays on its instrument's
     /// strip, as the rendered SMF plays it on its instrument's channel (`MidiRenderer.assignChannels`).
+    ///
+    /// The two run out at different points. The live synth has one port's 15 melodic channels, counted per strip; the
+    /// SMF has 15 per declared `<midiPort>`, counted per `<Channel>`. So in a score that fills the live synth, a
+    /// technique can sound in the exported file and as its instrument live — as an instrument past the fifteenth
+    /// already shares a live channel there.
     struct Builder {
         private let timelines: [[Score.SoundPoint]]
         private let assignments: [[MidiRenderer.ChannelAssignment]]
@@ -24,7 +29,9 @@ extension LiveChannelPlan {
         }
 
         var plan: LiveChannelPlan {
-            LiveChannelPlan(
+            // Every point is placed: an instrument point in the first pass, a technique after its base point.
+            assert(ordinals.allSatisfy { !$0.contains(nil) }, "a sound-timeline point was left without a strip")
+            return LiveChannelPlan(
                 strips: strips.sorted { ($0.partIndex, $0.ordinal) < ($1.partIndex, $1.ordinal) },
                 remap: remap,
                 ordinalByTimelineIndex: ordinals.map { $0.map { $0 ?? 0 } },
