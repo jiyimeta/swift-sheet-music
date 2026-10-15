@@ -162,14 +162,19 @@ extension HairpinRamps {
         let target = PartTrack(staff: staffIndex, voice: voiceIndex)
         let own = walk(target)
         var resolved: [PartTrack: [PartDynamicEvent.Source: [HairpinRamp]]] = [:]
-        var wedges: [HairpinRamp] = []
+        var wedges: [[HairpinRamp]] = []
         for event in events where event.isHairpin && event.reaches(staff: staffIndex, voice: voiceIndex) {
             if resolved[event.track] == nil {
                 let origin = event.track == target ? own : walk(event.track)
                 resolved[event.track] = origin.resolvedWedges(writtenIn: event.track)
             }
-            wedges += resolved[event.track]?[event.source] ?? []
+            if let segments = resolved[event.track]?[event.source] { wedges.append(segments) }
         }
-        return own.timeline(initialVelocity: initialVelocity, wedges: wedges)
+        // In the order the wedges start, as `resolveChained` resolves them — a two-level dynamic can move a start past
+        // the spanner's tick — so `holds` and `active` see them as they always have.
+        let ordered = wedges.enumerated().sorted { lhs, rhs in
+            (lhs.element.first?.startTick ?? 0, lhs.offset) < (rhs.element.first?.startTick ?? 0, rhs.offset)
+        }
+        return own.timeline(initialVelocity: initialVelocity, wedges: ordered.flatMap(\.element))
     }
 }

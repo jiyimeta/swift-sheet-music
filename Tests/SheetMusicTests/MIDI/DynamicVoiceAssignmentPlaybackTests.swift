@@ -109,6 +109,7 @@ struct DynamicVoiceAssignmentPlaybackTests {
             lower: [[[F.dynamic("fp")] + Self.lowBar()], [Self.lowBar()]],
         )
         #expect(try F.velocities(score, track: 0) == [96, 100, 104, 108, 112, 112, 112, 112])
+        #expect(try F.velocities(score, track: 1) == [96, 100, 104, 108, 112, 112, 112, 112])
     }
 
     /// Of an accent and a narrower level on one tick, the level takes the tick (`applyDynamic`'s priority,
