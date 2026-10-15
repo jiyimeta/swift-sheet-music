@@ -29,9 +29,15 @@ struct FileDefaultsTests {
     @Test("the file-default table is MuseScore's (dom/fermata.cpp:194-210)")
     func table() {
         let expected: [(String, Double)] = [
-            ("fermataVeryShortAbove", 1.25), ("fermataShortAbove", 1.5), ("fermataShortHenzeBelow", 1.5),
-            ("fermataAbove", 2.0), ("fermataBelow", 2.0), ("fermataLongAbove", 3.0), ("fermataLongHenzeBelow", 3.0),
+            ("fermataVeryShortAbove", 1.25), ("fermataVeryShortBelow", 1.25),
+            ("fermataShortAbove", 1.5), ("fermataShortBelow", 1.5),
+            ("fermataShortHenzeAbove", 1.5), ("fermataShortHenzeBelow", 1.5),
+            ("fermataAbove", 2.0), ("fermataBelow", 2.0),
+            ("fermataLongAbove", 3.0), ("fermataLongBelow", 3.0),
+            ("fermataLongHenzeAbove", 3.0), ("fermataLongHenzeBelow", 3.0),
             ("fermataVeryLongAbove", 4.0), ("fermataVeryLongBelow", 4.0),
+            // An unknown subtype is MuseScore's `Undefined`, which holds like the plain fermata.
+            ("curlewSign", 2.0),
         ]
         let wrong = expected.filter { Fermata.fileDefaultTimeStretch(for: $0.0) != $0.1 }
         #expect(wrong.map(\.0) == [])

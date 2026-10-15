@@ -131,7 +131,8 @@ struct MusicXMLImportTests {
             if case let .fermata(f) = element { return f }
             return nil
         }
-        #expect(fermatas == [Fermata(subtype: "fermataAbove")])
+        // MuseScore's import gives the subtype's file default (`setSymIdAndTimeStretch`), 2.0 for the plain fermata.
+        #expect(fermatas == [Fermata(subtype: "fermataAbove", timeStretch: 2.0)])
 
         // Fermata comes before the chord in voice order.
         let fermataIndex = elements.firstIndex {

@@ -294,6 +294,10 @@ and this project adheres to
   2.0 in its palette is not a file default; confirmed on MuseScore 4.7.4's MIDI export); ssm read the absent tag as
   1.5 and 0.5. The tag is now read and written against MuseScore's defaults (`Fermata.fileDefaultTimeStretch(for:)`,
   `Breath.fileDefaultPause(for:)`); what folino's menu inserts is unchanged.
+- **A MusicXML fermata, breath mark or caesura imports the way MuseScore imports it.** The hold is the subtype's file
+  default (2.0 for a plain fermata, where ssm gave 1.5) and the pause is 0 (where a caesura got 0.5), and the
+  `double-dot` and `half-curve` fermata shapes and the `single` caesura read as the Henze fermatas and the single-stroke
+  caesura instead of the plain fermata and caesura.
 - **Every MuseScore fermata subtype draws its own glyph.** Short, long, very short, very long and the Henze fermatas
   drew the plain fermata, and every `*Below` form except `fermataBelow` drew the upright glyph under the staff. The
   glyph, its measured ink offsets and the below-the-staff placement now follow the subtype (`FermataGlyph.isBelow`,

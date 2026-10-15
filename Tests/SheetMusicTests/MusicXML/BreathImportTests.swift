@@ -62,6 +62,8 @@ struct BreathImportTests {
         let cases: [(String, Breath.CaesuraStyle)] = [
             ("normal", .normal), ("short", .short),
             ("thick", .thick), ("curved", .curved),
+            // MusicXML 4.0's `single`, read by MuseScore as `caesuraSingleStroke` (`importmusicxmlpass2.cpp:8504`).
+            ("single", .singleStroke),
         ]
         for (value, expected) in cases {
             let s = try Self.score(notation: "<caesura>\(value)</caesura>")
@@ -90,13 +92,17 @@ struct BreathImportTests {
         #expect(b.kind == .caesura(.normal))
     }
 
-    @Test("MusicXML import uses default pause (no <pause> in MusicXML)")
-    func importUsesDefaultPause() throws {
-        let s = try Self.score(notation: "<caesura>thick</caesura>")
-        guard let b = Self.breath(in: s) else {
-            Issue.record("expected a .breath"); return
+    /// MusicXML carries no pause, and MuseScore's import never sets one (`addBreath`, `importmusicxmlpass2.cpp:9196`),
+    /// so the breath keeps `Breath`'s constructed 0 — the same value an absent `<pause>` means in an MSCX file.
+    @Test("MusicXML import uses MuseScore's file-default pause, 0")
+    func importUsesFileDefaultPause() throws {
+        for notation in ["<caesura>thick</caesura>", "<caesura/>", "<breath-mark>comma</breath-mark>"] {
+            let s = try Self.score(notation: notation)
+            guard let b = Self.breath(in: s) else {
+                Issue.record("expected a .breath for \(notation)"); continue
+            }
+            #expect(b.pause == 0, "\(notation)")
         }
-        #expect(b.pause == 0.75)
     }
 
     @Test("multiple breath siblings on one note preserve document order")

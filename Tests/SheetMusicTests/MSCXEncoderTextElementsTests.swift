@@ -279,13 +279,15 @@ struct MSCXEncoderTextElementsTests {
 
     @Test("Fermata round-trips subtype and explicit timeStretch")
     func fermataRoundTrip() throws {
-        // (subtype, explicit timeStretch or nil → use default,
-        //  expectedXMLContainsTimeStretch)
+        // (subtype, explicit timeStretch or nil → ssm's insertion default, expectedXMLContainsTimeStretch). The tag is
+        // omitted only at MuseScore's FILE default (`Fermata.fileDefaultTimeStretch`: 2.0 plain, 3.0 long), so the
+        // insertion defaults (1.5, 2.0) are written to keep their meaning.
         let cases: [(String, Double?, Bool)] = [
-            ("fermataAbove", nil, false), // default 1.5 → omit
-            ("fermataLongAbove", nil, false), // default 2.0 → omit
+            ("fermataAbove", nil, true), // insertion 1.5 ≠ file 2.0 → emit
+            ("fermataLongAbove", nil, true), // insertion 2.0 ≠ file 3.0 → emit
             ("fermataAbove", 2.5, true), // override → emit
-            ("fermataLongAbove", 2.0, false), // matches default → omit
+            ("fermataAbove", 2.0, false), // file default → omit
+            ("fermataLongAbove", 3.0, false), // file default → omit
             ("fermataAbove", 1.0, true), // override to 1.0 → emit
         ]
         for (subtype, stretch, expectXML) in cases {

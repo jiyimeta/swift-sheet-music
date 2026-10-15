@@ -202,9 +202,10 @@ enum MusicXMLNoteDecoder {
         return result
     }
 
-    /// MusicXML encodes fermatas under `<notations><fermata>`. The element's
-    /// text (if any) is the fermata shape ("normal", "square", "angled", …);
-    /// empty means normal. We map to MuseScore's `<subtype>` spelling.
+    /// MusicXML encodes fermatas under `<notations><fermata>`. The element's text (if any) is the fermata shape
+    /// ("normal", "square", "angled", …); empty means normal. Shapes map to MuseScore's `<subtype>` spelling the way
+    /// its importer does (`convertFermataToSymId`, `importmusicxmlpass2.cpp:1516`), and the hold is the subtype's file
+    /// default, because `addFermataToChord` sets it through `setSymIdAndTimeStretch` — MusicXML carries none.
     private static func decodeFermata(_ node: XMLTreeNode) -> Fermata? {
         guard let notations = node.first("notations") else { return nil }
         guard let fermataNode = notations.first("fermata") else { return nil }
@@ -221,10 +222,14 @@ enum MusicXMLNoteDecoder {
             subtype = above ? "fermataVeryLongAbove" : "fermataVeryLongBelow"
         case "double-angled":
             subtype = above ? "fermataVeryShortAbove" : "fermataVeryShortBelow"
+        case "double-dot":
+            subtype = above ? "fermataLongHenzeAbove" : "fermataLongHenzeBelow"
+        case "half-curve":
+            subtype = above ? "fermataShortHenzeAbove" : "fermataShortHenzeBelow"
         default:
             subtype = above ? "fermataAbove" : "fermataBelow"
         }
-        return Fermata(subtype: subtype)
+        return Fermata(subtype: subtype, timeStretch: Fermata.fileDefaultTimeStretch(for: subtype))
     }
 
     /// MusicXML's `<tie type="start"/>` starts a tie; `<tie type="stop"/>`

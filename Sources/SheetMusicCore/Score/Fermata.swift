@@ -30,11 +30,11 @@ public struct Fermata: Sendable, Equatable {
     }
 
     /// What an absent `<timeStretch>` means in a MuseScore file: the subtype's `propertyDefault(TIME_STRETCH)`
-    /// (`dom/fermata.cpp:194-210`), which MuseScore omits from the file. It differs from `defaultTimeStretch(for:)`,
-    /// the value folino's menu and MusicXML import insert. Measured on MuseScore 4.7.4's MIDI export: Long and
-    /// LongHenze 3.0 (tempo 1499999 µs/quarter over the bar), plain 2.0 (1000000), VeryShort 1.25 (625000),
-    /// Short and ShortHenze 1.5 (750000), VeryLong 4.0 (2000000). An unknown subtype is read as the plain
-    /// fermata (`Undefined` becomes Normal, `fermata.cpp:201-203`).
+    /// (`dom/fermata.cpp:194-210`), which MuseScore omits from the file, and the hold MusicXML import gives. It differs
+    /// from `defaultTimeStretch(for:)`, the value folino's menu inserts. Measured on MuseScore 4.7.4's MIDI export:
+    /// Long and LongHenze 3.0 (tempo 1499999 µs/quarter over the bar), plain 2.0 (1000000), VeryShort 1.25 (625000),
+    /// Short and ShortHenze 1.5 (750000), VeryLong 4.0 (2000000). An unknown subtype is read as the plain fermata
+    /// (`Undefined` becomes Normal, `fermata.cpp:201-203`).
     public static func fileDefaultTimeStretch(for subtype: String) -> Double {
         switch subtype {
         case "fermataVeryShortAbove", "fermataVeryShortBelow":
