@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="violin">
+        <longName>Violin</longName>
+        <trackName>Violin</trackName>
+        <Channel>
+          <controller ctrl="0" value="0"/>
+          <controller ctrl="32" value="0"/>
+          <program value="40"/>
+        </Channel>
+        <Channel name="pizzicato"><program value="45"/></Channel>
+        <Channel name="tremolo"><program value="44"/></Channel>
+      </Instrument>
+    </Part>
+    <Part>
+      <Staff id="2"/>
+      <Instrument id="guitar-steel">
+        <longName>Guitar</longName>
+        <trackName>Guitar</trackName>
+        <Channel>
+          <controller ctrl="0" value="0"/>
+          <controller ctrl="32" value="0"/>
+          <program value="25"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure><voice>
+        <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+        <Chord><durationType>whole</durationType><Note><pitch>69</pitch><tpc>17</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <PlayTechAnnotation><playTechType>pizzicato</playTechType><text>pizz.</text></PlayTechAnnotation>
+        <Chord><durationType>whole</durationType><Note><pitch>69</pitch><tpc>17</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <PlayTechAnnotation><text>arco</text></PlayTechAnnotation>
+        <Chord><durationType>whole</durationType><Note><pitch>69</pitch><tpc>17</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <PlayTechAnnotation><playTechType>tremolo</playTechType><text>trem.</text></PlayTechAnnotation>
+        <Chord><durationType>whole</durationType><Note><pitch>69</pitch><tpc>17</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <PlayTechAnnotation><playTechType>pizzicato</playTechType><play>0</play><text>pizz.</text></PlayTechAnnotation>
+        <Chord><durationType>whole</durationType><Note><pitch>69</pitch><tpc>17</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <PlayTechAnnotation><text>arco</text></PlayTechAnnotation>
+        <Chord><durationType>whole</durationType><Note><pitch>69</pitch><tpc>17</tpc></Note></Chord>
+      </voice></Measure>
+    </Staff>
+    <Staff id="2">
+      <Measure><voice>
+        <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+        <Chord><durationType>whole</durationType><Note><pitch>64</pitch><tpc>18</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <PlayTechAnnotation><playTechType>mute</playTechType><text>mute</text></PlayTechAnnotation>
+        <Chord><durationType>whole</durationType><Note><pitch>64</pitch><tpc>18</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <PlayTechAnnotation><text>ord.</text></PlayTechAnnotation>
+        <Chord><durationType>whole</durationType><Note><pitch>64</pitch><tpc>18</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <PlayTechAnnotation><playTechType>harmonics</playTechType><text>harm.</text></PlayTechAnnotation>
+        <Chord><durationType>whole</durationType><Note><pitch>64</pitch><tpc>18</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <Chord><durationType>whole</durationType><Note><pitch>64</pitch><tpc>18</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <PlayTechAnnotation><playTechType>open</playTechType><text>open</text></PlayTechAnnotation>
+        <Chord><durationType>whole</durationType><Note><pitch>64</pitch><tpc>18</tpc></Note></Chord>
+      </voice></Measure>
+    </Staff>
+  </Score>
+</museScore>

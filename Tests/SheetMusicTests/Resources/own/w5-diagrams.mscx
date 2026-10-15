@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="harp">
+        <longName>Harp</longName>
+        <trackName>Harp</trackName>
+        <Channel>
+          <controller ctrl="0" value="0"/>
+          <controller ctrl="32" value="0"/>
+          <program value="46"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Part>
+      <Staff id="2"/>
+      <Instrument id="guitar-steel">
+        <longName>Guitar</longName>
+        <trackName>Guitar</trackName>
+        <Channel>
+          <controller ctrl="0" value="0"/>
+          <controller ctrl="32" value="0"/>
+          <program value="25"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure><voice>
+        <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+        <HarpPedalDiagram>
+          <pedalState>
+            <string name="0">1</string><string name="1">1</string><string name="2">0</string>
+            <string name="3">1</string><string name="4">2</string><string name="5">1</string>
+            <string name="6">1</string>
+          </pedalState>
+          <text><sym>harpPedalCentered</sym><sym>harpPedalCentered</sym><sym>harpPedalRaised</sym><sym>harpPedalDivider</sym><sym>harpPedalCentered</sym><sym>harpPedalLowered</sym><sym>harpPedalCentered</sym><sym>harpPedalCentered</sym></text>
+        </HarpPedalDiagram>
+        <Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <HarpPedalDiagram>
+          <isDiagram>0</isDiagram>
+          <pedalState>
+            <string name="0">1</string><string name="1">1</string><string name="2">1</string>
+            <string name="3">1</string><string name="4">1</string><string name="5">1</string>
+            <string name="6">1</string>
+          </pedalState>
+          <text>B<sym>csymAccidentalNatural</sym> </text>
+        </HarpPedalDiagram>
+        <Chord><durationType>whole</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
+      </voice></Measure>
+    </Staff>
+    <Staff id="2">
+      <Measure><voice>
+        <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+        <FretDiagram>
+          <fretOffset>2</fretOffset>
+          <frets>5</frets>
+          <strings>6</strings>
+          <showNut>1</showNut>
+          <fretDiagram>
+            <string no="0"><marker>cross</marker></string>
+            <string no="1"><marker>circle</marker></string>
+            <string no="2"><dot fret="1">normal</dot></string>
+            <string no="3"><dot fret="2">normal</dot></string>
+            <string no="4"><dot fret="3">normal</dot></string>
+            <barre start="2" end="5">1</barre>
+          </fretDiagram>
+          <Harmony><name>Cmaj7</name></Harmony>
+        </FretDiagram>
+        <Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <FretDiagram>
+          <frets>4</frets>
+          <strings>6</strings>
+          <orientation>1</orientation>
+          <fretDiagram>
+            <string no="1"><dot fret="1">normal</dot></string>
+            <string no="3"><dot fret="2">normal</dot></string>
+          </fretDiagram>
+        </FretDiagram>
+        <Chord><durationType>whole</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
+      </voice></Measure>
+    </Staff>
+  </Score>
+</museScore>

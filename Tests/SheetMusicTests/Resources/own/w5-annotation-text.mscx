@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="piano">
+        <longName>Piano</longName>
+        <trackName>Piano</trackName>
+        <Channel>
+          <controller ctrl="0" value="0"/>
+          <controller ctrl="32" value="0"/>
+          <program value="0"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Dynamic><subtype>p</subtype><velocity>49</velocity></Dynamic>
+          <Expression><text>dolce</text></Expression>
+          <Chord><durationType>half</durationType><Note><pitch>72</pitch><tpc>14</tpc></Note></Chord>
+          <Dynamic><subtype>f</subtype><velocity>96</velocity></Dynamic>
+          <Expression><text>con <i>brio</i></text></Expression>
+          <Chord><durationType>half</durationType><Note><pitch>74</pitch><tpc>16</tpc></Note></Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Expression><placement>above</placement><text>espress.</text></Expression>
+          <Chord><durationType>quarter</durationType><Note><pitch>72</pitch><tpc>14</tpc></Note></Chord>
+          <Expression><visible>0</visible><text>unseen</text></Expression>
+          <Chord><durationType>quarter</durationType><Note><pitch>74</pitch><tpc>16</tpc></Note></Chord>
+          <Sticking><text>R</text></Sticking>
+          <Chord><durationType>quarter</durationType><Note><pitch>76</pitch><tpc>18</tpc></Note></Chord>
+          <Sticking><text>L</text><placement>above</placement></Sticking>
+          <Chord><durationType>quarter</durationType><Note><pitch>77</pitch><tpc>13</tpc></Note></Chord>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

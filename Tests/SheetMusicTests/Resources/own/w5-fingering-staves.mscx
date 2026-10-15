@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Staff id="2"/>
+      <Instrument id="piano">
+        <longName>Piano</longName>
+        <trackName>Piano</trackName>
+        <Channel>
+          <controller ctrl="0" value="0"/>
+          <controller ctrl="32" value="0"/>
+          <program value="0"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure><voice>
+        <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+        <Chord><durationType>whole</durationType>
+          <Note><Fingering><text>1</text></Fingering><pitch>72</pitch><tpc>14</tpc></Note>
+          <Note><Fingering><text>3</text></Fingering><pitch>76</pitch><tpc>18</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure>
+        <voice>
+          <Chord><durationType>whole</durationType>
+            <Note><Fingering><text>2</text></Fingering><pitch>79</pitch><tpc>15</tpc></Note></Chord>
+        </voice>
+        <voice>
+          <Chord><durationType>whole</durationType>
+            <Note><Fingering><text>4</text></Fingering><pitch>67</pitch><tpc>15</tpc></Note></Chord>
+        </voice>
+      </Measure>
+    </Staff>
+    <Staff id="2">
+      <Measure><voice>
+        <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+        <Clef><concertClefType>F</concertClefType><transposingClefType>F</transposingClefType></Clef>
+        <Chord><durationType>whole</durationType>
+          <Note><Fingering><text>5</text></Fingering><pitch>48</pitch><tpc>14</tpc></Note></Chord>
+      </voice></Measure>
+      <Measure><voice>
+        <Chord><durationType>whole</durationType>
+          <Note><pitch>48</pitch><tpc>14</tpc></Note></Chord>
+      </voice></Measure>
+    </Staff>
+  </Score>
+</museScore>
