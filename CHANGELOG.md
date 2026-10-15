@@ -41,7 +41,8 @@ and this project adheres to
   Annotations with the play flag off change nothing; techniques with no sound of their own (détaché, martelé, col
   legno, sul ponticello, sul tasto, vibrato, legato, the handbell techniques) play the instrument's normal sound, so
   one after a pizzicato ends it, as natural does. A breath earlier in the bar no longer carries a note across a
-  technique switch, an instrument change or a capo.
+  technique switch, an instrument change, a capo, a dynamic, an ottava or a swing marking: they stand at the bar's
+  nominal positions, and the pause was being counted in the tick they were looked up at.
 - **A capo transposes playback** — a `<Capo>` that is active and transposes playback (every MuseScore 4.6 file, and
   4.7's "playback" mode) adds its fret to the sounding pitch of the notes of its staff, in every voice, from its beat
   until the next capo, except on the strings it skips (MuseScore `Note::ottaveCapoFret`). A capo that transposes the
@@ -274,6 +275,10 @@ and this project adheres to
 
 ### Fixed
 
+- **Every MuseScore fermata subtype draws its own glyph.** Short, long, very short, very long and the Henze fermatas
+  drew the plain fermata, and every `*Below` form except `fermataBelow` drew the upright glyph under the staff. The
+  glyph, its measured ink offsets and the below-the-staff placement now follow the subtype (`FermataGlyph.isBelow`,
+  `FermataGlyphMetrics.offsets(forSubtype:)`).
 - **A saved fret diagram keeps its offset, nut, size and orientation for MuseScore** — `<fretOffset>`, `<showNut>`,
   `<orientation>`, `<minDistance>` and `<mag>` were written after `<fretDiagram>`, where MuseScore's reader skips every
   child; they now precede it, in MuseScore's order.

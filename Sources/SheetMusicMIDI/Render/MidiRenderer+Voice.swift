@@ -247,9 +247,12 @@ extension MidiRenderer {
                     tickInMeasure: localTick - entry.tickOffset - pauseTicksInMeasure,
                 )
                 let tickBeforeElement = localTick
-                // Channel switches and capos stand at a bar's nominal positions; the walk's tick also counts the
-                // breath pauses earlier in the bar, which must not carry an element across a switch.
-                let nominalOriginalTick = localTick + originalTickDelta - pauseTicksInMeasure
+                // Everything this walk looks up by original tick — channel switches, capos, swing, dynamics, ottavas —
+                // stands at a bar's nominal positions; the walk's tick also counts the breath pauses earlier in the
+                // bar, which must not carry an element across any of them. `localTick` itself keeps the pauses: it
+                // places the events.
+                let nominalDelta = originalTickDelta - pauseTicksInMeasure
+                let nominalOriginalTick = localTick + nominalDelta
                 var channel = channel(atOriginalTick: nominalOriginalTick)
                 if case let .keySignature(k) = element { currentKey = k.concertKey }
                 if consumedByTremolo.contains(elementIndex) {
@@ -304,7 +307,7 @@ extension MidiRenderer {
                         dynamics: dynamics,
                         ottavaRanges: ottavaRanges,
                         capo: capo,
-                        originalTickDelta: originalTickDelta,
+                        originalTickDelta: nominalDelta,
                     )
                     continue
                 }
@@ -331,7 +334,7 @@ extension MidiRenderer {
                     dynamics: dynamics,
                     ottavaRanges: ottavaRanges,
                     capo: capo,
-                    originalTickDelta: originalTickDelta,
+                    originalTickDelta: nominalDelta,
                 )
                 if case .breath = element { pauseTicksInMeasure += localTick - tickBeforeElement }
             }

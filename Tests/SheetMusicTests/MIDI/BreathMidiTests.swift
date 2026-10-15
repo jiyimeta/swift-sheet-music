@@ -140,4 +140,30 @@ struct BreathMidiTests {
         let midi = try MidiRenderer.render(score: score)
         #expect(noteOnTicks(in: midi) == [0, 720])
     }
+
+    /// A dynamic stands at its bar's nominal position. At 120 BPM a half-second caesura is a beat, so a note read at
+    /// its pause-shifted tick would take the `p` on beat 3 one beat early. Velocity and ottava share that tick.
+    @Test("a breath earlier in the bar does not bring a later dynamic forward")
+    func breathDoesNotShiftADynamic() throws {
+        func quarter(_ pitch: Int) -> String {
+            "<Chord><durationType>quarter</durationType><Note><pitch>\(pitch)</pitch><tpc>14</tpc></Note></Chord>"
+        }
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.40"><Score><Division>480</Division>
+          <Part><Staff id="1"/><Instrument id="piano"><trackName>Piano</trackName><Channel/></Instrument></Part>
+          <Staff id="1"><Measure><voice>
+            <Tempo><tempo>2</tempo></Tempo>
+            <Dynamic><subtype>f</subtype><velocity>96</velocity></Dynamic>\(quarter(60))
+            <Breath><subtype>caesura</subtype><pause>0.5</pause></Breath>\(quarter(62))
+            <Dynamic><subtype>p</subtype><velocity>49</velocity></Dynamic>\(quarter(64))\(quarter(65))
+          </voice></Measure></Staff>
+        </Score></museScore>
+        """
+        let midi = try MidiRenderer.render(score: MSCXParser.parse(Data(xml.utf8)))
+        let velocities = midi.tracks.flatMap(\.events).compactMap { timed -> Int? in
+            if case let .noteOn(_, _, velocity) = timed.event, velocity > 0 { velocity } else { nil }
+        }
+        #expect(velocities == [96, 96, 49, 49])
+    }
 }
