@@ -268,6 +268,8 @@ extension MidiRenderer {
                 // a chord with no forward tie ends any open chain.
                 // The capo works the same way: a tie's continuation keeps the pitch its head sounded, so a capo
                 // that changes under a tie neither retunes the held note nor leaves the head's note-on unreleased.
+                // Like the channel, it is resolved per chord: a fresh note struck beside a tied one, on the very tick
+                // a capo changes, sounds through the tie head's capo too.
                 var capo = CapoRanges.active(in: capoPoints, at: localTick + originalTickDelta)
                 if case let .chord(chord) = element {
                     if chord.notes.contains(where: { $0.tieBack != nil }),
