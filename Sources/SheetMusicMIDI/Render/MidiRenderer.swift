@@ -15,7 +15,16 @@ public enum MidiRenderer {
     static let defaultMicrosPerQuarter = 500_000
 
     /// Render the given `Score` into a `MidiFile` ready for serialization.
+    ///
+    /// Pedals do not play yet: `SustainPedal` is built and tested, but the Android and Windows engines have not been
+    /// checked for releasing the damper on stop, so no CC64 goes out until they are.
     public static func render(score: Score) throws -> MidiFile {
+        try render(score: score, includingSustainPedal: false)
+    }
+
+    /// `render(score:)` with the sustain pedal switched on — the path pedal playback will take once every engine
+    /// releases the damper on stop; its tests run it today.
+    static func render(score: Score, includingSustainPedal: Bool) throws -> MidiFile {
         // Hold each tie chain at its head note's sounding pitch so a tie
         // whose endpoints differ in pitch (e.g. C♯ tied across a key change
         // into an invisible C-double-sharp) doesn't leave a stuck note.
@@ -87,6 +96,7 @@ public enum MidiRenderer {
                     channels: channels,
                     isFirstTrack: trackIndex == 0,
                     isTopOfPart: s == 0,
+                    includingSustainPedal: includingSustainPedal,
                     division: score.division,
                     swingMap: trackIndex < swingMaps.count
                         ? swingMaps[trackIndex]
@@ -257,6 +267,7 @@ public enum MidiRenderer {
         channels: [ChannelAssignment],
         isFirstTrack: Bool,
         isTopOfPart: Bool,
+        includingSustainPedal: Bool,
         division: Int,
         swingMap: SwingMap,
         systemElementsByMeasure: [[PositionedSystemElement]],
@@ -295,7 +306,7 @@ public enum MidiRenderer {
 
         // Sustain pedal (CC64): every staff's pedals go into the part's first track, one stream per part, so a release
         // and a press on the shared channel at one tick keep their order (`SustainPedal.events(part:…)`).
-        if isTopOfPart {
+        if includingSustainPedal, isTopOfPart {
             events.append(contentsOf: SustainPedal.events(
                 part: part, route: route, plan: plan,
                 layout: { measureBaseLayout(measures: $0.measures, division: division, tempoMap: tempoMap) },

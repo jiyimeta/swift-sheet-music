@@ -9,15 +9,15 @@ and this project adheres to
 
 ### Added
 
-- **A pedal holds the sustain pedal down.** Pedal spanners send CC64 on at their start and off at their end on the
-  part's channel, following the repeat plan; touching pedals release before they press, a pedal cut by a jump is
-  released, `<play>0</play>` silences one (a hidden pedal still sounds, as in MuseScore). The Apple engine releases the
-  damper when playback stops. Both engines chase controllers on a seek or a loop wrap, so seeking into a pedal
-  re-presses it; every pedalled channel also opens with CC64 = 0 at the start of the track, so a chase that lands
-  before the channel's first pedal finds a released damper rather than the previous pass's held one. Every staff's
-  pedals go out in the part's first track, as one stream: the staves share the part's channel, and a sequencer merging
-  two tracks keeps no order at one tick, so a grand staff's lower-staff release could otherwise follow the upper
-  staff's press.
+- **Pedal playback is built, and switched off in this release.** `MidiRenderer.render(score:)` and
+  `renderForPlayback(score:)` still send no CC64: the Android and Windows engines have not yet been checked for
+  releasing the damper when playback stops, and a held damper there would keep every later note ringing. The renderer
+  behind the switch sends CC64 on at a pedal's start and off at its end on the part's channel, following the repeat
+  plan; touching pedals release before they press, a pedal cut by a jump is released, `<play>0</play>` silences one (a
+  hidden pedal still sounds, as in MuseScore); every pedalled channel opens with CC64 = 0, so a chase that lands
+  before the channel's first pedal finds a released damper; and every staff's pedals go out in the part's first
+  track as one stream, each projected through its own staff's bars, so a grand staff's lower-staff release cannot
+  follow the upper staff's press at the same tick. The Apple engine already releases the damper when playback stops.
 - **`Breath.CaesuraStyle.chant` and `.singleStroke`** — MuseScore's `chantCaesura` (U+E8F8) and `caesuraSingleStroke`
   (U+E4D7). They used to decode as a comma and re-save as `breathMarkComma`. They are appended after `.curved`, so the
   edit-wire style index of every existing caesura is unchanged.
@@ -171,7 +171,11 @@ and this project adheres to
   rewrites the text equation and turns an "a tempo" into an ordinary marking, which the older client did not do. An
   older client that receives a 4.11.0 edit applies the number and beat and drops the text, play and number-edit fields
   (tags 6–9). `stableFingerprint` covers tempo text (tag 111), so such a split is detected but not repaired; groups
-  that mix versions should update.
+  that mix versions should update. Three more differences reach a group that mixes versions: an older client refuses
+  an edit message that carries a chant or single-stroke caesura (breath styles 4 and 5) or one of the new marker kinds
+  (`.daCoda`, `.daDoubleCoda`, `.user`) as an unknown choice; and an older client keeps a `<PlayTechAnnotation>` or
+  `<HarpPedalDiagram>` as a preserved voice element where 4.11.0 lifts it out of the voice as a staff text, so the two
+  address every chord after one in its bar by a different element index.
 
 - **`NotatedClock` and `Score.notatedClock(tempoMap:)`** — `seconds(at:clock:)`, `cursor(atSeconds:clock:)` and
   `rehearsalMarks(clock:)` accept a cached clock, so per-frame callers skip the tempo-map build.
@@ -344,7 +348,11 @@ and this project adheres to
   at its own defaults (2.0 for a plain fermata, 3.0 for long, 4.0 for very long, 0 for every breath and caesura — the
   2.0 in its palette is not a file default; confirmed on MuseScore 4.7.4's MIDI export); ssm read the absent tag as
   1.5 and 0.5. The tag is now read and written against MuseScore's defaults (`Fermata.fileDefaultTimeStretch(for:)`,
-  `Breath.fileDefaultPause(for:)`); what folino's menu inserts is unchanged.
+  `Breath.fileDefaultPause(for:)`); what folino's menu inserts is unchanged. **A score an earlier ssm saved plays
+  differently on reopen** when it holds a fermata or caesura at ssm's old insertion default, which was written as no
+  tag: a plain fermata holds 2.0 (was 1.5), a long one 3.0 (2.0), a very long one 4.0 (3.0), a short Henze one 1.5
+  (1.25), and a caesura or breath that paused 0.5 / 0.25 / 0.75 no longer pauses. Such a file cannot be told apart from
+  MuseScore's own, which already played this way.
 - **A MusicXML fermata, breath mark or caesura imports the way MuseScore imports it.** The hold is the subtype's file
   default (2.0 for a plain fermata, where ssm gave 1.5) and the pause is 0 (where a caesura got 0.5), and the
   `double-dot` and `half-curve` fermata shapes and the `single` caesura read as the Henze fermatas and the single-stroke

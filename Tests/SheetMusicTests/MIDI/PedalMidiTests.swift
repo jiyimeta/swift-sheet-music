@@ -7,7 +7,9 @@ import Testing
 /// Pedal playback follows MuseScore 4: a pedal sounds unless `<play>0</play>`
 /// (`Spanner::playSpanner`, `engraving/playback/metaparsers/internal/spannersmetaparser.cpp:62-64`, which checks the
 /// play flag and never visibility), as CC64 = 127 at its start and 0 at its end
-/// (`framework/audio/engine/internal/synthesizers/fluidsynth/fluidsequencer.cpp:197-210`).
+/// (`framework/audio/engine/internal/synthesizers/fluidsynth/fluidsequencer.cpp:197-210`). Pedal playback is switched
+/// off in the public `render(score:)` until every engine releases the damper on stop; these tests run the pedal-on
+/// path.
 @Suite("Pedal in the rendered SMF")
 struct PedalMidiTests {
     private static func cc64(_ file: MidiFile) -> [(tick: Int, value: Int, channel: Int)] {
@@ -21,10 +23,18 @@ struct PedalMidiTests {
         }
     }
 
+    @Test("the public render sends no CC64 while pedal playback is switched off")
+    func publicRenderSendsNoPedal() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("pedal-lines"))
+        #expect(try !Self.cc64(MidiRenderer.render(score: score, includingSustainPedal: true)).isEmpty)
+        #expect(try Self.cc64(MidiRenderer.render(score: score)).isEmpty)
+        #expect(try Self.cc64(MidiRenderer.renderForPlayback(score: score)).isEmpty)
+    }
+
     @Test("a pedal over bars 1-2 sends 127 at its start and 0 at its end, on the part's channel")
     func simplePedal() throws {
         let score = try LineVariantFixtures.score(pedal: "<Pedal/>", bars: 3, from: 0, over: 2)
-        let sustain = try Self.cc64(MidiRenderer.render(score: score))
+        let sustain = try Self.cc64(MidiRenderer.render(score: score, includingSustainPedal: true))
         #expect(sustain.map(\.value) == [0, 127, 0])
         #expect(sustain.map(\.tick) == [0, 0, 3840])
     }
@@ -46,7 +56,7 @@ struct PedalMidiTests {
             division: 480,
             parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])],
         )
-        let sustain = try Self.cc64(MidiRenderer.render(score: score))
+        let sustain = try Self.cc64(MidiRenderer.render(score: score, includingSustainPedal: true))
         #expect(sustain.map(\.value) == [0, 127, 0])
         #expect(sustain.map(\.tick) == [0, 0, 1920])
     }
@@ -54,17 +64,17 @@ struct PedalMidiTests {
     @Test("<play>0</play> silences a pedal; a hidden pedal still sounds")
     func playFlagAndVisibility() throws {
         let muted = try LineVariantFixtures.score(pedal: "<Pedal><play>0</play></Pedal>", bars: 3, from: 0, over: 2)
-        #expect(try Self.cc64(MidiRenderer.render(score: muted)).isEmpty)
+        #expect(try Self.cc64(MidiRenderer.render(score: muted, includingSustainPedal: true)).isEmpty)
         let hidden = try LineVariantFixtures.score(
             pedal: "<Pedal><visible>0</visible></Pedal>", bars: 3, from: 0, over: 2,
         )
-        #expect(try Self.cc64(MidiRenderer.render(score: hidden)).count == 3)
+        #expect(try Self.cc64(MidiRenderer.render(score: hidden, includingSustainPedal: true)).count == 3)
     }
 
     @Test("two touching pedals release before they press")
     func touching() throws {
         let score = try LineVariantFixtures.score(pedals: [("<Pedal/>", 0, 1), ("<Pedal/>", 1, 1)], bars: 3)
-        let sustain = try Self.cc64(MidiRenderer.render(score: score))
+        let sustain = try Self.cc64(MidiRenderer.render(score: score, includingSustainPedal: true))
         #expect(sustain.map(\.value) == [0, 127, 0, 127, 0])
         #expect(sustain.map(\.tick) == [0, 0, 1920, 1920, 3840])
     }
@@ -88,7 +98,7 @@ struct PedalMidiTests {
             division: 480,
             parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [upper, lower])],
         )
-        let file = try MidiRenderer.render(score: score)
+        let file = try MidiRenderer.render(score: score, includingSustainPedal: true)
         try #require(file.tracks.count == 2)
         #expect(Self.cc64(track: file.tracks[1]).isEmpty)
         let sustain = Self.cc64(track: file.tracks[0])
@@ -123,7 +133,7 @@ struct PedalMidiTests {
             division: 480,
             parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [upper, lower])],
         )
-        let file = try MidiRenderer.render(score: score)
+        let file = try MidiRenderer.render(score: score, includingSustainPedal: true)
         try #require(file.tracks.count == 2)
         let lowerNoteOns = file.tracks[1].events.compactMap { event -> Int? in
             if case let .noteOn(_, 48, velocity) = event.event, velocity > 0 { return event.tick }
@@ -139,13 +149,13 @@ struct PedalMidiTests {
     @Test("a score without pedals renders no CC64")
     func noPedal() throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("grace_after"))
-        #expect(try Self.cc64(MidiRenderer.render(score: score)).isEmpty)
+        #expect(try Self.cc64(MidiRenderer.render(score: score, includingSustainPedal: true)).isEmpty)
     }
 
     @Test("the pedal fixture renders balanced presses and releases, plus one opening release per pedalled channel")
     func fixtureBalanced() throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("pedal-lines"))
-        let sustain = try Self.cc64(MidiRenderer.render(score: score))
+        let sustain = try Self.cc64(MidiRenderer.render(score: score, includingSustainPedal: true))
         #expect(!sustain.isEmpty)
         let channels = Set(sustain.map(\.channel))
         #expect(sustain.filter { $0.value == 0 }.count == sustain.filter { $0.value == 127 }.count + channels.count)
