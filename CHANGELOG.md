@@ -9,12 +9,6 @@ and this project adheres to
 
 ### Added
 
-- **Annotation text styles and placement roles** — `TextStyleType` gains `expression`, `sticking`, `fingering`,
-  `lhGuitarFingering`, `rhGuitarFingering`, `stringNumber`, `stringTunings`, `harpPedalDiagram`, `harpPedalTextDiagram`
-  and `fretDiagramFretNumber` with MuseScore 4's fonts, sizes and symbol sizes, and `TextPlacementRole` gains
-  `expression`, `sticking`, `harpPedalDiagram` and `harpPedalTextDiagram`, whose `<…Placement>` / `<…PosAbove>` /
-  `<…PosBelow>` style keys a score can now carry. Adding cases to these public enums breaks exhaustive switches over them
-  (ssm 5.0.0).
 - **Expression text and stickings are drawn** — an `<Expression>` ("dolce") draws below the staff in MuseScore's
   expression style (italic, 10 pt), snapped 0.5 sp (0.2 sp after an f) to the right of the dynamic on its beat and on
   that dynamic's baseline — the pair ignore each other in autoplace, as in MuseScore — and a `<Sticking>` draws centered
@@ -23,12 +17,14 @@ and this project adheres to
 - **Capo and string-tunings texts are drawn** — a `<Capo>` draws its text above the staff at its beat in the staff-text
   style, falling back to MuseScore's "Capo 2" / "No capo" when its text is empty (a partial capo with an empty text
   draws nothing: the instrument's strings are not known at layout), and a `<StringTunings>` draws its text in the 9 pt
-  string-tunings style one spatium from its measure's left edge.
+  string-tunings style one spatium from its measure's left edge, any symbol in it at the music font's size as
+  MuseScore sets it (`hasSymbolScale`).
 - **Play-technique annotations and harp pedal diagrams are modeled** — a `<PlayTechAnnotation>` ("pizz.", "arco",
   "tremolo", "mute", "open", "harmonics" …) and a `<HarpPedalDiagram>` are staff texts that also carry their technique /
-  pedal state (`StaffText.annotation`), draw their text (the harp diagram's pedal glyphs, centered, above the staff;
-  its text mode below) and are written back as MuseScore writes them — properties at their defaults omitted — instead
-  of surviving as unmodeled markup. Neither is a caret target. A MuseScore 3 staff text that MuseScore 4 converts to a
+  pedal state (`StaffText.annotation`), draw their text (the harp diagram's pedal glyphs, centered, above the staff,
+  at the music font's size — a space a pedal, as MuseScore sets them; its text mode below) and are written back as
+  MuseScore writes them — properties at their defaults omitted — instead of surviving as unmodeled markup. Neither is a
+  caret target. A MuseScore 3 staff text that MuseScore 4 converts to a
   technique ("pizzicato", "arco", or a channel switch to "tremolo") is converted here too. A MuseScore 3 target writes
   the text as a plain `<StaffText>`.
 - **Play techniques change the sound** — a play-technique annotation switches its part to the instrument's matching
@@ -37,7 +33,11 @@ and this project adheres to
   (string pizzicato 45, section tremolo 44 and mute 49, brass mute 59, guitar mute 28 / harmonics 31 / distortion 30 /
   overdrive 29 / jazz 26; bank 0, a channel of its own), until a natural or open annotation, the next technique or an
   instrument change. It is a point on the part's sound timeline like an instrument change, so the exported SMF, the
-  live mixer (one more row per technique sound, "Violin (Pizzicato)"), the audition and every platform's engine follow.
+  live mixer (one more row per technique sound, "Violin (Pizzicato)", after the part's instrument rows), the audition
+  and every platform's engine follow. A General MIDI sound takes its channel only after every part's instruments have
+  theirs, so a technique never moves another instrument's channel or mixer row; with the 15 melodic channels spent it
+  plays as its instrument rather than sharing another instrument's channel. Instrument families are matched by whole
+  MuseScore id (a contrabassoon is no contrabass).
   Annotations with the play flag off, and techniques with no General MIDI sound (détaché, martelé, col legno,
   sul ponticello, sul tasto, vibrato, legato, the handbell techniques), change nothing.
 - **A capo transposes playback** — a `<Capo>` that is active and transposes playback (every MuseScore 4.6 file, and
@@ -51,17 +51,20 @@ and this project adheres to
 - **Fingerings are drawn** — piano finger numbers, right-hand guitar letters and circled string numbers are placed per
   chord, centered on the notehead, above or below by MuseScore's rule (another voice and a stem-down chord, or the last
   staff of a multi-staff part; `<placement>` wins), cleared 0.5 sp from the chord, the staff and a beamed stem tip and
-  stacked outward; a lone unbeamed note among other voices takes its fingering 1.5 sp off the note instead; a left-hand
+  stacked outward a quarter of their ink height apart, a string number circled around its ink (MuseScore's tight
+  text box); a lone unbeamed note among other voices takes its fingering 1.5 sp off the note instead; a left-hand
   guitar fingering stands left of its note on its line. They are stacked from the chord's own extremes rather than the
   skyline, do not widen the chord's spacing, and grace-note fingerings are not drawn.
-- **Ambitus is drawn** — an `<Ambitus>` draws its two noteheads on the rows their pitches and the clef give (head type
-  and mirror honored), the accidentals the key calls for (computed at layout, as MuseScore does), the connecting line
-  (0.12 sp, 0.8 sp short of each head; off with `hasLine`) and the ledger lines, in a header column between the key and
-  the time signature padded by MuseScore's 0.5 sp `ambitusMargin`. Scores without an ambitus lay out exactly as before.
-- **Figured bass is drawn** — a `<FiguredBass>` draws its figures under the staff (6 sp from the top line), the digit
-  of each centered under its note, items stacked a line apart, with accidentals, crosses, slashed digits, parentheses
-  and continuation lines (to 1.5 sp past the last chord of the figure's length, within its bar). MuseScore's own MScoreBC
-  font is not shipped, so the glyphs are SMuFL's `figbass*` set sized to MScoreBC's digit: a slashed or backslashed digit
+- **Ambitus is drawn** — an `<Ambitus>` draws its two noteheads on the rows their pitches and the clef give (head
+  group, head type and mirror honored), the accidentals the key calls for (computed at layout, as MuseScore does), the
+  connecting line (0.12 sp, 0.8 sp short of each head; off with `hasLine`) and the ledger lines, in a header column
+  between the key and the time signature padded by MuseScore's 0.5 sp `ambitusMargin`. Scores without an ambitus lay
+  out exactly as before.
+- **Figured bass is drawn** — a `<FiguredBass>` draws its figures under the staff (6 sp from the top line), or over it
+  when placed above, the digit of each centered under its note, items stacked a line apart (line pitch and baseline
+  measured off MuseScore's own engraving), with accidentals, crosses, slashed digits, parentheses and continuation
+  lines (to 1.5 sp past the last chord of the figure's length, within its bar). MuseScore's own MScoreBC font is not
+  shipped, so the glyphs are SMuFL's `figbass*` set sized to MScoreBC's digit: a slashed or backslashed digit
   is the raised form where SMuFL has one, the digit with a combining mark elsewhere. Text that did not parse as figures
   draws as its lines.
 - **Fret diagrams are drawn** — the grid (`<strings>` strings, `<frets>` rows, 0.7 sp apart), the nut (a hairline when
@@ -69,15 +72,11 @@ and this project adheres to
   of an offset diagram and the nested chord name above it, vertical or horizontal, centered on its beat's notehead with
   its bottom 1 sp above the staff. The per-string fingering digits and the slur-style barre are not drawn, and the
   diagram is not lifted by autoplace.
-- **`FretDiagram` models `fretOffset`, `showNut`, `orientation` and every barre** — `barres` replaces the stored
-  `barre` (still readable and writable as the first; the initializer takes `barres:`); the new properties are optional
-  so an absent tag stays absent. A second barre used to be dropped on save.
-- **`LayoutElement.figure`** — one layout case for strokes, ellipses and glyph runs (`LayoutFigure`): `<Symbol>`s now,
-  and the ambitus, figured bass, fret diagrams and string numbers next. Every renderer draws it from its primitives —
-  the draw program with the opcodes it already has. Adding a case breaks exhaustive switches over `LayoutElement`.
 - **SMuFL names for annotations** — `SMuFLCodepoint.byName` resolves `ornament*`, `csymAccidental*`, `guitarString*`,
   `strings*`, `fingering*` and `tremolo*` (207 names), so `<sym>` in a harp or string-tunings text and a `<Symbol>`
   naming an ornament draw as glyphs.
+- **`CGRect.isEmpty` on the portable geometry types** (Android and WebAssembly builds), as `CGRectIsEmpty`: no width
+  or no height.
 - **`VoiceAssignment`, on `Dynamic` and `Spanner.HairpinPayload`** (import-fidelity W4): MuseScore's
   `<voiceAssignment>` — the whole instrument (the default), the staff, or the voice it is written in — and an older
   file's `<dynType>`, read as MuseScore 4 reads them and saved where MuseScore writes them (`<dynType>0</dynType>` for
@@ -164,6 +163,20 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking: `TextStyleType` and `TextPlacementRole` gain the annotation styles** — `TextStyleType` gains
+  `expression`, `sticking`, `fingering`, `lhGuitarFingering`, `rhGuitarFingering`, `stringNumber`, `stringTunings`,
+  `harpPedalDiagram`, `harpPedalTextDiagram` and `fretDiagramFretNumber` with MuseScore 4's fonts, sizes and symbol
+  sizes, and `TextPlacementRole` gains `expression`, `sticking`, `harpPedalDiagram` and `harpPedalTextDiagram`, whose
+  `<…Placement>` / `<…PosAbove>` / `<…PosBelow>` style keys a score can now carry. An exhaustive switch over either
+  needs the new cases.
+- **Breaking: `LayoutElement.figure`** — one layout case for strokes, ellipses and glyph runs (`LayoutFigure`), which
+  carries `<Symbol>`s, the ambitus, figured bass, fret diagrams and circled string numbers. Every renderer draws it
+  from its primitives — the draw program with the opcodes it already has. An exhaustive switch over `LayoutElement`
+  needs the new case.
+- **Breaking: `FretDiagram` stores every barre** — `barres` replaces the stored `barre`, and the initializer takes
+  `barres:` instead of `barre:`. `barre` stays as the first barre: setting it replaces or removes the first only, so
+  `barre = nil` on a two-barre diagram leaves one. `fretOffset`, `showNut` and `orientation` are modeled too, optional
+  so an absent tag stays absent. A second barre used to be dropped on save.
 - **Staff-text edits and range copies leave play techniques and harp diagrams alone** — `SetStaffText` (and the
   `.setStaffText` intent) never reads, writes, renames or removes an annotated staff text: writing beside "pizz." adds a
   second element, and removing the beat's words — or an empty text-entry commit on a beat whose only text is a
