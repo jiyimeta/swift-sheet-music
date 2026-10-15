@@ -31,6 +31,10 @@ and this project adheres to
   of surviving as unmodeled markup. Neither is a caret target. A MuseScore 3 staff text that MuseScore 4 converts to a
   technique ("pizzicato", "arco", or a channel switch to "tremolo") is converted here too. A MuseScore 3 target writes
   the text as a plain `<StaffText>`.
+- **A capo transposes playback** — a `<Capo>` that is active and transposes playback (every MuseScore 4.6 file, and
+  4.7's "playback" mode) adds its fret to the sounding pitch of the notes of its staff, in every voice, from its beat
+  until the next capo, except on the strings it skips (MuseScore `Note::ottaveCapoFret`). A capo that transposes the
+  notation or the tab only, and an inactive one, change nothing.
 - **SMuFL names for annotations** — `SMuFLCodepoint.byName` resolves `ornament*`, `csymAccidental*`, `guitarString*`,
   `strings*`, `fingering*` and `tremolo*` (207 names), so `<sym>` in a harp or string-tunings text and a `<Symbol>`
   naming an ornament draw as glyphs.

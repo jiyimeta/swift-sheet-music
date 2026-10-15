@@ -55,6 +55,7 @@ extension MidiRenderer {
             division: division,
             tempoMap: tempoMap,
         )
+        let capoPoints = CapoRanges.collect(staff: staff, division: division, tempoMap: tempoMap)
         // Original-tick base for each measure index, used to map
         // playback ticks (which include unrolled repeats) back to
         // pre-repeat ticks for ramp lookup.
@@ -291,6 +292,7 @@ extension MidiRenderer {
                         events: &events,
                         dynamics: dynamics,
                         ottavaRanges: ottavaRanges,
+                        capoPoints: capoPoints,
                         originalTickDelta: originalTickDelta,
                     )
                     continue
@@ -317,6 +319,7 @@ extension MidiRenderer {
                     lyricAnchors: &lyricAnchors,
                     dynamics: dynamics,
                     ottavaRanges: ottavaRanges,
+                    capoPoints: capoPoints,
                     originalTickDelta: originalTickDelta,
                 )
                 if case .breath = element { pauseTicksInMeasure += localTick - tickBeforeElement }
@@ -368,6 +371,7 @@ extension MidiRenderer {
         lyricAnchors: inout [LyricMidiCodec.Anchor],
         dynamics: DynamicsTimeline,
         ottavaRanges: [OttavaRange],
+        capoPoints: [CapoPoint],
         originalTickDelta: Int,
     ) {
         switch element {
@@ -475,8 +479,10 @@ extension MidiRenderer {
             let ottavaShift = OttavaRanges.semitones(
                 in: ottavaRanges, at: onsetOriginalTick,
             )
+            // At the chord's notated tick, as MuseScore reads the capo at its segment's.
+            let capo = CapoRanges.active(in: capoPoints, at: localTick + originalTickDelta)
             renderChordWithGraces(
-                chord,
+                capo.map { CapoRanges.compensate(chord, for: $0) } ?? chord,
                 tick: localTick + adjust.onsetShift,
                 velocity: chordVelocity,
                 channel: channel,
@@ -491,7 +497,7 @@ extension MidiRenderer {
                 playedTicksOverride: adjust == .none
                     ? nil
                     : max(1, chordTicks + adjust.lengthDelta),
-                pitchShift: ottavaShift,
+                pitchShift: ottavaShift + (capo?.fret ?? 0),
             )
             localTick += chordTicks
         case .fermata:

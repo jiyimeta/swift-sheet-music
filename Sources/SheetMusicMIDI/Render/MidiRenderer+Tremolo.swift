@@ -88,16 +88,20 @@ extension MidiRenderer {
         events: inout [TimedMidiEvent],
         dynamics: DynamicsTimeline,
         ottavaRanges: [OttavaRange],
+        capoPoints: [CapoPoint],
         originalTickDelta: Int,
     ) throws {
         let chordTicks = chord.duration
             .resolved(in: measureDuration)
             .ticks(division: division)
+        // The strokes sound the chord, and a two-note tremolo's follower, through the capo at the chord's tick.
+        let capo = CapoRanges.active(in: capoPoints, at: localTick + originalTickDelta)
+        let chord = capo.map { CapoRanges.compensate(chord, for: $0) } ?? chord
         var followerChord: Chord?
         if chord.tremolo?.span == .between {
             for j in (elementIndex + 1) ..< voiceElements.count {
                 if case let .chord(f) = voiceElements[j] {
-                    followerChord = f
+                    followerChord = capo.map { CapoRanges.compensate(f, for: $0) } ?? f
                     consumedByTremolo.insert(j)
                     break
                 }
@@ -111,7 +115,7 @@ extension MidiRenderer {
         let pitchShift = OttavaRanges.semitones(
             in: ottavaRanges,
             at: localTick + originalTickDelta,
-        )
+        ) + (capo?.fret ?? 0)
         // Sampled per stroke rather than once for the chord: each stroke
         // is its own attack, so a tremolo under a hairpin swells across
         // its own strokes. C++: `CompatMidiRender::collectNote` reads
