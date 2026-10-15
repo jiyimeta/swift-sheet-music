@@ -258,6 +258,8 @@ extension LayoutEngine {
                 text: text, origin: shift(origin), identity: identity, richText: richText, color: color,
                 placement: placement,
             )
+        case let .figure(kind, figure, color, placement):
+            return .figure(kind: kind, figure: figure.translated(dx: 0, dy: dy), color: color, placement: placement)
         case let .staffName(text, origin):
             return .staffName(text: text, origin: shift(origin))
         case .note, .tieArc:
@@ -294,6 +296,8 @@ extension LayoutEngine {
                 frame: frame, color: color, measureIndex: measureIndex, placement: placement,
                 properties: properties, richText: richText,
             )
+        case let .figure(kind, figure, color, placement):
+            return .figure(kind: kind, figure: figure.translated(dx: dx, dy: 0), color: color, placement: placement)
         default:
             return element
         }

@@ -1366,9 +1366,24 @@ extension LayoutEngine {
                         ))
                     }
                     out.append(element)
-                case .ambitus, .figuredBass, .symbol, .fretDiagram, .preserved:
-                    // Ambitus (W5 Task 10), figured bass (11), symbols (8) and fret diagrams (12) get their passes in
-                    // their own tasks; source-only preserved markup has no layout behavior.
+                case let .symbol(symbol):
+                    guard symbol.visible || options.showsInvisibleElements else { break }
+                    // Baseline-left at the notehead's left edge of its beat, on the staff's top line (MuseScore's
+                    // segment origin), then its offset. Neither autoplaced nor part of the segment's spacing.
+                    let offset = symbol.elementProperties.offset
+                    let origin = CGPoint(
+                        x: noteheadLeftEdge(timedX(atTick: tickCursor), sp: metrics.sp)
+                            + CGFloat(offset?.x ?? 0) * metrics.sp,
+                        y: staffMidY - metrics.sp * 2 + CGFloat(offset?.y ?? 0) * metrics.sp,
+                    )
+                    guard let figure = symbolFigure(for: symbol, origin: origin, sp: metrics.sp) else { break }
+                    let element = LayoutElement.figure(
+                        kind: .symbol, figure: figure, color: symbol.elementProperties.color,
+                    )
+                    if symbol.visible { out.append(element) } else { invisibleOut.append(element) }
+                case .ambitus, .figuredBass, .fretDiagram, .preserved:
+                    // Ambitus (W5 Task 10), figured bass (11) and fret diagrams (12) get their passes in their own
+                    // tasks; source-only preserved markup has no layout behavior.
                     break
                 case let .locationShift(delta):
                     // Voice-level cursor shift. Adds the location's
@@ -1953,6 +1968,10 @@ extension LayoutEngine {
             if !expressionSnapAnchors.isEmpty {
                 snapExpressions(expressionSnapAnchors, out: &out, metrics: metrics)
             }
+            emitNoteAnnotations(
+                voice: voice, chordOutIndex: voiceChordOutIndex, metrics: metrics, options: options,
+                out: &out, invisibleOut: &invisibleOut,
+            )
 
             // --- Tuplet brackets / numbers ---
             //

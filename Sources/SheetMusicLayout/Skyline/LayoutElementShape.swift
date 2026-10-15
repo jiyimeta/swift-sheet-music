@@ -53,6 +53,7 @@ public enum LayoutElementShape {
         case .rehearsalMark: .rehearsalMark
         case .marker: .marker
         case .jump: .jump
+        case let .figure(kind, _, _, _): kind.shapeKind
         case .lyricsMelisma: .lyricsMelisma
         case .lyricHyphen: .lyricHyphen
         case let .staffText(_, _, _, style, _, _, _, _, _):

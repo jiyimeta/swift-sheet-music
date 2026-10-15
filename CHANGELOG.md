@@ -35,6 +35,13 @@ and this project adheres to
   4.7's "playback" mode) adds its fret to the sounding pitch of the notes of its staff, in every voice, from its beat
   until the next capo, except on the strings it skips (MuseScore `Note::ottaveCapoFret`). A capo that transposes the
   notation or the tab only, and an inactive one, change nothing.
+- **`<Symbol>` annotations are drawn** — a standalone `<Symbol>` (a segment annotation, or a child of a note) draws its
+  SMuFL glyph by name from its beat's notehead edge on the staff's top line (a note's from the note, on its line), with
+  its `<offset>`; a symbol naming its own `<font>` is `4 sp × symbolsSize` and turned by `symbolAngle`, one without is
+  the normal size, upright (MuseScore's rule). A name outside the glyph table draws nothing and round-trips.
+- **`LayoutElement.figure`** — one layout case for strokes, ellipses and glyph runs (`LayoutFigure`): `<Symbol>`s now,
+  and the ambitus, figured bass, fret diagrams and string numbers next. Every renderer draws it from its primitives —
+  the draw program with the opcodes it already has. Adding a case breaks exhaustive switches over `LayoutElement`.
 - **SMuFL names for annotations** — `SMuFLCodepoint.byName` resolves `ornament*`, `csymAccidental*`, `guitarString*`,
   `strings*`, `fingering*` and `tremolo*` (207 names), so `<sym>` in a harp or string-tunings text and a `<Symbol>`
   naming an ornament draw as glyphs.

@@ -811,6 +811,9 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             out.append(.lineTo(x: tx, y: ty))
             out.append(.stroke(width: sp * 0.13 * ptToMM))
 
+        case let .figure(_, figure, color, _):
+            encodeFigure(figure.translated(dx: CGFloat(mox), dy: CGFloat(moy)), color: color, into: &out)
+
         case let .tupletLabel(fromOrigin, toOrigin, text, hasBracket, isAbove, tid):
             // The whole tuplet marking (number + bracket hooks/segments) is one visual unit under a single
             // `.tuplet(tid)` ID — matches Apple's `ScoreLayerBuilder.drawTuplet`, which attaches every one of

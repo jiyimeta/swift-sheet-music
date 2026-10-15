@@ -44,7 +44,8 @@ extension LayoutElement {
              let .marker(_, _, _, _, _, _, placement), let .jump(_, _, _, _, _, placement),
              let .staffText(_, _, _, _, _, placement, _, _, _),
              let .rehearsalMark(_, _, _, _, _, placement, _, _),
-             let .lyricsMelisma(_, _, placement), let .lyricHyphen(_, _, placement): placement
+             let .lyricsMelisma(_, _, placement), let .lyricHyphen(_, _, placement),
+             let .figure(_, _, _, placement): placement
         case let .harmony(harmony): harmony.placement
         default: nil
         }

@@ -210,6 +210,8 @@ extension LayoutElementShape {
             return [spannerRect(
                 kind: spannerKind, from: from, to: to, sp: sp,
             )]
+        case let .figure(_, figure, _, _):
+            return figure.ink.isEmpty ? [] : [figure.ink]
         default:
             return []
         }

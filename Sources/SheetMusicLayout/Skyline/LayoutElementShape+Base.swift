@@ -44,6 +44,8 @@ extension LayoutElementShape {
              .glissandoLine, .guitarBend, .legacyBend, .arpeggioWiggle,
              .chordLine, .tremoloBars:
             return decorationRects(for: element, sp: sp)
+        case let .figure(_, figure, _, _):
+            return figure.ink.isEmpty ? [] : [figure.ink]
         case .ledgerLine:
             // `LayoutElementShape.kind(of:)` already returns `nil` for
             // `.ledgerLine`, so `shape(for:)` never calls this far — the

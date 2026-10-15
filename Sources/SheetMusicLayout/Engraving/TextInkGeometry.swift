@@ -108,6 +108,8 @@ public enum TextInkGeometry {
             )
         case let .harmony(harmony):
             return harmonyRects(harmony, metrics: metrics)
+        case let .figure(_, figure, _, _):
+            return figure.ink.isEmpty ? [] : [figure.ink]
         default: return labelRects(for: element, metrics: metrics)
         }
     }

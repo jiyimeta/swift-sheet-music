@@ -254,6 +254,17 @@ extension ScoreLayerBuilder {
                 thickness: thickness,
                 metrics: metrics, height: height, into: parent,
             )
+        case let .figure(_, figure, color, _):
+            let ink = color.map(scoreColorToCGColor) ?? Self.inkColor
+            let parts = FigureRenderer.parts(for: figure.translated(dx: base.x, dy: base.y))
+            if let fill = parts.fill {
+                parent.addSublayer(fillLayer(path: fill, height: height, color: ink))
+            }
+            for stroke in parts.strokes {
+                let layer = strokeLayer(path: stroke.path, height: height, lineWidth: stroke.width, color: ink)
+                layer.lineCap = stroke.roundCaps ? .round : .butt
+                parent.addSublayer(layer)
+            }
         case let .tupletLabel(
             from, to, text, bracket, above,
             tid,

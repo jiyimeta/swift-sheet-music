@@ -82,4 +82,13 @@ enum AnnotationFixtures {
         }
         return chords.indices.contains(nth) ? chords[nth] : nil
     }
+
+    /// The y of the first note of the nth chord element, measure-local.
+    static func chordNoteY(_ document: LayoutDocument, nth: Int = 0) -> CGFloat? {
+        let chords = elements(document).compactMap { element -> CGFloat? in
+            guard case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = element else { return nil }
+            return notes.first?.origin.y
+        }
+        return chords.indices.contains(nth) ? chords[nth] : nil
+    }
 }

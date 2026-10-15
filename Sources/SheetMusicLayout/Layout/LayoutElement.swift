@@ -330,6 +330,12 @@ public enum LayoutElement: Sendable, Equatable {
         text: String, origin: CGPoint, identity: ScoreElementID? = nil, richText: LayoutRichText? = nil,
         color: ScoreColor? = nil, placement: TextPlacementMetadata? = nil,
     )
+    /// Strokes, ellipses and glyph / text runs: ambitus, figured bass, fret diagrams, string-number circles and
+    /// `<Symbol>`s. `figure.ink` is its measure-local extent for the skyline, ink rects and Y bounds.
+    case figure(
+        kind: LayoutFigure.Kind, figure: LayoutFigure, color: ScoreColor? = nil,
+        placement: TextPlacementMetadata? = nil,
+    )
     case measureRepeat(count: Int, origin: CGPoint)
     /// Multi-measure rest H-bar with a count printed above. Replaces
     /// the `count` consecutive rest measures starting at this layout

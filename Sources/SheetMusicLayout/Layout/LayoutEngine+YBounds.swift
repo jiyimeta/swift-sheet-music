@@ -127,6 +127,8 @@ extension LayoutEngine {
             }
         case let .tupletLabel(from, to, _, _, _, _):
             return [from.y, to.y]
+        case let .figure(_, figure, _, _):
+            return figure.ink.isEmpty ? [] : [figure.ink.minY, figure.ink.maxY]
         case let .harmony(lh):
             return [CGFloat(lh.y)]
         }

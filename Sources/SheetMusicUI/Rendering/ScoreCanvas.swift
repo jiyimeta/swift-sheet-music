@@ -352,6 +352,18 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 shape: shape, origin: shift(origin),
                 thickness: thickness, metrics: metrics,
             )
+        case let .figure(_, figure, color, _):
+            let ink = color.map { Color(scoreColor: $0) } ?? .primary
+            let parts = FigureRenderer.parts(for: figure.translated(dx: base.x, dy: base.y))
+            if let fill = parts.fill {
+                context.fill(Path(fill), with: .color(ink))
+            }
+            for stroke in parts.strokes {
+                context.stroke(
+                    Path(stroke.path), with: .color(ink),
+                    style: StrokeStyle(lineWidth: stroke.width, lineCap: stroke.roundCaps ? .round : .butt),
+                )
+            }
         case let .tupletLabel(
             from,
             to,
