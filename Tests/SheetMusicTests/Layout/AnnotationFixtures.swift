@@ -7,14 +7,16 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-#if !canImport(CoreGraphics)
-    private typealias CGFloat = SheetMusicLayout.CGFloat
-    private typealias CGPoint = SheetMusicLayout.CGPoint
-#endif
-
 /// What the W5 layout tests share: a fixture loader, a one-staff score builder, a layout call at the standard 28 pt
 /// staff (sp = 7 pt) and probes that read the `.staffText` elements a document carries.
 enum AnnotationFixtures {
+    // Inside the type, as `TextPlacementFixtures` does: a file-private alias could not appear in these internal
+    // signatures, which the wasm build compiles against the portable types.
+    #if !canImport(CoreGraphics)
+        typealias CGFloat = SheetMusicLayout.CGFloat
+        typealias CGPoint = SheetMusicLayout.CGPoint
+    #endif
+
     static let sp: CGFloat = 7
     static let metrics = StaffMetrics(staffSize: 28)
     static let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)

@@ -107,6 +107,11 @@
             size.height
         }
 
+        /// `CGRectIsEmpty`: no width or no height. This type has no null rect, the other case CoreGraphics counts.
+        public var isEmpty: Bool {
+            size.width == 0 || size.height == 0
+        }
+
         /// Whether `point` falls within the rect — min-inclusive, max-**exclusive** on both axes, matching
         /// `CGRectContainsPoint`: `point.x >= minX && point.x < maxX && point.y >= minY && point.y < maxY` on the
         /// standardized rect. A point on the right or bottom edge is therefore *not* contained, and this is also
