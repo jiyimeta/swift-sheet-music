@@ -50,6 +50,14 @@ public struct Breath: Sendable, Equatable {
         elementProperties = ElementProperties(visible: visible)
     }
 
+    /// What an absent `<pause>` means in a MuseScore file: 0 for every kind (`propertyDefault(PAUSE)`,
+    /// `dom/breath.cpp:134-135`; the 2.0 in `BREATH_LIST` is the palette's value). Measured on MuseScore 4.7.4's
+    /// MIDI export: tag-less breaths and caesuras add no pause. It differs from `defaultPause(for:)`, the value
+    /// folino's menu inserts.
+    public static func fileDefaultPause(for _: Kind) -> Double {
+        0
+    }
+
     /// MuseScore 4 default pause in seconds. Breath marks are
     /// visual-only (0); caesuras insert a style-dependent silence.
     public static func defaultPause(for kind: Kind) -> Double {

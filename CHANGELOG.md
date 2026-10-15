@@ -280,6 +280,11 @@ and this project adheres to
 
 ### Fixed
 
+- **A fermata or breath in a MuseScore file plays at MuseScore's length.** MuseScore omits `<timeStretch>` and `<pause>`
+  at its own defaults (2.0 for a plain fermata, 3.0 for long, 4.0 for very long, 0 for every breath and caesura — the
+  2.0 in its palette is not a file default; confirmed on MuseScore 4.7.4's MIDI export); ssm read the absent tag as
+  1.5 and 0.5. The tag is now read and written against MuseScore's defaults (`Fermata.fileDefaultTimeStretch(for:)`,
+  `Breath.fileDefaultPause(for:)`); what folino's menu inserts is unchanged.
 - **Every MuseScore fermata subtype draws its own glyph.** Short, long, very short, very long and the Henze fermatas
   drew the plain fermata, and every `*Below` form except `fermataBelow` drew the upright glyph under the staff. The
   glyph, its measured ink offsets and the below-the-staff placement now follow the subtype (`FermataGlyph.isBelow`,

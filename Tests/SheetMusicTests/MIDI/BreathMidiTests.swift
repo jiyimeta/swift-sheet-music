@@ -67,15 +67,17 @@ struct BreathMidiTests {
         #expect(noteOnTicks(in: midi) == [0, 480])
     }
 
-    @Test("caesura with default pause shifts the next chord at constant tempo")
+    @Test("caesura with a 0.5 s pause shifts the next chord at constant tempo")
     func caesuraDefaultPauseShifts() throws {
+        // The pause is written explicitly: MuseScore omits `<pause>` at its file default (0), so a caesura with
+        // no tag does not pause (`FileDefaultsTests`).
         // 120 BPM = 2 bps. Caesura .normal pause = 0.5s. Shift =
         // 0.5 * 2 * 480 = 480 ticks. The next chord's onset moves
         // from 480 to 960. Verified against MuseScore 4's mscore
         // CLI export: tempo stays constant at 500000 µs/quarter
         // throughout; the gap is realised purely by advancing the
         // next note's tick.
-        let s = try Self.score(breathKind: .caesura(.normal), pause: nil)
+        let s = try Self.score(breathKind: .caesura(.normal), pause: 0.5)
         let midi = try MidiRenderer.render(score: s)
         #expect(noteOnTicks(in: midi) == [0, 960])
     }
@@ -96,7 +98,7 @@ struct BreathMidiTests {
         // first note's release tick must not move when a caesura with
         // a non-zero pause follows. MuseScore inserts dead time after
         // the chord rather than shortening it.
-        let withCaesura = try Self.score(breathKind: .caesura(.normal), pause: nil)
+        let withCaesura = try Self.score(breathKind: .caesura(.normal), pause: 0.5)
         let withoutPause = try Self.score(breathKind: .breathMark(.comma), pause: nil)
         let offsCaesura = try noteOffTicks(in: MidiRenderer.render(score: withCaesura))
         let offsControl = try noteOffTicks(in: MidiRenderer.render(score: withoutPause))
@@ -127,7 +129,7 @@ struct BreathMidiTests {
                   <Chord><durationType>quarter</durationType>
                     <Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
                   <Tempo><tempo>1</tempo></Tempo>
-                  <Breath><subtype>caesura</subtype></Breath>
+                  <Breath><subtype>caesura</subtype><pause>0.5</pause></Breath>
                   <Chord><durationType>quarter</durationType>
                     <Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
                 </voice>

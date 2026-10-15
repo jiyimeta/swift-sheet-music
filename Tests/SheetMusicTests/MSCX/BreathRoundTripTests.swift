@@ -65,7 +65,7 @@ struct BreathRoundTripTests {
         }
     }
 
-    @Test("decode applies default pause when <pause> is absent")
+    @Test("decode reads an absent <pause> as MuseScore's file default (0)")
     func decodeDefaultPause() throws {
         let xml = Self.mscxWith(symbol: "caesura")
         let score = try Self.parse(xml)
@@ -73,7 +73,7 @@ struct BreathRoundTripTests {
         guard case let .breath(b) = voice.elements[1] else {
             Issue.record("expected .breath"); return
         }
-        #expect(b.pause == 0.5)
+        #expect(b.pause == 0)
     }
 
     @Test("decode honors explicit <pause>")

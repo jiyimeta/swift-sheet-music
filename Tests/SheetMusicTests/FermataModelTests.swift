@@ -53,7 +53,7 @@ struct FermataModelTests {
         #expect(f.timeStretch == 2.5)
     }
 
-    @Test func mscxDecodeFallsBackToSubtypeDefault() throws {
+    @Test func mscxDecodeFallsBackToFileDefault() throws {
         let xml = """
         <voice>
           <Fermata><subtype>fermataLongAbove</subtype></Fermata>
@@ -65,6 +65,7 @@ struct FermataModelTests {
         guard case let .fermata(f) = voice.elements[0] else {
             Issue.record("element 0 is not a fermata"); return
         }
-        #expect(f.timeStretch == 2.0)
+        // MuseScore's file default for a long fermata (`dom/fermata.cpp:194-210`), not ssm's insertion default (2.0).
+        #expect(f.timeStretch == 3.0)
     }
 }

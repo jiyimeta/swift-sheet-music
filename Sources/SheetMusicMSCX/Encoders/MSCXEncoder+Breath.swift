@@ -41,12 +41,12 @@ extension Breath.Kind {
 
 extension Breath {
     /// Build a `<Breath>` element. `<pause>` is omitted when it matches
-    /// the kind's default — same "omit when default" convention used by
-    /// `Fermata.encode()` for `<timeStretch>`.
+    /// MuseScore's file default (`fileDefaultPause`, 0) — same "omit when
+    /// default" convention used by `Fermata.encode()` for `<timeStretch>`.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         children.append(XMLTreeNode(name: "symbol", text: kind.mscxSubtype))
-        let defaultPause = Breath.defaultPause(for: kind)
+        let defaultPause = Breath.fileDefaultPause(for: kind)
         if pause != defaultPause {
             children.append(XMLTreeNode(
                 name: "pause",

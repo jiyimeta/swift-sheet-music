@@ -317,7 +317,10 @@ extension Voice {
             case "Fermata":
                 let subtype = child.first("subtype")?.text ?? ""
                 let stretch: Double? = child.first("timeStretch").flatMap { Double($0.text) }
-                var fermata = Fermata(subtype: subtype, timeStretch: stretch)
+                // An absent `<timeStretch>` is MuseScore's file default, not ssm's insertion default.
+                var fermata = Fermata(
+                    subtype: subtype, timeStretch: stretch ?? Fermata.fileDefaultTimeStretch(for: subtype),
+                )
                 fermata.elementProperties = ElementProperties(decodingMSCXChildrenOf: child)
                 appendVoiceElement(.fermata(fermata), eid: EIDXML.decode(from: child))
             case "Breath":

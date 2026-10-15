@@ -5,12 +5,13 @@ import SheetMusicXMLTools
 extension Fermata {
     /// Build a `<Fermata>` element. Mirrors the inline fermata
     /// decoding in `MSCXDecoder+Voice.swift`. `<timeStretch>` is
-    /// omitted when the value matches the subtype's default — same
-    /// "omit when default" convention MuseScore uses.
+    /// omitted when the value matches MuseScore's file default for the
+    /// subtype (`fileDefaultTimeStretch`) — the convention MuseScore uses,
+    /// and the one its reader assumes for an absent tag.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         children.append(XMLTreeNode(name: "subtype", text: subtype))
-        let defaultStretch = Fermata.defaultTimeStretch(for: subtype)
+        let defaultStretch = Fermata.fileDefaultTimeStretch(for: subtype)
         if timeStretch != defaultStretch {
             children.append(XMLTreeNode(
                 name: "timeStretch",
