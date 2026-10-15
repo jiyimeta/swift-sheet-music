@@ -42,7 +42,7 @@ struct StaffTextAnnotationRoundTripTests {
         ])
     }
 
-    /// MuseScore's palette writes "tremolo" in the expression style (`palettecreator.cpp:1556-1572`). Before 5.0 the
+    /// MuseScore's palette writes "tremolo" in the expression style (`palettecreator.cpp:1556-1572`). Before 4.11 the
     /// whole element was kept verbatim, so what the model does not cover must still come back — and `<style>` ahead
     /// of the offset, since reading it re-applies the style in MuseScore.
     @Test("an annotation's unmodeled children survive a save, <style> ahead of the overrides")

@@ -308,8 +308,8 @@ extension FNV1a {
     }
 
     /// Every chord-diagram field the one-barre model had, and the barres beyond the first (tag 116: a client before
-    /// 5.0 dropped them, so they are a real difference). `fretOffset`, `showNut` and `orientation` stay out: no edit
-    /// writes them, and a client before 5.0 kept them as preserved markup, so hashing them could only make two
+    /// 4.11 dropped them, so they are a real difference). `fretOffset`, `showNut` and `orientation` stay out: no edit
+    /// writes them, and a client before 4.11 kept them as preserved markup, so hashing them could only make two
     /// versions disagree about one file. A default diagram feeds no bytes, preserving the occupants rule for values
     /// that carry no content.
     mutating func combine(_ diagram: FretDiagram) {

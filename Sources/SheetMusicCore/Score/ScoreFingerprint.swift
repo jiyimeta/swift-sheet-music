@@ -48,13 +48,13 @@ import SheetMusicFoundation
 ///   dynamic's own text is covered by occupant 115 — as MuseScore xml text, markup included, because `SetDynamic`
 ///   writes both.
 /// - Not covered on a chord diagram: `FretDiagram.fretOffset`, `showNut` and `orientation`. No edit writes them, and
-///   a client before 5.0 kept them as preserved markup, so a version that hashed them would disagree with one that
-///   could not see them. Its barres beyond the first ARE covered (tag 116): a client before 5.0 dropped them.
-/// - Not covered on a spanner: `lineProperties`, `chordTextLine` and `payloadMarkup` (5.0). No edit writes them, and
-///   a client before 5.0 dropped them, so hashing them would make the two disagree on every pedal with a hook. The
-///   guitar lines' `kind` IS covered, and moved in 5.0 from `other` to `chordTextLine`: a score holding one hashes
-///   differently across that boundary, as one holding an annotation does. The 5.0 decoder also reads some values
-///   differently from a client before 5.0 — a fermata's absent `<timeStretch>` and a breath's absent `<pause>`
+///   a client before 4.11 kept them as preserved markup, so a version that hashed them would disagree with one that
+///   could not see them. Its barres beyond the first ARE covered (tag 116): a client before 4.11 dropped them.
+/// - Not covered on a spanner: `lineProperties`, `chordTextLine` and `payloadMarkup` (4.11). No edit writes them, and
+///   a client before 4.11 dropped them, so hashing them would make the two disagree on every pedal with a hook. The
+///   guitar lines' `kind` IS covered, and moved in 4.11 from `other` to `chordTextLine`: a score holding one hashes
+///   differently across that boundary, as one holding an annotation does. The 4.11 decoder also reads some values
+///   differently from a client before 4.11 — a fermata's absent `<timeStretch>` and a breath's absent `<pause>`
 ///   (MuseScore's file defaults), an authored empty line text (`""`, was nil), and the chant / single-stroke
 ///   caesuras (were a comma) — and all of those are hashed, so the same file hashes differently across that boundary.
 /// - The walk's own shape: it emits a flat sequence of staff blocks with no part/staff-count delimiter, so two

@@ -66,7 +66,7 @@ public struct StaffText: Sendable, Equatable {
     package var annotation: Annotation?
     /// An annotated text's children this library does not model — `<style>`, `<align>`, frame colors and the rest —
     /// in source order, written back after its `<eid>`, where MuseScore reads `<style>` ahead of the overrides that
-    /// follow it. Before 5.0 the whole element was kept verbatim; this keeps what the model does not cover. Empty for
+    /// follow it. Before 4.11 the whole element was kept verbatim; this keeps what the model does not cover. Empty for
     /// an ordinary staff text, whose unmodeled children are not kept (as before).
     package var annotationMarkup: [PreservedXML] = []
 
