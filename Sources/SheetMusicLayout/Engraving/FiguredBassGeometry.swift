@@ -6,12 +6,15 @@ import SheetMusicFoundation
 
 /// A `<FiguredBass>` as SMuFL `figbass*` glyphs (`TLayout::layoutFiguredBassItem`, `tlayout.cpp:1972-2073`;
 /// `TDraw::draw(FiguredBassItem)`, `tdraw.cpp:1268-1325`). MuseScore draws its own MScoreBC font at 8 pt, which is not
-/// shipped; the glyphs are sized so a digit is as tall as MScoreBC's (1.1 sp), and items stack at its line pitch.
+/// shipped; the glyphs are sized so a digit is as tall as MScoreBC's, set on its baseline, and items stack at its line
+/// pitch. The three sizes are measured off MuseScore 4.7's own engraving of `own/figured-bass` at 600 dpi.
 enum FiguredBassGeometry {
-    /// MuseScore's line pitch: the 8 pt face's line spacing (1.2 em) at the default 5 pt spatium, in spatiums.
-    static let linePitchSp: CGFloat = 1.92
+    /// MuseScore's line pitch, baseline to baseline, in spatiums.
+    static let linePitchSp: CGFloat = 1.65
     /// The height of an MScoreBC digit at 8 pt, in spatiums; the SMuFL glyphs are scaled to it.
-    static let digitHeightSp: CGFloat = 1.1
+    static let digitHeightSp: CGFloat = 1.14
+    /// An item's first baseline below its top — MScoreBC's ascent: a digit's top sits 0.35 sp under the item's.
+    static let baselineSp: CGFloat = 1.49
     /// The continuation line: `3/16 sp` after the text, at `0.875` of the item's height, `3/32 sp` thick, round caps.
     static let lineGapSp: CGFloat = 3.0 / 16.0
     static let lineWidthSp: CGFloat = 3.0 / 32.0
@@ -107,7 +110,7 @@ enum FiguredBassGeometry {
         }
         let font = glyphFont(sp: sp)
         let provider = FontMetrics.provider
-        let ascent = digitHeightSp * sp
+        let ascent = baselineSp * sp
         var primitives: [LayoutFigure.Primitive] = []
         for (index, item) in figuredBass.items.enumerated() {
             let (glyphs, center) = spelled(item)

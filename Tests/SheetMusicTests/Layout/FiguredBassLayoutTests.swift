@@ -86,6 +86,22 @@ struct FiguredBassLayoutTests {
         #expect(abs(line.1.x - (100 + 10 * F.sp)) < 0.001)
     }
 
+    /// Measured off MuseScore 4.7's engraving of this fixture at 600 dpi (41.25 px a space): bar 2's "4" has its top
+    /// 6.35 sp and its baseline 7.49 sp under the top line, and the "3" under it its baseline at 9.14 sp.
+    @Test("the figures sit where MuseScore engraves them: baselines 7.49 and 9.14 sp under the top line")
+    func calibratedAgainstMuseScore() throws {
+        let document = try F.layout(F.load("figured-bass"))
+        let second = try #require(Self.figures(document).dropFirst().first?.0)
+        // Bar 2's E4 is on the bottom line: the top line is 4 sp above it.
+        let topLine = try #require(F.chordNoteY(document, nth: 1)) - 4 * F.sp
+        let baselines = Set(second.primitives.compactMap { primitive -> CGFloat? in
+            if case let .run(run, _, _) = primitive { (run.baseline.y - topLine) / F.sp } else { nil }
+        }).sorted()
+        try #require(baselines.count == 2)
+        #expect(abs(baselines[0] - 7.49) < 0.05)
+        #expect(abs(baselines[1] - 9.14) < 0.05)
+    }
+
     /// MuseScore lays every figure out at its fixed offset below and lets autoplace carry one placed above over the
     /// staff (`Autoplace::autoplaceSegmentElement`) — the fixture's third bar, whose sharp MuseScore 4.7 draws with its
     /// bottom about a space above the top line.
