@@ -185,6 +185,8 @@ and this project adheres to
   dash, width, hook heights, `<play>`), `Spanner.chordTextLine` (`HarmonicMark`, `Rasgueado`, `PickScrape`,
   `WhammyBar` were `Kind.other`) and `Spanner.payloadMarkup`: a pedal's variant, a text line's hooks and a `<Segment>`
   offset now survive a save instead of being dropped.
+- **`LayoutElement.lineSpanX`** — the X span between a spanner segment's, tie's, glissando's or lyric line's two
+  ends, `nil` for any other element.
 
 ### Changed
 
@@ -311,6 +313,25 @@ and this project adheres to
 - **SMF tempo metas are written into the first track only**, as MuseScore's export does; a `<Tempo>` whose
   `originalStaff` is another staff used to put its meta on that staff's track (and so did not reach a player that
   reads the conductor track alone).
+- **`ScoreView(document:…, visibleRect:)` mounts part of a system.** Within a system the rect does not span from end
+  to end, only the measures whose frame meets it and the system-level spanners whose span does get layers, and a new
+  rect mounts and unmounts the difference, keeping the rest. A horizontal document is one system, so until now it
+  was mounted whole whatever the rect: a 508-measure, six-staff score came to 60,667 layers and about 104 MB, against
+  4,982 layers and 8.6 MB for a window and a window either side. A rect that spans every system end to end, as a
+  vertical reader's band does, mounts exactly what it did before.
+- **Laying out a long system is faster**, with identical output. Skyline autoplace measured every element against
+  every rect already placed on its staff — after copying them all to drop the ones it ignores — so it grew with the
+  square of the system's length; a horizontally engraved score is one system. `Skyline` now indexes its rects by
+  column of X and answers the overlap from the rects in the query's columns. A 508-measure, six-staff score laid out
+  horizontally: 3.2–3.4 s → 1.1–1.7 s, interleaved on a loaded machine.
+- **`ScoreHitTester.hitTest(at:)` no longer measures the whole score when nothing is under the point.** Its element
+  rung measured every element and spanner for any point the earlier rungs declined — about 7 ms on a 508-measure
+  score, on every pointer move for a host that asks then. It now measures only the systems, measures and spanners
+  that could reach the point; the answer is unchanged.
+- **`LayoutDocument.cursorFrame(for: .item(…))` reads the item's own measure** before scanning every element of the
+  score for it.
+- **The AUMIDISynth metronome is no longer built when a `SynthBackend` is injected.** The backend sounds the click on
+  its own synth; the extra unit was attached, loaded with the click SoundFont and never heard.
 
 ### Removed
 
