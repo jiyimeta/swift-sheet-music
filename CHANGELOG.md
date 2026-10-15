@@ -13,9 +13,11 @@ and this project adheres to
   `<voiceAssignment>` — the whole instrument (the default), the staff, or the voice it is written in — and an older
   file's `<dynType>`, read as MuseScore 4 reads them and saved where MuseScore writes them (`<dynType>0</dynType>` for
   the staff when saving for MuseScore 3).
-- **`Dynamic.playbackRole`** — what a dynamic does to playback, MuseScore 4's classification (`Dynamic.PlaybackRole`),
-  read in one place by the SMF's voice walk and by the hairpin ramps. A dynamic is a running level at its velocity, as
-  before.
+- **`Dynamic.playbackRole`** — what a dynamic does to playback, read from MuseScore 4's tables (`Dynamic.PlaybackRole`):
+  an ordinary dynamic is a running level, a single-note one (sf, sfz, rf, …) accents its own chord, a two-level one
+  (fp, pf, sfp, sfpp) changes from its first level to its second, and one MuseScore 4 does not play (fz, m, r, s, z,
+  `other-dynamics`, `<play>0`) leaves the level alone. Read in one place by the SMF's voice walk and by the hairpin
+  ramps.
 - **A dynamic keeps its own text, `<play>` and `<veloChangeSpeed>`** — `Dynamic.text` and `preservedTextMarkup`
   (`nil` while it prints its subtype), `playsBack`, `velocityChangeSpeed` (`Dynamic.VelocityChangeSpeed`), all
   defaulted; `richText`, `displayedRichText` (what it prints when it is not its glyphs) and `customXMLText` (its text as
