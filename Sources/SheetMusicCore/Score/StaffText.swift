@@ -60,8 +60,9 @@ public struct StaffText: Sendable, Equatable {
 
     /// What this staff text is besides text: a play-technique annotation or a harp pedal diagram. MuseScore reads
     /// both as staff-text-like annotations of a segment (`<PlayTechAnnotation>`, `<HarpPedalDiagram>`). Settable
-    /// after init; the public initializer makes an ordinary staff text. No edit command reaches an annotated text
-    /// (`SetStaffText` matches ordinary ones only), so `ScoreFingerprint` does not hash this field.
+    /// after init; the public initializer makes an ordinary staff text. No text command (`SetStaffText`, the text
+    /// property and visibility setters) reads or writes an annotated text, and structural edits only move it with its
+    /// bar, so `ScoreFingerprint` does not hash this field.
     package var annotation: Annotation?
 
     public init(

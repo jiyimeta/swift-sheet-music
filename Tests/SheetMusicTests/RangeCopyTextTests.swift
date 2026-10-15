@@ -288,9 +288,8 @@ struct RangeCopyTextTests {
     }
 
     /// A play technique rides the lane as an annotated staff text, but no lane command addresses one, so a range
-    /// leaves it where it is — as it left the unmodeled voice markup it used to be: the copy does not carry it, a cut
-    /// does not remove it (and so cannot duplicate it on paste), the range does not light it, and a pasted ordinary
-    /// text replaces the beat's words but not its technique.
+    /// leaves it where it is: the copy does not carry it, a cut does not remove it (and so cannot duplicate it on
+    /// paste), the range does not light it, and a pasted ordinary text replaces the beat's words but not its technique.
     @Test("an annotated text stays put through copy, cut and paste, and is not lit")
     func annotatedTextsInRanges() throws {
         var pizz = Self.text("pizz.")
