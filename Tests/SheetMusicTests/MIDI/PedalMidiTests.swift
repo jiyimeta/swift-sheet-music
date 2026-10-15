@@ -96,6 +96,46 @@ struct PedalMidiTests {
         #expect(sustain.map(\.tick) == [0, 0, 1920, 1920, 3840])
     }
 
+    /// A staff carrying its own meter has its own bar spans, and its notes play on them: its pedal must be projected
+    /// through that staff's layout, not the first staff's, or it drifts off its notes from the first differing bar on.
+    @Test("a lower staff in its own meter pedals on its own bars")
+    func lowerStaffPedalFollowsItsOwnBars() throws {
+        let whole = Chord(duration: .whole, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))
+        let dottedHalf = Chord(duration: .half.dotted(1), notes: ChordNotes([Note(pitch: 48, tpc: 14)]))
+        let pedal = Spanner(
+            kind: .pedal, rawType: "Pedal", nextMeasuresOffset: 0,
+            nextFractionsOffset: Fraction(numerator: 3, denominator: 4),
+        )
+        let fourFour = VoiceElement.timeSignature(TimeSignature(numerator: 4, denominator: 4))
+        let threeFour = VoiceElement.timeSignature(TimeSignature(numerator: 3, denominator: 4))
+        let upper = Staff(measures: [
+            Measure(voices: [Voice(elements: [fourFour, .chord(whole)])]),
+            Measure(voices: [Voice(elements: [.chord(whole)])]),
+            Measure(voices: [Voice(elements: [.chord(whole)])]),
+        ])
+        // The lower staff pedals its bar 2 (original ticks 1440..2880 in 3/4), which plays from 1920.
+        let lower = Staff(measures: [
+            Measure(voices: [Voice(elements: [threeFour, .chord(dottedHalf)])]),
+            Measure(voices: [Voice(elements: [.spanner(pedal), .chord(dottedHalf)])]),
+            Measure(voices: [Voice(elements: [.chord(dottedHalf)])]),
+        ])
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [upper, lower])],
+        )
+        let file = try MidiRenderer.render(score: score)
+        try #require(file.tracks.count == 2)
+        let lowerNoteOns = file.tracks[1].events.compactMap { event -> Int? in
+            if case let .noteOn(_, 48, velocity) = event.event, velocity > 0 { return event.tick }
+            return nil
+        }
+        let sustain = Self.cc64(track: file.tracks[0])
+        #expect(sustain.map(\.value) == [0, 127, 0])
+        // The press lands on the lower staff's own second note, wherever its bar plays.
+        #expect(sustain.dropFirst().first?.tick == lowerNoteOns.dropFirst().first)
+        #expect(sustain.map(\.tick) == [0, 1920, 3360])
+    }
+
     @Test("a score without pedals renders no CC64")
     func noPedal() throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("grace_after"))

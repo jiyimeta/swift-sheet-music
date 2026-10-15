@@ -297,7 +297,9 @@ public enum MidiRenderer {
         // and a press on the shared channel at one tick keep their order (`SustainPedal.events(part:…)`).
         if isTopOfPart {
             events.append(contentsOf: SustainPedal.events(
-                part: part, route: route, plan: plan, layout: layout, division: division, tempoMap: tempoMap,
+                part: part, route: route, plan: plan,
+                layout: { measureBaseLayout(measures: $0.measures, division: division, tempoMap: tempoMap) },
+                division: division, tempoMap: tempoMap,
             ))
         }
 

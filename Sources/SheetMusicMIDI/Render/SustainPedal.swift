@@ -12,33 +12,76 @@ enum SustainPedal {
     /// each start. The staves of a part share its channels, so their pedals go out as ONE stream, in the part's first
     /// track: a sequencer merging two tracks keeps no order at one tick, and the lower staff's release (its opening one
     /// at tick 0, or the end of its pedal) could otherwise land after the upper staff's press on the same channel.
+    /// Each staff's ranges are projected through that staff's own bar layout (a staff can carry its own meter), and the
+    /// streams are merged releases-first at every tick.
+    /// - Parameter layout: the bar bases and spans of a staff, in original ticks.
     static func events(
         part: Part,
         route: MidiRenderer.PartChannelRoute,
         plan: [MidiRenderer.PlaybackEntry],
-        layout: (bases: [Int], spans: [Int]),
+        layout: (Staff) -> (bases: [Int], spans: [Int]),
         division: Int,
         tempoMap: ResolvedTempoMap,
     ) -> [TimedMidiEvent] {
-        let ranges = part.staves.flatMap { staff in
+        var transitions: [TimedMidiEvent] = []
+        for staff in part.staves {
             let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
-            return (0 ..< voiceCount).flatMap {
+            let ranges = (0 ..< voiceCount).flatMap {
                 PedalRanges.collect(voiceIndex: $0, staff: staff, division: division, tempoMap: tempoMap)
             }
+            if ranges.isEmpty { continue }
+            let staffLayout = layout(staff)
+            let switches = route.routeByOriginalTick(measureBases: staffLayout.bases, division: division)
+            transitions += self.transitions(
+                ranges: ranges, plan: plan, measureBases: staffLayout.bases, measureSpans: staffLayout.spans,
+                channel: { route.channel(atOriginalTick: $0, in: switches) },
+            )
         }
-        if ranges.isEmpty { return [] }
-        let switches = route.routeByOriginalTick(measureBases: layout.bases, division: division)
-        return events(
-            ranges: ranges, plan: plan, measureBases: layout.bases, measureSpans: layout.spans,
-            channel: { route.channel(atOriginalTick: $0, in: switches) },
-        )
+        return withOpeningReleases(transitions)
     }
 
-    /// CC64 = 127 at each range's start and 0 at its end, in unrolled ticks, on the channel in force at the start.
-    /// At one tick every release sorts before every press; a plan entry that does not follow the previous one (a
-    /// jump) releases every open pedal at its first tick, and the end of the last entry releases the rest.
+    /// CC64 = 127 at each range's start and 0 at its end, in unrolled ticks, on the channel in force at the start,
+    /// after an opening release on every pedalled channel. At one tick every release sorts before every press.
     /// - Parameter channel: takes an ORIGINAL tick (the voice walk's `channel(atOriginalTick:)`).
     static func events(
+        ranges: [PedalRange],
+        plan: [MidiRenderer.PlaybackEntry],
+        measureBases: [Int],
+        measureSpans: [Int],
+        channel: (Int) -> Int,
+    ) -> [TimedMidiEvent] {
+        withOpeningReleases(transitions(
+            ranges: ranges, plan: plan, measureBases: measureBases, measureSpans: measureSpans, channel: channel,
+        ))
+    }
+
+    /// Every release sorts ahead of every press at its tick — across streams too — and a damper value opens the
+    /// track on every pedalled channel, so a chase from a seek or a loop start before the first pedal finds a released
+    /// damper instead of none (and the previous pass's held one stays).
+    private static func withOpeningReleases(_ transitions: [TimedMidiEvent]) -> [TimedMidiEvent] {
+        var channels: [Int] = []
+        for case let .controlChange(channel, _, value) in transitions.map(\.event)
+            where value > 0 && !channels.contains(channel)
+        {
+            channels.append(channel)
+        }
+        let initial = channels.sorted().map { release($0, at: 0) }
+        return (initial + transitions).enumerated()
+            .sorted { lhs, rhs in
+                (lhs.element.tick, isPress(lhs.element) ? 1 : 0, lhs.offset)
+                    < (rhs.element.tick, isPress(rhs.element) ? 1 : 0, rhs.offset)
+            }
+            .map(\.element)
+    }
+
+    private static func isPress(_ event: TimedMidiEvent) -> Bool {
+        if case let .controlChange(_, _, value) = event.event { return value > 0 }
+        return false
+    }
+
+    /// The presses and releases of one staff's ranges, unsorted. A plan entry that does not follow the previous one (a
+    /// jump) releases every open pedal at its first tick, and the end of the last entry releases the rest.
+    private static func transitions(
         ranges: [PedalRange],
         plan: [MidiRenderer.PlaybackEntry],
         measureBases: [Int],
@@ -84,17 +127,7 @@ enum SustainPedal {
             let closeTick = last.tickOffset + measureSpans[last.measureIndex]
             releases.append(contentsOf: open.map { release($0.channel, at: closeTick) })
         }
-        // A damper value at the start of the track on every pedalled channel, so a chase from a seek or a loop start
-        // before the first pedal finds a released damper instead of none (and the previous pass's held one stays).
-        var channels: [Int] = []
-        for case let .controlChange(channel, _, _) in presses.map(\.event) where !channels.contains(channel) {
-            channels.append(channel)
-        }
-        let initial = channels.sorted().map { release($0, at: 0) }
-        // Releases first, so a stable sort by tick puts every off ahead of an on at the same tick.
-        return (initial + releases + presses).enumerated()
-            .sorted { ($0.element.tick, $0.offset) < ($1.element.tick, $1.offset) }
-            .map(\.element)
+        return releases + presses
     }
 
     private static func press(_ channel: Int, at tick: Int) -> TimedMidiEvent {
