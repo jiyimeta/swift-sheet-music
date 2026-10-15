@@ -55,6 +55,14 @@ and this project adheres to
   font is not shipped, so the glyphs are SMuFL's `figbass*` set sized to MScoreBC's digit: a slashed or backslashed digit
   is the raised form where SMuFL has one, the digit with a combining mark elsewhere. Text that did not parse as figures
   draws as its lines.
+- **Fret diagrams are drawn** — the grid (`<strings>` strings, `<frets>` rows, 0.7 sp apart), the nut (a hairline when
+  offset or `showNut` is off), dots (normal, cross, square, triangle), open / muted markers, every barre, the fret number
+  of an offset diagram and the nested chord name above it, vertical or horizontal, centered on its beat's notehead with
+  its bottom 1 sp above the staff. The per-string fingering digits and the slur-style barre are not drawn, and the
+  diagram is not lifted by autoplace.
+- **`FretDiagram` models `fretOffset`, `showNut`, `orientation` and every barre** — `barres` replaces the stored
+  `barre` (still readable and writable as the first; the initializer takes `barres:`); the new properties are optional
+  so an absent tag stays absent. A second barre used to be dropped on save.
 - **`LayoutElement.figure`** — one layout case for strokes, ellipses and glyph runs (`LayoutFigure`): `<Symbol>`s now,
   and the ambitus, figured bass, fret diagrams and string numbers next. Every renderer draws it from its primitives —
   the draw program with the opcodes it already has. Adding a case breaks exhaustive switches over `LayoutElement`.
@@ -237,6 +245,9 @@ and this project adheres to
 
 ### Fixed
 
+- **A saved fret diagram keeps its offset, nut, size and orientation for MuseScore** — `<fretOffset>`, `<showNut>`,
+  `<orientation>`, `<minDistance>` and `<mag>` were written after `<fretDiagram>`, where MuseScore's reader skips every
+  child; they now precede it, in MuseScore's order.
 - **Changing a dynamic's subtype drops its old text** (import-fidelity F4.6): `SetDynamic` kept the preserved `<text>`,
   so MuseScore went on showing "subito p" over a dynamic changed to f.
 - **An `other-dynamics` dynamic saves without `<velocity>`** (import-fidelity): MuseScore's other dynamics have no

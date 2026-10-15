@@ -1414,8 +1414,15 @@ extension LayoutEngine {
                         placement: TextPlacementMetadata(side: .below, autoplace: false),
                     )
                     if figuredBass.visible { out.append(element) } else { invisibleOut.append(element) }
-                case .fretDiagram, .preserved:
-                    // Fret diagrams get their pass in W5 Task 12; source-only preserved markup has no layout behavior.
+                case let .fretDiagram(diagram):
+                    guard diagram.visible || options.showsInvisibleElements else { break }
+                    let elements = fretDiagramElements(
+                        diagram, x: timedX(atTick: tickCursor), staffTopY: staffMidY - metrics.sp * 2,
+                        metrics: metrics,
+                    )
+                    if diagram.visible { out += elements } else { invisibleOut += elements }
+                case .preserved:
+                    // Source-only preserved markup has no layout behavior.
                     break
                 case let .locationShift(delta):
                     // Voice-level cursor shift. Adds the location's

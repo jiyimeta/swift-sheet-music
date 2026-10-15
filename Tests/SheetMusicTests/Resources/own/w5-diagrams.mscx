@@ -67,6 +67,7 @@
             <string no="3"><dot fret="2">normal</dot></string>
             <string no="4"><dot fret="3">normal</dot></string>
             <barre start="2" end="5">1</barre>
+            <barre start="3" end="4">3</barre>
           </fretDiagram>
           <Harmony><name>Cmaj7</name></Harmony>
         </FretDiagram>

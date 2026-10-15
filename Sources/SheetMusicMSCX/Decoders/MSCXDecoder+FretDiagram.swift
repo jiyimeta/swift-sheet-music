@@ -7,7 +7,7 @@ extension FretDiagram {
     /// old-format `<string>` and `<barre>` children deliberately stay out and
     /// ride in preserved markup.
     private static let consumedChildren: Set = [
-        "Harmony", "fretDiagram", "frets", "strings",
+        "Harmony", "fretDiagram", "frets", "strings", "fretOffset", "showNut", "orientation",
         "color", "offset", "autoplace", "placement", "visible",
     ]
 
@@ -20,7 +20,10 @@ extension FretDiagram {
             stringCount: node.first("strings").flatMap { Int($0.text) } ?? 6,
             fretCount: node.first("frets").flatMap { Int($0.text) } ?? 5,
             strings: contents?.all("string").compactMap(decodeString) ?? [],
-            barre: contents?.first("barre").map(decodeBarre),
+            barres: contents?.all("barre").map(decodeBarre) ?? [],
+            fretOffset: node.first("fretOffset").flatMap { Int($0.text) },
+            showNut: node.first("showNut").map { $0.text != "0" },
+            orientation: node.first("orientation").flatMap { Int($0.text) }.map(FretDiagram.Orientation.init),
             harmony: node.first("Harmony").flatMap { try? Harmony.decode($0) },
             preservedMarkup: node.preservedMarkup(consuming: consumedChildren),
         )

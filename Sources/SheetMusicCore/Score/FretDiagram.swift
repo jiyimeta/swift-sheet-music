@@ -9,7 +9,27 @@ public struct FretDiagram: Sendable, Equatable {
     public var fretCount: Int
     /// Only strings carrying a marker or at least one dot.
     public var strings: [FretString]
-    public var barre: FretBarre?
+    /// Every `<barre>` of `<fretDiagram>`, in file order.
+    public var barres: [FretBarre]
+    /// The first barre — read and written as `barres.first`, for callers of the one-barre model.
+    public var barre: FretBarre? {
+        get { barres.first }
+        set {
+            if let newValue {
+                if barres.isEmpty { barres = [newValue] } else { barres[0] = newValue }
+            } else if !barres.isEmpty {
+                barres.removeFirst()
+            }
+        }
+    }
+
+    /// `<fretOffset>`: the fret the diagram starts below, 0 for one starting at the nut. `nil` keeps an absent tag
+    /// absent.
+    public var fretOffset: Int?
+    /// `<showNut>`. `nil` keeps an absent tag absent; MuseScore's default draws the nut.
+    public var showNut: Bool?
+    /// `<orientation>`. `nil` keeps an absent tag absent; MuseScore's default is vertical.
+    public var orientation: Orientation?
     /// The chord symbol nested inside `<FretDiagram>`, when present.
     public var harmony: Harmony?
     /// Base element properties shared with every engravable element.
@@ -28,7 +48,10 @@ public struct FretDiagram: Sendable, Equatable {
         stringCount: Int = 6,
         fretCount: Int = 5,
         strings: [FretString] = [],
-        barre: FretBarre? = nil,
+        barres: [FretBarre] = [],
+        fretOffset: Int? = nil,
+        showNut: Bool? = nil,
+        orientation: Orientation? = nil,
         harmony: Harmony? = nil,
         elementProperties: ElementProperties = .default,
         preservedMarkup: [PreservedXML] = [],
@@ -36,10 +59,36 @@ public struct FretDiagram: Sendable, Equatable {
         self.stringCount = stringCount
         self.fretCount = fretCount
         self.strings = strings
-        self.barre = barre
+        self.barres = barres
+        self.fretOffset = fretOffset
+        self.showNut = showNut
+        self.orientation = orientation
         self.harmony = harmony
         self.elementProperties = elementProperties
         self.preservedMarkup = preservedMarkup
+    }
+
+    /// MuseScore's `Orientation` ordinal: 0 vertical, 1 horizontal; any other value survives as-is.
+    public enum Orientation: Sendable, Hashable {
+        case vertical
+        case horizontal
+        case other(Int)
+
+        public var mscxOrdinal: Int {
+            switch self {
+            case .vertical: 0
+            case .horizontal: 1
+            case let .other(value): value
+            }
+        }
+
+        public init(mscxOrdinal: Int) {
+            switch mscxOrdinal {
+            case 0: self = .vertical
+            case 1: self = .horizontal
+            default: self = .other(mscxOrdinal)
+            }
+        }
     }
 }
 

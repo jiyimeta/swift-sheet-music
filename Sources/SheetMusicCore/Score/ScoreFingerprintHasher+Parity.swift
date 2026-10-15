@@ -335,6 +335,7 @@ extension FNV1a {
             combine(barre.endString)
             combine(barre.fret)
         }
+        combineExtraBarres(of: diagram)
         combine(diagram.harmony != nil)
         if let harmony = diagram.harmony {
             combine(harmony)

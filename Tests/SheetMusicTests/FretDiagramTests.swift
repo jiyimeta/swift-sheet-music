@@ -179,16 +179,13 @@ struct FretDiagramFixtureTests {
         #expect(diagrams[0].strings[0].marker == .cross)
         #expect(diagrams[0].barre == FretBarre(startString: 1, endString: 5, fret: 1))
         #expect(diagrams[0].preservedMarkup.map(\.name) == [
-            "minDistance", "fretOffset", "showNut", "mag", "orientation",
-            "string", "string", "string", "string", "barre",
+            "minDistance", "mag", "string", "string", "string", "string", "barre",
         ])
 
         #expect(diagrams[1].harmony == nil)
         #expect(diagrams[1].fretCount == 4)
         #expect(diagrams[1].strings.map(\.index) == [0, 2, 4])
         #expect(diagrams[1].barre == nil)
-        #expect(diagrams[1].preservedMarkup.map(\.name) == [
-            "showNut", "string", "string", "string",
-        ])
+        #expect(diagrams[1].preservedMarkup.map(\.name) == ["string", "string", "string"])
     }
 }
