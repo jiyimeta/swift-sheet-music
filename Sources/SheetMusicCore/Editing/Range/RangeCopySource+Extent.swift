@@ -115,7 +115,10 @@ extension RangeCopySource {
             guard geometry.measureStarts.indices.contains(measureIndex) else { continue }
             for positioned in score.systemMeasures[measureIndex].elements {
                 defer { ordinal += 1 }
-                guard case let .staffText(text) = positioned.element else { continue }
+                // An annotated text (a play technique, a harp pedal diagram) stays where it is: no lane command
+                // removes or addresses one, so a cut could not take it with it, and the copy would duplicate it. Before
+                // it was modeled it was unmodeled voice markup, which a range copy never carried either.
+                guard case let .staffText(text) = positioned.element, text.annotation == nil else { continue }
                 let absoluteTick = geometry.measureStarts[measureIndex]
                     + positioned.position.ticks(division: score.division)
                 guard absoluteTick >= rangeStart, absoluteTick < rangeEnd else { continue }

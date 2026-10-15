@@ -99,20 +99,12 @@ struct PlaceCopiedTexts: EditCommand {
     private static func matches(
         _ positioned: PositionedSystemElement, copied: RangeCopySource.CopiedText,
     ) -> Bool {
-        // Same kind includes the annotation's: a pasted "dolce" replaces the beat's words, not its "pizz." technique.
+        // A copy carries no annotated text, and a pasted "dolce" replaces the beat's words, not its "pizz." technique.
         guard case let .staffText(existing) = positioned.element,
-              existing.isSystemText == copied.text.isSystemText,
-              sameAnnotationKind(existing.annotation, copied.text.annotation)
+              existing.isSystemText == copied.text.isSystemText, existing.annotation == nil
         else { return false }
         if copied.text.isSystemText { return true }
         guard let staff = copied.staff else { return false }
         return (positioned.originalStaff ?? Score.canonicalStaff) == staff
-    }
-
-    private static func sameAnnotationKind(_ lhs: StaffText.Annotation?, _ rhs: StaffText.Annotation?) -> Bool {
-        switch (lhs, rhs) {
-        case (nil, nil), (.playTechnique?, .playTechnique?), (.harpPedal?, .harpPedal?): true
-        default: false
-        }
     }
 }

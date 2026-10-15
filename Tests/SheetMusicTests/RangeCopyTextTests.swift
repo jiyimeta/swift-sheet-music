@@ -287,11 +287,12 @@ struct RangeCopyTextTests {
         #expect(Self.named("espress.", in: repeated.score, measure: 1) != nil)
     }
 
-    /// A play technique rides the lane as an annotated staff text. A cut carries it and so must clear it, or a paste
-    /// would duplicate it; a pasted ordinary text replaces the beat's words but not its technique; and the range does
-    /// not light it, since the layout gives it no identity.
-    @Test("an annotated text is cleared by a cut, survives a paste of words, and is not lit")
-    func annotatedTextsInRanges() {
+    /// A play technique rides the lane as an annotated staff text, but no lane command addresses one, so a range
+    /// leaves it where it is — as it left the unmodeled voice markup it used to be: the copy does not carry it, a cut
+    /// does not remove it (and so cannot duplicate it on paste), the range does not light it, and a pasted ordinary
+    /// text replaces the beat's words but not its technique.
+    @Test("an annotated text stays put through copy, cut and paste, and is not lit")
+    func annotatedTextsInRanges() throws {
         var pizz = Self.text("pizz.")
         pizz.annotation = .playTechnique(.pizzicato, playsBack: true)
         var source = Self.score(staffCount: 1, measureCount: 2)
@@ -301,12 +302,14 @@ struct RangeCopyTextTests {
             end: Self.slot(staff: Self.top, beat: 3),
         )
         #expect(source.rangeTextIDs(for: range).isEmpty)
+        let payload = try #require(source.clipboardDocument(for: range))
+        #expect(Self.texts(in: payload, measure: 0).isEmpty)
 
         let removals = source.rangeTextRemovals(for: range)
-        #expect(removals.count == 1)
+        #expect(removals.isEmpty)
         let cut = ScoreEditSession(score: source)
         #expect(cut.apply(.composite(removals + [.deleteRange(over: range)])))
-        #expect(Self.texts(in: cut.score, measure: 0).isEmpty)
+        #expect(Self.named("pizz.", in: cut.score, measure: 0) != nil)
 
         var words = Self.score(staffCount: 1, measureCount: 2)
         Self.add(Self.text("dolce"), to: &words, beat: 1, staff: Self.top)

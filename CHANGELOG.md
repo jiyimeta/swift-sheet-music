@@ -124,11 +124,12 @@ and this project adheres to
 
 ### Changed
 
-- **A staff-text removal also clears a play technique on its beat** — `SetStaffText` with `nil` (and the
-  `.setStaffText(…, text: nil, …)` intent) empties the beat of its texts of that kind, annotated ones included, so a
-  range cut no longer leaves behind the "pizz." its copy carries; writing or renaming a staff text never touches an
-  annotated one, and a pasted text replaces only texts of its own annotation kind. `Score.rangeTextIDs(for:)` leaves
-  annotated texts out, as the layout gives them no identity.
+- **Staff-text edits and range copies leave play techniques and harp diagrams alone** — `SetStaffText` (and the
+  `.setStaffText` intent) never reads, writes, renames or removes an annotated staff text: writing beside "pizz." adds a
+  second element, and removing the beat's words — or an empty text-entry commit on a beat whose only text is a
+  technique — leaves the technique. A range copy does not carry one, so a cut leaves it in place, a pasted text does
+  not replace it, and `Score.rangeTextIDs(for:)` / `rangeTextRemovals(for:)` do not name it — as for the unmodeled
+  markup it was before.
 - **Breaking: `EditIntent.setDynamic` carries the dynamic's own text** — `setDynamic(at:subtype:xmlText:)`, `xmlText`
   defaulted to `nil`: building it as before still compiles, a pattern binding two values does not, nor does
   destructuring `SetDynamicIntentWire.decoded()`, which returns the text as a third value.

@@ -7,7 +7,7 @@ extension Capo {
     /// `Capo::generateText` in English: "No capo" when inactive or on fret 0, "Capo N" on a whole fret, and for a
     /// partial capo the 1-based strings it applies to. `""` for a partial capo when `stringCount` is unknown — the
     /// strings it applies to cannot be named.
-    package func generatedText(stringCount: Int?) -> String {
+    func generatedText(stringCount: Int?) -> String {
         guard isActive, fretPosition != 0 else { return "No capo" }
         guard !ignoredStrings.isEmpty else { return "Capo \(fretPosition)" }
         guard let stringCount else { return "" }

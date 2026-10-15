@@ -71,4 +71,38 @@ struct StaffTextAnnotationTests {
         #expect(texts.map { $0.annotation != nil } == [true, false])
         #expect(SetStaffText.current(at: anchor, isSystemText: false, in: score) == "mute")
     }
+
+    /// A text entry shows no text on a beat whose only text is a technique, and a host turns an empty commit into a
+    /// removal; deleting the beat's words is the same removal. Neither may take the technique, which nothing showed.
+    @Test("a staff-text removal never takes an annotated text")
+    func removalLeavesAnnotations() {
+        var pizz = StaffText(text: "pizz.")
+        pizz.annotation = .playTechnique(.pizzicato, playsBack: true)
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        func score(_ lane: [StaffText]) -> Score {
+            Score(division: 480, parts: [Part(
+                id: "P1", instrument: Instrument(id: "violin"),
+                staves: [Staff(lineCount: 5, measures: [Measure(voices: [Voice(elements: [
+                    .chord(Chord(duration: .whole, notes: ChordNotes([Note(pitch: 69, tpc: 17)]))),
+                ])])])],
+            )], systemMeasures: [SystemMeasure(elements: lane.map {
+                PositionedSystemElement(position: .start, element: .staffText($0), originalStaff: address)
+            })])
+        }
+        func texts(_ score: Score) -> [String] {
+            score.systemMeasures[0].elements.compactMap { positioned -> String? in
+                if case let .staffText(text) = positioned.element { text.text } else { nil }
+            }
+        }
+        let anchor = VoiceElementID(staff: address, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
+        let removal = EditIntent.setStaffText(anchor: anchor, text: nil, isSystemText: false)
+
+        let alone = ScoreEditSession(score: score([pizz]))
+        #expect(!alone.apply(removal))
+        #expect(texts(alone.score) == ["pizz."])
+
+        let beside = ScoreEditSession(score: score([StaffText(text: "dolce"), pizz]))
+        #expect(beside.apply(removal))
+        #expect(texts(beside.score) == ["pizz."])
+    }
 }

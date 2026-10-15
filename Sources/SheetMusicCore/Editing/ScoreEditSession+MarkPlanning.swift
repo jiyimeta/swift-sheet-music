@@ -30,7 +30,11 @@ extension ScoreEditSession {
             let unchanged = SetTempo.current(at: anchor, in: score) == unstamped
             return unchanged ? nil : SetTempo(anchor: anchor, marking: marking)
         case let .setStaffText(anchor, text, isSystemText):
-            return SetStaffText.planned(anchor: anchor, text: text, isSystemText: isSystemText, in: score)
+            // Compared as given, because it is stored as given (`SetStaffText`): "pizz." and "pizz.\n" are two texts,
+            // the second reserving an empty last line. A whitespace-only text never equals a mark that exists, so it
+            // still reaches the command and its `.emptyStaffText`.
+            let current = SetStaffText.current(at: anchor, isSystemText: isSystemText, in: score)
+            return current == text ? nil : SetStaffText(anchor: anchor, text: text, isSystemText: isSystemText)
         case let .setSwing(anchor, settings, isSystemText):
             // Compared on the trimmed label (a swing label, unlike a staff text, is stored trimmed): an empty one is
             // the command's own refusal to raise, not something to compare away.
