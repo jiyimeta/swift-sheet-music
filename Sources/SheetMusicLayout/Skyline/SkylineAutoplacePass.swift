@@ -172,10 +172,13 @@ enum SkylineAutoplacePass {
             }
         }
 
-        // 2. Autoplace each category in order.
+        // 2. Autoplace each category in order. What each element is, and whether it is autoplaced, is read once:
+        //    moving an element only changes its Y, and reading them again per category walked the whole staff
+        //    once for each of them.
+        let candidates = autoplaceCandidates(in: measures)
         for category in categories {
             let addresses = collect(
-                kinds: category.kinds, in: measures,
+                kinds: category.kinds, from: candidates,
             )
             guard !addresses.isEmpty else { continue }
             let groups = group(
@@ -198,18 +201,25 @@ enum SkylineAutoplacePass {
 }
 
 extension SkylineAutoplacePass {
-    private static func collect(
-        kinds: [ShapeItemKind], in measures: [[LayoutElement]],
-    ) -> [Address] {
-        var result: [Address] = []
+    /// Every element the categories can autoplace, in staff order, with its kind.
+    private static func autoplaceCandidates(
+        in measures: [[LayoutElement]],
+    ) -> [(address: Address, kind: ShapeItemKind)] {
+        var result: [(address: Address, kind: ShapeItemKind)] = []
         for (mIdx, elements) in measures.enumerated() {
             for (i, el) in elements.enumerated() {
                 guard let kind = LayoutElementShape.kind(of: el),
-                      kinds.contains(kind), el.textPlacement?.autoplace != false else { continue }
-                result.append(Address(measure: mIdx, index: i))
+                      el.textPlacement?.autoplace != false else { continue }
+                result.append((Address(measure: mIdx, index: i), kind))
             }
         }
         return result
+    }
+
+    private static func collect(
+        kinds: [ShapeItemKind], from candidates: [(address: Address, kind: ShapeItemKind)],
+    ) -> [Address] {
+        candidates.filter { kinds.contains($0.kind) }.map(\.address)
     }
 
     private static func group(
@@ -356,7 +366,9 @@ extension SkylineAutoplacePass {
             let side: AutoplaceSide = entry.side.map { $0 == .above ? .above : .below } ?? resolveSide(
                 kind: kind, shape: shape, staffMidY: staffMidY,
             )
-            let filtered = skyline.filtered { other in
+            // The rects this item must not see. Asked of the skyline in place rather than by a filtered copy:
+            // copying it per element was half of what made this pass grow with the square of the system's length.
+            let ignored: (ShapeItem) -> Bool = { other in
                 entry.ignoring.contains(other.id) || shape.rects.contains {
                     AutoplaceRules.shouldIgnoreEachOther($0.item, other)
                 }
@@ -368,8 +380,8 @@ extension SkylineAutoplacePass {
                 for: kind, sp: metrics.sp,
             )
             let overlap = side == .above
-                ? filtered.overlapAbove(shape, clearance: clearance)
-                : filtered.overlapBelow(shape, clearance: clearance)
+                ? skyline.overlapAbove(shape, clearance: clearance, ignoring: ignored)
+                : skyline.overlapBelow(shape, clearance: clearance, ignoring: ignored)
             guard overlap.isFinite, overlap > -minDistance else { continue }
             let push = overlap + minDistance
             dy = side == .above ? min(dy, -push) : max(dy, push)

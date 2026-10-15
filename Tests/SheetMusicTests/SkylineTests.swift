@@ -122,6 +122,44 @@ struct SkylineTests {
         #expect(sky.overlapBelow(item, clearance: 0) == 4)
     }
 
+    /// The column-indexed query autoplace uses agrees, value for value, with what it replaced: a filtered copy and
+    /// `minVerticalDistance` over every rect. Seeded so a failure reproduces; rects range from narrower than a
+    /// column to wider than many, at both edges of the staff, with clearances up to two columns.
+    @Test func indexedOverlapMatchesExhaustive() {
+        var rng = SplitMix64(seed: 0x5EEDF5)
+        func next(_ range: ClosedRange<CGFloat>) -> CGFloat {
+            range.lowerBound + CGFloat(rng.next() % 1_000_000) / 1_000_000 * (range.upperBound - range.lowerBound)
+        }
+        func randomRect() -> CGRect {
+            let width = rng.next() % 5 == 0 ? next(100 ... 3000) : next(0 ... 40)
+            return CGRect(x: next(-200 ... 20000), y: next(40 ... 200), width: width, height: next(1 ... 30))
+        }
+        let kinds: [ShapeItemKind] = [.chord, .dynamics, .lyrics, .tempo, .staffText, .hairpin, .harmony]
+        for round in 0 ..< 40 {
+            var sky = makeSkyline()
+            sky.add(rect(CGRect(x: 0, y: staffTop, width: 20000, height: staffBottom - staffTop), .staff, -1))
+            for id in 0 ..< 300 {
+                sky.add(rect(randomRect(), kinds[Int(rng.next() % UInt64(kinds.count))], id))
+            }
+            for query in 0 ..< 30 {
+                let shape = LayoutShape(rects: (0 ..< 1 + Int(rng.next() % 3)).map { _ in
+                    ShapeRect(rect: randomRect(), item: ShapeItem(kind: kinds[query % kinds.count], id: 1000 + query))
+                })
+                let clearance = next(0 ... 64)
+                let ignoring: (ShapeItem) -> Bool = { $0.id % 7 == round % 7 }
+                let copy = sky.filtered(ignoring: ignoring)
+                #expect(
+                    sky.overlapAbove(shape, clearance: clearance, ignoring: ignoring)
+                        == shape.minVerticalDistance(copy.north, minHorizontalClearance: clearance),
+                )
+                #expect(
+                    sky.overlapBelow(shape, clearance: clearance, ignoring: ignoring)
+                        == copy.south.minVerticalDistance(shape, minHorizontalClearance: clearance),
+                )
+            }
+        }
+    }
+
     @Test func overlapAgainstEmptyLineIsNegativeInfinity() {
         let sky = makeSkyline()
         let item = rect(
@@ -129,5 +167,22 @@ struct SkylineTests {
         )
         #expect(sky.overlapAbove(item, clearance: 0) == -.infinity)
         #expect(sky.overlapBelow(item, clearance: 0) == -.infinity)
+    }
+}
+
+/// Fixed-seed generator so a failure is always reproducible — `FormatGTests`' own, which is file-private there.
+private struct SplitMix64 {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
     }
 }
