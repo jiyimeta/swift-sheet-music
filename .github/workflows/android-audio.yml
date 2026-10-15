@@ -32,7 +32,13 @@ on:
 # needed as WIRELET_PAT because GitHub Packages requires authentication to
 # download the wirelet Gradle plugin / runtime even when they are public.
 jobs:
+  # First, as in ci.yml: the build below takes the better part of an hour, and a lint failure should stop it from
+  # starting rather than surface after it (see lint.yml).
+  lint:
+    uses: ./.github/workflows/lint.yml
+
   build-and-test:
+    needs: lint
     runs-on: macos-14
     timeout-minutes: 75
     env:

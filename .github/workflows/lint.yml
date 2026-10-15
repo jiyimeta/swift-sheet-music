@@ -1,0 +1,43 @@
+name: Lint
+
+# SwiftLint and SwiftFormat, called by ci.yml and android-audio.yml as the job every build job there `needs`. Lint
+# answers in a couple of minutes and the builds take twenty or more, so a lint failure has to stop them from starting:
+# on 2026-10-16 a release push waited out the Apple, WebAssembly and Android builds only to fail on a file-length rule
+# the Lint job had reported long before. One reusable workflow, so both callers run the same checks.
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Both tools are installed from Homebrew rather than pinned, which
+      # matches how contributors get them (.pre-commit-config.yaml uses
+      # `language: system`, so the hooks call whatever is on PATH). The
+      # trade-off is that a new upstream release can turn on a rule that
+      # was previously off and fail this job on untouched code — that is
+      # how `wrapIfStatementBodies` was found. The version echo below is
+      # what makes such a break diagnosable from the log alone.
+      - name: Install SwiftLint and SwiftFormat
+        run: brew install swiftlint swiftformat
+
+      - name: Tool versions
+        run: |
+          swiftlint --version
+          swiftformat --version
+
+      # Paths come from `included:` in .swiftlint.yml; passing them again
+      # on the command line makes SwiftLint lint each file twice and
+      # report every violation twice.
+      - name: SwiftLint
+        run: swiftlint lint --strict --quiet
+
+      # Wider than SwiftLint on purpose: `.swiftlint.yml` excludes
+      # Examples/Apple (the demo app carries long view bodies the library
+      # rules would reject), but the example app is formatter-clean and
+      # the pre-commit hook formats it, so CI checks it too.
+      - name: SwiftFormat
+        run: swiftformat Sources Tests Examples Tools --lint

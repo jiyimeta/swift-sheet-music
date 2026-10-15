@@ -18,6 +18,7 @@ concurrency:
 jobs:
   apple:
     name: Build & test (Apple)
+    needs: lint
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -66,42 +67,13 @@ jobs:
             Web/sheet-music-web/test/fixtures \
             Web/sheet-music-web/assets/sheet-music.smft
 
+  # First: both build jobs `need` it, so a lint failure stops them from starting (see lint.yml).
   lint:
-    name: Lint
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-
-      # Both tools are installed from Homebrew rather than pinned, which
-      # matches how contributors get them (.pre-commit-config.yaml uses
-      # `language: system`, so the hooks call whatever is on PATH). The
-      # trade-off is that a new upstream release can turn on a rule that
-      # was previously off and fail this job on untouched code — that is
-      # how `wrapIfStatementBodies` was found. The version echo below is
-      # what makes such a break diagnosable from the log alone.
-      - name: Install SwiftLint and SwiftFormat
-        run: brew install swiftlint swiftformat
-
-      - name: Tool versions
-        run: |
-          swiftlint --version
-          swiftformat --version
-
-      # Paths come from `included:` in .swiftlint.yml; passing them again
-      # on the command line makes SwiftLint lint each file twice and
-      # report every violation twice.
-      - name: SwiftLint
-        run: swiftlint lint --strict --quiet
-
-      # Wider than SwiftLint on purpose: `.swiftlint.yml` excludes
-      # Examples/Apple (the demo app carries long view bodies the library
-      # rules would reject), but the example app is formatter-clean and
-      # the pre-commit hook formats it, so CI checks it too.
-      - name: SwiftFormat
-        run: swiftformat Sources Tests Examples Tools --lint
+    uses: ./.github/workflows/lint.yml
 
   wasm:
     name: Build & test (WebAssembly)
+    needs: lint
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
