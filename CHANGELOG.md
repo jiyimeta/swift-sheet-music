@@ -445,8 +445,6 @@ and this project adheres to
 - **The notated clock integrates every tempo-map point.** `Score.notatedDurationSeconds`, `seconds(at:)`,
   `cursor(atSeconds:)` and `rehearsalMarks()` used to read only each bar's downbeat tempo; seek-bar totals and scrub
   positions now agree with `PlaybackTimeline` and the SMF through a rit./accel. or a mid-bar tempo marking.
-- **An empty line text is not written.** A spanner's empty `<beginText>`, `<continueText>` or `<endText>` is omitted, as
-  MuseScore omits it, rather than saved as an element that reads back as an empty text.
 - **A tempo marking hangs on its first baseline, and `<sym>space</sym>` advances in the music font** (import-fidelity
   W2): `tempoAlign` is LEFT, BASELINE, so the first baseline sits at `tempoPosAbove` (2 sp over the top line) or, with
   `<placement>below`, `tempoPosBelow` (3 sp under the bottom one) — the line a gradual tempo change's label hangs on —

@@ -266,8 +266,19 @@
         /// in Edwin) and stand above the staff ending on their bar's end barline (y 82.26 below the staff → 43.76
         /// above it); every one gains `color: nil` and its above, autoplaced `placement:`. No system origin, system
         /// height or page size moved, and no other fixture changed.
+        ///
+        /// **Re-recorded 2026-10-15 for import-fidelity W6 (glyph and line variants), after reading the diff** against
+        /// the W3 digest above (W4 and W5 left it unchanged). 52 of 4063 lines changed, every one a `spannerSegment`
+        /// line identical up to its `richText:` field: the 36 hairpin wedges of `testSingleNoteDynamics` and
+        /// `spanner_offsets_score_end` gain a `lineDetail` (Task 7's member; a wedge now carries its end-text detail),
+        /// and the 16 voltas of `repeat52`, `repeat53`, `testVoltaDynamic` and `testVoltaTemp` gain their authored
+        /// text (`repeat52`'s "1,3", "2,4", …) as bold 11 `richText`. No origin,
+        /// size, system height or page moved. The corpus holds no pedal, text line, palm mute, let ring, guitar line,
+        /// hairpin line, non-plain fermata, caesura variant or chord-symbol case style, so the W6 geometry those
+        /// carry is pinned by its own suites (`TextLineBaseGeometryTests`, `LineLabelRunsLayoutTests`,
+        /// `HairpinVoltaTextLayoutTests`, `FermataGlyphVariantsTests`, `HarmonyCaseTests`), not here.
         private static let expectedDigestSHA256 =
-            "27aba95fd27f1051a464b85352115cf6cdada7739c4be8a0d97285277d019c20"
+            "ee59ea6d100eb7a3e963fb62745836e0fb50b5e24ca7e899b8181b4e70721d3d"
 
         @Test("write digest")
         func writeDigest() throws {
