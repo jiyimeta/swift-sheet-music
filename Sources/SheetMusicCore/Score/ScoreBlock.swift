@@ -2,16 +2,17 @@ import SheetMusicFoundation
 
 /// A score-level MuseScore box carried in document order among measures.
 ///
-/// The cases are deliberately asymmetric. `<VBox>` is modeled because
-/// `LayoutEngine` renders the title block from its `ScoreFrame`; `<HBox>`,
-/// `<TBox>`, and `<FBox>` are not laid out anywhere in this library, so typing
-/// their fields would add semantics that no consumer uses. A future slice that
-/// teaches the layout engine about those boxes is what would justify modeling
-/// their properties.
+/// `<VBox>`, `<TBox>` and `<HBox>` are typed because the layout engine lays them out: the leading `<VBox>` is the title
+/// block, a later `<VBox>` or `<TBox>` is a frame between systems, and an `<HBox>` is horizontal room between two
+/// measures. `<FBox>` (a fret-diagram table) has no consumer in this library and is carried whole for source fidelity.
 public enum ScoreBlock: Sendable, Equatable {
-    /// `<VBox>` — modeled because the layout engine draws the title block from it.
+    /// `<VBox>` — the title block when it leads the score, otherwise a frame between systems.
     case verticalFrame(ScoreFrame)
-    /// `<HBox>` / `<TBox>` / `<FBox>` — carried whole for source fidelity.
+    /// `<TBox>` — a frame holding one text (MS `boxlayout.cpp:337-362`).
+    case textFrame(TextFrame)
+    /// `<HBox>` — horizontal room between two measures (MS `box.cpp:593-603`).
+    case horizontalFrame(HorizontalFrame)
+    /// `<FBox>` (and, for source compatibility, an `OpaqueFrame` of any kind) — carried whole for source fidelity.
     case opaqueFrame(OpaqueFrame)
 }
 

@@ -34,20 +34,46 @@ public struct ScoreFrame: Sendable, Equatable, Hashable {
     /// Source children that the typed frame model does not represent.
     /// This is fidelity, not semantics; no layout or editing pass reads it.
     public var preservedMarkup: [PreservedXML]
+    /// Gap above the frame in spatium; `nil` is MS's default of 7 sp (`box.cpp:255-258`).
+    public var topGapSp: CGFloat?
+    /// Gap below the frame in spatium; `nil` is MS's default of 7 sp.
+    public var bottomGapSp: CGFloat?
+    /// MS `boxAutoSize`; `nil` is the MS default, true (`box.cpp:265-266`). Optional so a written `1` is written
+    /// back like a written gap.
+    public var autoSize: Bool?
+    /// The `<Image>` children (MS `image.cpp`); the bytes live in `Score.pictures`.
+    public var images: [FrameImage]
+
+    /// Whether the frame carries a page break (a `LayoutBreak` whose `subtype` is `page`). Computed from
+    /// `preservedMarkup` so it cannot go stale when a host edits the bag.
+    public var pageBreakAfter: Bool {
+        preservedMarkup.hasPageBreak
+    }
 
     public init(
         heightSp: CGFloat,
         texts: [FrameText],
         preservedMarkup: [PreservedXML] = [],
+        topGapSp: CGFloat? = nil,
+        bottomGapSp: CGFloat? = nil,
+        autoSize: Bool? = nil,
+        images: [FrameImage] = [],
     ) {
         self.heightSp = heightSp
         self.texts = texts
         self.preservedMarkup = preservedMarkup
+        self.topGapSp = topGapSp
+        self.bottomGapSp = bottomGapSp
+        self.autoSize = autoSize
+        self.images = images
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(heightSp)
         hasher.combine(texts)
+        hasher.combine(topGapSp)
+        hasher.combine(bottomGapSp)
+        hasher.combine(autoSize)
     }
 }
 

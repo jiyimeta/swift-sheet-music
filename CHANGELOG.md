@@ -51,6 +51,12 @@ and this project adheres to
   a bar at natural width (stretched 1.5×) widened each symbol's beat by half again. A symbol is now a floor on the span
   of the element it names — room the beat must keep, shared by weight over any other voice's columns inside it — so it
   widens a beat only where it would otherwise run into the next symbol.
+- **`TextFrame`, `HorizontalFrame`, `FrameImage` and `Score.pictures`** — the box model the layout uses: a text frame
+  (MuseScore's TBox: one text, gaps, margins in mm), a horizontal frame (HBox: width and its left / right gap), the
+  pictures a vertical frame holds (`ScoreFrame.images`, with `<Image>`'s size, auto-scale, aspect lock and offset), and
+  an `.mscz`'s picture payloads keyed by their `<path>`. `ScoreFrame` also gains `topGapSp`, `bottomGapSp` and
+  `autoSize` (`nil` = MuseScore's defaults: 7 sp gaps, auto-sized), and `pageBreakAfter` reads a `<LayoutBreak>` page
+  break kept in a box's preserved markup.
 
 ## [4.11.0] - 2026-10-16
 
@@ -235,6 +241,8 @@ and this project adheres to
 
 ### Changed
 
+- **`ScoreBlock` gains `.textFrame` and `.horizontalFrame`** — breaking for an exhaustive `switch` over it. `.opaqueFrame`
+  and its `Kind.horizontal` / `.text` stay for source compatibility.
 - **Pedals, text lines, palm mutes, let rings and the guitar lines lay out from one text-line geometry** — begin label,
   line, hooks and end label as MuseScore's `layoutTextLineBaseSegment` (`SpannerGeometry.textLineBase`,
   `TextLineBaseParts`, `TextLineBaseStyle`). A pedal is its label and a line (or its hooks, or its ✱), no longer a 'Ped'
