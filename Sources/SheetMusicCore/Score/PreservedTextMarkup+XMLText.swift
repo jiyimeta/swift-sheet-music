@@ -14,7 +14,9 @@ extension PreservedTextMarkup {
     /// MuseScore xml text read back into markup — `xmlText`'s inverse — with `derivedText` its plain projection
     /// (`RichText.plainText`), as a decoder derives it. Tags and entities are read as `RichText(xmlText:)` reads them:
     /// a `<` that no `>` closes and an `&` that starts no known entity stay characters. A tag left open closes at the
-    /// end; a closing tag closes every tag opened after its match; one with no match is dropped.
+    /// end; a closing tag closes every tag opened after its match; one with no match is dropped. The text may be a
+    /// peer's or another app's, so a tag whose name is not a plain word, an attribute whose name is not, and an
+    /// element nested past `maximumNesting` are dropped too, their characters kept.
     init(xmlText: String) {
         let source = Array(xmlText)
         var open = [OpenElement(name: "", attributes: [:])]
@@ -41,6 +43,10 @@ extension PreservedTextMarkup {
         let content = open[0].content
         self.init(content: content, derivedText: RichText(content: content).plainText)
     }
+
+    /// How deep `init(xmlText:)` nests elements, the root's content being level 1. MuseScore's own formatting stacks a
+    /// handful (`<b><i><u><s><font>` and a `<sub>`); the bound is for text that is not MuseScore's.
+    static let maximumNesting = 16
 
     /// Plain text as MuseScore xml text: `&`, `<` and `>` escaped, nothing else changed.
     static func escapedXMLText(_ text: String) -> String {
@@ -75,13 +81,24 @@ extension PreservedTextMarkup {
             return
         }
         let name = String(body.prefix { !$0.isWhitespace })
-        guard !name.isEmpty else { return }
-        let attributes = RichTextBuilder.attributes(in: body.dropFirst(name.count))
+        // Untrusted text: a name that is not a plain word would make the saved `<text>` malformed, and nesting past
+        // the bound would recurse without one — such a tag is dropped, its characters kept.
+        guard isPlainName(name), selfClosing || open.count <= maximumNesting else { return }
+        let attributes = RichTextBuilder.attributes(in: body.dropFirst(name.count)).filter { isPlainName($0.key) }
         if selfClosing {
             open[open.count - 1].content.append(.element(Element(name: name, attributes: attributes)))
         } else {
             open.append(OpenElement(name: name, attributes: attributes))
         }
+    }
+
+    /// An element or attribute name as MuseScore writes them: a letter, then letters and digits (`b`, `font`, `size`).
+    private static func isPlainName(_ name: String) -> Bool {
+        func isLetter(_ scalar: Unicode.Scalar) -> Bool {
+            ("a" ... "z").contains(scalar) || ("A" ... "Z").contains(scalar)
+        }
+        guard let first = name.unicodeScalars.first, isLetter(first) else { return false }
+        return name.unicodeScalars.allSatisfy { isLetter($0) || ("0" ... "9").contains($0) }
     }
 
     private static func close(_ open: inout [OpenElement]) {

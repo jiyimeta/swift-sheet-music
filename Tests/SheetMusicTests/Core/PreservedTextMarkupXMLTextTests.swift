@@ -61,4 +61,23 @@ struct PreservedTextMarkupXMLTextTests {
         #expect(PreservedTextMarkup(xmlText: "<b>a<i>b</b>c").xmlText == "<b>a<i>b</i></b>c")
         #expect(PreservedTextMarkup.escapedXMLText("a <b> & c") == "a &lt;b&gt; &amp; c")
     }
+
+    private static func nesting(_ items: [PreservedTextMarkup.ContentItem]) -> Int {
+        items.map { item in
+            if case let .element(element) = item { 1 + nesting(element.content) } else { 0 }
+        }.max() ?? 0
+    }
+
+    /// The text comes from a peer's edit or another app's pasteboard, so it is read as untrusted: nesting is bounded —
+    /// the parse, `RichText(content:)` and the writer all recurse on it — and a name that is not a plain word is
+    /// dropped, so what is saved inside `<text>` stays well-formed.
+    @Test("untrusted xml text cannot nest without bound or name a malformed element or attribute")
+    func untrustedTextIsBounded() {
+        let deep = PreservedTextMarkup(xmlText: String(repeating: "<b>", count: 10000) + "x")
+        #expect(Self.nesting(deep.content) == PreservedTextMarkup.maximumNesting)
+        #expect(deep.derivedText == "x")
+        #expect(PreservedTextMarkup(xmlText: #"<a"b>x</a"b>"#).xmlText == "x")
+        let attribute = PreservedTextMarkup(xmlText: #"<font size="12" 1x="2">y</font>"#)
+        #expect(attribute.xmlText == #"<font size="12">y</font>"#)
+    }
 }
