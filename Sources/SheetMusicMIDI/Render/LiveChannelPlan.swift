@@ -27,7 +27,9 @@ import SheetMusicFoundation
 ///
 /// The instruments are the part's SOUND timeline: a play technique's
 /// variant ("Violin (Pizzicato)") is another instrument whose primary
-/// channel differs in program, so it earns a strip of its own.
+/// channel differs in program, so it earns a strip of its own — after
+/// every part's instruments have theirs, and only while a melodic live
+/// channel is left (`LiveChannelPlan.Builder`).
 ///
 /// Dedup is **within-part only**: collapsing across parts would destroy
 /// per-part mixer independence.
@@ -37,7 +39,9 @@ public struct LiveChannelPlan: Sendable, Equatable {
     public struct Strip: Sendable, Equatable {
         public let partIndex: Int
         /// Index into the part's DEDUPED instruments in first-appearance
-        /// order. Stable for a given score, and the `ordinal` of
+        /// order, its play techniques' sounds after them. Stable for a
+        /// given score — adding a technique never renumbers an
+        /// instrument — and the `ordinal` of
         /// `MixerChannel.Kind.instrument(partIndex:ordinal:)`.
         public let ordinal: Int
         public let instrument: Instrument
@@ -93,91 +97,14 @@ public struct LiveChannelPlan: Sendable, Equatable {
         return ordinalByTimelineIndex[partIndex][timelineIndex]
     }
 
-    /// A technique sounding through one of the instrument's own `<Channel>`s owns that channel's notes: they play on
-    /// the technique's strip, not the instrument's.
-    private static func remapFlavourSource(
-        of point: Score.SoundPoint, in partAssignments: [MidiRenderer.ChannelAssignment], to liveChannel: Int,
-        remap: inout [MidiChannelKey: Int],
-    ) {
-        guard let source = point.flavourSource else { return }
-        let flavours = partAssignments.filter { $0.instrumentOrdinal == source.point }
-        guard flavours.indices.contains(source.flavour) else { return }
-        remap[flavours[source.flavour].key] = liveChannel
-    }
-
     public static func build(score: Score) -> LiveChannelPlan {
-        let assignments = MidiRenderer.assignChannels(score: score)
-        var strips: [Strip] = []
-        var remap: [MidiChannelKey: Int] = [:]
-        var ordinalByTimelineIndex: [[Int]] = []
-        var nextMelodic = 0
-        func takeLiveChannel() -> Int {
-            let channel = MidiRenderer.melodicChannels[
-                nextMelodic % MidiRenderer.melodicChannels.count,
-            ]
-            nextMelodic += 1
-            return channel
-        }
-
+        var builder = Builder(score: score)
         for partIndex in score.parts.indices {
-            let timeline = score.soundTimeline(forPart: partIndex)
-            let partAssignments = assignments.indices.contains(partIndex)
-                ? assignments[partIndex] : []
-            // Dedup key: the primary flavour's SOUNDING fields only
-            // (program, bank, volume, pan, reverb, chorus) — `name`,
-            // `midiChannel`, and `midiPort` are identity/routing
-            // metadata from the rendered SMF, not part of what makes
-            // two instances sound alike. `InstrumentChannel`'s
-            // synthesized `Hashable` covers every stored field, so a
-            // literal per-instance value (declared channel included)
-            // would never collapse two instances MuseScore gave
-            // different channel numbers to — exactly the case this
-            // dedup exists to catch. Zeroing those three fields before
-            // hashing keeps `InstrumentChannel`'s own conformance
-            // untouched (still safe to hand off to a dictionary
-            // elsewhere) while keying this dictionary on sound alone.
-            var ordinalForFlavour: [InstrumentChannel: Int] = [:]
-            var ordinals: [Int] = []
-            for (timelineIndex, point) in timeline.enumerated() {
-                var flavour = point.instrument.channel
-                flavour.name = nil
-                flavour.midiChannel = nil
-                flavour.midiPort = nil
-                let ordinal: Int
-                if let existing = ordinalForFlavour[flavour] {
-                    ordinal = existing
-                } else {
-                    ordinal = strips.count(where: { $0.partIndex == partIndex })
-                    ordinalForFlavour[flavour] = ordinal
-                    let liveChannel = point.instrument.useDrumset
-                        ? MidiRenderer.drumChannel
-                        : takeLiveChannel()
-                    strips.append(Strip(
-                        partIndex: partIndex,
-                        ordinal: ordinal,
-                        instrument: point.instrument,
-                        liveChannel: liveChannel,
-                    ))
-                }
-                ordinals.append(ordinal)
-                // Every rendered assignment for this timeline index —
-                // all its `<Channel>` flavours — remaps onto the strip.
-                let liveChannel = strips.last(where: {
-                    $0.partIndex == partIndex && $0.ordinal == ordinal
-                })?.liveChannel ?? 0
-                for assignment in partAssignments
-                    where assignment.instrumentOrdinal == timelineIndex
-                {
-                    remap[assignment.key] = liveChannel
-                }
-                remapFlavourSource(of: point, in: partAssignments, to: liveChannel, remap: &remap)
-            }
-            ordinalByTimelineIndex.append(ordinals)
+            builder.addInstruments(ofPart: partIndex)
         }
-        return LiveChannelPlan(
-            strips: strips,
-            remap: remap,
-            ordinalByTimelineIndex: ordinalByTimelineIndex,
-        )
+        for partIndex in score.parts.indices {
+            builder.addTechniques(ofPart: partIndex)
+        }
+        return builder.plan
     }
 }

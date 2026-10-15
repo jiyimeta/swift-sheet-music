@@ -32,7 +32,7 @@ extension LiveChannelPlan {
     /// Two guards keep the composed form from stuttering:
     ///
     /// - the suffix is gated on the count of DEDUPED strips for the part (`strips`, filtered by `partIndex`), not
-    ///   on `Score.instrumentTimeline(forPart:).count` — a part whose two timeline entries collapse onto one live
+    ///   on `Score.soundTimeline(forPart:).count` — a part whose two timeline entries collapse onto one live
     ///   channel is one strip, and must read as one instrument however many times the score announced it;
     /// - an instrument whose name equals the part's is suppressed, so a part named after its own instrument reads
     ///   "Piano" rather than "Piano (Piano)".

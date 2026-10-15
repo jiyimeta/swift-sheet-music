@@ -79,6 +79,31 @@ struct SoundTimelineTests {
         #expect(PlayTechniqueSound.resolve(.pizzicato, for: kit) == .keep)
     }
 
+    /// MuseScore's ids, `share/instruments/instruments.xml`: a family is a whole id or a whole hyphen segment, so a
+    /// contrabassoon is not a contrabass and steel drums tuned like a guitar are not a guitar.
+    @Test("a family is matched by whole ids and segments, not by prefix")
+    func familiesByIDSegment() {
+        func resolve(_ technique: PlayingTechnique, _ id: String) -> PlayTechniqueSound.Outcome {
+            PlayTechniqueSound.resolve(technique, for: Instrument(id: id, channels: [InstrumentChannel(program: 0)]))
+        }
+        for id in ["contrabassoon", "contrabass-clarinet", "contrabass-flute", "viola-da-gamba", "cornett"] {
+            #expect(resolve(.pizzicato, id) == .keep, "\(id)")
+            #expect(resolve(.mute, id) == .keep, "\(id)")
+        }
+        #expect(resolve(.mute, "guitar-steel-drums") == .keep)
+        #expect(resolve(.mute, "english-horn") == .keep)
+        #expect(resolve(.mute, "basset-horn") == .keep)
+        for id in ["contrabass-trombone", "piccolo-trumpet", "bb-cornet", "f-tuba", "eb-horn", "baritone-horn"] {
+            #expect(resolve(.mute, id) == .generalMIDI(program: 59), "\(id)")
+        }
+        for id in ["violins", "violas", "violoncellos", "contrabasses"] {
+            #expect(resolve(.tremolo, id) == .generalMIDI(program: 44), "\(id)")
+            #expect(resolve(.mute, id) == .generalMIDI(program: 49), "\(id)")
+        }
+        #expect(resolve(.pizzicato, "double-bass") == .generalMIDI(program: 45))
+        #expect(resolve(.tremolo, "double-bass") == .keep)
+    }
+
     @Test("detaché, vibrato, legato and the handbell techniques sound as before")
     func soundlessTechniques() {
         let violin = Instrument(id: "violin", channels: [InstrumentChannel(program: 40)])
@@ -96,6 +121,43 @@ struct SoundTimelineTests {
         ] {
             #expect(PlayTechniqueSound.resolve(technique, for: violin) == .keep, "\(technique)")
         }
+    }
+
+    @Test("techniques listed out of time order in a bar sound in time order")
+    func outOfOrderLane() {
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        func element(_ text: String, _ technique: PlayingTechnique, at position: MeasurePosition)
+            -> PositionedSystemElement
+        {
+            var staffText = StaffText(text: text)
+            staffText.annotation = .playTechnique(technique, playsBack: true)
+            return PositionedSystemElement(position: position, element: .staffText(staffText), originalStaff: address)
+        }
+        // "arco" on beat 3 is listed before "pizz." on beat 1.
+        let lane = [SystemMeasure(elements: [
+            element("arco", .natural, at: MeasurePosition(numerator: 1, denominator: 2)),
+            element("pizz.", .pizzicato, at: .start),
+        ])]
+        let violin = Instrument(id: "violin", channels: [
+            InstrumentChannel(program: 40), InstrumentChannel(name: "pizzicato", program: 45),
+        ])
+        let measure = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .whole, notes: ChordNotes([Note(pitch: 69, tpc: 17)]))),
+        ])])
+        let score = Score(division: 480, parts: [Part(
+            id: "P1", instrument: violin, staves: [Staff(lineCount: 5, measures: [measure])],
+        )], systemMeasures: IdentifiedArray(lane))
+        let points = score.soundTimeline(forPart: 0)
+        // The seed, pizzicato from beat 1, back to the seed's sound on beat 3.
+        #expect(Self.summary(points) == ["0:40:-", "0:45:-", "0:40:0"])
+        #expect(points.map(\.position) == [.start, .start, MeasurePosition(numerator: 1, denominator: 2)])
+    }
+
+    @Test("a technique's point names the instrument point it modifies; an instrument point names none")
+    func basePoints() throws {
+        let score = try AnnotationFixtures.load("w5-play-techniques")
+        let points = score.soundTimeline(forPart: 1)
+        #expect(points.map(\.basePoint) == [nil, 0, 0, 0, 0])
     }
 
     @Test("ten alternations of pizzicato and arco allocate one extra sound, reused")

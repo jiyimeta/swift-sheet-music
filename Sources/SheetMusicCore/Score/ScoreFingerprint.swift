@@ -47,6 +47,9 @@ import SheetMusicFoundation
 ///   (114) — are covered by occupants as well, because `SetTempo` writes them; its preserved markup is not. A
 ///   dynamic's own text is covered by occupant 115 — as MuseScore xml text, markup included, because `SetDynamic`
 ///   writes both.
+/// - Not covered on a chord diagram: `FretDiagram.fretOffset`, `showNut` and `orientation`. No edit writes them, and
+///   a client before 5.0 kept them as preserved markup, so a version that hashed them would disagree with one that
+///   could not see them. Its barres beyond the first ARE covered (tag 116): a client before 5.0 dropped them.
 /// - The walk's own shape: it emits a flat sequence of staff blocks with no part/staff-count delimiter, so two
 ///   scores whose staves are grouped into parts differently — but which total the same number of staves — hash
 ///   identically.

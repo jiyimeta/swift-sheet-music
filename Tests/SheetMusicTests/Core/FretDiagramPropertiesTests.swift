@@ -66,15 +66,57 @@ struct FretDiagramPropertiesTests {
         #expect(positions == positions.sorted())
     }
 
-    @Test("the fingerprint input of a one-barre diagram is the one it always had")
-    func oneBarreEquality() {
-        var single = FretDiagram(strings: [], barres: [FretBarre(startString: 1, endString: 5, fret: 1)])
-        var legacy = FretDiagram()
-        legacy.barre = FretBarre(startString: 1, endString: 5, fret: 1)
-        #expect(single == legacy)
-        single.barres.append(FretBarre(startString: 2, endString: 3, fret: 2))
-        #expect(single != legacy)
-        legacy.barre = nil
-        #expect(legacy.barres.isEmpty)
+    private static func fingerprint(_ diagram: FretDiagram) -> UInt64 {
+        var hasher = FNV1a()
+        hasher.combine(diagram)
+        return hasher.value
+    }
+
+    /// The bytes `combine(_ diagram:)` fed for a one-barre diagram before barres became a list, written out by hand.
+    private static func legacyOneBarreBytes(_ barre: FretBarre) -> UInt64 {
+        var legacy = FNV1a()
+        legacy.combine(6)
+        legacy.combine(5)
+        legacy.combine(0)
+        legacy.combine(true)
+        legacy.combine(barre.startString)
+        legacy.combine(barre.endString)
+        legacy.combine(barre.fret)
+        legacy.combine(false)
+        legacy.combineOccupied(ElementProperties.default, visibleTag: 58, colorTag: 59, placementTag: 79)
+        return legacy.value
+    }
+
+    @Test("a one-barre diagram feeds the fingerprint the bytes it always did; a second barre adds its own")
+    func fingerprintBarres() {
+        let barre = FretBarre(startString: 1, endString: 5, fret: 1)
+        let single = FretDiagram(barres: [barre])
+        #expect(Self.fingerprint(single) == Self.legacyOneBarreBytes(barre))
+        var double = single
+        double.barres.append(FretBarre(startString: 2, endString: 3, fret: 2))
+        #expect(Self.fingerprint(double) != Self.fingerprint(single))
+    }
+
+    /// No edit writes the offset, the nut or the orientation, and a client that predates them kept them as preserved
+    /// markup: hashing them could only make two versions disagree about one file.
+    @Test("offset, nut and orientation stay out of the fingerprint")
+    func fingerprintLeavesFrameOut() {
+        let barre = FretBarre(startString: 1, endString: 5, fret: 1)
+        let framed = FretDiagram(barres: [barre], fretOffset: 3, showNut: false, orientation: .horizontal)
+        #expect(Self.fingerprint(framed) == Self.legacyOneBarreBytes(barre))
+        let bare = FretDiagram(fretOffset: 3, showNut: false, orientation: .horizontal)
+        #expect(Self.fingerprint(bare) == FNV1a().value)
+    }
+
+    @Test("the one-barre accessor reads and writes the first barre only")
+    func firstBarreAccessor() {
+        var diagram = FretDiagram()
+        diagram.barre = FretBarre(startString: 1, endString: 5, fret: 1)
+        #expect(diagram.barres == [FretBarre(startString: 1, endString: 5, fret: 1)])
+        diagram.barres.append(FretBarre(startString: 2, endString: 3, fret: 2))
+        diagram.barre = FretBarre(startString: 0, endString: -1, fret: 4)
+        #expect(diagram.barres.count == 2)
+        diagram.barre = nil
+        #expect(diagram.barres == [FretBarre(startString: 2, endString: 3, fret: 2)])
     }
 }

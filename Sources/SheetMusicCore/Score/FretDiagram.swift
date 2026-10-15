@@ -11,7 +11,8 @@ public struct FretDiagram: Sendable, Equatable {
     public var strings: [FretString]
     /// Every `<barre>` of `<fretDiagram>`, in file order.
     public var barres: [FretBarre]
-    /// The first barre — read and written as `barres.first`, for callers of the one-barre model.
+    /// The first barre — read and written as `barres.first`, for callers of the one-barre model. Setting it replaces
+    /// or removes the FIRST barre only: any later barre stays, so `barre = nil` on a two-barre diagram leaves one.
     public var barre: FretBarre? {
         get { barres.first }
         set {

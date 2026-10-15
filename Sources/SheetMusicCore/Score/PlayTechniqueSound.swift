@@ -51,25 +51,16 @@ package enum PlayTechniqueSound {
             ?? .keep
     }
 
-    /// `articulationSounds` by the instrument's id family. Bass guitars, a solo cello's mute and a solo double bass
-    /// are left on their normal sound: their MuseScore rows name instruments these ids do not tell apart.
+    /// `articulationSounds` by the instrument's id family. A family is a whole MuseScore id or a whole hyphen segment
+    /// of one (`share/instruments/instruments.xml`), so a contrabassoon is no contrabass and steel drums are no guitar.
+    /// Bass guitars, a solo cello's mute and a solo double bass are left on their normal sound: their MuseScore rows
+    /// name instruments these ids do not tell apart.
+    ///
+    /// Always bank 0. The table's other banks — 20/30/40/50 for the bowed solo and section sounds, 8 for an acoustic
+    /// guitar's harmonics — are MS Basic's own, and a General MIDI font (folino ships GeneralUser GS) has none of them.
     private static func generalMIDIProgram(_ technique: PlayingTechnique, instrumentID id: String) -> Int? {
-        let strings = ["violin", "viola", "violoncello", "cello", "contrabass", "strings"]
-        let brass = [
-            "trumpet",
-            "bb-trumpet",
-            "c-trumpet",
-            "cornet",
-            "flugelhorn",
-            "trombone",
-            "bass-trombone",
-            "horn",
-            "french-horn",
-            "tuba",
-            "euphonium",
-        ]
-        if strings.contains(where: id.hasPrefix) {
-            let section = id.contains("strings") || id.contains("group")
+        let segments = id.split(separator: "-").map(String.init)
+        if let section = bowedStringSection(id) {
             switch technique {
             case .pizzicato: return 45
             case .tremolo where section: return 44
@@ -77,10 +68,10 @@ package enum PlayTechniqueSound {
             default: return nil
             }
         }
-        if brass.contains(where: id.hasPrefix) {
+        if isBrass(id, segments: segments) {
             return technique == .mute ? 59 : nil
         }
-        if id.contains("guitar"), !id.contains("bass") {
+        if segments.contains("guitar"), !segments.contains("bass"), !segments.contains("drums") {
             let electric = id.contains("electric") || id.contains("overdriven") || id.contains("distortion")
             switch technique {
             case .mute: return 28
@@ -92,6 +83,24 @@ package enum PlayTechniqueSound {
             }
         }
         return nil
+    }
+
+    /// `true` for a bowed string section (a plural id, or the strings group), `false` for a solo bowed string, `nil`
+    /// for anything else.
+    private static func bowedStringSection(_ id: String) -> Bool? {
+        switch id {
+        case "violin", "viola", "violoncello", "cello", "contrabass", "double-bass": false
+        case "violins", "violas", "violoncellos", "contrabasses", "strings": true
+        default: id.hasPrefix("strings.") ? true : nil
+        }
+    }
+
+    /// MuseScore's brass section (`BRASS_SECTION`: bugle, euphonium, horn, trumpet, trombone, tuba) plus the cornet
+    /// and flugelhorn; the English horn and the basset horn are reeds.
+    private static func isBrass(_ id: String, segments: [String]) -> Bool {
+        let families: Set = ["trumpet", "cornet", "flugelhorn", "trombone", "tuba", "euphonium", "horn", "bugle"]
+        guard id != "english-horn", id != "basset-horn" else { return false }
+        return segments.contains(where: families.contains)
     }
 
     /// The instrument a technique's sound plays as: itself to keep; its named channel alone, or its primary channel

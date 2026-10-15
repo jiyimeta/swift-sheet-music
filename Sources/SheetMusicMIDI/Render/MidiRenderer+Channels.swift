@@ -48,11 +48,12 @@ extension MidiRenderer {
             nextIndex += 1
             return channel
         }
-        for partIndex in score.parts.indices {
-            // The sound timeline: a play technique's own sound is one more point. A point that sounds like an earlier
-            // one, or through one of an earlier instrument's own `<Channel>`s, takes no channel.
-            let timeline = score.soundTimeline(forPart: partIndex)
-            for (ordinal, point) in timeline.enumerated() where point.reusesPoint == nil && point.flavourSource == nil {
+        // The sound timeline: a play technique's own sound is one more point. Its instrument points — the seed and
+        // every change — are allocated first, for every part, exactly as they were before techniques sounded, so a
+        // technique never moves another instrument's channel.
+        let timelines = score.parts.indices.map { score.soundTimeline(forPart: $0) }
+        for (partIndex, timeline) in timelines.enumerated() {
+            for (ordinal, point) in timeline.enumerated() where point.basePoint == nil {
                 let instrument = point.instrument
                 let isDrumset = instrument.useDrumset
                 for flavour in instrument.channels {
@@ -73,7 +74,43 @@ extension MidiRenderer {
                 }
             }
         }
+        assignTechniqueChannels(timelines, to: &perPart)
         return perPart
+    }
+
+    /// A technique's General MIDI sound takes a melodic channel nothing else uses on its port, or none at all: with the
+    /// channels spent it sounds as its instrument (`PartChannelRoute` routes it to the base point) rather than sharing
+    /// another instrument's channel and program. A point that sounds like an earlier one, or through one of its
+    /// instrument's own `<Channel>`s, takes no channel either way.
+    private static func assignTechniqueChannels(
+        _ timelines: [[Score.SoundPoint]], to perPart: inout [[ChannelAssignment]],
+    ) {
+        var used = Set(perPart.flatMap { $0.map(\.key) })
+        for (partIndex, timeline) in timelines.enumerated() {
+            for (ordinal, point) in timeline.enumerated()
+                where point.basePoint != nil && point.reusesPoint == nil && point.flavourSource == nil
+            {
+                let flavours = point.instrument.channels
+                var taken: [ChannelAssignment] = []
+                for flavour in flavours {
+                    let port = flavour.midiPort ?? 0
+                    guard let channel = melodicChannels.first(where: {
+                        !used.contains(MidiChannelKey(port: port, channel: $0))
+                    }) else { break }
+                    let assignment = ChannelAssignment(
+                        channel: channel, port: port, flavour: flavour, instrumentOrdinal: ordinal,
+                    )
+                    used.insert(assignment.key)
+                    taken.append(assignment)
+                }
+                // All of its channels or none: a sound missing a flavour would route half its notes nowhere.
+                if taken.count == flavours.count {
+                    perPart[partIndex] += taken
+                } else {
+                    taken.forEach { used.remove($0.key) }
+                }
+            }
+        }
     }
 
     /// Per-flat-staff MIDI channel, in the same enumeration order as

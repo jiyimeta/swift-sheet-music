@@ -137,7 +137,7 @@ public enum MidiRenderer {
     }
 
     /// Ordered channel switches for one part, expressed in the SAME
-    /// measure-relative space `Score.instrumentTimeline` returns.
+    /// measure-relative space `Score.soundTimeline` returns.
     ///
     /// Kept measure-relative until the last moment: the absolute tick is
     /// resolved against the STAFF'S OWN `measureBases`, so this walker
@@ -196,6 +196,9 @@ public enum MidiRenderer {
                     }
                 } else if let earlier = point.reusesPoint {
                     routeByOrdinal[ordinal] = routeByOrdinal[earlier]
+                } else if let base = point.basePoint {
+                    // A technique whose sound found no free channel sounds as its instrument.
+                    routeByOrdinal[ordinal] = routeByOrdinal[base]
                 }
             }
             var switches: [Switch] = []

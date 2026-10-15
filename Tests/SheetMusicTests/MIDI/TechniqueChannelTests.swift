@@ -91,6 +91,70 @@ struct TechniqueChannelTests {
         #expect(Set(live).count == 3)
     }
 
+    /// `parts` single-channel parts, each its own program; the first a nylon guitar that mutes in bar 2 when `mute`.
+    private static func ensemble(parts: Int, mute: Bool) -> Score {
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        var text = StaffText(text: "mute")
+        text.annotation = .playTechnique(.mute, playsBack: true)
+        let lane = [
+            SystemMeasure(),
+            SystemMeasure(elements: mute ? [
+                PositionedSystemElement(position: .start, element: .staffText(text), originalStaff: address),
+            ] : []),
+        ]
+        let measures = (0 ..< 2).map { _ in
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .whole, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+            ])])
+        }
+        let instruments = (0 ..< parts).map { index in
+            index == 0
+                ? Instrument(id: "guitar-nylon", channels: [InstrumentChannel(program: 24)])
+                : Instrument(id: "part\(index)", channels: [InstrumentChannel(program: 64 + index)])
+        }
+        return Score(division: 480, parts: IdentifiedArray(instruments.enumerated().map { index, instrument in
+            Part(id: "P\(index)", instrument: instrument, staves: [Staff(lineCount: 5, measures: measures)])
+        }), systemMeasures: IdentifiedArray(lane))
+    }
+
+    @Test("a technique's sound never moves another instrument's channel or strip")
+    func techniqueAllocatesAfterInstruments() {
+        let plain = Self.ensemble(parts: 3, mute: false)
+        let muted = Self.ensemble(parts: 3, mute: true)
+        let before = MidiRenderer.assignChannels(score: plain)
+        let after = MidiRenderer.assignChannels(score: muted)
+        for part in 1 ..< 3 {
+            #expect(after[part].map(\.channel) == before[part].map(\.channel), "part \(part)")
+        }
+        let planBefore = LiveChannelPlan.build(score: plain)
+        let planAfter = LiveChannelPlan.build(score: muted)
+        for part in 0 ..< 3 {
+            #expect(planAfter.strip(partIndex: part, ordinal: 0) == planBefore.strip(partIndex: part, ordinal: 0))
+        }
+        // The mute still sounds, on a channel and a strip of its own.
+        #expect(after[0].count == 2)
+        #expect(planAfter.strips.count == 4)
+    }
+
+    /// Fifteen parts spend the fifteen melodic channels; the guitar's mute would have to share another part's.
+    @Test("with the melodic channels spent, a technique keeps the instrument's own sound")
+    func spentChannelsKeepTheInstrument() throws {
+        let score = Self.ensemble(parts: 15, mute: true)
+        let assignments = MidiRenderer.assignChannels(score: score)
+        // Every part's instrument keeps a channel of its own: none wrapped onto another's.
+        #expect(Set(assignments.compactMap { $0.first { $0.instrumentOrdinal == 0 }?.channel }).count == 15)
+        #expect(assignments[0].count == 1)
+        let midi = try MidiRenderer.render(score: score)
+        #expect(Self.channels(midi, track: 0)[0 ..< 2] == [assignments[0][0].channel, assignments[0][0].channel])
+        #expect(Self.program(of: assignments[0][0].channel, in: midi, track: 0) == 24)
+        let plan = LiveChannelPlan.build(score: score)
+        #expect(plan.strips.count == 15)
+        #expect(Set(plan.strips.map(\.liveChannel)).count == 15)
+        #expect(plan.dedupedOrdinal(partIndex: 0, timelineIndex: 1) == 0)
+        let switches = try #require(PreparedPlayback.staffChannelSwitches(score: score, plan: plan)[0])
+        #expect(Set(switches.map(\.channel)).count == 1)
+    }
+
     @Test("a score with no technique allocates the channels its instrument timeline always did")
     func scoreWithoutTechniquesIsUnchanged() throws {
         for name in ["instrument-change", "w5-capo-playback"] {
