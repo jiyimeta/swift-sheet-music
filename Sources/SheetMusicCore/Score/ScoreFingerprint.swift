@@ -50,6 +50,10 @@ import SheetMusicFoundation
 /// - Not covered on a chord diagram: `FretDiagram.fretOffset`, `showNut` and `orientation`. No edit writes them, and
 ///   a client before 5.0 kept them as preserved markup, so a version that hashed them would disagree with one that
 ///   could not see them. Its barres beyond the first ARE covered (tag 116): a client before 5.0 dropped them.
+/// - Not covered on a spanner: `lineProperties`, `chordTextLine` and `payloadMarkup` (5.0). No edit writes them, and
+///   a client before 5.0 dropped them, so hashing them would make the two disagree on every pedal with a hook. The
+///   guitar lines' `kind` IS covered, and moved in 5.0 from `other` to `chordTextLine`: a score holding one hashes
+///   differently across that boundary, as one holding an annotation does.
 /// - The walk's own shape: it emits a flat sequence of staff blocks with no part/staff-count delimiter, so two
 ///   scores whose staves are grouped into parts differently — but which total the same number of staves — hash
 ///   identically.
