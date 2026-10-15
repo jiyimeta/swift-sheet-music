@@ -633,7 +633,7 @@ extension LayoutBridge {
         case .gradualTempoChange:
             encodeGradualTempoChange(from: from, to: to, richText: richText, sp: sp, into: &out)
 
-        case .textLine, .palmMute, .letRing:
+        case .textLine, .palmMute, .letRing, .chordTextLine:
             let parts = SpannerGeometry.textLine(
                 from: from, to: to, text: text, sp: CGFloat(sp),
                 dashed: kind != .textLine,

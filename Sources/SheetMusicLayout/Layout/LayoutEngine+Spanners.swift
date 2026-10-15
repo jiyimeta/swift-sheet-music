@@ -66,6 +66,48 @@ extension LayoutEngine {
         /// Authored `<numbersOnly>` override, or `nil` to inherit
         /// `ScoreStyle.ottavaNumbersOnly`. Ottava only.
         let ottavaNumbersOnly: Bool?
+        /// The kind-specific line payload; `nil` = every property at the kind's default.
+        var lineProperties: Spanner.LineProperties?
+        /// Which guitar line. Meaningful only when `kind == .chordTextLine`.
+        var chordTextLine: Spanner.ChordTextLine?
+        /// Authored `<endText>`.
+        var endText: String?
+        /// The begin, continuation and end texts with the kind's defaults filled in (`Spanner.lineLabels`).
+        var lineLabels: Spanner.LineLabels?
+    }
+
+    /// The anchor of the begin side `sp`, found at `elementIndex` of a voice in `measureIdx`, `tick` into the measure,
+    /// ending where `endAnchor` resolved it.
+    private static func spannerAnchor(
+        _ sp: Spanner, address: StaffAddress, staffIdx: Int, voiceIndex: Int, elementIndex: Int,
+        measureIdx: Int, tick: Int, end: (measure: Int, tick: Int),
+    ) -> SpannerAnchor {
+        SpannerAnchor(
+            staffAddress: address,
+            voiceIndex: voiceIndex,
+            elementIndex: elementIndex,
+            kind: sp.kind,
+            rawType: sp.rawType,
+            startStaff: staffIdx,
+            startMeasure: measureIdx,
+            startTick: tick,
+            endStaff: staffIdx,
+            endMeasure: end.measure,
+            endTick: end.tick,
+            voltaEndings: sp.voltaEndings,
+            vibratoType: sp.vibrato?.type,
+            hairpinSubtype: sp.hairpin?.subtype,
+            ottavaSubtype: sp.ottava?.subtype,
+            beginText: sp.beginText,
+            continueText: sp.continueText,
+            trillType: sp.trill?.type,
+            placement: sp.placement,
+            ottavaNumbersOnly: sp.ottava?.numbersOnly,
+            lineProperties: sp.lineProperties,
+            chordTextLine: sp.chordTextLine,
+            endText: sp.endText,
+            lineLabels: sp.lineLabels,
+        )
     }
 
     /// Walk every staff / measure / voice and collect Spanner anchors.
@@ -109,27 +151,10 @@ extension LayoutEngine {
                                 measureDurations: measureDurations,
                                 division: score.division,
                             )
-                            out.append(SpannerAnchor(
-                                staffAddress: entry.address,
-                                voiceIndex: voiceIndex,
-                                elementIndex: elementIndex,
-                                kind: sp.kind,
-                                rawType: sp.rawType,
-                                startStaff: staffIdx,
-                                startMeasure: measureIdx,
-                                startTick: tick,
-                                endStaff: staffIdx,
-                                endMeasure: endMeasure,
-                                endTick: endTick,
-                                voltaEndings: sp.voltaEndings,
-                                vibratoType: sp.vibrato?.type,
-                                hairpinSubtype: sp.hairpin?.subtype,
-                                ottavaSubtype: sp.ottava?.subtype,
-                                beginText: sp.beginText,
-                                continueText: sp.continueText,
-                                trillType: sp.trill?.type,
-                                placement: sp.placement,
-                                ottavaNumbersOnly: sp.ottava?.numbersOnly,
+                            out.append(spannerAnchor(
+                                sp, address: entry.address, staffIdx: staffIdx, voiceIndex: voiceIndex,
+                                elementIndex: elementIndex, measureIdx: measureIdx, tick: tick,
+                                end: (endMeasure, endTick),
                             ))
                         }
                         switch el {
@@ -248,6 +273,9 @@ extension LayoutEngine {
                     continuesRight: false,
                     text: label,
                     anchor: anchor.selectionAnchor,
+                    richText: attachedLabelRuns(
+                        kind: kind, anchor: anchor, continuesLeft: false, metrics: metrics,
+                    ),
                 ))
             } else {
                 let startSystem = systems[startSys]
@@ -284,6 +312,9 @@ extension LayoutEngine {
                     continuesRight: true,
                     text: label,
                     anchor: anchor.selectionAnchor,
+                    richText: attachedLabelRuns(
+                        kind: kind, anchor: anchor, continuesLeft: false, metrics: metrics,
+                    ),
                 ))
                 if endSys > startSys + 1 {
                     for mid in (startSys + 1) ..< endSys {
@@ -315,6 +346,9 @@ extension LayoutEngine {
                             continuesRight: true,
                             text: label,
                             anchor: anchor.selectionAnchor,
+                            richText: attachedLabelRuns(
+                                kind: kind, anchor: anchor, continuesLeft: true, metrics: metrics,
+                            ),
                         ))
                     }
                 }
@@ -352,6 +386,9 @@ extension LayoutEngine {
                     continuesRight: false,
                     text: label,
                     anchor: anchor.selectionAnchor,
+                    richText: attachedLabelRuns(
+                        kind: kind, anchor: anchor, continuesLeft: true, metrics: metrics,
+                    ),
                 ))
             }
         }
@@ -547,6 +584,9 @@ extension LayoutEngine {
         if anchor.kind == .ottava {
             return (anchor.ottavaSubtype ?? .eightVA).semitones < 0
         }
+        // `PickScrape` is BELOW (`pickscrape.cpp:57, 173`); the other guitar lines are ABOVE (`harmonicmark.cpp:182`,
+        // `rasgueado.cpp:172`, `whammybar.cpp:171`).
+        if anchor.kind == .chordTextLine, anchor.chordTextLine == .pickScrape { return true }
         return isBelowStaff(kind: anchor.kind)
     }
 
@@ -861,7 +901,8 @@ extension LayoutEngine {
         case .palmMute: return .palmMute
         case .letRing: return .letRing
         case .gradualTempoChange: return .gradualTempoChange
-        case .glissando, .chordTextLine, .other: return .textLine
+        case .chordTextLine: return .chordTextLine(anchor.chordTextLine ?? .harmonicMark)
+        case .glissando, .other: return .textLine
         }
     }
 

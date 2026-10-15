@@ -45,7 +45,7 @@ struct SpannerSegmentPlumbingTests {
             element: Self.segment(y: 40), dy: 7,
         )
         guard case let .spannerSegment(
-            kind, from, to, continuesLeft, continuesRight, text, _, _,
+            kind, from, to, continuesLeft, continuesRight, text, _, _, _,
         ) = moved else {
             Issue.record("expected a spannerSegment, got \(moved)")
             return
@@ -72,12 +72,27 @@ struct SpannerSegmentPlumbingTests {
                 continuesLeft: false, continuesRight: false, text: "rit.", anchor: nil, richText: rich,
             )
             let moved = LayoutEngine.translate(element: segment, dy: 7)
-            guard case let .spannerSegment(_, _, _, _, _, _, _, carried) = moved else {
+            guard case let .spannerSegment(_, _, _, _, _, _, _, carried, _) = moved else {
                 Issue.record("expected a spannerSegment, got \(moved)")
                 return
             }
             #expect(carried == rich)
         }
+    }
+
+    @Test("translate carries a segment's line detail")
+    func translateKeepsTheLineDetail() {
+        let detail = LayoutLineDetail(lineVisible: false, lineType: .dashed, placedBelow: true)
+        let segment = LayoutElement.spannerSegment(
+            kind: .textLine, fromOrigin: CGPoint(x: 10, y: 40), toOrigin: CGPoint(x: 90, y: 40),
+            continuesLeft: false, continuesRight: false, text: "", anchor: nil, lineDetail: detail,
+        )
+        let moved = LayoutEngine.translate(element: segment, dy: 7)
+        guard case let .spannerSegment(_, _, _, _, _, _, _, _, carried) = moved else {
+            Issue.record("expected a spannerSegment, got \(moved)")
+            return
+        }
+        #expect(carried == detail)
     }
 
     @Test("elementYPoints reports the segment's full ink band")

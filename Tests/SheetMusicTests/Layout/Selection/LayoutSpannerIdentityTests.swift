@@ -74,7 +74,7 @@ struct LayoutSpannerIdentityTests {
         #expect(segments.map(\.elementID) == [expected, expected, expected])
         #expect(segments.map(\.elementItemID) == Array(repeating: .element(expected), count: 3))
         for (index, segment) in segments.enumerated() {
-            guard case let .spannerSegment(_, _, _, left, right, _, _, _) = segment else { continue }
+            guard case let .spannerSegment(_, _, _, left, right, _, _, _, _) = segment else { continue }
             #expect(left == (index > 0))
             #expect(right == (index < 2))
             #expect(LayoutEngine.translate(element: segment, dy: 17).elementID == expected)
@@ -254,7 +254,7 @@ extension LayoutSpannerIdentityTests {
         #expect(segments.count == (split ? 2 : 1))
         #expect(segments.map(\.elementID) == Array(repeating: expected, count: split ? 2 : 1))
         for (index, segment) in segments.enumerated() {
-            guard case let .spannerSegment(kind, _, _, left, right, _, slot, _) = segment else {
+            guard case let .spannerSegment(kind, _, _, left, right, _, slot, _, _) = segment else {
                 Issue.record("Expected a standalone slur segment")
                 continue
             }

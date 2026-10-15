@@ -51,7 +51,7 @@ enum SpannerRenderer {
                 context: &context, from: from, to: to,
                 text: text, dashed: false, metrics: metrics,
             )
-        case .palmMute, .letRing:
+        case .palmMute, .letRing, .chordTextLine:
             drawTextLine(
                 context: &context, from: from, to: to,
                 text: text, dashed: true, metrics: metrics,

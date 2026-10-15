@@ -174,6 +174,10 @@ and this project adheres to
 ### Changed
 
 - **`Spanner.Kind` gains `chordTextLine`** — a client switching over it exhaustively must handle it.
+- **`LayoutElement.spannerSegment` gains a trailing `lineDetail: LayoutLineDetail?`** (default `nil`): the segment's end
+  label and its resolved hooks, line visibility, line type, width and dash. Constructions are unchanged; a positional
+  pattern needs one more `_`. `LayoutElement.SpannerKind` gains `chordTextLine(Spanner.ChordTextLine)`, and a volta
+  segment now carries its authored text as `richText`.
 - **Breaking: `HarmonyRendering.runs(for:metrics:style:)` and `caretOffsets(for:metrics:style:)` require the
   chord-symbol case style** — a host that measured with MuseScore's defaults while the score lower-cased its minor
   chords placed the caret against "Cm7" over a drawn "cm7". Pass `LayoutDocument.chordSymbolCase` (new: the style the
@@ -295,6 +299,8 @@ and this project adheres to
   chords*, *Lowercase bass notes* and *All caps note names* (`ScoreStyle.chordSymbolCase`, read from `<Style>` and still
   saved verbatim). Only a lower or upper case is written back: MuseScore draws auto and capital alike and reads an
   absent tag as capital, so a `-1` in a source file is not kept.
+- **Text-line, palm-mute and let-ring labels that hold only a `<sym>` are no longer empty** — every line label is typeset
+  as runs, so a symbol is a glyph.
 - **A pedal's hooks survive MuseScore reopening the file with its texts.** MuseScore's pedal reader clears the begin and
   continue texts when it meets a `<beginHookType>` and resets the end text at `<lineVisible>`, so a pedal now writes
   those tags before its texts, as MuseScore does (`TWrite::write(const Pedal*)`).

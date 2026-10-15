@@ -28,7 +28,7 @@ extension LayoutElement {
             return anchor.map { .breath(anchor: $0) }
         case let .articulation(kind, _, _, anchor):
             return anchor.map { .articulation(anchor: $0, kind: kind.modelKind) }
-        case let .spannerSegment(kind, _, _, _, _, _, anchor, _):
+        case let .spannerSegment(kind, _, _, _, _, _, anchor, _, _):
             guard let anchor else { return nil }
             switch kind {
             case .hairpinOpen, .hairpinClose, .hairpinLine: return .spanner(anchor: anchor, kind: .hairpin)
@@ -36,7 +36,7 @@ extension LayoutElement {
             case .ottava: return .spanner(anchor: anchor, kind: .ottava)
             case .volta: return .spanner(anchor: anchor, kind: .volta)
             case .slur: return .slur(.voice(anchor))
-            case .vibrato, .trill, .textLine, .palmMute, .letRing, .gradualTempoChange: return nil
+            case .vibrato, .trill, .textLine, .palmMute, .letRing, .gradualTempoChange, .chordTextLine: return nil
             }
         default:
             return nil

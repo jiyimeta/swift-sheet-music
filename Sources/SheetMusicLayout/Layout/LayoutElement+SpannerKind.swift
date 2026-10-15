@@ -36,5 +36,8 @@ extension LayoutElement {
         /// A gradual tempo change (rit., accel., …): its label in the tempo change style and a dashed line, above the
         /// staff.
         case gradualTempoChange
+        /// A guitar technique line (harmonic mark, rasgueado, pick scrape, whammy bar): its default word over a dashed
+        /// line.
+        case chordTextLine(Spanner.ChordTextLine)
     }
 }

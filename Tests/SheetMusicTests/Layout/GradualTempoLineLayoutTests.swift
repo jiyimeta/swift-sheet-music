@@ -26,7 +26,7 @@ struct GradualTempoLineLayoutTests {
 
     private static func segments(_ document: LayoutDocument) -> [Segment] {
         document.systems.flatMap(\.spanners).compactMap { element in
-            guard case let .spannerSegment(.gradualTempoChange, from, _, continuesLeft, _, _, _, rich) = element
+            guard case let .spannerSegment(.gradualTempoChange, from, _, continuesLeft, _, _, _, rich, _) = element
             else { return nil }
             return Segment(from: from, continuesLeft: continuesLeft, rich: rich)
         }
@@ -151,19 +151,21 @@ struct GradualTempoLineLayoutTests {
         let score = TempoMapFixtures.score(measures: 3, ramps: [(measure: 0, spanner: line)])
         let document = LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 600)
         return document.systems.flatMap(\.spanners).compactMap { element in
-            guard case let .spannerSegment(segmentKind, from, to, _, _, text, _, rich) = element else { return nil }
+            guard case let .spannerSegment(segmentKind, from, to, _, _, text, _, rich, _) = element else { return nil }
             return Line(kind: segmentKind, from: from, to: to, rich: rich, text: text)
         }
     }
 
-    @Test("a .textLine and an .other spanner still lay out as the plain text line, with no typeset label")
+    /// Since W6 Task 7 every text-line label is typeset as runs (`LayoutEngine.lineLabelRuns`), so both carry their
+    /// label as rich text, and the two still share one path.
+    @Test("a .textLine and an .other spanner lay out as the same text line, their label typeset")
     func plainTextLinesUnchanged() throws {
         let textLine = try #require(Self.lines(of: .textLine, rawType: "TextLine").first)
         let other = try #require(Self.lines(of: .other, rawType: "Foo").first)
         #expect(textLine.kind == .textLine)
         #expect(other.kind == .textLine)
-        #expect(textLine.rich == nil)
-        #expect(other.rich == nil)
+        #expect(textLine.rich != nil)
+        #expect(textLine.rich == other.rich)
         #expect(textLine.text == "dim.")
         #expect(other.text == "dim.")
         // Same path, same geometry: the kind alone does not move a plain line.

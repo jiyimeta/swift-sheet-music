@@ -257,6 +257,10 @@ extension LayoutRichText {
         /// layout picks the origin that puts its first baseline on those glyphs' baseline
         /// (`LayoutEngine.dynamicElement`).
         case dynamic
+        /// A line spanner's begin, continue or end label, hung by its top-left; the line geometry hands out the origin
+        /// that puts the label's baseline or center where MuseScore's alignment for the kind wants it, as
+        /// `gradualTempoChangeLabel` does.
+        case lineLabel
 
         /// The kind a marker of `kind` is placed as.
         package static func forMarker(_ kind: Marker.Kind) -> ElementKind {
@@ -281,7 +285,7 @@ extension LayoutRichText {
         case .lyric: CGPoint(x: 0.5, y: 0.5)
         case .marker: CGPoint(x: 0, y: 1)
         case .rightMarker, .jump: CGPoint(x: 1, y: 1)
-        case .tempo, .gradualTempoChangeLabel: CGPoint(x: 0, y: 0)
+        case .tempo, .gradualTempoChangeLabel, .lineLabel: CGPoint(x: 0, y: 0)
         case .dynamic: CGPoint(x: 0, y: 0.5)
         }
     }

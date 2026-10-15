@@ -168,7 +168,7 @@ struct TempoRichTextLayoutTests {
         let document = Self.layout(score)
         let tempo = try #require(Self.tempos(document).first)
         let label = document.systems.flatMap(\.spanners).compactMap { element -> CGPoint? in
-            guard case let .spannerSegment(.gradualTempoChange, from, _, _, _, _, _, _) = element else { return nil }
+            guard case let .spannerSegment(.gradualTempoChange, from, _, _, _, _, _, _, _) = element else { return nil }
             return from
         }
         let line = try #require(label.first)

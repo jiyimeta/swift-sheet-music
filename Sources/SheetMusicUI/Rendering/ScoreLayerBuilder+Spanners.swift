@@ -26,7 +26,7 @@ extension ScoreLayerBuilder {
                 kind: kind, from: from, to: to, continuesLeft: continuesLeft, continuesRight: continuesRight,
                 metrics: metrics, height: height, into: parent,
             )
-        case .textLine, .palmMute, .letRing, .vibrato, .trill, .gradualTempoChange:
+        case .textLine, .palmMute, .letRing, .chordTextLine, .vibrato, .trill, .gradualTempoChange:
             drawLineSpanner(
                 kind: kind, from: from, to: to, continuesLeft: continuesLeft, text: text, richText: richText,
                 metrics: metrics, height: height, into: parent,
@@ -78,7 +78,7 @@ extension ScoreLayerBuilder {
                 numbersOnly: numbersOnly,
                 metrics: metrics, height: height, into: parent,
             )
-        case .textLine, .palmMute, .letRing, .vibrato, .trill, .gradualTempoChange:
+        case .textLine, .palmMute, .letRing, .chordTextLine, .vibrato, .trill, .gradualTempoChange:
             break // `drawLineSpanner`
         }
     }
@@ -100,7 +100,7 @@ extension ScoreLayerBuilder {
                 from: from, to: to, text: text, dashed: false,
                 metrics: metrics, height: height, into: parent,
             )
-        case .palmMute, .letRing:
+        case .palmMute, .letRing, .chordTextLine:
             drawTextLine(
                 from: from, to: to, text: text, dashed: true,
                 metrics: metrics, height: height, into: parent,

@@ -372,6 +372,7 @@ public enum LayoutElement: Sendable, Equatable {
         text: String,
         anchor: VoiceElementID?,
         richText: LayoutRichText? = nil,
+        lineDetail: LayoutLineDetail? = nil,
     )
     case tieArc(
         fromOrigin: CGPoint,

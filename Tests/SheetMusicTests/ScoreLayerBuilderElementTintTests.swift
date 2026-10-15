@@ -275,7 +275,7 @@
                 #expect(context.items.count == 2)
                 #expect(parent.sublayers?.count == 2)
                 #expect(layers[0] === parent.sublayers?.last)
-                if case .spannerSegment(.slur, _, _, _, _, _, _, _) = sample.element {
+                if case .spannerSegment(.slur, _, _, _, _, _, _, _, _) = sample.element {
                     #expect(layers[0].fillColor == nil && layers[0].strokeColor != nil)
                 } else {
                     #expect(layers[0].fillColor != nil && layers[0].strokeColor == nil)
@@ -293,7 +293,7 @@
                 switch sample.element {
                 case let .tieArc(from, to, above, _):
                     element = .tieArc(fromOrigin: from, toOrigin: to, above: above)
-                case let .spannerSegment(kind, from, to, left, right, text, _, _):
+                case let .spannerSegment(kind, from, to, left, right, text, _, _, _):
                     element = .spannerSegment(
                         kind: kind, fromOrigin: from, toOrigin: to, continuesLeft: left,
                         continuesRight: right, text: text, anchor: nil,

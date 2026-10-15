@@ -253,7 +253,7 @@ struct ScoreHitTesterRemovalTests {
                 sp: document.metrics.sp,
             )
             controls = [c.p0, c.p1, c.p2, c.p3]
-        case let .spannerSegment(.slur, from, to, _, _, _, _, _):
+        case let .spannerSegment(.slur, from, to, _, _, _, _, _, _):
             controls = [from, SpannerGeometry.slurControlPoint(from: from, to: to, sp: document.metrics.sp), to]
         default: throw TestFailure.missingArcPoint
         }

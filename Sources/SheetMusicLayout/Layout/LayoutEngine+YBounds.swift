@@ -95,7 +95,7 @@ extension LayoutEngine {
             // bars stack a fraction of sp away and are accounted for
             // by the generic glyphPad in elementYBounds.
             return [from.y, to.y]
-        case let .spannerSegment(kind, from, to, _, _, _, _, richText):
+        case let .spannerSegment(kind, from, to, _, _, _, _, richText, _):
             return spannerSegmentYPoints(
                 kind: kind, from: from, to: to, richText: richText, sp: sp,
             )

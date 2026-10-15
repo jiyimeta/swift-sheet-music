@@ -58,7 +58,7 @@ extension LayoutEngine {
     ) -> Bool {
         switch kind {
         case .hairpinOpen, .hairpinClose, .hairpinLine,
-             .pedal, .ottava, .textLine, .palmMute, .letRing, .gradualTempoChange:
+             .pedal, .ottava, .textLine, .palmMute, .letRing, .gradualTempoChange, .chordTextLine:
             true
         case .slur, .vibrato, .trill, .volta:
             false
@@ -169,6 +169,7 @@ extension LayoutEngine {
                     text: layoutLabel(anchor: anchor),
                     anchor: anchor.selectionAnchor,
                     richText: lineLabelRuns(kind: kind, anchor: anchor, clip: clip, metrics: metrics),
+                    lineDetail: lineDetail(kind: kind, anchor: anchor, clip: clip, metrics: metrics),
                 ))
         }
     }
@@ -184,17 +185,6 @@ extension LayoutEngine {
     ) -> CGFloat {
         if kind == .gradualTempoChange, !belowStaff { return -metrics.sp * 2 }
         return defaultBandOffsetY(belowStaff: belowStaff, lineGeometry: lineGeometry, metrics: metrics)
-    }
-
-    /// The typeset label of a kind that draws formatted text — a gradual tempo change's `<beginText>`, or on a later
-    /// system its `<continueText>`; `nil` for every other kind, whose `text` is the label.
-    static func lineLabelRuns(
-        kind: LayoutElement.SpannerKind, anchor: SpannerAnchor, clip: SystemClip, metrics: StaffMetrics,
-    ) -> LayoutRichText? {
-        guard kind == .gradualTempoChange else { return nil }
-        return LayoutRichText.gradualTempoChangeLabel(
-            clip.continuesLeft ? anchor.continueText : anchor.beginText, metrics: metrics,
-        )
     }
 
     /// Line geometry for `staffIndex`, falling back to five lines when
@@ -281,7 +271,7 @@ extension LayoutEngine {
                 for el in els {
                     guard case let .spannerSegment(
                         kind, from, to, continuesLeft, continuesRight,
-                        text, anchor, richText,
+                        text, anchor, richText, lineDetail,
                     ) = el else {
                         kept.append(el)
                         continue
@@ -299,6 +289,7 @@ extension LayoutEngine {
                         text: text,
                         anchor: anchor,
                         richText: richText,
+                        lineDetail: lineDetail,
                     ))
                 }
                 untranslated[idx].perStaffElements[staffIdx] = kept

@@ -312,7 +312,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             to,
             cl,
             cr,
-            text, _, richText,
+            text, _, richText, _,
         ):
             SpannerRenderer.draw(
                 context: &context, kind: kind,

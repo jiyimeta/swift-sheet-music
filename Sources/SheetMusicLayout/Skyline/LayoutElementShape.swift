@@ -67,14 +67,14 @@ public enum LayoutElementShape {
             case .tempo: .tempo
             case .lyrics: .lyrics
             }
-        case let .spannerSegment(spannerKind, _, _, _, _, _, _, _):
+        case let .spannerSegment(spannerKind, _, _, _, _, _, _, _, _):
             switch spannerKind {
             case .slur, .vibrato, .trill: nil
             case .volta: .volta
             case .hairpinOpen, .hairpinClose, .hairpinLine: .hairpin
             case .pedal: .pedal
             case .ottava: .ottava
-            case .textLine, .palmMute, .letRing, .gradualTempoChange: .textLine
+            case .textLine, .palmMute, .letRing, .gradualTempoChange, .chordTextLine: .textLine
             }
         }
     }
