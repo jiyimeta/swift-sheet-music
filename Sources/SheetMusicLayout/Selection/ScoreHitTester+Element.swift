@@ -157,8 +157,15 @@ extension ScoreHitTester {
         switch element {
         case let .barLine(subtype, origin, halfHeight, _, _):
             return barLineInkRects(subtype: subtype, origin: origin, halfHeight: halfHeight)
-        case let .spannerSegment(.pedal, from, to, _, _, _, _, _, _):
-            return PedalInkGeometry.rects(from: from, to: to, metrics: document.metrics)
+        case let .spannerSegment(kind, from, to, _, _, _, _, richText, detail):
+            if let parts = SpannerGeometry.textLineSegmentInkParts(
+                kind: kind, from: from, to: to, label: richText, detail: detail, sp: document.metrics.sp,
+            ) {
+                return parts
+            }
+            return LayoutElementShape.shape(
+                for: element, id: 0, xOffset: 0, metrics: document.metrics,
+            )?.rects.map(\.rect) ?? []
         case let .keySignature(sharps, flats, clef, naturals, origin, _):
             return keySignatureInkRects(sharps: sharps, flats: flats, clef: clef, naturals: naturals, origin: origin)
         case let .timeSignature(numerator, denominator, symbol, origin, _):

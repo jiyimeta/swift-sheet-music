@@ -312,13 +312,13 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             to,
             cl,
             cr,
-            text, _, richText, _,
+            text, _, richText, lineDetail,
         ):
             SpannerRenderer.draw(
                 context: &context, kind: kind,
                 from: shift(from), to: shift(to),
                 continuesLeft: cl, continuesRight: cr,
-                text: text, richText: richText, metrics: metrics,
+                text: text, richText: richText, lineDetail: lineDetail, metrics: metrics,
             )
         case let .tieArc(from, to, above, _):
             TieRenderer.draw(

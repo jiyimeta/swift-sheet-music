@@ -202,11 +202,16 @@ extension LayoutElementShape {
             return [box]
         case let .lyricsMelisma(from, to, _), let .lyricHyphen(from, to, _):
             return [spanRect(from, to, thickness: sp * 0.3)]
-        case let .spannerSegment(.pedal, from, to, _, _, _, _, _, _):
-            return PedalInkGeometry.rects(from: from, to: to, metrics: metrics)
-        case let .spannerSegment(.gradualTempoChange, from, to, _, _, _, _, richText, _):
-            return [SpannerGeometry.gradualTempoChangeInk(from: from, to: to, label: richText, sp: sp)]
-        case let .spannerSegment(spannerKind, from, to, _, _, _, _, _, _):
+        case let .spannerSegment(.gradualTempoChange, from, to, _, _, _, _, richText, detail):
+            return [SpannerGeometry.gradualTempoChangeInk(
+                from: from, to: to, label: richText, endLabel: detail?.endRichText, sp: sp,
+            )]
+        case let .spannerSegment(spannerKind, from, to, _, _, _, _, richText, detail):
+            if let parts = SpannerGeometry.textLineSegmentInkParts(
+                kind: spannerKind, from: from, to: to, label: richText, detail: detail, sp: sp,
+            ) {
+                return parts
+            }
             return [spannerRect(
                 kind: spannerKind, from: from, to: to, sp: sp,
             )]

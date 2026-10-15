@@ -143,34 +143,68 @@
                 }
             }
 
-            @Test("Pedal ink reaches above the skyline strip and beyond its endpoint")
+            @Test("Pedal ink reaches above the skyline strip and out to its endpoint")
             func pedalInkRegression() throws {
                 guard #available(macOS 15.0, *) else { return }
                 let element = ElementHitFixtures.spanner(.pedal)
                 let tester = ScoreHitTester(document: ElementHitFixtures.document([element]))
                 let target = ScoreHitTarget.spanner(anchor: ElementHitFixtures.anchor, kind: .pedal)
-                // The original failure is actual Ped. ink, 3.44 points above the skyline strip.
-                let point = CGPoint(x: 150.38, y: 119.06)
+                // The rect selection hits is the layout's own ink for this segment (label and line), moved into the
+                // document's frame by the system and measure origins (+50, +50): derived, not retyped.
+                guard case let .spannerSegment(_, from, to, _, _, _, _, label, detail) = element else {
+                    Issue.record("expected a spannerSegment")
+                    return
+                }
+                let ink = try #require(SpannerGeometry.textLineSegmentInk(
+                    kind: .pedal, from: from, to: to, label: label, detail: detail, sp: ElementHitFixtures.metrics.sp,
+                ))
+                let rect = try #require(tester.elementHitRect(for: target))
+                #expect(abs(rect.minX - (ink.minX + 50)) < 0.001)
+                #expect(abs(rect.maxX - (ink.maxX + 50)) < 0.001)
+                #expect(abs(rect.minY - (ink.minY + 50)) < 0.001)
+                #expect(abs(rect.maxY - (ink.maxY + 50)) < 0.001)
+                // The Ped label's ink sits above the line, the line runs to the endpoint (180 + 50).
+                #expect(rect.minY < to.y + 50 - ElementHitFixtures.metrics.sp)
+                #expect(rect.maxX >= to.x + 50 - 0.001)
+                // Painted label ink, wherever the renderer put it, hits.
+                let parent = CALayer()
+                var context = ScoreLayerBuilder.BuildContext()
+                ScoreLayerBuilder.drawElement(
+                    element, base: .zero, metrics: ElementHitFixtures.metrics,
+                    height: 200, context: &context, into: parent,
+                )
+                let labelLayer = try #require((parent.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
+                    .first { $0.strokeColor == nil && $0.fillColor != nil })
+                let painted = try inkPoint(labelLayer)
+                let point = CGPoint(x: painted.x + 50, y: 200 - painted.y + 50)
                 #expect(tester.hitTest(at: point) == target)
                 #expect(tester.itemID(at: point) == .element(.spanner(
                     anchor: ElementHitFixtures.anchor, kind: .pedal,
                 )))
-                let rect = try #require(tester.elementHitRect(for: target))
-                // Bravura at 40 pt: Ped. bbox (0,-0.32,40.76,22.52); release bbox (0,0,18,18).
-                // Leading anchors (130,130) and (230,130), baseline offset 0: union below.
-                #expect(abs(rect.minX - 130) < 0.001)
-                #expect(abs(rect.maxX - 248) < 0.001)
-                #expect(abs(rect.minY - 107.8) < 0.001)
-                #expect(abs(rect.maxY - 130.32) < 0.001)
-                #expect(tester.hitTest(at: CGPoint(x: 200, y: 125)) == nil)
+                // Nothing beyond the ink hits: past the line's end, and above the label — each 1 pt past the element
+                // hit padding (`ScoreHitTester.elementHitTolerance`, 0.5 sp), which a click is allowed to land in.
+                let clear = ElementHitFixtures.metrics.sp * 0.5 + 1
+                #expect(tester.hitTest(at: CGPoint(x: rect.maxX + clear, y: to.y + 50)) == nil)
+                #expect(tester.hitTest(at: CGPoint(x: rect.minX + 2, y: rect.minY - clear)) == nil)
+                // The corner above the line and right of the label is inside the union but no part of the ink:
+                // MuseScore's segment shape is its parts (`tlayout.cpp:6007-6026`), never their union.
+                let parts = try #require(SpannerGeometry.textLineSegmentInkParts(
+                    kind: .pedal, from: from, to: to, label: label, detail: detail, sp: ElementHitFixtures.metrics.sp,
+                ))
+                let labelPart = try #require(parts.first)
+                let corner = CGPoint(x: (labelPart.maxX + ink.maxX) / 2 + 50, y: ink.minY + 1 + 50)
+                #expect(rect.contains(corner))
+                #expect(parts.filter { $0.offsetBy(dx: 50, dy: 50).contains(corner) }.isEmpty)
+                #expect(tester.hitTest(at: corner) == nil)
             }
 
-            @Test("Both pedal glyphs' sampled painted interiors hit at each staff size", arguments: [28, 40, 56])
+            @Test("The pedal label's and line's painted interiors hit at each staff size", arguments: [28, 40, 56])
             func pedalPaintedInteriors(staffSize: Int) throws {
                 guard #available(macOS 15.0, *) else { return }
                 let element = ElementHitFixtures.spanner(.pedal)
                 let metrics = StaffMetrics(staffSize: CGFloat(staffSize))
-                try checkPaintedInteriors(element, metrics: metrics, expectedLayers: 2)
+                // The label glyph is filled and the line is stroked: two layers, each sampled where it paints.
+                try checkPaintedInteriors(element, metrics: metrics, expectedLayers: 2, allowStroked: true)
             }
 
             @Test("Every signature glyph's sampled ink round-trips", arguments: ElementHitFixtures.signatures)
@@ -185,6 +219,7 @@
             @available(macOS 15.0, *)
             private func checkPaintedInteriors(
                 _ element: LayoutElement, metrics: StaffMetrics, expectedLayers: Int? = nil,
+                allowStroked: Bool = false,
             ) throws {
                 let parent = CALayer()
                 var context = ScoreLayerBuilder.BuildContext()
@@ -200,8 +235,12 @@
                 let target = ScoreHitTarget(elementID: id)
                 let highlight = try #require(tester.elementHitRect(for: target))
                 for layer in layers {
-                    try #require(layer.fillColor != nil)
-                    let path = try #require(layer.path)
+                    try #require(allowStroked || layer.fillColor != nil)
+                    // A stroked layer paints the outline of its stroke, so that is the area sampled.
+                    let drawn = try #require(layer.path)
+                    let path = layer.fillColor != nil ? drawn : drawn.copy(
+                        strokingWithWidth: layer.lineWidth, lineCap: .butt, lineJoin: .miter, miterLimit: 10,
+                    )
                     let box = path.boundingBoxOfPath
                     var sampled = 0
                     for row in 0 ..< 17 {

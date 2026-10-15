@@ -53,10 +53,14 @@ extension LayoutEngine {
         kind: LayoutElement.SpannerKind, anchor: SpannerAnchor, clip: SystemClip, metrics: StaffMetrics,
     ) -> LayoutLineDetail? {
         let end = clip.continuesRight ? nil : anchor.lineLabels?.end
-        return lineDetailDefaults(
+        var detail = lineDetailDefaults(
             kind: kind, lineProperties: anchor.lineProperties, endText: end,
             placedBelow: isBelowStaff(anchor: anchor), metrics: metrics,
         )
+        // A hook belongs to the segment that holds its end of the line (`isSingleOrBegin` / `isSingleOrEnd`).
+        if clip.continuesLeft { detail?.beginHook = Spanner.LineHookType.none }
+        if clip.continuesRight { detail?.endHook = Spanner.LineHookType.none }
+        return detail
     }
 
     /// `lineDetail` without a `Score`: the hooks, visibility, line type, width and dash of `lineProperties` over the
@@ -65,59 +69,22 @@ extension LayoutEngine {
         kind: LayoutElement.SpannerKind, lineProperties: Spanner.LineProperties?, endText: String?,
         placedBelow: Bool, metrics: StaffMetrics,
     ) -> LayoutLineDetail? {
-        guard let base = baseStyle(kind: kind) else { return nil }
+        guard let base = TextLineBaseStyle.style(for: kind) else { return nil }
         let props = lineProperties ?? Spanner.LineProperties()
-        let width = props.lineWidth ?? base.widthSp
+        let width = props.lineWidth ?? base.lineWidthSp
         return LayoutLineDetail(
             endRichText: typesetLineLabel(endText, metrics: metrics),
             beginHook: props.beginHook ?? .none,
-            endHook: props.endHook ?? base.endHook,
+            endHook: props.endHook ?? base.defaultEndHook,
             beginHookHeightSp: props.beginHookHeight ?? base.hookHeightSp,
             endHookHeightSp: props.endHookHeight ?? base.hookHeightSp,
             lineVisible: props.lineVisible ?? true,
             lineType: props.lineType ?? base.lineType,
             lineWidthSp: width,
-            dashSp: (props.dashLength ?? base.dash) * width,
-            gapSp: (props.dashGap ?? base.gap) * width,
+            dashSp: (props.dashLength ?? base.dashLineWidths) * width,
+            gapSp: (props.dashGap ?? base.gapLineWidths) * width,
             placedBelow: placedBelow,
-            labelAlignment: base.alignment,
+            labelAlignment: base.labelAlignment,
         )
-    }
-
-    /// The per-kind defaults of `TextLineBaseStyle` (Decisions table; Task 8 moves this table).
-    private struct LineBaseStyle {
-        var widthSp: Double
-        var dash: Double
-        var gap: Double
-        var hookHeightSp: Double
-        var endHook: Spanner.LineHookType
-        var lineType: Spanner.LineType
-        var alignment: LabelAlignment
-    }
-
-    private static func baseStyle(kind: LayoutElement.SpannerKind) -> LineBaseStyle? {
-        switch kind {
-        case .pedal: // styledef.cpp:313-323
-            LineBaseStyle(
-                widthSp: 0.11, dash: 4, gap: 4, hookHeightSp: 1.2, endHook: .none, lineType: .solid,
-                alignment: .baseline,
-            )
-        case .hairpinLine: // styledef.cpp:288, 774-777; `TextLineBase` ctor
-            LineBaseStyle(
-                widthSp: 0.12, dash: 6, gap: 9, hookHeightSp: 1.9, endHook: .none, lineType: .dashed,
-                alignment: .baseline,
-            )
-        case .textLine:
-            LineBaseStyle(
-                widthSp: 0.15, dash: 4, gap: 4, hookHeightSp: 1.5, endHook: .none, lineType: .solid,
-                alignment: .center,
-            )
-        case .palmMute, .letRing, .chordTextLine: // styledef.cpp:1887-1890, 1913-1916, 1939-1942
-            LineBaseStyle(
-                widthSp: 0.11, dash: 5, gap: 5, hookHeightSp: 0.6, endHook: .hook90T, lineType: .dashed,
-                alignment: .center,
-            )
-        case .slur, .volta, .hairpinOpen, .hairpinClose, .ottava, .vibrato, .trill, .gradualTempoChange: nil
-        }
     }
 }

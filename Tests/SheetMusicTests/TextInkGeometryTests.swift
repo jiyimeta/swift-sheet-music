@@ -37,11 +37,11 @@
             try expectHighlightMatchesPaths(element)
         }
 
-        @Test func pedalSkylineContainsBothRenderedGlyphs() throws {
+        @Test func pedalSkylineContainsEveryRenderedLayer() throws {
             guard #available(macOS 15.0, *) else { return }
             let element = ElementHitFixtures.spanner(.pedal)
             let shape = try #require(LayoutElementShape.shape(for: element, id: 0, xOffset: 0, metrics: metrics))
-            #expect(shape.rects.count == 2)
+            #expect(!shape.rects.isEmpty)
             let parent = CALayer()
             var context = ScoreLayerBuilder.BuildContext()
             ScoreLayerBuilder.drawElement(
@@ -53,9 +53,17 @@
                 into: parent,
             )
             let layers = (parent.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
+            // The label's filled glyph and the stroked line: both must be drawn, and both must sit in the skyline.
             #expect(layers.count == 2)
+            #expect(layers.contains { $0.fillColor != nil })
+            #expect(layers.contains { $0.strokeColor != nil && $0.fillColor == nil })
             for layer in layers {
-                let bounds = try #require(layer.path).boundingBoxOfPath
+                let path = try #require(layer.path)
+                // A stroke paints its outline (flat caps add nothing past the ends), not the bare path.
+                let painted = layer.fillColor != nil ? path : path.copy(
+                    strokingWithWidth: layer.lineWidth, lineCap: .butt, lineJoin: .miter, miterLimit: 10,
+                )
+                let bounds = painted.boundingBoxOfPath
                 let drawn = CGRect(x: bounds.minX, y: 200 - bounds.maxY, width: bounds.width, height: bounds.height)
                 #expect(shape.rects.contains { $0.rect.insetBy(dx: -0.001, dy: -0.001).contains(drawn) })
             }

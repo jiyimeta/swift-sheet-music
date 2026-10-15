@@ -13,6 +13,7 @@ enum SpannerRenderer {
         continuesRight: Bool,
         text: String,
         richText: LayoutRichText? = nil,
+        lineDetail: LayoutLineDetail? = nil,
         metrics: StaffMetrics,
     ) {
         switch kind {
@@ -36,25 +37,16 @@ enum SpannerRenderer {
                 context: &context, from: from, to: to,
                 crescendo: crescendo, metrics: metrics,
             )
-        case .pedal:
-            drawPedal(
-                context: &context, from: from, to: to, metrics: metrics,
+        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine:
+            drawTextLineBase(
+                context: &context, kind: kind, from: from, to: to,
+                richText: richText, lineDetail: lineDetail, metrics: metrics,
             )
         case let .ottava(subtype, numbersOnly):
             drawOttava(
                 context: &context, from: from, to: to,
                 subtype: subtype, numbersOnly: numbersOnly,
                 metrics: metrics,
-            )
-        case .textLine:
-            drawTextLine(
-                context: &context, from: from, to: to,
-                text: text, dashed: false, metrics: metrics,
-            )
-        case .palmMute, .letRing, .chordTextLine:
-            drawTextLine(
-                context: &context, from: from, to: to,
-                text: text, dashed: true, metrics: metrics,
             )
         case let .vibrato(type):
             drawVibrato(
@@ -197,29 +189,6 @@ enum SpannerRenderer {
         )
     }
 
-    private static func drawPedal(
-        context: inout GraphicsContext, from: CGPoint, to: CGPoint,
-        metrics: StaffMetrics,
-    ) {
-        // MuseScore renders pedal marks as SMuFL glyphs from the
-        // music font: `keyboardPedalPed` (U+E650) for the "Ped."
-        // sigil and `keyboardPedalUp` (U+E655) for the closing
-        // "*" / asterisk.
-        let parts = SpannerGeometry.pedal(from: from, to: to)
-        // swiftlint:disable:next force_unwrapping
-        let down = Character(UnicodeScalar(parts.downCodepoint)!)
-        // swiftlint:disable:next force_unwrapping
-        let up = Character(UnicodeScalar(parts.upCodepoint)!)
-        context.drawGlyph(
-            down, at: parts.downOrigin,
-            size: metrics.glyphFontSize, anchor: .leading,
-        )
-        context.drawGlyph(
-            up, at: parts.upOrigin,
-            size: metrics.glyphFontSize, anchor: .leading,
-        )
-    }
-
     private static func drawOttava(
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
         subtype: Spanner.OttavaPayload.Subtype,
@@ -271,32 +240,5 @@ enum SpannerRenderer {
         for origin in run.origins {
             context.drawGlyph(ch, at: origin, size: metrics.glyphFontSize, anchor: .leading)
         }
-    }
-
-    private static func drawTextLine(
-        context: inout GraphicsContext, from: CGPoint, to: CGPoint,
-        text: String, dashed: Bool, metrics: StaffMetrics,
-    ) {
-        let parts = SpannerGeometry.textLine(
-            from: from, to: to, text: text, sp: metrics.sp,
-            dashed: dashed,
-        )
-        if !parts.label.isEmpty {
-            context.drawExpressionText(
-                parts.label, at: parts.labelOrigin,
-                size: metrics.sp * parts.labelSizeSp, italic: true,
-            )
-        }
-        guard parts.lineEnd.x > parts.lineStart.x else { return }
-        var p = Path()
-        p.move(to: parts.lineStart)
-        p.addLine(to: parts.lineEnd)
-        context.stroke(
-            p, with: .color(.primary),
-            style: StrokeStyle(
-                lineWidth: metrics.sp * parts.lineThicknessSp,
-                dash: parts.dashPattern,
-            ),
-        )
     }
 }

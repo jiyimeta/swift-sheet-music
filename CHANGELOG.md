@@ -173,6 +173,11 @@ and this project adheres to
 
 ### Changed
 
+- **Pedals, text lines, palm mutes, let rings and the guitar lines lay out from one text-line geometry** — begin label,
+  line, hooks and end label as MuseScore's `layoutTextLineBaseSegment` (`SpannerGeometry.textLineBase`,
+  `TextLineBaseParts`, `TextLineBaseStyle`). A pedal is its label and a line (or its hooks, or its ✱), no longer a 'Ped'
+  glyph and a ✱ glyph at the two ends. Selection and the skyline see the segment as its parts — each label and each
+  piece of line or hook — as MuseScore's segment shape does, so the empty corner above a long line is not part of it.
 - **`Spanner.Kind` gains `chordTextLine`** — a client switching over it exhaustively must handle it.
 - **`LayoutElement.spannerSegment` gains a trailing `lineDetail: LayoutLineDetail?`** (default `nil`): the segment's end
   label and its resolved hooks, line visibility, line type, width and dash. Constructions are unchanged; a positional
@@ -299,6 +304,8 @@ and this project adheres to
   chords*, *Lowercase bass notes* and *All caps note names* (`ScoreStyle.chordSymbolCase`, read from `<Style>` and still
   saved verbatim). Only a lower or upper case is written back: MuseScore draws auto and capital alike and reads an
   absent tag as capital, so a `-1` in a source file is not kept.
+- **The Apple renderers draw a text line's label in MuseScore's plain Edwin**, not in an italic system font, and draw its
+  continue and end text and its hooks (the layer renderer and the Canvas agree).
 - **Text-line, palm-mute and let-ring labels that hold only a `<sym>` are no longer empty** — every line label is typeset
   as runs, so a symbol is a glyph.
 - **A pedal's hooks survive MuseScore reopening the file with its texts.** MuseScore's pedal reader clears the begin and

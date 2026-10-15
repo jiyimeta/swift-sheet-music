@@ -53,7 +53,7 @@
 
         /// The red channel of the rendered Canvas, row by row from the top, on white.
         @available(macOS 15.0, *)
-        private static func renderRows(_ element: LayoutElement) throws -> [[UInt8]] {
+        static func renderRows(_ element: LayoutElement) throws -> [[UInt8]] {
             let metrics = Self.metrics
             let view = Canvas { context, _ in
                 ScoreCanvasDrawing.drawElement(element, base: .zero, metrics: metrics, into: &context)

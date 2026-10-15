@@ -172,9 +172,17 @@ enum ElementHitFixtures {
     static func spanner(
         _ kind: LayoutElement.SpannerKind, anchor: VoiceElementID? = ElementHitFixtures.anchor,
     ) -> LayoutElement {
-        .spannerSegment(
+        // A pedal is laid out with its "Ped" label and a resolved line detail, as `LayoutEngine` emits it.
+        let pedal = kind == .pedal
+        return .spannerSegment(
             kind: kind, fromOrigin: origin, toOrigin: CGPoint(x: 180, y: 80),
             continuesLeft: false, continuesRight: false, text: "", anchor: anchor,
+            richText: pedal ? navigationText("<sym>keyboardPedalPed</sym>", style: .staffText) : nil,
+            lineDetail: pedal
+                ? LayoutEngine.lineDetailDefaults(
+                    kind: kind, lineProperties: nil, endText: nil, placedBelow: true, metrics: metrics,
+                )
+                : nil,
         )
     }
 
