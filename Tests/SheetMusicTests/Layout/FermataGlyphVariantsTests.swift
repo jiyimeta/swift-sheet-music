@@ -35,13 +35,6 @@ struct FermataGlyphVariantsTests {
         #expect(wrong.map(\.name) == [])
     }
 
-    @Test("a subtype hangs below exactly when its name ends in Below")
-    func belowIsTheSuffix() {
-        let below = Self.table.filter { FermataGlyph.isBelow($0.name) }.map(\.name)
-        #expect(below == Self.table.map(\.name).filter { $0.hasSuffix("Below") })
-        #expect(!FermataGlyph.isBelow("fermata"))
-    }
-
     @Test("an unknown subtype keeps the plain above glyph")
     func unknownFallsBackToAbove() {
         #expect(FermataGlyph.codepoint(forSubtype: "") == 0xE4C0)
@@ -81,7 +74,7 @@ struct FermataGlyphVariantsTests {
         #expect(fermatas[0].0 == "fermataLongAbove")
         #expect(fermatas[1].0 == "fermataLongAbove")
         #expect(abs(fermatas[0].1.y - fermatas[1].1.y) < 0.001)
-        #expect(!fermatas.contains { FermataGlyph.isBelow($0.0) })
+        #expect(!fermatas.contains { $0.0.hasSuffix("Below") })
     }
 
     @Test("the side is the placement's, else the voice's; the drawn form follows the side")

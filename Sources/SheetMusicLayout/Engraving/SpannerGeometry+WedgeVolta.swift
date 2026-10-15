@@ -14,7 +14,7 @@ public struct WedgeTextParts: Sendable, Equatable {
 extension SpannerGeometry {
     /// How far a wedge's begin and end texts push its two ends inward: `text.width + 0.5 sp` each, `0` without text
     /// (`tlayout.cpp:2904-2913, 2920-2922`).
-    public static func wedgeTextShift(
+    static func wedgeTextShift(
         begin: LayoutRichText?, end: LayoutRichText?, sp: CGFloat,
     ) -> (startShift: CGFloat, endShift: CGFloat) {
         let gap = sp * textLineBaseLabelGapSp

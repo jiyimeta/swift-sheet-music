@@ -57,7 +57,10 @@ enum SpannerRenderer {
                 metrics: metrics,
             )
         case .gradualTempoChange:
-            drawGradualTempoChange(context: &context, from: from, to: to, richText: richText, metrics: metrics)
+            drawGradualTempoChange(
+                context: &context, from: from, to: to, richText: richText, endRichText: lineDetail?.endRichText,
+                metrics: metrics,
+            )
         }
     }
 

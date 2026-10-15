@@ -12,8 +12,9 @@ and this project adheres to
 - **A pedal holds the sustain pedal down.** Pedal spanners send CC64 on at their start and off at their end on the
   part's channel, following the repeat plan; touching pedals release before they press, a pedal cut by a jump is
   released, `<play>0</play>` silences one (a hidden pedal still sounds, as in MuseScore). The Apple engine releases the
-  damper when playback stops. The SwiftySynth backend chases controllers on a seek, so seeking into a pedal re-presses
-  it; the AVAudioSequencer path does not chase the controller.
+  damper when playback stops. Both engines chase controllers on a seek or a loop wrap, so seeking into a pedal
+  re-presses it; every pedalled channel also opens with CC64 = 0 at the start of the track, so a chase that lands
+  before the channel's first pedal finds a released damper rather than the previous pass's held one.
 - **`Breath.CaesuraStyle.chant` and `.singleStroke`** — MuseScore's `chantCaesura` (U+E8F8) and `caesuraSingleStroke`
   (U+E4D7). They used to decode as a comma and re-save as `breathMarkComma`. They are appended after `.curved`, so the
   edit-wire style index of every existing caesura is unchanged.
@@ -196,7 +197,9 @@ and this project adheres to
 - **Breaking: `HarmonyRendering.runs(for:metrics:style:)` and `caretOffsets(for:metrics:style:)` require the
   chord-symbol case style** — a host that measured with MuseScore's defaults while the score lower-cased its minor
   chords placed the caret against "Cm7" over a drawn "cm7". Pass `LayoutDocument.chordSymbolCase` (new: the style the
-  document was laid out with, carried by `subdocument`) or `score.style.chordSymbolCase`.
+  document was laid out with, carried by `subdocument`) or `score.style.chordSymbolCase`. A host that builds a
+  `LayoutDocument` itself must pass the score's `chordSymbolCase` (or copy it from the document it rebuilds); the
+  initializer defaults to `.museScoreDefaults`, and a lower-cased score's caret then measures the wrong string.
 - **`Breath.CaesuraStyle` gains two cases** — a client switching over it exhaustively must handle `.chant` and
   `.singleStroke`.
 - **Breaking: `TextStyleType` and `TextPlacementRole` gain the annotation styles** — `TextStyleType` gains
@@ -348,7 +351,9 @@ and this project adheres to
   MuseScore, the side is the fermata's placement — its `<placement>`, else below for the second and fourth voice — and
   the glyph is the subtype's form for that side, with its measured ink offsets (`FermataGlyph.placedBelow`,
   `FermataGlyph.drawnSubtype`, `FermataGlyphMetrics.offsets(forSubtype:)`); a MusicXML `type="inverted"` fermata is
-  placed below.
+  placed below. `LayoutElement.fermata(subtype:)` now carries the form drawn at its side, not the model's subtype, and
+  a fermata with no `<placement>` in a second or fourth voice now hangs below the staff (as in MuseScore), including
+  one folino inserted there.
 - **A pedal mark is drawn at MuseScore's size** — the "Ped." and "✱" symbols in a pedal's label are the music font at
   its full size, as MuseScore sets a pedal's text symbols, not the staff-text symbol size. A whammy bar lies below the
   staff, as MuseScore draws it.

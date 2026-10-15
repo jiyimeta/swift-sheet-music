@@ -47,5 +47,21 @@
             try #require(lineY.count == 1)
             #expect(abs(lineY[0] - (50 - sp * 0.15 / 2) * Self.mm) < 1e-9)
         }
+
+        @Test("the end label from the segment's line detail is emitted as text")
+        func endLabelIsEmitted() throws {
+            let sp = 5.0
+            let metrics = StaffMetrics(staffSize: CGFloat(sp) * 4)
+            let label = try #require(LayoutRichText.gradualTempoChangeLabel("rit.", metrics: metrics))
+            let end = try #require(LayoutRichText.gradualTempoChangeLabel("a tempo", metrics: metrics))
+            var out: [DrawCommand] = []
+            LayoutBridge.encodeSpanner(
+                kind: .gradualTempoChange, fromX: 20, fromY: 50, toX: 220, toY: 50,
+                continuesLeft: false, continuesRight: false, text: "rit.", sp: sp, glyphSize: sp * 4,
+                richText: label, lineDetail: LayoutLineDetail(endRichText: end), into: &out,
+            )
+            #expect(out.contains { if case let .text(text, _, _, _, _) = $0 { text == "a tempo" } else { false } })
+            #expect(out.contains { if case let .text(text, _, _, _, _) = $0 { text == "rit." } else { false } })
+        }
     }
 #endif

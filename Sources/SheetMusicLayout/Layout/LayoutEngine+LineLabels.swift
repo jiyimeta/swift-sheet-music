@@ -117,6 +117,14 @@ extension LayoutEngine {
                 placedBelow: placedBelow, labelAlignment: .center,
             )
         }
+        // A gradual tempo change keeps its own geometry and dash (`SpannerGeometry.gradualTempoChange`); its detail
+        // carries only the end text, in the begin label's face. MuseScore's default end text is empty
+        // (`GradualTempoChange::propertyDefault`, `gradualtempochange.cpp:230-233`), so only an authored one draws.
+        if kind == .gradualTempoChange {
+            return LayoutLineDetail(
+                endRichText: LayoutRichText.gradualTempoChangeLabel(endText, metrics: metrics),
+            )
+        }
         guard let base = TextLineBaseStyle.style(for: kind) else { return nil }
         let props = lineProperties ?? Spanner.LineProperties()
         let width = props.lineWidth ?? base.lineWidthSp

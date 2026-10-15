@@ -3,7 +3,8 @@ import SheetMusicFoundation
 
 /// Builds the sustain-pedal (CC64) events of one track from its pedal ranges, projected through the repeat plan.
 ///
-/// Known limits: seeking into a pedal does not chase the controller.
+/// A seek or a loop wrap into a pedal relies on the engines chasing controllers; the release at tick 0 on every
+/// pedalled channel guarantees a chase always finds a damper value, also before the first pedal.
 enum SustainPedal {
     private static let controller = 64
 
@@ -78,8 +79,15 @@ enum SustainPedal {
             let closeTick = last.tickOffset + measureSpans[last.measureIndex]
             releases.append(contentsOf: open.map { release($0.channel, at: closeTick) })
         }
+        // A damper value at the start of the track on every pedalled channel, so a chase from a seek or a loop start
+        // before the first pedal finds a released damper instead of none (and the previous pass's held one stays).
+        var channels: [Int] = []
+        for case let .controlChange(channel, _, _) in presses.map(\.event) where !channels.contains(channel) {
+            channels.append(channel)
+        }
+        let initial = channels.sorted().map { release($0, at: 0) }
         // Releases first, so a stable sort by tick puts every off ahead of an on at the same tick.
-        return (releases + presses).enumerated()
+        return (initial + releases + presses).enumerated()
             .sorted { ($0.element.tick, $0.offset) < ($1.element.tick, $1.offset) }
             .map(\.element)
     }

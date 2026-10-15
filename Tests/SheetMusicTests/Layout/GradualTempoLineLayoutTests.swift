@@ -117,6 +117,43 @@ struct GradualTempoLineLayoutTests {
         #expect(abs((pushed.endLabelOrigin?.x ?? .nan) - (from.x + label.size.width + metrics.sp * 0.5)) < 1e-9)
     }
 
+    @Test("an authored end text lays out on the segment that ends the line, which stops half a space short of its end")
+    func endTextIsLaidOut() throws {
+        var rit = TempoMapFixtures.ritardando(measures: 2)
+        rit.beginText = "rit."
+        rit.endText = "a tempo"
+        let score = TempoMapFixtures.score(measures: 3, ramps: [(measure: 0, spanner: rit)])
+        let document = LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 600)
+        let ends: [(to: CGPoint, from: CGPoint, detail: LayoutLineDetail?, rich: LayoutRichText?)] = document.systems
+            .flatMap(\.spanners).compactMap { element in
+                guard case let .spannerSegment(.gradualTempoChange, from, to, _, _, _, _, rich, detail) = element
+                else { return nil }
+                return (to, from, detail, rich)
+            }
+        let segment = try #require(ends.first)
+        let end = try #require(segment.detail?.endRichText)
+        #expect(Self.contents(end) == [.text("a tempo")])
+        let sp = document.metrics.sp
+        let parts = SpannerGeometry.gradualTempoChange(
+            from: segment.from, to: segment.to, label: segment.rich, endLabel: end, sp: sp,
+        )
+        #expect(abs(parts.lineEnd.x - (segment.to.x - sp * 0.5)) < 1e-9)
+        // No authored end text, no end label.
+        var bare = TempoMapFixtures.ritardando(measures: 2)
+        bare.beginText = "rit."
+        let plain = LayoutEngine.layout(
+            score: TempoMapFixtures.score(measures: 3, ramps: [(measure: 0, spanner: bare)]),
+            options: ScoreViewOptions(), availableWidth: 600,
+        )
+        let details = plain.systems.flatMap(\.spanners).compactMap { element -> [LayoutLineDetail?]? in
+            guard case let .spannerSegment(.gradualTempoChange, _, _, _, _, _, _, _, detail) = element
+            else { return nil }
+            return [detail]
+        }
+        #expect(details.count == 1)
+        #expect(details.first?.first??.endRichText == nil)
+    }
+
     @Test("the label's baseline is the segment's y and the line runs half its width above it (alignBaseLine)")
     func lineSitsOnLabelBaseline() throws {
         let metrics = StaffMetrics(staffSize: 20)

@@ -10,16 +10,23 @@ import SheetMusicLayout
 
 @available(macOS 15.0, *)
 extension ScoreLayerBuilder {
-    /// A gradual tempo line as layers: the label's runs filled, then the dashed line stroked
+    /// A gradual tempo line as layers: the label's runs and the end label's filled, then the dashed line stroked
     /// (`SpannerGeometry.gradualTempoChange`).
     static func drawGradualTempoChange(
-        from: CGPoint, to: CGPoint, richText: LayoutRichText?, metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer,
+        from: CGPoint, to: CGPoint, richText: LayoutRichText?, endRichText: LayoutRichText?, metrics: StaffMetrics,
+        height: CGFloat, into parent: CALayer,
     ) {
-        let parts = SpannerGeometry.gradualTempoChange(from: from, to: to, label: richText, sp: metrics.sp)
+        let parts = SpannerGeometry.gradualTempoChange(
+            from: from, to: to, label: richText, endLabel: endRichText, sp: metrics.sp,
+        )
+        let anchor = LayoutRichText.anchor(for: .gradualTempoChangeLabel)
         if let richText, let layer = richTextLayer(
-            richText, at: parts.labelOrigin, anchor: LayoutRichText.anchor(for: .gradualTempoChangeLabel),
-            color: inkColor, height: height,
+            richText, at: parts.labelOrigin, anchor: anchor, color: inkColor, height: height,
+        ) {
+            parent.addSublayer(layer)
+        }
+        if let endRichText, let origin = parts.endLabelOrigin, let layer = richTextLayer(
+            endRichText, at: origin, anchor: anchor, color: inkColor, height: height,
         ) {
             parent.addSublayer(layer)
         }

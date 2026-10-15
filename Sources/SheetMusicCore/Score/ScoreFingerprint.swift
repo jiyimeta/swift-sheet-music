@@ -53,7 +53,10 @@ import SheetMusicFoundation
 /// - Not covered on a spanner: `lineProperties`, `chordTextLine` and `payloadMarkup` (5.0). No edit writes them, and
 ///   a client before 5.0 dropped them, so hashing them would make the two disagree on every pedal with a hook. The
 ///   guitar lines' `kind` IS covered, and moved in 5.0 from `other` to `chordTextLine`: a score holding one hashes
-///   differently across that boundary, as one holding an annotation does.
+///   differently across that boundary, as one holding an annotation does. The 5.0 decoder also reads some values
+///   differently from a client before 5.0 — a fermata's absent `<timeStretch>` and a breath's absent `<pause>`
+///   (MuseScore's file defaults), an authored empty line text (`""`, was nil), and the chant / single-stroke
+///   caesuras (were a comma) — and all of those are hashed, so the same file hashes differently across that boundary.
 /// - The walk's own shape: it emits a flat sequence of staff blocks with no part/staff-count delimiter, so two
 ///   scores whose staves are grouped into parts differently — but which total the same number of staves — hash
 ///   identically.

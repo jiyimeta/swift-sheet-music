@@ -28,7 +28,7 @@ extension SpannerGeometry {
     /// A gradual tempo line from `from` to `to`. `from.y` is the label's baseline (`tempoChangeAlign` = LEFT, BASELINE,
     /// `styledef.cpp:1174`); the dashed line starts half a space after the label — at `from` itself when there is
     /// none — and, with a label, runs lifted by half its width so the label's baseline sits on the line's lower edge
-    /// (`alignBaseLine`, `tlayout.cpp:5750-5768`). MuseScore's end hook and end text are not drawn. `to.y` is ignored:
+    /// (`alignBaseLine`, `tlayout.cpp:5750-5768`). MuseScore's end hook is not drawn. `to.y` is ignored:
     /// both ends share the anchor `from.y` (the line is horizontal), so a caller passes the end's x only.
     public static func gradualTempoChange(
         from: CGPoint, to: CGPoint, label: LayoutRichText?, endLabel: LayoutRichText? = nil, sp: CGFloat,

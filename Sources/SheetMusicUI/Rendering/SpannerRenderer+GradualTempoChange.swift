@@ -4,16 +4,24 @@ import SwiftUI
 
 @available(macOS 15.0, *)
 extension SpannerRenderer {
-    /// A gradual tempo line on the Canvas: the label's runs, then the dashed line
+    /// A gradual tempo line on the Canvas: the label's runs, the end label's, then the dashed line
     /// (`SpannerGeometry.gradualTempoChange`).
     static func drawGradualTempoChange(
-        context: inout GraphicsContext, from: CGPoint, to: CGPoint, richText: LayoutRichText?, metrics: StaffMetrics,
+        context: inout GraphicsContext, from: CGPoint, to: CGPoint, richText: LayoutRichText?,
+        endRichText: LayoutRichText?, metrics: StaffMetrics,
     ) {
-        let parts = SpannerGeometry.gradualTempoChange(from: from, to: to, label: richText, sp: metrics.sp)
+        let parts = SpannerGeometry.gradualTempoChange(
+            from: from, to: to, label: richText, endLabel: endRichText, sp: metrics.sp,
+        )
+        let anchor = LayoutRichText.anchor(for: .gradualTempoChangeLabel)
         if let richText {
             TextInkRenderer.drawRich(
-                context: &context, richText: richText, origin: parts.labelOrigin,
-                anchor: LayoutRichText.anchor(for: .gradualTempoChangeLabel), color: .primary,
+                context: &context, richText: richText, origin: parts.labelOrigin, anchor: anchor, color: .primary,
+            )
+        }
+        if let endRichText, let origin = parts.endLabelOrigin {
+            TextInkRenderer.drawRich(
+                context: &context, richText: endRichText, origin: origin, anchor: anchor, color: .primary,
             )
         }
         guard parts.lineEnd.x > parts.lineStart.x else { return }

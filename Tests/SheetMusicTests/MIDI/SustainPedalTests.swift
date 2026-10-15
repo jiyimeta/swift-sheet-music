@@ -52,7 +52,7 @@ struct SustainPedalTests {
             ranges: [PedalRange(startTick: 480, endTick: 3840)], plan: Self.straight(),
             measureBases: Self.bases, measureSpans: Self.spans, channel: Self.ch,
         )
-        #expect(events == [Self.on(480), Self.off(3840)])
+        #expect(events == [Self.off(0), Self.on(480), Self.off(3840)])
     }
 
     @Test("a pedal ending where the next begins releases first")
@@ -61,7 +61,7 @@ struct SustainPedalTests {
             ranges: [PedalRange(startTick: 0, endTick: 1920), PedalRange(startTick: 1920, endTick: 3840)],
             plan: Self.straight(), measureBases: Self.bases, measureSpans: Self.spans, channel: Self.ch,
         )
-        #expect(events == [Self.on(0), Self.off(1920), Self.on(1920), Self.off(3840)])
+        #expect(events == [Self.off(0), Self.on(0), Self.off(1920), Self.on(1920), Self.off(3840)])
     }
 
     @Test("a repeat plays the pedal on both takes")
@@ -71,7 +71,7 @@ struct SustainPedalTests {
             ranges: [PedalRange(startTick: 0, endTick: 3840)], plan: Self.plan([0, 1, 0, 1, 2, 3]),
             measureBases: Self.bases, measureSpans: Self.spans, channel: Self.ch,
         )
-        #expect(events == [Self.on(0), Self.off(3840), Self.on(3840), Self.off(7680)])
+        #expect(events == [Self.off(0), Self.on(0), Self.off(3840), Self.on(3840), Self.off(7680)])
     }
 
     @Test("a jump out of an open pedal releases it at the jump target")
@@ -83,7 +83,7 @@ struct SustainPedalTests {
         )
         // On at bar 1, released by the jump at 3840, on again at bar 1's second play (5760), and off where bar 2's
         // second play ends the range (7680 + 1920 = 9600).
-        #expect(events == [Self.on(1920), Self.off(3840), Self.on(5760), Self.off(9600)])
+        #expect(events == [Self.off(0), Self.on(1920), Self.off(3840), Self.on(5760), Self.off(9600)])
     }
 
     @Test("a pedal that never ends is released at the end of the last bar")
@@ -92,7 +92,24 @@ struct SustainPedalTests {
             ranges: [PedalRange(startTick: 0, endTick: 100_000)], plan: Self.straight(),
             measureBases: Self.bases, measureSpans: Self.spans, channel: Self.ch,
         )
-        #expect(events == [Self.on(0), Self.off(7680)])
+        #expect(events == [Self.off(0), Self.on(0), Self.off(7680)])
+    }
+
+    @Test("a chase into the bars before the first pedal finds a released damper")
+    func chaseBeforeTheFirstPedalFindsARelease() {
+        let events = SustainPedal.events(
+            ranges: [PedalRange(startTick: 3840, endTick: 5760), PedalRange(startTick: 1920, endTick: 3000)],
+            plan: Self.straight(), measureBases: Self.bases, measureSpans: Self.spans,
+            channel: { $0 < 3000 ? 3 : 5 },
+        )
+        // Each pedalled channel opens with CC64 = 0 at tick 0, ahead of any press, whatever its first pedal's tick.
+        for pedalled in [3, 5] {
+            let first = events.first { event in
+                if case .controlChange(pedalled, 64, _) = event.event { return true }
+                return false
+            }
+            #expect(first == Self.off(0, channel: pedalled))
+        }
     }
 
     @Test("the channel is the one in force at the start, and the release goes to the same channel")
@@ -101,6 +118,6 @@ struct SustainPedalTests {
             ranges: [PedalRange(startTick: 0, endTick: 1920)], plan: Self.straight(),
             measureBases: Self.bases, measureSpans: Self.spans, channel: { $0 < 960 ? 3 : 5 },
         )
-        #expect(events == [Self.on(0, channel: 3), Self.off(1920, channel: 3)])
+        #expect(events == [Self.off(0, channel: 3), Self.on(0, channel: 3), Self.off(1920, channel: 3)])
     }
 }

@@ -33,7 +33,7 @@ public enum FermataGlyphMetrics {
     }
 
     /// Offsets measured on the glyph `FermataGlyph.codepoint(forSubtype:)` picks for `subtype`.
-    public static func offsets(forSubtype subtype: String) -> FermataGlyphOffsets {
+    static func offsets(forSubtype subtype: String) -> FermataGlyphOffsets {
         let codepoint = UInt16(truncatingIfNeeded: FermataGlyph.codepoint(forSubtype: subtype))
         return offsets(for: codepoint)
     }

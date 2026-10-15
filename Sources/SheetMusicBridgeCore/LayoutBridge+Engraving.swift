@@ -565,7 +565,9 @@ extension LayoutBridge {
             out.append(.setDash(onMM: 0, offMM: 0))
 
         case .gradualTempoChange:
-            encodeGradualTempoChange(from: from, to: to, richText: richText, sp: sp, into: &out)
+            encodeGradualTempoChange(
+                from: from, to: to, richText: richText, endRichText: lineDetail?.endRichText, sp: sp, into: &out,
+            )
 
         case let .trill(type):
             let symbols = SpannerGeometry.trillSymbols(

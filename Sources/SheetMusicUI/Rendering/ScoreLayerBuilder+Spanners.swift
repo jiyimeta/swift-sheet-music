@@ -34,7 +34,7 @@ extension ScoreLayerBuilder {
         case .vibrato, .trill, .gradualTempoChange:
             drawLineSpanner(
                 kind: kind, from: from, to: to, continuesLeft: continuesLeft, text: text, richText: richText,
-                metrics: metrics, height: height, into: parent,
+                endRichText: lineDetail?.endRichText, metrics: metrics, height: height, into: parent,
             )
         }
     }
@@ -87,7 +87,7 @@ extension ScoreLayerBuilder {
         kind: LayoutElement.SpannerKind,
         from: CGPoint, to: CGPoint,
         continuesLeft: Bool,
-        text: String, richText: LayoutRichText?, metrics: StaffMetrics,
+        text: String, richText: LayoutRichText?, endRichText: LayoutRichText?, metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer,
     ) {
@@ -108,7 +108,8 @@ extension ScoreLayerBuilder {
             )
         case .gradualTempoChange:
             drawGradualTempoChange(
-                from: from, to: to, richText: richText, metrics: metrics, height: height, into: parent,
+                from: from, to: to, richText: richText, endRichText: endRichText, metrics: metrics, height: height,
+                into: parent,
             )
         }
     }
