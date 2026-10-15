@@ -42,6 +42,13 @@ struct SpannerLineLabelsTests {
         #expect(labels.end == nil)
     }
 
+    @Test("an authored empty text removes the styled default")
+    func emptyAuthoredTextRemovesTheDefault() {
+        // MuseScore writes `<beginText></beginText>` for this (`vtest/scores/line-dashed.mscx:261`); it draws nothing.
+        #expect(Self.pedal(begin: "").lineLabels.begin?.isEmpty == true)
+        #expect(Self.pedal(begin: "").lineLabels.continuation == Self.parens)
+    }
+
     @Test("authored text wins")
     func authoredWins() {
         #expect(Self.pedal(begin: "Sost.").lineLabels.begin == "Sost.")

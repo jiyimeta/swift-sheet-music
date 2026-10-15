@@ -59,6 +59,7 @@ extension LayoutBridge {
             size: synthesized.size,
             systems: [synthesized],
             metrics: document.metrics,
+            chordSymbolCase: document.chordSymbolCase,
         )
         return EncodablePage(
             widthMM: Double(synthesized.size.width) * ptToMMScale,

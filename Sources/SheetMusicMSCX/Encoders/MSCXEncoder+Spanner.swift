@@ -57,10 +57,11 @@ extension Spanner {
         // child for every line-shaped spanner. Authored `<placement>` is
         // emitted from `ElementProperties` under MuseScore's "write when no
         // longer styled" rule.
-        // An empty text is omitted, as MuseScore omits it: an empty element would read back as an empty text.
+        // An empty text is written as an empty element, as MuseScore writes it (`vtest/scores/line-dashed.mscx:261`):
+        // it removes a styled default text such as a pedal's "Ped"; only an absent text writes nothing.
         let lineTexts: [XMLTreeNode] = [("beginText", beginText), ("continueText", continueText), ("endText", endText)]
             .compactMap { name, text in
-                guard let text, !text.isEmpty else { return nil }
+                guard let text else { return nil }
                 return XMLTreeNode(name: name, text: text)
             }
         let leading = lineTexts + elementProperties.mscxChildren()
@@ -110,7 +111,11 @@ extension Spanner {
             children += trailing
             return XMLTreeNode(name: rawType, children: children)
         }
-        var children = leading + line
+        // A pedal writes its line tags before the texts (`TWrite::write(const Pedal*)`,
+        // `rw/write/twrite.cpp:2570-2590`):
+        // `TRead::read(Pedal*)` (`rw/read460/tread.cpp:3632-3655`) clears the begin / continue texts on a non-NONE
+        // `<beginHookType>` and resets the end text on `<lineVisible>`, so a text written first is lost on reopen.
+        var children = kind == .pedal ? line + leading : leading + line
         appendPreservedMarkup(payloadMarkup, to: &children, options: options)
         return XMLTreeNode(name: rawType, children: children + trailing)
     }

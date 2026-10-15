@@ -69,18 +69,19 @@ struct SpannerBeginTextTests {
         ))
     }
 
-    @Test func emptyLineTextsAreNotWritten() throws {
+    /// An authored empty text is how MuseScore removes a styled default (a pedal's "Ped", a hairpin line's "cresc."):
+    /// it writes `<beginText></beginText>` (`vtest/scores/line-dashed.mscx:261`). It is written back as an empty
+    /// element; only an absent text (`nil`) writes nothing.
+    @Test func emptyLineTextsAreWrittenAsEmptyElements() throws {
         let line = Spanner(
             kind: .textLine, rawType: "TextLine", nextMeasuresOffset: 1,
             beginText: "", continueText: "", endText: "",
         )
         let encoded = try #require(String(bytes: XMLTreeSerializer.serialize(line.encode()), encoding: .utf8))
-        #expect(!encoded.contains("beginText"))
-        #expect(!encoded.contains("continueText"))
-        #expect(!encoded.contains("endText"))
-        let labelled = Spanner(
-            kind: .textLine, rawType: "TextLine", nextMeasuresOffset: 1, beginText: "", endText: "end",
-        )
+        #expect(encoded.contains("<beginText/>"))
+        #expect(encoded.contains("<continueText/>"))
+        #expect(encoded.contains("<endText/>"))
+        let labelled = Spanner(kind: .textLine, rawType: "TextLine", nextMeasuresOffset: 1, endText: "end")
         let written = try #require(String(bytes: XMLTreeSerializer.serialize(labelled.encode()), encoding: .utf8))
         #expect(!written.contains("beginText"))
         #expect(written.contains("<endText>end</endText>"))

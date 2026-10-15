@@ -19,11 +19,12 @@ public enum HarmonyRendering {
     ///      in a text run; consecutive text characters coalesce.
     ///
     /// `style` is the score's chord-symbol case style: it decides the case of the root and bass letters
-    /// (`ChordSymbolCaseStyle`); a caller without a score gets MuseScore's defaults.
+    /// (`ChordSymbolCaseStyle`). It has no default on purpose: a host that forgot it would measure "Cm7" while "cm7"
+    /// is drawn in a lower-case-minor score; pass `LayoutDocument.chordSymbolCase`.
     public static func runs(
         for harmony: Harmony,
         metrics: StaffMetrics,
-        style: ChordSymbolCaseStyle = .museScoreDefaults,
+        style: ChordSymbolCaseStyle,
     ) -> [HarmonyRun] {
         // Bravura registration (Apple) and CoreText serialization are
         // handled by the `FontMetrics.provider` implementation: the
@@ -103,6 +104,11 @@ public enum HarmonyRendering {
     }
 
     // MARK: - Internals
+
+    /// `runs(for:metrics:style:)` under MuseScore's default case style, for tests and internal callers.
+    package static func runs(for harmony: Harmony, metrics: StaffMetrics) -> [HarmonyRun] {
+        runs(for: harmony, metrics: metrics, style: .museScoreDefaults)
+    }
 
     enum Slice {
         case text(String)

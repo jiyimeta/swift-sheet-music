@@ -46,8 +46,9 @@ public struct ScoreStyle: Sendable, Equatable {
     /// C++: `Sid::ottavaNumbersOnly` (`styledef.cpp:679`).
     public var ottavaNumbersOnly: Bool
     /// The four flags that decide the case of a chord symbol's root and bass (`Sid::automaticCapitalization`,
-    /// `lowerCaseMinorChords`, `lowerCaseBassNotes`, `allCapsNoteNames`). Read from `<Style>`; the tags are still
-    /// saved verbatim as preserved markup.
+    /// `lowerCaseMinorChords`, `lowerCaseBassNotes`, `allCapsNoteNames`). Read from `<Style>` for layout and NOT
+    /// written: the tags stay as preserved markup, so editing this field changes layout but a save keeps the file's
+    /// tags.
     public var chordSymbolCase: ChordSymbolCaseStyle
     /// Source markup under this element that the model does not
     /// represent, kept so that read → write does not delete it. See

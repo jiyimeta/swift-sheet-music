@@ -168,6 +168,7 @@ public enum LayoutEngine {
             systems: systemsWithSpanners,
             metrics: metrics,
             titleFrame: titleFrame,
+            chordSymbolCase: score.style.chordSymbolCase,
         )
         let ties = resolveTies(for: firstPass, score: score)
         let systemsWithTies = attachTies(
@@ -217,6 +218,7 @@ public enum LayoutEngine {
             systems: systemsWithLegacyBends,
             metrics: metrics,
             titleFrame: titleFrame,
+            chordSymbolCase: score.style.chordSymbolCase,
         )
     }
 

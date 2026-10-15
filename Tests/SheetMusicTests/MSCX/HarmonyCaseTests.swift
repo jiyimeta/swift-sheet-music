@@ -59,6 +59,19 @@ struct HarmonyCaseTests {
         #expect(text.contains("<lowerCaseMinorChords>1</lowerCaseMinorChords>"))
     }
 
+    @Test("the style flags are read off <Style> in both directions")
+    func nonDefaultStyleFlagsAreRead() throws {
+        let xml = """
+        <Style><automaticCapitalization>0</automaticCapitalization><lowerCaseBassNotes>1</lowerCaseBassNotes>\
+        <allCapsNoteNames>1</allCapsNoteNames></Style>
+        """
+        let style = try ScoreStyle.decode(style: XMLTreeParser.parse(Data(xml.utf8)))
+        #expect(!style.chordSymbolCase.automaticCapitalization)
+        #expect(style.chordSymbolCase.lowerCaseBassNotes)
+        #expect(style.chordSymbolCase.allCapsNoteNames)
+        #expect(!style.chordSymbolCase.lowerCaseMinorChords)
+    }
+
     @Test("automatic capitalization ignores the stored case")
     func automaticCapitalizationIgnoresStoredCase() {
         let lower = Self.harmony(name: "7", rootCase: .lower, bassCase: .lower)
@@ -83,6 +96,11 @@ struct HarmonyCaseTests {
         #expect(shown("M7") == "CM7")
         #expect(shown("7") == "C7")
         #expect(shown("") == "C")
+        // The quality token ends at a space or any of `()[],/\` as well as a digit (`ParsedChord::parse`,
+        // `dom/chordlist.cpp:584-585, 602-605`): "m" before the slash is minor, "maj" before it is major.
+        #expect(shown("m/E") == "cm/E")
+        #expect(shown("maj7/E") == "Cmaj7/E")
+        #expect(shown("m E") == "cm E")
     }
 
     @Test("lowerCaseBassNotes lowers the bass; allCapsNoteNames keeps letters upper")
@@ -111,5 +129,32 @@ struct HarmonyCaseTests {
         }
         #expect(texts.contains { $0.hasPrefix("cm7") })
         #expect(texts.contains { $0.hasPrefix("Cmaj7") })
+    }
+
+    private static func harmonyTexts(in document: LayoutDocument) -> [String] {
+        document.systems.flatMap(\.measures).flatMap(\.elements).compactMap { element -> String? in
+            if case let .harmony(layoutHarmony) = element { return layoutHarmony.runs.map(\.content).joined() }
+            return nil
+        }
+    }
+
+    /// The width cache keys a bar by the chord-symbol case style (`LayoutEngine+Packing`): a bar whose chord symbol
+    /// changes width with the case must not be taken from the cache laid out under the other style.
+    @Test("a warm layout cache follows a changed chord-symbol case style")
+    func warmCacheFollowsTheCaseStyle() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("chord-symbol-case"))
+        #expect(score.style.chordSymbolCase.lowerCaseMinorChords)
+        let cache = LayoutCache()
+        let options = ScoreViewOptions()
+        let lower = LayoutEngine.layout(score: score, options: options, availableWidth: 800, cache: cache)
+        #expect(Self.harmonyTexts(in: lower).contains { $0.hasPrefix("cm7") })
+        score.style.chordSymbolCase.lowerCaseMinorChords = false
+        let warm = LayoutEngine.layout(score: score, options: options, availableWidth: 800, cache: cache)
+        let cold = LayoutEngine.layout(score: score, options: options, availableWidth: 800)
+        #expect(Self.harmonyTexts(in: warm).contains { $0.hasPrefix("Cm7") })
+        #expect(!Self.harmonyTexts(in: warm).contains { $0.hasPrefix("cm7") })
+        // A stale width entry would pack the bars as the lower-case layout did; the cold layout is the reference.
+        #expect(warm == cold)
+        #expect(warm.chordSymbolCase == score.style.chordSymbolCase)
     }
 }

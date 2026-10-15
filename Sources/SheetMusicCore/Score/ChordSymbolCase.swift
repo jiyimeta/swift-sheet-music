@@ -45,6 +45,8 @@ public struct ChordSymbolCaseStyle: Sendable, Equatable {
         return allCapsNoteNames ? .upper : .capitalize
     }
 
+    /// The characters that end the quality token: `extensionDigits` plus `special` (`dom/chordlist.cpp:584-585`).
+    private static let qualityBreakCharacters: Set<Character> = Set("123456789()[],/\\ ")
     private static let majorTokens: Set = ["ma", "maj", "major", "t", "^"]
     private static let minorTokens: Set = ["mi", "min", "minor", "-", "="]
     private static let diminishedTokens: Set = ["dim", "o"]
@@ -52,15 +54,15 @@ public struct ChordSymbolCaseStyle: Sendable, Equatable {
     private static let modifiersStartingWithQuality: Set = ["tristan", "omit", "type"]
 
     /// Whether a chord name's quality is minor, diminished or half-diminished, read the way `ParsedChord::parse`
-    /// reads the leading token (`dom/chordlist.cpp:596-681`): the characters up to the first non-zero digit, `(` or
-    /// `,`; a token that merely starts with a quality (`mima7`) is cut back to the longest quality prefix, and `madd`
-    /// keeps `m`. Only the exact lower-case `m` is minor, so `M` stays major.
+    /// reads the leading token (`dom/chordlist.cpp:596-681`): the characters up to the first non-zero digit or
+    /// special character (`()[],/\` and space); a token that merely starts with a quality (`mima7`) is cut back to
+    /// the longest quality prefix, and `madd` keeps `m`. Only the exact lower-case `m` is minor, so `M` stays major.
     package static func isMinorLike(suffix: String) -> Bool {
         var token = ""
         var tokenLower = ""
         var initial = ""
         for character in suffix {
-            if "123456789(,".contains(character) { break }
+            if qualityBreakCharacters.contains(character) { break }
             token.append(character)
             tokenLower = token.lowercased()
             if tokenLower == "m" || majorTokens.contains(tokenLower) || minorTokens.contains(tokenLower)

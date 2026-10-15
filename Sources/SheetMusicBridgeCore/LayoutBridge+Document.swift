@@ -216,6 +216,7 @@ extension LayoutBridge {
                     ? LayoutDocument(
                         size: sub.size, systems: sub.systems,
                         metrics: sub.metrics, titleFrame: document.titleFrame,
+                        chordSymbolCase: document.chordSymbolCase,
                     )
                     : sub
                 // Onto the paper: the leading and top margins in. Untouched for `.zero`.

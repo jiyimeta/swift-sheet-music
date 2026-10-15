@@ -12,7 +12,7 @@ extension HarmonyRendering {
     /// Ligature/bidi offsets can repeat or run backwards; callers must restrict hit testing to grapheme boundaries.
     /// `style` must be the one the symbol was laid out with, or the offsets map a different string than the one drawn.
     public static func caretOffsets(
-        for harmony: Harmony, metrics: StaffMetrics, style: ChordSymbolCaseStyle = .museScoreDefaults,
+        for harmony: Harmony, metrics: StaffMetrics, style: ChordSymbolCaseStyle,
     ) -> [CGFloat] {
         let displayName = displayedName(for: harmony, style: style)
         let slices = parseSlices(name: displayName, harmonyType: harmony.harmonyType)
@@ -46,5 +46,10 @@ extension HarmonyRendering {
         }
         let start = displayedPrefix(for: harmony, style: style).utf16.count
         return Array(offsets[start ... start + harmony.name.utf16.count])
+    }
+
+    /// `caretOffsets(for:metrics:style:)` under MuseScore's default case style, for tests and internal callers.
+    package static func caretOffsets(for harmony: Harmony, metrics: StaffMetrics) -> [CGFloat] {
+        caretOffsets(for: harmony, metrics: metrics, style: .museScoreDefaults)
     }
 }

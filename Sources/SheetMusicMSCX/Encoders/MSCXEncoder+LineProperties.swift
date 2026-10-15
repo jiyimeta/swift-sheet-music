@@ -4,8 +4,10 @@ import SheetMusicXMLTools
 extension Spanner {
     /// The `TextLineBase` children of a begin side's payload, in the pedal's own order
     /// (`TWrite::write(const Pedal*)`, `rw/write/twrite.cpp:2570-2604`; MuseScore's generic order differs and the file
-    /// is not claimed byte-identical to MuseScore's). Only the properties the model holds are written; `<play>` only
-    /// when the spanner does not play back.
+    /// is not claimed byte-identical to MuseScore's). For a pedal the encoder places these tags BEFORE the line texts,
+    /// as `TWrite` does: `TRead::read(Pedal*)` (`rw/read460/tread.cpp:3632-3655`) clears the begin / continue texts on
+    /// a non-NONE `<beginHookType>` and resets the end text on `<lineVisible>`, which would drop texts written first.
+    /// Only the properties the model holds are written; `<play>` only when the spanner does not play back.
     func lineChildren() -> [XMLTreeNode] {
         guard let line = lineProperties else { return [] }
         var children: [XMLTreeNode] = []

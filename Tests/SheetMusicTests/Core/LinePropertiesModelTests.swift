@@ -134,4 +134,50 @@ struct LinePropertiesModelTests {
         #expect(text.contains("<Segment>"))
         #expect(text.contains("<beginText>Sost.</beginText>"))
     }
+
+    /// `TRead::read(Pedal*)` (`rw/read460/tread.cpp:3632-3655`) clears the begin / continue texts when it reads a
+    /// non-NONE `<beginHookType>` and resets the end text on `<lineVisible>`, so a text written before either tag is
+    /// lost when MuseScore reopens the file.
+    @Test("a pedal writes its hook and visibility tags before its texts")
+    func pedalWritesLineTagsBeforeTexts() throws {
+        let hooked = Spanner(
+            kind: .pedal, rawType: "Pedal", nextMeasuresOffset: 1, beginText: "Sost.",
+            lineProperties: Spanner.LineProperties(beginHook: .hook90),
+        )
+        let hookedText = try Self.encodedText(of: hooked)
+        let hook = try #require(hookedText.range(of: "<beginHookType>"))
+        let begin = try #require(hookedText.range(of: "<beginText>"))
+        #expect(hook.lowerBound < begin.lowerBound)
+
+        let hidden = Spanner(
+            kind: .pedal, rawType: "Pedal", nextMeasuresOffset: 1, endText: "x",
+            lineProperties: Spanner.LineProperties(lineVisible: false),
+        )
+        let hiddenText = try Self.encodedText(of: hidden)
+        let visible = try #require(hiddenText.range(of: "<lineVisible>"))
+        let end = try #require(hiddenText.range(of: "<endText>"))
+        #expect(visible.lowerBound < end.lowerBound)
+    }
+
+    /// MuseScore writes `<beginText></beginText>` to remove a styled default text such as a pedal's "Ped"
+    /// (`vtest/scores/line-dashed.mscx:261`); the serializer writes an empty element as `<beginText/>`.
+    @Test("an authored empty line text survives a round trip")
+    func emptyLineTextRoundTrips() throws {
+        let pedal = try Self.begin("<Pedal><beginText></beginText></Pedal>")
+        #expect(pedal.beginText?.isEmpty == true)
+        #expect(pedal.continueText == nil)
+        let text = try Self.encodedText(of: pedal)
+        #expect(text.contains("<beginText/>"))
+        #expect(!text.contains("<continueText"))
+        let back = try MSCXParser.parse(MSCXEncoder.encode(LineVariantFixtures.score(spanner: pedal)))
+        #expect(LineVariantFixtures.spanners(in: back).first?.beginText?.isEmpty == true)
+    }
+
+    @Test("a bare chordTextLine type is not a guitar line")
+    func bareChordTextLineTypeIsOther() throws {
+        let spanner = try Self.begin("<TextLine/>", type: "chordTextLine")
+        #expect(spanner.kind == .other)
+        #expect(spanner.chordTextLine == nil)
+        #expect(spanner.rawType == "chordTextLine")
+    }
 }

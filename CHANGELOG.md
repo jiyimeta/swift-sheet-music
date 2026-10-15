@@ -174,9 +174,10 @@ and this project adheres to
 ### Changed
 
 - **`Spanner.Kind` gains `chordTextLine`** — a client switching over it exhaustively must handle it.
-- **`HarmonyRendering.runs(for:metrics:)` and `caretOffsets(for:metrics:)` take the chord-symbol case style** — a
-  defaulted `style: ChordSymbolCaseStyle` (MuseScore's defaults); pass `score.style.chordSymbolCase` to draw what the
-  layout measured.
+- **Breaking: `HarmonyRendering.runs(for:metrics:style:)` and `caretOffsets(for:metrics:style:)` require the
+  chord-symbol case style** — a host that measured with MuseScore's defaults while the score lower-cased its minor
+  chords placed the caret against "Cm7" over a drawn "cm7". Pass `LayoutDocument.chordSymbolCase` (new: the style the
+  document was laid out with, carried by `subdocument`) or `score.style.chordSymbolCase`.
 - **`Breath.CaesuraStyle` gains two cases** — a client switching over it exhaustively must handle `.chant` and
   `.singleStroke`.
 - **Breaking: `TextStyleType` and `TextPlacementRole` gain the annotation styles** — `TextStyleType` gains
@@ -294,6 +295,12 @@ and this project adheres to
   chords*, *Lowercase bass notes* and *All caps note names* (`ScoreStyle.chordSymbolCase`, read from `<Style>` and still
   saved verbatim). Only a lower or upper case is written back: MuseScore draws auto and capital alike and reads an
   absent tag as capital, so a `-1` in a source file is not kept.
+- **A pedal's hooks survive MuseScore reopening the file with its texts.** MuseScore's pedal reader clears the begin and
+  continue texts when it meets a `<beginHookType>` and resets the end text at `<lineVisible>`, so a pedal now writes
+  those tags before its texts, as MuseScore does (`TWrite::write(const Pedal*)`).
+- **An authored empty line text is kept.** `<beginText></beginText>` is how MuseScore removes a style default (a
+  pedal's "Ped", a hairpin line's "cresc."); it decoded as no text and was dropped on save, so the default came back. It
+  now reads as `""`, draws nothing and is written back as an empty element.
 - **A fermata or breath in a MuseScore file plays at MuseScore's length.** MuseScore omits `<timeStretch>` and `<pause>`
   at its own defaults (2.0 for a plain fermata, 3.0 for long, 4.0 for very long, 0 for every breath and caesura — the
   2.0 in its palette is not a file default; confirmed on MuseScore 4.7.4's MIDI export); ssm read the absent tag as

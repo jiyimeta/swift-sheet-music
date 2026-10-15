@@ -10,11 +10,18 @@ extension Spanner {
         "next", "prev", "visible",
     ]
 
+    /// The four guitar lines are `Kind.chordTextLine` (`rawType` keeps the tag that says which). A bare
+    /// `chordTextLine` type is not MuseScore input — it has no `ChordTextLine` to carry — so it is `.other`.
+    private static func kind(forRawType raw: String) -> Kind {
+        if ChordTextLine(rawValue: raw) != nil { return .chordTextLine }
+        if raw == "chordTextLine" { return .other }
+        return Kind(rawValue: raw) ?? .other
+    }
+
     static func decode(_ node: XMLTreeNode) throws -> Spanner {
         let raw = node.attributes["type"] ?? ""
-        // The four guitar lines are `Kind.chordTextLine`; `rawType` keeps the tag that says which.
         let chordTextLine = ChordTextLine(rawValue: raw)
-        let kind: Kind = chordTextLine != nil ? .chordTextLine : (Kind(rawValue: raw) ?? .other)
+        let kind = kind(forRawType: raw)
 
         var voltaEndings: [Int] = []
         if let voltaNode = node.first("Volta") {
@@ -96,12 +103,14 @@ extension Spanner {
     /// payload child rather than special-casing `<TextLine>`. `next` / `prev` are location records and never carry
     /// one. Unlike `decodeVisible` below, this walk has no `<eid>` exclusion: `child.first(name)` on an `<eid>` leaf
     /// node (no children of its own) is always nil, so the wrapper's identifier is harmless here without
-    /// special-casing it — the asymmetry with `decodeVisible` is not accidental.
+    /// special-casing it — the asymmetry with `decodeVisible` is not accidental. A present but empty element is `""`,
+    /// not nil: MuseScore writes `<beginText></beginText>` to remove a styled default text such as a pedal's "Ped"
+    /// (`vtest/scores/line-dashed.mscx:261`), and the removal has to survive the round trip.
     private static func decodeLineText(_ node: XMLTreeNode, named name: String) -> String? {
         for child in node.children
             where child.name != "next" && child.name != "prev"
         {
-            if let text = child.first(name)?.text, !text.isEmpty {
+            if let text = child.first(name)?.text {
                 return text
             }
         }
