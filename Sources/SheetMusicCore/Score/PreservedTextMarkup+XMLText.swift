@@ -83,7 +83,7 @@ extension PreservedTextMarkup {
         let name = String(body.prefix { !$0.isWhitespace })
         // Untrusted text: a name that is not a plain word would make the saved `<text>` malformed, and nesting past
         // the bound would recurse without one — such a tag is dropped, its characters kept.
-        guard isPlainName(name), selfClosing || open.count <= maximumNesting else { return }
+        guard isPlainName(name), open.count <= maximumNesting else { return }
         let attributes = RichTextBuilder.attributes(in: body.dropFirst(name.count)).filter { isPlainName($0.key) }
         if selfClosing {
             open[open.count - 1].content.append(.element(Element(name: name, attributes: attributes)))

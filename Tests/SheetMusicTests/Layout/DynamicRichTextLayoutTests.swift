@@ -146,6 +146,23 @@ struct DynamicRichTextLayoutTests {
         #expect(richMeasure.dynamicExtents.map(\.tick) == [0, 960])
     }
 
+    /// The element's `text` is its label for whatever reads one; glyphs alone have no plain words, so the subtype names
+    /// it. Bar 7 is a plain fp, given a text of its own glyphs.
+    @Test("a text of glyphs alone is labelled by its subtype")
+    func glyphOnlyTextIsLabelledBySubtype() throws {
+        let document = try Self.document { score in
+            Self.editFirstDynamic(of: &score, measure: 6) { dynamic in
+                dynamic.text = ""
+                dynamic.preservedTextMarkup = PreservedTextMarkup(
+                    xmlText: "<sym>dynamicForte</sym><sym>dynamicPiano</sym>",
+                )
+            }
+        }
+        let dynamic = try #require(Self.dynamics(Self.measure(document, 6)).first)
+        #expect(dynamic.rich != nil)
+        #expect(dynamic.text == "fp")
+    }
+
     @Test("an other-dynamics marking draws its word, not its subtype's name")
     func otherDynamicDrawsItsWord() throws {
         let dynamic = try #require(Self.dynamics(Self.measure(Self.document(), 3)).first)

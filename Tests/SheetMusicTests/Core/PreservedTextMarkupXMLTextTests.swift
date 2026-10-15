@@ -76,6 +76,7 @@ struct PreservedTextMarkupXMLTextTests {
         let deep = PreservedTextMarkup(xmlText: String(repeating: "<b>", count: 10000) + "x")
         #expect(Self.nesting(deep.content) == PreservedTextMarkup.maximumNesting)
         #expect(deep.derivedText == "x")
+        #expect(deep.xmlText.hasSuffix("x" + String(repeating: "</b>", count: PreservedTextMarkup.maximumNesting)))
         #expect(PreservedTextMarkup(xmlText: #"<a"b>x</a"b>"#).xmlText == "x")
         let attribute = PreservedTextMarkup(xmlText: #"<font size="12" 1x="2">y</font>"#)
         #expect(attribute.xmlText == #"<font size="12">y</font>"#)
