@@ -44,9 +44,12 @@ extension ScoreEditSession {
             return current == trimmed
                 ? nil
                 : SetSwing(anchor: anchor, settings: settings, isSystemText: isSystemText)
-        case let .setDynamic(location, subtype):
-            let current = SetDynamic.current(at: location, in: score)?.subtype
-            return current == subtype ? nil : SetDynamic(at: location, subtype: subtype)
+        case let .setDynamic(location, subtype, xmlText):
+            // The text is written with the subtype (`SetDynamic.xmlText`): the palette's subtype over a dynamic with
+            // its own text is a write, not a restatement.
+            let current = SetDynamic.current(at: location, in: score)
+            let same = current?.subtype == subtype && (subtype == nil || current?.customXMLText == xmlText)
+            return same ? nil : SetDynamic(at: location, subtype: subtype, xmlText: xmlText)
         case let .setFermata(location, subtype, timeStretch):
             let current = SetFermata.current(at: location, in: score)
             let same = current?.subtype == subtype && (subtype == nil || current?.timeStretch == timeStretch)

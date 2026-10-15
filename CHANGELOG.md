@@ -98,6 +98,11 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking: `EditIntent.setDynamic` carries the dynamic's own text** — `setDynamic(at:subtype:xmlText:)`, `xmlText`
+  defaulted to `nil`: building it as before still compiles, a pattern binding two values does not.
+  `SetDynamic(at:subtype:xmlText:)` writes the text with the subtype, as MuseScore's drop does, so the palette's own
+  subtype over "subito p" brings back a plain p. `SetDynamicIntentWire` carries it as optional tag 4, absent for a
+  dynamic without its own text, whose bytes are unchanged.
 - **A hairpin aims where MuseScore 4's playback aims it** (import-fidelity, owner decision c): at the dynamic on its end
   when that dynamic lies in its direction, otherwise one MuseScore 4 level past where it starts — p to mp, mf to f
   (`MuseScoreDynamicLevels`) — instead of staying flat; `<veloChange>`, which MuseScore 4 does not read, no longer sets
@@ -171,6 +176,8 @@ and this project adheres to
 
 ### Fixed
 
+- **Changing a dynamic's subtype drops its old text** (import-fidelity F4.6): `SetDynamic` kept the preserved `<text>`,
+  so MuseScore went on showing "subito p" over a dynamic changed to f.
 - **A dynamic plays in every voice its assignment reaches — both hands of a piano by default** (import-fidelity,
   MuseScore 4 playback — owner decision c): a dynamic or a hairpin plays in every staff and voice of its instrument
   unless its `<voiceAssignment>` narrows it to its staff or its own voice, and on one tick the narrower assignment wins

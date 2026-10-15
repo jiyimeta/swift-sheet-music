@@ -26,16 +26,20 @@ import Wirelet
 /// does the same for every case payload — there is no "omit a zero-valued scalar" shortcut. Every tag listed below
 /// must be written on encode, including zero-valued ones (a committed golden fixture emits literal `08 00` / `10 00`
 /// / `20 00` triples for exactly this reason), or decoding throws `unknownTag`. The one exception the macro allows
-/// is an `Optional<T>` (`T?`) stored property, written only when non-nil: `SetTempoIntentWire`'s tags 6–9 are the only
-/// ones, so an unstamped number-only tempo edit encodes exactly as before (a stamped one adds tag 9, 2 bytes).
-/// Every other field below is mandatory.
+/// is an `Optional<T>` (`T?`) stored property, written only when non-nil: `SetTempoIntentWire`'s tags 6–9 and
+/// `SetDynamicIntentWire`'s tag 4 are the only ones, so an unstamped number-only tempo edit and a dynamic written
+/// without its own text encode exactly as before (a stamped tempo edit adds tag 9, 2 bytes; a dynamic's own text adds
+/// tag 4, 2 bytes and the text). Every other field below is mandatory.
 ///
 /// Two decode behaviors of Wirelet's struct decoder (`WireFormatMacro.swift`) keep that compatible.
 /// `unknownTag` is thrown for a MISSING mandatory field, not for an extra one. A field NUMBER the decoder does not
 /// declare is skipped (`default: try reader.skipUnknownField(wireType:)`). So a decoder built before
 /// tags 6–9 existed reads a new `setTempo` intent, skips those tags, and applies the number and beat; the text, play
 /// and number-edit fields are dropped by it, silently. A decoder that knows them reads an old intent — which carries
-/// none — as `.keep`, no change to `<play>`, and a number edit inferred as before.
+/// none — as `.keep`, no change to `<play>`, and a number edit inferred as before. The same holds for `setDynamic`: a
+/// decoder built before tag 4 existed reads an intent that carries it, skips the tag and applies the subtype — the
+/// text is dropped by it, silently. That is why the text rides as a tag on the existing struct: a new CASE of the
+/// `@WireFormatChoice` enum would not be skippable.
 ///
 /// `EditIntentWire` top-level bytes: `varint(payloadLength)` + payload, where payload is `varint(caseIndex)`
 /// followed — for every case here, since none is payload-less — by `tag(1, lengthDelimited) +
@@ -546,6 +550,7 @@ import Wirelet
 /// tag 1: location    VoiceElementIDWire, see PathIDCodecs.swift
 /// tag 2: hasDynamic  u8, varint — 0 = remove, 1 = write `subtype`
 /// tag 3: subtype     string — the MSCX token ("pp", "mf", "sfz", …); "" when hasDynamic == 0
+/// tag 4: xmlText     string, OPTIONAL — the dynamic's own text as MuseScore xml text; absent = its subtype's glyphs
 /// ```
 ///
 /// `SetFermataIntentWire` (`setFermata`'s payload):
@@ -1273,8 +1278,8 @@ public enum EditIntentWire {
             self = .setTempo(SetTempoIntentWire(anchor: anchor, marking: marking))
         case let .setStaffText(anchor, text, isSystemText):
             self = .setStaffText(SetStaffTextIntentWire(anchor: anchor, text: text, isSystemText: isSystemText))
-        case let .setDynamic(location, subtype):
-            self = .setDynamic(SetDynamicIntentWire(location: location, subtype: subtype))
+        case let .setDynamic(location, subtype, xmlText):
+            self = .setDynamic(SetDynamicIntentWire(location: location, subtype: subtype, xmlText: xmlText))
         case let .setFermata(location, subtype, timeStretch):
             self = .setFermata(SetFermataIntentWire(location: location, subtype: subtype, timeStretch: timeStretch))
         case let .setBreath(location, kind, pause):
@@ -1531,7 +1536,7 @@ public enum EditIntentWire {
             return .setStaffText(anchor: decoded.anchor, text: decoded.text, isSystemText: decoded.isSystemText)
         case let .setDynamic(wire):
             let decoded = wire.decoded()
-            return .setDynamic(at: decoded.location, subtype: decoded.subtype)
+            return .setDynamic(at: decoded.location, subtype: decoded.subtype, xmlText: decoded.xmlText)
         case let .setFermata(wire):
             let decoded = wire.decoded()
             return .setFermata(at: decoded.location, subtype: decoded.subtype, timeStretch: decoded.timeStretch)

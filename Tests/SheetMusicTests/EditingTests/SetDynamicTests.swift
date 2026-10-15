@@ -1,4 +1,6 @@
+import Foundation
 @testable import SheetMusicCore
+@testable import SheetMusicMSCX
 import Testing
 
 @Suite("SetDynamic")
@@ -103,5 +105,117 @@ struct SetDynamicTests {
     private static func reason(of error: SheetMusicError?) -> EditRefusal.Reason? {
         guard case let .invalidEdit(refusal)? = error else { return nil }
         return refusal.reason
+    }
+}
+
+/// `SetDynamic` sets a dynamic's text with its subtype, as MuseScore's drop does (`Dynamic::drop`,
+/// `engraving/dom/dynamic.cpp:318-325`): a new subtype never keeps a stale text (F4.6), the palette's own subtype over
+/// a dynamic with its own text brings back the plain one, and a copied text — MuseScore xml text — is written back
+/// whole (F4.7).
+@Suite("SetDynamic — the dynamic's own text")
+struct SetDynamicTextTests {
+    private static let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+    private static let subitoXML = "subito <sym>dynamicPiano</sym>"
+
+    private static func slot(_ element: Int) -> VoiceElementID {
+        VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: element)
+    }
+
+    private static func subitoP() -> Dynamic {
+        Dynamic(
+            subtype: "p", velocity: 49, text: "subito ", preservedTextMarkup: PreservedTextMarkup(xmlText: subitoXML),
+        )
+    }
+
+    /// `parityFixture`'s first bar `[ts, C4, D4, r, r]` with `dynamic` before C4: `[ts, dyn, C4, D4, r, r]`.
+    private static func score(with dynamic: Dynamic) -> Score {
+        var score = EditingFixtures.parityFixture()
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                var elements = staff.measures[0].voices[0].elements.values
+                elements.insert(.dynamic(dynamic), at: 1)
+                staff.measures[0].voices[0].elements = IdentifiedArray(elements)
+            }
+        }
+        return score
+    }
+
+    private static func dynamic(in score: Score) -> Dynamic? {
+        if case let .dynamic(dynamic) = score.parts[0].staves[0].measures[0].voices[0].elements.values[1] {
+            return dynamic
+        }
+        return nil
+    }
+
+    @Test("a new subtype drops the old text (F4.6)")
+    func newSubtypeDropsTheText() throws {
+        var score = Self.score(with: Self.subitoP())
+        _ = try SetDynamic(at: Self.slot(2), subtype: "f").apply(to: &score)
+        #expect(Self.dynamic(in: score) == Dynamic(subtype: "f", velocity: 96))
+    }
+
+    @Test("the palette's own subtype over a dynamic with its own text is a write, back to the plain dynamic")
+    func paletteSubtypeOverOwnTextIsAWrite() {
+        let session = ScoreEditSession(score: Self.score(with: Self.subitoP()))
+        #expect(session.apply(.setDynamic(at: Self.slot(2), subtype: "p")))
+        #expect(Self.dynamic(in: session.score) == Dynamic(subtype: "p", velocity: 49))
+        #expect(!session.apply(.setDynamic(at: Self.slot(2), subtype: "p")))
+        #expect(session.lastRefusal?.reason == .nothingToApply)
+    }
+
+    @Test("a text written as MuseScore xml text arrives whole: words, glyph, formatting; plain words stay plain")
+    func writesXMLText() throws {
+        var score = EditingFixtures.parityFixture()
+        _ = try SetDynamic(at: Self.slot(1), subtype: "p", xmlText: Self.subitoXML).apply(to: &score)
+        let written = try #require(Self.dynamic(in: score))
+        #expect(written.subtype == "p")
+        #expect(written.velocity == 49)
+        #expect(written.text == "subito ")
+        #expect(written.customXMLText == Self.subitoXML)
+        #expect(written.richText?.lines == [[
+            .text("subito ", RichTextFormat()), .symbol(name: "dynamicPiano", RichTextFormat()),
+        ]])
+        var plainScore = EditingFixtures.parityFixture()
+        _ = try SetDynamic(at: Self.slot(1), subtype: "p", xmlText: "subito p").apply(to: &plainScore)
+        let plain = try #require(Self.dynamic(in: plainScore))
+        #expect(plain.text == "subito p")
+        #expect(plain.preservedTextMarkup == nil)
+    }
+
+    @Test("a write keeps what it does not set: play flag, change speed, voice assignment, font overrides, visibility")
+    func keepsTheElementsOwnProperties() throws {
+        var dynamic = Self.subitoP()
+        dynamic.playsBack = false
+        dynamic.velocityChangeSpeed = .slow
+        dynamic.voiceAssignment = .currentVoiceOnly
+        dynamic.properties = TextProperties(size: 14)
+        dynamic.visible = false
+        var score = Self.score(with: dynamic)
+        _ = try SetDynamic(at: Self.slot(2), subtype: "fp").apply(to: &score)
+        let written = try #require(Self.dynamic(in: score))
+        #expect(!written.playsBack)
+        #expect(written.velocityChangeSpeed == .slow)
+        #expect(written.voiceAssignment == .currentVoiceOnly)
+        #expect(written.properties == TextProperties(size: 14))
+        #expect(!written.visible)
+        #expect(written.text == nil)
+    }
+
+    @Test("undo brings the text back")
+    func undoRestoresTheText() throws {
+        var score = Self.score(with: Self.subitoP())
+        let before = score
+        let inverse = try SetDynamic(at: Self.slot(2), subtype: "f").apply(to: &score)
+        _ = try inverse.apply(to: &score)
+        #expect(score == before)
+    }
+
+    @Test("a dynamic whose subtype changed saves without its stale text (F4.6)")
+    func savedWithoutStaleText() throws {
+        var score = Self.score(with: Self.subitoP())
+        _ = try SetDynamic(at: Self.slot(2), subtype: "f").apply(to: &score)
+        let xml = try #require(String(bytes: MSCXEncoder.encode(score), encoding: .utf8))
+        #expect(!xml.contains("subito"))
+        #expect(xml.contains("<subtype>f</subtype>"))
     }
 }

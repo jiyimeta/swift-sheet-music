@@ -4,8 +4,8 @@ import Wirelet
 
 // Payload structs for intents 41…47 (edit-command parity, group 3). Tag layouts are documented in
 // `EditIntentCodec.swift`'s file-level comment alongside the older payloads; the rules there apply unchanged —
-// every field mandatory (`SetTempoIntentWire`'s tags 6–9 are the one `T?` exception, written only when non-nil),
-// optionals as `has` + value pairs, enums this codec does not own as raw strings, small
+// every field mandatory (`SetTempoIntentWire`'s tags 6–9 and `SetDynamicIntentWire`'s tag 4 are the `T?` exceptions,
+// written only when non-nil), optionals as `has` + value pairs, enums this codec does not own as raw strings, small
 // closed enums as `u8` with a throwing table. The `Double` fields are the codec's first floating-point payloads:
 // Wirelet writes them as fixed 64-bit IEEE 754 bit patterns, so they are byte-stable and round-trip exactly.
 
@@ -171,15 +171,20 @@ public struct SetDynamicIntentWire {
     public var location: VoiceElementIDWire
     public var hasDynamic: UInt8
     public var subtype: String
+    /// Tag 4: the dynamic's own text as MuseScore xml text (`Dynamic.customXMLText`); absent for its subtype's glyphs
+    /// and for a removal, so those encode as they did before the tag existed.
+    public var xmlText: String?
 
-    public init(location: VoiceElementID, subtype: String?) {
+    public init(location: VoiceElementID, subtype: String?, xmlText: String? = nil) {
         self.location = VoiceElementIDWire(from: location)
         hasDynamic = subtype == nil ? 0 : 1
         self.subtype = subtype ?? ""
+        self.xmlText = subtype == nil ? nil : xmlText
     }
 
-    public func decoded() -> (location: VoiceElementID, subtype: String?) {
-        (location: location.decoded(), subtype: hasDynamic == 0 ? nil : subtype)
+    public func decoded() -> (location: VoiceElementID, subtype: String?, xmlText: String?) {
+        let decodedSubtype = hasDynamic == 0 ? nil : subtype
+        return (location: location.decoded(), subtype: decodedSubtype, xmlText: decodedSubtype == nil ? nil : xmlText)
     }
 }
 

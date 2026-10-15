@@ -282,9 +282,11 @@ public enum EditIntent: Sendable, Equatable {
     /// `.emptyStaffText`. Resolves to nothing to apply when the text already reads this way.
     case setStaffText(anchor: VoiceElementID, text: String?, isSystemText: Bool)
 
-    /// Write `subtype` as the dynamic on the chord at `at` (velocity from `Dynamic.defaultVelocity(for:)`), or
-    /// remove it with `nil`. Resolves to nothing to apply when the chord already carries that subtype.
-    case setDynamic(at: VoiceElementID, subtype: String?)
+    /// Write `subtype` as the dynamic on the chord at `at` (velocity from `Dynamic.defaultVelocity(for:)`), with
+    /// `xmlText` — MuseScore xml text, `Dynamic.customXMLText` — as its own text, or printing its subtype when `nil`;
+    /// or remove it with a `nil` subtype. Resolves to nothing to apply when the chord already carries that subtype and
+    /// text.
+    case setDynamic(at: VoiceElementID, subtype: String?, xmlText: String? = nil)
 
     /// Write a fermata of `subtype` with `timeStretch` over the chord or rest at `at`, or remove it with `nil`.
     /// Resolves to nothing to apply when both fields already match.
