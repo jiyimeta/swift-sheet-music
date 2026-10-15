@@ -304,6 +304,8 @@ and this project adheres to
   chords*, *Lowercase bass notes* and *All caps note names* (`ScoreStyle.chordSymbolCase`, read from `<Style>` and still
   saved verbatim). Only a lower or upper case is written back: MuseScore draws auto and capital alike and reads an
   absent tag as capital, so a `-1` in a source file is not kept.
+- **The draw program draws a text line's label at the Apple size** (it used the larger jump text size), with the same
+  continue/end text, hooks and dashes — Android, Windows, web and the PDF writer follow with no code change.
 - **The Apple renderers draw a text line's label in MuseScore's plain Edwin**, not in an italic system font, and draw its
   continue and end text and its hooks (the layer renderer and the Canvas agree).
 - **Text-line, palm-mute and let-ring labels that hold only a `<sym>` are no longer empty** — every line label is typeset

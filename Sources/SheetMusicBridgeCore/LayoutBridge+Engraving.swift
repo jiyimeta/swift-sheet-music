@@ -469,6 +469,7 @@ extension LayoutBridge {
         sp: Double,
         glyphSize: Double,
         richText: LayoutRichText? = nil,
+        lineDetail: LayoutLineDetail? = nil,
         into out: inout [DrawCommand],
     ) {
         let from = CGPoint(x: CGFloat(fromX), y: CGFloat(fromY))
@@ -568,35 +569,11 @@ extension LayoutBridge {
                 out.append(.setDash(onMM: 0, offMM: 0))
             }
 
-        case .pedal:
-            let parts = SpannerGeometry.pedal(from: from, to: to)
-            // Canvas.drawText anchors at baseline-leading. Apple uses
-            // `(0, 0.5)` (vertical center, leading); shift by the
-            // glyph half-height.
-            let glyphFont = LayoutFont(
-                face: SMuFLFamily.bravura, pointSize: CGFloat(glyphSize),
-            )
-            let ascent = Double(
-                FontMetrics.provider.ascent(font: glyphFont),
-            )
-            let descent = Double(
-                FontMetrics.provider.descent(font: glyphFont),
-            )
-            let dy = (ascent - descent) / 2
-            out.append(.glyph(
-                codepoint: parts.downCodepoint,
-                x: Double(parts.downOrigin.x) * ptToMMScale,
-                y: (Double(parts.downOrigin.y) + dy) * ptToMMScale,
-                size: glyphSize * ptToMMScale,
-                fontId: .smufl,
-            ))
-            out.append(.glyph(
-                codepoint: parts.upCodepoint,
-                x: Double(parts.upOrigin.x) * ptToMMScale,
-                y: (Double(parts.upOrigin.y) + dy) * ptToMMScale,
-                size: glyphSize * ptToMMScale,
-                fontId: .smufl,
-            ))
+        case .pedal, .textLine, .palmMute, .letRing, .chordTextLine:
+            // One geometry for the whole family (`SpannerGeometry.textLineBase`), as the Apple renderers draw it.
+            if let detail = SpannerGeometry.resolvedLineDetail(kind: kind, detail: lineDetail, sp: CGFloat(sp)) {
+                encodeTextLineBase(from: from, to: to, richText: richText, lineDetail: detail, sp: sp, into: &out)
+            }
 
         case let .ottava(subtype, numbersOnly):
             let parts = SpannerGeometry.ottava(
@@ -632,38 +609,6 @@ extension LayoutBridge {
 
         case .gradualTempoChange:
             encodeGradualTempoChange(from: from, to: to, richText: richText, sp: sp, into: &out)
-
-        case .textLine, .palmMute, .letRing, .chordTextLine:
-            let parts = SpannerGeometry.textLine(
-                from: from, to: to, text: text, sp: CGFloat(sp),
-                dashed: kind != .textLine,
-            )
-            if !parts.label.isEmpty {
-                encodeNotationText(
-                    text: parts.label, role: .jump,
-                    originX: Double(parts.labelOrigin.x),
-                    originY: Double(parts.labelOrigin.y),
-                    sp: sp, into: &out,
-                )
-            }
-            if parts.lineEnd.x > parts.lineStart.x {
-                if !parts.dashPattern.isEmpty {
-                    let onMM = Double(parts.dashPattern[0]) * ptToMMScale
-                    let offMM = Double(
-                        parts.dashPattern.count > 1
-                            ? parts.dashPattern[1]
-                            : parts.dashPattern[0],
-                    ) * ptToMMScale
-                    out.append(.setDash(onMM: onMM, offMM: offMM))
-                }
-                emitSegment(
-                    from: parts.lineStart, to: parts.lineEnd,
-                    lineWidth: line, into: &out,
-                )
-                if !parts.dashPattern.isEmpty {
-                    out.append(.setDash(onMM: 0, offMM: 0))
-                }
-            }
 
         case let .trill(type):
             let symbols = SpannerGeometry.trillSymbols(
@@ -734,8 +679,9 @@ extension LayoutBridge {
         return (ascent - descent) / 2
     }
 
-    private static func emitPolyline(
-        _ points: [CGPoint], lineWidth: Double,
+    /// Internal with `TextInkPoint` points for the text-line file, as `emitSegment(from:to:lineWidth:)` is.
+    static func emitPolyline(
+        _ points: [TextInkPoint], lineWidth: Double,
         into out: inout [DrawCommand],
     ) {
         guard let first = points.first else { return }
