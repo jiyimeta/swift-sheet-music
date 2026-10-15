@@ -59,6 +59,44 @@ struct AnnotationStaffTextLayoutTests {
         #expect(abs((texts[0].origin.x + ink.width / 2) - noteX) < 0.6 * F.sp)
     }
 
+    /// MuseScore draws a glyph-mode diagram's `<sym>`s in the music font at its SMuFL size (`hasSymbolScale`), so each
+    /// pedal is its one-space advance and the row of seven and the divider is eight spaces wide, as in MuseScore's own
+    /// engraving of this fixture. The text mode's note names keep the style's 8 pt symbol size.
+    @Test("a glyph-mode harp diagram sets its pedals at the music font's size; the text mode at its style's")
+    func harpDiagramSymbolSize() throws {
+        let document = try F.layout(F.load("w5-diagrams"))
+        let texts = F.staffTexts(document).filter { $0.style == .harpPedalDiagram || $0.style == .harpPedalTextDiagram }
+        try #require(texts.count == 2)
+        let glyphs = try #require(texts[0].richText)
+        let pedals = glyphs.lines.flatMap(\.runs)
+        #expect(pedals.allSatisfy { abs($0.font.pointSize - 4 * F.sp) < 0.01 })
+        #expect(abs(glyphs.size.width - 8 * F.sp) < 0.25 * F.sp)
+        let names = try #require(texts[1].richText)
+        let symbols = names.lines.flatMap(\.runs).filter { if case .symbol = $0.content { true } else { false } }
+        #expect(!symbols.isEmpty)
+        #expect(symbols.allSatisfy { abs($0.font.pointSize - 8 * F.sp / 5) < 0.01 })
+    }
+
+    @Test("a play technique and a string tunings text set their symbols at the music font's size")
+    func scaledSymbolsOnTechniqueAndTunings() throws {
+        let markup = PreservedTextMarkup(xmlText: "<sym>stringsDownBow</sym>pizz.")
+        var pizz = StaffText(text: "pizz.", preservedTextMarkup: markup)
+        pizz.annotation = .playTechnique(.pizzicato, playsBack: true)
+        let technique = F.layout(F.score([F.whole()], system: Self.lane(pizz)))
+        let run = try #require(F.staffTexts(technique).first?.richText?.lines.first?.runs.first)
+        #expect(abs(run.font.pointSize - 4 * F.sp) < 0.01)
+        let plain = StaffText(text: "pizz.", preservedTextMarkup: markup)
+        let ordinary = F.layout(F.score([F.whole()], system: Self.lane(plain)))
+        let plainRun = try #require(F.staffTexts(ordinary).first?.richText?.lines.first?.runs.first)
+        #expect(abs(plainRun.font.pointSize - 10 * F.sp / 5) < 0.01)
+        let flat = PreservedTextMarkup(xmlText: "Drop D<sym>csymAccidentalFlat</sym>")
+        let dropD = StringTunings(text: "Drop D", preservedTextMarkup: flat)
+        let tunings = F.layout(F.score([.stringTunings(dropD), F.whole()]))
+        let tuningRuns = try #require(F.staffTexts(tunings).first?.richText?.lines.first?.runs)
+        let tuningSymbol = try #require(tuningRuns.first { if case .symbol = $0.content { true } else { false } })
+        #expect(abs(tuningSymbol.font.pointSize - 4 * F.sp) < 0.01)
+    }
+
     @Test("a diagram with no text draws nothing")
     func emptyDiagramDrawsNothing() {
         var bare = StaffText(text: "")

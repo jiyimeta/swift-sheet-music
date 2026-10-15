@@ -27,6 +27,10 @@ extension LayoutEngine {
         /// The style's position row is the text's vertical CENTER (`AlignV::VCENTER`: the harp pedal diagram), not
         /// its first baseline.
         var verticalCenter = false
+        /// MuseScore's `TextBase::hasSymbolScale` (`textbase.cpp:3425-3436`): a string tunings text, a play technique
+        /// and a harp pedal diagram in glyph mode draw their `<sym>`s in the music font at its SMuFL size, not at the
+        /// style's musical-symbol size (`TextFragment::font`, `textbase.cpp:881-904`).
+        var symbolsScaled = false
     }
 
     /// The text spec of a voice-level annotation, or `nil` for any other element or an empty text.
@@ -59,11 +63,15 @@ extension LayoutEngine {
                 alignment: .leading, anchorsAtMeasureStart: false,
             )
         case let .stringTunings(tunings):
-            AnnotationTextSpec(
-                text: tunings.text, richText: tunings.richText, style: .stringTunings, role: .staffText,
-                properties: tunings.elementProperties, overrides: tunings.fontOverrides,
-                alignment: .leading, anchorsAtMeasureStart: true,
-            )
+            {
+                var spec = AnnotationTextSpec(
+                    text: tunings.text, richText: tunings.richText, style: .stringTunings, role: .staffText,
+                    properties: tunings.elementProperties, overrides: tunings.fontOverrides,
+                    alignment: .leading, anchorsAtMeasureStart: true,
+                )
+                spec.symbolsScaled = true
+                return spec
+            }()
         default:
             nil
         }
@@ -79,15 +87,19 @@ extension LayoutEngine {
         let role: TextPlacementRole
         let alignment: AnnotationAlignment
         let verticalCenter: Bool
+        let symbolsScaled: Bool
         switch annotation {
         case .playTechnique:
             role = staffText.isSystemText ? .systemText : .staffText
             alignment = .leading
             verticalCenter = false
+            symbolsScaled = true
         case let .harpPedal(diagram):
             role = diagram.isDiagram ? .harpPedalDiagram : .harpPedalTextDiagram
             alignment = diagram.isDiagram ? .center : .leading
             verticalCenter = diagram.isDiagram
+            // Glyph mode only: the text mode's note names keep the style's symbol size.
+            symbolsScaled = diagram.isDiagram
         }
         var spec = AnnotationTextSpec(
             text: staffText.text, richText: staffText.richText, style: staffText.styleType, role: role,
@@ -95,6 +107,7 @@ extension LayoutEngine {
             alignment: alignment, anchorsAtMeasureStart: false,
         )
         spec.verticalCenter = verticalCenter
+        spec.symbolsScaled = symbolsScaled
         return spec
     }
 
@@ -107,7 +120,9 @@ extension LayoutEngine {
         textPlacementStyle: TextPlacementStyles, lineGeometry: StaffLineGeometry, metrics: StaffMetrics,
     ) -> LayoutElement {
         let rich = spec.richText.map {
-            LayoutRichText($0, style: spec.style, overrides: spec.overrides, metrics: metrics)
+            LayoutRichText(
+                $0, style: spec.style, overrides: spec.overrides, metrics: metrics, symbolsScaled: spec.symbolsScaled,
+            )
         }
         let font = TextInkGeometry.font(for: spec.style, overrides: spec.overrides, metrics: metrics)
         let width = rich?.size.width ?? TextInkGeometry.typographicSize(text: spec.text, font: font).width

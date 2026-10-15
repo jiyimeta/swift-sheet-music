@@ -45,17 +45,20 @@ extension LayoutRichText {
 
     /// `richText` as a text element of `style` with the element's font override — in the font
     /// `TextInkGeometry.font(for:overrides:metrics:)` resolves, which plain text of the same element is measured and
-    /// drawn in.
+    /// drawn in. `symbolsScaled` sets its `<sym>`s at the music font's SMuFL size — `DEFAULT_SMUFL_POINT_SIZE`, four
+    /// reference spaces — for the elements MuseScore's `hasSymbolScale` names, rather than the style's symbol size.
     init(
         _ richText: RichText, style: TextStyleType, overrides: TextProperties = TextProperties(), metrics: StaffMetrics,
+        symbolsScaled: Bool = false,
     ) {
         let resolved = overrides.resolved(against: style)
         let pointScale = resolved.spatiumDependent ? metrics.sp / TextRoleStyle.referenceSpatiumInPoints : 1
+        let symbolSize = symbolsScaled ? 4 * TextRoleStyle.referenceSpatiumInPoints : Self.musicalSymbolSize(for: style)
         self.init(
             richText,
             baseFont: TextInkGeometry.font(for: style, overrides: overrides, metrics: metrics),
             pointScale: pointScale,
-            symbolPointSize: Self.musicalSymbolSize(for: style) * pointScale,
+            symbolPointSize: symbolSize * pointScale,
             underline: resolved.style.contains(.underline),
             strike: resolved.style.contains(.strike),
         )
