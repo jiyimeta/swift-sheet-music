@@ -565,6 +565,10 @@ and this project adheres to
   covered, and so are tempo markings (typeset from runs, see above); expression text marks still emit plain text on the
   wire, and their formatting arrives with the dynamics workstream. No opcode was added and the wire stays v8, so no reader changes. A `<font face>`
   override reaches the wire only as the face id `TextFontMapping` can name; Apple honors the face itself.
+- **`PlaybackEngine.teardown()` lets go of the score.** It kept the last prepared score, so a host sharing one engine
+  across windows held the last closed score, model and all, for the rest of the process; and a `reloadSoundfont`
+  after the teardown re-prepared that score and restarted the graph. The new SoundFont now waits for the next
+  `prepare(score:)`, as it does on an engine that never had a score.
 
 ## [4.10.0] - 2026-10-14
 

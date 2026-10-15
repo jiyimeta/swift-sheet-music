@@ -67,8 +67,8 @@ extension PlaybackEngine {
     /// - `.exporting`: the export renders on its own engine and is not what the system reconfigured; tearing the
     ///   live graph down under it would be gratuitous.
     /// - `.stopped`: nothing is sounding, and the next `play(...)` starts the engine itself and so adopts the new
-    ///   route anyway. This is also what makes a notification arriving after `teardown()` harmless — `teardown()`
-    ///   leaves `loadedScore` set, so a "has a score" test alone would resurrect a torn-down engine.
+    ///   route anyway. This is also one of the two things that make a notification arriving after `teardown()`
+    ///   harmless; the other is that `teardown()` now clears `loadedScore`.
     /// - no score prepared: `restartGraphPreservingState()` would no-op regardless.
     ///
     /// A failed rebuild is recorded rather than swallowed, and the transport is corrected — the whole point is that

@@ -273,6 +273,34 @@
                 #expect(engine.exportEngineSnapshot().resolver.defaultGMSoundfontURL == Self.urlB)
                 engine.teardown()
             }
+
+            /// `teardown()` is the host letting go of the score, so the engine must not keep it: a host that shares
+            /// one engine across windows held the last closed score, model and all, after every window was gone.
+            @Test("teardown forgets the loaded score")
+            func teardownForgetsLoadedScore() throws {
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                try engine.prepare(score: Self.singleStaffScore())
+                #expect(engine.loadedScore != nil)
+
+                engine.teardown()
+
+                #expect(engine.loadedScore == nil)
+            }
+
+            /// Before `teardown()` cleared the score, a SoundFont swap after it re-prepared the released score and
+            /// restarted the graph. The new font still lands — it waits for the next `prepare(score:)`.
+            @Test("a reload after teardown does not re-prepare the released score")
+            func reloadAfterTeardownStaysReleased() throws {
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: Self.urlA))
+                try engine.prepare(score: Self.singleStaffScore())
+                engine.teardown()
+
+                engine.reloadSoundfont(resolver: FakeResolver(gmURL: Self.urlB))
+
+                #expect(engine.graphRestartCount == 0)
+                #expect(engine.loadedScore == nil)
+                #expect(engine.exportEngineSnapshot().resolver.defaultGMSoundfontURL == Self.urlB)
+            }
         }
     }
 #endif

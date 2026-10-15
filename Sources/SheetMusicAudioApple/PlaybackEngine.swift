@@ -2788,6 +2788,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         engine.stop()
         sequencer = nil
         sequencerScore = nil
+        // The host is letting go of the score, so the engine does too. Kept, it outlived every window that showed
+        // it — a host sharing one engine across windows held the last closed score, model and all, for the rest of
+        // the process (measured in Folino 2026-10-15) — and a later `reloadSoundfont` re-prepared it, restarting a
+        // graph nobody had asked for.
+        loadedScore = nil
         if let backend {
             backend.teardown()
             // Teardown supersedes any in-flight SoundFont load; clear the
