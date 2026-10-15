@@ -4,7 +4,9 @@ import SheetMusicXMLTools
 
 extension VoiceAssignment {
     /// `<voiceAssignment>`, else an older file's `<dynType>`, else the whole instrument — as MuseScore 4 reads them
-    /// (`rw/read460/tread.cpp:465-466`: an unknown value is the whole instrument).
+    /// (`rw/read460/tread.cpp:465-466`: an unknown value is the whole instrument). MuseScore reads `<dynType>` only
+    /// from a file older than 4.4 (`mscVersion` below 440); this reads it whatever the version, which agrees because no
+    /// 4.4+ save writes one.
     static func decode(_ node: XMLTreeNode) -> VoiceAssignment {
         if let text = node.first("voiceAssignment")?.text {
             return VoiceAssignment(rawValue: text.trimmingWhitespaceAndNewlines()) ?? .allInInstrument

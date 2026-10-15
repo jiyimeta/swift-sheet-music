@@ -3,8 +3,8 @@ import SheetMusicFoundation
 
 /// One resolved hairpin: a linear (or v1-falls-through-to-linear)
 /// velocity ramp between two ticks in the original (pre-repeat)
-/// score timeline. Built by `HairpinRamps.collect` and consumed by
-/// `MidiRenderer+Voice` at chord onset.
+/// score timeline. Built into a voice's `DynamicsTimeline` by
+/// `HairpinRamps.timeline` and consumed by `MidiRenderer+Voice` at chord onset.
 struct HairpinRamp: Equatable {
     /// What the range represents. A `wedge` is an engraved hairpin; a
     /// `hold` is the flat stretch after one, keeping the level it
@@ -106,22 +106,26 @@ enum HairpinRamps {
     /// starting on an accent or a two-level dynamic starts from that
     /// dynamic, as MuseScore 4's `appliableDynamicLevel` does there
     /// (`playbackcontext.cpp:576-601`).
+    ///
+    /// `dynList` holds the marks a wedge climbs to — the dynamics written in the hairpins' own track — and `stops`
+    /// every dynamic in force on that track, wherever it is written: one of those ends a chain, and one on a wedge's
+    /// end tick at another level stops the wedge short of it (`stopsShort`). Each wedge comes back with its segments.
     static func resolveChained(
-        _ pending: [Pending], dynList: [DynPoint],
-    ) -> [HairpinRamp] {
-        var resolved: [HairpinRamp] = []
+        _ pending: [Pending], dynList: [DynPoint], stops: [DynPoint],
+    ) -> [(pending: Pending, segments: [HairpinRamp])] {
+        var resolved: [(pending: Pending, segments: [HairpinRamp])] = []
         var reached: (tick: Int, velocity: Int)?
         for p in pending.sorted(by: { $0.startTick < $1.startTick }) {
             var startVelocity = p.startVelocity
             if !p.startsOnItsDynamic, let reached, reached.tick <= p.startTick {
-                let lastMark = dynList
+                let lastMark = stops
                     .last { $0.tick <= p.startTick }?.tick ?? Int.min
                 if reached.tick > lastMark { startVelocity = reached.velocity }
             }
             let segments = resolveRamp(
-                p, startVelocity: startVelocity, dynList: dynList,
+                p, startVelocity: startVelocity, dynList: dynList, stops: stops,
             )
-            resolved.append(contentsOf: segments)
+            resolved.append((p, segments))
             if let last = segments.last {
                 reached = (last.endTick, last.endVelocity)
             }
@@ -174,6 +178,9 @@ enum HairpinRamps {
         /// A two-level dynamic's mark: the level a wedge ending on it aims for is its first, and it moves on to its
         /// second by itself, so no hold follows a wedge ending on it.
         var startsTransition = false
+        /// The track the dynamic is written in; a hairpin aims only for its own track's
+        /// (`DynamicsWalk.resolvedWedges`).
+        var track: PartTrack?
     }
 
     struct Pending {
@@ -184,6 +191,8 @@ enum HairpinRamps {
         /// The wedge starts on an accent or a two-level dynamic, from that dynamic's level, which no earlier wedge's
         /// end replaces (`resolveChained`).
         var startsOnItsDynamic = false
+        /// The hairpin it is, in its part (`PartDynamicEvent.source`).
+        var source: PartDynamicEvent.Source?
     }
 
     // swiftlint:disable:next function_parameter_count
@@ -270,10 +279,12 @@ enum HairpinRamps {
     ///
     /// The end is MuseScore 4's (`PlaybackContext::handleHairpin`, `playbackcontext.cpp:603-624`): the dynamic on the
     /// wedge's end tick when it lies in the wedge's direction; otherwise one of MuseScore 4's levels past the wedge's
-    /// start (`MuseScoreDynamicLevels.oneStep`), stopping one tick short of an end dynamic that went the other way.
-    /// `<veloChange>` — MuseScore 3's spelling of the ramp's size — is not read: MuseScore 4 ignores it.
+    /// start (`MuseScoreDynamicLevels.oneStep`), stopping one tick short of an end dynamic that went the other way —
+    /// or of one written in another track (`stops`) at another level, which MuseScore does not aim for but which still
+    /// governs its own note (`hasDynamicAtEndTick`, `playbackcontext.cpp:617-624`). `<veloChange>` — MuseScore 3's
+    /// spelling of the ramp's size — is not read: MuseScore 4 ignores it.
     private static func resolveRamp(
-        _ p: Pending, startVelocity: Int, dynList: [DynPoint],
+        _ p: Pending, startVelocity: Int, dynList: [DynPoint], stops: [DynPoint],
     ) -> [HairpinRamp] {
         let isCrescendo = p.payload.subtype.isCrescendo
         func segment(from: Int, to: Int, start: Int, end: Int) -> HairpinRamp {
@@ -318,7 +329,8 @@ enum HairpinRamps {
         // No dynamic at the end: one level past where the wedge started, unless its checkpoints already took it there.
         if tick < p.endTick || segments.isEmpty {
             let end = climbs(to: stepTarget, from: velocity) ? stepTarget : velocity
-            segments.append(segment(from: tick, to: p.endTick, start: velocity, end: end))
+            let stopsShort = stops.contains { $0.tick == p.endTick && $0.velocity != end }
+            segments.append(segment(from: tick, to: stopsShort ? p.endTick - 1 : p.endTick, start: velocity, end: end))
         }
         return segments
     }

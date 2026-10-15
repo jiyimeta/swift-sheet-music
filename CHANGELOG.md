@@ -182,8 +182,10 @@ and this project adheres to
   MuseScore 4 playback — owner decision c): a dynamic or a hairpin plays in every staff and voice of its instrument
   unless its `<voiceAssignment>` narrows it to its staff or its own voice, and on one tick the narrower assignment wins
   — before, a dynamic played in its own voice only, so a left hand without dynamics stayed at mf under a right-hand pp.
-  A measure repeat replays its source's accents and two-level changes as well as its levels, and a replayed level ends
-  a hairpin's hold.
+  A hairpin is resolved once, on the staff and voice it is written in — it aims only for an end dynamic written there,
+  and waits for a two-level change only when the change is written there — and plays that one curve in every voice it
+  reaches. A measure repeat replays its source's accents and two-level changes as well as its levels, and a replayed
+  level ends a hairpin's hold.
 - **A repeat or a jump carries the dynamic level in force** (import-fidelity, MuseScore 4 playback — owner decision c):
   a return to bar 1 starts with the level the music left with — a hairpin's held level too, an accent's never —
   instead of mf, and a run of measures hears only the hairpins that reach into it, so a hold from before a repeat's
