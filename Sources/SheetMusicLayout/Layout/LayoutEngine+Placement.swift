@@ -1383,9 +1383,22 @@ extension LayoutEngine {
                         kind: .symbol, figure: figure, color: symbol.elementProperties.color,
                     )
                     if symbol.visible { out.append(element) } else { invisibleOut.append(element) }
-                case .ambitus, .figuredBass, .fretDiagram, .preserved:
-                    // Ambitus (W5 Task 10), figured bass (11) and fret diagrams (12) get their passes in their own
-                    // tasks; source-only preserved markup has no layout behavior.
+                case let .ambitus(ambitus):
+                    guard ambitus.visible || options.showsInvisibleElements else { break }
+                    // Its own header column; one standing anywhere else starts at its beat's notehead edge.
+                    let columnX = headerSchedule.ambitusX
+                        ?? noteheadLeftEdge(timedX(atTick: tickCursor), sp: metrics.sp)
+                    let figure = AmbitusGeometry.figure(
+                        ambitus, clef: currentClef, key: currentKey, columnX: columnX,
+                        staffTopY: staffMidY - metrics.sp * 2, lineCount: lineGeometry.lineCount, sp: metrics.sp,
+                    )
+                    let element = LayoutElement.figure(
+                        kind: .ambitus, figure: figure, color: ambitus.elementProperties.color,
+                    )
+                    if ambitus.visible { out.append(element) } else { invisibleOut.append(element) }
+                case .figuredBass, .fretDiagram, .preserved:
+                    // Figured bass (W5 Task 11) and fret diagrams (12) get their passes in their own tasks;
+                    // source-only preserved markup has no layout behavior.
                     break
                 case let .locationShift(delta):
                     // Voice-level cursor shift. Adds the location's

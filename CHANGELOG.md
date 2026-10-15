@@ -45,6 +45,10 @@ and this project adheres to
   stacked outward; a lone unbeamed note among other voices takes its fingering 1.5 sp off the note instead; a left-hand
   guitar fingering stands left of its note on its line. They are stacked from the chord's own extremes rather than the
   skyline, do not widen the chord's spacing, and grace-note fingerings are not drawn.
+- **Ambitus is drawn** — an `<Ambitus>` draws its two noteheads on the rows their pitches and the clef give (head type
+  and mirror honored), the accidentals the key calls for (computed at layout, as MuseScore does), the connecting line
+  (0.12 sp, 0.8 sp short of each head; off with `hasLine`) and the ledger lines, in a header column between the key and
+  the time signature padded by MuseScore's 0.5 sp `ambitusMargin`. Scores without an ambitus lay out exactly as before.
 - **`LayoutElement.figure`** — one layout case for strokes, ellipses and glyph runs (`LayoutFigure`): `<Symbol>`s now,
   and the ambitus, figured bass, fret diagrams and string numbers next. Every renderer draws it from its primitives —
   the draw program with the opcodes it already has. Adding a case breaks exhaustive switches over `LayoutElement`.

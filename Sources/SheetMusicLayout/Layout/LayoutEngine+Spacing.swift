@@ -20,6 +20,9 @@ extension LayoutEngine {
         /// already includes the room it takes.
         let startRepeatX: CGFloat?
         let contentStartX: CGFloat
+        /// Left edge of the ambitus column (its heads' and accidentals' bbox), between the key and the time
+        /// signature; `nil` when no staff's measure opens with an ambitus.
+        var ambitusX: CGFloat?
     }
 
     /// Clearance between the key signature's last accidental and the
@@ -109,6 +112,8 @@ extension LayoutEngine {
         /// column, because `KeySignatureRenderer` centers each glyph on
         /// its stride.
         let keySigX: CGFloat
+        /// Left edge of the ambitus column, right after the key signature's (zero wide without an ambitus).
+        let ambitusX: CGFloat
         /// Row origin of the time signature, half a glyph inside its own
         /// column for the same reason.
         let timeSigX: CGFloat
@@ -131,6 +136,7 @@ extension LayoutEngine {
         clefWidth: CGFloat,
         keyGlyphCount: Int,
         timeSigInk: TimeSignatureInk,
+        ambitusWidth: CGFloat = 0,
         metrics: StaffMetrics,
     ) -> HeaderColumns {
         let clefX = staffStartX + metrics.sp * 2
@@ -138,13 +144,15 @@ extension LayoutEngine {
         let keySigX = keyGlyphCount > 0
             ? keySigInkLeft + KeySignatureSteps.glyphWidth(sp: metrics.sp) / 2
             : keySigInkLeft
-        let timeSigInkLeft = keySigInkLeft + keySignatureColumnWidth(
+        let ambitusX = keySigInkLeft + keySignatureColumnWidth(
             glyphCount: keyGlyphCount, sp: metrics.sp,
         )
+        let timeSigInkLeft = ambitusX + ambitusWidth
         return HeaderColumns(
             clefX: clefX,
             keySigInkLeft: keySigInkLeft,
             keySigX: keySigX,
+            ambitusX: ambitusX,
             timeSigX: timeSigInkLeft + timeSigInk.leadHalf,
             contentEndX: timeSigInkLeft + timeSigInk.width,
         )
@@ -240,10 +248,32 @@ extension LayoutEngine {
             clefWidth: clefWidth,
             keyGlyphCount: keyGlyphCount,
             timeSigInk: timeSigInk,
+            ambitusWidth: ambitusColumnWidth(
+                measureIdx: measureIdx, staves: staves, activeKeys: activeKeys, sp: metrics.sp,
+            ),
             staves: staves,
             measureIdx: measureIdx,
             metrics: metrics,
         )
+    }
+
+    /// The widest ambitus any staff's measure opens with (`AmbitusGeometry.columnWidth`), its accidentals spelled
+    /// against the measure's own key declaration before it, else the carried key; 0 when none does.
+    private static func ambitusColumnWidth(
+        measureIdx: Int, staves: [Staff], activeKeys: [Int]?, sp: CGFloat,
+    ) -> CGFloat {
+        var width: CGFloat = 0
+        for (idx, staff) in staves.enumerated() where measureIdx < staff.measures.count {
+            var key = activeKeys.flatMap { idx < $0.count ? $0[idx] : nil } ?? 0
+            for element in staff.measures[measureIdx].voices.first?.elements ?? [] {
+                if case .chord = element { break }
+                if case let .keySignature(signature) = element { key = signature.concertKey }
+                if case let .ambitus(ambitus) = element {
+                    width = max(width, AmbitusGeometry.columnWidth(ambitus, key: key, sp: sp))
+                }
+            }
+        }
+        return width
     }
 
     /// Turn the per-column ink `computeHeaderSchedule` measured into the
@@ -253,6 +283,7 @@ extension LayoutEngine {
         clefWidth: CGFloat,
         keyGlyphCount: Int,
         timeSigInk: TimeSignatureInk,
+        ambitusWidth: CGFloat,
         staves: [Staff],
         measureIdx: Int,
         metrics: StaffMetrics,
@@ -261,6 +292,7 @@ extension LayoutEngine {
             clefWidth: clefWidth,
             keyGlyphCount: keyGlyphCount,
             timeSigInk: timeSigInk,
+            ambitusWidth: ambitusWidth,
             metrics: metrics,
         )
         let clefX = columns.clefX
@@ -299,6 +331,7 @@ extension LayoutEngine {
             timeSigX: timeSigX,
             startRepeatX: startRepeatX,
             contentStartX: contentStartX,
+            ambitusX: ambitusWidth > 0 ? columns.ambitusX : nil,
         )
     }
 
