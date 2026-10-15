@@ -228,6 +228,10 @@
             try #require(MeasureLayerDiffPlanner.systemFrameIsUnchanged(system, shifted))
 
             mock.applyMeasureDiff(previous: system, system: shifted, metrics: metrics)
+            // The diff itself must stay inside the window: building every measure only for `remount` to tear most
+            // of them down again would cost what mounting by range is there to save.
+            let inWindow = shifted.measures.filter { SystemMount.meets($0, window) }.map(\.measureIndex)
+            #expect(Set(mock.measureContainers.keys) == Set(inWindow))
             mock.remount(system: shifted, metrics: metrics, to: window)
 
             let fresh = host(shifted, metrics, window)
