@@ -12,8 +12,10 @@ extension MidiRenderer {
     /// `resolvedVoice`). `emitsTempoEvents` is set for the first track's voice 0, which carries the score's tempo
     /// map as MuseScore's export does (`importexport/midi/internal/midiexport/exportmidi.cpp:177-204`); `bookends`
     /// are that track's fermata bookends, which decide with it whether a jump's target needs its tempo re-stated.
+    /// `staffIndex` is `staff`'s place in `part.staves`: the voice plays every dynamic of the part that reaches it.
     static func renderVoice( // swiftlint:disable:this function_body_length cyclomatic_complexity
         voiceIndex: Int,
+        staffIndex: Int = 0,
         staff: Staff,
         part: Part,
         route: PartChannelRoute,
@@ -40,8 +42,9 @@ extension MidiRenderer {
         var tempoSequence = TempoSequence()
 
         let allDynamics = HairpinRamps.timeline(
+            staffIndex: staffIndex,
             voiceIndex: voiceIndex,
-            staff: staff,
+            staves: Array(part.staves),
             instrument: part.instrument,
             division: division,
             tempoMap: tempoMap,

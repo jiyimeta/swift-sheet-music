@@ -83,10 +83,8 @@ enum HairpinRamps {
             .ramps
     }
 
-    /// The voice's dynamics timeline (`DynamicsTimeline`): its ramps, and the levels its dynamics put in force.
-    /// Walk one voice in original (pre-repeat) ticks and resolve every `<HairPin>` into a concrete `HairpinRamp`. The
-    /// end velocity is MuseScore 4's — see `resolveRamp`. Sign comes from the subtype (cresc → +, decresc → −) and the
-    /// final velocity is clamped to `1...127`.
+    /// The single-staff timeline: voice `voiceIndex` of a part that is `staff` alone. The end velocity of each wedge is
+    /// MuseScore 4's — see `resolveRamp`; the final velocity is clamped to `1...127`.
     static func timeline(
         voiceIndex: Int,
         staff: Staff,
@@ -94,56 +92,10 @@ enum HairpinRamps {
         division: Int,
         tempoMap: ResolvedTempoMap,
     ) -> DynamicsTimeline {
-        let initialVelocity = MidiRenderer.effectiveVelocity(forDynamic: nil, instrument: instrument)
-        var walk = DynamicsWalk(runningVelocity: initialVelocity)
-        var measureBase = 0
-        let measureDurations = staff.measures.effectiveMeasureDurations()
-
-        for (measureIdx, measure) in staff.measures.enumerated() {
-            let measureDuration = measureIdx < measureDurations.count
-                ? measureDurations[measureIdx]
-                : Fraction(numerator: 4, denominator: 4)
-            let mTicks = MidiRenderer.measureTicks(
-                measure: measure, division: division,
-                measureDuration: measureDuration,
-                measureIndex: measureIdx, tempoMap: tempoMap,
-            )
-            // A measure repeat replays its source's dynamics at its own ticks — as the SMF's walker always played their
-            // levels, and as MuseScore 4 copies them (`handleMeasureRepeats`, `playbackcontext.cpp:765-803`); its
-            // hairpins are the ones written in it.
-            let literal = voiceIndex < measure.voices.count ? measure.voices[voiceIndex] : nil
-            let resolved = MidiRenderer.resolvedVoice(measureIndex: measureIdx, staff: staff, voiceIndex: voiceIndex)
-            let isRepeat = MidiRenderer.explicitMeasureRepeatInAnyVoice(of: measure) != nil
-                || MidiRenderer.groupRepeatMarker(measureIndex: measureIdx, staff: staff, voiceIndex: voiceIndex) != nil
-            let walks = [(resolved, true, !isRepeat), (isRepeat ? literal : nil, false, true)]
-            for (voice, readsDynamics, readsHairpins) in walks {
-                guard let voice else { continue }
-                walkVoice(
-                    voice,
-                    measureIdx: measureIdx,
-                    measureBase: measureBase,
-                    measureDuration: measureDuration,
-                    instrument: instrument,
-                    measures: staff.measures,
-                    division: division,
-                    tempoMap: tempoMap,
-                    readsDynamics: readsDynamics,
-                    readsHairpins: readsHairpins,
-                    walk: &walk,
-                )
-            }
-            measureBase += mTicks
-        }
-
-        // A wedge ending on an accent aims for the accent's level (MuseScore 4's `findNominalEndDynamicLevel`,
-        // `playbackcontext.cpp:124-142`); an accent anywhere else is no mark for a wedge. The level coming back after
-        // an accent's chord ends a hold, as a mark does (`DynamicsWalk.restores`).
-        let endingAccents = walk.accents.filter { accent in walk.pending.contains { $0.endTick == accent.tick } }
-        let targets = endingAccents.isEmpty ? walk.marks : (walk.marks + endingAccents).sorted { $0.tick < $1.tick }
-        let wedges = resolveChained(walk.pending, dynList: targets)
-        let holdEnds = walk.restores.isEmpty ? walk.marks : (walk.marks + walk.restores).sorted { $0.tick < $1.tick }
-        let ramps = wedges + holds(after: wedges, dynList: holdEnds) + walk.ramps
-        return DynamicsTimeline(ramps: ramps, levels: walk.levels, initialVelocity: initialVelocity)
+        timeline(
+            staffIndex: 0, voiceIndex: voiceIndex, staves: [staff], instrument: instrument, division: division,
+            tempoMap: tempoMap,
+        )
     }
 
     /// Resolve the wedges in tick order, each starting from whatever the
@@ -154,7 +106,7 @@ enum HairpinRamps {
     /// starting on an accent or a two-level dynamic starts from that
     /// dynamic, as MuseScore 4's `appliableDynamicLevel` does there
     /// (`playbackcontext.cpp:576-601`).
-    private static func resolveChained(
+    static func resolveChained(
         _ pending: [Pending], dynList: [DynPoint],
     ) -> [HairpinRamp] {
         var resolved: [HairpinRamp] = []
@@ -187,7 +139,7 @@ enum HairpinRamps {
     /// walker so that every consumer — chords, tremolo strokes, anything
     /// that resolves velocity by tick — holds the level without knowing
     /// it has to.
-    private static func holds(
+    static func holds(
         after wedges: [HairpinRamp], dynList: [DynPoint],
     ) -> [HairpinRamp] {
         wedges.compactMap { wedge in
@@ -235,25 +187,29 @@ enum HairpinRamps {
     }
 
     // swiftlint:disable:next function_parameter_count
-    private static func walkVoice(
+    /// Walk one voice of one measure, recording its dynamics, hairpins and chords (`VoiceDynamicsRecord`).
+    static func walkVoice(
         _ voice: Voice,
         measureIdx: Int,
         measureBase: Int,
         measureDuration: Fraction,
-        instrument: Instrument,
         measures: [Measure],
         division: Int,
         tempoMap: ResolvedTempoMap,
         readsDynamics: Bool,
         readsHairpins: Bool,
-        walk: inout DynamicsWalk,
+        staffIndex: Int,
+        voiceIndex: Int,
+        record: inout VoiceDynamicsRecord,
     ) {
         var runningTick = measureBase
         for element in voice.elements {
             switch element {
             case let .dynamic(d) where readsDynamics:
-                let bps = tempoMap.beatsPerSecond(atMeasure: measureIdx, tickInMeasure: runningTick - measureBase)
-                walk.apply(d, atTick: runningTick, instrument: instrument, beatsPerSecond: bps, division: division)
+                record.events.append(PartDynamicEvent(
+                    tick: runningTick, measureIndex: measureIdx, tickInMeasure: runningTick - measureBase,
+                    staffIndex: staffIndex, voiceIndex: voiceIndex, order: record.events.count, payload: .dynamic(d),
+                ))
             case let .spanner(s) where s.kind == .hairpin && readsHairpins:
                 // Only the begin-side spanner carries a non-nil
                 // payload. End-side placeholders (`<prev>` only) have
@@ -269,20 +225,14 @@ enum HairpinRamps {
                     division: division,
                     tempoMap: tempoMap,
                 )
-                // A wedge starting on an accent starts from its level (`DynamicsWalk.wedgeStart`). One that would start
-                // at or past its own end plays nothing, as MuseScore's does (`playbackcontext.cpp:626-629`).
-                let start = walk.wedgeStart(at: runningTick)
-                guard start.tick < endTick else { break }
-                walk.pending.append(Pending(
-                    startTick: start.tick,
-                    endTick: endTick,
-                    startVelocity: start.velocity,
-                    payload: payload,
-                    startsOnItsDynamic: walk.wedgeStartsOnItsDynamic(at: runningTick),
+                record.events.append(PartDynamicEvent(
+                    tick: runningTick, measureIndex: measureIdx, tickInMeasure: runningTick - measureBase,
+                    staffIndex: staffIndex, voiceIndex: voiceIndex, order: record.events.count,
+                    payload: .hairpin(payload, endTick: endTick),
                 ))
             case let .chord(chord):
                 let ticks = chord.duration.resolved(in: measureDuration).ticks(division: division)
-                walk.close(chordAt: runningTick, ticks: ticks)
+                record.chords.append((tick: runningTick, ticks: ticks))
                 runningTick += ticks
             case let .locationShift(delta):
                 runningTick += delta.ticks(division: division)

@@ -41,6 +41,9 @@ struct DynamicsWalk {
     ) {
         switch dynamic.playbackRole {
         case let .level(level):
+            // Two dynamics on one tick of this voice: the later — MuseScore's winner (`applyDynamic`) — stands.
+            if marks.last?.tick == tick { marks.removeLast() }
+            if levels.last?.tick == tick { levels.removeLast() }
             let velocity = MidiRenderer.effectiveVelocity(level: level, instrument: instrument)
             marks.append(HairpinRamps.DynPoint(tick: tick, velocity: velocity))
             levels.append(HairpinRamps.DynPoint(tick: tick, velocity: velocity))
@@ -54,6 +57,9 @@ struct DynamicsWalk {
             accents.append(accent)
             wedgeStartOverride = WedgeStart(at: tick, tick: tick, velocity: accent.velocity)
         case let .transition(from, to):
+            // Two dynamics on one tick of this voice: the later — MuseScore's winner (`applyDynamic`) — stands.
+            if marks.last?.tick == tick { marks.removeLast() }
+            if levels.last?.tick == tick { levels.removeLast() }
             let fromVelocity = MidiRenderer.effectiveVelocity(level: from, instrument: instrument)
             let toVelocity = MidiRenderer.effectiveVelocity(level: to, instrument: instrument)
             let length = dynamic.velocityChangeTicks(beatsPerSecond: beatsPerSecond, division: division)
@@ -69,6 +75,39 @@ struct DynamicsWalk {
             // No effect: no level, no mark, no hold ends here.
             break
         }
+    }
+
+    /// One part event (`PartDynamicEvent`): a dynamic at the tempo where it stands, or a hairpin from where
+    /// `wedgeStart` says — one that would start at or past its own end plays nothing, as MuseScore's does
+    /// (`playbackcontext.cpp:626-629`).
+    mutating func apply(
+        _ event: PartDynamicEvent, instrument: Instrument, division: Int, tempoMap: ResolvedTempoMap,
+    ) {
+        switch event.payload {
+        case let .dynamic(dynamic):
+            let bps = tempoMap.beatsPerSecond(atMeasure: event.measureIndex, tickInMeasure: event.tickInMeasure)
+            apply(dynamic, atTick: event.tick, instrument: instrument, beatsPerSecond: bps, division: division)
+        case let .hairpin(payload, endTick):
+            let start = wedgeStart(at: event.tick)
+            guard start.tick < endTick else { return }
+            pending.append(HairpinRamps.Pending(
+                startTick: start.tick, endTick: endTick, startVelocity: start.velocity, payload: payload,
+                startsOnItsDynamic: wedgeStartsOnItsDynamic(at: event.tick),
+            ))
+        }
+    }
+
+    /// The walk's timeline: its wedges resolved against the marks, the holds after them, and the dynamics' own ramps.
+    func timeline(initialVelocity: Int) -> DynamicsTimeline {
+        // A wedge ending on an accent aims for the accent's level (MuseScore 4's `findNominalEndDynamicLevel`,
+        // `playbackcontext.cpp:124-142`); an accent anywhere else is no mark for a wedge. The level coming back after
+        // an accent's chord ends a hold, as a mark does (`DynamicsWalk.restores`).
+        let endingAccents = accents.filter { accent in pending.contains { $0.endTick == accent.tick } }
+        let targets = endingAccents.isEmpty ? marks : (marks + endingAccents).sorted { $0.tick < $1.tick }
+        let wedges = HairpinRamps.resolveChained(pending, dynList: targets)
+        let holdEnds = restores.isEmpty ? marks : (marks + restores).sorted { $0.tick < $1.tick }
+        let allRamps = wedges + HairpinRamps.holds(after: wedges, dynList: holdEnds) + ramps
+        return DynamicsTimeline(ramps: allRamps, levels: levels, initialVelocity: initialVelocity)
     }
 
     /// The chord at `tick`, `ticks` long: an accent standing on its tick sounds over the whole chord — its graces and

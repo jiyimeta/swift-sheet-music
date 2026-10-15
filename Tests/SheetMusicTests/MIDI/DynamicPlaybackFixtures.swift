@@ -13,6 +13,43 @@ enum DynamicPlaybackFixtures {
         .chord(Chord(duration: duration, notes: ChordNotes([Note(pitch: 60, tpc: 14)])))
     }
 
+    static func note(_ duration: NoteDuration, pitch: Int) -> VoiceElement {
+        .chord(Chord(duration: duration, notes: ChordNotes([Note(pitch: pitch, tpc: 14)])))
+    }
+
+    /// A dynamic at MuseScore's velocity for its subtype, reaching `assignment`'s voices.
+    static func dynamic(_ subtype: String, assignment: VoiceAssignment) -> VoiceElement {
+        .dynamic(Dynamic(
+            subtype: subtype, velocity: Dynamic.defaultVelocity(for: subtype), voiceAssignment: assignment,
+        ))
+    }
+
+    /// A two-staff 4/4 part: `upper[bar][voice]` and `lower[bar][voice]` are each voice's elements.
+    static func grandStaff(upper: [[[VoiceElement]]], lower: [[[VoiceElement]]]) -> Score {
+        func staff(_ bars: [[[VoiceElement]]]) -> Staff {
+            Staff(measures: bars.enumerated().map { bar, voices in
+                Measure(voices: voices.enumerated().map { voice, elements in
+                    let meter: [VoiceElement] = bar == 0 && voice == 0
+                        ? [.timeSignature(TimeSignature(numerator: 4, denominator: 4))]
+                        : []
+                    return Voice(elements: meter + elements)
+                })
+            })
+        }
+        let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff(upper), staff(lower)])
+        return Score(division: 480, parts: [part], systemMeasures: IdentifiedArray(upper.map { _ in SystemMeasure() }))
+    }
+
+    /// Every sounding note-on's velocity on track `track` — one per staff — of `pitch` only when given, in order.
+    static func velocities(_ score: Score, track: Int, pitch: Int? = nil) throws -> [Int] {
+        let midi = try MidiRenderer.render(score: score)
+        return midi.tracks[track].events.compactMap { timed -> Int? in
+            guard case let .noteOn(_, notePitch, velocity) = timed.event, velocity > 0 else { return nil }
+            if let pitch, notePitch != pitch { return nil }
+            return velocity
+        }
+    }
+
     /// A dynamic at MuseScore's velocity for its subtype unless given one.
     static func dynamic(
         _ subtype: String, velocity: Int? = nil, playsBack: Bool = true, speed: Dynamic.VelocityChangeSpeed = .normal,

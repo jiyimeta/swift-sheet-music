@@ -80,6 +80,7 @@ public enum MidiRenderer {
                 )
                 let track = try renderTrack(
                     staff: staff,
+                    staffIndex: s,
                     part: part,
                     plan: plan,
                     route: route,
@@ -223,6 +224,7 @@ public enum MidiRenderer {
 
     private static func renderTrack(
         staff: Staff,
+        staffIndex: Int,
         part: Part,
         plan: [PlaybackEntry],
         route: PartChannelRoute,
@@ -272,6 +274,7 @@ public enum MidiRenderer {
         for voiceIndex in 0 ..< voiceCount {
             let (voiceEvents, _, anchors) = try renderVoice(
                 voiceIndex: voiceIndex,
+                staffIndex: staffIndex,
                 staff: staff,
                 part: part,
                 route: route,
