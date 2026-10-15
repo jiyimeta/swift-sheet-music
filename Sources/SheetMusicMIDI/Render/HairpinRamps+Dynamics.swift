@@ -124,8 +124,11 @@ struct DynamicsWalk {
             accent.track == track && own.contains { $0.endTick == accent.tick }
         }
         let targets = endingAccents.isEmpty ? ownMarks : (ownMarks + endingAccents).sorted { $0.tick < $1.tick }
+        // The level an accent's chord gives back is a write of its own in MuseScore's map, so it ends a chain as a mark
+        // does (`playbackcontext.cpp:398-405`).
+        let stops = restores.isEmpty ? marks : (marks + restores).sorted { $0.tick < $1.tick }
         var wedges: [PartDynamicEvent.Source: [HairpinRamp]] = [:]
-        for (wedge, segments) in HairpinRamps.resolveChained(own, dynList: targets, stops: marks) {
+        for (wedge, segments) in HairpinRamps.resolveChained(own, dynList: targets, stops: stops) {
             if let source = wedge.source { wedges[source] = segments }
         }
         return wedges
@@ -186,11 +189,13 @@ struct DynamicsWalk {
         }
     }
 
-    /// An earlier dynamic on `tick` loses the tick to a later one: its mark and level, and an accent's chord, which the
-    /// later level overwrites (`applyDynamic`, `playbackcontext.cpp:831-835`).
+    /// An earlier dynamic on `tick` loses the tick to a later one: its mark and level, an accent's chord, and a
+    /// two-level change's steps, each of which the later dynamic writes over (`applyDynamic`,
+    /// `playbackcontext.cpp:831-835`).
     private mutating func supersede(at tick: Int) {
         if marks.last?.tick == tick { marks.removeLast() }
         if levels.last?.tick == tick { levels.removeLast() }
+        ramps.removeAll { $0.role == .transition && $0.origin?.lowerBound == tick }
         if pendingAccent?.accent.tick == tick {
             pendingAccent = nil
             accents.removeAll { $0.tick == tick }

@@ -138,6 +138,18 @@ struct DynamicVoiceAssignmentPlaybackTests {
         #expect(try F.velocities(score, track: 1) == [80, 49, 49, 49])
     }
 
+    /// Two different two-level dynamics on one tick: the later — the narrower here — writes every step over the earlier
+    /// one's (`applyDynamic`'s `<=`, `playbackcontext.cpp:831-835`), so the lower staff plays pf's change, not fp's.
+    @Test("of two two-level dynamics on one tick, the later's change plays")
+    func theLaterTransitionPlays() throws {
+        let score = F.grandStaff(
+            upper: [[[F.dynamic("fp"), F.quarter, F.quarter, F.quarter, F.quarter]]],
+            lower: [[[F.dynamic("pf", assignment: .currentVoiceOnly)] + Self.lowBar()]],
+        )
+        #expect(try F.velocities(score, track: 0) == [96, 49, 49, 49])
+        #expect(try F.velocities(score, track: 1) == [49, 96, 96, 96])
+    }
+
     @Test("an accent reaches the chords that start with it, not one sounding across it")
     func anAccentReachesChordsStartingWithIt() throws {
         let bar = [F.dynamic("p"), F.quarter, F.dynamic("sf"), F.quarter, F.quarter, F.quarter]

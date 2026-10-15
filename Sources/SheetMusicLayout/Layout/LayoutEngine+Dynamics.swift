@@ -20,9 +20,11 @@ extension LayoutEngine {
             face: SMuFLFamily.bravura, pointSize: LayoutRichText.dynamicSymbolPointSize(metrics: metrics),
         )
         let baseline = LayoutElementShape.baselineY(font: glyphFont, originY: origin.y, anchor: .leadingCenter)
+        // `text` is the element's label for whatever reads one; a text of glyphs alone has no plain words, so the
+        // subtype names it.
         return .textMark(
             kind: .dynamic(anchor: anchor),
-            text: displayed.plainText,
+            text: displayed.plainText.isEmpty ? dynamic.subtype : displayed.plainText,
             origin: rich.origin(
                 firstBaselineAt: CGPoint(x: origin.x, y: baseline), anchor: LayoutRichText.anchor(for: .dynamic),
             ),

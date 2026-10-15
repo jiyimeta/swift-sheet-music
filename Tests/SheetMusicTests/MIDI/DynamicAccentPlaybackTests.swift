@@ -54,6 +54,21 @@ struct DynamicAccentPlaybackTests {
         #expect(try F.velocities(score) == [49, 53, 57, 60, 64, 96, 49, 49])
     }
 
+    /// The level an accent restores is a write in the dynamics map, so a crescendo starting on it starts from it —
+    /// MuseScore 4's `appliableDynamicLevel` finds the restore, not the first crescendo's end
+    /// (`playbackcontext.cpp:398-405`, `:599-601`): the second crescendo — beat 3 to beat 3 of the next bar — climbs p
+    /// to mp again, not mp to mf.
+    @Test("a crescendo starting where an accent restored the level starts from the restored level")
+    func aWedgeAfterAnAccentStartsFromTheRestoredLevel() throws {
+        let score = F.score([
+            [F.dynamic("p"), F.crescendo(), F.quarter, F.quarter, F.quarter, F.quarter],
+            [F.quarter, F.dynamic("sf"), F.quarter, F.crescendo(), F.quarter, F.quarter],
+            [F.quarter, F.quarter, F.quarter, F.quarter],
+        ])
+        let velocities = try F.velocities(score)
+        #expect(velocities == [49, 53, 57, 60, 64, 96, 49, 53, 57, 60, 64, 64])
+    }
+
     @Test("an accent inside a crescendo sounds on its chord, and the crescendo carries on")
     func accentInsideACrescendoLeavesItGoing() throws {
         let score = F.score([

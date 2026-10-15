@@ -4,7 +4,8 @@ import Testing
 import Wirelet
 
 /// `SetDynamicIntentWire`'s tag 4 carries a dynamic's own text as MuseScore xml text. It is optional: a dynamic written
-/// without its own text — every one folino's palette writes — encodes exactly as before, and older bytes still decode.
+/// without its own text — every one folino's palette writes — encodes exactly as before. That older bytes still decode
+/// is `EditReplayGoldenTests`' to show: its committed steps hold `setDynamic` intents encoded before tag 4 existed.
 @Suite("EditIntentCodec — a dynamic's own text")
 struct EditIntentCodecDynamicTextTests {
     private static let slot = VoiceElementID(

@@ -13,11 +13,6 @@ and this project adheres to
   `<voiceAssignment>` — the whole instrument (the default), the staff, or the voice it is written in — and an older
   file's `<dynType>`, read as MuseScore 4 reads them and saved where MuseScore writes them (`<dynType>0</dynType>` for
   the staff when saving for MuseScore 3).
-- **`Dynamic.playbackRole`** — what a dynamic does to playback, read from MuseScore 4's tables (`Dynamic.PlaybackRole`):
-  an ordinary dynamic is a running level, a single-note one (sf, sfz, rf, …) accents its own chord, a two-level one
-  (fp, pf, sfp, sfpp) changes from its first level to its second, and one MuseScore 4 does not play (fz, m, r, s, z,
-  `other-dynamics`, `<play>0`) leaves the level alone. Read in one place by the SMF's voice walk and by the hairpin
-  ramps.
 - **A dynamic keeps its own text, `<play>` and `<veloChangeSpeed>`** — `Dynamic.text` and `preservedTextMarkup`
   (`nil` while it prints its subtype), `playsBack`, `velocityChangeSpeed` (`Dynamic.VelocityChangeSpeed`), all
   defaulted; `richText`, `displayedRichText` (what it prints when it is not its glyphs) and `customXMLText` (its text as
@@ -101,14 +96,20 @@ and this project adheres to
 ### Changed
 
 - **Breaking: `EditIntent.setDynamic` carries the dynamic's own text** — `setDynamic(at:subtype:xmlText:)`, `xmlText`
-  defaulted to `nil`: building it as before still compiles, a pattern binding two values does not.
+  defaulted to `nil`: building it as before still compiles, a pattern binding two values does not, nor does
+  destructuring `SetDynamicIntentWire.decoded()`, which returns the text as a third value.
   `SetDynamic(at:subtype:xmlText:)` writes the text with the subtype, as MuseScore's drop does, so the palette's own
-  subtype over "subito p" brings back a plain p. `SetDynamicIntentWire` carries it as optional tag 4, absent for a
-  dynamic without its own text, whose bytes are unchanged.
+  subtype over "subito p" brings back a plain p. The text is read as untrusted — it can come from a peer or another
+  app's pasteboard — so its nesting is bounded and a tag or attribute whose name is not a plain word is dropped.
+  `SetDynamicIntentWire` carries it as optional tag 4, absent for a dynamic without its own text, whose bytes are
+  unchanged. A peer built before tag 4 skips it and applies the subtype keeping its old text, and its fingerprint
+  does not hash a dynamic's text, so the two scores differ unnoticed until both update.
 - **A hairpin aims where MuseScore 4's playback aims it** (import-fidelity, owner decision c): at the dynamic on its end
   when that dynamic lies in its direction, otherwise one MuseScore 4 level past where it starts — p to mp, mf to f
   (`MuseScoreDynamicLevels`) — instead of staying flat; `<veloChange>`, which MuseScore 4 does not read, no longer sets
-  the change. A part of hairpins with no dynamics now climbs a level per crescendo, as MuseScore 4 plays it.
+  the change. A part of hairpins with no dynamics now climbs a level per crescendo, as MuseScore 4 plays it. Two
+  differences stay deliberately: a dynamic written under a hairpin is still a checkpoint the hairpin climbs to (MuseScore
+  4's curve writes over it), and the curve is linear whatever `<veloChangeMethod>` says.
 - **`Dynamic.defaultVelocity(for:)` is MuseScore's whole `dynList`** (import-fidelity F4.5): sf, sfz, sfp, sfpp, rf,
   rfz, fz, r and s are 112, sff and sffz 126, sfff and sfffz 127, fp and m 96, pf and n 49, z 80, pppppp 1, ffffff 127 —
   all 80 before but the plain levels. A palette `sf` is now saved with `<velocity>112</velocity>`, as MuseScore saves
@@ -190,7 +191,7 @@ and this project adheres to
   A hairpin is resolved once, on the staff and voice it is written in — it aims only for an end dynamic written there,
   and waits for a two-level change only when the change is written there — and plays that one curve in every voice it
   reaches. A measure repeat replays its source's accents and two-level changes as well as its levels, and a replayed
-  level ends a hairpin's hold.
+  level ends a hairpin's hold; it does not yet replay its source's hairpins, which MuseScore 4 does.
 - **A repeat or a jump carries the dynamic level in force** (import-fidelity, MuseScore 4 playback — owner decision c):
   a return to bar 1 starts with the level the music left with — a hairpin's held level too, an accent's never —
   instead of mf, and a run of measures hears only the hairpins that reach into it, so a hold from before a repeat's

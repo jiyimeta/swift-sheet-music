@@ -5,7 +5,7 @@ extension Dynamic {
     /// `engraving/playback/playbackcontext.cpp:384-428`; its tables are `playback/utils/expressionutils.h:33-109`) —
     /// the one place the SMF's voice walk (`MidiRenderer.renderVoice`) and `HairpinRamps` learn it from. Velocities are
     /// `dynList` velocities (`defaultVelocity(for:)`), before an instrument's velocity scale.
-    public enum PlaybackRole: Sendable, Equatable {
+    package enum PlaybackRole: Sendable, Equatable {
         /// An ordinary dynamic: the running level from its own chord on.
         case level(velocity: Int)
         /// A single-note dynamic: only the chord on its tick plays `velocity`; the running level is untouched.
@@ -24,7 +24,7 @@ extension Dynamic {
     /// level to its second (`COMPOUND_DYNAMICS`, 104-109); a dynamic none of the tables lists — fz, m, r, s, z,
     /// `other-dynamics`, a token MuseScore reads as OTHER — and any dynamic with `<play>0</play>` does nothing
     /// (`updateDynamicMap`, `playbackcontext.cpp:386-388`).
-    public var playbackRole: PlaybackRole {
+    package var playbackRole: PlaybackRole {
         guard playsBack else { return .none }
         switch subtype {
         case "pppppp", "ppppp", "pppp", "ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "ffff", "fffff", "ffffff":
