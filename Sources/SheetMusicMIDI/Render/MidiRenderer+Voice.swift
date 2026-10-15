@@ -34,13 +34,12 @@ extension MidiRenderer {
         // order (repeats re-state lyrics on each take). Encoded into SMF
         // Lyric meta events by `LyricMidiCodec` at track assembly.
         var lyricAnchors: [LyricMidiCodec.Anchor] = []
-        var velocity = effectiveVelocity(forDynamic: nil, instrument: part.instrument)
         // Tempo in beats-per-second; default is 2 bps (120 BPM = MuseScore's DEFAULT_TEMPO).
         var currentTempoBps = 2.0
         // The last tempo meta this walk wrote on the first track, carried from plan entry to plan entry.
         var tempoSequence = TempoSequence()
 
-        let hairpinRamps = HairpinRamps.collect(
+        let allDynamics = HairpinRamps.timeline(
             voiceIndex: voiceIndex,
             staff: staff,
             instrument: part.instrument,
@@ -104,9 +103,9 @@ extension MidiRenderer {
         // bar line.
         var sustainedChannel: Int?
 
-        // The ramps the run being played hears (`HairpinRamp.appliesToPass(startingAt:)`): all of them until a repeat
-        // or a jump starts a new run.
-        var passRamps = hairpinRamps
+        // The timeline the run being played hears (`DynamicsTimeline.pass(startingAt:carrying:)`): all of it until a
+        // repeat or a jump starts a new run.
+        var dynamics = allDynamics
 
         // The unrolled `plan` is computed ONCE, score-globally, from
         // staff 0's measure count (see `render(score:)`), then applied
@@ -130,9 +129,8 @@ extension MidiRenderer {
                 let sourceEnd = previous.measureIndex + 1 < originalMeasureBase.count
                     ? originalMeasureBase[previous.measureIndex + 1]
                     : originalScoreEnd
-                velocity = HairpinRamps.levelToCarry(at: sourceEnd - 1, ramps: passRamps, running: velocity)
-                let passStart = originalMeasureBase[entry.measureIndex]
-                passRamps = hairpinRamps.filter { $0.appliesToPass(startingAt: passStart) }
+                let carried = dynamics.carriedVelocity(atOriginalTick: sourceEnd - 1)
+                dynamics = allDynamics.pass(startingAt: originalMeasureBase[entry.measureIndex], carrying: carried)
             }
             // Splice in the source measure's notes if this measure is a
             // measure-repeat. Returns nil only when neither the current
@@ -284,12 +282,11 @@ extension MidiRenderer {
                         voiceElements: effectiveVoice.elements.values,
                         measureDuration: measureDuration,
                         localTick: &localTick,
-                        velocity: velocity,
                         consumedByTremolo: &consumedByTremolo,
                         channel: channel,
                         division: division,
                         events: &events,
-                        hairpinRamps: passRamps,
+                        dynamics: dynamics,
                         ottavaRanges: ottavaRanges,
                         originalTickDelta: originalTickDelta,
                     )
@@ -306,7 +303,6 @@ extension MidiRenderer {
                     measureDuration: measureDuration,
                     currentKey: currentKey,
                     localTick: &localTick,
-                    velocity: &velocity,
                     currentTempoBps: &currentTempoBps,
                     swingMap: swingMap,
                     swingGridBase: swingGridBase,
@@ -316,7 +312,7 @@ extension MidiRenderer {
                     division: division,
                     events: &events,
                     lyricAnchors: &lyricAnchors,
-                    hairpinRamps: passRamps,
+                    dynamics: dynamics,
                     ottavaRanges: ottavaRanges,
                     originalTickDelta: originalTickDelta,
                 )
@@ -356,7 +352,6 @@ extension MidiRenderer {
         measureDuration: Fraction,
         currentKey: Int,
         localTick: inout Int,
-        velocity: inout Int,
         currentTempoBps: inout Double,
         swingMap: SwingMap,
         // What to ADD to `localTick` to get the tick the swing grid reads: the bar's own zero, shifted forward by
@@ -368,7 +363,7 @@ extension MidiRenderer {
         division: Int,
         events: inout [TimedMidiEvent],
         lyricAnchors: inout [LyricMidiCodec.Anchor],
-        hairpinRamps: [HairpinRamp],
+        dynamics: DynamicsTimeline,
         ottavaRanges: [OttavaRange],
         originalTickDelta: Int,
     ) {
@@ -391,10 +386,10 @@ extension MidiRenderer {
             }
         // Text annotations, string tunings, and ambitus range indicators
         // produce no MIDI events. A capo changes sounding pitch upstream, but
-        // this library does not apply it yet.
+        // this library does not apply it yet. A dynamic reaches the chords through `DynamicsTimeline`.
         case .clef, .barLine, .spanner, .measureRepeat, .harmony,
              .sticking, .expression, .capo, .stringTunings, .ambitus, .figuredBass, .symbol, .fretDiagram,
-             .preserved:
+             .preserved, .dynamic:
             return
         case let .locationShift(delta):
             // Voice cursor shift: applies the location's fractional
@@ -402,17 +397,6 @@ extension MidiRenderer {
             // marker events land at the correct beat. Mirrors
             // `LayoutEngine`'s placement-side handling.
             localTick += delta.ticks(division: division)
-        case let .dynamic(dynamic):
-            switch dynamic.playbackRole {
-            case let .level(level):
-                velocity = effectiveVelocity(level: level, instrument: instrument)
-            case let .transition(_, to):
-                // The second level is the running level; `HairpinRamps` sounds the first and the steps on the way.
-                velocity = effectiveVelocity(level: to, instrument: instrument)
-            case .accent, .none:
-                // An accent sounds on its own chord through `HairpinRamps`; neither changes the running level.
-                break
-            }
         case let .chord(chord) where chord.notes.isEmpty:
             // Rest: advance the tick cursor, emit no note events.
             localTick += chord.duration
@@ -481,16 +465,10 @@ extension MidiRenderer {
                 ),
                 state: swingMap.state(atTick: localTick + originalTickDelta),
             )
-            // Hairpin influence is scoped to the chord onset; the
-            // running `velocity` is untouched, so the next .dynamic
-            // resets it normally for post-ramp playback. Look up the
-            // ramp at the swing-adjusted onset so the velocity tracks
-            // the audible attack rather than the nominal grid.
+            // The velocity is the timeline's at the swing-adjusted onset, so it tracks the audible attack rather than
+            // the nominal grid: a ramp in force there, else the level the dynamics put in force (`DynamicsTimeline`).
             let onsetOriginalTick = (localTick + adjust.onsetShift) + originalTickDelta
-            let chordVelocity =
-                HairpinRamps.active(in: hairpinRamps, at: onsetOriginalTick)
-                .map { HairpinRamps.interpolate(ramp: $0, atOriginalTick: onsetOriginalTick) }
-                ?? velocity
+            let chordVelocity = dynamics.velocity(atOriginalTick: onsetOriginalTick)
             let ottavaShift = OttavaRanges.semitones(
                 in: ottavaRanges, at: onsetOriginalTick,
             )

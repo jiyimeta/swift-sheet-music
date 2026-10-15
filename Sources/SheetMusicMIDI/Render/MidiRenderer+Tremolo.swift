@@ -82,12 +82,11 @@ extension MidiRenderer {
         voiceElements: [VoiceElement],
         measureDuration: Fraction,
         localTick: inout Int,
-        velocity: Int,
         consumedByTremolo: inout Set<Int>,
         channel: Int,
         division: Int,
         events: inout [TimedMidiEvent],
-        hairpinRamps: [HairpinRamp],
+        dynamics: DynamicsTimeline,
         ottavaRanges: [OttavaRange],
         originalTickDelta: Int,
     ) throws {
@@ -120,14 +119,7 @@ extension MidiRenderer {
         // onset, commented there as what "allows correct playback of
         // tremolos even without SND enabled".
         let strokeVelocity: (Int) -> Int = { strokeTick in
-            let originalTick = strokeTick + originalTickDelta
-            return HairpinRamps.active(
-                in: hairpinRamps, at: originalTick,
-            ).map {
-                HairpinRamps.interpolate(
-                    ramp: $0, atOriginalTick: originalTick,
-                )
-            } ?? velocity
+            dynamics.velocity(atOriginalTick: strokeTick + originalTickDelta)
         }
         emitTremoloSegments(
             segments,

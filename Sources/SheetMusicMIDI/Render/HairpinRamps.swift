@@ -71,9 +71,7 @@ enum HairpinRamps {
         return containing.max(by: { $0.startTick < $1.startTick })
     }
 
-    /// Walk one voice in original (pre-repeat) ticks and resolve every `<HairPin>` into a concrete `HairpinRamp`. The
-    /// end velocity is MuseScore 4's — see `resolveRamp`. Sign comes from the subtype (cresc → +, decresc → −) and the
-    /// final velocity is clamped to `1...127`.
+    /// The ramps of `timeline(voiceIndex:staff:instrument:division:tempoMap:)`.
     static func collect(
         voiceIndex: Int,
         staff: Staff,
@@ -81,9 +79,23 @@ enum HairpinRamps {
         division: Int,
         tempoMap: ResolvedTempoMap,
     ) -> [HairpinRamp] {
-        var walk = DynamicsWalk(
-            runningVelocity: MidiRenderer.effectiveVelocity(forDynamic: nil, instrument: instrument),
-        )
+        timeline(voiceIndex: voiceIndex, staff: staff, instrument: instrument, division: division, tempoMap: tempoMap)
+            .ramps
+    }
+
+    /// The voice's dynamics timeline (`DynamicsTimeline`): its ramps, and the levels its dynamics put in force.
+    /// Walk one voice in original (pre-repeat) ticks and resolve every `<HairPin>` into a concrete `HairpinRamp`. The
+    /// end velocity is MuseScore 4's — see `resolveRamp`. Sign comes from the subtype (cresc → +, decresc → −) and the
+    /// final velocity is clamped to `1...127`.
+    static func timeline(
+        voiceIndex: Int,
+        staff: Staff,
+        instrument: Instrument,
+        division: Int,
+        tempoMap: ResolvedTempoMap,
+    ) -> DynamicsTimeline {
+        let initialVelocity = MidiRenderer.effectiveVelocity(forDynamic: nil, instrument: instrument)
+        var walk = DynamicsWalk(runningVelocity: initialVelocity)
         var measureBase = 0
         let measureDurations = staff.measures.effectiveMeasureDurations()
 
@@ -96,13 +108,18 @@ enum HairpinRamps {
                 measureDuration: measureDuration,
                 measureIndex: measureIdx, tempoMap: tempoMap,
             )
-            // Read the literal voice — hairpins inside a
-            // measure-repeat source apply each time the group plays
-            // back, and the runtime override re-uses the original
-            // tick anyway.
-            if voiceIndex < measure.voices.count {
+            // A measure repeat replays its source's dynamics at its own ticks — as the SMF's walker always played their
+            // levels, and as MuseScore 4 copies them (`handleMeasureRepeats`, `playbackcontext.cpp:765-803`); its
+            // hairpins are the ones written in it.
+            let literal = voiceIndex < measure.voices.count ? measure.voices[voiceIndex] : nil
+            let resolved = MidiRenderer.resolvedVoice(measureIndex: measureIdx, staff: staff, voiceIndex: voiceIndex)
+            let isRepeat = MidiRenderer.explicitMeasureRepeatInAnyVoice(of: measure) != nil
+                || MidiRenderer.groupRepeatMarker(measureIndex: measureIdx, staff: staff, voiceIndex: voiceIndex) != nil
+            let walks = [(resolved, true, !isRepeat), (isRepeat ? literal : nil, false, true)]
+            for (voice, readsDynamics, readsHairpins) in walks {
+                guard let voice else { continue }
                 walkVoice(
-                    measure.voices[voiceIndex],
+                    voice,
                     measureIdx: measureIdx,
                     measureBase: measureBase,
                     measureDuration: measureDuration,
@@ -110,6 +127,8 @@ enum HairpinRamps {
                     measures: staff.measures,
                     division: division,
                     tempoMap: tempoMap,
+                    readsDynamics: readsDynamics,
+                    readsHairpins: readsHairpins,
                     walk: &walk,
                 )
             }
@@ -123,7 +142,8 @@ enum HairpinRamps {
         let targets = endingAccents.isEmpty ? walk.marks : (walk.marks + endingAccents).sorted { $0.tick < $1.tick }
         let wedges = resolveChained(walk.pending, dynList: targets)
         let holdEnds = walk.restores.isEmpty ? walk.marks : (walk.marks + walk.restores).sorted { $0.tick < $1.tick }
-        return wedges + holds(after: wedges, dynList: holdEnds) + walk.ramps
+        let ramps = wedges + holds(after: wedges, dynList: holdEnds) + walk.ramps
+        return DynamicsTimeline(ramps: ramps, levels: walk.levels, initialVelocity: initialVelocity)
     }
 
     /// Resolve the wedges in tick order, each starting from whatever the
@@ -224,15 +244,17 @@ enum HairpinRamps {
         measures: [Measure],
         division: Int,
         tempoMap: ResolvedTempoMap,
+        readsDynamics: Bool,
+        readsHairpins: Bool,
         walk: inout DynamicsWalk,
     ) {
         var runningTick = measureBase
         for element in voice.elements {
             switch element {
-            case let .dynamic(d):
+            case let .dynamic(d) where readsDynamics:
                 let bps = tempoMap.beatsPerSecond(atMeasure: measureIdx, tickInMeasure: runningTick - measureBase)
                 walk.apply(d, atTick: runningTick, instrument: instrument, beatsPerSecond: bps, division: division)
-            case let .spanner(s) where s.kind == .hairpin:
+            case let .spanner(s) where s.kind == .hairpin && readsHairpins:
                 // Only the begin-side spanner carries a non-nil
                 // payload. End-side placeholders (`<prev>` only) have
                 // hairpin == nil and must NOT be treated as a new

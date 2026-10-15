@@ -14,6 +14,9 @@ struct DynamicsWalk {
 
     var runningVelocity: Int
     var marks: [HairpinRamps.DynPoint] = []
+    /// The level each dynamic puts in force from its tick on — an ordinary one's, a two-level one's second — what a
+    /// chord plays when no ramp is in force (`DynamicsTimeline`).
+    var levels: [HairpinRamps.DynPoint] = []
     var pending: [HairpinRamps.Pending] = []
     /// Every accent: a wedge ending on one aims for its level.
     var accents: [HairpinRamps.DynPoint] = []
@@ -40,6 +43,7 @@ struct DynamicsWalk {
         case let .level(level):
             let velocity = MidiRenderer.effectiveVelocity(level: level, instrument: instrument)
             marks.append(HairpinRamps.DynPoint(tick: tick, velocity: velocity))
+            levels.append(HairpinRamps.DynPoint(tick: tick, velocity: velocity))
             runningVelocity = velocity
             wedgeStartOverride = nil
         case let .accent(level):
@@ -58,6 +62,7 @@ struct DynamicsWalk {
             // `playbackcontext.cpp:136-139`); one starting here starts once the change is done, from the second
             // (`:576-593`).
             marks.append(HairpinRamps.DynPoint(tick: tick, velocity: fromVelocity, startsTransition: true))
+            levels.append(HairpinRamps.DynPoint(tick: tick, velocity: toVelocity))
             runningVelocity = toVelocity
             wedgeStartOverride = WedgeStart(at: tick, tick: tick + length, velocity: toVelocity)
         case .none:
