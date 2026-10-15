@@ -86,12 +86,27 @@ struct FiguredBassLayoutTests {
         #expect(abs(line.1.x - (100 + 10 * F.sp)) < 0.001)
     }
 
-    @Test("text that did not parse draws as its lines; a hidden figure is a ghost; autoplace is off")
+    /// MuseScore lays every figure out at its fixed offset below and lets autoplace carry one placed above over the
+    /// staff (`Autoplace::autoplaceSegmentElement`) — the fixture's third bar, whose sharp MuseScore 4.7 draws with its
+    /// bottom about a space above the top line.
+    @Test("a figure placed above sits over the staff, its bottom about a space above the top line")
+    func placedAbove() throws {
+        let document = try F.layout(F.load("figured-bass"))
+        let figures = Self.figures(document)
+        try #require(figures.count == 3)
+        let above = figures[2]
+        #expect(above.1?.side == .above)
+        // The bar's G4 is on the second line: the top line is 3 sp above it.
+        let topLine = try #require(F.chordNoteY(document, nth: 2)) - 3 * F.sp
+        #expect(abs(above.0.ink.maxY - (topLine - F.sp)) < 0.25 * F.sp)
+    }
+
+    @Test("text that did not parse draws as its lines; a hidden figure is a ghost; autoplace is off below")
     func textOnlyAndHidden() throws {
         let document = try F.layout(F.load("figured-bass"))
         let figures = Self.figures(document)
         #expect(figures.count == 3)
-        #expect(figures.map { $0.1?.autoplace } == [false, false, false])
+        #expect(figures.map { $0.1?.autoplace } == [false, false, true])
         let textRuns = figures.last?.0.primitives.compactMap { primitive -> String? in
             if case let .run(run, _, _) = primitive, case let .text(text) = run.content { text } else { nil }
         }

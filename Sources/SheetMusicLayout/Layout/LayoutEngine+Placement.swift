@@ -1399,19 +1399,23 @@ extension LayoutEngine {
                 case let .figuredBass(figuredBass):
                     guard figuredBass.visible || options.showsInvisibleElements else { break }
                     let columnX = timedX(atTick: tickCursor)
+                    let staffTopY = staffMidY - metrics.sp * 2
                     let figure = FiguredBassGeometry.figure(
                         figuredBass, columnX: columnX,
-                        // `figuredBassYOffset`: 6 sp below the top line; MuseScore fixes it, `<placement>` aside.
-                        topY: staffMidY - metrics.sp * 2 + 6 * metrics.sp,
+                        // `figuredBassYOffset`: 6 sp below the top line, where MuseScore lays every figure out.
+                        topY: staffTopY + 6 * metrics.sp,
                         lineEndX: figuredBassLineEnd(
                             figuredBass, tick: tickCursor, columnX: columnX, division: division,
                             tickColumns: tickColumns, sp: metrics.sp,
                         ),
                         sp: metrics.sp,
                     )
+                    let (placed, placement) = Self.placedFiguredBass(
+                        figure, figuredBass, staffTopY: staffTopY, sp: metrics.sp,
+                    )
                     let element = LayoutElement.figure(
-                        kind: .figuredBass, figure: figure, color: figuredBass.elementProperties.color,
-                        placement: TextPlacementMetadata(side: .below, autoplace: false),
+                        kind: .figuredBass, figure: placed, color: figuredBass.elementProperties.color,
+                        placement: placement,
                     )
                     if figuredBass.visible { out.append(element) } else { invisibleOut.append(element) }
                 case let .fretDiagram(diagram):

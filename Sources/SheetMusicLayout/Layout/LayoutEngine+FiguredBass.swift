@@ -17,4 +17,19 @@ extension LayoutEngine {
         let last = tickColumns.keys.filter { $0 >= tick && $0 < end }.max()
         return (last.flatMap { tickColumns[$0] } ?? columnX) + 1.5 * sp
     }
+
+    /// MuseScore lays a figure out at `figuredBassYOffset` whatever its placement and lets autoplace carry one placed
+    /// above over the staff (`Autoplace::autoplaceSegmentElement`). Here it starts `figuredBassMinDistance` (0.5 sp)
+    /// above the top line on the above side, and the skyline pass clears it from the staff and anything higher, as it
+    /// does a text above — a space above the top line over an empty staff, where MuseScore 4.7 draws it too. One below
+    /// stays where it was laid out, autoplace off.
+    static func placedFiguredBass(
+        _ figure: LayoutFigure, _ figuredBass: FiguredBass, staffTopY: CGFloat, sp: CGFloat,
+    ) -> (LayoutFigure, TextPlacementMetadata) {
+        guard figuredBass.elementProperties.placement == .above, !figure.ink.isEmpty else {
+            return (figure, TextPlacementMetadata(side: .below, autoplace: false))
+        }
+        let lifted = figure.translated(dx: 0, dy: staffTopY - 0.5 * sp - figure.ink.maxY)
+        return (lifted, TextPlacementMetadata(side: .above, autoplace: figuredBass.elementProperties.autoplace ?? true))
+    }
 }
