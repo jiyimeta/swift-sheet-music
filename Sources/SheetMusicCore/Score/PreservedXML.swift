@@ -3,7 +3,9 @@ import SheetMusicFoundation
 /// Source markup this library does not model, kept verbatim so that
 /// read → write does not delete it.
 ///
-/// **Inert.** No layout, playback, MIDI, or editing pass reads this.
+/// **Inert.** No layout, playback, MIDI, or editing pass reads this. One exception: the five annotation carriers whose
+/// font overrides ride here (`ExpressionText`, `Sticking`, `Capo`, `StringTunings`, `Fingering`) are read through
+/// `TextProperties(fontChildrenOf:)` by layout.
 /// It exists solely so `MSCXEncoder` can put back what `MSCXParser`
 /// did not understand. Before it existed, an element outside the
 /// model was dropped on read and therefore erased on the next save.

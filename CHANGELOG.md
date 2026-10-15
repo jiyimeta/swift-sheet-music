@@ -15,6 +15,11 @@ and this project adheres to
   `expression`, `sticking`, `harpPedalDiagram` and `harpPedalTextDiagram`, whose `<…Placement>` / `<…PosAbove>` /
   `<…PosBelow>` style keys a score can now carry. Adding cases to these public enums breaks exhaustive switches over them
   (ssm 5.0.0).
+- **Expression text and stickings are drawn** — an `<Expression>` ("dolce") draws below the staff in MuseScore's
+  expression style (italic, 10 pt), snapped 0.5 sp (0.2 sp after an f) to the right of the dynamic on its beat and on
+  that dynamic's baseline — the pair ignore each other in autoplace, as in MuseScore — and a `<Sticking>` draws centered
+  on its notehead below the staff; `<placement>`, `<offset>`, `<autoplace>`, `<visible>`, `<color>` and the element's
+  font overrides are honored, and a hidden one is a ghost when invisible elements are shown.
 - **SMuFL names for annotations** — `SMuFLCodepoint.byName` resolves `ornament*`, `csymAccidental*`, `guitarString*`,
   `strings*`, `fingering*` and `tremolo*` (207 names), so `<sym>` in a harp or string-tunings text and a `<Symbol>`
   naming an ornament draw as glyphs.

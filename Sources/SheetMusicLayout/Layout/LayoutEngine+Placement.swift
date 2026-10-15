@@ -219,6 +219,7 @@ extension LayoutEngine {
                 anchorTick: Int?,
                 isBelow: Bool,
             )] = []
+            var expressionSnapAnchors: [ExpressionSnapAnchor] = []
             // Parallel mapping for rest members. Used by
             // `emitTupletLabel` so a rest in a tuplet still
             // contributes to the bracket's horizontal span.
@@ -1340,10 +1341,33 @@ extension LayoutEngine {
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
                     break
-                case .sticking, .expression, .capo, .stringTunings, .ambitus, .figuredBass, .symbol,
-                     .fretDiagram, .preserved:
-                    // These modeled annotations do not have an engraving pass
-                    // yet. Source-only preserved markup likewise has no layout
+                case .sticking, .expression:
+                    guard let spec = annotationSpec(for: el),
+                          spec.properties.visible || options.showsInvisibleElements
+                    else { break }
+                    // At its beat's column even when it opens the measure: MuseScore places an annotation at its
+                    // segment, as a staff text of the same beat stands.
+                    let element = annotationStaffText(
+                        spec, x: timedX(atTick: tickCursor),
+                        textPlacementStyle: textPlacementStyle, lineGeometry: lineGeometry, metrics: metrics,
+                    )
+                    guard spec.properties.visible else {
+                        invisibleOut.append(element)
+                        break
+                    }
+                    if case let .expression(expression) = el, spec.properties.autoplace != false,
+                       textPlacementStyle.side(for: spec.role, element: spec.properties) == .below,
+                       let attachedTo = attachmentAnchor(at: elementAddress, in: voice)
+                    {
+                        expressionSnapAnchors.append(ExpressionSnapAnchor(
+                            outIndex: out.count, attachedTo: attachedTo,
+                            sharesBaseline: expression.snapToDynamics != false,
+                        ))
+                    }
+                    out.append(element)
+                case .capo, .stringTunings, .ambitus, .figuredBass, .symbol, .fretDiagram, .preserved:
+                    // Capo and string tunings (W5 Task 4), ambitus (10), figured bass (11), symbols (8) and fret
+                    // diagrams (12) get their passes in their own tasks; source-only preserved markup has no layout
                     // behavior.
                     break
                 case let .locationShift(delta):
@@ -1926,6 +1950,10 @@ extension LayoutEngine {
                 }
             }
 
+            if !expressionSnapAnchors.isEmpty {
+                snapExpressions(expressionSnapAnchors, out: &out, metrics: metrics)
+            }
+
             // --- Tuplet brackets / numbers ---
             //
             // For each tuplet span in the voice, determine whether every
@@ -2223,16 +2251,17 @@ extension LayoutEngine {
 
     /// Invert the attachment runs used by `AdjacentElementSlot` and the mark commands.
     ///
-    /// Dynamics and fermatas look forward through annotations and signatures to their timed owner;
+    /// Dynamics, expressions and fermatas look forward through annotations and signatures to their timed owner;
     /// breaths look backward only through breaths. A location shift, barline, or other run boundary
     /// ends the search even when geometry happens to put a chord at the same tick. Rest owners are
-    /// accepted only for fermatas, matching the commands' element-kind guards.
+    /// accepted only for fermatas, matching the commands' element-kind guards. An expression's owner is what pairs it
+    /// with the dynamic of its beat (`snapExpressions`).
     static func attachmentAnchor(at marking: VoiceElementID, in voice: Voice) -> VoiceElementID? {
         guard voice.elements.indices.contains(marking.elementIndex) else { return nil }
         let backwards: Bool
         let permitsRest: Bool
         switch voice.elements[marking.elementIndex] {
-        case .dynamic: backwards = false; permitsRest = false
+        case .dynamic, .expression: backwards = false; permitsRest = false
         case .fermata: backwards = false; permitsRest = true
         case .breath: backwards = true; permitsRest = false
         default: return nil

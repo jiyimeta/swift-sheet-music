@@ -272,7 +272,7 @@ extension SkylineAutoplacePass {
         lyricRows: inout LyricRowBands,
         skyline: inout Skyline,
     ) {
-        var shapes: [(address: Address, shape: LayoutShape, kind: ShapeItemKind, side: Placement?)] = []
+        var shapes: [ShapeEntry] = []
         for a in group {
             let el = measures[a.measure][a.index]
             guard let kind = LayoutElementShape.kind(of: el),
@@ -281,7 +281,10 @@ extension SkylineAutoplacePass {
                       xOffset: xOffsets[a.measure], metrics: metrics,
                   )
             else { continue }
-            shapes.append((a, shape, kind, el.textPlacement?.side))
+            let ignoring = snappedDynamics(of: el, shape: shape, in: skyline, sp: metrics.sp)
+            shapes.append(ShapeEntry(
+                address: a, shape: shape, kind: kind, side: el.textPlacement?.side, ignoring: ignoring,
+            ))
         }
         guard !shapes.isEmpty else { return }
 
@@ -332,8 +335,18 @@ extension SkylineAutoplacePass {
     /// Farthest-from-the-staff shift any member of the group needs.
     /// Negative above the staff, positive below — i.e. always AWAY
     /// from it, never toward it (0 when nothing collides).
+    /// One member of a group being placed: where it is, its shape and kind, its side when the element says, and the
+    /// skyline items it ignores beyond `AutoplaceRules.shouldIgnoreEachOther` (`snappedDynamics`).
+    private struct ShapeEntry {
+        let address: Address
+        let shape: LayoutShape
+        let kind: ShapeItemKind
+        let side: Placement?
+        let ignoring: Set<Int>
+    }
+
     private static func requiredShift(
-        shapes: [(address: Address, shape: LayoutShape, kind: ShapeItemKind, side: Placement?)],
+        shapes: [ShapeEntry],
         staffMidY: CGFloat, metrics: StaffMetrics, skyline: Skyline,
     ) -> CGFloat {
         var dy: CGFloat = 0
@@ -344,7 +357,7 @@ extension SkylineAutoplacePass {
                 kind: kind, shape: shape, staffMidY: staffMidY,
             )
             let filtered = skyline.filtered { other in
-                shape.rects.contains {
+                entry.ignoring.contains(other.id) || shape.rects.contains {
                     AutoplaceRules.shouldIgnoreEachOther($0.item, other)
                 }
             }

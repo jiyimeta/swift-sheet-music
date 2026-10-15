@@ -4,9 +4,9 @@ import SheetMusicFoundation
 // (`PreservedTextMarkup.richText(ifCurrentFor:)`). Computed, never stored: an edit leaves the carrier plain text,
 // exactly as the encoder then saves it.
 //
-// Public only on the carriers layout draws from its runs. The rest — expression text, fingering, sticking, capo,
-// string tunings, the glissando label and a line spanner's begin text — still draw their plain text, so their
-// `richText` stays internal until a renderer reads it.
+// Public on the carriers layout draws from its runs that other modules read; `package` on the annotation carriers
+// layout draws (expression, sticking, capo, string tunings, fingering); the glissando label and a line spanner's begin
+// text stay internal.
 
 extension StaffText {
     public var richText: RichText? {
@@ -33,31 +33,31 @@ extension RehearsalMark {
 }
 
 extension ExpressionText {
-    var richText: RichText? {
+    package var richText: RichText? {
         preservedTextMarkup?.richText(ifCurrentFor: text)
     }
 }
 
 extension Fingering {
-    var richText: RichText? {
+    package var richText: RichText? {
         preservedTextMarkup?.richText(ifCurrentFor: text)
     }
 }
 
 extension Sticking {
-    var richText: RichText? {
+    package var richText: RichText? {
         preservedTextMarkup?.richText(ifCurrentFor: text)
     }
 }
 
 extension Capo {
-    var richText: RichText? {
+    package var richText: RichText? {
         preservedTextMarkup?.richText(ifCurrentFor: text)
     }
 }
 
 extension StringTunings {
-    var richText: RichText? {
+    package var richText: RichText? {
         preservedTextMarkup?.richText(ifCurrentFor: text)
     }
 }
