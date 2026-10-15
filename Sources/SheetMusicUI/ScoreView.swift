@@ -74,15 +74,17 @@ public struct ScoreView: View {
     /// options you used to build `document` so toggles like
     /// "hide break badges" survive the doc handoff.
     ///
-    /// `visibleRect`, in `document` coordinates, limits which systems
-    /// are mounted in a vertical document: only those whose frame meets
-    /// it get a layer tree. Pass the viewport already grown by however
-    /// much should be ready beyond it — the view adds no margin of its
-    /// own. `nil`, the default, mounts every system. The view keeps the
-    /// document's full size either way, so scrolling, hit testing and
-    /// anything else that maps document coordinates is unaffected; an
-    /// unmounted system is simply not drawn. A horizontal document is
-    /// one system and is always mounted.
+    /// `visibleRect`, in `document` coordinates, limits what is mounted:
+    /// only the systems whose frame meets it get a layer tree, and within
+    /// a system that it does not span from end to end, only the measures
+    /// whose frame meets it and the system-level spanners whose span
+    /// does. That second half is what a horizontal document needs, being
+    /// one system. Pass the viewport already grown by however much should
+    /// be ready beyond it — the view adds no margin of its own. `nil`, the
+    /// default, mounts everything. The view keeps the document's full
+    /// size either way, so scrolling, hit testing and anything else that
+    /// maps document coordinates is unaffected; what is not mounted is
+    /// simply not drawn.
     public init(
         document: LayoutDocument,
         score: Score,
@@ -183,6 +185,7 @@ public struct ScoreView: View {
                 SystemLayerView(
                     system: sys, metrics: doc.metrics,
                     selection: selection,
+                    visibleXRange: Self.visibleXRange(of: sys, in: visibleRect),
                 )
                 .overlay(alignment: .topLeading) {
                     if options.breakIndicatorVisibility != .none {
@@ -277,6 +280,24 @@ extension ScoreView {
             return system.origin.y + system.size.height + 1 >= visibleRect.minY
                 && system.origin.y <= visibleRect.maxY
         }
+    }
+
+    /// The part of `system` that `visibleRect` reaches, in the system's
+    /// own X, for `SystemLayerView` to mount — or `nil`, mount it all,
+    /// when there is no rect or it spans the system from end to end.
+    ///
+    /// The second `nil` is not just a shortcut: a vertical reader passes
+    /// a band as wide as the document, and mapping that to "every measure
+    /// meets it" would put every system of every vertical document
+    /// through the measure-by-measure path for nothing.
+    nonisolated static func visibleXRange(
+        of system: LayoutSystem, in visibleRect: CGRect?,
+    ) -> ClosedRange<CGFloat>? {
+        guard let visibleRect else { return nil }
+        let lower = visibleRect.minX - system.origin.x
+        let upper = visibleRect.maxX - system.origin.x
+        guard lower > 0 || upper < system.size.width else { return nil }
+        return lower ... max(lower, upper)
     }
 
     /// The wrap width when it can be decided without measuring the

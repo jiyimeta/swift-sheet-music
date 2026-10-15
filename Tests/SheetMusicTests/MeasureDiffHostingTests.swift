@@ -33,6 +33,10 @@
             var itemLayers: [ScoreItemID: [CAShapeLayer]] = [:]
             var measureContainers: [Int: CALayer] = [:]
             var measureItems: [Int: [ScoreItemID: [CAShapeLayer]]] = [:]
+            var mountedRange: ClosedRange<CGFloat>?
+            var spannerLayers: [Int: MountedLayers] = [:]
+            var invisibleLayers: MountedLayers?
+            var invisibleMembership = InvisibleMembership()
         }
 
         private func firstSystem() throws -> (LayoutSystem, StaffMetrics) {
@@ -136,9 +140,7 @@
 
             let mock = MockHost()
             mock.baseLayer = built.root
-            mock.itemLayers = built.items
-            mock.measureContainers = built.measureContainers
-            mock.measureItems = built.measureItems
+            mock.adopt(built, range: nil)
 
             let selectedColor = CGColor(red: 1, green: 0, blue: 0, alpha: 1)
             let priorSelection = SelectionRenderState(
@@ -200,9 +202,7 @@
 
             let mock = MockHost()
             mock.baseLayer = built.root
-            mock.itemLayers = built.items
-            mock.measureContainers = built.measureContainers
-            mock.measureItems = built.measureItems
+            mock.adopt(built, range: nil)
 
             let root = try #require(mock.baseLayer)
             let originalContainer = try #require(mock.measureContainers[rebuildIndex])
@@ -271,9 +271,7 @@
 
             let mock = MockHost()
             mock.baseLayer = built.root
-            mock.itemLayers = built.items
-            mock.measureContainers = built.measureContainers
-            mock.measureItems = built.measureItems
+            mock.adopt(built, range: nil)
 
             let dx: CGFloat = 37
             let shifted = shiftingAllMeasures(in: system, by: dx)
@@ -309,9 +307,7 @@
 
             let mock = MockHost()
             mock.baseLayer = built.root
-            mock.itemLayers = built.items
-            mock.measureContainers = built.measureContainers
-            mock.measureItems = built.measureItems
+            mock.adopt(built, range: nil)
 
             let first = try mutatingMeasure(in: system, at: rebuildIndex, token: "p1")
             mock.applyMeasureDiff(previous: system, system: first, metrics: metrics)

@@ -35,25 +35,32 @@ import SwiftUI
 /// rebuilds only the measures whose drawn content actually changed and
 /// merely repositions the containers of measures that only slid
 /// sideways.
+///
+/// **Mounting part of a system.** With a `visibleXRange` (system-local X), only what meets it gets layers
+/// (`SystemMount`); a new range mounts and unmounts the difference (`remount`). `nil` mounts everything.
 @available(macOS 15.0, *)
 struct SystemLayerView: View {
     let system: LayoutSystem
     let metrics: StaffMetrics
     let selection: SelectionRenderState
+    let visibleXRange: ClosedRange<CGFloat>?
 
     init(
         system: LayoutSystem,
         metrics: StaffMetrics,
         selection: SelectionRenderState = .empty,
+        visibleXRange: ClosedRange<CGFloat>? = nil,
     ) {
         self.system = system
         self.metrics = metrics
         self.selection = selection
+        self.visibleXRange = visibleXRange
     }
 
     var body: some View {
         _LayerBackedSystem(
             system: system, metrics: metrics, selection: selection,
+            visibleXRange: visibleXRange,
         )
         .frame(
             width: system.size.width,
@@ -71,11 +78,13 @@ struct SystemLayerView: View {
         let system: LayoutSystem
         let metrics: StaffMetrics
         let selection: SelectionRenderState
+        let visibleXRange: ClosedRange<CGFloat>?
 
         func makeNSView(context: Context) -> LayerSystemHostView {
             let view = LayerSystemHostView()
             view.configure(
                 system: system, metrics: metrics, selection: selection,
+                visibleXRange: visibleXRange,
             )
             return view
         }
@@ -85,6 +94,7 @@ struct SystemLayerView: View {
         ) {
             nsView.configure(
                 system: system, metrics: metrics, selection: selection,
+                visibleXRange: visibleXRange,
             )
         }
     }
@@ -117,6 +127,10 @@ struct SystemLayerView: View {
         var itemLayers: [ScoreItemID: [CAShapeLayer]] = [:]
         var measureContainers: [Int: CALayer] = [:]
         var measureItems: [Int: [ScoreItemID: [CAShapeLayer]]] = [:]
+        var mountedRange: ClosedRange<CGFloat>?
+        var spannerLayers: [Int: MountedLayers] = [:]
+        var invisibleLayers: MountedLayers?
+        var invisibleMembership = InvisibleMembership()
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
@@ -134,6 +148,7 @@ struct SystemLayerView: View {
             system: LayoutSystem,
             metrics: StaffMetrics,
             selection: SelectionRenderState,
+            visibleXRange: ClosedRange<CGFloat>?,
         ) {
             guard let hostLayer = layer else { return }
             // Pure selection-only change (every click / marquee drag):
@@ -146,11 +161,19 @@ struct SystemLayerView: View {
                 {
                     // Same system geometry and same system-level
                     // furniture: touch only the measures that actually
-                    // changed.
+                    // changed, then mount whatever a new range reaches.
+                    mountedRange = visibleXRange
                     applyMeasureDiff(previous: previous, system: system, metrics: metrics)
+                    remount(system: system, metrics: metrics, to: visibleXRange)
                 } else {
-                    rebuildAll(system: system, metrics: metrics, into: hostLayer)
+                    rebuildAll(
+                        system: system, metrics: metrics,
+                        visibleXRange: visibleXRange, into: hostLayer,
+                    )
                 }
+            } else if visibleXRange != mountedRange {
+                // Only the window moved.
+                remount(system: system, metrics: metrics, to: visibleXRange)
             }
             // Disable implicit animation here too: a just-rebuilt
             // measure's freshly-created layers must not cross-fade from
@@ -169,11 +192,12 @@ struct SystemLayerView: View {
         func rebuildAll(
             system: LayoutSystem,
             metrics: StaffMetrics,
+            visibleXRange: ClosedRange<CGFloat>?,
             into hostLayer: CALayer,
         ) {
             hostLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
             let result = ScoreLayerBuilder.buildSystemWithItems(
-                system, metrics: metrics,
+                system, metrics: metrics, visibleXRange: visibleXRange,
             )
             hostLayer.addSublayer(result.root)
 
@@ -184,9 +208,7 @@ struct SystemLayerView: View {
 
             baseLayer = result.root
             overlayLayer = overlay
-            itemLayers = result.items
-            measureContainers = result.measureContainers
-            measureItems = result.measureItems
+            adopt(result, range: visibleXRange)
             // Re-apply the selection from a clean slate — the new
             // layers all start at `inkColor`. (Diffed rebuilds inside
             // `applyMeasureDiff` deliberately do NOT do this — see the
@@ -225,11 +247,13 @@ struct SystemLayerView: View {
         let system: LayoutSystem
         let metrics: StaffMetrics
         let selection: SelectionRenderState
+        let visibleXRange: ClosedRange<CGFloat>?
 
         func makeUIView(context: Context) -> LayerSystemHostView {
             let view = LayerSystemHostView()
             view.configure(
                 system: system, metrics: metrics, selection: selection,
+                visibleXRange: visibleXRange,
             )
             return view
         }
@@ -239,6 +263,7 @@ struct SystemLayerView: View {
         ) {
             uiView.configure(
                 system: system, metrics: metrics, selection: selection,
+                visibleXRange: visibleXRange,
             )
         }
     }
@@ -255,6 +280,10 @@ struct SystemLayerView: View {
         var itemLayers: [ScoreItemID: [CAShapeLayer]] = [:]
         var measureContainers: [Int: CALayer] = [:]
         var measureItems: [Int: [ScoreItemID: [CAShapeLayer]]] = [:]
+        var mountedRange: ClosedRange<CGFloat>?
+        var spannerLayers: [Int: MountedLayers] = [:]
+        var invisibleLayers: MountedLayers?
+        var invisibleMembership = InvisibleMembership()
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -270,6 +299,7 @@ struct SystemLayerView: View {
             system: LayoutSystem,
             metrics: StaffMetrics,
             selection: SelectionRenderState,
+            visibleXRange: ClosedRange<CGFloat>?,
         ) {
             let hostLayer = layer
             // Pure selection-only change (every click / marquee drag):
@@ -282,11 +312,19 @@ struct SystemLayerView: View {
                 {
                     // Same system geometry and same system-level
                     // furniture: touch only the measures that actually
-                    // changed.
+                    // changed, then mount whatever a new range reaches.
+                    mountedRange = visibleXRange
                     applyMeasureDiff(previous: previous, system: system, metrics: metrics)
+                    remount(system: system, metrics: metrics, to: visibleXRange)
                 } else {
-                    rebuildAll(system: system, metrics: metrics, into: hostLayer)
+                    rebuildAll(
+                        system: system, metrics: metrics,
+                        visibleXRange: visibleXRange, into: hostLayer,
+                    )
                 }
+            } else if visibleXRange != mountedRange {
+                // Only the window moved.
+                remount(system: system, metrics: metrics, to: visibleXRange)
             }
             // Disable implicit animation here too: a just-rebuilt
             // measure's freshly-created layers must not cross-fade from
@@ -305,11 +343,12 @@ struct SystemLayerView: View {
         func rebuildAll(
             system: LayoutSystem,
             metrics: StaffMetrics,
+            visibleXRange: ClosedRange<CGFloat>?,
             into hostLayer: CALayer,
         ) {
             hostLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
             let result = ScoreLayerBuilder.buildSystemWithItems(
-                system, metrics: metrics,
+                system, metrics: metrics, visibleXRange: visibleXRange,
             )
             hostLayer.addSublayer(result.root)
 
@@ -320,9 +359,7 @@ struct SystemLayerView: View {
 
             baseLayer = result.root
             overlayLayer = overlay
-            itemLayers = result.items
-            measureContainers = result.measureContainers
-            measureItems = result.measureItems
+            adopt(result, range: visibleXRange)
             // Re-apply the selection from a clean slate — the new
             // layers all start at `inkColor`. (Diffed rebuilds inside
             // `applyMeasureDiff` deliberately do NOT do this — see the
