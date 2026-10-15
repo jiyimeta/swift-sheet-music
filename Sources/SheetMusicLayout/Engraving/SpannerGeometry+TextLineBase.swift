@@ -223,7 +223,7 @@ extension SpannerGeometry {
         if let detail { return detail }
         let below = switch kind {
         // `hairpinPlacement` is BELOW (`styledef.cpp:281`), as are the pedal and the guitar lines'.
-        case .pedal, .hairpinLine, .palmMute, .letRing, .chordTextLine(.pickScrape): true
+        case .pedal, .hairpinLine, .palmMute, .letRing, .chordTextLine(.pickScrape), .chordTextLine(.whammyBar): true
         default: false
         }
         return LayoutEngine.lineDetailDefaults(

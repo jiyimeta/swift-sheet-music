@@ -61,13 +61,16 @@ extension LayoutEngine {
 
     /// A line label's face: the staff-text row (Edwin 10, symbols 10) except where MuseScore's style says otherwise —
     /// a hairpin line and a wedge are italic (`hairpinFontStyle`, `styledef.cpp:293`), a volta is Edwin 11 bold with
-    /// symbols 11 (`voltaFontSize` / `voltaFontStyle`, `styledef.cpp:619-623`).
+    /// symbols 11 (`voltaFontSize` / `voltaFontStyle`, `styledef.cpp:619-623`), and a pedal sets its symbols ("Ped.",
+    /// "✱") in the music font at its full 20 pt (`TextBase::hasSymbolScale` for a pedal segment's text,
+    /// `textbase.cpp:880-890, 3425-3435`; `pedalMusicalSymbolsScale` 1.0, `styledef.cpp:328`).
     private static func labelFace(
         for kind: LayoutElement.SpannerKind,
     ) -> (overrides: TextProperties, symbolSize: CGFloat) {
         switch kind {
         case .hairpinLine, .hairpinOpen, .hairpinClose: (TextProperties(style: .italic), 10)
         case .volta: (TextProperties(size: 11, style: .bold), 11)
+        case .pedal: (TextProperties(), 20)
         default: (TextProperties(), 10)
         }
     }

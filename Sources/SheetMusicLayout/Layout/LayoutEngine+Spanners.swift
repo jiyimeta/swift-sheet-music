@@ -584,9 +584,13 @@ extension LayoutEngine {
         if anchor.kind == .ottava {
             return (anchor.ottavaSubtype ?? .eightVA).semitones < 0
         }
-        // `PickScrape` is BELOW (`pickscrape.cpp:57, 173`); the other guitar lines are ABOVE (`harmonicmark.cpp:182`,
-        // `rasgueado.cpp:172`, `whammybar.cpp:171`).
-        if anchor.kind == .chordTextLine, anchor.chordTextLine == .pickScrape { return true }
+        // `PickScrape` is BELOW (`pickscrape.cpp:57, 173`), and so is `WhammyBar`: its style table has no placement
+        // row (`whammybar.cpp:40-64`), so it lays out at the line's default, below — MuseScore 4.7.4 draws "w/bar"
+        // under the staff. Harmonic mark and rasgueado take `ottava8VAPlacement`, ABOVE (`harmonicmark.cpp:57`,
+        // `rasgueado.cpp:57`).
+        if anchor.kind == .chordTextLine, anchor.chordTextLine == .pickScrape || anchor.chordTextLine == .whammyBar {
+            return true
+        }
         return isBelowStaff(kind: anchor.kind)
     }
 

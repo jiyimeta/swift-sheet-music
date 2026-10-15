@@ -185,7 +185,10 @@ struct FermataLayoutTests {
             duration: .quarter,
             notes: ChordNotes([Note(pitch: 36, tpc: 14)]),
         )
-        let fermata = Fermata(subtype: "fermataBelow")
+        // A first-voice fermata hangs below when its placement says so, as MuseScore writes a flipped one
+        // (`<placement>below</placement>`); the subtype name alone does not move it (`FermataGlyph.placedBelow`).
+        var fermata = Fermata(subtype: "fermataBelow")
+        fermata.elementProperties.placement = .below
         let voice = Voice(elements: [
             .fermata(fermata),
             .chord(lowChord),

@@ -1,3 +1,4 @@
+import SheetMusicCore
 import SheetMusicFoundation
 
 /// SMuFL codepoint selection for fermatas.
@@ -23,8 +24,26 @@ public enum FermataGlyph {
         return codepoint
     }
 
-    /// Whether a subtype hangs below the staff: its name ends in `Below`.
+    /// Whether a subtype's name is the below form (it ends in `Below`). It does not decide where the fermata sits —
+    /// `placedBelow(placement:voiceIndex:)` does — but a file MuseScore wrote names the form its placement draws.
     public static func isBelow(_ subtype: String) -> Bool {
         subtype.hasSuffix("Below")
+    }
+
+    /// Where MuseScore lays a fermata: its `<placement>`, else below for the second and fourth voice of a staff and
+    /// above for the others (`Fermata::propertyDefault(PLACEMENT)`, `track() & 1`, `dom/fermata.cpp:190-193`). The
+    /// subtype name does not move it.
+    public static func placedBelow(placement: Placement?, voiceIndex: Int) -> Bool {
+        if let placement { return placement == .below }
+        return !voiceIndex.isMultiple(of: 2)
+    }
+
+    /// The subtype MuseScore draws at that placement: its layout swaps a `…Below` name for its `…Above` twin above the
+    /// staff and the reverse below it (`TLayout::layoutFermata`, `rendering/score/tlayout.cpp:1919-1929`), so a
+    /// `fermataLongBelow` in the first voice with no `<placement>` draws the long fermata upright, over the staff.
+    public static func drawnSubtype(_ subtype: String, below: Bool) -> String {
+        if below, subtype.hasSuffix("Above") { return String(subtype.dropLast(5)) + "Below" }
+        if !below, subtype.hasSuffix("Below") { return String(subtype.dropLast(5)) + "Above" }
+        return subtype
     }
 }

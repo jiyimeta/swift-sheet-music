@@ -1293,7 +1293,12 @@ extension LayoutEngine {
                     // the chord skyline by the visual gap.
                     let anchorTick = forwardChordTick
                         ?? lastEmittedChordTick
-                    let isBelow = FermataGlyph.isBelow(f.subtype)
+                    // The placement (`<placement>`, else the voice) decides the side, and the glyph drawn is the
+                    // subtype's form for that side, as MuseScore's layout swaps it (`FermataGlyph.drawnSubtype`).
+                    let isBelow = FermataGlyph.placedBelow(
+                        placement: f.elementProperties.placement, voiceIndex: voiceIdx,
+                    )
+                    let drawnSubtype = FermataGlyph.drawnSubtype(f.subtype, below: isBelow)
                     let visualGap = metrics.sp * 0.5
                     let anchorY: CGFloat
                     if isBelow {
@@ -1304,7 +1309,7 @@ extension LayoutEngine {
                         // glyph TOP in screen = origin.y + topOffset.
                         // Want: origin.y + topOffset >= chordSouth + gap.
                         let topOffset =
-                            FermataGlyphMetrics.offsets(forSubtype: f.subtype).topOffset * metrics.sp
+                            FermataGlyphMetrics.offsets(forSubtype: drawnSubtype).topOffset * metrics.sp
                         let needed = chordSouth + visualGap - topOffset
                         anchorY = max(defaultY, needed)
                     } else {
@@ -1315,12 +1320,12 @@ extension LayoutEngine {
                         // glyph BOTTOM in screen = origin.y + bottomOffset.
                         // Want: origin.y + bottomOffset <= chordNorth - gap.
                         let bottomOffset =
-                            FermataGlyphMetrics.offsets(forSubtype: f.subtype).bottomOffset * metrics.sp
+                            FermataGlyphMetrics.offsets(forSubtype: drawnSubtype).bottomOffset * metrics.sp
                         let needed = chordNorth - visualGap - bottomOffset
                         anchorY = min(defaultY, needed)
                     }
                     let fermataElement = LayoutElement.fermata(
-                        subtype: f.subtype,
+                        subtype: drawnSubtype,
                         origin: CGPoint(x: anchorX, y: anchorY),
                         anchor: attachmentAnchor(at: elementAddress, in: voice),
                     )

@@ -344,9 +344,14 @@ and this project adheres to
   `double-dot` and `half-curve` fermata shapes and the `single` caesura read as the Henze fermatas and the single-stroke
   caesura instead of the plain fermata and caesura.
 - **Every MuseScore fermata subtype draws its own glyph.** Short, long, very short, very long and the Henze fermatas
-  drew the plain fermata, and every `*Below` form except `fermataBelow` drew the upright glyph under the staff. The
-  glyph, its measured ink offsets and the below-the-staff placement now follow the subtype (`FermataGlyph.isBelow`,
-  `FermataGlyphMetrics.offsets(forSubtype:)`).
+  drew the plain fermata, and every `*Below` form except `fermataBelow` drew the upright glyph under the staff. As in
+  MuseScore, the side is the fermata's placement — its `<placement>`, else below for the second and fourth voice — and
+  the glyph is the subtype's form for that side, with its measured ink offsets (`FermataGlyph.placedBelow`,
+  `FermataGlyph.drawnSubtype`, `FermataGlyphMetrics.offsets(forSubtype:)`); a MusicXML `type="inverted"` fermata is
+  placed below.
+- **A pedal mark is drawn at MuseScore's size** — the "Ped." and "✱" symbols in a pedal's label are the music font at
+  its full size, as MuseScore sets a pedal's text symbols, not the staff-text symbol size. A whammy bar lies below the
+  staff, as MuseScore draws it.
 - **A saved fret diagram keeps its offset, nut, size and orientation for MuseScore** — `<fretOffset>`, `<showNut>`,
   `<orientation>`, `<minDistance>` and `<mag>` were written after `<fretDiagram>`, where MuseScore's reader skips every
   child; they now precede it, in MuseScore's order.

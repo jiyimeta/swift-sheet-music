@@ -12,8 +12,9 @@ import Testing
     private typealias CGPoint = SheetMusicLayout.CGPoint
 #endif
 
-/// F6.1: MuseScore's fourteen fermata symbols (`dom/fermata.cpp:269-284`) each draw their own SMuFL glyph; a `*Below`
-/// symbol is the below form and hangs under the staff.
+/// F6.1: MuseScore's fourteen fermata symbols (`dom/fermata.cpp:269-284`) each draw their own SMuFL glyph. The side is
+/// the placement's — `<placement>`, else below for the second and fourth voice — and the glyph is the subtype's form
+/// for that side (`TLayout::layoutFermata`, `tlayout.cpp:1919-1929`).
 @Suite("Fermata glyph variants")
 struct FermataGlyphVariantsTests {
     private let _installFontMetrics = TestSupport.installFontMetrics
@@ -64,25 +65,68 @@ struct FermataGlyphVariantsTests {
         }
     }
 
-    @Test("a fermataLongBelow lays out below the staff and carries the long glyph")
-    func longBelowLaysOutBelow() throws {
+    /// MuseScore 4.7.4 draws the fixture's first-voice `fermataLongBelow` (no `<placement>`) upright over the staff,
+    /// exactly like the `fermataLongAbove` beside it: the placement, not the subtype, decides the side.
+    @Test("a first-voice fermataLongBelow with no placement draws the long fermata upright above the staff")
+    func longBelowFollowsItsPlacement() throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("fermata-breath-variants"))
         let document = LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 2400)
-        // Per system, so the two y values share a frame (the fixture puts the Long pair first).
-        let perSystem = document.systems.map { system in
-            system.measures.flatMap(\.elements).compactMap { element -> (String, CGPoint)? in
+        let fermatas = document.systems.flatMap { $0.measures.flatMap(\.elements) }
+            .compactMap { element -> (String, CGPoint)? in
                 if case let .fermata(subtype, origin, _) = element { return (subtype, origin) }
                 return nil
             }
+        // The fixture's first two fermatas are `fermataLongAbove` then `fermataLongBelow`, both first voice.
+        try #require(fermatas.count >= 2)
+        #expect(fermatas[0].0 == "fermataLongAbove")
+        #expect(fermatas[1].0 == "fermataLongAbove")
+        #expect(abs(fermatas[0].1.y - fermatas[1].1.y) < 0.001)
+        #expect(!fermatas.contains { FermataGlyph.isBelow($0.0) })
+    }
+
+    @Test("the side is the placement's, else the voice's; the drawn form follows the side")
+    func placementDecidesTheSide() {
+        #expect(FermataGlyph.placedBelow(placement: nil, voiceIndex: 0) == false)
+        #expect(FermataGlyph.placedBelow(placement: nil, voiceIndex: 1) == true)
+        #expect(FermataGlyph.placedBelow(placement: nil, voiceIndex: 3) == true)
+        #expect(FermataGlyph.placedBelow(placement: .below, voiceIndex: 0) == true)
+        #expect(FermataGlyph.placedBelow(placement: .above, voiceIndex: 1) == false)
+        #expect(FermataGlyph.drawnSubtype("fermataLongBelow", below: false) == "fermataLongAbove")
+        #expect(FermataGlyph.drawnSubtype("fermataShortHenzeAbove", below: true) == "fermataShortHenzeBelow")
+        #expect(FermataGlyph.drawnSubtype("fermataAbove", below: false) == "fermataAbove")
+        #expect(FermataGlyph.drawnSubtype("curlewSign", below: true) == "curlewSign")
+    }
+
+    @Test("a fermata placed below hangs under the staff with the below glyph")
+    func placedBelowHangsUnder() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("fermata-breath-variants"))
+        let address = try #require(Self.firstFermata(in: score))
+        guard case var .fermata(fermata) = score[address] else {
+            Issue.record("expected a fermata")
+            return
         }
-        let system = try #require(perSystem.first { fermatas in
-            fermatas.contains { $0.0 == "fermataLongBelow" } && fermatas.contains { $0.0 == "fermataLongAbove" }
-        })
-        let long = try #require(system.first { $0.0 == "fermataLongBelow" })
-        let above = try #require(system.first { $0.0 == "fermataLongAbove" })
-        #expect(long.1.y > above.1.y)
-        #expect(FermataGlyph.codepoint(forSubtype: long.0) == 0xE4C7)
-        #expect(FermataGlyph.isBelow(long.0))
-        #expect(!FermataGlyph.isBelow(above.0))
+        fermata.elementProperties.placement = .below
+        score[address] = .fermata(fermata)
+        let document = LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 2400)
+        let fermatas = document.systems.flatMap { $0.measures.flatMap(\.elements) }
+            .compactMap { element -> (String, CGPoint)? in
+                if case let .fermata(subtype, origin, _) = element { return (subtype, origin) }
+                return nil
+            }
+        try #require(fermatas.count >= 2)
+        #expect(fermatas[0].0 == "fermataLongBelow")
+        #expect(FermataGlyph.codepoint(forSubtype: fermatas[0].0) == 0xE4C7)
+        #expect(fermatas[0].1.y > fermatas[1].1.y)
+    }
+
+    private static func firstFermata(in score: Score) -> VoiceElementID? {
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
+        guard let index = voice.elements.firstIndex(where: { if case .fermata = $0 { true } else { false } }) else {
+            return nil
+        }
+        return VoiceElementID(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0,
+            elementIndex: index,
+        )
     }
 }

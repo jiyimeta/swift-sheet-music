@@ -229,7 +229,13 @@ enum MusicXMLNoteDecoder {
         default:
             subtype = above ? "fermataAbove" : "fermataBelow"
         }
-        return Fermata(subtype: subtype, timeStretch: Fermata.fileDefaultTimeStretch(for: subtype))
+        var fermata = Fermata(subtype: subtype, timeStretch: Fermata.fileDefaultTimeStretch(for: subtype))
+        // A `type` attribute places it explicitly, as MuseScore's `addFermataToChord` does; without one the voice
+        // decides, as for any fermata (`FermataGlyph.placedBelow`).
+        if fermataNode.attributes["type"] != nil {
+            fermata.elementProperties.placement = above ? .above : .below
+        }
+        return fermata
     }
 
     /// MusicXML's `<tie type="start"/>` starts a tie; `<tie type="stop"/>`

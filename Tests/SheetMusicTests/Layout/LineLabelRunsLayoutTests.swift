@@ -112,4 +112,32 @@ struct LineLabelRunsLayoutTests {
             .map { Self.contents($0.rich).map(\.string).joined() }
         #expect(voltaWords.contains("Last time"))
     }
+
+    /// A pedal's "Ped." is the music font at its full 20 pt (`TextBase::hasSymbolScale` holds for a pedal segment's
+    /// text, `textbase.cpp:3425-3435`), twice the 10 pt a text line's `<sym>` gets — MuseScore 4.7.4 draws the
+    /// fixture's pedal mark as large as the staff's own glyphs.
+    @Test("a pedal's symbol is set at twice a text line's symbol size")
+    func pedalSymbolIsFullSize() throws {
+        func symbolSize(_ segments: [Seg], _ kind: LayoutElement.SpannerKind) -> CGFloat? {
+            segments.first { $0.kind == kind && $0.rich != nil }?.rich?.lines.flatMap(\.runs)
+                .first { if case .symbol = $0.content { true } else { false } }?.font.pointSize
+        }
+        let pedal = try #require(try symbolSize(Self.layout("pedal-lines"), .pedal))
+        let textLine = try #require(try symbolSize(Self.layout("line-texts"), .textLine))
+        #expect(abs(pedal - 2 * textLine) < 0.001)
+    }
+
+    /// MuseScore 4.7.4 draws "w/bar" and "P.S." under the staff and "rasg" over it: the whammy bar's style table has no
+    /// placement row (`whammybar.cpp:40-64`), pick scrape reads `palmMutePlacement` and rasgueado
+    /// `ottava8VAPlacement` (`pickscrape.cpp:57`, `rasgueado.cpp:57`).
+    @Test("whammy bar and pick scrape lie below the staff, rasgueado above")
+    func guitarLinePlacement() throws {
+        let lines = try Self.layout("line-texts")
+        func below(_ line: Spanner.ChordTextLine) -> Bool? {
+            lines.first { $0.kind == .chordTextLine(line) }?.detail?.placedBelow
+        }
+        #expect(below(.whammyBar) == true)
+        #expect(below(.pickScrape) == true)
+        #expect(below(.rasgueado) == false)
+    }
 }
