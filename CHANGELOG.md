@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.11.0] - 2026-10-16
+
 ### Added
 
 - **Pedal playback is built, and switched off in this release.** `MidiRenderer.render(score:)` and
