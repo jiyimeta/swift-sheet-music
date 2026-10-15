@@ -160,10 +160,13 @@ struct ScoreHitTesterArcTests {
         let element = LayoutElement.tieArc(
             fromOrigin: .zero, toOrigin: CGPoint(x: 20000, y: 0), above: true, identity: Self.identity,
         )
-        let tester = ScoreHitTester(document: ElementHitFixtures.document([element]))
-        #expect(tester.hitTest(at: CGPoint(x: 10050, y: 29)) == ScoreHitTarget(elementID: Self.identity))
-        #expect(tester.hitTest(at: CGPoint(x: 10050, y: 23)) == ScoreHitTarget(elementID: Self.identity))
-        #expect(tester.hitTest(at: CGPoint(x: 10050, y: 21)) == nil)
+        // A system spanner, as the layout engine emits every tie (`attachTies`): measured from the system's origin
+        // (30, 40), so the apex is at (10030, 19). A measure keeps its own elements near it, and the hit tester
+        // relies on that (`hitElement(at:)`), so an arc 20,000 points long belongs at system level.
+        let tester = ScoreHitTester(document: ElementHitFixtures.document([], spanners: [element]))
+        #expect(tester.hitTest(at: CGPoint(x: 10030, y: 19)) == ScoreHitTarget(elementID: Self.identity))
+        #expect(tester.hitTest(at: CGPoint(x: 10030, y: 13)) == ScoreHitTarget(elementID: Self.identity))
+        #expect(tester.hitTest(at: CGPoint(x: 10030, y: 11)) == nil)
         // At an intentionally exhausted cap, report the larger bound instead of claiming accuracy.
         let capped = curve.distance(to: CGPoint(x: 10000, y: -27), accuracy: 0.01, depth: 0)
         #expect(capped.errorBound > 0.01)

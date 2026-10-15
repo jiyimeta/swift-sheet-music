@@ -20,25 +20,11 @@ enum SystemMount {
     }
 
     /// Whether a system-level spanner's span meets `range` (system-local X). A spanner whose span is not known from
-    /// its two ends (`horizontalExtent(of:)`) always does, as does everything with `nil`.
+    /// its two ends (`LayoutElement.lineSpanX`) always does, as does everything with `nil`. The host's margin covers
+    /// a label at a spanner's start or a hook at its end.
     static func meets(spanner: LayoutElement, _ range: ClosedRange<CGFloat>?) -> Bool {
-        guard let range, let extent = horizontalExtent(of: spanner) else { return true }
+        guard let range, let extent = spanner.lineSpanX else { return true }
         return extent.overlaps(range)
-    }
-
-    /// The X span between a line-like element's two ends, or `nil` for any other element. Spanners, ties, glissandi
-    /// and lyric lines are drawn between their two ends; a slur's control points stay inside them.
-    static func horizontalExtent(of element: LayoutElement) -> ClosedRange<CGFloat>? {
-        let ends: (CGPoint, CGPoint)
-        switch element {
-        case let .spannerSegment(_, from, to, _, _, _, _): ends = (from, to)
-        case let .tieArc(from, to, _, _): ends = (from, to)
-        case let .glissandoLine(from, to, _, _, _): ends = (from, to)
-        case let .lyricsMelisma(from, to, _): ends = (from, to)
-        case let .lyricHyphen(from, to, _): ends = (from, to)
-        default: return nil
-        }
-        return min(ends.0.x, ends.1.x) ... max(ends.0.x, ends.1.x)
     }
 }
 

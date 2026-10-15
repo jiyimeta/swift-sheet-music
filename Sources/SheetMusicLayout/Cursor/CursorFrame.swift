@@ -48,9 +48,19 @@ extension LayoutDocument {
     /// `LayoutEngine+Placement` centers in the bar. Such a rest's layout
     /// `origin.x` is the measure midpoint, not its tick-0 column, so the
     /// playback cursor must not anchor to it directly.
+    ///
+    /// Looked for in the rest's own measure first, like `itemFrame(_:)`.
     private func isMeasureFillRest(_ restID: RestID) -> Bool {
+        measureFillRest(restID, inMeasureIndex: restID.measureIndex)
+            ?? measureFillRest(restID, inMeasureIndex: nil)
+            ?? false
+    }
+
+    /// Whether `restID` is a measure-fill rest, searching the measure at `index` (every measure when `nil`); `nil`
+    /// when the rest is not there.
+    private func measureFillRest(_ restID: RestID, inMeasureIndex index: Int?) -> Bool? {
         for system in systems {
-            for measure in system.measures {
+            for measure in system.measures where index == nil || measure.measureIndex == index {
                 for element in measure.elements {
                     if case let .rest(duration, _, _, rid, _) = element,
                        rid == restID
@@ -60,10 +70,20 @@ extension LayoutDocument {
                 }
             }
         }
-        return false
+        return nil
     }
 
+    /// The cursor's frame on a notehead or rest.
+    ///
+    /// **Its own measure first.** An item's ID names the measure it belongs to, and that is where it is engraved,
+    /// so the frame is found there by reading one measure's elements. Scanning every element of the score instead
+    /// made each playback tick cost what the whole score does. The full scan remains for anything not found there.
     private func itemFrame(_ id: ScoreItemID) -> CGRect? {
+        itemFrame(id, inMeasureIndex: id.measureIndex) ?? itemFrame(id, inMeasureIndex: nil)
+    }
+
+    /// `itemFrame(_:)` within the measure at `index`, or every measure when `nil`.
+    private func itemFrame(_ id: ScoreItemID, inMeasureIndex index: Int?) -> CGRect? {
         for system in systems {
             // Same span as the system's own left-edge vertical: the end
             // staves' drawn extent, with MuseScore's ±2 sp one-line
@@ -72,7 +92,7 @@ extension LayoutDocument {
             guard let span = system.systemStartBarLine else { continue }
             let topY = system.origin.y + span.top
             let bottomY = system.origin.y + span.bottom
-            for measure in system.measures {
+            for measure in system.measures where index == nil || measure.measureIndex == index {
                 if let x = itemX(id, in: measure) {
                     let absX = system.origin.x + measure.origin.x + x
                     let halfW = metrics.sp * 0.4

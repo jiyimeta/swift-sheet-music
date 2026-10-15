@@ -7,21 +7,46 @@ import SheetMusicFoundation
 @available(macOS 15.0, *)
 extension ScoreHitTester {
     /// Tests addressable elements in the order defined by `ScoreHitTarget`'s priority ladder.
+    ///
+    /// **Only the systems, measures and spanners that could reach `point` are measured.** This rung runs for every
+    /// point the earlier ones decline — empty paper included, and a host that asks on every pointer move — and
+    /// measuring an element is the expensive part: a slur's Bézier bounds, a glyph's path. Measuring all of them
+    /// made one hit test on a 508-measure score cost what the whole score does, about 7 ms. What is skipped cannot
+    /// contain the point, so the answer and its emission-order tie-break are unchanged:
+    /// - a system, by its frame — the engine sizes it to the ink of everything it holds — grown by
+    ///   `elementSystemReach`, which also covers hidden elements, laid out where they would have been drawn;
+    /// - a measure's elements, by the measure's frame grown by `elementMeasureReach` — the longest text an element
+    ///   carries (a tempo marking, a D.S. instruction) reaches well under that past the bar it belongs to;
+    /// - a spanner, tie or glissando, by the span between its two ends grown by `elementLineReach`, for the label
+    ///   at its start and the hook at its end.
     func hitElement(at point: CGPoint) -> ScoreHitTarget? {
+        let sp = document.metrics.sp
         for system in document.systems {
+            let yReach = sp * Self.elementSystemReach
+            guard point.y >= system.origin.y - yReach,
+                  point.y <= system.origin.y + system.size.height + yReach
+            else { continue }
+            let xReach = sp * Self.elementMeasureReach
             for measure in system.measures {
                 let base = CGPoint(
                     x: system.origin.x + measure.origin.x,
                     y: system.origin.y + measure.origin.y,
                 )
+                guard point.x >= base.x - xReach, point.x <= base.x + measure.width + xReach else { continue }
                 for elements in [measure.elements, measure.markers, measure.jumps, measure.invisibleElements] {
                     if let target = hitElement(elements: elements, base: base, point: point) {
                         return target
                     }
                 }
             }
+            let localX = point.x - system.origin.x
+            let lineReach = sp * Self.elementLineReach
             for elements in [system.spanners, system.invisibleSpanners] {
-                if let target = hitElement(elements: elements, base: system.origin, point: point) {
+                let reachable = elements.filter { element in
+                    guard let ends = element.lineSpanX else { return true }
+                    return localX >= ends.lowerBound - lineReach && localX <= ends.upperBound + lineReach
+                }
+                if let target = hitElement(elements: reachable, base: system.origin, point: point) {
                     return target
                 }
             }
@@ -29,9 +54,19 @@ extension ScoreHitTester {
         return nil
     }
 
+    /// How far past a system's frame, in spatia, an element of it can be hit. See `hitElement(at:)`.
+    static let elementSystemReach: CGFloat = 8
+    /// How far past its measure's frame, in spatia, an element can be hit. See `hitElement(at:)`.
+    static let elementMeasureReach: CGFloat = 64
+    /// How far past its two ends, in spatia, a line-like element can be hit. See `hitElement(at:)`.
+    static let elementLineReach: CGFloat = 8
+
     /// First matching ink wins in emission order. Navigation marks currently share origins;
     /// overlapping ink therefore selects the first mark until engraving separates those marks.
-    private func hitElement(elements: [LayoutElement], base: CGPoint, point: CGPoint) -> ScoreHitTarget? {
+    ///
+    /// Internal rather than private so a test can run it over every element as the reference `hitElement(at:)`'s
+    /// pruning must agree with.
+    func hitElement(elements: [LayoutElement], base: CGPoint, point: CGPoint) -> ScoreHitTarget? {
         for element in elements {
             guard let id = element.elementID else { continue }
             let local = CGPoint(x: point.x - base.x, y: point.y - base.y)
