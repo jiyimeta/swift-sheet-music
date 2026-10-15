@@ -40,7 +40,8 @@ enum SpannerPlacement {
         switch kind {
         case .slur: .chordAnchored
         case .volta: .measureVolta
-        case .hairpin, .pedal, .ottava, .textLine, .trill, .vibrato, .palmMute, .letRing: .voiceElement
+        case .hairpin, .pedal, .ottava, .textLine, .chordTextLine, .trill, .vibrato, .palmMute, .letRing:
+            .voiceElement
         case .glissando, .gradualTempoChange, .other: .voiceElement
         }
     }

@@ -166,9 +166,14 @@ and this project adheres to
 
 - **`NotatedClock` and `Score.notatedClock(tempoMap:)`** — `seconds(at:clock:)`, `cursor(atSeconds:clock:)` and
   `rehearsalMarks(clock:)` accept a cached clock, so per-frame callers skip the tempo-map build.
+- **Text-line spanners keep their line properties** — `Spanner.lineProperties` (hooks, line visibility, line type,
+  dash, width, hook heights, `<play>`), `Spanner.chordTextLine` (`HarmonicMark`, `Rasgueado`, `PickScrape`,
+  `WhammyBar` were `Kind.other`) and `Spanner.payloadMarkup`: a pedal's variant, a text line's hooks and a `<Segment>`
+  offset now survive a save instead of being dropped.
 
 ### Changed
 
+- **`Spanner.Kind` gains `chordTextLine`** — a client switching over it exhaustively must handle it.
 - **`HarmonyRendering.runs(for:metrics:)` and `caretOffsets(for:metrics:)` take the chord-symbol case style** — a
   defaulted `style: ChordSymbolCaseStyle` (MuseScore's defaults); pass `score.style.chordSymbolCase` to draw what the
   layout measured.

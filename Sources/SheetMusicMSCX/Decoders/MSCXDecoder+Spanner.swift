@@ -12,7 +12,9 @@ extension Spanner {
 
     static func decode(_ node: XMLTreeNode) throws -> Spanner {
         let raw = node.attributes["type"] ?? ""
-        let kind = Kind(rawValue: raw) ?? .other
+        // The four guitar lines are `Kind.chordTextLine`; `rawType` keeps the tag that says which.
+        let chordTextLine = ChordTextLine(rawValue: raw)
+        let kind: Kind = chordTextLine != nil ? .chordTextLine : (Kind(rawValue: raw) ?? .other)
 
         var voltaEndings: [Int] = []
         if let voltaNode = node.first("Volta") {
@@ -46,6 +48,8 @@ extension Spanner {
         }
         let gradualTempoChange = kind == .gradualTempoChange ? node.first(raw).map(decodeGradualTempoChange) : nil
 
+        let (lineProperties, payloadMarkup) = decodeLinePayload(node.first(raw), kind: kind)
+
         let elementProperties = decodeElementProperties(node, payloadName: raw)
         var spanner = Spanner(
             kind: kind,
@@ -67,6 +71,9 @@ extension Spanner {
                 consuming: consumedSpannerChildren.union([raw]),
             ),
             isEndMarker: isEndMarker(node),
+            lineProperties: lineProperties,
+            chordTextLine: chordTextLine,
+            payloadMarkup: payloadMarkup,
         )
         spanner.elementProperties = elementProperties
         return spanner

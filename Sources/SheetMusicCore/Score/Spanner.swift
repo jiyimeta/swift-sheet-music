@@ -18,6 +18,9 @@ public struct Spanner: Sendable, Equatable {
         case palmMute = "PalmMute"
         case letRing = "LetRing"
         case gradualTempoChange = "GradualTempoChange"
+        /// The four guitar lines MuseScore writes as `<Spanner type="HarmonicMark|Rasgueado|PickScrape|WhammyBar">`;
+        /// `chordTextLine` says which.
+        case chordTextLine
         case other
     }
 
@@ -112,6 +115,15 @@ public struct Spanner: Sendable, Equatable {
     public var gradualTempoChange: GradualTempoChangePayload?
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
+    /// The line variants a begin side's payload child carries (hooks, line visibility, line type, dash, width, hook
+    /// heights, `<play>`), for the text-line kinds. `nil` means every property is at the kind's default — the decoder
+    /// stores a payload that sets none of them as `nil`, so a spanner made in code and the same spanner read back from
+    /// its save are equal. Whether a spanner is a begin or an end side is `isEndMarker`, not this.
+    public var lineProperties: LineProperties?
+    /// Which guitar line this is; set with `kind == .chordTextLine` (`rawType` still holds the tag).
+    public var chordTextLine: ChordTextLine?
+    /// The begin-side payload's children nothing models, written back after the modeled ones.
+    public var payloadMarkup: [PreservedXML] = []
 
     public init(
         kind: Kind,
@@ -131,6 +143,9 @@ public struct Spanner: Sendable, Equatable {
         endText: String? = nil,
         preservedMarkup: [PreservedXML] = [],
         isEndMarker: Bool? = nil,
+        lineProperties: LineProperties? = nil,
+        chordTextLine: ChordTextLine? = nil,
+        payloadMarkup: [PreservedXML] = [],
     ) {
         self.isEndMarker = isEndMarker ?? !visible
         self.kind = kind
@@ -150,6 +165,9 @@ public struct Spanner: Sendable, Equatable {
         self.continueText = continueText
         self.endText = endText
         self.preservedMarkup = preservedMarkup
+        self.lineProperties = lineProperties
+        self.chordTextLine = chordTextLine
+        self.payloadMarkup = payloadMarkup
     }
 
     /// MuseScore `<Trill>` payload.

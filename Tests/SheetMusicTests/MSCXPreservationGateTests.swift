@@ -164,10 +164,10 @@ enum MSCXPreservation {
             + "treat a green gate as covering it."
     private static let spannerPayloadReason =
         "genuinely lost under this design: these fields are nested inside a modeled spanner "
-            + "payload, and the wrapper-level Spanner preserved-markup bag cannot retain only the "
-            + "unconsumed part of that payload. MSCXDecoder+Spanner.swift plus "
-            + "slur_ms4_glissando_legato.mscx, testSingleNoteDynamics.mscx, and repeat52.mscx "
-            + "pin the loss; a payload-level bag or model field would be required."
+            + "payload that has no payload-level bag (the Glissando's; the text-line kinds have "
+            + "`Spanner.payloadMarkup`). MSCXDecoder+Spanner.swift plus "
+            + "slur_ms4_glissando_legato.mscx pin the loss; a payload-level bag or model field "
+            + "would be required."
     private static let glissandoAnchorReason =
         "by design, and not user-data loss: <anchor>3</anchor> is the fixed note-anchor marker "
             + "inside the modeled Glissando payload. MSCXDecoder+Note.swift derives the anchor "
@@ -321,9 +321,10 @@ enum MSCXPreservation {
         allow([
             "Note/Symbol", "Symbol/name",
         ], because: noteParenthesisSymbolReason, into: &result)
+        // `HairPin/Segment` (with its `Segment/*` children) and `Volta/endHookType` left this list in W6 Task 5: the
+        // text-line kinds now keep their modeled line tags and a payload bag (`Spanner.payloadMarkup`).
         allow([
-            "Glissando/diagonal", "HairPin/Segment", "Segment/off2", "Segment/offset",
-            "Segment/subtype", "Volta/endHookType",
+            "Glissando/diagonal",
         ], because: spannerPayloadReason, into: &result)
         allow([
             "Glissando/anchor",

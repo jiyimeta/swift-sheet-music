@@ -528,7 +528,7 @@ extension LayoutEngine {
         // `trillPlacement` = ABOVE (`styledef.cpp:348`).
         case .hairpin, .pedal, .palmMute, .letRing: true
         case .volta, .slur, .ottava, .textLine, .glissando, .vibrato,
-             .trill, .gradualTempoChange, .other: false
+             .trill, .gradualTempoChange, .chordTextLine, .other: false
         }
     }
 
@@ -861,7 +861,7 @@ extension LayoutEngine {
         case .palmMute: return .palmMute
         case .letRing: return .letRing
         case .gradualTempoChange: return .gradualTempoChange
-        case .glissando, .other: return .textLine
+        case .glissando, .chordTextLine, .other: return .textLine
         }
     }
 
@@ -881,7 +881,7 @@ extension LayoutEngine {
         // projection, never the tags.
         let authored = anchor.beginText.map { RichText(xmlText: $0).plainText }
         switch anchor.kind {
-        case .textLine, .glissando, .gradualTempoChange, .other:
+        case .textLine, .glissando, .gradualTempoChange, .chordTextLine, .other:
             return authored ?? ""
         // `Sid::palmMuteText` / `Sid::letRingText`
         // (`styledef.cpp:1943,1891`).

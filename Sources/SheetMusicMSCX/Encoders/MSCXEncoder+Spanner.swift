@@ -68,14 +68,17 @@ extension Spanner {
         if kind == .gradualTempoChange, let gradualTempoChange {
             return gradualTempoChangePayload(gradualTempoChange, leading: leading, trailing: trailing, options: options)
         }
+        // Line variants, then the kind's own children, then the children nothing models (`payloadMarkup`), as read;
+        // the color stays last.
+        let line = lineChildren()
         if kind == .volta, !voltaEndings.isEmpty {
             let endingsText = voltaEndings.map(String.init).joined(separator: ", ")
-            return XMLTreeNode(name: rawType, children: leading + [
-                XMLTreeNode(name: "endings", text: endingsText),
-            ] + trailing)
+            var children = leading + line + [XMLTreeNode(name: "endings", text: endingsText)]
+            appendPreservedMarkup(payloadMarkup, to: &children, options: options)
+            return XMLTreeNode(name: rawType, children: children + trailing)
         }
         if kind == .hairpin, let hairpin {
-            var children: [XMLTreeNode] = leading + [
+            var children: [XMLTreeNode] = leading + line + [
                 XMLTreeNode(name: "subtype", text: String(hairpin.subtype.rawValue)),
             ]
             if let velo = hairpin.veloChange {
@@ -91,6 +94,7 @@ extension Spanner {
             if let child = hairpin.voiceAssignment.mscxChild(options: options) {
                 children.append(child)
             }
+            appendPreservedMarkup(payloadMarkup, to: &children, options: options)
             children += trailing
             return XMLTreeNode(name: rawType, children: children)
         }
@@ -106,7 +110,9 @@ extension Spanner {
             children += trailing
             return XMLTreeNode(name: rawType, children: children)
         }
-        return XMLTreeNode(name: rawType, children: leading + trailing)
+        var children = leading + line
+        appendPreservedMarkup(payloadMarkup, to: &children, options: options)
+        return XMLTreeNode(name: rawType, children: children + trailing)
     }
 
     /// `<GradualTempoChange>` in `TWrite`'s order (`rw/write/twrite.cpp:1651-1661`): the type, a non-default easing,
