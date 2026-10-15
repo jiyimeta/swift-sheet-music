@@ -23,7 +23,7 @@ public struct Breath: Sendable, Equatable {
     }
 
     public enum CaesuraStyle: String, Sendable, Equatable, CaseIterable {
-        case normal, short, thick, curved
+        case normal, short, thick, curved, chant, singleStroke
     }
 
     public var kind: Kind
@@ -62,6 +62,7 @@ public struct Breath: Sendable, Equatable {
             case .short: return 0.25
             case .thick: return 0.75
             case .curved: return 0.5
+            case .chant, .singleStroke: return 0.5
             }
         }
     }

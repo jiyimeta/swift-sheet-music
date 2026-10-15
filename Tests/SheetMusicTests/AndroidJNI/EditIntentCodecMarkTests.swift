@@ -69,7 +69,7 @@ struct EditIntentCodecMarkTests {
     /// case fails here rather than in a host's file.
     @Test func `every breath style is carried by the wire tables`() throws {
         #expect(Breath.BreathMarkStyle.allCases.count == 4)
-        #expect(Breath.CaesuraStyle.allCases.count == 4)
+        #expect(Breath.CaesuraStyle.allCases.count == 6)
         for style in Breath.BreathMarkStyle.allCases {
             let intent = EditIntent.setBreath(after: Self.slot, kind: .breathMark(style), pause: 0.25)
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -96,7 +96,7 @@ struct EditIntentCodecMarkTests {
             try EditIntentCodec.decode(EditIntentWire.setBreath(kind).encodeToData())
         }
         var style = SetBreathIntentWire(location: Self.slot, kind: .caesura(.short), pause: 0)
-        style.style = 4
+        style.style = 6
         #expect(throws: (any Error).self) {
             try EditIntentCodec.decode(EditIntentWire.setBreath(style).encodeToData())
         }

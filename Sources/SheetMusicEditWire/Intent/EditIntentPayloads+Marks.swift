@@ -211,7 +211,9 @@ public struct SetFermataIntentWire {
 /// properties only — `@WireFormat` numbers those into tags, and a stored type property would be noise there.
 private enum BreathTables {
     static let breathStyles: [Breath.BreathMarkStyle] = [.comma, .tick, .upbow, .salzedo]
-    static let caesuraStyles: [Breath.CaesuraStyle] = [.normal, .short, .thick, .curved]
+    static let caesuraStyles: [Breath.CaesuraStyle] = [
+        .normal, .short, .thick, .curved, .chant, .singleStroke,
+    ]
 }
 
 /// `Breath.Kind` as two hand-written `u8` tables — the `NoteDurationWire` rule for a small closed enum whose
@@ -222,7 +224,8 @@ public struct SetBreathIntentWire {
     public var hasBreath: UInt8
     /// 0 = breath mark, 1 = caesura.
     public var kind: UInt8
-    /// Breath mark: 0 comma, 1 tick, 2 upbow, 3 salzedo. Caesura: 0 normal, 1 short, 2 thick, 3 curved.
+    /// Breath mark: 0 comma, 1 tick, 2 upbow, 3 salzedo. Caesura: 0 normal, 1 short, 2 thick, 3 curved, 4 chant,
+    /// 5 singleStroke.
     public var style: UInt8
     public var pause: Double
 

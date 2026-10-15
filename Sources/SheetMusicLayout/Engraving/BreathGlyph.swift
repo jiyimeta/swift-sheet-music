@@ -17,6 +17,8 @@ public enum BreathGlyph {
         case .caesura(.short): return SMuFLCodepoint.caesuraShort
         case .caesura(.thick): return SMuFLCodepoint.caesuraThick
         case .caesura(.curved): return SMuFLCodepoint.caesuraCurved
+        case .caesura(.chant): return SMuFLCodepoint.chantCaesura
+        case .caesura(.singleStroke): return SMuFLCodepoint.caesuraSingleStroke
         }
     }
 }

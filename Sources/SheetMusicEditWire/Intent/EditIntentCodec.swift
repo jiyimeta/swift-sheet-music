@@ -567,7 +567,7 @@ import Wirelet
 /// tag 2: hasBreath  u8, varint — 0 = remove, 1 = write
 /// tag 3: kind       u8, varint — 0 breath mark / 1 caesura, else throws
 /// tag 4: style      u8, varint — breath mark: 0 comma 1 tick 2 upbow 3 salzedo;
-///                   caesura: 0 normal 1 short 2 thick 3 curved; else throws
+///                   caesura: 0 normal 1 short 2 thick 3 curved 4 chant 5 singleStroke; else throws
 /// tag 5: pause      f64, fixed-64 little-endian IEEE 754 — 0 when hasBreath == 0
 /// ```
 ///

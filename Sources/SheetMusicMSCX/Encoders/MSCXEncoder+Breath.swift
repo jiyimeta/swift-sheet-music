@@ -16,6 +16,8 @@ extension Breath.Kind {
         case "caesuraShort": return .caesura(.short)
         case "caesuraThick": return .caesura(.thick)
         case "caesuraCurved": return .caesura(.curved)
+        case "chantCaesura": return .caesura(.chant)
+        case "caesuraSingleStroke": return .caesura(.singleStroke)
         default: return nil
         }
     }
@@ -31,6 +33,8 @@ extension Breath.Kind {
         case .caesura(.short): return "caesuraShort"
         case .caesura(.thick): return "caesuraThick"
         case .caesura(.curved): return "caesuraCurved"
+        case .caesura(.chant): return "chantCaesura"
+        case .caesura(.singleStroke): return "caesuraSingleStroke"
         }
     }
 }

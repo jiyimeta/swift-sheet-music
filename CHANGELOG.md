@@ -9,6 +9,9 @@ and this project adheres to
 
 ### Added
 
+- **`Breath.CaesuraStyle.chant` and `.singleStroke`** — MuseScore's `chantCaesura` (U+E8F8) and `caesuraSingleStroke`
+  (U+E4D7). They used to decode as a comma and re-save as `breathMarkComma`. They are appended after `.curved`, so the
+  edit-wire style index of every existing caesura is unchanged.
 - **Expression text and stickings are drawn** — an `<Expression>` ("dolce") draws below the staff in MuseScore's
   expression style (italic, 10 pt), snapped 0.5 sp (0.2 sp after an f) to the right of the dynamic on its beat and on
   that dynamic's baseline — the pair ignore each other in autoplace, as in MuseScore — and a `<Sticking>` draws centered
@@ -166,6 +169,8 @@ and this project adheres to
 
 ### Changed
 
+- **`Breath.CaesuraStyle` gains two cases** — a client switching over it exhaustively must handle `.chant` and
+  `.singleStroke`.
 - **Breaking: `TextStyleType` and `TextPlacementRole` gain the annotation styles** — `TextStyleType` gains
   `expression`, `sticking`, `fingering`, `lhGuitarFingering`, `rhGuitarFingering`, `stringNumber`, `stringTunings`,
   `harpPedalDiagram`, `harpPedalTextDiagram` and `fretDiagramFretNumber` with MuseScore 4's fonts, sizes and symbol

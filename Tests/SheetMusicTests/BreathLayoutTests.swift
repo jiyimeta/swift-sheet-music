@@ -178,7 +178,7 @@ struct BreathLayoutTests {
             Breath.BreathMarkStyle.allCases.map { .breathMark($0) }
                 + Breath.CaesuraStyle.allCases.map { .caesura($0) },
         )
-        #expect(allKinds.count == 8)
+        #expect(allKinds.count == 10)
         for kind in allKinds {
             let codepoint = BreathGlyph.codepoint(forKind: kind)
             let scalar = UnicodeScalar(codepoint)

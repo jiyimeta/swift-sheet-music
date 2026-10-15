@@ -105,6 +105,10 @@ public enum SMuFLCodepoint {
     public static let caesuraThick: UInt32 = 0xE4D2
     /// Curved caesura — SMuFL `caesuraCurved`.
     public static let caesuraCurved: UInt32 = 0xE4D4
+    /// Chant caesura — SMuFL `chantCaesura`.
+    public static let chantCaesura: UInt32 = 0xE8F8
+    /// Single-stroke caesura — SMuFL `caesuraSingleStroke`.
+    public static let caesuraSingleStroke: UInt32 = 0xE4D7
 
     // MARK: - Articulations
 
