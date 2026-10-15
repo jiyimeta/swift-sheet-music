@@ -31,6 +31,13 @@ extension LayoutEngine {
 
     /// The text spec of a voice-level annotation, or `nil` for any other element or an empty text.
     static func annotationSpec(for element: VoiceElement) -> AnnotationTextSpec? {
+        guard let spec = annotationSpecIgnoringEmptiness(for: element),
+              !spec.text.isEmpty || spec.richText != nil
+        else { return nil }
+        return spec
+    }
+
+    private static func annotationSpecIgnoringEmptiness(for element: VoiceElement) -> AnnotationTextSpec? {
         switch element {
         case let .expression(expression):
             AnnotationTextSpec(
@@ -43,6 +50,19 @@ extension LayoutEngine {
                 text: sticking.text, richText: sticking.richText, style: .sticking, role: .sticking,
                 properties: sticking.elementProperties, overrides: sticking.fontOverrides,
                 alignment: .center, anchorsAtMeasureStart: false,
+            )
+        case let .capo(capo):
+            // The instrument's string count is not known here, so a partial capo with an empty text draws nothing.
+            AnnotationTextSpec(
+                text: capo.displayedText(stringCount: nil), richText: capo.richText, style: .staffText,
+                role: .staffText, properties: capo.elementProperties, overrides: capo.fontOverrides,
+                alignment: .leading, anchorsAtMeasureStart: false,
+            )
+        case let .stringTunings(tunings):
+            AnnotationTextSpec(
+                text: tunings.text, richText: tunings.richText, style: .stringTunings, role: .staffText,
+                properties: tunings.elementProperties, overrides: tunings.fontOverrides,
+                alignment: .leading, anchorsAtMeasureStart: true,
             )
         default:
             nil

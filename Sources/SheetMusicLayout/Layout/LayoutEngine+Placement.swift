@@ -1341,14 +1341,15 @@ extension LayoutEngine {
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
                     break
-                case .sticking, .expression:
+                case .sticking, .expression, .capo, .stringTunings:
                     guard let spec = annotationSpec(for: el),
                           spec.properties.visible || options.showsInvisibleElements
                     else { break }
                     // At its beat's column even when it opens the measure: MuseScore places an annotation at its
-                    // segment, as a staff text of the same beat stands.
+                    // segment, as a staff text of the same beat stands. A string-tunings text is the exception, one
+                    // spatium in from the measure's left edge.
                     let element = annotationStaffText(
-                        spec, x: timedX(atTick: tickCursor),
+                        spec, x: spec.anchorsAtMeasureStart ? metrics.sp : timedX(atTick: tickCursor),
                         textPlacementStyle: textPlacementStyle, lineGeometry: lineGeometry, metrics: metrics,
                     )
                     guard spec.properties.visible else {
@@ -1365,10 +1366,9 @@ extension LayoutEngine {
                         ))
                     }
                     out.append(element)
-                case .capo, .stringTunings, .ambitus, .figuredBass, .symbol, .fretDiagram, .preserved:
-                    // Capo and string tunings (W5 Task 4), ambitus (10), figured bass (11), symbols (8) and fret
-                    // diagrams (12) get their passes in their own tasks; source-only preserved markup has no layout
-                    // behavior.
+                case .ambitus, .figuredBass, .symbol, .fretDiagram, .preserved:
+                    // Ambitus (W5 Task 10), figured bass (11), symbols (8) and fret diagrams (12) get their passes in
+                    // their own tasks; source-only preserved markup has no layout behavior.
                     break
                 case let .locationShift(delta):
                     // Voice-level cursor shift. Adds the location's

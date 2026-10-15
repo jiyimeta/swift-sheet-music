@@ -20,6 +20,10 @@ and this project adheres to
   that dynamic's baseline — the pair ignore each other in autoplace, as in MuseScore — and a `<Sticking>` draws centered
   on its notehead below the staff; `<placement>`, `<offset>`, `<autoplace>`, `<visible>`, `<color>` and the element's
   font overrides are honored, and a hidden one is a ghost when invisible elements are shown.
+- **Capo and string-tunings texts are drawn** — a `<Capo>` draws its text above the staff at its beat in the staff-text
+  style, falling back to MuseScore's "Capo 2" / "No capo" when its text is empty (a partial capo with an empty text
+  draws nothing: the instrument's strings are not known at layout), and a `<StringTunings>` draws its text in the 9 pt
+  string-tunings style one spatium from its measure's left edge.
 - **SMuFL names for annotations** — `SMuFLCodepoint.byName` resolves `ornament*`, `csymAccidental*`, `guitarString*`,
   `strings*`, `fingering*` and `tremolo*` (207 names), so `<sym>` in a harp or string-tunings text and a `<Symbol>`
   naming an ornament draw as glyphs.
