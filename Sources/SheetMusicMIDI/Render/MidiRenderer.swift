@@ -126,8 +126,9 @@ public enum MidiRenderer {
         /// identity — see `MidiChannelKey`.
         var port: Int
         var flavour: InstrumentChannel
-        /// Index into `Score.instrumentTimeline(forPart:)`: 0 = the
-        /// tick-0 instrument, 1... = one per change instance.
+        /// Index into `Score.soundTimeline(forPart:)`: 0 = the tick-0
+        /// instrument, then one per change instance and per play
+        /// technique's new sound.
         var instrumentOrdinal: Int
 
         var key: MidiChannelKey {
@@ -170,20 +171,32 @@ public enum MidiRenderer {
             switches.allSatisfy { $0.port == defaultPort }
         }
 
-        /// Build from the part's timeline plus its channel assignments.
-        /// Assignment `ordinal` indexes the timeline one-to-one, and the
-        /// FIRST flavour of each instrument is the sounding one (the
-        /// later flavours are pizz / tremolo variants nothing selects yet).
+        /// Build from the part's sound timeline plus its channel assignments.
+        /// Assignment `ordinal` indexes the sound timeline, and the FIRST
+        /// flavour of each instrument is the sounding one; a play technique
+        /// that selects one of the instrument's other `<Channel>`s sounds on
+        /// that flavour's channel, and a point that sounds like an earlier
+        /// one on that point's.
         static func build(
             score: Score, partIndex: Int, assignments: [ChannelAssignment],
         ) -> PartChannelRoute {
-            let timeline = score.instrumentTimeline(forPart: partIndex)
+            let timeline = score.soundTimeline(forPart: partIndex)
             var routeByOrdinal: [Int: (channel: Int, port: Int)] = [:]
             for assignment in assignments
                 where routeByOrdinal[assignment.instrumentOrdinal] == nil
             {
                 routeByOrdinal[assignment.instrumentOrdinal] =
                     (assignment.channel, assignment.port)
+            }
+            for (ordinal, point) in timeline.enumerated() where routeByOrdinal[ordinal] == nil {
+                if let source = point.flavourSource {
+                    let flavours = assignments.filter { $0.instrumentOrdinal == source.point }
+                    if flavours.indices.contains(source.flavour) {
+                        routeByOrdinal[ordinal] = (flavours[source.flavour].channel, flavours[source.flavour].port)
+                    }
+                } else if let earlier = point.reusesPoint {
+                    routeByOrdinal[ordinal] = routeByOrdinal[earlier]
+                }
             }
             var switches: [Switch] = []
             for (ordinal, point) in timeline.enumerated() where ordinal > 0 {

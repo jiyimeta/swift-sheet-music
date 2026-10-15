@@ -49,8 +49,10 @@ extension MidiRenderer {
             return channel
         }
         for partIndex in score.parts.indices {
-            let timeline = score.instrumentTimeline(forPart: partIndex)
-            for (ordinal, point) in timeline.enumerated() {
+            // The sound timeline: a play technique's own sound is one more point. A point that sounds like an earlier
+            // one, or through one of an earlier instrument's own `<Channel>`s, takes no channel.
+            let timeline = score.soundTimeline(forPart: partIndex)
+            for (ordinal, point) in timeline.enumerated() where point.reusesPoint == nil && point.flavourSource == nil {
                 let instrument = point.instrument
                 let isDrumset = instrument.useDrumset
                 for flavour in instrument.channels {

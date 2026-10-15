@@ -25,6 +25,10 @@ import SheetMusicFoundation
 /// construction, and an instance the author tweaked in MuseScore's
 /// mixer keeps its own channel because a sounding field differs.
 ///
+/// The instruments are the part's SOUND timeline: a play technique's
+/// variant ("Violin (Pizzicato)") is another instrument whose primary
+/// channel differs in program, so it earns a strip of its own.
+///
 /// Dedup is **within-part only**: collapsing across parts would destroy
 /// per-part mixer independence.
 public struct LiveChannelPlan: Sendable, Equatable {
@@ -89,6 +93,18 @@ public struct LiveChannelPlan: Sendable, Equatable {
         return ordinalByTimelineIndex[partIndex][timelineIndex]
     }
 
+    /// A technique sounding through one of the instrument's own `<Channel>`s owns that channel's notes: they play on
+    /// the technique's strip, not the instrument's.
+    private static func remapFlavourSource(
+        of point: Score.SoundPoint, in partAssignments: [MidiRenderer.ChannelAssignment], to liveChannel: Int,
+        remap: inout [MidiChannelKey: Int],
+    ) {
+        guard let source = point.flavourSource else { return }
+        let flavours = partAssignments.filter { $0.instrumentOrdinal == source.point }
+        guard flavours.indices.contains(source.flavour) else { return }
+        remap[flavours[source.flavour].key] = liveChannel
+    }
+
     public static func build(score: Score) -> LiveChannelPlan {
         let assignments = MidiRenderer.assignChannels(score: score)
         var strips: [Strip] = []
@@ -104,7 +120,7 @@ public struct LiveChannelPlan: Sendable, Equatable {
         }
 
         for partIndex in score.parts.indices {
-            let timeline = score.instrumentTimeline(forPart: partIndex)
+            let timeline = score.soundTimeline(forPart: partIndex)
             let partAssignments = assignments.indices.contains(partIndex)
                 ? assignments[partIndex] : []
             // Dedup key: the primary flavour's SOUNDING fields only
@@ -154,6 +170,7 @@ public struct LiveChannelPlan: Sendable, Equatable {
                 {
                     remap[assignment.key] = liveChannel
                 }
+                remapFlavourSource(of: point, in: partAssignments, to: liveChannel, remap: &remap)
             }
             ordinalByTimelineIndex.append(ordinals)
         }

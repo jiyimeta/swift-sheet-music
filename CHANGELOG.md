@@ -31,6 +31,15 @@ and this project adheres to
   of surviving as unmodeled markup. Neither is a caret target. A MuseScore 3 staff text that MuseScore 4 converts to a
   technique ("pizzicato", "arco", or a channel switch to "tremolo") is converted here too. A MuseScore 3 target writes
   the text as a plain `<StaffText>`.
+- **Play techniques change the sound** — a play-technique annotation switches its part to the instrument's matching
+  `<Channel>` (pizzicato, tremolo, mute, open, distortion, overdriven, harmonics, jazz) from its beat — on the MIDI
+  channel that `<Channel>` already has, as MuseScore does — or to MuseScore's General MIDI sound for the instrument
+  (string pizzicato 45, section tremolo 44 and mute 49, brass mute 59, guitar mute 28 / harmonics 31 / distortion 30 /
+  overdrive 29 / jazz 26; bank 0, a channel of its own), until a natural or open annotation, the next technique or an
+  instrument change. It is a point on the part's sound timeline like an instrument change, so the exported SMF, the
+  live mixer (one more row per technique sound, "Violin (Pizzicato)"), the audition and every platform's engine follow.
+  Annotations with the play flag off, and techniques with no General MIDI sound (détaché, martelé, col legno,
+  sul ponticello, sul tasto, vibrato, legato, the handbell techniques), change nothing.
 - **A capo transposes playback** — a `<Capo>` that is active and transposes playback (every MuseScore 4.6 file, and
   4.7's "playback" mode) adds its fret to the sounding pitch of the notes of its staff, in every voice, from its beat
   until the next capo, except on the strings it skips (MuseScore `Note::ottaveCapoFret`). A capo that transposes the

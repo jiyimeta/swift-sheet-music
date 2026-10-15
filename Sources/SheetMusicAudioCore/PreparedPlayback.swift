@@ -98,7 +98,7 @@ public struct PreparedPlayback: Sendable {
         var switches: [Int: [StaffChannelSwitch]] = [:]
         for (staffIndex, entry) in score.allStaves.enumerated() {
             let partIndex = entry.address.partIndex
-            let timeline = score.instrumentTimeline(forPart: partIndex)
+            let timeline = score.soundTimeline(forPart: partIndex)
             guard timeline.count > 1 else { continue }
             switches[staffIndex] = timeline.enumerated().compactMap { timelineIndex, point in
                 guard bases.indices.contains(point.measureIndex),
