@@ -331,11 +331,17 @@ extension Voice {
                         eid: EIDXML.decode(from: child),
                     )
                 } else {
-                    try lifted(
-                        .staffText(StaffText.decode(child, isSystemText: false)),
-                        eid: EIDXML.decode(from: child),
-                    )
+                    var staffText = try StaffText.decode(child, isSystemText: false)
+                    // A MuseScore 3 "pizz." is the technique MuseScore 4 converts it into on load.
+                    if let revision = MSCXParserContext.formatRevision, revision < 400,
+                       let technique = StaffText.legacyTechnique(of: child)
+                    {
+                        staffText.annotation = .playTechnique(technique, playsBack: true)
+                    }
+                    lifted(.staffText(staffText), eid: EIDXML.decode(from: child))
                 }
+            case "PlayTechAnnotation", "HarpPedalDiagram":
+                try lifted(.staffText(StaffText.decodeAnnotated(child)), eid: EIDXML.decode(from: child))
             case "SystemText":
                 if Swing.isSwingMarker(child) {
                     lifted(

@@ -58,6 +58,12 @@ public struct StaffText: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
+    /// What this staff text is besides text: a play-technique annotation or a harp pedal diagram. MuseScore reads
+    /// both as staff-text-like annotations of a segment (`<PlayTechAnnotation>`, `<HarpPedalDiagram>`). Settable
+    /// after init; the public initializer makes an ordinary staff text. No edit command reaches an annotated text
+    /// (`SetStaffText` matches ordinary ones only), so `ScoreFingerprint` does not hash this field.
+    package var annotation: Annotation?
+
     public init(
         text: String,
         offsetX: Double = 0,
@@ -82,10 +88,13 @@ public struct StaffText: Sendable, Equatable {
         )
     }
 
-    /// The `TextStyleType` row this element inherits from. Picks
-    /// `.systemText` when `isSystemText` is true.
+    /// The `TextStyleType` row this element inherits from: a harp pedal diagram's own style, else `.systemText` when
+    /// `isSystemText` is true and `.staffText` otherwise.
     public var styleType: TextStyleType {
-        isSystemText ? .systemText : .staffText
+        switch annotation {
+        case let .harpPedal(diagram)?: diagram.isDiagram ? .harpPedalDiagram : .harpPedalTextDiagram
+        default: isSystemText ? .systemText : .staffText
+        }
     }
 }
 

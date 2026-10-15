@@ -184,6 +184,9 @@ struct MSCXIdempotencyTests {
     /// - `dynamics` — a dynamic's own text (words, runs with glyphs, an other-dynamics word), `<play>0</play>` and
     ///   `<veloChangeSpeed>`, written back in MuseScore's order (import fidelity W4).
     /// - `dynamics-voices` — dynamics assigned to the instrument, the staff and one voice (import fidelity W4).
+    /// - `w5-play-techniques` — `<PlayTechAnnotation>`s on two parts, with and without a type, one not played back:
+    ///   default-valued properties are omitted on the way out (import fidelity W5).
+    /// - `w5-diagrams` — `<HarpPedalDiagram>` in glyph and text mode, with its `<pedalState>` and `<sym>` markup.
     @Test("committed MSCX fixtures encode to a fixed point", arguments: [
         "testVoltaTemp",
         "testSingleNoteDynamics",
@@ -201,6 +204,8 @@ struct MSCXIdempotencyTests {
         "marker-properties",
         "dynamics",
         "dynamics-voices",
+        "w5-play-techniques",
+        "w5-diagrams",
     ])
     func mscxFixtureIsAFixedPoint(_ name: String) throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData(name))

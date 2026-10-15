@@ -45,7 +45,8 @@ extension Score {
     /// system text on `Score.canonicalStaff` — and hangs it on the lowest-numbered voice's chord or rest at its beat
     /// on that staff. So that is the only staff searched here, with no fallback to another covered staff the way
     /// `rangeTextRemovals(for:)` falls back. A text with no onset under it has no identity in the layout either, and
-    /// is left out.
+    /// is left out, and so is an annotated one (a play technique, a harp pedal diagram), which the layout draws with
+    /// no identity at all.
     ///
     /// Unlike the copy itself, this does not refuse a range that cuts a tuplet. It answers which texts the range
     /// covers, the same question `Score.items(inRangeFrom:to:)` answers for notes and rests, and that range is tinted
@@ -55,7 +56,8 @@ extension Score {
               let texts = RangeCopySource.texts(for: extent, in: self)
         else { return [] }
         return Set(texts.compactMap { copied in
-            guard let anchor = chordOrRest(at: copied.absoluteTick, on: copied.staff ?? Self.canonicalStaff)
+            guard copied.text.annotation == nil,
+                  let anchor = chordOrRest(at: copied.absoluteTick, on: copied.staff ?? Self.canonicalStaff)
             else { return nil }
             return .staffText(anchor: anchor, style: copied.text.isSystemText ? .systemText : .staffText)
         })

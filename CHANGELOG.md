@@ -24,6 +24,13 @@ and this project adheres to
   style, falling back to MuseScore's "Capo 2" / "No capo" when its text is empty (a partial capo with an empty text
   draws nothing: the instrument's strings are not known at layout), and a `<StringTunings>` draws its text in the 9 pt
   string-tunings style one spatium from its measure's left edge.
+- **Play-technique annotations and harp pedal diagrams are modeled** — a `<PlayTechAnnotation>` ("pizz.", "arco",
+  "tremolo", "mute", "open", "harmonics" …) and a `<HarpPedalDiagram>` are staff texts that also carry their technique /
+  pedal state (`StaffText.annotation`), draw their text (the harp diagram's pedal glyphs, centered, above the staff;
+  its text mode below) and are written back as MuseScore writes them — properties at their defaults omitted — instead
+  of surviving as unmodeled markup. Neither is a caret target. A MuseScore 3 staff text that MuseScore 4 converts to a
+  technique ("pizzicato", "arco", or a channel switch to "tremolo") is converted here too. A MuseScore 3 target writes
+  the text as a plain `<StaffText>`.
 - **SMuFL names for annotations** — `SMuFLCodepoint.byName` resolves `ornament*`, `csymAccidental*`, `guitarString*`,
   `strings*`, `fingering*` and `tremolo*` (207 names), so `<sym>` in a harp or string-tunings text and a `<Symbol>`
   naming an ornament draw as glyphs.
@@ -113,6 +120,11 @@ and this project adheres to
 
 ### Changed
 
+- **A staff-text removal also clears a play technique on its beat** — `SetStaffText` with `nil` (and the
+  `.setStaffText(…, text: nil, …)` intent) empties the beat of its texts of that kind, annotated ones included, so a
+  range cut no longer leaves behind the "pizz." its copy carries; writing or renaming a staff text never touches an
+  annotated one, and a pasted text replaces only texts of its own annotation kind. `Score.rangeTextIDs(for:)` leaves
+  annotated texts out, as the layout gives them no identity.
 - **Breaking: `EditIntent.setDynamic` carries the dynamic's own text** — `setDynamic(at:subtype:xmlText:)`, `xmlText`
   defaulted to `nil`: building it as before still compiles, a pattern binding two values does not, nor does
   destructuring `SetDynamicIntentWire.decoded()`, which returns the text as a third value.

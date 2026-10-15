@@ -2127,6 +2127,18 @@ extension LayoutEngine {
                 if t.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .staffText(st):
                 guard st.visible || options.showsInvisibleElements else { break }
+                // An annotated staff text (a play technique, a harp pedal diagram) is never a caret target: it gets
+                // no `anchor`, so no text-entry command reaches it (`SetStaffText` would not address it anyway).
+                if st.annotation != nil {
+                    if let spec = annotationSpec(for: st) {
+                        let element = annotationStaffText(
+                            spec, x: xAtTick, textPlacementStyle: textPlacementStyle,
+                            lineGeometry: lineGeometry, metrics: metrics,
+                        )
+                        if st.visible { out.append(element) } else { invisibleOut.append(element) }
+                    }
+                    break
+                }
                 let role: TextPlacementRole = st.isSystemText ? .systemText : .staffText
                 let side = textPlacementStyle.side(for: role, element: st.elementProperties)
                 let rich = st.richText.map {

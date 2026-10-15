@@ -16,6 +16,12 @@ import SheetMusicFoundation
 /// rename mutates the mark in place, so its color, offsets and font overrides survive, and collapses any second
 /// match; the removal drops every match and is refused when there is none. The inverse carries the pre-image lane
 /// (`SetTempo`'s idiom).
+///
+/// An annotated staff text (`StaffText.annotation`: a play technique, a harp pedal diagram) is a different element
+/// that happens to carry text. A write, a rename and `current(at:)` never see one, so writing the beat's staff text
+/// beside "pizz." adds a second element instead of turning the technique into plain words. The removal does clear it:
+/// a removal empties the beat of its texts of this kind, which is what a range cut composes it for — the copy carries
+/// the technique, so leaving it behind would duplicate it on paste.
 public struct SetStaffText: EditCommand {
     public let anchor: VoiceElementID
     /// The text to write, as given; `nil` removes. Ignored on the restore path.
@@ -60,21 +66,46 @@ public struct SetStaffText: EditCommand {
                 write(text, at: position, into: &$0, ids: &ids)
             }
         } else {
-            guard Self.current(at: anchor, isSystemText: isSystemText, in: score) != nil else {
+            guard Self.removes(at: anchor, isSystemText: isSystemText, in: score) else {
                 throw Self.refused(.targetNotFound(anchor))
             }
             score.systemMeasures.updateValue(at: anchor.measureIndex) { measure in
                 measure.elements.removeAll {
-                    $0.position == position && matches($0)
+                    $0.position == position && isOfThisKind($0)
                 }
             }
         }
         return SetStaffText(restoringLane: previous, anchor: anchor, isSystemText: isSystemText)
     }
 
+    /// The command the `.setStaffText` intent plans to, or `nil` when it would restate the score. Compared as given,
+    /// because it is stored as given: "pizz." and "pizz.\n" are two texts, the second reserving an empty last line. A
+    /// whitespace-only text never equals a mark that exists, so it still reaches the command and its
+    /// `.emptyStaffText`. A removal is planned whenever the beat holds a text of the kind, a play technique included,
+    /// which `current(at:)` does not see.
+    static func planned(
+        anchor: VoiceElementID, text: String?, isSystemText: Bool, in score: Score,
+    ) -> SetStaffText? {
+        let command = SetStaffText(anchor: anchor, text: text, isSystemText: isSystemText)
+        guard text != nil else {
+            return removes(at: anchor, isSystemText: isSystemText, in: score) ? command : nil
+        }
+        return current(at: anchor, isSystemText: isSystemText, in: score) == text ? nil : command
+    }
+
     /// The text at the anchor's beat of this kind (and, for staff text, on the anchor's staff), or `nil`.
     static func current(at anchor: VoiceElementID, isSystemText: Bool, in score: Score) -> String? {
         laneMark(at: anchor, isSystemText: isSystemText, in: score)?.text
+    }
+
+    /// Whether a removal at `anchor` has anything to clear: a text of this kind at its beat (and, for staff text, on
+    /// its staff), annotated or not — so a beat holding only a play technique still plans one.
+    static func removes(at anchor: VoiceElementID, isSystemText: Bool, in score: Score) -> Bool {
+        let probe = SetStaffText(anchor: anchor, text: nil, isSystemText: isSystemText)
+        guard let position = SystemLaneSlot.position(of: anchor, in: score),
+              let measure = score[system: MeasureRef(measureIndex: anchor.measureIndex)]
+        else { return false }
+        return measure.elements.contains { $0.position == position && probe.isOfThisKind($0) }
     }
 
     /// The mark itself rather than its string — what `SetTextVisible` reads, since it wants a field the text
@@ -102,8 +133,16 @@ public struct SetStaffText: EditCommand {
         return (anchor.measureIndex, index)
     }
 
-    /// Whether `positioned` is a text of this command's kind, on this command's staff.
+    /// Whether `positioned` is an ordinary text of this command's kind, on this command's staff — what a write, a
+    /// rename and every lookup address. An annotated one is never one (see the type's doc).
     private func matches(_ positioned: PositionedSystemElement) -> Bool {
+        guard isOfThisKind(positioned), case let .staffText(text) = positioned.element else { return false }
+        return text.annotation == nil
+    }
+
+    /// Whether `positioned` is a text of this command's kind, on this command's staff, annotated or not — what a
+    /// removal clears.
+    private func isOfThisKind(_ positioned: PositionedSystemElement) -> Bool {
         guard case let .staffText(text) = positioned.element, text.isSystemText == isSystemText else { return false }
         return isSystemText || (positioned.originalStaff ?? Score.canonicalStaff) == anchor.staff
     }

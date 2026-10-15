@@ -69,6 +69,35 @@ extension LayoutEngine {
         }
     }
 
+    /// The text spec of an annotated staff text, or `nil` for an ordinary one or an empty text. A play technique
+    /// draws as the staff (or system) text it is; a harp pedal diagram in its own style — glyph mode centered on its
+    /// beat with its row as the text's vertical center (`AlignH::HCENTER | AlignV::VCENTER`), text mode left-aligned.
+    static func annotationSpec(for staffText: StaffText) -> AnnotationTextSpec? {
+        guard let annotation = staffText.annotation,
+              !staffText.text.isEmpty || staffText.richText != nil
+        else { return nil }
+        let role: TextPlacementRole
+        let alignment: AnnotationAlignment
+        let verticalCenter: Bool
+        switch annotation {
+        case .playTechnique:
+            role = staffText.isSystemText ? .systemText : .staffText
+            alignment = .leading
+            verticalCenter = false
+        case let .harpPedal(diagram):
+            role = diagram.isDiagram ? .harpPedalDiagram : .harpPedalTextDiagram
+            alignment = diagram.isDiagram ? .center : .leading
+            verticalCenter = diagram.isDiagram
+        }
+        var spec = AnnotationTextSpec(
+            text: staffText.text, richText: staffText.richText, style: staffText.styleType, role: role,
+            properties: staffText.elementProperties, overrides: staffText.properties,
+            alignment: alignment, anchorsAtMeasureStart: false,
+        )
+        spec.verticalCenter = verticalCenter
+        return spec
+    }
+
     /// The `.staffText` element MuseScore's `TextBase` layout gives `spec` at `x`: the first baseline on the style's
     /// position row of the placement side (`placedTextOrigin`), centered or left-aligned on `x`, carrying its style,
     /// placement metadata (so the skyline pass lifts it on its side unless `<autoplace>0`) and font overrides. No

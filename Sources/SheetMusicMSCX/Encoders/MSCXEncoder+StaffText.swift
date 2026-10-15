@@ -11,6 +11,11 @@ extension StaffText {
     /// and `SystemText` based on `isSystemText` so the parser routes
     /// to the same struct on the way back.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        // MuseScore 3 has neither annotation element; its target writes the text as the plain staff text an older
+        // reader can show.
+        if options.targetVersion == .v4, let annotated = encodeAnnotation(eid: eid, options: options) {
+            return annotated
+        }
         var children: [XMLTreeNode] = []
         // `<eid>` is the true first child: `TWrite::write(const
         // StaffText*, ...)` / `write(const SystemText*, ...)`
