@@ -9,7 +9,7 @@
     import Testing
 
     /// Both Apple renderers draw the text-line family from `SpannerGeometry.textLineBase`: the labels' runs filled and
-    /// each stroke as a flat-capped path.
+    /// each stroke as a path with its own dash pattern and cap.
     @Suite("Text lines reach the Apple renderers", .serialized)
     @MainActor
     struct TextLineBaseRenderTests {
@@ -55,7 +55,7 @@
                 from: Self.from, to: Self.to, label: label, detail: detail, sp: Self.metrics.sp,
             )
             let box = try #require(line.path?.boundingBoxOfPath)
-            #expect(abs(box.minX - (parts.strokes.first?.first?.x ?? .nan)) < 0.01)
+            #expect(abs(box.minX - (parts.strokes.first?.points.first?.x ?? .nan)) < 0.01)
             #expect(abs(box.maxX - Self.to.x) < 0.01)
             // One FILLED shape layer (`richTextLayer` returns a `CAShapeLayer` with no stroke) for the Ped glyph, none
             // at the right end.
@@ -64,26 +64,62 @@
         }
 
         @available(macOS 15.0, *)
-        @Test("a let-ring line is dashed at MuseScore's 5 and 5 line widths")
+        @Test("a let-ring main line is dashed at MuseScore's 5 line widths, its gap stretched to fit")
         func letRingDashes() throws {
-            let (element, _, _) = Self.segment(kind: .letRing, xml: "let ring")
+            let (element, label, detail) = Self.segment(kind: .letRing, xml: "let ring")
             let line = try #require(Self.shapeLayers(element).first { $0.lineDashPattern != nil })
             let lw = Self.metrics.sp * 0.11
             let dashes = line.lineDashPattern?.map(\.doubleValue) ?? []
             #expect(dashes.count == 2)
-            #expect(dashes.filter { abs($0 - Double(5 * lw)) > 1e-6 }.isEmpty)
+            #expect(abs((dashes.first ?? .nan) - Double(5 * lw)) < 1e-6)
+            // The layer carries the geometry's per-stroke pattern, not the undistributed style one.
+            let parts = SpannerGeometry.textLineBase(
+                from: Self.from, to: Self.to, label: label, detail: detail, sp: Self.metrics.sp,
+            )
+            let expected = parts.strokes.first?.dashPattern.map { Double($0) } ?? []
+            #expect(dashes.count == expected.count)
+            #expect(zip(dashes, expected).filter { abs($0 - $1) > 1e-6 }.isEmpty)
         }
 
         @available(macOS 15.0, *)
-        @Test("hooked pedal: the end hook is part of the stroked path")
-        func hookedPedal() throws {
-            let (element, _, _) = Self.segment(kind: .pedal, xml: nil) {
-                $0.endHook = .hook90
-                $0.beginHook = .hook90
+        @Test("a dotted line's layer has a round cap; the let-ring T hook layer is solid")
+        func dottedAndTeeLayers() throws {
+            let (dotted, _, _) = Self.segment(kind: .pedal, xml: nil) { $0.lineType = .dotted }
+            let dots = try #require(Self.shapeLayers(dotted).first { $0.lineDashPattern != nil })
+            #expect(dots.lineCap == .round)
+            let (ring, _, _) = Self.segment(kind: .letRing, xml: nil) { $0.endHook = .hook90T }
+            let strokes = Self.shapeLayers(ring).filter { $0.strokeColor != nil }
+            #expect(strokes.count == 2)
+            #expect(strokes.filter { $0.lineDashPattern == nil }.count == 1)
+        }
+
+        /// The points of a layer's path, in order.
+        @available(macOS 15.0, *)
+        private static func points(_ layer: CAShapeLayer) -> [CGPoint] {
+            var points: [CGPoint] = []
+            layer.path?.applyWithBlock { element in
+                if element.pointee.type != .closeSubpath { points.append(element.pointee.points[0]) }
             }
-            let line = try #require(Self.shapeLayers(element).first)
-            let box = try #require(line.path?.boundingBoxOfPath)
-            #expect(box.height >= 1.2 * Self.metrics.sp - 0.01)
+            return points
+        }
+
+        @available(macOS 15.0, *)
+        @Test("a hook is on the end it was set on: an end hook after the line, a begin hook before it")
+        func hookedPedal() throws {
+            let (endOnly, _, _) = Self.segment(kind: .pedal, xml: nil) { $0.endHook = .hook90 }
+            let end = try Self.points(#require(Self.shapeLayers(endOnly).first))
+            try #require(end.count == 3)
+            // Line from (20, 80) to (220, 80), then the hook: the line's first two points share a y, the hook point
+            // is at the line's end x and a hook's height away.
+            #expect(abs(end[0].y - end[1].y) < 0.01)
+            #expect(abs(end[2].x - end[1].x) < 0.01 && abs(end[1].x - Self.to.x) < 0.01)
+            #expect(abs(abs(end[2].y - end[1].y) - 1.2 * Self.metrics.sp) < 0.01)
+            let (beginOnly, _, _) = Self.segment(kind: .pedal, xml: nil) { $0.beginHook = .hook90 }
+            let begin = try Self.points(#require(Self.shapeLayers(beginOnly).first))
+            try #require(begin.count == 3)
+            #expect(abs(begin[1].y - begin[2].y) < 0.01)
+            #expect(abs(begin[0].x - begin[1].x) < 0.01 && abs(begin[1].x - Self.from.x) < 0.01)
+            #expect(abs(abs(begin[0].y - begin[1].y) - 1.2 * Self.metrics.sp) < 0.01)
         }
 
         @available(macOS 15.0, *)
@@ -107,7 +143,12 @@
             let plainSpan = try #require(inkedX(plainRows))
             let starSpan = try #require(inkedX(starRows))
             #expect(plainSpan.upperBound >= 215) // the line reaches the end
-            #expect(starSpan.upperBound >= 205) // the rosette sits at the end
+            // The end label's LEFT edge is `to.x` (`tlayout.cpp:5865-5883`), so its ink reaches past the end by
+            // about its width; right-aligned at `to.x` it would stop at 220. Half the width tells the two apart.
+            let starWidth = LayoutRichText(
+                RichText(xmlText: "<sym>keyboardPedalUp</sym>"), style: .staffText, metrics: Self.metrics,
+            ).size.width
+            #expect(starSpan.upperBound >= Int(Self.to.x + starWidth / 2))
             // The asterisk pedal draws no line: the dark pixels in its middle columns are only the label's, if any.
             let middle = 120
             #expect(starRows.filter { $0[middle] < 200 }.isEmpty)

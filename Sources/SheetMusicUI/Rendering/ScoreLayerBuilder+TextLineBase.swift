@@ -11,8 +11,8 @@ import SheetMusicLayout
 @available(macOS 15.0, *)
 extension ScoreLayerBuilder {
     /// A text-line-family segment (pedal, text line, palm mute, let ring, the guitar lines) as layers: the begin and
-    /// end labels' runs filled, then each stroke of `SpannerGeometry.textLineBase` stroked with flat caps
-    /// (MuseScore's `PenCapStyle::FlatCap`, `tdraw.cpp:1778`) and the style's dash pattern.
+    /// end labels' runs filled, then each stroke of `SpannerGeometry.textLineBase` stroked with its own dash
+    /// pattern and cap: flat (MuseScore's `PenCapStyle::FlatCap`, `tdraw.cpp:1778`), round for a dotted line.
     static func drawTextLineBase(
         kind: LayoutElement.SpannerKind, from: CGPoint, to: CGPoint, richText: LayoutRichText?,
         lineDetail: LayoutLineDetail?, metrics: StaffMetrics, height: CGFloat, into parent: CALayer,
@@ -28,16 +28,16 @@ extension ScoreLayerBuilder {
                 parent.addSublayer(layer)
             }
         }
-        let dashes = parts.dashPattern.isEmpty ? nil : parts.dashPattern.map { NSNumber(value: Double($0)) }
         for stroke in parts.strokes {
-            guard let first = stroke.first else { continue }
+            guard let first = stroke.points.first else { continue }
             let path = CGMutablePath()
             path.move(to: first)
-            for point in stroke.dropFirst() {
+            for point in stroke.points.dropFirst() {
                 path.addLine(to: point)
             }
+            let dashes = stroke.dashPattern.isEmpty ? nil : stroke.dashPattern.map { NSNumber(value: Double($0)) }
             let layer = strokeLayer(path: path, height: height, lineWidth: parts.thickness, dashPattern: dashes)
-            layer.lineCap = .butt
+            layer.lineCap = stroke.roundCap ? .round : .butt
             parent.addSublayer(layer)
         }
     }

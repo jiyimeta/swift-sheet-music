@@ -78,6 +78,26 @@ struct GradualTempoLineLayoutTests {
         #expect(LayoutRichText.gradualTempoChangeLabel("", metrics: metrics) == nil)
     }
 
+    @Test("the end label starts at the segment end (tempoChangePosition LEFT) and the line stops half a space short")
+    func endLabelHangsRightOfEnd() throws {
+        let metrics = StaffMetrics(staffSize: 20)
+        let label = try #require(LayoutRichText.gradualTempoChangeLabel("rit.", metrics: metrics))
+        let end = try #require(LayoutRichText.gradualTempoChangeLabel("a tempo", metrics: metrics))
+        let from = CGPoint(x: 20, y: 50)
+        let to = CGPoint(x: 220, y: 50)
+        let parts = SpannerGeometry.gradualTempoChange(from: from, to: to, label: label, endLabel: end, sp: metrics.sp)
+        // `tlayout.cpp:5865-5883` with AlignH::LEFT (`styledef.cpp:1186`): `l2` is only the gap, the text's left edge
+        // is `max(to.x, beginRight + gap)`, so it is not right-aligned to `to.x`.
+        #expect(abs((parts.endLabelOrigin?.x ?? .nan) - to.x) < 1e-9)
+        #expect(abs(parts.lineEnd.x - (to.x - metrics.sp * 0.5)) < 1e-9)
+        // A begin label reaching past the end pushes the end label to its right edge plus a gap.
+        let short = CGPoint(x: from.x + 1, y: 50)
+        let pushed = SpannerGeometry.gradualTempoChange(
+            from: from, to: short, label: label, endLabel: end, sp: metrics.sp,
+        )
+        #expect(abs((pushed.endLabelOrigin?.x ?? .nan) - (from.x + label.size.width + metrics.sp * 0.5)) < 1e-9)
+    }
+
     @Test("the label's baseline is the segment's y and the line runs half its width above it (alignBaseLine)")
     func lineSitsOnLabelBaseline() throws {
         let metrics = StaffMetrics(staffSize: 20)

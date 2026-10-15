@@ -16,7 +16,7 @@ extension SpannerGeometry {
         /// Where the label's runs hang, by `LayoutRichText.anchor(for: .gradualTempoChangeLabel)` (its top-left): the
         /// label's first baseline lands on the segment's `from.y`.
         public let labelOrigin: CGPoint
-        /// Where the end label's runs hang (its top-left; right-aligned at the segment's end), or `nil` without one.
+        /// Where the end label's runs hang (its top-left; its left edge at the segment's end), or `nil` without one.
         public let endLabelOrigin: CGPoint?
         public let lineStart: CGPoint
         public let lineEnd: CGPoint
@@ -37,12 +37,15 @@ extension SpannerGeometry {
         let start = labelWidth > 0 ? from.x + labelWidth + sp * gradualTempoChangeLabelGapSp : from.x
         let thickness = sp * gradualTempoChangeLineThicknessSp
         let lineY = label == nil && endLabel == nil ? from.y : from.y - thickness / 2
-        // The end label is right-aligned at `to.x` and the line stops half a space short of it.
-        let endWidth = endLabel?.size.width ?? 0
-        let lineEndX = endLabel == nil ? to.x : to.x - endWidth - sp * gradualTempoChangeLabelGapSp
+        // `tempoChangePosition` is `AlignH::LEFT` (`styledef.cpp:1186`), so the line stops one gap short of `to` and
+        // the end label starts at `to`, right of the begin label's box when that reaches further
+        // (`tlayout.cpp:5865-5883`).
+        let gap = sp * gradualTempoChangeLabelGapSp
+        let lineEndX = endLabel == nil ? to.x : to.x - gap
+        let endX = max(to.x, label.map { from.x + $0.size.width + gap } ?? to.x)
         return GradualTempoChangeParts(
             labelOrigin: CGPoint(x: from.x, y: from.y - (label?.firstBaseline ?? 0)),
-            endLabelOrigin: endLabel.map { CGPoint(x: to.x - endWidth, y: from.y - $0.firstBaseline) },
+            endLabelOrigin: endLabel.map { CGPoint(x: endX, y: from.y - $0.firstBaseline) },
             lineStart: CGPoint(x: min(start, to.x), y: lineY),
             lineEnd: CGPoint(x: max(min(start, to.x), lineEndX), y: lineY),
             lineThickness: thickness,

@@ -73,7 +73,22 @@
             }
             #expect(dash.count == 1)
             #expect(abs((dash.first?.0 ?? 0) - 5 * lw * Self.mm) < 1e-9)
-            #expect(out.last == .setDash(onMM: 0, offMM: 0))
+            // The solid T hook is drawn after the dashed main line, so the reset is the last `setDash`, not the last
+            // command.
+            let dashCommands = out.filter { if case .setDash = $0 { true } else { false } }
+            #expect(dashCommands.last == .setDash(onMM: 0, offMM: 0))
+            #expect(dashCommands.count == 2)
+        }
+
+        @Test("a 90T hook on a dashed line is a solid stroke: no setDash between its start and its stroke")
+        func teeHookSolid() {
+            let out = Self.encode(.letRing, xml: nil) { $0.endHook = .hook90T }
+            let firstStroke = out.firstIndex { if case .stroke = $0 { true } else { false } } ?? 0
+            let resetAfterMain = out.firstIndex(of: .setDash(onMM: 0, offMM: 0)) ?? -1
+            #expect(resetAfterMain > firstStroke)
+            let tail = out[(resetAfterMain + 1)...]
+            #expect(Self.strokes(Array(tail)) == 1)
+            #expect(!tail.contains { if case .setDash = $0 { true } else { false } })
         }
 
         @Test("an end hook is a second point of the polyline; a 90T hook is a second stroke")

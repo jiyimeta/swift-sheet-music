@@ -178,6 +178,11 @@ and this project adheres to
   `TextLineBaseParts`, `TextLineBaseStyle`). A pedal is its label and a line (or its hooks, or its ✱), no longer a 'Ped'
   glyph and a ✱ glyph at the two ends. Selection and the skyline see the segment as its parts — each label and each
   piece of line or hook — as MuseScore's segment shape does, so the empty corner above a long line is not part of it.
+  Each stroke carries its own dash pattern (`TextLineBaseParts.strokes: [TextLineBaseStroke]`): a dash starts and ends
+  every piece, a 90° T hook is always solid, and a dotted line is round dots on a two-line-width period. An end label
+  starts at the line's end (the line stops half a space short), as MuseScore's left-positioned end text does; the
+  gradual tempo line's end label follows the same rule. The draw program, which cannot draw a round cap yet, draws a
+  dotted line as square dots.
 - **`Spanner.Kind` gains `chordTextLine`** — a client switching over it exhaustively must handle it.
 - **`LayoutElement.spannerSegment` gains a trailing `lineDetail: LayoutLineDetail?`** (default `nil`): the segment's end
   label and its resolved hooks, line visibility, line type, width and dash. Constructions are unchanged; a positional

@@ -9,12 +9,21 @@ public struct TextLineBaseParts: Sendable, Equatable {
     public let beginOrigin: CGPoint?
     /// Top-left of the end label (anchor `(0, 0)`), or `nil` without one.
     public let endOrigin: CGPoint?
-    /// Each element is one polyline stroked as one path: the main line with its non-separate hooks, then each
-    /// separately drawn hook.
-    public let strokes: [[CGPoint]]
+    /// The main line with its non-separate hooks, then each separately drawn hook; each is stroked as one path with
+    /// its own dash pattern and cap.
+    public let strokes: [TextLineBaseStroke]
     public let thickness: CGFloat
-    /// Dash and gap in points; empty = solid. A dotted line is `[lw, 2·lw]`.
+}
+
+/// One polyline of a text line, stroked with flat caps unless `roundCap` (MuseScore's `PenCapStyle::FlatCap`,
+/// `tdraw.cpp:1778`; a dotted line's `RoundCap`, `:1535`).
+public struct TextLineBaseStroke: Sendable, Equatable {
+    public let points: [CGPoint]
+    /// Dash and gap in points, already distributed over this stroke's length so a dash starts and ends it
+    /// (`distributedDashPattern`, `tdraw.cpp:1541-1547`); empty = solid.
     public let dashPattern: [CGFloat]
+    /// A dotted line draws round dots: a 0.01 line-width dash with a round cap.
+    public let roundCap: Bool
 }
 
 extension SpannerGeometry {
@@ -33,29 +42,28 @@ extension SpannerGeometry {
         let thickness = CGFloat(detail.lineWidthSp) * sp
         let gap = sp * textLineBaseLabelGapSp
         let endLabel = detail.endRichText
-        let beginWidth = label?.size.width ?? 0
-        let endWidth = endLabel?.size.width ?? 0
-        let beginGap = label == nil ? 0 : beginWidth + gap
-        let endGap = endLabel == nil ? 0 : endWidth + gap
-        // The end text may not overlap the begin text (`tlayout.cpp:5865-5883`).
-        let endRight = endLabel == nil ? to.x : max(to.x, from.x + beginWidth + endGap)
-        var strokes: [[CGPoint]] = []
+        let beginGap = label == nil ? 0 : (label?.size.width ?? 0) + gap
+        // Every kind's end text position is `AlignH::LEFT` (`pedalPosition` `styledef.cpp:338`, hairpin :302, textLine
+        // :785, letRing/palmMute/whammyBar :1898/:1950/:1924), so the line stops one gap short of `to` and the end
+        // text starts at `to`, pushed right of the begin text's box when that reaches further
+        // (`tlayout.cpp:5865-5883`).
+        let beginRight = label.map { from.x + $0.size.width }
+        let endX = max(to.x, beginRight.map { $0 + gap } ?? to.x)
+        var strokes: [TextLineBaseStroke] = []
         if detail.lineVisible {
             // Labels and line share a baseline, accounting for the line's thickness (`alignBaseLine`).
             let hasLabel = label != nil || endLabel != nil
             let lift = hasLabel && detail.labelAlignment == .baseline ? thickness / 2 : 0
             strokes = lineStrokes(
                 start: CGPoint(x: from.x + beginGap, y: from.y - lift),
-                end: CGPoint(x: to.x - endGap, y: from.y - lift),
+                end: CGPoint(x: to.x - (endLabel == nil ? 0 : gap), y: from.y - lift),
                 hasBeginLabel: label != nil, detail: detail, sp: sp,
             )
         }
         return TextLineBaseParts(
             beginOrigin: label.map { labelOrigin($0, x: from.x, y: from.y, alignment: detail.labelAlignment) },
-            endOrigin: endLabel.map {
-                labelOrigin($0, x: endRight - endWidth, y: from.y, alignment: detail.labelAlignment)
-            },
-            strokes: strokes, thickness: thickness, dashPattern: dashPattern(detail, thickness: thickness, sp: sp),
+            endOrigin: endLabel.map { labelOrigin($0, x: endX, y: from.y, alignment: detail.labelAlignment) },
+            strokes: strokes, thickness: thickness,
         )
     }
 
@@ -68,12 +76,27 @@ extension SpannerGeometry {
         }
     }
 
-    private static func dashPattern(_ detail: LayoutLineDetail, thickness: CGFloat, sp: CGFloat) -> [CGFloat] {
+    /// A line's dash and gap before distribution, in points, and whether its pen is round-capped: dotted is a 0.01
+    /// line-width dash and a 1.99 gap with round caps, i.e. round dots on a two-line-width period
+    /// (`setDashAndGapLen`, `tdraw.cpp:1524-1538`). `nil` for a solid line.
+    private static func dashStyle(
+        _ detail: LayoutLineDetail, thickness: CGFloat, sp: CGFloat,
+    ) -> (dash: CGFloat, gap: CGFloat, round: Bool)? {
         switch detail.lineType {
-        case .solid: []
-        case .dashed: [CGFloat(detail.dashSp) * sp, CGFloat(detail.gapSp) * sp]
-        case .dotted: [thickness, 2 * thickness]
+        case .solid: nil
+        case .dashed: (CGFloat(detail.dashSp) * sp, CGFloat(detail.gapSp) * sp, false)
+        case .dotted: (0.01 * thickness, 1.99 * thickness, true)
         }
+    }
+
+    /// `distributedDashPattern` (`tdraw.cpp:1541-1547`): the gap is stretched so a dash starts and ends a piece of
+    /// `length`, whose `numPairs` is `length / (dash + gap)` truncated to an integer of at least 1. The gap is
+    /// clamped at 0 where MuseScore's formula would go negative on a piece shorter than two dashes.
+    static func distributedDashPattern(dash: CGFloat, gap: CGFloat, length: CGFloat) -> [CGFloat] {
+        guard dash + gap > 0 else { return [dash, gap] }
+        let numPairs = max(1, Int(length / (dash + gap)))
+        let newGap = (length - dash * CGFloat(numPairs + 1)) / CGFloat(numPairs)
+        return [dash, max(0, newGap)]
     }
 
     /// `ROSETTE`, `ARROW` and `ARROW_FILLED` draw no hook (`hasHook`, `tlayout.cpp:5937-5950`).
@@ -85,11 +108,12 @@ extension SpannerGeometry {
     }
 
     /// The main polyline (the line and its hooks that share its stroke) and then each separately drawn hook, from the
-    /// line's already label-adjusted ends. A T hook is always its own stroke; on a dashed or dotted line every hook
-    /// is, so its dashes restart (`tlayout.cpp:5958-5981`; the dash-extension at the corner is not reproduced).
+    /// line's already label-adjusted ends. A T hook is always its own stroke, drawn solid; on a dashed or dotted line
+    /// every hook is its own stroke, and each stroke gets a dash pattern distributed over its own length
+    /// (`tlayout.cpp:5958-5981`, `tdraw.cpp:1800-1876`; the dash-extension at the corner is not reproduced).
     private static func lineStrokes(
         start: CGPoint, end: CGPoint, hasBeginLabel: Bool, detail: LayoutLineDetail, sp: CGFloat,
-    ) -> [[CGPoint]] {
+    ) -> [TextLineBaseStroke] {
         // Hooks point up when the line is placed below the staff (`tlayout.cpp:5898-5899`).
         let sign: CGFloat = detail.placedBelow ? -1 : 1
         let beginHeight = sign * CGFloat(detail.beginHookHeightSp) * sp
@@ -102,11 +126,12 @@ extension SpannerGeometry {
         if hasBeginLabel, p1.x > p2.x { return [] }
         var main: [CGPoint] = []
         var separate: [[CGPoint]] = []
+        var tees: [[CGPoint]] = []
         let solid = detail.lineType == .solid
         if drawsHook(detail.beginHook) {
             let tip = CGPoint(x: p1.x - beginWidth, y: p1.y + beginHeight)
             if detail.beginHook == .hook90T {
-                separate.append([tip, CGPoint(x: p1.x - beginWidth, y: p1.y - beginHeight)])
+                tees.append([tip, CGPoint(x: p1.x - beginWidth, y: p1.y - beginHeight)])
             } else if solid {
                 main.append(tip)
             } else {
@@ -117,14 +142,29 @@ extension SpannerGeometry {
         if drawsHook(detail.endHook) {
             let tip = CGPoint(x: p2.x + endWidth, y: p2.y + endHeight)
             if detail.endHook == .hook90T {
-                separate.append([tip, CGPoint(x: p2.x + endWidth, y: p2.y - endHeight)])
+                tees.append([tip, CGPoint(x: p2.x + endWidth, y: p2.y - endHeight)])
             } else if solid {
                 main.append(tip)
             } else {
                 separate.append([p2, tip])
             }
         }
-        return [main] + separate
+        let style = dashStyle(detail, thickness: CGFloat(detail.lineWidthSp) * sp, sp: sp)
+        func dashed(_ points: [CGPoint]) -> TextLineBaseStroke {
+            guard let style, let first = points.first, let last = points.last else {
+                return TextLineBaseStroke(points: points, dashPattern: [], roundCap: false)
+            }
+            let length = ((last.x - first.x) * (last.x - first.x) + (last.y - first.y) * (last.y - first.y))
+                .squareRoot()
+            return TextLineBaseStroke(
+                points: points,
+                dashPattern: distributedDashPattern(dash: style.dash, gap: style.gap, length: length),
+                roundCap: style.round,
+            )
+        }
+        // A T hook is drawn with the solid pen (`tdraw.cpp:1810-1811`), never dashed.
+        let solidTees = tees.map { TextLineBaseStroke(points: $0, dashPattern: [], roundCap: false) }
+        return [dashed(main)] + separate.map(dashed) + solidTees
     }
 
     /// The ink of `textLineBase` as MuseScore's segment shape holds it (`tlayout.cpp:6007-6026`): each label's ink,
@@ -143,7 +183,7 @@ extension SpannerGeometry {
         }
         let half = parts.thickness / 2
         for stroke in parts.strokes {
-            for (start, end) in zip(stroke, stroke.dropFirst()) {
+            for (start, end) in zip(stroke.points, stroke.points.dropFirst()) {
                 rects.append(lineBox(start, end, half: half, dotted: detail.lineType == .dotted))
             }
         }
@@ -182,7 +222,8 @@ extension SpannerGeometry {
         guard TextLineBaseStyle.style(for: kind) != nil else { return nil }
         if let detail { return detail }
         let below = switch kind {
-        case .pedal, .palmMute, .letRing, .chordTextLine(.pickScrape): true
+        // `hairpinPlacement` is BELOW (`styledef.cpp:281`), as are the pedal and the guitar lines'.
+        case .pedal, .hairpinLine, .palmMute, .letRing, .chordTextLine(.pickScrape): true
         default: false
         }
         return LayoutEngine.lineDetailDefaults(

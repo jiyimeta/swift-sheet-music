@@ -5,8 +5,8 @@ import SwiftUI
 @available(macOS 15.0, *)
 extension SpannerRenderer {
     /// A text-line-family segment on the Canvas: the begin and end labels' runs, then each stroke of
-    /// `SpannerGeometry.textLineBase` with flat caps (MuseScore's `PenCapStyle::FlatCap`, `tdraw.cpp:1778`) and the
-    /// style's dash pattern.
+    /// `SpannerGeometry.textLineBase` with its own dash pattern and cap: flat (MuseScore's
+    /// `PenCapStyle::FlatCap`, `tdraw.cpp:1778`), round for a dotted line.
     static func drawTextLineBase(
         context: inout GraphicsContext, kind: LayoutElement.SpannerKind, from: CGPoint, to: CGPoint,
         richText: LayoutRichText?, lineDetail: LayoutLineDetail?, metrics: StaffMetrics,
@@ -23,15 +23,17 @@ extension SpannerRenderer {
             )
         }
         for stroke in parts.strokes {
-            guard let first = stroke.first else { continue }
+            guard let first = stroke.points.first else { continue }
             var path = Path()
             path.move(to: first)
-            for point in stroke.dropFirst() {
+            for point in stroke.points.dropFirst() {
                 path.addLine(to: point)
             }
             context.stroke(
                 path, with: .color(.primary),
-                style: StrokeStyle(lineWidth: parts.thickness, lineCap: .butt, dash: parts.dashPattern),
+                style: StrokeStyle(
+                    lineWidth: parts.thickness, lineCap: stroke.roundCap ? .round : .butt, dash: stroke.dashPattern,
+                ),
             )
         }
     }
