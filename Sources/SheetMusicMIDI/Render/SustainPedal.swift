@@ -1,25 +1,30 @@
 import SheetMusicCore
 import SheetMusicFoundation
 
-/// Builds the sustain-pedal (CC64) events of one track from its pedal ranges, projected through the repeat plan.
+/// Builds the sustain-pedal (CC64) events of one part from its pedal ranges, projected through the repeat plan.
 ///
 /// A seek or a loop wrap into a pedal relies on the engines chasing controllers; the release at tick 0 on every
 /// pedalled channel guarantees a chase always finds a damper value, also before the first pedal.
 enum SustainPedal {
     private static let controller = 64
 
-    /// The CC64 events of one staff: every voice's pedal ranges, on the part's channel in force at each start.
+    /// The CC64 events of one part: every staff's and every voice's pedal ranges, on the part's channel in force at
+    /// each start. The staves of a part share its channels, so their pedals go out as ONE stream, in the part's first
+    /// track: a sequencer merging two tracks keeps no order at one tick, and the lower staff's release (its opening one
+    /// at tick 0, or the end of its pedal) could otherwise land after the upper staff's press on the same channel.
     static func events(
-        staff: Staff,
+        part: Part,
         route: MidiRenderer.PartChannelRoute,
         plan: [MidiRenderer.PlaybackEntry],
         layout: (bases: [Int], spans: [Int]),
         division: Int,
         tempoMap: ResolvedTempoMap,
     ) -> [TimedMidiEvent] {
-        let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
-        let ranges = (0 ..< voiceCount).flatMap {
-            PedalRanges.collect(voiceIndex: $0, staff: staff, division: division, tempoMap: tempoMap)
+        let ranges = part.staves.flatMap { staff in
+            let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
+            return (0 ..< voiceCount).flatMap {
+                PedalRanges.collect(voiceIndex: $0, staff: staff, division: division, tempoMap: tempoMap)
+            }
         }
         if ranges.isEmpty { return [] }
         let switches = route.routeByOriginalTick(measureBases: layout.bases, division: division)

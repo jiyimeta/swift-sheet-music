@@ -293,10 +293,13 @@ public enum MidiRenderer {
             route: route, plan: plan, measureBases: measureBases, division: division,
         ))
 
-        // Sustain pedal (CC64) for every staff's track: a pedal belongs to the staff that wrote it.
-        events.append(contentsOf: SustainPedal.events(
-            staff: staff, route: route, plan: plan, layout: layout, division: division, tempoMap: tempoMap,
-        ))
+        // Sustain pedal (CC64): every staff's pedals go into the part's first track, one stream per part, so a release
+        // and a press on the shared channel at one tick keep their order (`SustainPedal.events(part:…)`).
+        if isTopOfPart {
+            events.append(contentsOf: SustainPedal.events(
+                part: part, route: route, plan: plan, layout: layout, division: division, tempoMap: tempoMap,
+            ))
+        }
 
         var voiceEventBuckets: [[TimedMidiEvent]] = []
         var lyricAnchors: [LyricMidiCodec.Anchor] = []

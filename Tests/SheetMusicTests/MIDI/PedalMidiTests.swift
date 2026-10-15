@@ -11,7 +11,11 @@ import Testing
 @Suite("Pedal in the rendered SMF")
 struct PedalMidiTests {
     private static func cc64(_ file: MidiFile) -> [(tick: Int, value: Int, channel: Int)] {
-        file.tracks.flatMap(\.events).compactMap { event in
+        file.tracks.flatMap(cc64(track:))
+    }
+
+    private static func cc64(track: MidiTrack) -> [(tick: Int, value: Int, channel: Int)] {
+        track.events.compactMap { event in
             if case let .controlChange(channel, 64, value) = event.event { return (event.tick, value, channel) }
             return nil
         }
@@ -61,6 +65,33 @@ struct PedalMidiTests {
     func touching() throws {
         let score = try LineVariantFixtures.score(pedals: [("<Pedal/>", 0, 1), ("<Pedal/>", 1, 1)], bars: 3)
         let sustain = try Self.cc64(MidiRenderer.render(score: score))
+        #expect(sustain.map(\.value) == [0, 127, 0, 127, 0])
+        #expect(sustain.map(\.tick) == [0, 0, 1920, 1920, 3840])
+    }
+
+    /// The two staves of a part share its channel, and a sequencer merging two tracks keeps no order at one tick: were
+    /// each staff's pedals in its own track, the lower staff's opening release at tick 0 could follow the upper
+    /// staff's press there and silence bar 1's pedal.
+    @Test("a grand staff's pedals go out in the part's first track, released before pressed at a shared tick")
+    func grandStaffPedalsShareOneTrack() throws {
+        let chord = Chord(duration: .whole, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))
+        let pedal = Spanner(
+            kind: .pedal, rawType: "Pedal", nextMeasuresOffset: 0,
+            nextFractionsOffset: Fraction(numerator: 1, denominator: 1),
+        )
+        let plain = Measure(voices: [Voice(elements: [.chord(chord)])])
+        let pedalled = Measure(voices: [Voice(elements: [.spanner(pedal), .chord(chord)])])
+        // The upper staff pedals bar 1, the lower staff bar 2.
+        let upper = Staff(measures: [pedalled, plain, plain])
+        let lower = Staff(measures: [plain, pedalled, plain])
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [upper, lower])],
+        )
+        let file = try MidiRenderer.render(score: score)
+        try #require(file.tracks.count == 2)
+        #expect(Self.cc64(track: file.tracks[1]).isEmpty)
+        let sustain = Self.cc64(track: file.tracks[0])
         #expect(sustain.map(\.value) == [0, 127, 0, 127, 0])
         #expect(sustain.map(\.tick) == [0, 0, 1920, 1920, 3840])
     }

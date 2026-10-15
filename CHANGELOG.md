@@ -14,7 +14,10 @@ and this project adheres to
   released, `<play>0</play>` silences one (a hidden pedal still sounds, as in MuseScore). The Apple engine releases the
   damper when playback stops. Both engines chase controllers on a seek or a loop wrap, so seeking into a pedal
   re-presses it; every pedalled channel also opens with CC64 = 0 at the start of the track, so a chase that lands
-  before the channel's first pedal finds a released damper rather than the previous pass's held one.
+  before the channel's first pedal finds a released damper rather than the previous pass's held one. Every staff's
+  pedals go out in the part's first track, as one stream: the staves share the part's channel, and a sequencer merging
+  two tracks keeps no order at one tick, so a grand staff's lower-staff release could otherwise follow the upper
+  staff's press.
 - **`Breath.CaesuraStyle.chant` and `.singleStroke`** — MuseScore's `chantCaesura` (U+E8F8) and `caesuraSingleStroke`
   (U+E4D7). They used to decode as a comma and re-save as `breathMarkComma`. They are appended after `.curved`, so the
   edit-wire style index of every existing caesura is unchanged.
