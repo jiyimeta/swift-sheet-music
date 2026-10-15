@@ -883,7 +883,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // `.clickSamples` builds an SF2 from the host's WAVs, `.soundFont`
         // uses a host SF2, and `.defaultGM` (or no provider) falls back to
         // the GM drum-kit (notes 76 / 77). AUMIDISynth loads it unchanged.
-        metronome.prepare(soundfontURL: clickResolver.resolvedSoundFontURL())
+        //
+        // Only on the AUMIDISynth path: an injected backend renders the click
+        // on its own synth (see `backend.prepare` below), so a second synth
+        // here would be attached, fed the click SoundFont and never sound.
+        if backend == nil {
+            metronome.prepare(soundfontURL: clickResolver.resolvedSoundFontURL())
+        }
         // Tear down the synths from a previous score, if any.
         for old in attachedSynths {
             engine.disconnectNodeOutput(old)
@@ -1103,9 +1109,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 }
             }
             // The backend renders the metronome on its own synth, so it needs the
-            // resolved click sound too — the AUMIDISynth `MetronomeController`
-            // prepared above never sounds on the backend path. The resolver
-            // caches its generated SF2, so asking twice costs nothing.
+            // resolved click sound — the AUMIDISynth `MetronomeController` is
+            // not built on this path at all.
             backend.prepare(
                 soundfontURL: url,
                 metronomeSoundfontURL: clickResolver.resolvedSoundFontURL(),

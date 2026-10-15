@@ -34,6 +34,20 @@
                 #expect(destination !== engine.sumMixer)
             }
 
+            /// An injected backend sounds the click itself, so the engine builds
+            /// no AUMIDISynth for it — one would only be attached, loaded with the
+            /// click SoundFont and left silent.
+            @Test("With a backend, no metronome synth is attached")
+            func backendPathBuildsNoMetronomeSynth() throws {
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: SilentResolver(), backend: backend)
+                defer { engine.teardown() }
+                try engine.prepare(score: loadMidi01())
+
+                #expect(backend.prepareCallCount > 0, "sanity: the backend path ran")
+                #expect(engine.metronomeOutputDestination == nil)
+            }
+
             /// And the samples agree. Read back through the export, the only
             /// way to get the mix as numbers.
             @Test("Doubling the master gain doubles the click")
