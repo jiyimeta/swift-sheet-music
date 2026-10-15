@@ -51,3 +51,70 @@ enum LineVariantFixtures {
         )
     }
 }
+
+extension LineVariantFixtures {
+    /// A score of `bars` 4/4 measures of four quarter chords with one pedal: `payload` (the begin side's `<Pedal…>`
+    /// element) at the start of bar `from`, ending at the end of bar `from + over - 1`, with the matching payload-less
+    /// end side (`<prev>`) placed there.
+    static func score(pedal payload: String, bars: Int, from: Int, over: Int) throws -> Score {
+        try score(pedals: [(payload, from, over)], bars: bars)
+    }
+
+    /// Like `score(pedal:bars:from:over:)` for several pedals, each `(payload, from, over)`.
+    static func score(pedals: [(payload: String, from: Int, over: Int)], bars: Int) throws -> Score {
+        let measures = (0 ..< bars).map { bar -> String in
+            var body = ""
+            if bar == 0 {
+                body += "<TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>\n"
+            }
+            for pedal in pedals where pedal.from == bar {
+                body += pedalBegin(payload: pedal.payload, over: pedal.over)
+            }
+            for step in 0 ..< 4 {
+                body += """
+                <Chord><durationType>quarter</durationType><Note><pitch>\(60 + step)</pitch><tpc>14</tpc></Note></Chord>
+
+                """
+            }
+            for pedal in pedals where pedal.from + pedal.over - 1 == bar {
+                body += pedalEnd(over: pedal.over)
+            }
+            return "<Measure><voice>\n\(body)</voice></Measure>"
+        }
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60">
+          <Score>
+            <Division>480</Division>
+            <Part>
+              <Staff id="1"/>
+              <Instrument id="piano"><trackName>Piano</trackName><Channel/></Instrument>
+            </Part>
+            <Staff id="1">
+              \(measures.joined(separator: "\n"))
+            </Staff>
+          </Score>
+        </museScore>
+        """
+        return try MSCXParser.parse(Data(xml.utf8))
+    }
+
+    /// The begin side: the payload, then `<next>` — `over - 1` whole measures (omitted for 0) plus one whole note of
+    /// fractions, which lands on the end of the last covered bar (the shape `own/pedal-lines.mscx` carries).
+    private static func pedalBegin(payload: String, over: Int) -> String {
+        let measures = over > 1 ? "<measures>\(over - 1)</measures>" : ""
+        return """
+        <Spanner type="Pedal">\(payload)<next><location>\(measures)<fractions>1/1</fractions></location></next>\
+        </Spanner>
+
+        """
+    }
+
+    private static func pedalEnd(over: Int) -> String {
+        let measures = over > 1 ? "<measures>\(1 - over)</measures>" : ""
+        return """
+        <Spanner type="Pedal"><prev><location>\(measures)<fractions>-1/1</fractions></location></prev></Spanner>
+
+        """
+    }
+}

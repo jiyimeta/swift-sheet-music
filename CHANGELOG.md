@@ -9,6 +9,11 @@ and this project adheres to
 
 ### Added
 
+- **A pedal holds the sustain pedal down.** Pedal spanners send CC64 on at their start and off at their end on the
+  part's channel, following the repeat plan; touching pedals release before they press, a pedal cut by a jump is
+  released, `<play>0</play>` silences one (a hidden pedal still sounds, as in MuseScore). The Apple engine releases the
+  damper when playback stops. The SwiftySynth backend chases controllers on a seek, so seeking into a pedal re-presses
+  it; the AVAudioSequencer path does not chase the controller.
 - **`Breath.CaesuraStyle.chant` and `.singleStroke`** — MuseScore's `chantCaesura` (U+E8F8) and `caesuraSingleStroke`
   (U+E4D7). They used to decode as a comma and re-save as `breathMarkComma`. They are appended after `.curved`, so the
   edit-wire style index of every existing caesura is unchanged.

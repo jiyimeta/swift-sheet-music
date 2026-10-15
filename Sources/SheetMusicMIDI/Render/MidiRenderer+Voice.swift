@@ -84,7 +84,7 @@ extension MidiRenderer {
         )
         /// Channel in force at `originalTick`. Linear scan: a part has
         /// at most a handful of changes, and the loop below queries it
-        /// once per voice element.
+        /// once per voice element. (`PartChannelRoute.channel(atOriginalTick:in:)` is the same scan.)
         func channel(atOriginalTick tick: Int) -> Int {
             var result = route.defaultChannel
             for entry in channelSwitches {

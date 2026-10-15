@@ -218,6 +218,16 @@ public enum MidiRenderer {
             )
         }
 
+        /// Channel in force at `tick`, given this route flattened by `routeByOriginalTick`. The same scan as the local
+        /// `channel(atOriginalTick:)` in `renderVoice`, which stays untouched.
+        func channel(atOriginalTick tick: Int, in flattened: [(tick: Int, channel: Int, port: Int)]) -> Int {
+            var result = defaultChannel
+            for entry in flattened {
+                if entry.tick <= tick { result = entry.channel } else { break }
+            }
+            return result
+        }
+
         /// Flatten to `(originalTick, channel, port)` triples against a
         /// staff's own measure bases, sorted ascending. Switches whose
         /// measure index is out of range for a ragged staff are dropped.
@@ -268,9 +278,10 @@ public enum MidiRenderer {
         // `.tempo` from those walks; open events are appended AFTER so they sort after one. The
         // stable sort below realises the documented close → .tempo → open ordering at boundary
         // ticks.
-        let measureBases = measureBaseLayout(
+        let layout = measureBaseLayout(
             measures: staff.measures, division: division, tempoMap: tempoMap,
-        ).bases
+        )
+        let measureBases = layout.bases
 
         events.append(contentsOf: fermataCloseEvents)
 
@@ -280,6 +291,11 @@ public enum MidiRenderer {
         // every single-port part.
         events.append(contentsOf: portSwitchEvents(
             route: route, plan: plan, measureBases: measureBases, division: division,
+        ))
+
+        // Sustain pedal (CC64) for every staff's track: a pedal belongs to the staff that wrote it.
+        events.append(contentsOf: SustainPedal.events(
+            staff: staff, route: route, plan: plan, layout: layout, division: division, tempoMap: tempoMap,
         ))
 
         var voiceEventBuckets: [[TimedMidiEvent]] = []

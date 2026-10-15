@@ -2235,11 +2235,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     ///
     /// `cutPreviewNote` addresses one known channel; here nothing says which channels the sequencer left sounding,
     /// so it is all of them.
+    ///
+    /// All Sound Off does not release a held damper: a stop in the middle of a pedal would leave CC64 down, and the
+    /// next note the unit plays (a preview, a count-in) would sustain. So each channel also gets CC64 = 0.
     private func silenceSoundingVoices() {
         for unit in attachedSynths {
             for channel in UInt8(0) ..< 16 {
                 MIDISynthBuilder.sendControlChange(
                     into: unit, controller: 120, value: 0, onChannel: channel,
+                )
+                MIDISynthBuilder.sendControlChange(
+                    into: unit, controller: 64, value: 0, onChannel: channel,
                 )
             }
         }

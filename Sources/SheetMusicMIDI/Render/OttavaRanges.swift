@@ -113,7 +113,7 @@ enum OttavaRanges {
     /// add the offset directly to `startTick` rather than re-deriving
     /// it from a measure base. Falls back to `startTick + 1` so the
     /// range stays non-empty.
-    private static func computeEndTick(
+    static func computeEndTick(
         startTick: Int,
         startMeasureIndex: Int,
         spanner: Spanner,
