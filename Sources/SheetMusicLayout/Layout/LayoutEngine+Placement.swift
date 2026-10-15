@@ -67,6 +67,9 @@ extension LayoutEngine {
         incomingMelismas: [MelismaContinuation] = [],
         systemElements: [PositionedSystemElement] = [],
         textPlacementStyle: TextPlacementStyles = TextPlacementStyles(),
+        // The score's chord-symbol case style: the string a chord symbol draws is measured here and in
+        // `aggregatedTickWeights`, which must be given the same value.
+        chordSymbolCase: ChordSymbolCaseStyle = .museScoreDefaults,
         maxAboveLyricVerse: Int = 0,
         drawsLeadingClef: Bool = true,
         followingClef: FollowingClef? = nil,
@@ -1422,7 +1425,7 @@ extension LayoutEngine {
                     guard diagram.visible || options.showsInvisibleElements else { break }
                     let elements = fretDiagramElements(
                         diagram, x: timedX(atTick: tickCursor), staffTopY: staffMidY - metrics.sp * 2,
-                        metrics: metrics,
+                        metrics: metrics, chordSymbolCase: chordSymbolCase,
                     )
                     if diagram.visible { out += elements } else { invisibleOut += elements }
                 case .preserved:
@@ -1457,7 +1460,7 @@ extension LayoutEngine {
                         ? headerSchedule.contentStartX
                         : timedX(atTick: tickCursor)
                     let runs = HarmonyRendering.runs(
-                        for: harmony, metrics: metrics,
+                        for: harmony, metrics: metrics, style: chordSymbolCase,
                     )
                     let width = HarmonyRendering.width(of: runs)
                     let role = harmonyPlacementRole(harmony)

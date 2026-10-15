@@ -169,6 +169,9 @@ and this project adheres to
 
 ### Changed
 
+- **`HarmonyRendering.runs(for:metrics:)` and `caretOffsets(for:metrics:)` take the chord-symbol case style** — a
+  defaulted `style: ChordSymbolCaseStyle` (MuseScore's defaults); pass `score.style.chordSymbolCase` to draw what the
+  layout measured.
 - **`Breath.CaesuraStyle` gains two cases** — a client switching over it exhaustively must handle `.chant` and
   `.singleStroke`.
 - **Breaking: `TextStyleType` and `TextPlacementRole` gain the annotation styles** — `TextStyleType` gains
@@ -280,6 +283,12 @@ and this project adheres to
 
 ### Fixed
 
+- **Chord-symbol root and bass case follow MuseScore.** `<rootCase>` / `<bassCase>` were decoded with the wrong
+  numbers (MuseScore: -1 auto, 0 capital, 1 lower, 2 upper), and the stored case was always honored, where MuseScore
+  honors it only with *Automatic capitalization* off and otherwise derives it from the score style: *Lowercase minor
+  chords*, *Lowercase bass notes* and *All caps note names* (`ScoreStyle.chordSymbolCase`, read from `<Style>` and still
+  saved verbatim). Only a lower or upper case is written back: MuseScore draws auto and capital alike and reads an
+  absent tag as capital, so a `-1` in a source file is not kept.
 - **A fermata or breath in a MuseScore file plays at MuseScore's length.** MuseScore omits `<timeStretch>` and `<pause>`
   at its own defaults (2.0 for a plain fermata, 3.0 for long, 4.0 for very long, 0 for every breath and caesura — the
   2.0 in its palette is not a file default; confirmed on MuseScore 4.7.4's MIDI export); ssm read the absent tag as

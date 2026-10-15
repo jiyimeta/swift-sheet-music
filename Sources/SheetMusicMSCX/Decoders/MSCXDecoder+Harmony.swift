@@ -88,9 +88,10 @@ extension Harmony {
 
     private static func decodeNoteCase(_ raw: String?) -> NoteCase {
         switch raw?.trimmingWhitespaceAndNewlines() {
-        case "1": return .upper
-        case "2": return .lower
-        case "3": return .capitalize
+        case "-1": return .auto
+        case "0": return .capitalize
+        case "1": return .lower
+        case "2": return .upper
         default: return .auto
         }
     }

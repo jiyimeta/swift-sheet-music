@@ -45,6 +45,10 @@ public struct ScoreStyle: Sendable, Equatable {
     /// MSCX field `<ottavaNumbersOnly>`.
     /// C++: `Sid::ottavaNumbersOnly` (`styledef.cpp:679`).
     public var ottavaNumbersOnly: Bool
+    /// The four flags that decide the case of a chord symbol's root and bass (`Sid::automaticCapitalization`,
+    /// `lowerCaseMinorChords`, `lowerCaseBassNotes`, `allCapsNoteNames`). Read from `<Style>`; the tags are still
+    /// saved verbatim as preserved markup.
+    public var chordSymbolCase: ChordSymbolCaseStyle
     /// Source markup under this element that the model does not
     /// represent, kept so that read → write does not delete it. See
     /// `PreservedXML`.
@@ -63,7 +67,9 @@ public struct ScoreStyle: Sendable, Equatable {
         ottavaNumbersOnly: Bool = true,
         preservedMarkup: [PreservedXML] = [],
         textPlacement: TextPlacementStyles = TextPlacementStyles(),
+        chordSymbolCase: ChordSymbolCaseStyle = .museScoreDefaults,
     ) {
+        self.chordSymbolCase = chordSymbolCase
         self.textPlacement = textPlacement
         self.spatium = spatium
         self.pageLayout = pageLayout

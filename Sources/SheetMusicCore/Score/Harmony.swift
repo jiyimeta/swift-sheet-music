@@ -122,8 +122,10 @@ public enum HarmonyType: String, Sendable, Equatable {
     case nashville
 }
 
-/// MSCX `<rootCase>` / `<baseCase>` enum
-/// (0=auto / 1=upper / 2=lower / 3=capitalize).
+/// MSCX `<rootCase>` / `<bassCase>` enum, MuseScore's `NoteCaseType`
+/// (-1 = auto, 0 = capital, 1 = lower, 2 = upper; `dom/pitchspelling.h:75-77`).
+/// The stored case is drawn only while the score style's automatic capitalization is off
+/// (`ChordSymbolCaseStyle`). `.auto` and `.capitalize` draw the same and are written as no tag.
 public enum NoteCase: String, Sendable, Equatable {
     case auto
     case upper

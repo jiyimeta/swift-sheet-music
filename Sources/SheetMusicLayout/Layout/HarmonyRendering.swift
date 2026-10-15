@@ -17,16 +17,20 @@ public enum HarmonyRendering {
     ///      is also recognized as an accidental.
     ///   3. Everything else (digits, slashes, parens, letters) stays
     ///      in a text run; consecutive text characters coalesce.
+    ///
+    /// `style` is the score's chord-symbol case style: it decides the case of the root and bass letters
+    /// (`ChordSymbolCaseStyle`); a caller without a score gets MuseScore's defaults.
     public static func runs(
         for harmony: Harmony,
         metrics: StaffMetrics,
+        style: ChordSymbolCaseStyle = .museScoreDefaults,
     ) -> [HarmonyRun] {
         // Bravura registration (Apple) and CoreText serialization are
         // handled by the `FontMetrics.provider` implementation: the
         // Apple provider's `init` triggers `BravuraFont.register` and
         // serializes CT calls internally. The Stub provider on
         // non-Apple hosts needs neither.
-        let displayName = displayedName(for: harmony)
+        let displayName = displayedName(for: harmony, style: style)
         let kindedSlices = parseSlices(
             name: displayName, harmonyType: harmony.harmonyType,
         )
@@ -217,23 +221,30 @@ public enum HarmonyRendering {
     /// `<rootCase>` / `<baseCase>` re-case the note LETTER only, and
     /// `<leftParen/>` / `<rightParen/>` wrap the finished symbol —
     /// MuseScore draws both (`harmony.cpp:202,261`).
-    static func displayedName(for harmony: Harmony) -> String {
-        var s = displayedPrefix(for: harmony) + harmony.name
+    static func displayedName(
+        for harmony: Harmony, style: ChordSymbolCaseStyle = .museScoreDefaults,
+    ) -> String {
+        var s = displayedPrefix(for: harmony, style: style) + harmony.name
         if harmony.rootTpc != nil {
             if let bassTpc = harmony.bassTpc {
                 s += "/"
-                s += cased(tpcToText(bassTpc), as: harmony.bassCase)
+                s += cased(tpcToText(bassTpc), as: style.bassCase(stored: harmony.bassCase))
             }
         }
         if harmony.rightParen { s += ")" }
         return s
     }
 
-    /// Generated display characters before the editable name. Shared by display construction and caret mapping.
-    static func displayedPrefix(for harmony: Harmony) -> String {
+    /// Generated display characters before the editable name. Shared by display construction and caret mapping,
+    /// which must be given the same `style`. The root is re-cased from the score style
+    /// (`Harmony::rootRenderCase`) only when a root is generated; a name that is the whole text keeps its letters.
+    static func displayedPrefix(
+        for harmony: Harmony, style: ChordSymbolCaseStyle = .museScoreDefaults,
+    ) -> String {
         var prefix = harmony.leftParen ? "(" : ""
         if let rootTpc = harmony.rootTpc {
-            prefix += cased(tpcToText(rootTpc), as: harmony.rootCase)
+            let rootCase = style.rootCase(stored: harmony.rootCase, suffix: harmony.name)
+            prefix += cased(tpcToText(rootTpc), as: rootCase)
         }
         return prefix
     }

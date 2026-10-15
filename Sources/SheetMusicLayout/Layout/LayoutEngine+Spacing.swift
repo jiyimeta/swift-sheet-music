@@ -383,6 +383,7 @@ extension LayoutEngine {
                 division: score.division,
                 measureDuration: measureDuration(durations, at: i),
                 graceNoteMag: options.graceNoteMag,
+                chordSymbolCase: score.style.chordSymbolCase,
             )
             total += w + (i < cancellations.count ? cancellations[i] : 0)
         }
@@ -554,6 +555,7 @@ extension LayoutEngine {
         division: Int,
         measureDuration: Fraction,
         graceNoteMag: CGFloat = ScoreViewOptions().graceNoteMag,
+        chordSymbolCase: ChordSymbolCaseStyle = .museScoreDefaults,
     ) -> [Int: CGFloat] {
         tickColumns(
             aggregate: aggregatedTickWeights(
@@ -561,6 +563,7 @@ extension LayoutEngine {
                 metrics: metrics, division: division,
                 measureDuration: measureDuration,
                 graceNoteMag: graceNoteMag,
+                chordSymbolCase: chordSymbolCase,
             ),
             metrics: metrics,
             headerSchedule: headerSchedule,
@@ -594,12 +597,13 @@ extension LayoutEngine {
         division: Int,
         measureDuration: Fraction,
         graceNoteMag: CGFloat,
+        chordSymbolCase: ChordSymbolCaseStyle,
     ) -> CGFloat {
         crossStaffMinimumMeasureWidthWithAggregate(
             staves: staves, measureIdx: measureIdx,
             metrics: metrics, headerSchedule: headerSchedule,
             division: division, measureDuration: measureDuration,
-            graceNoteMag: graceNoteMag,
+            graceNoteMag: graceNoteMag, chordSymbolCase: chordSymbolCase,
         ).width
     }
 
@@ -616,12 +620,14 @@ extension LayoutEngine {
         division: Int,
         measureDuration: Fraction,
         graceNoteMag: CGFloat,
+        chordSymbolCase: ChordSymbolCaseStyle,
     ) -> (width: CGFloat, aggregate: TickAggregate) {
         let agg = aggregatedTickWeights(
             staves: staves, measureIdx: measureIdx,
             metrics: metrics, division: division,
             measureDuration: measureDuration,
             graceNoteMag: graceNoteMag,
+            chordSymbolCase: chordSymbolCase,
         )
         // Must match `tickColumns`' trailingGap so the spacing engine
         // and the placement engine size every measure identically.
@@ -701,6 +707,7 @@ extension LayoutEngine {
         division: Int,
         measureDuration: Fraction,
         graceNoteMag: CGFloat,
+        chordSymbolCase: ChordSymbolCaseStyle,
     ) -> TickAggregate {
         struct TimedElement {
             let startTick: Int
@@ -836,7 +843,7 @@ extension LayoutEngine {
                         // carries demand to host the symbol without
                         // colliding with the next chord. + 0.5 sp gap.
                         let runs = HarmonyRendering.runs(
-                            for: harmony, metrics: metrics,
+                            for: harmony, metrics: metrics, style: chordSymbolCase,
                         )
                         pendingHarmonyWidth = max(
                             pendingHarmonyWidth,

@@ -10,10 +10,13 @@ extension HarmonyRendering {
     /// resolved font's shaping; `bb` / `##` split their single glyph advance at its midpoint. A shared run
     /// boundary uses the next run's start, while the terminal boundary excludes the synthetic spacing gap.
     /// Ligature/bidi offsets can repeat or run backwards; callers must restrict hit testing to grapheme boundaries.
-    public static func caretOffsets(for harmony: Harmony, metrics: StaffMetrics) -> [CGFloat] {
-        let displayName = displayedName(for: harmony)
+    /// `style` must be the one the symbol was laid out with, or the offsets map a different string than the one drawn.
+    public static func caretOffsets(
+        for harmony: Harmony, metrics: StaffMetrics, style: ChordSymbolCaseStyle = .museScoreDefaults,
+    ) -> [CGFloat] {
+        let displayName = displayedName(for: harmony, style: style)
         let slices = parseSlices(name: displayName, harmonyType: harmony.harmonyType)
-        let runs = runs(for: harmony, metrics: metrics)
+        let runs = runs(for: harmony, metrics: metrics, style: style)
         let provider = FontMetrics.provider
         let textFont = TextInkGeometry.font(for: harmony.styleType, overrides: harmony.properties, metrics: metrics)
         let glyphFont = LayoutFont(face: SMuFLFamily.bravura, pointSize: glyphPointSize(for: harmony, metrics: metrics))
@@ -41,7 +44,7 @@ extension HarmonyRendering {
             }
             sourceIndex += localOffsets.count - 1
         }
-        let start = displayedPrefix(for: harmony).utf16.count
+        let start = displayedPrefix(for: harmony, style: style).utf16.count
         return Array(offsets[start ... start + harmony.name.utf16.count])
     }
 }

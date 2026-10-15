@@ -46,6 +46,7 @@ extension ScoreStyle {
         decodeSwing(node, into: &s)
         decodeTitleBlockAlign(node, into: &s)
         decodeOttava(node, into: &s)
+        decodeChordSymbolCase(node, into: &s)
         s.textPlacement.overlay(node)
         // Preserved markup layers the same way the modeled fields do.
         // A `.mscz` can carry its style in `score_style.mss` AND an
@@ -83,6 +84,18 @@ private func decodeOttava(
     if let raw = node.first("ottavaNumbersOnly")?.text {
         s.ottavaNumbersOnly = raw != "0"
     }
+}
+
+/// Parse the four flags that decide a chord symbol's root and bass case. They are read for layout and NOT added to
+/// `consumedStyleChildren`, so the tags still reach the saved `<Style>` verbatim as preserved markup. An absent tag
+/// keeps MuseScore's default (`style/styledef.cpp:494-497`).
+private func decodeChordSymbolCase(
+    _ node: XMLTreeNode, into s: inout ScoreStyle,
+) {
+    if let v = node.firstBool("automaticCapitalization") { s.chordSymbolCase.automaticCapitalization = v }
+    if let v = node.firstBool("lowerCaseMinorChords") { s.chordSymbolCase.lowerCaseMinorChords = v }
+    if let v = node.firstBool("lowerCaseBassNotes") { s.chordSymbolCase.lowerCaseBassNotes = v }
+    if let v = node.firstBool("allCapsNoteNames") { s.chordSymbolCase.allCapsNoteNames = v }
 }
 
 /// Parse the four `<{role}Align>` children that the `<VBox>` title

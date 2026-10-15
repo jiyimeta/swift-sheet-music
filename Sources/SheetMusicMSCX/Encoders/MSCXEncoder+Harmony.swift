@@ -26,16 +26,11 @@ extension Harmony {
         let usesHarmonyInfo = options.targetVersion == .v4
         var children: [XMLTreeNode] = []
         children += chordContent(usesHarmonyInfo: usesHarmonyInfo)
-        if rootCase != .auto {
-            children.append(XMLTreeNode(
-                name: "rootCase", text: encodeNoteCase(rootCase),
-            ))
+        if let text = encodeNoteCase(rootCase) {
+            children.append(XMLTreeNode(name: "rootCase", text: text))
         }
-        if bassCase != .auto {
-            children.append(XMLTreeNode(
-                name: usesHarmonyInfo ? "bassCase" : "baseCase",
-                text: encodeNoteCase(bassCase),
-            ))
+        if let text = encodeNoteCase(bassCase) {
+            children.append(XMLTreeNode(name: usesHarmonyInfo ? "bassCase" : "baseCase", text: text))
         }
         if leftParen {
             children.append(XMLTreeNode(name: "leftParen"))
@@ -95,11 +90,13 @@ private func encodeHarmonyType(_ type: HarmonyType) -> String {
     }
 }
 
-private func encodeNoteCase(_ noteCase: NoteCase) -> String {
+/// MuseScore's `NoteCaseType` number for the two cases that are written. `.auto` and `.capitalize` are not: they
+/// draw the same (`tpc2name` treats both as the capitalized spelling, `pitchspelling.cpp:372-381`) and MuseScore
+/// reads an absent tag as CAPITAL. A `-1` in a source file therefore does not survive a round trip.
+private func encodeNoteCase(_ noteCase: NoteCase) -> String? {
     switch noteCase {
-    case .auto: "0"
-    case .upper: "1"
-    case .lower: "2"
-    case .capitalize: "3"
+    case .lower: "1"
+    case .upper: "2"
+    case .auto, .capitalize: nil
     }
 }

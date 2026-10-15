@@ -62,6 +62,9 @@ public final class LayoutCache: @unchecked Sendable {
         /// The size grace notes are drawn at. A chord's leading graces are part of its column's left ink, so both
         /// `minWidth` and `tickAggregate` move with it.
         let graceNoteMag: CGFloat
+        /// The score's chord-symbol case style. The case a root or bass is drawn in changes the width of every
+        /// chord symbol in the measure, so both `minWidth` and `tickAggregate` move with it.
+        let chordSymbolCase: ChordSymbolCaseStyle
         /// The effective duration `measureDuration(context
         /// .measureDurations, at: measureIdx)` resolved to for this
         /// measure at the time this entry was built. NOT derivable
@@ -209,6 +212,8 @@ public final class LayoutCache: @unchecked Sendable {
         let overlappingSpannerAnchors: [LayoutEngine.SpannerAnchor]
         /// Read by `synthesizeLineSpanners` for the ottava label.
         let ottavaNumbersOnly: Bool
+        /// Read by `placeMeasureElements` and `aggregatedTickWeights` for the case a chord symbol draws in.
+        let chordSymbolCase: ChordSymbolCaseStyle
         /// The end-of-system courtesy signature this system announces —
         /// derived from the measure that OPENS the NEXT system, which no
         /// other field here can see. Without it a key change edited into
@@ -283,6 +288,8 @@ public final class LayoutCache: @unchecked Sendable {
         /// `.measure` rest duration via `NoteDuration.resolved(in:)`.
         let measureDuration: Fraction
         var textPlacementStyle = TextPlacementStyles()
+        /// The case a chord symbol's root and bass draw in, which changes the string placement measures.
+        var chordSymbolCase = ChordSymbolCaseStyle.museScoreDefaults
         var maxAboveLyricVerse = 0
         /// Whether the measure draws the clef it opens with in its own
         /// header — `false` mid-system, where the measure before draws it —

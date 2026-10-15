@@ -715,7 +715,7 @@ extension HarmonyTests {
     @Test func decodesModernBassTagInsideHarmonyInfo() throws {
         let xml = """
         <Harmony>
-          <bassCase>2</bassCase>
+          <bassCase>1</bassCase>
           <harmonyInfo>
             <name>m7</name>
             <root>13</root>
@@ -736,7 +736,7 @@ extension HarmonyTests {
     @Test func decodesLegacyBaseTagStill() throws {
         let xml = """
         <Harmony>
-          <baseCase>2</baseCase>
+          <baseCase>1</baseCase>
           <harmonyInfo>
             <name>m7</name>
             <root>13</root>

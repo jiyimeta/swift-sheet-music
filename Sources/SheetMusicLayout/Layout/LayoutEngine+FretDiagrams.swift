@@ -10,6 +10,7 @@ extension LayoutEngine {
     /// stay with its diagram, and MuseScore's own autoplace of the pair is not modeled.
     static func fretDiagramElements(
         _ diagram: FretDiagram, x: CGFloat, staffTopY: CGFloat, metrics: StaffMetrics,
+        chordSymbolCase: ChordSymbolCaseStyle = .museScoreDefaults,
     ) -> [LayoutElement] {
         let sp = metrics.sp
         let built = FretDiagramGeometry.figure(diagram, sp: sp)
@@ -21,7 +22,7 @@ extension LayoutEngine {
             kind: .fretDiagram, figure: figure, color: diagram.elementProperties.color, placement: placement,
         )]
         if let harmony = diagram.harmony {
-            let runs = HarmonyRendering.runs(for: harmony, metrics: metrics)
+            let runs = HarmonyRendering.runs(for: harmony, metrics: metrics, style: chordSymbolCase)
             let width = HarmonyRendering.width(of: runs)
             let font = TextInkGeometry.font(for: harmony.styleType, overrides: harmony.properties, metrics: metrics)
             let height = FontMetrics.provider.ascent(font: font) + FontMetrics.provider.descent(font: font)

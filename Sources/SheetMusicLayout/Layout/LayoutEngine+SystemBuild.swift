@@ -229,6 +229,7 @@ extension LayoutEngine {
                     sharedMeasureDurations, at: measureIdx,
                 ),
                 graceNoteMag: context.options.graceNoteMag,
+                chordSymbolCase: context.score.style.chordSymbolCase,
             )
             let tickCols = tickColumns(
                 aggregate: aggregate,
@@ -309,6 +310,7 @@ extension LayoutEngine {
                     lyricsVisible: context.options.lyricsVisible,
                     measureDuration: measDuration,
                     textPlacementStyle: context.score.style.textPlacement,
+                    chordSymbolCase: context.score.style.chordSymbolCase,
                     maxAboveLyricVerse: maxAboveVerses[staffIdx],
                     drawsLeadingClef: drawsLeadingClef,
                     followingClef: followingClefsHere[staffIdx],
@@ -355,6 +357,7 @@ extension LayoutEngine {
                         incomingMelismas: incomingMelismas,
                         systemElements: systemElementsForStaff,
                         textPlacementStyle: context.score.style.textPlacement,
+                        chordSymbolCase: context.score.style.chordSymbolCase,
                         maxAboveLyricVerse: maxAboveVerses[staffIdx],
                         drawsLeadingClef: drawsLeadingClef,
                         followingClef: followingClefsHere[staffIdx],

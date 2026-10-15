@@ -9,6 +9,10 @@ import Testing
 /// `tpc2name` (`pitchspelling.cpp:372-381`).
 @Suite("Harmony parentheses and note case")
 struct HarmonyParenCaseTests {
+    /// The stored `<rootCase>` / `<bassCase>` is drawn only while the score's automatic capitalization is off
+    /// (`Harmony::rootRenderCase`); the tests that pin how a stored case re-cases the spelling turn it off.
+    private static let storedCase = ChordSymbolCaseStyle(automaticCapitalization: false)
+
     /// MuseScore TPC cycle-of-fifths values (`pitchspelling.h:40-51`,
     /// which starts at `TPC_F_BBB = -8`): 12 = B♭, 14 = C, 16 = D.
     private func harmony(
@@ -62,10 +66,10 @@ struct HarmonyParenCaseTests {
         // re-cased, matching `tpc2name`'s `s.toLower()` on the note
         // name alone.
         #expect(HarmonyRendering.displayedName(
-            for: harmony(name: "m7", rootCase: .lower),
+            for: harmony(name: "m7", rootCase: .lower), style: Self.storedCase,
         ) == "cm7")
         #expect(HarmonyRendering.displayedName(
-            for: harmony(name: "m7", rootCase: .upper),
+            for: harmony(name: "m7", rootCase: .upper), style: Self.storedCase,
         ) == "Cm7")
     }
 
@@ -75,16 +79,16 @@ struct HarmonyParenCaseTests {
         // `parseSlices` would still fire but the letter would read as
         // "bb" (B double flat).
         #expect(HarmonyRendering.displayedName(
-            for: harmony(name: "", rootTpc: 12, rootCase: .lower),
+            for: harmony(name: "", rootTpc: 12, rootCase: .lower), style: Self.storedCase,
         ) == "bb")
         #expect(HarmonyRendering.displayedName(
-            for: harmony(name: "", rootTpc: 12, rootCase: .upper),
+            for: harmony(name: "", rootTpc: 12, rootCase: .upper), style: Self.storedCase,
         ) == "Bb")
     }
 
     @Test func bassCaseAppliesToTheSlashBass() {
         #expect(HarmonyRendering.displayedName(
-            for: harmony(bassTpc: 16, bassCase: .lower),
+            for: harmony(bassTpc: 16, bassCase: .lower), style: Self.storedCase,
         ) == "C7/d")
     }
 

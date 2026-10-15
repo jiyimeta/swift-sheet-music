@@ -93,6 +93,7 @@ extension LayoutEngine {
                prior.sp == sp,
                prior.division == division, prior.spacing == context.options.spacing,
                prior.graceNoteMag == context.options.graceNoteMag,
+               prior.chordSymbolCase == context.score.style.chordSymbolCase,
                prior.measures == measuresAt,
                prior.measureDuration == durationAt,
                prior.followingClefs == followingClefsAt,
@@ -505,12 +506,14 @@ extension LayoutEngine {
             division: context.score.division,
             measureDuration: measureDuration,
             graceNoteMag: context.options.graceNoteMag,
+            chordSymbolCase: context.score.style.chordSymbolCase,
         )
         return LayoutCache.Entry(
             measures: measures,
             sp: context.metrics.sp,
             division: context.score.division, spacing: context.options.spacing,
             graceNoteMag: context.options.graceNoteMag,
+            chordSymbolCase: context.score.style.chordSymbolCase,
             measureDuration: measureDuration,
             followingClefs: followingClefs,
             leadingClefDrawnBefore: leadingClefDrawnBefore,
@@ -618,6 +621,7 @@ extension LayoutEngine {
             options: context.options,
             overlappingSpannerAnchors: overlappingAnchors,
             ottavaNumbersOnly: context.score.style.ottavaNumbersOnly,
+            chordSymbolCase: context.score.style.chordSymbolCase,
             trailingCourtesy: trailingCourtesy,
             followingClefs: followingClefs(after: lastMeasure, staves: staves, plan: context.multiMeasureRestPlan),
         )
