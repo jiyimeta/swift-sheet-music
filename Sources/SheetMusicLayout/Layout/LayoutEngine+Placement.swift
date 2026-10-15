@@ -70,6 +70,8 @@ extension LayoutEngine {
         maxAboveLyricVerse: Int = 0,
         drawsLeadingClef: Bool = true,
         followingClef: FollowingClef? = nil,
+        // How many staves the part has: a fingering's default side looks at whether this is a grand staff's last.
+        staffCountInPart: Int = 1,
     ) -> MeasurePlacement {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         // Barlines are the one thing here measured against the staff's
@@ -1969,8 +1971,13 @@ extension LayoutEngine {
                 snapExpressions(expressionSnapAnchors, out: &out, metrics: metrics)
             }
             emitNoteAnnotations(
-                voice: voice, chordOutIndex: voiceChordOutIndex, metrics: metrics, options: options,
-                out: &out, invisibleOut: &invisibleOut,
+                voice: voice, chordOutIndex: voiceChordOutIndex,
+                context: NoteAnnotationContext(
+                    measure: measure, measureDuration: measureDuration, division: division,
+                    staffIndexInPart: staffAddress.staffIndexInPart, staffCountInPart: staffCountInPart,
+                    lineGeometry: lineGeometry, chordTickByOutIndex: chordTickByOutIndex,
+                ),
+                metrics: metrics, options: options, out: &out, invisibleOut: &invisibleOut,
             )
 
             // --- Tuplet brackets / numbers ---

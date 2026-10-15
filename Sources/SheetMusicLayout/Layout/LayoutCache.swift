@@ -291,5 +291,8 @@ public final class LayoutCache: @unchecked Sendable {
         /// `measure`.
         var drawsLeadingClef = true
         var followingClef: LayoutEngine.FollowingClef?
+        /// The part's staff count: a fingering's default side depends on whether this staff is a multi-staff part's
+        /// last, which removing a staff above it changes without touching `measure`.
+        var staffCountInPart = 1
     }
 }

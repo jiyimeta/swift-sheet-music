@@ -26,19 +26,26 @@ extension LayoutEngine {
         x - GuitarBendGeometry.noteheadWidthSp / 2 * sp
     }
 
-    /// Each note's `<Symbol>`s, placed once the chords are final (after beaming and mirroring): baseline-left at the
-    /// note's left edge on the note's own line, moved by the symbol's offset. Hidden ones are ghosts when the options
-    /// ask for invisible elements.
+    /// Each note's fingerings (`emitFingerings`) and `<Symbol>`s, placed once the chords are final (after beaming and
+    /// mirroring). A symbol is baseline-left at the note's left edge on the note's own line, moved by its offset.
+    /// Hidden ones are ghosts when the options ask for invisible elements.
     static func emitNoteAnnotations(
-        voice: Voice, chordOutIndex: [Int: Int], metrics: StaffMetrics, options: ScoreViewOptions,
-        out: inout [LayoutElement], invisibleOut: inout [LayoutElement],
+        voice: Voice, chordOutIndex: [Int: Int], context: NoteAnnotationContext, metrics: StaffMetrics,
+        options: ScoreViewOptions, out: inout [LayoutElement], invisibleOut: inout [LayoutElement],
     ) {
         let sp = metrics.sp
         for (elementIndex, outIndex) in chordOutIndex.sorted(by: { $0.key < $1.key }) {
             guard voice.elements.indices.contains(elementIndex),
                   case let .chord(chord) = voice.elements[elementIndex],
-                  chord.notes.contains(where: { !$0.symbols.isEmpty }),
-                  out.indices.contains(outIndex),
+                  out.indices.contains(outIndex)
+            else { continue }
+            if chord.notes.contains(where: { !$0.fingerings.isEmpty }) {
+                emitFingerings(
+                    chord: chord, outIndex: outIndex, context: context, metrics: metrics, options: options,
+                    out: &out, invisibleOut: &invisibleOut,
+                )
+            }
+            guard chord.notes.contains(where: { !$0.symbols.isEmpty }),
                   case let .chord(layoutNotes, _, _, _, _, _, _, _, _, _, _) = out[outIndex]
             else { continue }
             let notes = Array(chord.notes)

@@ -283,6 +283,8 @@ extension LayoutEngine {
                 let measDuration = measureDuration(
                     staffMeasureDurations[staffIdx], at: measureIdx,
                 )
+                let staffCountInPart = context.score.parts.indices.contains(address.partIndex)
+                    ? context.score.parts[address.partIndex].staves.count : 1
                 let placementInputs = LayoutCache.PlacementInputs(
                     measure: m,
                     isPitchedStaff: isPitchedStaff,
@@ -310,6 +312,7 @@ extension LayoutEngine {
                     maxAboveLyricVerse: maxAboveVerses[staffIdx],
                     drawsLeadingClef: drawsLeadingClef,
                     followingClef: followingClefsHere[staffIdx],
+                    staffCountInPart: staffCountInPart,
                 )
                 let els: [LayoutElement]
                 let invisibleEls: [LayoutElement]
@@ -355,6 +358,7 @@ extension LayoutEngine {
                         maxAboveLyricVerse: maxAboveVerses[staffIdx],
                         drawsLeadingClef: drawsLeadingClef,
                         followingClef: followingClefsHere[staffIdx],
+                        staffCountInPart: staffCountInPart,
                     )
                     els = result.elements
                     invisibleEls = result.invisibleElements

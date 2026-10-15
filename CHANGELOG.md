@@ -39,6 +39,12 @@ and this project adheres to
   SMuFL glyph by name from its beat's notehead edge on the staff's top line (a note's from the note, on its line), with
   its `<offset>`; a symbol naming its own `<font>` is `4 sp × symbolsSize` and turned by `symbolAngle`, one without is
   the normal size, upright (MuseScore's rule). A name outside the glyph table draws nothing and round-trips.
+- **Fingerings are drawn** — piano finger numbers, right-hand guitar letters and circled string numbers are placed per
+  chord, centered on the notehead, above or below by MuseScore's rule (another voice and a stem-down chord, or the last
+  staff of a multi-staff part; `<placement>` wins), cleared 0.5 sp from the chord, the staff and a beamed stem tip and
+  stacked outward; a lone unbeamed note among other voices takes its fingering 1.5 sp off the note instead; a left-hand
+  guitar fingering stands left of its note on its line. They are stacked from the chord's own extremes rather than the
+  skyline, do not widen the chord's spacing, and grace-note fingerings are not drawn.
 - **`LayoutElement.figure`** — one layout case for strokes, ellipses and glyph runs (`LayoutFigure`): `<Symbol>`s now,
   and the ambitus, figured bass, fret diagrams and string numbers next. Every renderer draws it from its primitives —
   the draw program with the opcodes it already has. Adding a case breaks exhaustive switches over `LayoutElement`.
