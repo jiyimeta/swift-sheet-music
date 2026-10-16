@@ -62,6 +62,12 @@ and this project adheres to
   `<Image>` children into `ScoreFrame.images`. Each writes back in MuseScore's child order, a written value is always
   written back, and anything the model does not represent (`createSystemHeader`, an `<Image>` under a TBox, an image's
   `z`) is kept in the preserved markup. A fret box (`<FBox>`) stays opaque.
+- **`Score.pictures`: an `.mscz`'s `Pictures/` payloads travel with the score and `MSCZWriter` writes them back** —
+  `MSCZReader` loads the `Pictures/<path>` bytes every VBox `<Image>` names (a missing one is a `mscz.picture.missing`
+  diagnostic, a name that escapes the archive `mscz.picture.badName`), and the two `MSCZWriter.write(score:…)` overloads
+  store each picture an image still references, so a save with no host sidecar keeps them. An entry a host already
+  passes in `extraEntries` is not written twice; a picture whose `<Image>` was removed is dropped. `Score ==` compares
+  `pictures`; `stableFingerprint` does not.
 
 ### Fixed
 

@@ -279,6 +279,19 @@ struct MSCZReaderTests {
         #expect(text.contains(Self.pngName))
     }
 
+    @Test func escapingPictureNameIsSkippedWithADiagnostic() throws {
+        let mscx = try #require(String(data: MSCXFixtureLoader.mscxData("frames-pictures"), encoding: .utf8))
+        let edited = mscx.replacingOccurrences(of: Self.pngName, with: "../x.png")
+        #expect(edited != mscx)
+        let mscz = try MSCZWriter.write(mscxData: Data(edited.utf8))
+        let result = try MSCZReader.parseWithDiagnostics(mscz)
+
+        let bad = result.diagnostics.filter { $0.code == "mscz.picture.badName" }
+        #expect(bad.count == 1)
+        #expect(bad.first?.location == "../x.png")
+        #expect(result.score.pictures["../x.png"] == nil)
+    }
+
     private func archive(dropping dropped: String, from data: Data) throws -> Data {
         let reader = try ZipReader(data: data)
         let ordered = reader.entries.values
