@@ -55,8 +55,10 @@ and this project adheres to
   trimmed, for hosts whose displays show a multi-line title on one line.
 - **The Android and web readers draw `drawImage`** — the Kotlin readers (the `SheetMusicComposeAndroid` AAR and the
   Examples app) read draw program v9 and decode the new image command (`DrawCommand.DrawImage`, bytes compared by
-  content), include its rect in a band's bounds, and draw it with `BitmapFactory` into a size-bounded decoded-image
-  cache; a picture Android cannot decode draws nothing. The web reader reads the flat format v3 (a blob table after the
+  content), include its rect in a band's bounds, and draw it with `BitmapFactory`, decoded at a power-of-two
+  `inSampleSize` that keeps its long side within twice the destination's and 2048 px, into a 32 MiB cache keyed by the
+  command's content hash (computed once per command; a hit confirms the bytes); a picture Android cannot decode draws
+  nothing. The web reader reads the flat format v3 (a blob table after the
   string table, opcode 13), bounds-checks the blob index, includes the rect in band bounds, and draws through a cached
   `createImageBitmap` decode (`drawPage` / `drawTile` take `onImageReady` to repaint once a picture has decoded). A v8
   Kotlin reader or a v2 web reader refuses a v9 stream instead of mis-reading it. The Kotlin half is compile-checked by
@@ -147,11 +149,13 @@ and this project adheres to
 - **PDF export of PNGs with alpha** — an 8-bit non-interlaced RGBA or gray+alpha PNG is inflated, unfiltered and split
   into a color image (`FlateDecode`, device RGB or gray) and an 8-bit `/DeviceGray` soft mask the color image names in
   `/SMask`, so the picture's transparency survives in the PDF. A chunk length or image size that overflows a 32-bit
-  `Int` makes the file unreadable (no picture) instead of trapping.
+  `Int` makes the file unreadable (no picture) instead of trapping, and a picture that would inflate past 64 MiB is
+  refused rather than allocated.
 - **The Apple screen, print and PDF export draw boxes and pictures** — `ScoreView` draws every box between systems
   (`LayoutDocument.frames`) at its `originY`, mounted by `visibleRect` with the systems' test, and the title block
   with its pictures (`titleImages`) in both modes. A box's texts are set as the title block's are; each picture is an
-  image layer stretched to its rect, decoded by ImageIO once per file. `PDFExporter.export(score:)` and
+  image layer stretched to its rect, decoded by ImageIO at no more than 2048 px on its long side into a cache of at
+  most 96 MB (a file ImageIO cannot read is remembered, not retried). `PDFExporter.export(score:)` and
   `export(document:sheets:…)` draw on each page the boxes `PDFExporter.frames(of:in:)` gives it (a box after the last
   system on the last page, a frames-only page included) and the title's pictures on the first, so a host's own
   `Sheet`s need no new field; `PDFPageView` and the `PDFPageLayerView` preview take defaulted `frames` and
