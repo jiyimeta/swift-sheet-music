@@ -333,4 +333,36 @@ import Testing
         #expect(first.origin.y == title.height)
         #expect(picture.rect.maxY <= first.origin.y + 0.01)
     }
+
+    /// Twenty single-staff measures of whole-measure rests under a title, except a note in measure 15, so collapsing
+    /// multi-measure rests gives the runs `0 ..< 15` and `16 ..< 20`.
+    private func restsAroundANote(blocks: [PositionedScoreBlock]) -> Score {
+        let rest = Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+        let chord = Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])
+        var measures = Array(repeating: rest, count: 20)
+        measures[15] = Measure(voices: [Voice(elements: [.chord(chord)])])
+        return Score(
+            division: 480,
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: measures)])],
+            systemMeasures: IdentifiedArray(Array(repeating: SystemMeasure(), count: 20)),
+            titleFrame: ScoreFrame(heightSp: 10, texts: [FrameText(style: .title, text: "Rests")]),
+            blocks: blocks,
+        )
+    }
+
+    @Test("a frame right after a collapsed rest run ends the system and sits between the two systems")
+    func frameAfterACollapsedRestEndsTheSystem() throws {
+        let tbox = PositionedScoreBlock(beforeMeasureIndex: 15, block: textFrame("Interlude"))
+        let options = ScoreViewOptions(multiMeasureRest: .collapse(minimumMeasures: 2))
+        let document = laidOut(restsAroundANote(blocks: [tbox]), options: options)
+        #expect(document.systems.flatMap(\.measures).compactMap(\.multiMeasureRest) == [15, 4])
+        let index = document.systems.firstIndex { $0.measures.first?.measureIndex == 15 }
+        let below = try #require(index, "no system starts at measure 15")
+        try #require(below > 0)
+        let above = document.systems[below - 1]
+        let frame = try #require(document.frames.first)
+        #expect(frame.beforeMeasureIndex == 15)
+        #expect(frame.originY >= above.origin.y + above.size.height)
+        #expect(frame.bottom <= document.systems[below].origin.y)
+    }
 }

@@ -298,6 +298,17 @@ extension LayoutEngine {
                 // run's start.
                 if context.multiMeasureRestPlan.isInteriorOfRun(cursor) {
                     cursor += 1
+                    // A run's last measure is interior: its break (authored, or a frame right after the run) ends
+                    // the system here, as the check at the bottom of this loop does for a drawn measure.
+                    if context.options.wrapToViewWidth,
+                       cursor > systemStart,
+                       measureForcesLineBreak(
+                           at: cursor - 1, staves: staves, policy: context.options.breakPolicy,
+                           frameBreaks: context.frameBreaks,
+                       )
+                    {
+                        break
+                    }
                     continue
                 }
                 let baseW = minWidths[cursor]

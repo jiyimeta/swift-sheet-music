@@ -98,6 +98,10 @@ and this project adheres to
   (`<boxAutoSize>`) and `images`.
 - **A frame text's unmodeled `<style>` is written back** — a TBox text's `frame` style or a user style on a VBox text
   decoded to `.other` and was dropped on save; `FrameText.otherStyleName` now keeps the name as written.
+- **A line or page break on the last measure of a collapsed multi-measure rest ends the system** — the planner closes a
+  run at an authored break, so the break sits on the run's last measure, which the packer skipped without checking it:
+  with the rest collapsed, the measures after the run joined its system (unless the break also bounded a balanced span
+  of 12 measures or fewer). The same check now ends the system before a frame that follows a collapsed run.
 
 ## [4.11.0] - 2026-10-16
 
