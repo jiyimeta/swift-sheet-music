@@ -72,4 +72,74 @@ struct SetScoreInfoSingleLineTests {
         #expect(!SetScoreInfo.isRestatement([ScoreInfoWrite(field: .title, text: "Partita")], in: score))
         #expect(try Self.plan(.title, "Partita", in: score))
     }
+
+    // MARK: - Saving with another field changed
+
+    /// `score(field, text:)` with a composer engraved and stored too, so a save can change it alongside.
+    private static func scoreWithComposer(_ field: ScoreInfoWrite.Field, text: String) -> Score {
+        var result = Self.score(field, text: text)
+        var frame = result.titleFrame ?? ScoreFrame(heightSp: 10, texts: [])
+        frame.texts.append(FrameText(style: .composer, text: "Old"))
+        result.titleFrame = frame
+        result.metaTags[ScoreInfoWrite.Field.composer.metaTagKey] = "Old"
+        return result
+    }
+
+    /// The writes a host's info sheet sends when only the composer changed: `field` as it displays it, on one line.
+    @discardableResult
+    private static func saveNewComposer(
+        _ field: ScoreInfoWrite.Field, to score: inout Score,
+    ) throws -> any EditCommand {
+        try SetScoreInfo(writes: [
+            ScoreInfoWrite(field: field, text: "First line Second line"),
+            ScoreInfoWrite(field: .composer, text: "New"),
+        ]).apply(to: &score)
+    }
+
+    @Test(arguments: [ScoreInfoWrite.Field.subtitle, .title])
+    func `changing the composer keeps a multi-line credit's line breaks`(field: ScoreInfoWrite.Field) throws {
+        let original = Self.scoreWithComposer(field, text: Self.multiLine)
+        var score = original
+        let inverse = try Self.saveNewComposer(field, to: &score)
+        let style = try #require(field.frameTextStyle)
+        #expect(Self.engraved(.composer, in: score) == "New")
+        #expect(score.metaTags[ScoreInfoWrite.Field.composer.metaTagKey] == "New")
+        #expect(Self.engraved(style, in: score) == Self.multiLine)
+        #expect(score.metaTags[field.metaTagKey] == Self.multiLine)
+        try inverse.apply(to: &score)
+        #expect(score == original)
+    }
+
+    /// A MuseScore file often engraves a subtitle without storing it: the engraved text is still what the one-line
+    /// form restates, so it keeps its line breaks and the metaTag takes the same text.
+    @Test func `an engraved multi-line subtitle with no metaTag keeps its line breaks`() throws {
+        var score = Self.scoreWithComposer(.subtitle, text: Self.multiLine)
+        score.metaTags[ScoreInfoWrite.Field.subtitle.metaTagKey] = nil
+        try Self.saveNewComposer(.subtitle, to: &score)
+        #expect(Self.engraved(.subtitle, in: score) == Self.multiLine)
+        #expect(score.metaTags[ScoreInfoWrite.Field.subtitle.metaTagKey] == Self.multiLine)
+        #expect(Self.engraved(.composer, in: score) == "New")
+    }
+
+    /// The repair `isRestatement` protects survives the same save: a title stored only in the metaTag is engraved.
+    @Test func `an unchanged title stored only in its metaTag is still engraved`() throws {
+        var score = Self.scoreWithComposer(.title, text: "Sonata")
+        score.titleFrame?.texts.removeAll { $0.style == .title }
+        try SetScoreInfo(writes: [
+            ScoreInfoWrite(field: .title, text: "Sonata"),
+            ScoreInfoWrite(field: .composer, text: "New"),
+        ]).apply(to: &score)
+        #expect(Self.engraved(.title, in: score) == "Sonata")
+        #expect(score.metaTags[ScoreInfoWrite.Field.title.metaTagKey] == "Sonata")
+    }
+
+    @Test func `an edited one-line subtitle saved with a new composer is written`() throws {
+        var score = Self.scoreWithComposer(.subtitle, text: Self.multiLine)
+        try SetScoreInfo(writes: [
+            ScoreInfoWrite(field: .subtitle, text: "First line Third"),
+            ScoreInfoWrite(field: .composer, text: "New"),
+        ]).apply(to: &score)
+        #expect(Self.engraved(.subtitle, in: score) == "First line Third")
+        #expect(Self.engraved(.composer, in: score) == "New")
+    }
 }
