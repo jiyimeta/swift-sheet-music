@@ -42,6 +42,19 @@ public enum TitleFrameRenderer {
         }
     }
 
+    /// `draw(_:into:origin:)`, then the block's pictures, in the order the draw program draws a box. `images` are in
+    /// the block's own space, as its texts are, so `origin` moves both: `.zero` for the title block (whose texts and
+    /// `LayoutDocument.titleImages` are in document coordinates), `(0, frame.originY)` for a frame between systems.
+    package static func draw(
+        _ frame: LayoutTitleFrame,
+        images: [LayoutFrameImage],
+        into context: inout GraphicsContext,
+        origin: CGPoint = .zero,
+    ) {
+        draw(frame, into: &context, origin: origin)
+        FrameImageDrawing.draw(images, into: &context, origin: origin)
+    }
+
     // MARK: - Placement (shared with the layer renderer)
 
     /// One line of a `LayoutFrameText`, already placed: the string,

@@ -142,9 +142,22 @@ and this project adheres to
   into a color image (`FlateDecode`, device RGB or gray) and an 8-bit `/DeviceGray` soft mask the color image names in
   `/SMask`, so the picture's transparency survives in the PDF. A chunk length or image size that overflows a 32-bit
   `Int` makes the file unreadable (no picture) instead of trapping.
+- **The Apple screen, print and PDF export draw boxes and pictures** — `ScoreView` draws every box between systems
+  (`LayoutDocument.frames`) at its `originY`, mounted by `visibleRect` with the systems' test, and the title block
+  with its pictures (`titleImages`) in both modes. A box's texts are set as the title block's are; each picture is an
+  image layer stretched to its rect, decoded by ImageIO once per file. `PDFExporter.export(score:)` and
+  `export(document:sheets:…)` draw on each page the boxes `PDFExporter.frames(of:in:)` gives it (a box after the last
+  system on the last page, a frames-only page included) and the title's pictures on the first, so a host's own
+  `Sheet`s need no new field; `PDFPageView` and the `PDFPageLayerView` preview take defaulted `frames` and
+  `titleImages`. A picture ImageIO cannot read draws nothing. A score without a box after the title block and without
+  a picture draws exactly as before. `render-previews` draws the boxes too: `SM_SCORE` renders always, and
+  `SM_PARITY_TITLE=1` lays out the title block and the boxes and draws them on both sides of the parity diff.
 
 ### Changed
 
+- **The Windows walker accepts `drawImage` and draws nothing for it (tracked by a folino `PARITY(windows)` row)** —
+  `SheetMusicRenderWindows`' `DrawCommandWalker` reads a v9 program that carries pictures without failing and skips
+  each picture, so a Windows page shows a box's texts but not its pictures until the Windows renderer decodes them.
 - **A frame forces a system break on both sides and replaces the system gap with MuseScore's frame distance** — a VBox
   or TBox between two measures always ends the system before it, whatever `breakPolicy` says (MuseScore collects no
   measures across a box), and bounds the balanced-wrap span like an authored break. The systems around it sit

@@ -68,7 +68,6 @@ public struct PDFPageView: View {
         self.systems = systems
         self.pageStartY = pageStartY
         self.titleFrame = titleFrame
-        // W7 Task 14 Phase A: stored, not drawn yet.
         self.frames = frames
         self.titleImages = titleImages
         self.metrics = metrics
@@ -82,42 +81,7 @@ public struct PDFPageView: View {
 
     public var body: some View {
         ZStack(alignment: .topLeading) {
-            Canvas(opaque: true) { context, _ in
-                // White background — `opaque: true` doesn't
-                // auto-clear, and we want a paper-like fill
-                // regardless of the host platform's default canvas
-                // color. Fill the full (scaled) canvas extent so
-                // the background still covers the view at any
-                // `renderScale`.
-                let canvasSize = CGSize(
-                    width: pageSize.width * renderScale,
-                    height: pageSize.height * renderScale,
-                )
-                context.fill(
-                    Path(CGRect(origin: .zero, size: canvasSize)),
-                    with: .color(.white),
-                )
-                var local = context
-                // Scale the drawing coordinates BEFORE translating
-                // so glyphs render at native resolution at the new
-                // size, not as an upscaled bitmap.
-                if renderScale != 1 {
-                    local.scaleBy(x: renderScale, y: renderScale)
-                }
-                local.translateBy(
-                    x: margins.leading,
-                    y: margins.top - pageStartY,
-                )
-                if let titleFrame {
-                    TitleFrameRenderer.draw(titleFrame, into: &local)
-                }
-                for system in systems {
-                    ScoreCanvasDrawing.drawSystem(
-                        system, metrics: metrics, into: &local,
-                        drawsInvisibleElements: drawsInvisibleElements,
-                    )
-                }
-            }
+            pageCanvas
             if breakIndicatorVisibility != .none {
                 BreakIndicatorOverlay(
                     mode: .document(
@@ -137,5 +101,53 @@ public struct PDFPageView: View {
             height: pageSize.height * renderScale,
         )
         .environment(\.colorScheme, .light)
+    }
+
+    /// The page itself: white paper, then the title block with its pictures, the boxes between systems and the
+    /// systems, all in document coordinates mapped onto the page by one scale and one translation.
+    private var pageCanvas: some View {
+        Canvas(opaque: true) { context, _ in
+            // White background — `opaque: true` doesn't
+            // auto-clear, and we want a paper-like fill
+            // regardless of the host platform's default canvas
+            // color. Fill the full (scaled) canvas extent so
+            // the background still covers the view at any
+            // `renderScale`.
+            let canvasSize = CGSize(
+                width: pageSize.width * renderScale,
+                height: pageSize.height * renderScale,
+            )
+            context.fill(
+                Path(CGRect(origin: .zero, size: canvasSize)),
+                with: .color(.white),
+            )
+            var local = context
+            // Scale the drawing coordinates BEFORE translating
+            // so glyphs render at native resolution at the new
+            // size, not as an upscaled bitmap.
+            if renderScale != 1 {
+                local.scaleBy(x: renderScale, y: renderScale)
+            }
+            local.translateBy(
+                x: margins.leading,
+                y: margins.top - pageStartY,
+            )
+            if let titleFrame {
+                TitleFrameRenderer.draw(titleFrame, images: titleImages, into: &local)
+            }
+            // A box's texts and pictures are relative to its top, which is a document Y like a system's: the
+            // translation above already takes `pageStartY` off.
+            for frame in frames {
+                TitleFrameRenderer.draw(
+                    frame.content, images: frame.images, into: &local, origin: CGPoint(x: 0, y: frame.originY),
+                )
+            }
+            for system in systems {
+                ScoreCanvasDrawing.drawSystem(
+                    system, metrics: metrics, into: &local,
+                    drawsInvisibleElements: drawsInvisibleElements,
+                )
+            }
+        }
     }
 }

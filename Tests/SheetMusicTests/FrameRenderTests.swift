@@ -245,6 +245,36 @@
                 #expect(pages[page].markedFraction(in: probe) > 0.9, "no picture at \(center) on page \(page + 1)")
             }
         }
+
+        /// The on-screen PDF preview: its configuration carries a page's frames and title pictures, and its host view
+        /// builds one layer for the title's pictures and one per frame, each placed like a system — its top
+        /// `margins.top + (originY − pageStartY)` below the page's top, in the host's Y-up space — and holding the
+        /// frame's picture.
+        @Test("the PDF preview's layer view builds a layer per frame, placed on its page")
+        func pdfPreviewBuildsFrameLayers() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let paged = try PDFExporter.pagedLayout(score: Self.loadPictures(), options: Self.a4())
+            let framed = try #require(paged.document.frames.first)
+            let page = paged.resolved.page
+            let view = PDFPageLayerView(
+                systems: [], pageStartY: 0, titleFrame: paged.document.titleFrame, frames: [framed],
+                titleImages: paged.document.titleImages, metrics: paged.document.metrics,
+                pageSize: page.size, margins: page.margins(forPageIndex: 0),
+            )
+            #expect(view.frames == [framed])
+            #expect(view.titleImages == paged.document.titleImages)
+            let layers = PDFPageLayerHostView.boxLayers(
+                titleFrame: view.titleFrame, titleImages: view.titleImages, frames: view.frames,
+                pageStartY: view.pageStartY, pageSize: view.pageSize, margins: view.margins,
+            )
+            try #require(layers.count == 2)
+            let frameLayer = layers[1]
+            let expectedY = view.pageSize.height - view.margins.top - framed.originY - framed.height
+            #expect(abs(frameLayer.frame.minX - view.margins.leading) < 0.001)
+            #expect(abs(frameLayer.frame.minY - expectedY) < 0.001, "at \(frameLayer.frame.minY), not \(expectedY)")
+            let pictureLayerCount = (frameLayer.sublayers ?? []).count { $0.contents != nil }
+            #expect(pictureLayerCount == 1)
+        }
     }
 
     /// A layer tree or a picture rasterized onto white in sRGB. Rows run top to bottom, so pixel `(x, y)` is the

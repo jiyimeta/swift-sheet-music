@@ -45,7 +45,6 @@
             self.systems = systems
             self.pageStartY = pageStartY
             self.titleFrame = titleFrame
-            // W7 Task 14 Phase A: stored, not drawn yet.
             self.frames = frames
             self.titleImages = titleImages
             self.metrics = metrics
@@ -59,8 +58,8 @@
             ))
             view.configure(
                 systems: systems, pageStartY: pageStartY,
-                titleFrame: titleFrame, metrics: metrics,
-                pageSize: pageSize, margins: margins,
+                titleFrame: titleFrame, frames: frames, titleImages: titleImages,
+                metrics: metrics, pageSize: pageSize, margins: margins,
             )
             return view
         }
@@ -70,8 +69,8 @@
         ) {
             nsView.configure(
                 systems: systems, pageStartY: pageStartY,
-                titleFrame: titleFrame, metrics: metrics,
-                pageSize: pageSize, margins: margins,
+                titleFrame: titleFrame, frames: frames, titleImages: titleImages,
+                metrics: metrics, pageSize: pageSize, margins: margins,
             )
         }
     }
@@ -99,6 +98,8 @@
             systems: [LayoutSystem],
             pageStartY: CGFloat,
             titleFrame: LayoutTitleFrame?,
+            frames: [LayoutFrame],
+            titleImages: [LayoutFrameImage],
             metrics: StaffMetrics,
             pageSize: CGSize,
             margins: PageMargins,
@@ -112,6 +113,8 @@
                 pageStartY: pageStartY,
                 titleHash: titleFrame?.texts.map(\.text)
                     .joined(separator: "|"),
+                frames: frames,
+                titleImages: titleImages,
                 pageSize: pageSize,
                 margins: margins,
                 staffSize: metrics.staffHeight,
@@ -139,6 +142,15 @@
                 }
             }
 
+            // The title's pictures and the boxes between systems, from the screen's builder.
+            let boxes = Self.boxLayers(
+                titleFrame: titleFrame, titleImages: titleImages, frames: frames,
+                pageStartY: pageStartY, pageSize: pageSize, margins: margins,
+            )
+            for box in boxes {
+                host.addSublayer(box)
+            }
+
             // Systems — reuse the proven ScoreLayerBuilder output.
             for system in systems {
                 let systemLayer = SheetMusicUI
@@ -164,6 +176,8 @@
         let firstSystemId: ObjectIdentifier?
         let pageStartY: CGFloat
         let titleHash: String?
+        let frames: [LayoutFrame]
+        let titleImages: [LayoutFrameImage]
         let pageSize: CGSize
         let margins: PageMargins
         let staffSize: CGFloat

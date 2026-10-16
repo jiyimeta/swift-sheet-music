@@ -79,7 +79,9 @@ public struct ScoreView: View {
     /// a system that it does not span from end to end, only the measures
     /// whose frame meets it and the system-level spanners whose span
     /// does. That second half is what a horizontal document needs, being
-    /// one system. Pass the viewport already grown by however much should
+    /// one system. The boxes between systems (`LayoutDocument.frames`)
+    /// are mounted by the same test as whole systems; the title block
+    /// always is. Pass the viewport already grown by however much should
     /// be ready beyond it — the view adds no margin of its own. `nil`, the
     /// default, mounts everything. The view keeps the document's full
     /// size either way, so scrolling, hit testing and anything else that
@@ -170,13 +172,11 @@ public struct ScoreView: View {
         // notehead positions off the LayoutEngine's coords.
         //
         // The title frame (when present) sits at y=0; system
-        // `origin.y` already accounts for its height.
+        // `origin.y` already accounts for its height. A box between
+        // systems sits at its own `originY`, like a system.
         ZStack(alignment: .topLeading) {
-            if let titleFrame = doc.titleFrame {
-                TitleFrameView(
-                    frame: titleFrame, width: doc.size.width,
-                )
-            }
+            Self.titleBlock(of: doc)
+            Self.mountedFrames(of: doc, in: visibleRect)
             // Identified by the system's index in the WHOLE document, so
             // a system keeps its view (and its layer tree) as others
             // mount and unmount around it.
@@ -230,11 +230,8 @@ public struct ScoreView: View {
             // (selection highlight, playback cursor) cheap.
             ZStack(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 0) {
-                    if let titleFrame = doc.titleFrame {
-                        TitleFrameView(
-                            frame: titleFrame, width: doc.size.width,
-                        )
-                    }
+                    // No frames here: horizontal mode lays out none, but the title's pictures come with it.
+                    Self.titleBlock(of: doc)
                     SystemLayerView(
                         system: system, metrics: doc.metrics,
                         selection: selection,
@@ -280,14 +277,6 @@ extension ScoreView {
             return system.origin.y + system.size.height + 1 >= visibleRect.minY
                 && system.origin.y <= visibleRect.maxY
         }
-    }
-
-    /// Indices of the frames between systems (`LayoutDocument.frames`) that `visibleRect` meets, by the systems'
-    /// test, one point of slack below each included — every index when it is `nil`.
-    ///
-    /// W7 Task 14 Phase A stub: mounts none yet.
-    nonisolated static func mountedFrameIndices(of doc: LayoutDocument, in visibleRect: CGRect?) -> [Int] {
-        []
     }
 
     /// The part of `system` that `visibleRect` reaches, in the system's

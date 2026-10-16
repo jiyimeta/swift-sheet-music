@@ -49,7 +49,9 @@ extension PDFExporter {
     }
 
     /// Draw `sheets` — pages of `document` that the caller has already paginated — to a PDF, one page per sheet, each
-    /// at its own size and margins. The first sheet carries `document.titleFrame`. `score` supplies the page chrome
+    /// at its own size and margins. The first sheet carries `document.titleFrame` and its pictures
+    /// (`document.titleImages`); each sheet draws the boxes between systems that `frames(of:in:)` gives it, so a host's
+    /// own `Sheet`s need no field for them. `score` supplies the page chrome
     /// (`score.style.pageChrome` and `score.metaTags`), drawn into each sheet's margins as `export(score:options:)`
     /// draws it, which is now built on this. An empty `sheets` still yields a one-page PDF (CoreGraphics writes a page
     /// of its default size); pass a sheet with no systems to choose that page's size.
@@ -72,11 +74,14 @@ extension PDFExporter {
         else {
             throw PDFExportError.contextCreationFailed
         }
+        let sheetFrames = frames(of: sheets, in: document)
         for (idx, sheet) in sheets.enumerated() {
             let view = PDFPageView(
                 systems: sheet.systems,
                 pageStartY: sheet.pageStartY,
                 titleFrame: idx == 0 ? document.titleFrame : nil,
+                frames: sheetFrames[idx],
+                titleImages: idx == 0 ? document.titleImages : [],
                 metrics: document.metrics,
                 pageSize: sheet.pageSize,
                 margins: sheet.margins,
@@ -117,9 +122,8 @@ extension PDFExporter {
     /// to the sheet whose first system follows it — the sheet whose `[previous sheet's last system bottom, its own last
     /// system bottom)` holds it — and the last sheet takes every frame below the sheets before it. Not
     /// `pageStartY ..< next sheet's pageStartY`: a host whose sheet starts at its first system's top would leave the
-    /// frame above that system on the sheet before. A sheet with no systems other than the last holds none.
-    ///
-    /// Not drawn yet: `export(document:sheets:…)` passes these to `PDFPageView` once it draws frames (W7 Task 14).
+    /// frame above that system on the sheet before. A sheet with no systems other than the last holds none. One entry
+    /// per sheet, in order: what `export(document:sheets:…)` draws on each.
     static func frames(of sheets: [Sheet], in document: LayoutDocument) -> [[LayoutFrame]] {
         var lower = -CGFloat.infinity
         var result: [[LayoutFrame]] = []
