@@ -3,9 +3,10 @@ import SheetMusicFoundation
 
 /// A direction's words, metronome and rehearsal marks as the elements MuseScore makes of them (`P2:3525-3699`), in
 /// its `else if` order: a tempo text by its words, a tempo line (decided here, made by its own decoder), a Sticking,
-/// then — when the direction has words, a rehearsal or a metronome — a tempo text by its sound tempo, or else a staff
-/// text, a system text, a play-technique annotation or an Expression, or else its rehearsal marks; a direction with
-/// none of those but a sound tempo is a hidden tempo. Only one of these is made.
+/// a dynamic range's hyphen (which makes nothing here), then — when the direction has words, a rehearsal or a
+/// metronome — a tempo text by its sound tempo, or else a staff text, a system text, a play-technique annotation or an
+/// Expression, or else its rehearsal marks; a direction with none of those but a sound tempo is a hidden tempo. Only
+/// one of these is made.
 extension MusicXMLDirectionDecoder {
     static func appendTexts(
         _ facts: MusicXMLDirectionFacts, staff: Int, tick: Fraction, context: Context, to output: inout Output,
@@ -34,6 +35,8 @@ extension MusicXMLDirectionDecoder {
         default:
             break
         }
+        // The hyphen of a dynamic range belongs to its dynamic (`appendDynamics`), which is all it makes.
+        if isLikelyDynamicRange(facts, context: context) { return }
         guard !words.isEmpty || !facts.rehearsals.isEmpty || facts.hasMetronome else {
             appendHiddenTempo(facts, tick: tick, context: context, to: &output)
             return

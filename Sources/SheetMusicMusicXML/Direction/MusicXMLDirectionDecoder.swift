@@ -39,18 +39,9 @@ enum MusicXMLDirectionDecoder {
         let staff = staffIndex(direction, staffCount: context.staffCount)
         let tick = context.now + offset(direction, context: context)
         var output = Output()
-        for type in direction.all("direction-type") {
-            for dynamics in type.all("dynamics") {
-                // `other-dynamics` is a dynamic spelled in words; a later direction kind reads it.
-                for mark in dynamics.children where mark.name != "other-dynamics" {
-                    let dynamic = Dynamic(subtype: mark.name, velocity: Dynamic.defaultVelocity(for: mark.name))
-                    output.events.append(MusicXMLDirectionEvent(
-                        measure: context.measure, staff: staff, tick: tick, payload: .voice(.dynamic(dynamic)),
-                    ))
-                }
-            }
-        }
-        appendTexts(MusicXMLDirectionFacts(direction), staff: staff, tick: tick, context: context, to: &output)
+        let facts = MusicXMLDirectionFacts(direction, infers: context.options.inferTextType)
+        appendDynamics(facts, staff: staff, tick: tick, context: context, to: &output)
+        appendTexts(facts, staff: staff, tick: tick, context: context, to: &output)
         return output
     }
 

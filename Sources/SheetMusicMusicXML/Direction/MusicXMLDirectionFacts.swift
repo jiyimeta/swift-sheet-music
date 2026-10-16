@@ -24,6 +24,16 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
     var rehearsals: [RehearsalMark] = []
     /// What `<sound>` says — its `tempo` already replaced by the metronome's when it has none.
     var sound = MusicXMLSoundFacts()
+    /// MuseScore's `m_dynamicsList`: every `<dynamics>` child in order — an `<other-dynamics>` as its text, any other
+    /// as its element name (`P2:4218-4225`) — then, when inferring, each `<words>` that is a dynamic, as its subtype
+    /// (`textToDynamic`, `P2:4535-4537`).
+    var dynamics: [String] = []
+    /// `color` on the last `<dynamics>` (`m_dynamicsColor`, `P2:4216`).
+    var dynamicsColor: ScoreColor?
+    /// MuseScore's `m_dynaVelocity` as a number, `nil` while it is empty: a words dynamic sets it to its table
+    /// velocity ÷ 0.9 (`P2:4536`), then each `<sound>` sets it again to its `dynamics` (`P2:4124`) — a value that is no
+    /// number reads as 0 (`String::toDouble`).
+    var dynamicsVelocity: Double?
 
     /// The metronome's text is not empty (MuseScore's non-empty `m_metroText`).
     var hasMetronome: Bool {
@@ -35,7 +45,9 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
         metronome?.xmlText ?? ""
     }
 
-    init(_ direction: XMLTreeNode) {
+    /// `infers` is `MusicXMLImportOptions.inferTextType`, which lets words be a dynamic; `finale` reads them with
+    /// Finale's letters (the exporter is Finale, `P2:4519`).
+    init(_ direction: XMLTreeNode, infers: Bool, finale: Bool = false) {
         let explicitPlacement = direction.attributes["placement"].flatMap { $0.isEmpty ? nil : $0 }
         isSystem = direction.attributes["system"] == "only-top"
         var defaultY: Double?
@@ -45,7 +57,7 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
                 defaultY = child.attributes["default-y"].flatMap { Double($0) }.map { $0 * -0.1 }
                 visible = child.attributes["print-object"] != "no"
                 color = child.attributes["color"].flatMap { MusicXMLColor.parse($0) }
-                read(child)
+                read(child, infers: infers, finale: finale)
             }
         }
         placement = explicitPlacement ?? defaultY.map { $0 < 0 ? "above" : "below" }
@@ -53,6 +65,7 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
         rehearsals = MusicXMLRehearsalDecoder.decode(direction)
         for node in direction.all("sound") {
             sound.read(node)
+            dynamicsVelocity = sound.dynamics.flatMap { $0.isEmpty ? nil : (Double($0) ?? 0) }
         }
         // Sibelius 7.1.3 writes a metronome without `<sound tempo>`: the metronome's tempo stands in, before anything
         // reads the tempo (`P2:3494-3499`).
@@ -63,10 +76,22 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
 
     /// One `<direction-type>` child's contribution to the words (`P2:4037-4103`). `<segno/>` and `<coda/>` add
     /// nothing here: the repeat decoding owns their glyph.
-    private mutating func read(_ child: XMLTreeNode) {
+    private mutating func read(_ child: XMLTreeNode, infers: Bool, finale: Bool) {
         switch child.name {
         case "words":
-            wordsXML += MusicXMLFormattedWords.xmlText(of: child)
+            let part = MusicXMLFormattedWords.xmlText(of: child)
+            // `textToDynamic` takes each `<words>` that is a dynamic out of the words (`P2:4044`).
+            if infers, let subtype = MusicXMLDynamicText.wordsDynamic(part, finale: finale) {
+                dynamics.append(subtype)
+                dynamicsVelocity = (Double(Dynamic.defaultVelocity(for: subtype)) / 0.9).rounded()
+            } else {
+                wordsXML += part
+            }
+        case "dynamics":
+            dynamicsColor = child.attributes["color"].flatMap { MusicXMLColor.parse($0) }
+            for mark in child.children {
+                dynamics.append(mark.name == "other-dynamics" ? mark.text : mark.name)
+            }
         case "metronome":
             metronome = MusicXMLMetronome.parse(child)
         case "eyeglasses":

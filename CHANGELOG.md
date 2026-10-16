@@ -26,6 +26,10 @@ and this project adheres to
   at the tempo it exported, not 120), a hidden "♩ = N" for a bare `<sound tempo>`, and a second tempo on a tick that
   already holds one is dropped, across parts. With the new internal text-type inference, words such as "Allegro" and
   "a tempo" are tempo texts.
+- **MusicXML dynamics as MuseScore reads them** — `<sound dynamics>` sets the velocity (×0.9, clamped), `<other-dynamics>`
+  text keeps its words ("subito p" is a `p` with its own text), several elements in one `<dynamics>` are several
+  dynamics, two dynamics joined by a hyphen are one, and — with text-type inference — words that are a dynamic ("mf",
+  "sfz") become one. A dynamic takes the `<dynamics>` color and the direction's `print-object`.
 
 ### Fixed
 
