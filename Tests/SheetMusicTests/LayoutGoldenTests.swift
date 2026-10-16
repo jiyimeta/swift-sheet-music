@@ -285,6 +285,16 @@
         /// the empty bar's 109.20 pt — the symbol, from x 14 to 76.69, still ends 29 pt short of its barline — and
         /// the two bars after it, the system and the block shift left by the 32.09 pt it gave up. Wrapped, every
         /// block is identical: there the bars already stretched past what their symbols need.
+        ///
+        /// **Re-recorded 2026-10-15 for import-fidelity W7 (frames and images), after reading the diff** against the
+        /// W6 digest above. 6 of 4063 lines changed (4057 identical), all in the `wrap=true` blocks of `repeat52` and
+        /// `repeat53` — the only top-level fixtures with a box after the title, a `<TBox>` before measure 0. In each,
+        /// that TBox is now laid out between the title block and system 0, which moves down by 80.669 pt (title →
+        /// TBox 1 sp, the title's `bottomGap`; the TBox's own 17.669 pt; TBox → system 8 sp, its `bottomGap`): the
+        /// `size=` height grows 173.264 → 253.933, `sys[0]`'s origin.y goes 70 → 150.669, and one new `frames` line
+        /// lists the box. The `wrap=false` blocks lay out no frames and did not change; no fixture has an `<HBox>`,
+        /// a second `<VBox>` or a picture, so W7's other geometry is pinned by its own suites
+        /// (`FrameStreamPlacerTests`, `FrameLayoutTests`, `HorizontalFrameLayoutTests`, `LayoutPaginatorTests`).
         private static let expectedDigestSHA256 =
             "df99d64e173776786c17bbeff86012cacf48447e74ceaa26263d149227d71664"
 
