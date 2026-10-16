@@ -332,5 +332,10 @@ public enum LayoutEngine {
         /// mode (`includeTitleFrame && wrapToViewWidth`). A defaulted `var` so the memberwise initializer keeps its
         /// other call sites (`NoteInputPipelineBenchmark`) compiling.
         var frameBreaks: Set<Int> = []
+        /// Room in points before measure `m` for the HBoxes of `score.frameStream` that sit there: each is
+        /// `(widthSp ?? 5) + (topGapSp ?? 0) + (bottomGapSp ?? 0)` spatium (MS `box.cpp:71-74`), summed over
+        /// consecutive boxes, for `m` in `1 ..< measureCount` only. Where `m` opens a system the room is dropped. A
+        /// defaulted `var` for the same reason as `frameBreaks`.
+        var horizontalGaps: [Int: CGFloat] = [:]
     }
 }
