@@ -15,6 +15,12 @@ and this project adheres to
   `<backup>` and `<forward>` move it, a direction's `<offset>` is added) and splices a direction's element into the
   staff named by `<staff>` at that tick, jogging the voice exactly as MuseScore's `<location>` does. The first
   direction to use it is a dynamic named by its element (`<f/>`, `<mp/>`), imported with MuseScore's velocity.
+- **MusicXML words become the text MuseScore makes of them** — a `<direction>`'s `<words>` import as a staff text, a
+  system text (`system="only-top"`), an Expression (italic words below the staff), a play-technique annotation (from
+  `<sound pizzicato>`, `<play>`, or — with the new internal text-type inference — words such as "pizz." and "con sord."),
+  or a Sticking, with `font-weight`, `font-style`, `underline`, `line-through`, `font-size`, `font-family` and `color`
+  kept as markup. A rehearsal mark now sits at its real tick on the direction's staff, and loses to words in the same
+  direction, as in MuseScore.
 
 ### Fixed
 

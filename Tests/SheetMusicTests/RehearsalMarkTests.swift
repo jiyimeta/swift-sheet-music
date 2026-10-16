@@ -254,4 +254,39 @@ struct RehearsalMarkTests {
             } ?? []
         #expect(marks.first?.frame == TextFrameType.rectangle)
     }
+
+    private typealias F = DirectionFixtures
+
+    private static func rehearsals(_ score: Score) -> [(position: MeasurePosition, mark: RehearsalMark)] {
+        F.lane(score).compactMap { entry -> (position: MeasurePosition, mark: RehearsalMark)? in
+            guard case let .rehearsalMark(mark) = entry.element else { return nil }
+            return (entry.position, mark)
+        }
+    }
+
+    private static func staffTexts(_ score: Score) -> [(position: MeasurePosition, text: StaffText)] {
+        F.lane(score).compactMap { entry -> (position: MeasurePosition, text: StaffText)? in
+            guard case let .staffText(text) = entry.element else { return nil }
+            return (entry.position, text)
+        }
+    }
+
+    @Test("a rehearsal mark sits at its real tick")
+    func rehearsalAtItsRealTick() throws {
+        let body = F.quarter("C") + F.quarter("D")
+            + F.direction("<rehearsal>A</rehearsal>") + F.quarter("E") + F.quarter("F")
+        let marks = try Self.rehearsals(F.score(measures: [body]))
+        #expect(marks.count == 1)
+        #expect(marks.first?.position == MeasurePosition(numerator: 1, denominator: 2))
+        #expect(marks.first?.mark.text == "A")
+    }
+
+    @Test("words in a direction beat its rehearsal mark (P2:3564-3614)")
+    func wordsBeatRehearsal() throws {
+        let body = F.direction(F.words("Solo") + "</direction-type><direction-type><rehearsal>A</rehearsal>")
+            + F.fourQuarters
+        let score = try F.score(measures: [body])
+        #expect(Self.rehearsals(score).isEmpty)
+        #expect(Self.staffTexts(score).map(\.text.text) == ["Solo"])
+    }
 }

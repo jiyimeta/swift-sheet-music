@@ -15,10 +15,20 @@ enum MusicXMLDirectionDecoder {
         var now: Fraction
         var divisions: DivisionsContext
         var options: MusicXMLImportOptions
+        /// The part's index in the score: a direction on part 0's first staff is on the score's top staff.
+        var partIndex = 0
+    }
+
+    /// A system-lane element the direction made, on a staff of the part, at a position in the measure.
+    struct SystemPlacement: Sendable, Equatable {
+        let staff: Int
+        let position: MeasurePosition
+        let element: SystemElement
     }
 
     struct Output: Sendable, Equatable {
         var events: [MusicXMLDirectionEvent] = []
+        var systemElements: [SystemPlacement] = []
     }
 
     static func decode(_ direction: XMLTreeNode, context: Context) -> Output {
@@ -36,6 +46,7 @@ enum MusicXMLDirectionDecoder {
                 }
             }
         }
+        appendTexts(MusicXMLDirectionFacts(direction), staff: staff, tick: tick, context: context, to: &output)
         return output
     }
 

@@ -25,15 +25,15 @@ struct MusicXMLComparatorTests {
     private static let dynamic = VoiceElement.dynamic(Dynamic(subtype: "p", velocity: 49))
     private static let wedgeEnd = VoiceElement.spanner(Spanner(kind: .hairpin, rawType: "HairPin", visible: false))
 
-    @Test("staff text is compared once the strip is switched off")
+    @Test("staff text is compared unless the strip is switched on")
     func staffTextIsCompared() {
         let with = Self.score(lane: [Self.text], voice: [Self.quarter])
         let without = Self.score(voice: [Self.quarter])
-        var keep = ScoreSemanticComparison.Options()
-        keep.stripsStaffText = false
-        #expect(ScoreSemanticComparison.normalize(with, options: keep)
-            != ScoreSemanticComparison.normalize(without, options: keep))
-        #expect(ScoreSemanticComparison.normalize(with) == ScoreSemanticComparison.normalize(without))
+        #expect(ScoreSemanticComparison.normalize(with) != ScoreSemanticComparison.normalize(without))
+        var strip = ScoreSemanticComparison.Options()
+        strip.stripsStaffText = true
+        #expect(ScoreSemanticComparison.normalize(with, options: strip)
+            == ScoreSemanticComparison.normalize(without, options: strip))
     }
 
     @Test("a run of untimed annotations compares equal in any order when asked")

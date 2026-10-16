@@ -6,7 +6,7 @@ extension Score {
     /// Decode a parsed MusicXML root node into a `Score`.
     /// Rejects `<score-timewise>` with an explicit error; the rest of the
     /// library assumes the partwise layout.
-    static func decodeMusicXML(_ root: XMLTreeNode) throws -> Score {
+    static func decodeMusicXML(_ root: XMLTreeNode, options: MusicXMLImportOptions = .default) throws -> Score {
         switch root.name {
         case "score-partwise":
             break
@@ -38,7 +38,7 @@ extension Score {
                 ),
             )
         }
-        let (parts, systemMeasures) = try decodeParts(root: root, partList: partList)
+        let (parts, systemMeasures) = try decodeParts(root: root, partList: partList, options: options)
 
         // Hard-code division = 480 ticks per quarter, matching MuseScore's default
         // and the `*_ref.mscx` fixtures we semantic-compare against. MusicXML's
@@ -118,6 +118,7 @@ extension Score {
     private static func decodeParts(
         root: XMLTreeNode,
         partList: XMLTreeNode,
+        options: MusicXMLImportOptions,
     ) throws -> (parts: [Part], systemMeasures: [SystemMeasure]) {
         let scoreParts = partList.all("score-part")
         var parts: [Part] = []
@@ -132,6 +133,7 @@ extension Score {
                 scoreParts: scoreParts,
                 index: index,
                 partIndex: parts.count,
+                options: options,
             )
             parts.append(part)
             perStaffSystemElements.append(contentsOf: staffElements)
@@ -170,6 +172,7 @@ extension Score {
         scoreParts: [XMLTreeNode],
         index: Int,
         partIndex: Int,
+        options: MusicXMLImportOptions,
     ) throws -> (part: Part, staffElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])]) {
         let id = partNode.attributes["id"] ?? ""
         guard let scorePart = scoreParts.first(where: { $0.attributes["id"] == id })
@@ -190,6 +193,8 @@ extension Score {
         let walker = try MusicXMLMeasureWalker.decode(
             partNode: partNode,
             drumTable: prelimDrumTable,
+            options: options,
+            partIndex: partIndex,
         )
         let (partTemplate, _, instrumentByID) = try Part.decodeMusicXML(
             scorePart: scorePart,
@@ -222,8 +227,7 @@ extension Score {
         }
         // Mid-score instrument changes have no per-staff home in
         // MusicXML (they're a part-wide playback concept) — lift them
-        // onto staff 0, matching where rehearsal marks and other
-        // system-flagged elements already land.
+        // onto staff 0.
         let instrumentChangesByMeasure = MusicXMLInstrumentChangeDecoder.decode(
             partNode: partNode,
             instrumentByID: instrumentByID,

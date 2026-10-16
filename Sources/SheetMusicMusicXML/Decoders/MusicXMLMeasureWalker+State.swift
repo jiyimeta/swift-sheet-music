@@ -10,11 +10,17 @@ struct MusicXMLMeasureState {
     let measureIndex: Int
     let staffCount: Int
     var directionEvents: [MusicXMLDirectionEvent] = []
+    /// The import's options, which the direction decoder reads (text-type inference).
+    let options: MusicXMLImportOptions
+    /// The part's index in the score.
+    let partIndex: Int
 
-    init(measureIndex: Int, staffCount: Int) {
+    init(measureIndex: Int, staffCount: Int, options: MusicXMLImportOptions, partIndex: Int) {
         builders = (0 ..< staffCount).map { _ in StaffMeasureBuilder() }
         self.measureIndex = measureIndex
         self.staffCount = staffCount
+        self.options = options
+        self.partIndex = partIndex
     }
 }
 
@@ -99,32 +105,31 @@ extension MusicXMLMeasureWalker {
         )
     }
 
-    /// One `<direction>`: navigation and rehearsal marks as before, and every other kind through
-    /// `MusicXMLDirectionDecoder` at the clock.
+    /// One `<direction>`: navigation as before, and every other kind through `MusicXMLDirectionDecoder` at the
+    /// clock — voice elements as events, texts and rehearsal marks into the lane of the direction's staff.
     static func decodeDirectionChild(
         _ child: XMLTreeNode, state: inout MusicXMLMeasureState, divisions: DivisionsContext,
     ) {
         // MuseScore attaches measure-level jumps/markers to the first staff only, matching the .mscx layout where
         // they live on `<Staff id="1">`'s `<Measure>`.
         let navigation = MusicXMLJumpDecoder.decode(child)
-        // Rehearsal marks ride on the same `<direction>` element as a `<direction-type><rehearsal>` child. Attach to
-        // staff 0 so they match the MSCX `RehearsalMark` shape (system-flagged, drawn once above the top staff).
-        let rehearsals = MusicXMLRehearsalDecoder.decode(child)
         if !state.builders.isEmpty {
             state.builders[0].addMarkers(navigation.markers)
             state.builders[0].addJumps(navigation.jumps)
-            for mark in rehearsals {
-                state.builders[0].addRehearsalMark(mark)
-            }
         }
         let context = MusicXMLDirectionDecoder.Context(
             measure: state.measureIndex,
             staffCount: state.staffCount,
             now: state.clock.now,
             divisions: divisions,
-            options: MusicXMLImportOptions.default,
+            options: state.options,
+            partIndex: state.partIndex,
         )
-        state.directionEvents += MusicXMLDirectionDecoder.decode(child, context: context).events
+        let output = MusicXMLDirectionDecoder.decode(child, context: context)
+        state.directionEvents += output.events
+        for placed in output.systemElements where state.builders.indices.contains(placed.staff) {
+            state.builders[placed.staff].addSystemElement(placed.element, at: placed.position)
+        }
     }
 
     /// `<forward>` and `<backup>` move the clock by their `<duration>` (`P2:2862-2887`); one without a positive

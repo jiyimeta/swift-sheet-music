@@ -8,18 +8,17 @@ import SheetMusicXMLTools
 enum MusicXMLRehearsalDecoder {
     /// Pull every rehearsal mark out of a single `<direction>`. A direction
     /// can in principle hold several `<rehearsal>` siblings (one per
-    /// part), so we iterate.
+    /// part), so we iterate — over every `<direction-type>`, as MuseScore's `directionType` reads each one.
     static func decode(_ direction: XMLTreeNode) -> [RehearsalMark] {
-        guard let directionType = direction.first("direction-type") else {
-            return []
-        }
         var result: [RehearsalMark] = []
-        for child in directionType.children where child.name == "rehearsal" {
-            let text = plainText(of: child)
-            let frame = frameKind(
-                forEnclosure: child.attributes["enclosure"],
-            )
-            result.append(RehearsalMark(text: text, frame: frame))
+        for directionType in direction.all("direction-type") {
+            for child in directionType.children where child.name == "rehearsal" {
+                let text = plainText(of: child)
+                let frame = frameKind(
+                    forEnclosure: child.attributes["enclosure"],
+                )
+                result.append(RehearsalMark(text: text, frame: frame))
+            }
         }
         return result
     }

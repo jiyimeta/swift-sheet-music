@@ -34,6 +34,8 @@ enum MusicXMLMeasureWalker {
     static func decode(
         partNode: XMLTreeNode,
         drumTable: MusicXMLDrumTable = MusicXMLDrumTable(),
+        options: MusicXMLImportOptions = .default,
+        partIndex: Int = 0,
     ) throws -> PartResult {
         let staffCount = detectStaffCount(partNode: partNode)
         var divisions = DivisionsContext(perQuarter: 1)
@@ -66,6 +68,8 @@ enum MusicXMLMeasureWalker {
                 measureIndex: index,
                 glideTracker: &glideTracker,
                 directionEvents: &directionEvents,
+                options: options,
+                partIndex: partIndex,
             )
             for (staffIdx, item) in built.enumerated() {
                 perStaffMeasures[staffIdx].append(item.measure)
@@ -155,8 +159,12 @@ enum MusicXMLMeasureWalker {
         measureIndex: Int,
         glideTracker: inout MusicXMLGlideTracker,
         directionEvents: inout [MusicXMLDirectionEvent],
+        options: MusicXMLImportOptions,
+        partIndex: Int,
     ) throws -> [StaffMeasureBuilder.Built] {
-        var state = MusicXMLMeasureState(measureIndex: measureIndex, staffCount: staffCount)
+        var state = MusicXMLMeasureState(
+            measureIndex: measureIndex, staffCount: staffCount, options: options, partIndex: partIndex,
+        )
         for child in measureNode.children {
             switch child.name {
             case "attributes":

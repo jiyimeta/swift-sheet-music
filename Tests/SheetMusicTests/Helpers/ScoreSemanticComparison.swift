@@ -31,8 +31,9 @@ enum ScoreSemanticComparison {
         var ignoreInstrumentPlaybackFields = true
         /// Additional meta-tag keys to drop from both sides before comparing.
         var ignoreMetaTagKeys: Set<String> = []
-        /// If true (default), drop every `.staffText` system element before comparing.
-        var stripsStaffText = true
+        /// If true, drop every `.staffText` system element before comparing. Off by default since the MusicXML
+        /// importer reads `<words>` as MuseScore does.
+        var stripsStaffText = false
         /// If true, stable-sort each run of untimed annotations (MuseScore's order inside a segment is arbitrary).
         var sortsAnnotationRuns = false
         /// If true, clear line geometry (hook heights, dash lengths) that MusicXML cannot carry.

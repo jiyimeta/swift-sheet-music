@@ -130,6 +130,20 @@ enum DirectionFixtures {
         }
     }
 
+    static func expressions(in voice: Voice) -> [(tick: Int, expression: ExpressionText)] {
+        placed(voice).compactMap { entry -> (tick: Int, expression: ExpressionText)? in
+            guard case let .expression(expression) = entry.element else { return nil }
+            return (entry.tick, expression)
+        }
+    }
+
+    static func stickings(in voice: Voice) -> [(tick: Int, sticking: Sticking)] {
+        placed(voice).compactMap { entry -> (tick: Int, sticking: Sticking)? in
+            guard case let .sticking(sticking) = entry.element else { return nil }
+            return (entry.tick, sticking)
+        }
+    }
+
     static func spanners(in voice: Voice) -> [(tick: Int, spanner: Spanner)] {
         placed(voice).compactMap { entry -> (tick: Int, spanner: Spanner)? in
             guard case let .spanner(spanner) = entry.element else { return nil }

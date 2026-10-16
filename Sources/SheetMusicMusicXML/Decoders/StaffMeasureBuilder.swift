@@ -19,9 +19,8 @@ struct StaffMeasureBuilder {
     private var trailingBarline: BarLine?
     private var markers: [Marker] = []
     private var jumps: [Jump] = []
-    /// System-level elements lifted out during decode (currently
-    /// just rehearsal marks; tempo / staff text / swing imports
-    /// would feed into this once added). The caller pulls these
+    /// System-level elements lifted out during decode (rehearsal
+    /// marks and the texts a direction's words make). The caller pulls these
     /// out via `build()` and merges them into `Score.systemMeasures`.
     /// `originalStaff` is left nil here and stamped by the caller
     /// once the staff address is known.
@@ -52,15 +51,9 @@ struct StaffMeasureBuilder {
         jumps.append(contentsOf: newJumps)
     }
 
-    /// Record a rehearsal mark at the start of this measure.
-    /// MusicXML's `<direction-type><rehearsal>` doesn't carry a
-    /// fractional offset so the position defaults to
-    /// `MeasurePosition.start`.
-    mutating func addRehearsalMark(_ mark: RehearsalMark) {
-        systemElements.append(PositionedSystemElement(
-            position: .start,
-            element: .rehearsalMark(mark),
-        ))
+    /// Record a system-lane element (a staff text, a rehearsal mark, …) at `position` in this measure.
+    mutating func addSystemElement(_ element: SystemElement, at position: MeasurePosition) {
+        systemElements.append(PositionedSystemElement(position: position, element: element))
     }
 
     /// Append to the first voice index (MSCX attributes convention). Lazily
