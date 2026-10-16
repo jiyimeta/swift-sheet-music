@@ -232,15 +232,24 @@ function drawCommandList(
         break;
       }
       case "setRotation":
+        // A state command like `setColor`: the next one REPLACES the
+        // rotation and zero clears it. `rotate` composes onto the context's
+        // transform, so the open one is closed first — the wavy glissando sends
+        // one rotation per wiggle and a single reset after the run, and stacking
+        // them left every wiggle but the last on the context. `restore` also
+        // rewinds the fill and stroke style, so a color set inside the rotation
+        // is applied again.
+        if (rotationOpen) {
+          ctx.restore();
+          applyColor();
+          rotationOpen = false;
+        }
         if (command.radians !== 0) {
           ctx.save();
           ctx.translate(command.pivotX * pxPerMM, command.pivotY * pxPerMM);
           ctx.rotate(command.radians);
           ctx.translate(-command.pivotX * pxPerMM, -command.pivotY * pxPerMM);
           rotationOpen = true;
-        } else if (rotationOpen) {
-          ctx.restore();
-          rotationOpen = false;
         }
         break;
       case "setDash":
@@ -262,9 +271,9 @@ function drawCommandList(
   for (const command of commands) {
     paint(command);
   }
-  // A page may end with a rotation still open — the Kotlin renderer's save-count
-  // survives to the end of a band the same way. Close it so the caller's context
-  // is not left transformed.
+  // A page may end with a rotation still open. Close it so the caller's context
+  // is not left transformed — the Kotlin renderer closes it at the end of a run
+  // the same way.
   if (rotationOpen) {
     ctx.restore();
   }

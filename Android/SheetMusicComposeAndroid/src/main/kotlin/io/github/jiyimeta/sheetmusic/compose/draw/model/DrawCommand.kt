@@ -60,7 +60,9 @@ sealed class DrawCommand {
      * subsequent command, until reset with `radians == 0`. A state command
      * like [SetColor]: emit the non-zero rotation, draw the rotated content,
      * then emit `SetRotation(0, 0, 0)` to restore. Arpeggio wiggles (90°)
-     * and glissando labels (gliss angle) use this.
+     * and glissando labels (gliss angle) use this. A non-zero rotation
+     * REPLACES the one in force rather than composing with it — see
+     * `CanvasRotation`.
      */
     data class SetRotation(
         val radians: Double,

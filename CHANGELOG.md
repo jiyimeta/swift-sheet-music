@@ -7,6 +7,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A wavy glissando no longer tilts everything drawn after it on Android and the web.** The draw program's
+  `setRotation` is a state command — the next one replaces the rotation in force — and a wavy glissando sends one per
+  wiggle with a single reset after the run. The Compose renderer and `canvas.ts` stacked each one onto the canvas
+  instead, so the reset undid only the last: the rest of the page (or band) came out rotated by every other wiggle's
+  angle, and a tap no longer landed on the note drawn under it. Both now close the open rotation before opening the
+  next, and close one left open at the end of a run, as the PDF writer and the Windows walker already did. The
+  RenderPreviews CoreGraphics walk had the same fault and is fixed with them.
+
 ## [4.11.0] - 2026-10-16
 
 ### Added

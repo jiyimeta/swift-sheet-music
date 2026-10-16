@@ -254,8 +254,14 @@ private fun DrawScope.drawPage(
                 currentArgb = cmd.argb.toInt()
             }
             is DrawCommand.SetRotation -> {
+                // Replaces the rotation in force rather than stacking on it — see the library's
+                // `CanvasRotation`. The wavy glissando sends one per wiggle and one reset after.
                 drawIntoCanvas { canvas ->
                     val native = canvas.nativeCanvas
+                    if (rotationSaveCount >= 0) {
+                        native.restoreToCount(rotationSaveCount)
+                        rotationSaveCount = -1
+                    }
                     if (cmd.radians != 0.0) {
                         rotationSaveCount = native.save()
                         native.rotate(
@@ -263,9 +269,6 @@ private fun DrawScope.drawPage(
                             cmd.pivotX.toFloat() * pxPerMM,
                             cmd.pivotY.toFloat() * pxPerMM
                         )
-                    } else if (rotationSaveCount >= 0) {
-                        native.restoreToCount(rotationSaveCount)
-                        rotationSaveCount = -1
                     }
                 }
             }
@@ -278,6 +281,7 @@ private fun DrawScope.drawPage(
             }
         }
     }
+    if (rotationSaveCount >= 0) drawIntoCanvas { it.nativeCanvas.restoreToCount(rotationSaveCount) }
 }
 
 private fun codepointToString(cp: Int): String =

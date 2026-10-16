@@ -138,6 +138,10 @@ public enum DrawCommand: Sendable, Equatable {
     /// state opcode like `setColor`: emit the non-zero rotation, draw the
     /// rotated content, then emit `setRotation(0, 0, 0)` to restore.
     /// Used for arpeggio wiggles (90°) and glissando labels (gliss angle).
+    ///
+    /// A non-zero rotation REPLACES the one in force rather than composing with it: the wavy glissando emits one per
+    /// wiggle, each about its own pivot, and a single reset after the run. A renderer whose canvas only stacks
+    /// transforms closes the open rotation before opening the next.
     case setRotation(radians: Double, pivotX: Double, pivotY: Double)
     /// Dash pattern for subsequent stroked paths, in document mm.
     /// `(0, 0)` clears it (solid). State opcode; reset after the dashed

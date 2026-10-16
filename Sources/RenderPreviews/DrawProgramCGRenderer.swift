@@ -135,15 +135,19 @@
                         fontSize: px(fontSize), xScale: CGFloat(xScale), fontId: fontId,
                     )
                 case let .setRotation(radians, pivotX, pivotY):
+                    // A state command like `setColor`: the next one replaces the rotation, so the open one is closed
+                    // first rather than stacked on (the wavy glissando sends one per wiggle and one reset after).
+                    if rotationOpen {
+                        ctx.restoreGState()
+                        applyColor()
+                        rotationOpen = false
+                    }
                     if radians != 0 {
                         ctx.saveGState()
                         ctx.translateBy(x: px(pivotX), y: px(pivotY))
                         ctx.rotate(by: CGFloat(radians))
                         ctx.translateBy(x: -px(pivotX), y: -px(pivotY))
                         rotationOpen = true
-                    } else if rotationOpen {
-                        ctx.restoreGState()
-                        rotationOpen = false
                     }
                 case let .setDash(onMM, offMM):
                     dashOn = px(onMM)

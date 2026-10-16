@@ -127,11 +127,10 @@ internal fun DrawScope.drawCommands(
     var strokeStarted = false
     var currentArgb: Int = android.graphics.Color.BLACK
     // State commands accumulate here. `dash*` gates the stroke path effect;
-    // `rotationSaveCount` tracks the native-canvas save depth for an active
-    // SetRotation so the paired `SetRotation(0)` can restore it.
+    // `rotation` holds the one SetRotation in force on the native canvas.
     var dashOnPx = 0f
     var dashOffPx = 0f
-    var rotationSaveCount = -1
+    val rotation = CanvasRotation()
     // `SetTextStyle`'s bitmask, applied to every subsequent Text / Glyph. Each page starts neutral,
     // which is why this is a local rather than anything the caller carries between pages.
     var textStyleFlags: UByte = DrawCommand.TextStyleFlag.NONE
@@ -277,18 +276,12 @@ internal fun DrawScope.drawCommands(
             }
             is DrawCommand.SetRotation -> {
                 drawIntoCanvas { canvas ->
-                    val native = canvas.nativeCanvas
-                    if (cmd.radians != 0.0) {
-                        rotationSaveCount = native.save()
-                        native.rotate(
-                            Math.toDegrees(cmd.radians).toFloat(),
-                            cmd.pivotX.toFloat() * pxPerMM,
-                            cmd.pivotY.toFloat() * pxPerMM,
-                        )
-                    } else if (rotationSaveCount >= 0) {
-                        native.restoreToCount(rotationSaveCount)
-                        rotationSaveCount = -1
-                    }
+                    rotation.set(
+                        NativeRotationTarget(canvas.nativeCanvas),
+                        cmd.radians,
+                        cmd.pivotX.toFloat() * pxPerMM,
+                        cmd.pivotY.toFloat() * pxPerMM,
+                    )
                 }
             }
             is DrawCommand.SetDash -> {
@@ -300,6 +293,18 @@ internal fun DrawScope.drawCommands(
             }
         }
     }
+    // A run may end with a rotation still open. The native canvas belongs to the host, which may draw more into it
+    // after this run, so close the rotation here rather than let it tilt that drawing.
+    drawIntoCanvas { canvas -> rotation.close(NativeRotationTarget(canvas.nativeCanvas)) }
+}
+
+/** [CanvasRotation.Target] over the native canvas a draw scope paints into. */
+private class NativeRotationTarget(private val canvas: android.graphics.Canvas) : CanvasRotation.Target {
+    override fun save(): Int = canvas.save()
+
+    override fun rotate(degrees: Float, pivotX: Float, pivotY: Float) = canvas.rotate(degrees, pivotX, pivotY)
+
+    override fun restoreToCount(saveCount: Int) = canvas.restoreToCount(saveCount)
 }
 
 /**

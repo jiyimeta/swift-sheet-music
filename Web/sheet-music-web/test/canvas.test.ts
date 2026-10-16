@@ -227,6 +227,30 @@ describe("drawPage", () => {
     expect(countOf(calls, "save")).toBe(countOf(calls, "restore"));
   });
 
+  it("replaces an open rotation instead of stacking a second one on it", () => {
+    // A wavy glissando's shape: one rotation per wiggle, a single reset after.
+    const { ctx, calls } = fakeContext();
+    drawPage(
+      ctx,
+      pageWith([
+        { kind: "setRotation", radians: 0.2, pivotX: 1, pivotY: 1 },
+        { kind: "setRotation", radians: 0.2, pivotX: 2, pivotY: 1 },
+        { kind: "setRotation", radians: 0.2, pivotX: 3, pivotY: 1 },
+        { kind: "setRotation", radians: 0, pivotX: 0, pivotY: 0 },
+        rect(50),
+      ]),
+      1,
+      fonts,
+    );
+    const beforeRect = calls.slice(
+      0,
+      calls.findIndex(([name]) => name === "fillRect"),
+    );
+    // Only `drawPage`'s own bracket is open when the rect is drawn.
+    expect(countOf(beforeRect, "save") - countOf(beforeRect, "restore")).toBe(1);
+    expect(countOf(calls, "save")).toBe(countOf(calls, "restore"));
+  });
+
   it("restores an unpaired rotation at the end of the page", () => {
     const { ctx, calls } = fakeContext();
     drawPage(
