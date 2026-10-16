@@ -117,9 +117,19 @@ extension PDFExporter {
     /// to the sheet whose first system follows it — the sheet whose `[previous sheet's last system bottom, its own last
     /// system bottom)` holds it — and the last sheet takes every frame below the sheets before it. Not
     /// `pageStartY ..< next sheet's pageStartY`: a host whose sheet starts at its first system's top would leave the
-    /// frame above that system on the sheet before.
+    /// frame above that system on the sheet before. A sheet with no systems other than the last holds none.
+    ///
+    /// Not drawn yet: `export(document:sheets:…)` passes these to `PDFPageView` once it draws frames (W7 Task 14).
     static func frames(of sheets: [Sheet], in document: LayoutDocument) -> [[LayoutFrame]] {
-        sheets.map { _ in [] }
+        var lower = -CGFloat.infinity
+        var result: [[LayoutFrame]] = []
+        for (index, sheet) in sheets.enumerated() {
+            let lastBottom = sheet.systems.last.map { $0.origin.y + $0.size.height } ?? lower
+            let upper = index == sheets.count - 1 ? CGFloat.infinity : max(lower, lastBottom)
+            result.append(document.frames.filter { $0.originY >= lower && $0.originY < upper })
+            lower = upper
+        }
+        return result
     }
 
     static func pdfInfo(title: String?, author: String?) -> [String: Any] {

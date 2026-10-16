@@ -76,6 +76,12 @@ import SheetMusicLayout
 /// content bottom, so the count is `pageCount + 1`. Empty when no layout has
 /// been computed for the handle.
 ///
+/// The pages are `LayoutDocument.paginate`'s, frames included: a frames-only
+/// last page starts at the last system's bottom, and the content bottom is
+/// the lowest frame's bottom when that is below the last system (never the
+/// document's bottom margin), so a score without frames reports exactly the
+/// offsets it always did.
+///
 /// Android: `nativePageBreaks`, which returns the same sequence as a
 /// `PageBreaksWire` payload. BridgeJS lowers `[Double]` through the typed-array
 /// fast path, so a wire format would buy nothing here.
@@ -85,20 +91,18 @@ import SheetMusicLayout
     else { return [] }
     let mmToPt = 72.0 / 25.4
     let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
-    let ranges = LayoutPaginator.paginate(
-        systems: entry.document.systems, pageHeight: pageHeightPt, policy: entry.options.breakPolicy,
-    )
-    guard !ranges.isEmpty else { return [] }
+    let ranges = entry.document.paginate(pageHeight: pageHeightPt, policy: entry.options.breakPolicy)
+    guard !ranges.isEmpty, let contentBottom = entry.document.contentBottom else { return [] }
     var offsetsMM: [Double] = []
     for (i, range) in ranges.enumerated() {
         if i == 0 {
             offsetsMM.append(0)
         } else {
+            // An empty (frames-only) range's previous system is the last one, so this index is always valid.
             let previous = entry.document.systems[range.lowerBound - 1]
             offsetsMM.append(Double(previous.origin.y + previous.size.height) / mmToPt)
         }
     }
-    let last = entry.document.systems[entry.document.systems.count - 1]
-    offsetsMM.append(Double(last.origin.y + last.size.height) / mmToPt)
+    offsetsMM.append(Double(contentBottom) / mmToPt)
     return offsetsMM
 }

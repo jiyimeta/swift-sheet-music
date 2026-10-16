@@ -99,23 +99,57 @@
             return wire
         }
 
-        /// Every system fits on one page and the box under the last one does not, so it gets a page of its own, which
-        /// ends at the document's bottom rather than at the last system's.
-        @Test func framesOnlyLastPageEndsAtTheDocumentBottom() throws {
-            let handle = scoreTable.insert(Self.trailingFrameScore())
+        /// Vertical options with a 6 sp bottom margin, so the document's height is not where its content ends.
+        private static func marginedOptions() -> Data {
+            var wire = LayoutOptionsWire.verticalDefault
+            wire.spacing = EngravingSpacingWire(marginBottom: 6)
+            return wire.encodeToData()
+        }
+
+        /// `score` laid out by `nativeComputeLayout` with `options`, then its page breaks on a page `pageHeightMM`
+        /// tall, or — with `nil` — on one a point taller than the last system's bottom.
+        private static func breaks(
+            of score: Score, options: Data, pageHeightMM: Double? = nil,
+        ) throws -> (document: LayoutDocument, offsets: [Double]) {
+            let handle = scoreTable.insert(score)
             defer { LayoutDocumentCache.release(handle); scoreTable.release(handle) }
-            let options = LayoutOptionsWire.verticalDefault.encodeToData()
             _ = nativeComputeLayout(scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297, optionsBlob: options)
             let document = try #require(LayoutDocumentCache.value(for: handle))
             let last = try #require(document.systems.last)
-            let systemsBottom = Double(last.origin.y + last.size.height)
-            try #require(Double(document.size.height) > systemsBottom + 1, "the box must not fit under the last system")
-            let pageHeightMM = (systemsBottom + 1) * Self.ptToMM
-            let offsets = Self.offsets(
-                nativePageBreaks(scoreHandle: handle, pageHeightMM: pageHeightMM, optionsBytes: options),
+            let height = pageHeightMM ?? Double(last.origin.y + last.size.height + 1) * ptToMM
+            let data = nativePageBreaks(scoreHandle: handle, pageHeightMM: height, optionsBytes: options)
+            return (document, offsets(data))
+        }
+
+        /// Every system fits on one page and the box under the last one does not, so it gets a page of its own, which
+        /// ends at the box's bottom — the content's end, not the document's, whose height adds the bottom margin.
+        @Test func framesOnlyLastPageEndsAtTheContentBottom() throws {
+            let result = try Self.breaks(of: Self.trailingFrameScore(), options: Self.marginedOptions())
+            let box = try #require(result.document.frames.last)
+            try #require(result.document.size.height > box.bottom, "the bottom margin must be below the box")
+            #expect(result.offsets.count == 3)
+            #expect(abs((result.offsets.last ?? 0) - Double(box.bottom) * Self.ptToMM) < 1e-6)
+        }
+
+        /// A score without frames reports exactly the offsets it always did: the systems-only cut, ending at the last
+        /// system's bottom however large the bottom margin.
+        @Test func framelessOffsetsAreUnchanged() throws {
+            let result = try Self.breaks(
+                of: Self.pageBreakScore(), options: Self.marginedOptions(), pageHeightMM: 10000,
             )
-            #expect(offsets.count == 3)
-            #expect(abs((offsets.last ?? 0) - Double(document.size.height) * Self.ptToMM) < 1e-6)
+            let document = result.document
+            let mmToPt = 72.0 / 25.4
+            let ranges = LayoutPaginator.paginate(
+                systems: document.systems, pageHeight: CGFloat(10000 * mmToPt), policy: .honor,
+            )
+            let tops = ranges.map { range -> Double in
+                guard range.lowerBound > 0 else { return 0 }
+                let previous = document.systems[range.lowerBound - 1]
+                return Double(previous.origin.y + previous.size.height) / mmToPt
+            }
+            let last = try #require(document.systems.last)
+            #expect(document.frames.isEmpty)
+            #expect(result.offsets == tops + [Double(last.origin.y + last.size.height) / mmToPt])
         }
 
         /// `.page` mode draws a page per `document.paginate` range. On a page no music fills, frames-boxes still takes

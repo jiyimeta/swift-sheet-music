@@ -38,13 +38,16 @@ public enum LayoutPaginator {
         contentBottom: CGFloat? = nil,
     ) -> [Range<Int>] {
         guard !systems.isEmpty, pageHeight > 0 else { return [] }
+        let forced: Set<Int> = policy == .ignoreAll ? [] : forcedBreaksBefore
         var pages: [Range<Int>] = []
         var pageStart = 0
         var pageTopDoc: CGFloat = 0
 
         for (index, system) in systems.enumerated() {
             let systemBottom = system.origin.y + system.size.height
-            if index > pageStart, systemBottom - pageTopDoc > pageHeight {
+            // `index > pageStart` keeps a page's first system on it, so a forced break at 0 (or right after a page
+            // break) adds no empty page.
+            if index > pageStart, forced.contains(index) || systemBottom - pageTopDoc > pageHeight {
                 pages.append(pageStart ..< index)
                 pageStart = index
                 pageTopDoc = systems[index - 1].origin.y
@@ -60,6 +63,9 @@ public enum LayoutPaginator {
         }
         if pageStart < systems.count {
             pages.append(pageStart ..< systems.count)
+        }
+        if let contentBottom, contentBottom - pageTopDoc > pageHeight {
+            pages.append(systems.count ..< systems.count)
         }
         return pages
     }

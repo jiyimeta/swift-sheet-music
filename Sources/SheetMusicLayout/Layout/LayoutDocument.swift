@@ -58,7 +58,41 @@ extension LayoutDocument {
     /// `LayoutPaginator.paginate(systems:pageHeight:policy:)` exactly. Every page-mode caller cuts through here, so the
     /// bridge, wasm, JNI and PDF pages agree on where a frame lands.
     public func paginate(pageHeight: CGFloat, policy: LayoutBreakPolicy) -> [Range<Int>] {
-        LayoutPaginator.paginate(systems: systems, pageHeight: pageHeight, policy: policy)
+        LayoutPaginator.paginate(
+            systems: systems, pageHeight: pageHeight, policy: policy,
+            forcedBreaksBefore: framePageBreaksBefore, contentBottom: trailingFramesBottom,
+        )
+    }
+
+    /// The index of the first system at or below `frame`'s bottom: the system the frame sits above. `nil` for a frame
+    /// after the last system.
+    func systemIndex(below frame: LayoutFrame) -> Int? {
+        systems.firstIndex { $0.origin.y >= frame.bottom }
+    }
+
+    /// The systems a frame's page break starts a page at: the one below each frame whose `pageBreakAfter` is set.
+    package var framePageBreaksBefore: Set<Int> {
+        Set(frames.filter(\.pageBreakAfter).compactMap { systemIndex(below: $0) })
+    }
+
+    /// The systems with a frame between them and the system before (or the title block, for system 0).
+    package var systemsBelowFrames: Set<Int> {
+        Set(frames.compactMap { systemIndex(below: $0) })
+    }
+
+    /// The lowest bottom of the frames after the last system; `nil` when none follows it.
+    package var trailingFramesBottom: CGFloat? {
+        frames.filter { systemIndex(below: $0) == nil }.map(\.bottom).max()
+    }
+
+    /// Where the paginated content ends: the last system's bottom, or the lowest frame's when that is lower. Unlike
+    /// `size.height` it leaves out the bottom margin, so a document without frames ends at its last system exactly as
+    /// it always has. `nil` without systems.
+    package var contentBottom: CGFloat? {
+        guard let last = systems.last else { return nil }
+        let lastBottom = last.origin.y + last.size.height
+        guard let lowest = frames.map(\.bottom).max(), lowest > lastBottom else { return lastBottom }
+        return lowest
     }
 
     /// `subdocument(systems:yOffset:isLastPage:)` for a range that is the last page exactly when it ends at the last
@@ -78,13 +112,26 @@ extension LayoutDocument {
     /// `titleImages` are dropped because only the first page carries them, and that page re-attaches both.
     public func subdocument(systems range: Range<Int>, yOffset: CGFloat, isLastPage: Bool) -> LayoutDocument {
         let slice = systems[range].map { $0.movedBy(dy: yOffset) }
-        let height = slice.map { $0.origin.y + $0.size.height }.max() ?? 0
+        // Half-open bands on the frame's top edge: consecutive pages share their boundary (one page's last system
+        // bottom is the next one's top), so every frame lands on exactly one page.
+        let pageTop = range.lowerBound > 0
+            ? systems[range.lowerBound - 1].origin.y + systems[range.lowerBound - 1].size.height
+            : -CGFloat.infinity
+        let lastSystemBottom = systems[range].last.map { $0.origin.y + $0.size.height } ?? pageTop
+        let pageBottom = isLastPage ? CGFloat.infinity : lastSystemBottom
+        let carried = frames.filter { $0.originY >= pageTop && $0.originY < pageBottom }.map { frame in
+            var moved = frame
+            moved.originY += yOffset
+            return moved
+        }
+        let bottoms = slice.map { $0.origin.y + $0.size.height } + carried.map(\.bottom)
         return LayoutDocument(
-            size: CGSize(width: size.width, height: height),
+            size: CGSize(width: size.width, height: bottoms.max() ?? 0),
             systems: slice,
             metrics: metrics,
             titleFrame: nil,
             chordSymbolCase: chordSymbolCase,
+            frames: carried,
         )
     }
 }

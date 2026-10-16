@@ -132,7 +132,7 @@ extension LayoutBridge {
     ///   runs past the viewport — a measure wider than the line — to that system's right edge, as `.page` widens.
     /// - `.horizontal` — one page sized to `document.size` (both dimensions), since horizontal layout has no
     ///   separate viewport concept — the document *is* the page.
-    /// - `.page` — `document.systems` paginated by `LayoutPaginator` at `pageHeightMM`, each page a
+    /// - `.page` — `document` paginated by `LayoutDocument.paginate` at `pageHeightMM`, each page a
     ///   `pageWidthMM` × `pageHeightMM` slice with its first system lifted to y ≈ 0 (mirrors the original
     ///   inline implementation this was extracted from — see the two comments below for why). No paper margins:
     ///   those are `encodePagesWithSpans`'s, which no wire carries yet.
@@ -229,12 +229,17 @@ extension LayoutBridge {
     /// the title block never renders in `.page` mode — the systems were already shifted down for it, leaving a gap.
     static func pageDocument(_ index: Int, of ranges: [Range<Int>], in document: LayoutDocument) -> LayoutDocument {
         let range = ranges[index]
-        let sub = document.subdocument(systems: range, yOffset: -CGFloat(pageTop(of: range, in: document)))
+        let sub = document.subdocument(
+            systems: range,
+            yOffset: -CGFloat(pageTop(of: range, in: document)),
+            isLastPage: index == ranges.count - 1,
+        )
         guard range.lowerBound == 0 else { return sub }
         return LayoutDocument(
             size: sub.size, systems: sub.systems,
             metrics: sub.metrics, titleFrame: document.titleFrame,
             chordSymbolCase: document.chordSymbolCase,
+            frames: sub.frames, titleImages: document.titleImages,
         )
     }
 

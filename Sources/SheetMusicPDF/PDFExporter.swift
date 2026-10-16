@@ -206,6 +206,9 @@ public enum PDFExporter {
         contentBottom: CGFloat? = nil,
         systemsWithFrameAbove: Set<Int> = [],
     ) -> [PageBatch] {
+        let forced: Set<Int> = policy == .ignoreAll ? [] : forcedBreaksBefore
+        // A frame's page break sits in a frame above the system it breaks before.
+        let framed = systemsWithFrameAbove.union(forcedBreaksBefore)
         var pages: [PageBatch] = []
         var currentSystems: [LayoutSystem] = []
         var currentStartY: CGFloat = 0
@@ -220,49 +223,53 @@ public enum PDFExporter {
             return system.measures.last?.pageBreak ?? false
         }
 
-        for system in systems {
+        /// Where a later page starting with system `index` starts: its own top, or the previous system's bottom when a
+        /// frame sits between the two, so the frame is drawn on this page rather than lost between two.
+        func startY(ofPageAt index: Int) -> CGFloat {
+            guard index > 0, framed.contains(index) else { return systems[index].origin.y }
+            return systems[index - 1].origin.y + systems[index - 1].size.height
+        }
+
+        for (index, system) in systems.enumerated() {
             if currentSystems.isEmpty {
                 // Page 1 always anchors at doc Y = 0 so a leading
                 // title frame (which sits above the first system in
                 // doc coords) lands inside the page's content area
                 // rather than off the top. Without a title, system
                 // 0's origin.y is also 0 — same answer either way.
-                currentStartY = pages.isEmpty ? 0 : system.origin.y
+                currentStartY = pages.isEmpty ? 0 : startY(ofPageAt: index)
                 currentSystems.append(system)
                 if systemEndsPage(system) {
-                    pages.append(PageBatch(
-                        startY: currentStartY,
-                        systems: currentSystems,
-                    ))
+                    pages.append(PageBatch(startY: currentStartY, systems: currentSystems))
                     currentSystems = []
                 }
                 continue
             }
-            let bottomOnPage =
-                (system.origin.y + system.size.height) - currentStartY
-            if bottomOnPage > usableHeight(forPageIndex: pages.count) {
-                pages.append(PageBatch(
-                    startY: currentStartY,
-                    systems: currentSystems,
-                ))
-                currentStartY = system.origin.y
+            let bottomOnPage = (system.origin.y + system.size.height) - currentStartY
+            if forced.contains(index) || bottomOnPage > usableHeight(forPageIndex: pages.count) {
+                pages.append(PageBatch(startY: currentStartY, systems: currentSystems))
+                currentStartY = startY(ofPageAt: index)
                 currentSystems = [system]
             } else {
                 currentSystems.append(system)
             }
             if systemEndsPage(system) && !currentSystems.isEmpty {
-                pages.append(PageBatch(
-                    startY: currentStartY,
-                    systems: currentSystems,
-                ))
+                pages.append(PageBatch(startY: currentStartY, systems: currentSystems))
                 currentSystems = []
             }
         }
+        // The trailing frames join the open page, or the next one when a page break closed the last; as in
+        // `LayoutPaginator`, they get a page of their own only when they do not fit on that one.
+        let lastBottom = systems.last.map { $0.origin.y + $0.size.height }
+        let trailingTop = currentSystems.isEmpty ? lastBottom ?? 0 : currentStartY
+        let trailingPageIndex = pages.count
         if !currentSystems.isEmpty {
-            pages.append(PageBatch(
-                startY: currentStartY,
-                systems: currentSystems,
-            ))
+            pages.append(PageBatch(startY: currentStartY, systems: currentSystems))
+        }
+        if let contentBottom, let lastBottom,
+           contentBottom - trailingTop > usableHeight(forPageIndex: trailingPageIndex)
+        {
+            pages.append(PageBatch(startY: lastBottom, systems: []))
         }
         return pages
     }
@@ -271,7 +278,11 @@ public enum PDFExporter {
     /// `LayoutDocument.paginate(pageHeight:policy:)` derives it, so the PDF and the page-mode readers put every frame
     /// on the same page.
     static func paginate(document: LayoutDocument, page: EngravingPage, policy: LayoutBreakPolicy) -> [PageBatch] {
-        paginate(systems: document.systems, page: page, policy: policy)
+        paginate(
+            systems: document.systems, page: page, policy: policy,
+            forcedBreaksBefore: document.framePageBreaksBefore, contentBottom: document.trailingFramesBottom,
+            systemsWithFrameAbove: document.systemsBelowFrames,
+        )
     }
 
     // MARK: - Resolution
