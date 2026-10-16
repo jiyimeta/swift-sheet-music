@@ -113,12 +113,19 @@ sealed class DrawCommand {
         val x: Double, val y: Double,
         val w: Double, val h: Double,
     ) : DrawCommand() {
+        /**
+         * [data]'s content hash, worked out once per command instead of on every draw: the renderer keys its
+         * decoded-picture cache by it (`ScoreCanvas`), and [hashCode] starts from it. A hash is not identity, so
+         * that cache and [equals] still compare the bytes.
+         */
+        internal val contentHash: Int by lazy(LazyThreadSafetyMode.PUBLICATION) { data.contentHashCode() }
+
         override fun equals(other: Any?): Boolean =
             other is DrawImage && data.contentEquals(other.data) &&
                 x == other.x && y == other.y && w == other.w && h == other.h
 
         override fun hashCode(): Int {
-            var result = data.contentHashCode()
+            var result = contentHash
             result = 31 * result + x.hashCode()
             result = 31 * result + y.hashCode()
             result = 31 * result + w.hashCode()

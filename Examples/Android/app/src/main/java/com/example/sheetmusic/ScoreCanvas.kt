@@ -3,6 +3,7 @@ package com.example.sheetmusic
 import android.graphics.Paint
 import android.graphics.BitmapFactory
 import android.util.LruCache
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.IntOffset
@@ -289,7 +290,11 @@ private fun DrawScope.drawPage(
             is DrawCommand.DrawImage -> {
                 // The wire rect is document mm, top-left origin. A picture BitmapFactory cannot decode
                 // draws nothing, as on the other platforms.
-                val image = decodedImage(cmd.data)
+                val dstSize = IntSize(
+                    (cmd.w.toFloat() * pxPerMM).roundToInt(),
+                    (cmd.h.toFloat() * pxPerMM).roundToInt(),
+                )
+                val image = decodedImage(cmd, dstSize)
                 if (image != null) {
                     drawImage(
                         image = image,
@@ -297,10 +302,9 @@ private fun DrawScope.drawPage(
                             (cmd.x.toFloat() * pxPerMM).roundToInt(),
                             (cmd.y.toFloat() * pxPerMM).roundToInt(),
                         ),
-                        dstSize = IntSize(
-                            (cmd.w.toFloat() * pxPerMM).roundToInt(),
-                            (cmd.h.toFloat() * pxPerMM).roundToInt(),
-                        ),
+                        dstSize = dstSize,
+                        // The bitmap is decoded near, not at, the destination size; filter the resample.
+                        filterQuality = FilterQuality.High,
                     )
                 }
             }
@@ -312,26 +316,77 @@ private fun DrawScope.drawPage(
 private fun codepointToString(cp: Int): String =
     String(intArrayOf(cp), 0, 1)
 
-/** One decoded picture; [bitmap] is null when the bytes are not an image Android can decode. */
-private class DecodedImage(val bitmap: ImageBitmap?, val byteCount: Int)
+/**
+ * One decoded picture. [bytes] are the encoded bytes it came from (a cache hit compares them, so two pictures
+ * whose hashes collide never share a bitmap); [sourceWidth] × [sourceHeight] the picture's own pixel size and
+ * [sampleSize] the `inSampleSize` it was decoded at. [bitmap] is null when the bytes are not an image Android
+ * can decode.
+ */
+private class DecodedImage(
+    val bytes: ByteArray,
+    val bitmap: ImageBitmap?,
+    val sourceWidth: Int,
+    val sourceHeight: Int,
+    val sampleSize: Int,
+    val byteCount: Int,
+)
+
+/** The longest side a picture is decoded at, in pixels: 2048 × 2048 ARGB is 16 MiB, half the cache. */
+private const val MAX_DECODED_SIDE = 2048
 
 /**
- * Decoded `drawImage` pictures, keyed by the content hash of their encoded bytes, so a score repainted on
- * every scroll frame decodes each picture once. Size-bounded by decoded bytes (32 MiB); a failed decode is
- * cached too (as a null bitmap), so an undecodable picture is not retried every frame.
+ * Decoded `drawImage` pictures, keyed by their command's content hash and byte count, so a score repainted on
+ * every scroll frame decodes each picture once. Size-bounded by decoded bytes (32 MiB); since no picture decodes
+ * larger than [MAX_DECODED_SIDE], every one fits, and none is decoded again on each frame for being too big to
+ * keep. A failed decode is cached too (as a null bitmap), so an undecodable picture is not retried every frame.
  */
-private val decodedImages = object : LruCache<Int, DecodedImage>(32 * 1024 * 1024) {
-    override fun sizeOf(key: Int, value: DecodedImage): Int = maxOf(value.byteCount, 1)
+private val decodedImages = object : LruCache<Long, DecodedImage>(32 * 1024 * 1024) {
+    override fun sizeOf(key: Long, value: DecodedImage): Int = maxOf(value.byteCount, 1)
 }
 
-/** The bitmap for [bytes], decoded on first use; null draws nothing. */
-private fun decodedImage(bytes: ByteArray): ImageBitmap? {
-    val key = bytes.contentHashCode()
-    synchronized(decodedImages) {
-        decodedImages.get(key)?.let { return it.bitmap }
+/**
+ * The bitmap for [cmd]'s picture, detailed enough for [dst] pixels; null draws nothing. Decoded on first use,
+ * and again only when a zoom asks for more detail than the cached bitmap has. A hit costs no walk over the bytes
+ * when it is the same array the entry was decoded from (a page's commands are decoded once); a repeated picture
+ * carried in another array is compared byte for byte.
+ */
+private fun decodedImage(cmd: DrawCommand.DrawImage, dst: IntSize): ImageBitmap? {
+    val bytes = cmd.data
+    val key = (cmd.contentHash.toLong() shl 32) or (bytes.size.toLong() and 0xFFFF_FFFFL)
+    val cached = synchronized(decodedImages) { decodedImages.get(key) }
+    if (cached != null && (cached.bytes === bytes || cached.bytes.contentEquals(bytes))) {
+        val bitmap = cached.bitmap ?: return null
+        if (cached.sampleSize <= sampleSizeFor(cached.sourceWidth, cached.sourceHeight, dst)) return bitmap
     }
-    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-    val entry = DecodedImage(decoded?.asImageBitmap(), decoded?.byteCount ?: 0)
+    val entry = decodePicture(bytes, dst)
     synchronized(decodedImages) { decodedImages.put(key, entry) }
     return entry.bitmap
+}
+
+/** Decodes [bytes] in two passes: the header for the pixel size, then the pixels at [sampleSizeFor]'s reduction. */
+private fun decodePicture(bytes: ByteArray, dst: IntSize): DecodedImage {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val width = bounds.outWidth
+    val height = bounds.outHeight
+    if (width <= 0 || height <= 0) {
+        return DecodedImage(bytes, null, 0, 0, 1, 0)
+    }
+    val sampleSize = sampleSizeFor(width, height, dst)
+    val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+    return DecodedImage(bytes, decoded?.asImageBitmap(), width, height, sampleSize, decoded?.byteCount ?: 0)
+}
+
+/**
+ * The `inSampleSize` for a [width] × [height] picture drawn into [dst] pixels: the smallest power of two that
+ * brings its long side down to twice the destination's long side (room for a later zoom before a redecode), and
+ * never above [MAX_DECODED_SIDE].
+ */
+private fun sampleSizeFor(width: Int, height: Int, dst: IntSize): Int {
+    val target = minOf(MAX_DECODED_SIDE, 2 * maxOf(dst.width, dst.height, 1))
+    val longSide = maxOf(width, height)
+    var sample = 1
+    while (longSide / sample > target) sample *= 2
+    return sample
 }
