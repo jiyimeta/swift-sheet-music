@@ -237,7 +237,7 @@ public enum LayoutEngine {
         let systemsWithLegacyBends = attachLegacyBends(
             to: systemsWithBends, resolved: legacyBends, metrics: metrics,
         )
-        return LayoutDocument(
+        var document = LayoutDocument(
             size: firstPass.size,
             systems: systemsWithLegacyBends,
             metrics: metrics,
@@ -246,6 +246,8 @@ public enum LayoutEngine {
             frames: stream.frames,
             titleImages: titleImages,
         )
+        document.staffMeasureDurations = staffMeasureDurations
+        return document
     }
 
     static func shift(

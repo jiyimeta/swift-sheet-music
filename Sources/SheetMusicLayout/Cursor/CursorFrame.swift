@@ -210,10 +210,9 @@ extension LayoutDocument {
     ) -> CGFloat? {
         var ticksToX: [Int: CGFloat] = [:]
         let division = score.division
-        for (address, staff) in score.allStaves {
+        for (ordinal, (address, staff)) in score.allStaves.enumerated() {
             guard measureIndex < staff.measures.count else { continue }
-            let measureDurations = staff.measures.effectiveMeasureDurations()
-            let measureDuration = measureDurations[measureIndex]
+            let measureDuration = measureDurations(ofStaffAt: ordinal, staff)[measureIndex]
             let measure = staff.measures[measureIndex]
             for (voiceIdx, voice) in measure.voices.enumerated() {
                 var t = 0
@@ -357,26 +356,35 @@ extension LayoutDocument {
         }
         return nil
     }
-}
 
-private func measureTickLength(
-    measureIndex: Int, score: Score, division: Int,
-) -> Int {
-    guard let firstStaff = score.allStaves.first?.staff,
-          let measure = firstStaff.measures[safe: measureIndex],
-          let voice0 = measure.voices.first
-    else { return 0 }
-    let measureDurations = firstStaff.measures.effectiveMeasureDurations()
-    let measureDuration = measureDurations[measureIndex]
-    var t = 0
-    for el in voice0.elements {
-        switch el {
-        case let .chord(c):
-            t += c.duration.resolved(in: measureDuration).ticks(division: division)
-        default: break
+    /// The effective measure durations of `staff`, the one at `ordinal` in `Score.allStaves`: the table the layout
+    /// kept (`staffMeasureDurations`) when it matches the staff's shape, otherwise derived from the staff — a walk of
+    /// its whole measure list, which is what the table is there to spare each playback tick.
+    private func measureDurations(ofStaffAt ordinal: Int, _ staff: Staff) -> [Fraction] {
+        if ordinal < staffMeasureDurations.count, staffMeasureDurations[ordinal].count == staff.measures.count {
+            return staffMeasureDurations[ordinal]
         }
+        return staff.measures.effectiveMeasureDurations()
     }
-    return t
+
+    private func measureTickLength(
+        measureIndex: Int, score: Score, division: Int,
+    ) -> Int {
+        guard let firstStaff = score.allStaves.first?.staff,
+              let measure = firstStaff.measures[safe: measureIndex],
+              let voice0 = measure.voices.first
+        else { return 0 }
+        let measureDuration = measureDurations(ofStaffAt: 0, firstStaff)[measureIndex]
+        var t = 0
+        for el in voice0.elements {
+            switch el {
+            case let .chord(c):
+                t += c.duration.resolved(in: measureDuration).ticks(division: division)
+            default: break
+            }
+        }
+        return t
+    }
 }
 
 extension Array {

@@ -22,6 +22,11 @@ public struct LayoutDocument: Sendable, Equatable {
     /// The leading box's pictures, in document coordinates (margins included, like the texts of `titleFrame`). They
     /// live here because `LayoutTitleFrame` carries no images.
     public let titleImages: [LayoutFrameImage]
+    /// Each staff's effective measure durations (`[Measure].effectiveMeasureDurations()`), in `Score.allStaves` order,
+    /// as the layout computed them — so the playback cursor can resolve a `.beat` without walking every staff's whole
+    /// measure list on each tick (`cursorFrame(for:in:)`). Empty for a document built any other way, which makes the
+    /// cursor derive them from the score instead.
+    var staffMeasureDurations: [[Fraction]] = []
 
     public init(
         size: CGSize,
@@ -154,7 +159,7 @@ extension LayoutDocument {
             return moved
         }
         let bottoms = slice.map { $0.origin.y + $0.size.height } + carried.map(\.bottom)
-        return LayoutDocument(
+        var page = LayoutDocument(
             size: CGSize(width: size.width, height: bottoms.max() ?? 0),
             systems: slice,
             metrics: metrics,
@@ -162,5 +167,7 @@ extension LayoutDocument {
             chordSymbolCase: chordSymbolCase,
             frames: carried,
         )
+        page.staffMeasureDurations = staffMeasureDurations
+        return page
     }
 }
