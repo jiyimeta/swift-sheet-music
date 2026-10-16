@@ -136,8 +136,7 @@
                         fontSize: px(fontSize), xScale: CGFloat(xScale), fontId: fontId,
                     )
                 case let .setRotation(radians, pivotX, pivotY):
-                    // A state command like `setColor`: the next one replaces the rotation, so the open one is closed
-                    // first rather than stacked on (the wavy glissando sends one per wiggle and one reset after).
+                    // A state command: the next one replaces the open rotation rather than stacking on it.
                     if rotationOpen {
                         ctx.restoreGState()
                         applyColor()
@@ -154,9 +153,8 @@
                     dashOn = px(onMM)
                     dashOff = px(offMM)
                 case let .drawImage(data, x, y, w, h):
-                    DrawProgramCGRenderer.drawImage(
-                        data, in: CGRect(x: px(x), y: px(y), width: px(w), height: px(h)), ctx: ctx, cache: images,
-                    )
+                    let rect = CGRect(x: px(x), y: px(y), width: px(w), height: px(h))
+                    DrawProgramCGRenderer.drawImage(data, in: rect, ctx: ctx, cache: images)
                 }
             }
 
