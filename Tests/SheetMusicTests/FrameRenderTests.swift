@@ -173,10 +173,12 @@
 
         // MARK: - PDF
 
-        /// Each frame's text is on the page that holds the system below the frame, and on no other. The title's text
-        /// is the probe's control: it was drawn before frames were, so a page text that misses it means the
-        /// extraction, not the drawing, failed.
-        @Test("the PDF draws each frame's text on the page holding the system below it, and on no other")
+        /// Each frame's text is on one page alone: a box without a page break on the page that holds the system below
+        /// it ("Interlude", above measure 9), a box with one on the page it closes, which holds the system above it
+        /// ("Part II", whose break ends page 1 after measures 1–4, as MuseScore lays it out). The title's text is the
+        /// probe's control: it was drawn before frames were, so a page text that misses it means the extraction, not
+        /// the drawing, failed.
+        @Test("the PDF draws each frame's text on its page alone; a box with a page break on the page it closes")
         func pdfPageDrawsFrame() throws {
             guard #available(macOS 15.0, *) else { return }
             let score = try Self.load("frames-boxes")
@@ -188,7 +190,8 @@
             let texts = (0 ..< pdf.pageCount).map { pdf.page(at: $0)?.string ?? "" }
             let first = try #require(texts.first)
             #expect(first.contains("Frames"), "the title is missing from page 1's text: \(first)")
-            for (text, measure) in [("Part II", 4), ("Interlude", 8)] {
+            // Each box with the first measure of the system on the page it belongs to.
+            for (text, measure) in [("Part II", 0), ("Interlude", 8)] {
                 let pageMatch = Self.page(startingSystemAt: measure, in: paged.batches)
                 let page = try #require(pageMatch, "no page holds a system starting at measure \(measure)")
                 let found = texts.indices.filter { texts[$0].contains(text) }
