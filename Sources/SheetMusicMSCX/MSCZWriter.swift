@@ -75,7 +75,11 @@ public enum MSCZWriter {
         score: Score, mainFileName: String = "score.mscx",
     ) throws -> Data {
         let mscxData = try MSCXEncoder.encode(score)
-        return try write(mscxData: mscxData, mainFileName: mainFileName)
+        return try write(
+            mscxData: mscxData,
+            mainFileName: mainFileName,
+            extraEntries: MSCZPictures.entries(for: score, excluding: []),
+        )
     }
 
     public static func write(
@@ -95,10 +99,11 @@ public enum MSCZWriter {
         extraEntries: [MSCZExtraEntry] = [],
     ) throws -> Data {
         let mscxData = try MSCXEncoder.encode(score, options: options)
+        let pictures = MSCZPictures.entries(for: score, excluding: Set(extraEntries.map(\.path)))
         return try write(
             mscxData: mscxData,
             mainFileName: mainFileName,
-            extraEntries: extraEntries,
+            extraEntries: extraEntries + pictures,
         )
     }
 

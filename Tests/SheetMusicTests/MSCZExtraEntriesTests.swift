@@ -242,6 +242,31 @@ struct MSCZExtraEntriesTests {
         #expect(try MSCZReader.extraEntries(in: second) == extras)
     }
 
+    // MARK: - Pictures
+
+    /// Regression guard: a host that carries `Pictures/` through `extraEntries` (folino's path) must not
+    /// get each picture twice once the writer emits `Score.pictures` itself.
+    @Test func hostPassthroughDoesNotDuplicate() throws {
+        let original = try MSCXFixtureLoader.msczData("frames-pictures")
+        let score = try MSCZReader.parse(original)
+        let carried = try MSCZReader.extraEntries(in: original)
+        let saved = try MSCZWriter.write(
+            score: score, options: MSCXEncoderOptions(), extraEntries: carried,
+        )
+
+        let reader = try ZipReader(data: saved)
+        let pictures = reader.entries.values
+            .map(\.path)
+            .filter { $0.hasPrefix("Pictures/") }
+            .sorted()
+        let expected = carried.map(\.path).filter { $0.hasPrefix("Pictures/") }.sorted()
+        #expect(pictures.count == 2)
+        #expect(pictures == expected)
+        for entry in carried where entry.path.hasPrefix("Pictures/") {
+            #expect(try reader.read(path: entry.path) == entry.data)
+        }
+    }
+
     @Test func readerRejectsBytesThatAreNotAZip() {
         do {
             _ = try MSCZReader.extraEntries(in: Data([0x00, 0x01, 0x02, 0x03]))

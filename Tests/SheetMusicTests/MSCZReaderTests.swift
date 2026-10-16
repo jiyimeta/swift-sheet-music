@@ -244,6 +244,52 @@ struct MSCZReaderTests {
         return try buildArchiveData(entries: entries)
     }
 
+    // MARK: - Pictures
+
+    private static let pngName = "c30a2fc8801ac2ae196a1d9580695545.png"
+    private static let jpgName = "099d26f8691e3a8bb734f122687d7220.jpg"
+
+    @Test func parseLoadsTheReferencedPictures() throws {
+        let score = try MSCZReader.parse(MSCXFixtureLoader.msczData("frames-pictures"))
+        #expect(score.pictures.count == 2)
+        let png = try #require(score.pictures[Self.pngName])
+        #expect(Array(png.prefix(8)) == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        #expect(score.pictures[Self.jpgName] != nil)
+    }
+
+    @Test func mscxAloneHasNoPictures() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("frames-pictures"))
+        #expect(score.pictures.isEmpty)
+    }
+
+    @Test func missingPictureIsADiagnostic() throws {
+        let original = try MSCXFixtureLoader.msczData("frames-pictures")
+        let trimmed = try archive(dropping: "Pictures/\(Self.pngName)", from: original)
+        let result = try MSCZReader.parseWithDiagnostics(trimmed)
+
+        let missing = result.diagnostics.filter { $0.code == "mscz.picture.missing" }
+        #expect(missing.count == 1)
+        #expect(missing.first?.severity == .warning)
+        #expect(missing.first?.location == Self.pngName)
+        #expect(result.score.pictures.count == 1)
+
+        // The `<Image>` is preserved even though its bytes are gone.
+        let text = try #require(String(data: MSCXEncoder.encode(result.score), encoding: .utf8))
+        #expect(text.contains("<Image>"))
+        #expect(text.contains(Self.pngName))
+    }
+
+    private func archive(dropping dropped: String, from data: Data) throws -> Data {
+        let reader = try ZipReader(data: data)
+        let ordered = reader.entries.values
+            .sorted { ($0.payloadRange?.lowerBound ?? 0) < ($1.payloadRange?.lowerBound ?? 0) }
+        var writer = ZipWriter()
+        for entry in ordered where entry.path != dropped {
+            try writer.add(path: entry.path, data: reader.read(entry), method: .deflate)
+        }
+        return writer.finish()
+    }
+
     @Test func fallbackFileNameRenamedMainEntry() throws {
         // Zip only contains "renamed.mscx" at root — the rule-2 fallback
         // in MSCZReader should still locate it.
