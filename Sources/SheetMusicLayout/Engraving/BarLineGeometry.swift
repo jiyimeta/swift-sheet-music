@@ -91,6 +91,15 @@ public enum BarLineGeometry {
         return max(barEnd, last.origin.x + last.width)
     }
 
+    /// The system-local x runs one staff's lines are drawn over, left to right: from `startX` (where the staff starts)
+    /// to `staffLineEndX(for:)`, broken at each of `system.staffLineGaps` — an `<HBox>`'s room, where MuseScore draws
+    /// no staff because staff lines belong to measures. A system without gaps gives the one run every renderer drew
+    /// before. The one place the split rule lives, so the Apple renderers and the draw program break the lines at the
+    /// same x.
+    package static func staffLineSegments(for system: LayoutSystem, startX: CGFloat) -> [Range<CGFloat>] {
+        [startX ..< max(startX, staffLineEndX(for: system))]
+    }
+
     /// Distance from the barline `origin.x` to the right edge of the
     /// rightmost stroke this subtype paints. Used by the staff
     /// renderer to clip the five-line staff so it terminates flush

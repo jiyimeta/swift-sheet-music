@@ -530,4 +530,31 @@
             return measures
         }
     }
+
+    /// `drawStaves` breaks the staff lines over `LayoutSystem.staffLineGaps` in the system-level staff layer, outside
+    /// every measure container. Widening an HBox in wrapped mode keeps the system's `size` and its last measure's
+    /// right edge, so `staffLineEndX` too, and moves the gap: a diff that only rebuilt the measures would leave the
+    /// lines broken at the old room. A separate extension so the suite's body stays inside the repository's
+    /// `type_body_length` budget.
+    extension MeasureLayerDiffPlannerTests {
+        @Test("systemFrameIsUnchanged is false when an HBox's staff-line gap changes")
+        func systemFrameCatchesStaffLineGapChange() {
+            let base = fullSystem()
+            func withGap(_ gap: Range<CGFloat>) -> LayoutSystem {
+                LayoutSystem(
+                    origin: base.origin, size: base.size, measures: base.measures,
+                    staffOrigins: base.staffOrigins, staffAddresses: base.staffAddresses,
+                    staffGeometries: base.staffGeometries, partLabels: base.partLabels,
+                    brackets: base.brackets, spanners: base.spanners, sp: base.sp,
+                    invisibleSpanners: base.invisibleSpanners,
+                    showsInvisibleElements: base.showsInvisibleElements,
+                    staffLineGaps: [gap],
+                )
+            }
+            let previous = withGap(80 ..< 100)
+            let next = withGap(70 ..< 100)
+            #expect(BarLineGeometry.staffLineEndX(for: previous) == BarLineGeometry.staffLineEndX(for: next))
+            #expect(!MeasureLayerDiffPlanner.systemFrameIsUnchanged(previous, next))
+        }
+    }
 #endif

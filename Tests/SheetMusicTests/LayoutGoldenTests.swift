@@ -448,6 +448,11 @@
                     : "MISSING"
                 s += "    staffOrigin \(f(o.x)),\(f(o.y)) addr=\(addr)\n"
             }
+            // Printed only when present, so a system without an HBox's room keeps every line it had.
+            if !sys.staffLineGaps.isEmpty {
+                let gaps = sys.staffLineGaps.map { "\(f($0.lowerBound))..<\(f($0.upperBound))" }
+                s += "    staffLineGaps \(gaps.joined(separator: " "))\n"
+            }
             for l in sys.partLabels {
                 s += "    label \(String(describing: l))\n"
             }

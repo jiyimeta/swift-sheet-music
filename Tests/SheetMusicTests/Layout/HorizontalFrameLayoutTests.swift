@@ -72,6 +72,9 @@ import Testing
         [hbox(6, before: 4)],
     ]
 
+    /// No blocks at all, then `inertBlocks`: every score that leaves no room between two measures.
+    private static let roomlessBlocks: [[PositionedScoreBlock]] = [[]] + inertBlocks
+
     /// `score` laid out at `width` — wrapped unless `options` says otherwise, and wide enough that four bars are one
     /// system unless a bar breaks it.
     private func laidOut(
@@ -305,5 +308,66 @@ import Testing
         let room = try roomBefore(1, in: atStart)
         #expect(closeEnough(room, 6 * atStart.metrics.sp))
         #expect(closeEnough(atStart.systems[0].size.width, bare.systems[0].size.width))
+    }
+
+    // MARK: - Staff-line gaps
+
+    /// MuseScore draws staff lines per measure, so an HBox's room has none: the system carries the room as one gap in
+    /// its own x, as wide as the room and ending where the measure after the box starts.
+    @Test("an HBox's room is one staff-line gap that ends where the next measure starts")
+    func staffLineGapsCoverTheRoom() throws {
+        let document = laidOut(Self.score(blocks: [Self.hbox(6, before: 2)]))
+        try #require(document.systems.count == 1)
+        let gaps = document.systems[0].staffLineGaps
+        #expect(gaps.count == 1)
+        let gap = try #require(gaps.first)
+        let after = try measure(2, in: document)
+        #expect(closeEnough(gap.upperBound, after.origin.x))
+        #expect(closeEnough(gap.upperBound - gap.lowerBound, 6 * document.metrics.sp))
+    }
+
+    /// Pass 2 lays a collapsed run out in a branch of its own, so the room before a run's first measure is pinned
+    /// apart from the room before an ordinary measure.
+    @Test("an HBox before a collapsed multi-measure rest is a staff-line gap too")
+    func gapBeforeACollapsedRun() throws {
+        let options = ScoreViewOptions(multiMeasureRest: .collapse(minimumMeasures: 2))
+        let document = laidOut(Self.restRunScore(blocks: [Self.hbox(6, before: 1)]), options: options)
+        try #require(document.systems.count == 1)
+        let gaps = document.systems[0].staffLineGaps
+        #expect(gaps.count == 1)
+        let gap = try #require(gaps.first)
+        let run = try measure(1, in: document)
+        #expect(closeEnough(gap.upperBound, run.origin.x))
+        #expect(closeEnough(gap.upperBound - gap.lowerBound, 6 * document.metrics.sp))
+    }
+
+    @Test("a score with no HBox between two measures has no staff-line gap", arguments: roomlessBlocks)
+    func noHBoxHasNoGaps(_ blocks: [PositionedScoreBlock]) {
+        let document = laidOut(Self.score(blocks: blocks))
+        #expect(document.systems.flatMap(\.staffLineGaps).isEmpty)
+    }
+
+    @Test("an HBox before the measure that opens a system leaves no staff-line gap")
+    func gapAtSystemStartHasNoGap() throws {
+        let document = laidOut(Self.score(blocks: [Self.hbox(6, before: 2)], lineBreakAfter: 1))
+        try #require(document.systems.count == 2)
+        #expect(document.systems[1].measures.first?.measureIndex == 2)
+        #expect(document.systems.flatMap(\.staffLineGaps).isEmpty)
+    }
+
+    /// A host shades a staff over its lines (`LayoutDocument.staffBands`), so the band breaks where the lines do, and
+    /// MuseScore draws no highlight in a box either: one band each side of the room, meeting the gap's two ends.
+    @Test("a staff's band breaks over an HBox's room as its lines do")
+    func staffBandBreaksOverTheRoom() throws {
+        let document = laidOut(Self.score(blocks: [Self.hbox(6, before: 2)]))
+        try #require(document.systems.count == 1)
+        let system = document.systems[0]
+        let gap = try #require(system.staffLineGaps.first)
+        let bands = document.staffBands(verticalPaddingSp: 0)
+        #expect(bands.count == 2)
+        let left = try #require(bands.first)
+        let right = try #require(bands.last)
+        #expect(closeEnough(left.rect.maxX, system.origin.x + gap.lowerBound))
+        #expect(closeEnough(right.rect.minX, system.origin.x + gap.upperBound))
     }
 }
