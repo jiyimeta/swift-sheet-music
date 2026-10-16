@@ -109,15 +109,15 @@ and this project adheres to
 - **PDF export of PNGs with alpha** — an 8-bit non-interlaced RGBA or gray+alpha PNG is inflated, unfiltered and split
   into a color image (`FlateDecode`, device RGB or gray) and an 8-bit `/DeviceGray` soft mask the color image names in
   `/SMask`, so the picture's transparency survives in the PDF. A chunk length or image size that overflows a 32-bit
-  `Int` makes the file unreadable (no picture) instead of trapping, and a picture that would inflate past 64 MiB is
-  refused rather than allocated.
+  `Int` makes the file unreadable (no picture) instead of trapping, and a picture that would inflate past 64 MiB of
+  samples (a 4096 × 4096 RGBA picture still fits) is refused rather than allocated.
 - **The Apple screen, print and PDF export draw boxes and pictures** — `ScoreView` draws every box between systems
   (`LayoutDocument.frames`) at its `originY`, mounted by `visibleRect` with the systems' test, and the title block
   with its pictures (`titleImages`) in both modes. A box's texts are set as the title block's are; each picture is an
   image layer stretched to its rect, decoded by ImageIO at no more than 2048 px on its long side into a cache of at
   most 96 MB (a file ImageIO cannot read is remembered, not retried). `PDFExporter.export(score:)` and
-  `export(document:sheets:…)` draw on each page the boxes `PDFExporter.frames(of:in:)` gives it (a box after the last
-  system on the last page, a frames-only page included) and the title's pictures on the first, so a host's own
+  `export(document:sheets:…)` draw on each page the boxes that belong to it (the page whose first system follows the
+  box; a box after the last system on the last page, a frames-only page included) and the title's pictures on the first, so a host's own
   `Sheet`s need no new field; `PDFPageView` and the `PDFPageLayerView` preview take defaulted `frames` and
   `titleImages`. A picture ImageIO cannot read draws nothing. A score without a box after the title block and without
   a picture draws exactly as before. `render-previews` draws the boxes too: `SM_SCORE` renders always, and

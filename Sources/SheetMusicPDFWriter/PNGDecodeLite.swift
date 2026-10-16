@@ -10,9 +10,10 @@ import SheetMusicPDFSyntax
 /// and it is released when `decode` returns — before the caller deflates the planes again. So at most the inflated
 /// picture and its two planes (about twice `maxInflatedBytes`) are alive at once.
 enum PNGDecodeLite {
-    /// The most inflated bytes (filter bytes included) a picture may need — 64 MiB, a 4096 × 4096 RGBA picture less
-    /// its filter bytes: bigger files are refused, not allocated, and draw nothing in the PDF.
-    private static let maxInflatedBytes = 1 << 26
+    /// The most inflated bytes a picture may need — 64 MiB of samples plus room for their filter bytes, so a 4096 ×
+    /// 4096 RGBA picture (64 MiB and 4096 filter bytes) still fits: bigger files are refused, not allocated, and draw
+    /// nothing in the PDF.
+    private static let maxInflatedBytes = (1 << 26) + (1 << 16)
 
     /// Samples are row-major, top row first: `color` holds one (gray) or three (RGB) bytes a pixel, `alpha` one.
     static func decode(_ file: Data) -> (width: Int, height: Int, color: [UInt8], alpha: [UInt8]?)? {
