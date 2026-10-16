@@ -309,5 +309,11 @@ public enum LayoutEngine {
         /// prevailing time signature is wanted (e.g. `placeMeasureElements`
         /// inputs), as opposed to the cross-staff merge.
         let staffMeasureDurations: [[Fraction]]
+        /// The `beforeMeasureIndex` of every frame-stream box (`Score.frameStream`) that sits between two measures
+        /// (`1 ..< measureCount`); an index inside a multi-measure-rest run moves to the run's start. A frame always
+        /// ends the system before it, whatever the break policy says. Empty unless the title block is laid out in wrap
+        /// mode (`includeTitleFrame && wrapToViewWidth`). A defaulted `var` so the memberwise initializer keeps its
+        /// other call sites (`NoteInputPipelineBenchmark`) compiling.
+        var frameBreaks: Set<Int> = []
     }
 }
