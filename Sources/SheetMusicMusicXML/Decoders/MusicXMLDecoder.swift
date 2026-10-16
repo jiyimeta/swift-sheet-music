@@ -171,7 +171,10 @@ extension Score {
             }
         }
         let lanes = laneElements.map { SystemMeasure(elements: laneOrdered($0)) }
-        return (parts: addingFinalBarLines(parts), systemMeasures: lanes)
+        // MuseScore numbers an implicit brace's column `bracketLevels + 1`, which leaves column 0 empty; it draws an
+        // empty column at no width, where ssm's gutter gives every column up to the highest one a spatium.
+        let compacted = Score.canonicalizingBracketColumns(addingFinalBarLines(parts))
+        return (parts: compacted, systemMeasures: lanes)
     }
 
     /// A measure's lane in the order the MSCX reader builds it from a MuseScore file (`MSCXDecoder+Staff`'s assembly:

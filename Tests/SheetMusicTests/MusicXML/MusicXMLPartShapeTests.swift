@@ -22,13 +22,29 @@ struct MusicXMLPartShapeTests {
 
     private static let piano = "<score-part id=\"P1\"><part-name>Piano</part-name></score-part>"
 
-    @Test("a two-staff part with no part-group gets a brace on its first staff, in column 1")
+    /// MuseScore numbers the brace's column 1 (`bracketLevels + 1`) and draws the empty column 0 at no width; ssm's
+    /// gutter gives every column a spatium, so the import compacts the columns and the lone brace sits in column 0.
+    @Test("a two-staff part with no part-group gets a brace on its first staff, in column 0")
     func implicitBrace() throws {
         let score = try F.score(measures: [F.whole("C", staff: 1) + "<backup><duration>1920</duration></backup>"
                 + F.whole("C", octave: 3, staff: 2)], staves: 2)
         let staves = score.parts[0].staves
-        #expect(staves[0].brackets == [BracketItem(type: .brace, span: 2, column: 1)])
+        #expect(staves[0].brackets == [BracketItem(type: .brace, span: 2, column: 0)])
         #expect(staves[1].brackets.isEmpty)
+    }
+
+    @Test("compacting keeps the columns' order and closes only the gaps")
+    func compactedColumns() {
+        func staff(_ columns: [Int]) -> Staff {
+            Staff(brackets: columns.map { BracketItem(type: .normal, span: 1, column: $0) })
+        }
+        let parts = [
+            Part(id: "1", instrument: Instrument(id: "x"), staves: [staff([1, 3])]),
+            Part(id: "2", instrument: Instrument(id: "x"), staves: [staff([3])]),
+        ]
+        let compacted = Score.canonicalizingBracketColumns(parts)
+        #expect(compacted[0].staves[0].brackets.map(\.column) == [0, 1])
+        #expect(compacted[1].staves[0].brackets.map(\.column) == [1])
     }
 
     @Test("a one-staff part gets no brace")
@@ -46,7 +62,7 @@ struct MusicXMLPartShapeTests {
         let noSymbol = "<part-group type=\"start\" number=\"1\"><group-symbol>none</group-symbol></part-group>"
             + Self.piano + "<part-group type=\"stop\" number=\"1\"/>"
         let braced = try Self.score(partList: noSymbol, measures: notes, staves: 2).parts[0].staves[0].brackets
-        #expect(braced == [BracketItem(type: .brace, span: 2, column: 1)])
+        #expect(braced == [BracketItem(type: .brace, span: 2, column: 0)])
     }
 
     @Test("groups starting at the part push the brace one column past theirs")

@@ -54,10 +54,17 @@ enum ScoreSemanticComparison {
         /// only when it differs from the track's default, above for an even track, below for an odd one
         /// (`fermata.cpp:190-191`); the MusicXML decoder sets it explicitly.
         var ignoresDefaultFermataPlacement = false
-        /// If true, in a voice's trailing run of bar lines and spanner end markers, put the end markers before the bar
-        /// lines and collapse identical consecutive end markers. MuseScore 4.x's MSCX writer writes a spanner ending
-        /// on the score's last tick twice and before the end bar line; other versions write one, after it.
+        /// If true, in the trailing run of bar lines and spanner end markers of each voice of each staff's LAST measure
+        /// only, put the end markers before the bar lines on both sides, and collapse identical consecutive end
+        /// markers on the reference side only. MuseScore 4.x's MSCX writer writes a spanner ending on the score's
+        /// last tick twice and before the end bar line; other versions write one, after it. A duplicate end on the
+        /// produced side is a decoder fault and still fails.
         var normalizesTrailingEndMarkers = false
+        /// If true, compact bracket columns onto `0 ..< n` on both sides (`Score.canonicalizingBracketColumns`).
+        /// MuseScore numbers a bracket's `<bracket col>` / `<level>` by level (an implicit brace is
+        /// `bracketLevels + 1`, so column 1 over an empty column 0) and draws an empty column at no width; the
+        /// import compacts the columns, so the drawn gutter is the same while the numbers differ.
+        var canonicalizesBracketColumns = false
         /// If true, round every tempo's beats per second to 6 decimals — the precision MuseScore's writer gives
         /// Pid::TEMPO (`TConv::toXml(tempo, Constants::TEMPO_PRECISION)`, `twrite.cpp:3327`, `constants.h:110`), so a
         /// reference file holds 1.666667 where the import's exact value is 100 / 60.
@@ -79,7 +86,7 @@ enum ScoreSemanticComparison {
         sourceLocation: SourceLocation = #_sourceLocation
     ) {
         let lhs = normalize(produced, options: options)
-        let rhs = normalize(reference, options: options)
+        let rhs = normalize(reference, options: options, isReference: true)
         if lhs == rhs { return }
 
         var diffs: [String] = []
@@ -226,8 +233,9 @@ enum ScoreSemanticComparison {
     }
 
     /// Produce a normalized copy of `score` suitable for field-by-field
-    /// comparison across MusicXML / MSCX producers.
-    static func normalize(_ score: Score, options: Options = .init()) -> Score {
+    /// comparison across MusicXML / MSCX producers. `isReference` marks MuseScore's side, which one allowance treats
+    /// differently (`normalizesTrailingEndMarkers`).
+    static func normalize(_ score: Score, options: Options = .init(), isReference: Bool = false) -> Score {
         var s = score
         // Frames — the title block (`<VBox>`) and the horizontal, text, and
         // fret frames beside it — are page furniture with no MusicXML
@@ -311,7 +319,7 @@ enum ScoreSemanticComparison {
         if options.stripsStaffText { s = removingStaffText(s) }
         if options.sortsAnnotationRuns { s = sortingAnnotationRuns(s) }
         if options.ignoresLineGeometry { s = ignoringLineGeometry(s) }
-        return applyingWriterAllowances(s, options: options)
+        return applyingWriterAllowances(s, options: options, isReference: isReference)
     }
 
     private static func canonicalizeDurations(_ element: VoiceElement) -> VoiceElement {

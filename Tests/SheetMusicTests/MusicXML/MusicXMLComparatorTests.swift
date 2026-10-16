@@ -71,15 +71,17 @@ struct MusicXMLComparatorTests {
             == ScoreSemanticComparison.normalize(other, options: ignoring))
     }
 
-    /// Whether `one` and `other` normalize equal without the allowance and with it (`allow` switches it on).
+    /// Whether `one` (the produced side) and `other` (the reference side) normalize equal without the allowance and
+    /// with it (`allow` switches it on).
     private static func equality(
         _ one: Score, _ other: Score, allow: (inout ScoreSemanticComparison.Options) -> Void,
     ) -> (without: Bool, with: Bool) {
         var options = ScoreSemanticComparison.Options()
-        let without = ScoreSemanticComparison.normalize(one) == ScoreSemanticComparison.normalize(other)
+        let without = ScoreSemanticComparison.normalize(one)
+            == ScoreSemanticComparison.normalize(other, isReference: true)
         allow(&options)
         let with = ScoreSemanticComparison.normalize(one, options: options)
-            == ScoreSemanticComparison.normalize(other, options: options)
+            == ScoreSemanticComparison.normalize(other, options: options, isReference: true)
         return (without, with)
     }
 
@@ -187,13 +189,79 @@ struct MusicXMLComparatorTests {
         let barLine = VoiceElement.barLine(BarLine(subtype: "end"))
         let museScore4 = Self.score(voice: [Self.quarter, pedalEnd, pedalEnd, barLine])
         let decoded = Self.score(voice: [Self.quarter, barLine, pedalEnd])
-        let result = Self.equality(museScore4, decoded) { $0.normalizesTrailingEndMarkers = true }
+        let result = Self.equality(decoded, museScore4) { $0.normalizesTrailingEndMarkers = true }
         let midMeasure = Self.equality(
-            Self.score(voice: [pedalEnd, Self.quarter, barLine]), Self.score(voice: [Self.quarter, barLine, pedalEnd]),
+            Self.score(voice: [Self.quarter, barLine, pedalEnd]), Self.score(voice: [pedalEnd, Self.quarter, barLine]),
         ) { $0.normalizesTrailingEndMarkers = true }
         #expect(result.without == false)
         #expect(result.with == true)
         #expect(midMeasure.with == false)
+    }
+
+    @Test("a duplicated end marker on the produced side still fails; only the reference's is collapsed")
+    func producedDuplicateEndFails() {
+        let pedalEnd = VoiceElement.spanner(Spanner(kind: .pedal, rawType: "Pedal", visible: false))
+        let barLine = VoiceElement.barLine(BarLine(subtype: "end"))
+        let doubled = Self.score(voice: [Self.quarter, barLine, pedalEnd, pedalEnd])
+        let single = Self.score(voice: [Self.quarter, pedalEnd, barLine])
+        let result = Self.equality(doubled, single) { $0.normalizesTrailingEndMarkers = true }
+        #expect(result.with == false)
+    }
+
+    @Test("only a staff's last measure is normalized; an earlier bar's trailing run is compared as it is")
+    func onlyTheLastMeasure() {
+        let pedalEnd = VoiceElement.spanner(Spanner(kind: .pedal, rawType: "Pedal", visible: false))
+        let barLine = VoiceElement.barLine(BarLine(subtype: "double"))
+        func twoBars(_ first: [VoiceElement]) -> Score {
+            var score = Self.score(voice: first)
+            score.parts.mapValues { part in
+                var copy = part
+                copy.staves.mapValues { staff in
+                    var changed = staff
+                    changed.measures.append(Measure(voices: [Voice(elements: [Self.quarter])]))
+                    return changed
+                }
+                return copy
+            }
+            score.systemMeasures = [SystemMeasure(), SystemMeasure()]
+            return score
+        }
+        let produced = twoBars([Self.quarter, barLine, pedalEnd])
+        let result = Self.equality(produced, twoBars([Self.quarter, pedalEnd, barLine])) {
+            $0.normalizesTrailingEndMarkers = true
+        }
+        #expect(result.with == false)
+    }
+
+    @Test("bracket columns compare compacted when asked; a different span or order of columns stays different")
+    func bracketColumns() {
+        func braced(_ brackets: [BracketItem]) -> Score {
+            var score = Self.score(voice: [Self.quarter])
+            score.parts.mapValues { part in
+                var copy = part
+                copy.staves.mapValues { staff in
+                    var changed = staff
+                    changed.brackets = brackets
+                    return changed
+                }
+                return copy
+            }
+            return score
+        }
+        let compacted = braced([BracketItem(type: .brace, span: 1, column: 0)])
+        let museScore = braced([BracketItem(type: .brace, span: 1, column: 1)])
+        let same = Self.equality(compacted, museScore) { $0.canonicalizesBracketColumns = true }
+        #expect(same.without == false)
+        #expect(same.with == true)
+        let otherSpan = Self.equality(compacted, braced([BracketItem(type: .brace, span: 2, column: 1)])) {
+            $0.canonicalizesBracketColumns = true
+        }
+        #expect(otherSpan.with == false)
+        let order = Self.equality(
+            braced([BracketItem(type: .brace, span: 1, column: 0), BracketItem(type: .normal, span: 1, column: 1)]),
+            braced([BracketItem(type: .brace, span: 1, column: 2), BracketItem(type: .normal, span: 1, column: 1)]),
+        ) { $0.canonicalizesBracketColumns = true }
+        #expect(order.with == false)
     }
 
     @Test("a tempo compares at the 6 decimals MuseScore writes when asked; a different tempo stays different")

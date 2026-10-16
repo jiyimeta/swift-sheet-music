@@ -99,6 +99,7 @@ struct MusicXMLImportTests {
         options.ignoresDefaultFermataPlacement = true
         options.normalizesTrailingEndMarkers = true
         options.roundsTempoToFilePrecision = true
+        options.canonicalizesBracketColumns = true
         return options
     }
 
@@ -202,9 +203,14 @@ struct MusicXMLImportTests {
         let fromXml = try MusicXMLParser.parse(xml)
         let fromMscx = try MSCXParser.parse(mscx)
 
+        // testPartNames and testCodaHBox carry MuseScore's implicit brace at `<level>1</level>`, which the import
+        // compacts to column 0 (`canonicalizesBracketColumns`).
+        var options = ScoreSemanticComparison.Options()
+        options.canonicalizesBracketColumns = true
         ScoreSemanticComparison.assertEquivalent(
             produced: fromXml,
             reference: fromMscx,
+            options: options,
         )
     }
 

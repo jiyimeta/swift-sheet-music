@@ -107,11 +107,12 @@ struct MusicXMLInferredLineLog: Sendable, Equatable {
 /// m_offset` from it, `P2:3705`, `3764`, `4573`, `4591`), which puts the line after the element it stands for; that
 /// is deliberately not mirrored.
 extension MusicXMLDirectionDecoder {
-    /// "cresc." / "dim." words (`textToCrescLine`, `P2:4543-4564`): a hairpin line with its line hidden and no
-    /// continue text, whose text is saved only when it is not the style's "cresc." / "dim."; "cresc" wins when both
-    /// appear. Its side is the hairpin's `<direction>`, kept as payload markup, from the placement attribute alone
-    /// (`default-y` is not consulted), else up on a vocal staff and down on any other (`addInferredHairpin`,
-    /// `P2:4575-4579`).
+    /// "cresc." / "dim." words (`textToCrescLine`, `P2:4543-4564`): a hairpin line with its line hidden and an empty
+    /// continue text, holding the words as its begin text unless they are the style's own "cresc." / "dim."; "cresc"
+    /// wins when both appear. MuseScore sets both texts by setter, which leaves them STYLED, so its file never carries
+    /// either (`TWrite` writes a TextLineBase text only when unstyled, `twrite.cpp:1714-1717`). Its side is the
+    /// hairpin's `<direction>`, kept as payload markup, from the placement attribute alone (`default-y` is not
+    /// consulted), else up on a vocal staff and down on any other (`addInferredHairpin`, `P2:4575-4579`).
     static func appendInferredHairpin(
         _ facts: MusicXMLDirectionFacts, staff: Int, tick: Fraction, context: Context, to output: inout Output,
     ) {

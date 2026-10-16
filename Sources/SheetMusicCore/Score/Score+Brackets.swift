@@ -80,6 +80,28 @@ extension Score {
     /// this pass repairs the damage a structural edit did, and an undrawn bracket is still a slot the score
     /// declared and a slot the user can make visible again. Squeezing it out would silently rewrite a column the
     /// edit never touched, and the gutter it costs is already zero — the sizing pass ignores it too.
+    /// `parts` with every staff's bracket columns compacted by `canonicalizedColumns`, in place: the same brackets,
+    /// renumbered onto `0 ..< n` across the score. An importer whose source numbers columns from a level that leaves
+    /// column 0 empty (MuseScore's `bracketLevels + 1`) calls it so the gutter has no empty column.
+    package static func canonicalizingBracketColumns(_ parts: [Part]) -> [Part] {
+        var entries: [(part: Int, staff: Int, bracket: BracketItem)] = []
+        for (partIndex, part) in parts.enumerated() {
+            for (staffIndex, staff) in part.staves.enumerated() {
+                entries += staff.brackets.map { (part: partIndex, staff: staffIndex, bracket: $0) }
+            }
+        }
+        var compacted = canonicalizedColumns(entries).makeIterator()
+        var result = parts
+        for partIndex in result.indices {
+            result[partIndex].staves.mapValues { staff in
+                var copy = staff
+                copy.brackets = staff.brackets.map { original in compacted.next()?.bracket ?? original }
+                return copy
+            }
+        }
+        return result
+    }
+
     private static func canonicalizedColumns(
         _ entries: [(part: Int, staff: Int, bracket: BracketItem)],
     ) -> [(part: Int, staff: Int, bracket: BracketItem)] {

@@ -4,8 +4,9 @@ import Foundation
 /// The comparator's allowances for what MuseScore's MSCX writer puts in a file whatever the MusicXML said — each one an
 /// `Options` flag naming the MuseScore field — and the system-lane diagnostic `assertEquivalent` prints.
 extension ScoreSemanticComparison {
-    /// Applies every writer allowance `options` switches on. Called last by `normalize`.
-    static func applyingWriterAllowances(_ score: Score, options: Options) -> Score {
+    /// Applies every writer allowance `options` switches on. Called last by `normalize`; `isReference` marks
+    /// MuseScore's side.
+    static func applyingWriterAllowances(_ score: Score, options: Options, isReference: Bool = false) -> Score {
         var s = score
         if options.ignoresPartTrackName {
             s.parts.mapValues { part in
@@ -14,15 +15,20 @@ extension ScoreSemanticComparison {
                 return copy
             }
         }
+        if options.canonicalizesBracketColumns {
+            s.parts = IdentifiedArray(Score.canonicalizingBracketColumns(s.parts.values))
+        }
         if options.roundsTempoToFilePrecision { s = roundingTempos(s) }
         let touchesVoices = options.ignoresPedalAutoTextPlace || options.ignoresLineHairpinStyledTexts
             || options.ignoresDefaultFermataPlacement || options.normalizesTrailingEndMarkers
         guard touchesVoices else { return s }
-        return mappingIndexedVoices(s) { index, voice in
+        return mappingIndexedVoices(s) { index, isLastMeasure, voice in
             var elements = voice.elements.values.map { element in
                 allowingWriterFields(element, voiceIndex: index, options: options)
             }
-            if options.normalizesTrailingEndMarkers { elements = normalizingTrailingEndMarkers(elements) }
+            if options.normalizesTrailingEndMarkers, isLastMeasure {
+                elements = normalizingTrailingEndMarkers(elements, collapsingDuplicates: isReference)
+            }
             var copy = voice
             copy.elements = IdentifiedArray(elements)
             return copy
@@ -73,8 +79,11 @@ extension ScoreSemanticComparison {
     }
 
     /// In the maximal trailing run of bar lines and spanner end markers (when it holds a bar line): end markers first,
-    /// in their order, identical consecutive ones collapsed, then the bar lines.
-    static func normalizingTrailingEndMarkers(_ elements: [VoiceElement]) -> [VoiceElement] {
+    /// in their order, then the bar lines; with `collapsingDuplicates` (the reference side, whose 4.x writer doubles
+    /// an end on the score's last tick) identical consecutive end markers become one.
+    static func normalizingTrailingEndMarkers(
+        _ elements: [VoiceElement], collapsingDuplicates: Bool,
+    ) -> [VoiceElement] {
         var start = elements.count
         while start > 0, trailingRunRank(elements[start - 1]) != nil {
             start -= 1
@@ -82,7 +91,8 @@ extension ScoreSemanticComparison {
         let run = elements[start...]
         guard run.contains(where: { trailingRunRank($0) == 1 }) else { return elements }
         var markers: [VoiceElement] = []
-        for element in run where trailingRunRank(element) == 0 && markers.last != element {
+        for element in run where trailingRunRank(element) == 0 {
+            if collapsingDuplicates, markers.last == element { continue }
             markers.append(element)
         }
         let barLines = run.filter { trailingRunRank($0) == 1 }
@@ -98,15 +108,19 @@ extension ScoreSemanticComparison {
         }
     }
 
-    private static func mappingIndexedVoices(_ score: Score, _ transform: @escaping (Int, Voice) -> Voice) -> Score {
+    /// Every voice through `transform(voice index, whether its measure is the staff's last, voice)`.
+    private static func mappingIndexedVoices(
+        _ score: Score, _ transform: @escaping (Int, Bool, Voice) -> Voice,
+    ) -> Score {
         var s = score
         s.parts.mapValues { part in
             var pt = part
             pt.staves.mapValues { staff in
                 var st = staff
-                st.measures = st.measures.map { measure in
+                let lastIndex = st.measures.count - 1
+                st.measures = st.measures.enumerated().map { measureIndex, measure in
                     var m = measure
-                    m.voices = m.voices.enumerated().map { transform($0.offset, $0.element) }
+                    m.voices = m.voices.enumerated().map { transform($0.offset, measureIndex == lastIndex, $0.element) }
                     return m
                 }
                 return st
