@@ -285,8 +285,19 @@
         /// the empty bar's 109.20 pt — the symbol, from x 14 to 76.69, still ends 29 pt short of its barline — and
         /// the two bars after it, the system and the block shift left by the 32.09 pt it gave up. Wrapped, every
         /// block is identical: there the bars already stretched past what their symbols need.
+        ///
+        /// **Re-recorded 2026-10-16 for import-fidelity W7 (frames and images), after reading the diff** against the
+        /// digest above (`02d33e22…`; W7 was rebased onto it, and its own lines came out the same as against the W6
+        /// digest it was first read against). 6 of 4063 lines changed, all in the `wrap=true` blocks of `repeat52` and
+        /// `repeat53` — the only top-level fixtures with a box after the title, a `<TBox>` before measure 0. In each,
+        /// that TBox is now laid out between the title block and system 0, which moves down by 80.669 pt (title →
+        /// TBox 1 sp, the title's `bottomGap`; the TBox's own 17.669 pt; TBox → system 8 sp, its `bottomGap`): the
+        /// `size=` height grows 173.264 → 253.933, `sys[0]`'s origin.y goes 70 → 150.669, and one new `frames` line
+        /// lists the box. The `wrap=false` blocks lay out no frames and did not change; no fixture has an `<HBox>`,
+        /// a second `<VBox>` or a picture, so W7's other geometry is pinned by its own suites
+        /// (`FrameStreamPlacerTests`, `FrameLayoutTests`, `HorizontalFrameLayoutTests`, `LayoutPaginatorTests`).
         private static let expectedDigestSHA256 =
-            "02d33e22e9bf34aa01a5a4fad529cc47f6ceb59ca869ed47c065d614301d9094"
+            "f386db1db299bb8786de7c707e56bee786f66a7bb9d4ad7f37706204c13c61b4"
 
         @Test("write digest")
         func writeDigest() throws {
@@ -410,6 +421,14 @@
             if let title = doc.titleFrame {
                 s += "  title \(String(describing: title))\n"
             }
+            // Printed only when present, so a document without them keeps
+            // every line it had before the frame stream existed.
+            if !doc.titleImages.isEmpty {
+                s += "  titleImages \(String(describing: doc.titleImages))\n"
+            }
+            for frame in doc.frames {
+                s += "  frames \(String(describing: frame))\n"
+            }
             for (i, sys) in doc.systems.enumerated() {
                 s += digest(ofSystem: sys, index: i)
             }
@@ -439,6 +458,11 @@
                     ? String(describing: sys.staffAddresses[idx])
                     : "MISSING"
                 s += "    staffOrigin \(f(o.x)),\(f(o.y)) addr=\(addr)\n"
+            }
+            // Printed only when present, so a system without an HBox's room keeps every line it had.
+            if !sys.staffLineGaps.isEmpty {
+                let gaps = sys.staffLineGaps.map { "\(f($0.lowerBound))..<\(f($0.upperBound))" }
+                s += "    staffLineGaps \(gaps.joined(separator: " "))\n"
             }
             for l in sys.partLabels {
                 s += "    label \(String(describing: l))\n"

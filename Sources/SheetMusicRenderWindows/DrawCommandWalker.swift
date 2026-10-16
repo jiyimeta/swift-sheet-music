@@ -82,6 +82,10 @@ struct DrawCommandWalker {
         case let .setDash(onMM, offMM):
             dashOn = px(onMM)
             dashOff = px(offMM)
+        case .drawImage:
+            // Pictures are not drawn on Windows yet: folino's Windows reader records the gap as a PARITY(windows)
+            // marker, which is where the ledger tracks it.
+            break
         }
     }
 

@@ -70,24 +70,23 @@ extension LayoutBridge {
         )
     }
 
-    /// `.page` mode's cut: the systems each page holds, by the printable height.
+    /// `.page` mode's cut: the systems each page holds, by the printable height (`LayoutDocument.paginate`, so a
+    /// frame's page break starts a page and trailing frames that do not fit get a last range with no systems).
     static func pageRanges(
         document: LayoutDocument, options optionsWire: LayoutOptionsWire, pageHeightMM: Double, margins: PageMargins,
     ) -> [Range<Int>] {
         // `.zero` subtracts nothing, so the edge-to-edge page is cut at `pageHeightMM` exactly as before margins.
         let pageHeightPt = CGFloat(margins.printableHeightMM(pageHeightMM: pageHeightMM) * (72.0 / 25.4))
-        return LayoutPaginator.paginate(
-            systems: document.systems, pageHeight: pageHeightPt, policy: optionsWire.breakPolicy,
-        )
+        return document.paginate(pageHeight: pageHeightPt, policy: optionsWire.breakPolicy)
     }
 
-    /// Where a page's music starts in the document, in points. The first page keeps y = 0 (so the title frame stays
-    /// visible); later pages start at the previous system's bottom, so the gap above the page's first system renders
-    /// on it. `Double`, not `CGFloat`: off Apple this file's `CGFloat` is a private alias an internal signature cannot
-    /// name.
+    /// Where a page's music starts in the document, in points: `LayoutDocument.pageTop(ofPageStartingAt:)` of its
+    /// first system. The first page keeps y = 0 (so the title frame stays visible); later pages start at the previous
+    /// system's bottom, so the gap above the page's first system — and a plain frame in it — renders on it, or at the
+    /// bottom of the frames with a page break between the two, which stay on the page they close. A frames-only last
+    /// page (an empty range) starts at the last system's bottom. `Double`, not `CGFloat`: off Apple this file's
+    /// `CGFloat` is a private alias an internal signature cannot name.
     static func pageTop(of range: Range<Int>, in document: LayoutDocument) -> Double {
-        guard range.lowerBound > 0 else { return 0 }
-        let previous = document.systems[range.lowerBound - 1]
-        return Double(previous.origin.y + previous.size.height)
+        Double(document.pageTop(ofPageStartingAt: range.lowerBound))
     }
 }

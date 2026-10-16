@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="piano">
+        <longName>Piano</longName>
+        <trackName>Piano</trackName>
+        <Channel>
+          <program value="0"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <Image>
+          <path>c30a2fc8801ac2ae196a1d9580695545.png</path>
+          <autoScale>1</autoScale>
+        </Image>
+      </VBox>
+      <Measure>
+        <voice>
+          <TimeSig>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+          </TimeSig>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+          </Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+          </Chord>
+        </voice>
+      </Measure>
+      <VBox>
+        <height>8</height>
+        <boxAutoSize>0</boxAutoSize>
+        <Image>
+          <offset x="1" y="0.5"/>
+          <path>099d26f8691e3a8bb734f122687d7220.jpg</path>
+          <size w="12" h="6"/>
+        </Image>
+      </VBox>
+      <Measure>
+        <voice>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+          </Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+          </Chord>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

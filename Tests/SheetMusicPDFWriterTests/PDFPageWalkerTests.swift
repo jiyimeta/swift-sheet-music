@@ -111,6 +111,54 @@ struct PDFPageWalkerTests {
         #expect(roman.used[edwin.glyphCount] == [0x524D])
     }
 
+    /// A 10 x 5 mm picture at (20, 30) on a 100 x 150 mm page: the unit square scaled to 10k x 5k points, its
+    /// bottom-left corner at x = 20k and y = (150 - (30 + 5))k from the page's bottom (k = 72 / 25.4).
+    @Test func drawImageEmitsDoOverItsRectangle() throws {
+        let png = try ImageFixtures.png(width: 40, height: 20, colorType: 2)
+        let resources = try PDFResources(fonts: WriterFixtures.fonts())
+        var walker = PDFPageWalker(resources: resources, pageHeightMM: 150)
+
+        walker.walk([.drawImage(data: png.file, x: 20, y: 30, w: 10, h: 5)])
+        let dictionary = try resources.write(into: PDFObjectWriter())
+
+        #expect(walker.content == "q /GS255 gs 28.346 0 0 14.173 56.693 325.984 cm /Im1 Do Q\n")
+        #expect(dictionary.contains("/XObject << /Im1 "))
+    }
+
+    /// A translucent fill color must not reach a picture: the CG renderer ignores it, so the PDF resets the alpha
+    /// inside the picture's own `q … Q` (state 255 is always defined).
+    @Test func openAlphaDoesNotLeakIntoAPicture() throws {
+        let png = try ImageFixtures.png(width: 40, height: 20, colorType: 2)
+        let resources = try PDFResources(fonts: WriterFixtures.fonts())
+        var walker = PDFPageWalker(resources: resources, pageHeightMM: 150)
+
+        walker.walk([.setColor(argb: 0x80FF_0000), .drawImage(data: png.file, x: 20, y: 30, w: 10, h: 5)])
+        let dictionary = try resources.write(into: PDFObjectWriter())
+
+        #expect(walker.content.contains("q /GS255 gs 28.346 0 0 14.173 56.693 325.984 cm /Im1 Do Q\n"))
+        #expect(walker.content.hasPrefix("/GS128 gs 1 0 0 rg 1 0 0 RG\nq /GS255 gs "))
+        #expect(dictionary.contains("/GS255 << /Type /ExtGState /ca 1 /CA 1 >>"))
+    }
+
+    /// Each name is followed by a space before its reference: `/Im1 5 0 R`, never the name `/Im15` and `0 R`.
+    @Test func twoImagesAreListedWithSpacedReferences() throws {
+        let first = try ImageFixtures.png(width: 40, height: 20, colorType: 2)
+        let second = try ImageFixtures.png(width: 20, height: 40, colorType: 2)
+        let resources = try PDFResources(fonts: WriterFixtures.fonts())
+        var walker = PDFPageWalker(resources: resources, pageHeightMM: 150)
+
+        walker.walk([
+            .drawImage(data: first.file, x: 0, y: 0, w: 10, h: 5),
+            .drawImage(data: second.file, x: 20, y: 0, w: 5, h: 10),
+        ])
+        let dictionary = try resources.write(into: PDFObjectWriter())
+
+        #expect(dictionary.contains("/XObject << /Im1 "))
+        #expect(dictionary.contains(" 0 R /Im2 "))
+        #expect(dictionary.hasSuffix(" 0 R >> >>"))
+        #expect(!dictionary.contains("/Im11"))
+    }
+
     @Test func `a brace is stretched between its top and bottom with its right edge in place`() throws {
         let walked = try WriterFixtures.walk([.stretchedGlyph(
             codepoint: 0xE000, rightEdgeX: 20, topY: 30, bottomY: 80, fontSize: 7, xScale: 1, fontId: .smufl,

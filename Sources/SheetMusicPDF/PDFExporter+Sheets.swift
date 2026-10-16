@@ -18,6 +18,14 @@ extension PDFExporter {
         /// The systems on this page, in document coordinates.
         public var systems: [LayoutSystem]
         /// The document Y drawn at the page's top margin.
+        ///
+        /// **A sheet whose first system has a frame above it (`LayoutDocument.frames`) must start at or above that
+        /// frame** — at `LayoutDocument.pageTop(ofPageStartingAt:)` of that system, as
+        /// `paginate(systems:page:policy:…)` starts such a page: the previous sheet's last-system bottom, or the bottom
+        /// of the frames with a page break between the two, which stay on the sheet before. The export draws on each
+        /// sheet the frames `frames(of:in:)` assigns it, which include the plain frames above its first system; a sheet
+        /// that starts at that system's top instead draws them into its top margin. The first sheet starts at 0, above
+        /// the title block.
         public var pageStartY: CGFloat
         /// The page's media box, in points.
         public var pageSize: CGSize
@@ -49,7 +57,9 @@ extension PDFExporter {
     }
 
     /// Draw `sheets` — pages of `document` that the caller has already paginated — to a PDF, one page per sheet, each
-    /// at its own size and margins. The first sheet carries `document.titleFrame`. `score` supplies the page chrome
+    /// at its own size and margins. The first sheet carries `document.titleFrame` and its pictures
+    /// (`document.titleImages`); each sheet draws the boxes between systems that `frames(of:in:)` gives it, so a host's
+    /// own `Sheet`s need no field for them. `score` supplies the page chrome
     /// (`score.style.pageChrome` and `score.metaTags`), drawn into each sheet's margins as `export(score:options:)`
     /// draws it, which is now built on this. An empty `sheets` still yields a one-page PDF (CoreGraphics writes a page
     /// of its default size); pass a sheet with no systems to choose that page's size.
@@ -72,11 +82,14 @@ extension PDFExporter {
         else {
             throw PDFExportError.contextCreationFailed
         }
+        let sheetFrames = frames(of: sheets, in: document)
         for (idx, sheet) in sheets.enumerated() {
             let view = PDFPageView(
                 systems: sheet.systems,
                 pageStartY: sheet.pageStartY,
                 titleFrame: idx == 0 ? document.titleFrame : nil,
+                frames: sheetFrames[idx],
+                titleImages: idx == 0 ? document.titleImages : [],
                 metrics: document.metrics,
                 pageSize: sheet.pageSize,
                 margins: sheet.margins,
@@ -111,6 +124,41 @@ extension PDFExporter {
         }
         pdfContext.closePDF()
         return data as Data
+    }
+
+    /// The frames each of `sheets` holds, in document coordinates, by the rule every paginator follows
+    /// (`LayoutDocument.subdocument`): a frame belongs to the sheet whose first system follows it, unless it carries a
+    /// page break (`LayoutFrame.pageBreakAfter`) — then it stays on the sheet it closes. So a sheet holds the frames
+    /// whose top lies in `[the sheet before's upper bound, its own)`, its upper bound being its last system's bottom,
+    /// or the lowest bottom of the page-break frames between that system and the next sheet's first when that is
+    /// further down, and the last sheet takes every frame below the sheets before it. A sheet followed by a frames-only
+    /// sheet (no systems) ends at its last system's bottom: no system follows the frames after the last system, so no
+    /// break of theirs keeps them above (`LayoutDocument.pageTop(ofPageStartingAt: systems.count)`). Sheets carry
+    /// systems rather than indices, hence the positions. Not `pageStartY ..< next sheet's pageStartY`: a host whose
+    /// sheet starts at its first system's top would leave the frame above that system on the sheet before. A sheet
+    /// with no systems other than the last holds none. One entry per sheet, in order: what
+    /// `export(document:sheets:…)` draws on each.
+    static func frames(of sheets: [Sheet], in document: LayoutDocument) -> [[LayoutFrame]] {
+        var lower = -CGFloat.infinity
+        var result: [[LayoutFrame]] = []
+        for (index, sheet) in sheets.enumerated() {
+            let upper: CGFloat
+            if index == sheets.count - 1 {
+                upper = .infinity
+            } else {
+                let lastBottom = sheet.systems.last.map { $0.origin.y + $0.size.height } ?? lower
+                // A frames-only next sheet: the frames after the last system go to it, page break or not.
+                let breakBottoms = sheets[index + 1].systems.first.map { next in
+                    document.frames
+                        .filter { $0.pageBreakAfter && $0.originY >= lastBottom && $0.bottom <= next.origin.y }
+                        .map(\.bottom)
+                } ?? []
+                upper = max(lower, lastBottom, breakBottoms.max() ?? lastBottom)
+            }
+            result.append(document.frames.filter { $0.originY >= lower && $0.originY < upper })
+            lower = upper
+        }
+        return result
     }
 
     static func pdfInfo(title: String?, author: String?) -> [String: Any] {

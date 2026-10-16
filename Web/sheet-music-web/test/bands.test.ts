@@ -211,6 +211,23 @@ describe("splitIntoBands", () => {
     expect(bands[0]!.topMM + bands[0]!.heightMM).toBeGreaterThan(50);
   });
 
+  it("bands include the rect of a drawImage", () => {
+    // The image is the page's only ink: the band is exactly its rect, top-left origin.
+    const image: DrawCommand = {
+      kind: "drawImage",
+      blob: Uint8Array.from([1, 2, 3]),
+      x: 10,
+      y: 30,
+      w: 40,
+      h: 20,
+    };
+    const bands = splitIntoBands(page(image), 80);
+    expect(bands).toHaveLength(1);
+    expect(bands[0]!.topMM).toBeCloseTo(30, 9);
+    expect(bands[0]!.heightMM).toBeCloseTo(20, 9);
+    expect(bands[0]!.commands).toContain(image);
+  });
+
   it("splits the tall fixture and preserves paint command order", () => {
     const bytes = new Uint8Array(
       readFileSync(fileURLToPath(new URL("./fixtures/tall.smdf", import.meta.url))),

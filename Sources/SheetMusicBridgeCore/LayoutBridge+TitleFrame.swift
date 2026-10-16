@@ -25,15 +25,22 @@ import SheetMusicLayout
 /// (`LayoutTitleFrame.font(size:)`, which the Apple renderers draw), as the
 /// provider resolves it, and its `.text` names that face (`TextFontMapping`).
 extension LayoutBridge {
+    /// Emits `frame`'s texts. `originY` (document points) is added to every text's y: 0 for the title block, whose
+    /// texts are in document coordinates, and a box's top for a box after it (`LayoutFrame.content`), whose texts are
+    /// frame-local in y. `Double`, not `CGFloat`: off Apple this file's `CGFloat` is a private alias an internal
+    /// signature cannot name.
     static func appendTitleFrame(
         _ frame: LayoutTitleFrame,
+        originY: Double = 0,
         into out: inout [DrawCommand],
     ) {
         // Only a rich entry needs layout's placement; a plain one keeps its own byte-identical stacking below.
-        let placed = frame.texts.contains { $0.richText != nil } ? frame.placedLines() : []
+        let placed = frame.texts.contains { $0.richText != nil }
+            ? frame.placedLines(origin: CGPoint(x: 0, y: CGFloat(originY)))
+            : []
         for (index, entry) in frame.texts.enumerated() {
             guard entry.richText != nil else {
-                appendTitleEntry(entry, into: &out)
+                appendTitleEntry(entry, originY: originY, into: &out)
                 continue
             }
             // A rich entry draws the runs layout placed per line (`LayoutTitleFrame.PlacedLine.positionedRuns`), so
@@ -50,6 +57,7 @@ extension LayoutBridge {
     /// resolves with the same ~1.2× system line-height factor.
     private static func appendTitleEntry(
         _ entry: LayoutFrameText,
+        originY: Double,
         into out: inout [DrawCommand],
     ) {
         // The face the layout sets the title block in — the system face the Apple renderers draw — as this provider
@@ -68,7 +76,7 @@ extension LayoutBridge {
         ).map(String.init)
         let lineHeight = fontSize * 1.2
         let posX = Double(entry.position.x)
-        let posY = Double(entry.position.y)
+        let posY = originY + Double(entry.position.y)
         // A bottom-anchored entry positions its block so the LAST line's
         // bottom lands on `position.y`; shift the first line's top up by the
         // full block height (mirrors `TitleFrameRenderer`).

@@ -24,15 +24,9 @@ extension PositionedScoreBlock {
             case "VBox":
                 block = .verticalFrame(ScoreFrame.decode(vbox: child))
             case "HBox":
-                block = .opaqueFrame(OpaqueFrame(
-                    kind: .horizontal,
-                    preservedMarkup: child.preservedMarkup(consuming: []),
-                ))
+                block = .horizontalFrame(HorizontalFrame.decode(hbox: child))
             case "TBox":
-                block = .opaqueFrame(OpaqueFrame(
-                    kind: .text,
-                    preservedMarkup: child.preservedMarkup(consuming: []),
-                ))
+                block = .textFrame(TextFrame.decode(tbox: child))
             case "FBox":
                 block = .opaqueFrame(OpaqueFrame(
                     kind: .fret,

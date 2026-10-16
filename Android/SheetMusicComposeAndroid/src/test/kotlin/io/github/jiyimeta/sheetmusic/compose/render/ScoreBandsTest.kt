@@ -245,6 +245,17 @@ class ScoreBandsTest {
     }
 
     @Test
+    fun `band extent covers an image rect`() {
+        // The image is the page's only ink: the band must be exactly its rect, top-left origin.
+        val image = DrawCommand.DrawImage(byteArrayOf(1, 2, 3), 10.0, 30.0, 40.0, 20.0)
+        val bands = page(image).splitIntoBands(80.0)
+        assertEquals(1, bands.size)
+        assertEquals(30.0, bands[0].topMM, 1e-9)
+        assertEquals(20.0, bands[0].heightMM, 1e-9)
+        assertTrue("image missing from its band", bands[0].commands.contains(image))
+    }
+
+    @Test
     fun `band extent covers a glyph above its baseline`() {
         val bands = page(DrawCommand.Glyph(0xE0A4u, 5.0, 50.0, 7.0, FontID.SMUFL)).splitIntoBands(80.0)
         assertEquals(1, bands.size)

@@ -10,41 +10,49 @@ import SheetMusicFoundation
 /// records a hand-written producer and a `@WireFormat` reader silently failing to agree. This format exists so the
 /// JavaScript side never has to know anything about Wirelet.
 ///
-/// ### Wire layout (v2)
+/// ### Wire layout (v3)
 ///
 /// ```text
 /// u32 magic       = 0x534D4446 ("SMDF")
-/// u32 version     = 2
+/// u32 version     = 3
 /// i32 pageCount
 /// i32 stringCount
 /// [string] × stringCount:
 ///     i32 byteLen + UTF-8
+/// i32 blobCount
+/// [blob] × blobCount:
+///     i32 byteLen + bytes     — a picture's file (PNG or JPEG), as `drawImage` carries it
 /// [page] × pageCount:
 ///     f64 widthMM
 ///     f64 heightMM
 ///     i32 commandCount
 ///     [command] × commandCount:
-///         i32 opcode          — DrawCommand's declaration order, 0…12
+///         i32 opcode          — DrawCommand's declaration order, 0…13
 ///         f64 × 6             — fixed; unused slots are 0
 ///         i32 stringIndex     — -1 when the opcode carries no string
-///         u32 integer         — codepoint, packed ARGB for setColor, style flags for setTextStyle
+///         u32 integer         — codepoint, packed ARGB for setColor, style flags for setTextStyle,
+///                               blob index for drawImage
 ///         i32 fontId          — DrawProgram.FontID's raw value (0…2), -1 when the opcode carries no font
 /// ```
 ///
 /// All little-endian. Six `f64` slots because `cubicTo` needs six and no opcode
 /// needs more; the fixed stride is what lets a `DataView` walk the command array
-/// without branching on length. Strings live in a side table, deduplicated, so
-/// the command array stays fixed-stride.
+/// without branching on length. Strings and pictures live in side tables,
+/// deduplicated by content, so the command array stays fixed-stride.
 ///
 /// v2 follows `DrawProgram` v8: the italic text run (11) is gone, so `setTextStyle` moved from 12 to 11, and
 /// `fillPath` is 12, a record whose six slots and integer are zero (string and font -1, as for any opcode without
 /// them). A v1 reader would mis-read both without a word, which is what the version field refuses.
 ///
+/// v3 follows `DrawProgram` v9: `drawImage` is opcode 13, its slots `[x, y, w, h]` and its `integer` the index of its
+/// bytes in the blob table, which follows the string table — two pictures of one file carry its bytes once. A v2
+/// reader would take the blob count for the first page's width, which is what the version field refuses.
+///
 /// Larger than the macro encoding per command, which is deliberate: these bytes cross from wasm memory into a
 /// JavaScript typed array and never touch the network.
 public enum DrawProgramFlat {
     public static let magic: UInt32 = 0x534D_4446 // "SMDF"
-    public static let version: UInt32 = 2
+    public static let version: UInt32 = 3
 
     /// Bytes per command record: opcode + 6 × f64 + stringIndex + integer + fontId.
     static let commandStride = 4 + 6 * 8 + 4 + 4 + 4
@@ -55,16 +63,19 @@ public enum DrawProgramFlat {
         case truncated
         case unknownOpcode(Int32)
         case badStringIndex(Int32)
+        case badBlobIndex(UInt32)
         case badFontID(Int32)
         case invalidUTF8
     }
 
-    // MARK: - Encoding
+    /// The tables a stream carries ahead of its pages — strings and pictures' bytes — each deduplicated by content.
+    private struct SideTables {
+        private(set) var strings: [String] = []
+        private(set) var blobs: [Data] = []
+        private var stringIndices: [String: Int32] = [:]
+        private var blobIndices: [Data: UInt32] = [:]
 
-    public static func encode(pages: [EncodablePage]) -> Data {
-        var strings: [String] = []
-        var stringIndices: [String: Int32] = [:]
-        func intern(_ s: String) -> Int32 {
+        mutating func intern(_ s: String) -> Int32 {
             if let existing = stringIndices[s] { return existing }
             let index = Int32(strings.count)
             strings.append(s)
@@ -72,15 +83,28 @@ public enum DrawProgramFlat {
             return index
         }
 
-        // Commands are encoded first so the string table is complete before it
-        // is written; the reader needs the table up front.
+        mutating func intern(blob: Data) -> UInt32 {
+            if let existing = blobIndices[blob] { return existing }
+            let index = UInt32(blobs.count)
+            blobs.append(blob)
+            blobIndices[blob] = index
+            return index
+        }
+    }
+
+    // MARK: - Encoding
+
+    public static func encode(pages: [EncodablePage]) -> Data {
+        // Commands are encoded first so the side tables are complete before they
+        // are written; the reader needs them up front.
+        var tables = SideTables()
         var commandBlocks: [Data] = []
         commandBlocks.reserveCapacity(pages.count)
         for page in pages {
             var block = Data()
             block.reserveCapacity(page.commands.count * commandStride)
             for command in page.commands {
-                appendCommand(command, to: &block, intern: intern)
+                appendCommand(command, to: &block, tables: &tables)
             }
             commandBlocks.append(block)
         }
@@ -89,11 +113,16 @@ public enum DrawProgramFlat {
         appendU32(magic, to: &out)
         appendU32(version, to: &out)
         appendI32(Int32(pages.count), to: &out)
-        appendI32(Int32(strings.count), to: &out)
-        for s in strings {
+        appendI32(Int32(tables.strings.count), to: &out)
+        for s in tables.strings {
             let utf8 = Data(s.utf8)
             appendI32(Int32(utf8.count), to: &out)
             out.append(utf8)
+        }
+        appendI32(Int32(tables.blobs.count), to: &out)
+        for blob in tables.blobs {
+            appendI32(Int32(blob.count), to: &out)
+            out.append(blob)
         }
         for (page, block) in zip(pages, commandBlocks) {
             appendF64(page.widthMM, to: &out)
@@ -110,7 +139,7 @@ public enum DrawProgramFlat {
     private static func appendCommand(
         _ command: DrawCommand,
         to out: inout Data,
-        intern: (String) -> Int32,
+        tables: inout SideTables,
     ) {
         func write(
             _ opcode: Int32,
@@ -140,7 +169,7 @@ public enum DrawProgramFlat {
         case let .glyph(codepoint, x, y, size, fontId):
             write(4, [x, y, size], integer: codepoint, fontId: Int32(fontId.rawValue))
         case let .text(text, x, y, size, fontId):
-            write(5, [x, y, size], stringIndex: intern(text), fontId: Int32(fontId.rawValue))
+            write(5, [x, y, size], stringIndex: tables.intern(text), fontId: Int32(fontId.rawValue))
         case let .setColor(argb):
             write(6, integer: argb)
         case let .cubicTo(cx1, cy1, cx2, cy2, x, y):
@@ -158,6 +187,8 @@ public enum DrawProgramFlat {
             write(11, integer: UInt32(flags))
         case .fillPath:
             write(12)
+        case let .drawImage(data, x, y, w, h):
+            write(13, [x, y, w, h], integer: tables.intern(blob: data))
         }
     }
 

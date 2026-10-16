@@ -200,6 +200,7 @@
         _ score: Score, to url: URL, scale: CGFloat,
         options: ScoreViewOptions? = nil,
         availableWidth: CGFloat? = nil,
+        drawsBoxes: Bool = false,
     ) throws {
         let opts = options ?? ScoreViewOptions(
             staffSize: 28, systemGap: 40, wrapToViewWidth: false,
@@ -212,7 +213,7 @@
             availableWidth: naturalWidth,
         )
 
-        let cg = try renderDocumentImage(doc, scale: scale, padding: 16)
+        let cg = try renderDocumentImage(doc, scale: scale, padding: 16, drawsBoxes: drawsBoxes)
         try writePNG(cg, to: url)
     }
 
@@ -220,9 +221,15 @@
     /// with a white background and `padding` points of margin on every side. `renderScoreToPNG` is this plus
     /// the layout pass; `DrawProgramParity` calls it directly so both of its renderers draw the SAME
     /// `LayoutDocument` and any difference between the two bitmaps is a renderer difference, never a layout one.
+    ///
+    /// Systems only by default. `drawsBoxes` also draws the title block with its pictures and every box between
+    /// systems (`renderDocumentBoxes`), as `ScoreView` does; the sample and corpus renders leave it off so their
+    /// before/after images stay comparable with renders from before boxes were drawn.
     @available(macOS 15.0, *)
     @MainActor
-    func renderDocumentImage(_ doc: LayoutDocument, scale: CGFloat, padding: CGFloat) throws -> CGImage {
+    func renderDocumentImage(
+        _ doc: LayoutDocument, scale: CGFloat, padding: CGFloat, drawsBoxes: Bool = false,
+    ) throws -> CGImage {
         let pxW = Int(ceil((doc.size.width + 2 * padding) * scale))
         let pxH = Int(ceil((doc.size.height + 2 * padding) * scale))
         guard pxW > 0, pxH > 0 else { throw RenderError.zeroSize }
@@ -256,6 +263,9 @@
         // lands at bitmap row 0 of that tree's region. Stacking systems
         // therefore means placing each tree's bottom edge at bitmap row
         // = sys.origin.y + sys.size.height.
+        if drawsBoxes {
+            renderDocumentBoxes(doc, padding: padding, into: ctx)
+        }
         for sys in doc.systems {
             let tree = ScoreLayerBuilder.buildSystem(
                 sys, metrics: doc.metrics,

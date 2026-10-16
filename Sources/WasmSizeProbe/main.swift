@@ -56,11 +56,7 @@ let document = LayoutEngine.layout(
     options: ScoreViewOptions(),
     availableWidth: 800,
 )
-let pages = LayoutPaginator.paginate(
-    systems: document.systems,
-    pageHeight: 297,
-    policy: .honor,
-)
+let pages = document.paginate(pageHeight: 297, policy: .honor)
 let midi = try MidiRenderer.render(score: score)
 let bytes = try MidiWriter.write(midi)
 

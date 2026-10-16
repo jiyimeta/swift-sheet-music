@@ -83,7 +83,13 @@ set -euo pipefail
 # **Re-check this when the next slice crosses the new ceiling.** If that has
 # happened, the absolute form has failed twice and should be replaced rather
 # than raised a second time.
-CEILING_BYTES=$((9 * 1024 * 1024 / 2))
+#
+# It did happen, and the owner chose to raise it a second time (2026-10-16):
+# import-fidelity W7 (boxes and pictures: a typed box model, the frame stream,
+# draw program v9 with `drawImage`, the PNG/JPEG readers) took the probe to
+# 4,824,468 — 105,876 bytes over 4.5 MiB. Now 5 MiB. The delta gate described
+# above is still the shape that would stop this recurring.
+CEILING_BYTES=$((5 * 1024 * 1024))
 SDK="swift-6.3.3-RELEASE_wasm"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SIZE_BUILD_DIR="$REPO_ROOT/.build/wasm-size"

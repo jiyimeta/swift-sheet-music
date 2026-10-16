@@ -172,6 +172,22 @@ struct SystemSpanTests {
         }
     }
 
+    /// A picture paints its whole rectangle; under a rotation the bound is the square about the pivot that holds the
+    /// rectangle at any angle, as for every other rectangle.
+    @Test("a picture's bound is its rectangle, rotated as any other rectangle is")
+    func boundsIncludeTheImageRect() {
+        let image = DrawCommand.drawImage(data: Data([1, 2, 3]), x: 10, y: 20, w: 30, h: 40)
+        var plain = DrawCommandBounds()
+        plain.add(image)
+        #expect(plain.bounds == DrawRect(x: 10, y: 20, width: 30, height: 40))
+
+        var rotated = DrawCommandBounds()
+        rotated.add(.setRotation(radians: Double.pi / 2, pivotX: 0, pivotY: 0))
+        rotated.add(image)
+        let radius = (40.0 * 40.0 + 60.0 * 60.0).squareRoot()
+        #expect(rotated.bounds == DrawRect(x: -radius, y: -radius, width: 2 * radius, height: 2 * radius))
+    }
+
     // MARK: - Helpers
 
     /// The points a command certainly paints at — its own coordinates, not a guess at its ink.
@@ -183,6 +199,7 @@ struct SystemSpanTests {
         case let .glyph(_, x, y, _, _): [(x, y)]
         case let .text(_, x, y, _, _): [(x, y)]
         case let .stretchedGlyph(_, rightEdgeX, topY, bottomY, _, _, _): [(rightEdgeX, topY), (rightEdgeX, bottomY)]
+        case let .drawImage(_, x, y, w, h): [(x, y), (x + w, y + h)]
         case .stroke, .fillPath, .setColor, .setRotation, .setDash, .setTextStyle: []
         }
     }

@@ -28,16 +28,16 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         visibleX: ClosedRange<CGFloat>? = nil,
         drawsInvisibleElements: Bool = true,
     ) {
-        // Staves
-        let staffEndX = StaffRenderer.endX(for: system)
+        // Staves, broken over each HBox's room
+        let staffEndX = BarLineGeometry.staffLineEndX(for: system)
         for (index, origin) in system.staffOrigins.enumerated() {
+            let runs = BarLineGeometry.staffLineSegments(
+                for: system, startX: origin.x, staffEndX: staffEndX,
+            ).map { system.origin.x + $0.lowerBound ..< system.origin.x + $0.upperBound }
             StaffRenderer.draw(
                 context: &context,
-                origin: CGPoint(
-                    x: system.origin.x + origin.x,
-                    y: system.origin.y + origin.y,
-                ),
-                width: staffEndX - origin.x,
+                top: system.origin.y + origin.y,
+                runs: runs,
                 geometry: system.geometry(atFlatIndex: index),
                 metrics: metrics,
             )

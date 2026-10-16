@@ -19,6 +19,9 @@ public struct Score: Sendable, Equatable {
     public var metaTags: [String: String]
     /// Score-level boxes in their document order among measures.
     public var blocks: [PositionedScoreBlock]
+    /// Picture bytes behind the `FrameImage`s in `blocks`, keyed by the image's `<path>` (the name of its
+    /// `Pictures/` archive entry). Read and written by the MSCZ layer; a bare `.mscx` carries none.
+    public var pictures: [String: Data]
     /// Title block (`<VBox>` in MuseScore) above the first system,
     /// when present. This compatibility view reads and writes the
     /// first leading vertical frame in `blocks`.
@@ -78,8 +81,10 @@ public struct Score: Sendable, Equatable {
         style: ScoreStyle = .museScoreDefaults,
         source: ScoreSource = .unknown,
         preservedMarkup: [PreservedXML] = [],
+        pictures: [String: Data] = [:],
     ) {
         self.division = division
+        self.pictures = pictures
         self.parts = parts
         self.systemMeasures = systemMeasures
         self.metaTags = metaTags
@@ -143,17 +148,7 @@ public struct Score: Sendable, Equatable {
         stripped.preservedMarkup = []
         stripped.style.preservedMarkup = []
         for blockIndex in stripped.blocks.indices {
-            switch stripped.blocks[blockIndex].block {
-            case var .verticalFrame(frame):
-                frame.preservedMarkup = []
-                for textIndex in frame.texts.indices {
-                    frame.texts[textIndex].preservedTextMarkup = nil
-                }
-                stripped.blocks[blockIndex].block = .verticalFrame(frame)
-            case var .opaqueFrame(frame):
-                frame.preservedMarkup = []
-                stripped.blocks[blockIndex].block = .opaqueFrame(frame)
-            }
+            stripped.blocks[blockIndex].block = stripped.blocks[blockIndex].block.strippingPreservedMarkup()
         }
         for measureIndex in stripped.systemMeasures.indices {
             stripped.systemMeasures.updateValue(at: measureIndex) { column in

@@ -40,16 +40,19 @@ public struct DrawRect: Sendable, Equatable {
     }
 }
 
-/// One system's run of a page's commands — or the title block's — and the part of the page those commands can paint.
+/// One system's run of a page's commands — or the title block's, or a frame's — and the part of the page those commands
+/// can paint.
 ///
 /// `LayoutBridge.buildCommands` walks the systems in order and emits everything a system draws (staff lines, measure
 /// elements, system spanners, the system start, invisible elements) inside that system's iteration, so a system's
-/// commands are one contiguous range. A renderer that caches the page in pieces (the Windows onscreen surface
+/// commands are one contiguous range. The title block (its texts, then its pictures) comes first, and each box between
+/// systems (`LayoutDocument.frames`) is a range of its own just before the system below it, so the spans follow the
+/// page from top to bottom. A renderer that caches the page in pieces (the Windows onscreen surface
 /// rasterizes horizontal bands) walks only the spans whose `frameMM` crosses a piece. That is correct because every
 /// state command (color, dash, rotation, text style) is set and reset within the element that needs it: a walk that
 /// starts at a span's first command from the default state paints what the full walk paints there.
 public struct SystemSpan: Sendable, Equatable {
-    /// The system's index in the laid-out document, or nil for the title block.
+    /// The system's index in the laid-out document, or nil for the title block or a frame.
     public var systemIndex: Int?
     /// The span's commands, as indices into its page's `commands`.
     public var commandRange: Range<Int>
@@ -130,6 +133,9 @@ package struct DrawCommandBounds {
             include(DrawRect(x: x - size, y: y - 1.5 * size, width: size * (length + 1), height: 2.25 * size))
         case let .setRotation(radians, pivotX, pivotY):
             rotation = (radians, pivotX, pivotY)
+        case let .drawImage(_, x, y, w, h):
+            // The whole rectangle: a picture paints all of it.
+            include(DrawRect(x: min(x, x + w), y: min(y, y + h), width: abs(w), height: abs(h)))
         }
     }
 

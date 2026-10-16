@@ -25,11 +25,43 @@ public struct CreditTextLine: Sendable, Equatable {
     /// the face's full ascent-plus-descent height below `origin.y`. A formatted line (bold, a `<font size>`, a symbol)
     /// takes the ink of the runs the renderers draw instead, so the box covers what is on the page.
     public let frame: CGRect
+    /// Whether every text run of the line is bold in its `LayoutFont`.
+    public let isBold: Bool
+    /// Whether every text run of the line is italic in its `LayoutFont`.
+    public let isItalic: Bool
+
+    init(
+        field: ScoreInfoWrite.Field,
+        text: String,
+        fontSize: CGFloat,
+        origin: CGPoint,
+        horizontalAnchor: CGFloat,
+        frame: CGRect,
+        isBold: Bool = false,
+        isItalic: Bool = false,
+    ) {
+        self.field = field
+        self.text = text
+        self.fontSize = fontSize
+        self.origin = origin
+        self.horizontalAnchor = horizontalAnchor
+        self.frame = frame
+        self.isBold = isBold
+        self.isItalic = isItalic
+    }
 
     /// The face the title block is drawn in. Title-block texts are set in the platform's system font at their
     /// resolved size (`LayoutTitleFrame.font(size:)`), which `LayoutFont`'s empty face names.
     public var font: LayoutFont {
-        LayoutTitleFrame.font(size: fontSize)
+        Self.font(size: fontSize, isBold: isBold, isItalic: isItalic)
+    }
+
+    /// The title face at `size` with the line's traits.
+    fileprivate static func font(size: CGFloat, isBold: Bool, isItalic: Bool) -> LayoutFont {
+        let base = LayoutTitleFrame.font(size: size)
+        return LayoutFont(
+            face: base.face, pointSize: size, weight: isBold ? .bold : base.weight, isItalic: isItalic,
+        )
     }
 }
 
@@ -65,21 +97,34 @@ extension LayoutDocument {
     private static func creditTextLine(field: ScoreInfoWrite.Field, line: LayoutTitleFrame.PlacedLine)
         -> CreditTextLine
     {
-        CreditTextLine(
+        let textFonts = (line.richLine?.runs ?? []).compactMap { run -> LayoutFont? in
+            if case .text = run.content { run.font } else { nil }
+        }
+        let isBold = !textFonts.isEmpty && textFonts.allSatisfy { $0.weight == .bold }
+        let isItalic = !textFonts.isEmpty && textFonts.allSatisfy(\.isItalic)
+        return CreditTextLine(
             field: field,
             text: line.text,
             fontSize: line.fontSize,
             origin: line.position,
             horizontalAnchor: line.horizontalAnchor,
-            frame: richFrame(of: line) ?? plainFrame(of: line),
+            frame: richFrame(of: line) ?? plainFrame(of: line, isBold: isBold, isItalic: isItalic),
+            isBold: isBold,
+            isItalic: isItalic,
         )
     }
 
     /// A plain line's box. The layer renderer aligns a title line on its INK box (`ScoreLayerBuilder.textLayer`), so
-    /// the box is measured the same way; an ink-less line (spaces only) falls back to its advance.
-    private static func plainFrame(of line: LayoutTitleFrame.PlacedLine) -> CGRect {
-        let font = LayoutTitleFrame.font(size: line.fontSize)
+    /// the box is measured the same way; an ink-less line (spaces only) falls back to its advance. It is measured in
+    /// the face the line is drawn in — the provider's `renderingTextFont` of the title face, as the draw program
+    /// (`LayoutBridge.appendTitleEntry`) and the rich placement (`LayoutTitleFrame.richLineTops`) resolve it — so a
+    /// table provider, which carries no system face, measures the Edwin it draws rather than its stub's fallback.
+    /// `CreditTextLine.font` stays the title face a host's editor asks its own platform for.
+    private static func plainFrame(of line: LayoutTitleFrame.PlacedLine, isBold: Bool, isItalic: Bool) -> CGRect {
         let provider = FontMetrics.provider
+        let font = provider.renderingTextFont(
+            CreditTextLine.font(size: line.fontSize, isBold: isBold, isItalic: isItalic),
+        )
         let width = provider.textInkBounds(text: line.text, font: font)?.width
             ?? provider.typographicWidth(text: line.text, font: font)
         let height = provider.ascent(font: font) + provider.descent(font: font)

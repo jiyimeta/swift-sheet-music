@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DrawProgramPage } from "../src/draw-program.js";
 import {
   FontId,
@@ -393,6 +393,58 @@ describe("drawPage", () => {
     expect(calls).toContainEqual(["scale", 2, 2]);
     expect(calls).toContainEqual(["fillText", "\u{e000}", 0, 0]);
     expect(nestedRestores(calls)).toBe(1);
+  });
+
+  describe("drawImage", () => {
+    // The decode cache is keyed by blob identity, so every test builds its own
+    // command (and Uint8Array): a shared one would carry a cached failure over.
+    const makeImage = (): DrawProgramPage["commands"][number] => ({
+      kind: "drawImage",
+      blob: Uint8Array.from([0x89, 0x50, 0x4e, 0x47]),
+      x: 3,
+      y: 4,
+      w: 5,
+      h: 6,
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("draws without throwing when createImageBitmap rejects", async () => {
+      const image = makeImage();
+      const decode = vi.fn(() => Promise.reject(new Error("undecodable")));
+      vi.stubGlobal("createImageBitmap", decode);
+      const { ctx, calls } = fakeContext();
+      expect(() => drawPage(ctx, pageWith([image]), 2, fonts)).not.toThrow();
+      // Let the rejection settle: it must be swallowed, not left unhandled.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(decode).toHaveBeenCalledTimes(1);
+      expect(countOf(calls, "drawImage")).toBe(0);
+      expect(() => drawPage(ctx, pageWith([image]), 2, fonts)).not.toThrow();
+    });
+
+    it("decodes once per blob, then draws the cached bitmap scaled by pxPerMM", async () => {
+      const image = makeImage();
+      const bitmap = { width: 2, height: 2, close() {} } as unknown as ImageBitmap;
+      const decode = vi.fn(() => Promise.resolve(bitmap));
+      vi.stubGlobal("createImageBitmap", decode);
+      const { ctx, calls } = fakeContext();
+
+      // First draw: the bitmap is not decoded yet, so nothing is drawn and a decode is scheduled.
+      drawPage(ctx, pageWith([image]), 2, fonts);
+      expect(countOf(calls, "drawImage")).toBe(0);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Later draws (same command, same blob) reuse the decode.
+      drawPage(ctx, pageWith([image]), 2, fonts);
+      drawPage(ctx, pageWith([image]), 2, fonts);
+      expect(decode).toHaveBeenCalledTimes(1);
+      expect(calls.filter(([name]) => name === "drawImage")).toEqual([
+        ["drawImage", bitmap, 6, 8, 10, 12],
+        ["drawImage", bitmap, 6, 8, 10, 12],
+      ]);
+    });
   });
 
   it("offsets a slice by translating rather than by moving coordinates", () => {

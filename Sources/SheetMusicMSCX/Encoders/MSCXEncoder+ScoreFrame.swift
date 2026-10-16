@@ -11,7 +11,7 @@ import SheetMusicXMLTools
 extension ScoreFrame {
     /// Encode this frame as MuseScore's `<VBox>` element. Mirrors the
     /// shape `MSCXDecoder+ScoreFrame.decode(vbox:)` reads:
-    /// `<height>` followed by zero or more `<Text>` blocks.
+    /// `<height>`, the gaps and `<boxAutoSize>` when set, then the `<Text>` blocks and the `<Image>` children.
     func encodeAsVBox(
         options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
@@ -21,8 +21,15 @@ extension ScoreFrame {
                 text: FormatG.string(Double(heightSp)),
             ),
         ]
+        appendBoxGaps(top: topGapSp, bottom: bottomGapSp, to: &children)
+        if let autoSize {
+            children.append(XMLTreeNode(name: "boxAutoSize", text: autoSize ? "1" : "0"))
+        }
         for text in texts {
             children.append(text.encode(options: options))
+        }
+        for image in images {
+            children.append(image.encode(options: options))
         }
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "VBox", children: children)
@@ -40,6 +47,8 @@ extension FrameText {
             children.append(XMLTreeNode(
                 name: "style", text: style.rawValue,
             ))
+        } else if let otherStyleName {
+            children.append(XMLTreeNode(name: "style", text: otherStyleName))
         }
         if let fontSize {
             children.append(XMLTreeNode(

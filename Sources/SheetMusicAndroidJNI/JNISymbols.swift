@@ -160,9 +160,16 @@ public func nativeComputeLayout(
 ///
 /// Wire format: `i32 count` (big-endian) then `count × f64` big-endian IEEE 754.
 /// The sequence is `[0, top1, …, contentBottom]` — one entry per page boundary
-/// plus the content bottom (`count == pageCount + 1`). Returns empty `Data`
-/// when the handle is unknown, the options blob fails to decode, or
-/// `LayoutPaginator` returns no ranges.
+/// plus the content bottom (`count == pageCount + 1`). The pages are
+/// `LayoutDocument.paginate`'s, frames included, and each starts at
+/// `LayoutDocument.pageTop(ofPageStartingAt:)` — the `.page` draw program's
+/// lift: the previous system's bottom, or the bottom of the boxes with a page
+/// break before its first system, which stay on the page they close. A
+/// frames-only last page starts at the last system's bottom, and the content
+/// bottom is the lowest frame's bottom when that is below the last system
+/// (never the bottom margin), so a score without frames gets exactly the
+/// offsets it always did. Returns empty `Data` when the handle is unknown, the
+/// options blob fails to decode, or there are no pages.
 public func nativePageBreaks(scoreHandle: Int64, pageHeightMM: Double, optionsBytes: Data) -> Data {
     guard let document = LayoutDocumentCache.value(for: scoreHandle) else { return Data() }
     let optionsWire: LayoutOptionsWire
@@ -173,19 +180,9 @@ public func nativePageBreaks(scoreHandle: Int64, pageHeightMM: Double, optionsBy
     }
     let mmToPt = 72.0 / 25.4
     let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
-    let ranges = LayoutPaginator.paginate(
-        systems: document.systems, pageHeight: pageHeightPt, policy: optionsWire.breakPolicy,
-    )
-    guard !ranges.isEmpty else { return Data() }
-    var offsetsMm: [Double] = []
-    for (i, range) in ranges.enumerated() {
-        let topPt: CGFloat = i == 0
-            ? 0
-            : document.systems[range.lowerBound - 1].origin.y
-            + document.systems[range.lowerBound - 1].size.height
-        offsetsMm.append(Double(topPt) / mmToPt)
-    }
-    let lastSystem = document.systems[document.systems.count - 1]
-    offsetsMm.append(Double(lastSystem.origin.y + lastSystem.size.height) / mmToPt)
+    let ranges = document.paginate(pageHeight: pageHeightPt, policy: optionsWire.breakPolicy)
+    guard !ranges.isEmpty, let contentBottom = document.contentBottom else { return Data() }
+    var offsetsMm = ranges.map { Double(document.pageTop(ofPageStartingAt: $0.lowerBound)) / mmToPt }
+    offsetsMm.append(Double(contentBottom) / mmToPt)
     return PageBreaksWire.encode(offsetsMm)
 }

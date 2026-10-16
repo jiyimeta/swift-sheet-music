@@ -132,7 +132,7 @@ extension LayoutBridge {
     ///   runs past the viewport — a measure wider than the line — to that system's right edge, as `.page` widens.
     /// - `.horizontal` — one page sized to `document.size` (both dimensions), since horizontal layout has no
     ///   separate viewport concept — the document *is* the page.
-    /// - `.page` — `document.systems` paginated by `LayoutPaginator` at `pageHeightMM`, each page a
+    /// - `.page` — `document` paginated by `LayoutDocument.paginate` at `pageHeightMM`, each page a
     ///   `pageWidthMM` × `pageHeightMM` slice with its first system lifted to y ≈ 0 (mirrors the original
     ///   inline implementation this was extracted from — see the two comments below for why). No paper margins:
     ///   those are `encodePagesWithSpans`'s, which no wire carries yet.
@@ -205,20 +205,8 @@ extension LayoutBridge {
             let paperWidthMM = margins.paperWidthMM(for: document, pageWidthMM: pageWidthMM)
             var pages: [EncodablePage] = []
             var spans: [[SystemSpan]] = []
-            for range in ranges {
-                // Lift each page's first system to y ≈ 0 (`pageTop(of:in:)`).
-                let sub = document.subdocument(systems: range, yOffset: -CGFloat(pageTop(of: range, in: document)))
-                // `subdocument` drops the title frame; only the first page (at
-                // y = 0) carries it, so re-attach it there. Without this the
-                // title block never renders in `.page` mode — the systems were
-                // already shifted down for it, leaving a blank gap.
-                let pageDoc = range.lowerBound == 0
-                    ? LayoutDocument(
-                        size: sub.size, systems: sub.systems,
-                        metrics: sub.metrics, titleFrame: document.titleFrame,
-                        chordSymbolCase: document.chordSymbolCase,
-                    )
-                    : sub
+            for (index, range) in ranges.enumerated() {
+                let pageDoc = pageDocument(index, of: ranges, in: document)
                 // Onto the paper: the leading and top margins in. Untouched for `.zero`.
                 let built = margins.place(buildCommandsWithSpans(
                     layout: pageDoc, tint: tint, drawsInvisibleElements: drawsInvisibleElements,
@@ -232,6 +220,27 @@ extension LayoutBridge {
             }
             return (pages, spans)
         }
+    }
+
+    /// The document `.page` mode draws page `index` of `ranges` from: `document.subdocument` lifted by the page's top
+    /// (`pageTop(of:in:)`), so its first system sits at y ≈ 0, with the frames that page holds — the last of `ranges`
+    /// takes the ones after the last system. `subdocument` drops the title block, which only the first page (at
+    /// y = 0) carries, so it is re-attached there: the title frame, its pictures and that page's frames. Without it
+    /// the title block never renders in `.page` mode — the systems were already shifted down for it, leaving a gap.
+    static func pageDocument(_ index: Int, of ranges: [Range<Int>], in document: LayoutDocument) -> LayoutDocument {
+        let range = ranges[index]
+        let sub = document.subdocument(
+            systems: range,
+            yOffset: -CGFloat(pageTop(of: range, in: document)),
+            isLastPage: index == ranges.count - 1,
+        )
+        guard range.lowerBound == 0 else { return sub }
+        return LayoutDocument(
+            size: sub.size, systems: sub.systems,
+            metrics: sub.metrics, titleFrame: document.titleFrame,
+            chordSymbolCase: document.chordSymbolCase,
+            frames: sub.frames, titleImages: document.titleImages,
+        )
     }
 
     /// Lay out `score` and return its pages with each system's `SystemSpan` — `computeWithDocument` for a renderer

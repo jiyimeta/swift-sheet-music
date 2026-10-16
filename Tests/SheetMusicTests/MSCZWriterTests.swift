@@ -96,6 +96,38 @@ struct MSCZWriterTests {
         #expect(reader.contains(path: "renamed.mscx"))
     }
 
+    // MARK: - Pictures
+
+    private static let pngEntry = "Pictures/c30a2fc8801ac2ae196a1d9580695545.png"
+
+    @Test func saveKeepsPicturesWithOptions() throws {
+        let original = try MSCZReader.parse(MSCXFixtureLoader.msczData("frames-pictures"))
+        let saved = try MSCZWriter.write(score: original, options: MSCXEncoderOptions())
+        try expectPictures(of: original, survive: saved)
+    }
+
+    @Test func saveKeepsPicturesWithoutOptions() throws {
+        let original = try MSCZReader.parse(MSCXFixtureLoader.msczData("frames-pictures"))
+        let saved = try MSCZWriter.write(score: original)
+        try expectPictures(of: original, survive: saved)
+    }
+
+    private func expectPictures(of original: Score, survive saved: Data) throws {
+        #expect(original.pictures.count == 2)
+        #expect(try MSCZReader.parse(saved).pictures == original.pictures)
+        let entries = try MSCZReader.extraEntries(in: saved)
+        #expect(entries.filter { $0.path == Self.pngEntry }.count == 1)
+        #expect(entries.filter { $0.path.hasPrefix("Pictures/") }.count == 2)
+    }
+
+    @Test func orphanPictureIsNotWritten() throws {
+        var score = try MSCZReader.parse(MSCXFixtureLoader.msczData("frames-pictures"))
+        score.pictures["orphan.png"] = Data([0x01, 0x02, 0x03])
+        let saved = try MSCZWriter.write(score: score)
+        let reader = try ZipReader(data: saved)
+        #expect(!reader.contains(path: "Pictures/orphan.png"))
+    }
+
     @Test func writeToBadURLThrowsIOError() {
         let bogus = URL(fileURLWithPath: "/nonexistent-dir-\(UUID().uuidString)/out.mscz")
         do {

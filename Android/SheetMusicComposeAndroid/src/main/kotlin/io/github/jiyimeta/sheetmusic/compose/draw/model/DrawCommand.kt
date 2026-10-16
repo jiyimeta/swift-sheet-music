@@ -104,6 +104,38 @@ sealed class DrawCommand {
      */
     data object FillPath : DrawCommand()
 
+    /**
+     * An encoded raster image (PNG or JPEG) drawn into the rect (document mm, top-left origin). Discriminator
+     * 13. The generated codec maps Swift's `Data` to [ByteArray], so `equals` / `hashCode` compare content.
+     */
+    class DrawImage(
+        val data: ByteArray,
+        val x: Double, val y: Double,
+        val w: Double, val h: Double,
+    ) : DrawCommand() {
+        /**
+         * [data]'s content hash, worked out once per command instead of on every draw: the renderer keys its
+         * decoded-picture cache by it (`ScoreCanvas`), and [hashCode] starts from it. A hash is not identity, so
+         * that cache and [equals] still compare the bytes.
+         */
+        internal val contentHash: Int by lazy(LazyThreadSafetyMode.PUBLICATION) { data.contentHashCode() }
+
+        override fun equals(other: Any?): Boolean =
+            other is DrawImage && data.contentEquals(other.data) &&
+                x == other.x && y == other.y && w == other.w && h == other.h
+
+        override fun hashCode(): Int {
+            var result = contentHash
+            result = 31 * result + x.hashCode()
+            result = 31 * result + y.hashCode()
+            result = 31 * result + w.hashCode()
+            result = 31 * result + h.hashCode()
+            return result
+        }
+
+        override fun toString(): String = "DrawImage(data=${data.size} bytes, x=$x, y=$y, w=$w, h=$h)"
+    }
+
     /** Bit positions in [SetTextStyle.flags]. Mirrors Swift's `DrawCommand.TextStyleFlag`. */
     object TextStyleFlag {
         const val BOLD: UByte = 1u

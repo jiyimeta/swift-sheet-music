@@ -26,6 +26,9 @@
     ///   SM_STRETCH — `EngravingSpacing.systemStretch` (default 1.5); a
     ///             host's note-spacing control scales this value
     ///
+    /// The title block, its pictures and the boxes between systems are drawn too (`renderDocumentBoxes`). Boxes
+    /// between systems are laid out only in wrap mode, so they appear only with `SM_WIDTH`.
+    ///
     /// Usage:
     ///   SM_SCORE=~/Documents/.../foo.mscz SM_COUNT=8 swift run render-previews
     @available(macOS 15.0, *)
@@ -81,11 +84,11 @@
             if let width {
                 try renderScoreToPNG(
                     score, to: outURL, scale: 2, options: opts,
-                    availableWidth: CGFloat(width),
+                    availableWidth: CGFloat(width), drawsBoxes: true,
                 )
             } else {
                 try renderScoreToPNG(
-                    score, to: outURL, scale: 2, options: opts,
+                    score, to: outURL, scale: 2, options: opts, drawsBoxes: true,
                 )
             }
             print("wrote \(outURL.path)")

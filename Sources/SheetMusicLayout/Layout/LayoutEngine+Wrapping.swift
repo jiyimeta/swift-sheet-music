@@ -13,9 +13,13 @@ extension LayoutEngine {
     /// promotion in `engraving/rendering/score/systemlayout.cpp:262`
     /// (a page break implies a system break) — promotion is gated on
     /// `policy` per `LayoutBreakPolicy`.
+    ///
+    /// `frameBreaks` (`RenderContext.frameBreaks`) holds the measure indexes a frame sits before; a frame ends the
+    /// system whatever `policy` says, since MuseScore collects no measures across a box (`systemlayout.cpp:200-205`).
     static func measureForcesLineBreak(
-        at idx: Int, staves: [Staff], policy: LayoutBreakPolicy,
+        at idx: Int, staves: [Staff], policy: LayoutBreakPolicy, frameBreaks: Set<Int> = [],
     ) -> Bool {
+        if frameBreaks.contains(idx + 1) { return true }
         guard let s0 = staves.first,
               idx < s0.measures.count else { return false }
         let m = s0.measures[idx]
@@ -146,7 +150,9 @@ extension LayoutEngine {
     /// land as 4 + 4 instead of greedy 6 + 2. For longer spans,
     /// returns `Int.max` — letting the system packer fall back
     /// to width-only greedy wrap, matching MuseScore's behavior
-    /// for unbroken stretches.
+    /// for unbroken stretches. A frame break (`frameBreaks`) bounds the
+    /// span like an authored one, and a chunk counts the HBox room
+    /// inside it (`horizontalGaps`) as the packer's fit test does.
     static func balancedMeasuresPerSystem(
         fromIndex startIdx: Int,
         measureCount: Int,
@@ -155,12 +161,14 @@ extension LayoutEngine {
         contentAvail: CGFloat,
         staves: [Staff],
         policy: LayoutBreakPolicy,
+        frameBreaks: Set<Int> = [],
+        horizontalGaps: [Int: CGFloat] = [:],
     ) -> Int {
         // Find the END of the current break-bounded span.
         var endIdx = measureCount
         for i in startIdx ..< measureCount
             where measureForcesLineBreak(
-                at: i, staves: staves, policy: policy,
+                at: i, staves: staves, policy: policy, frameBreaks: frameBreaks,
             )
         {
             endIdx = i + 1
@@ -187,6 +195,7 @@ extension LayoutEngine {
                 let slice = minWidths[i ..< upper]
                 var w: CGFloat = slice.reduce(0, +)
                 if i == startIdx { w += firstHeaderBoost }
+                w += roomInside(i ..< upper, gaps: horizontalGaps)
                 maxChunkWidth = max(maxChunkWidth, w)
                 i = upper
             }

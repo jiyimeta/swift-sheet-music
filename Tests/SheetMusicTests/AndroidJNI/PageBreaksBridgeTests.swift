@@ -1,8 +1,13 @@
 #if SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT
+    #if canImport(CoreGraphics)
+        import CoreGraphics
+    #endif
     import Foundation
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicBridgeCore
     import SheetMusicCore
+    import SheetMusicLayout
+    import SheetMusicMSCX
     import Testing
 
     /// `nativePageBreaks` paginates the cached document a second time, so it has to resolve the break policy the
@@ -57,6 +62,188 @@
 
             let result = nativePageBreaks(scoreHandle: handle, pageHeightMM: 10000, optionsBytes: options)
             #expect(Self.boundaryCount(result) == expectedBoundaries)
+        }
+
+        // MARK: - Frames
+
+        private static let ptToMM = 25.4 / 72
+
+        /// Three whole-note bars and a ten-spatium box after the last one, holding `texts`.
+        private static func trailingFrameScore(texts: [FrameText] = []) -> Score {
+            let measures = (0 ..< 3).map { index in
+                Measure(voices: [Voice(elements: [
+                    .chord(Chord(duration: .whole, notes: [Note(pitch: 60 + index, tpc: 14)])),
+                ])])
+            }
+            let box = ScoreFrame(heightSp: 10, texts: texts, autoSize: false)
+            return Score(
+                division: 480,
+                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: measures)])],
+                blocks: [PositionedScoreBlock(beforeMeasureIndex: 3, block: .verticalFrame(box))],
+            )
+        }
+
+        /// The offsets of a `PageBreaksWire` payload, in millimetres.
+        private static func offsets(_ data: Data) -> [Double] {
+            let bytes = [UInt8](data)
+            return stride(from: 4, to: bytes.count - 7, by: 8).map { start in
+                Double(bitPattern: bytes[start ..< start + 8].reduce(UInt64(0)) { $0 << 8 | UInt64($1) })
+            }
+        }
+
+        /// `.page` options: wrapped, with the title block, cut into pages.
+        private static func pageOptions(breakPolicyRaw: UInt8 = 0) -> LayoutOptionsWire {
+            var wire = LayoutOptionsWire.verticalDefault
+            wire.layoutMode = LayoutOptionsWire.Mode.page.rawValue
+            wire.breakPolicyRaw = breakPolicyRaw
+            return wire
+        }
+
+        /// Vertical options with a 6 sp bottom margin, so the document's height is not where its content ends.
+        private static func marginedOptions() -> Data {
+            var wire = LayoutOptionsWire.verticalDefault
+            wire.spacing = EngravingSpacingWire(marginBottom: 6)
+            return wire.encodeToData()
+        }
+
+        /// `score` laid out by `nativeComputeLayout` with `options`, then its page breaks on a page `pageHeightMM`
+        /// tall, or — with `nil` — on one a point taller than the last system's bottom.
+        private static func breaks(
+            of score: Score, options: Data, pageHeightMM: Double? = nil,
+        ) throws -> (document: LayoutDocument, offsets: [Double]) {
+            let handle = scoreTable.insert(score)
+            defer { LayoutDocumentCache.release(handle); scoreTable.release(handle) }
+            _ = nativeComputeLayout(scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297, optionsBlob: options)
+            let document = try #require(LayoutDocumentCache.value(for: handle))
+            let last = try #require(document.systems.last)
+            let height = pageHeightMM ?? Double(last.origin.y + last.size.height + 1) * ptToMM
+            let data = nativePageBreaks(scoreHandle: handle, pageHeightMM: height, optionsBytes: options)
+            return (document, offsets(data))
+        }
+
+        /// Every system fits on one page and the box under the last one does not, so it gets a page of its own, which
+        /// ends at the box's bottom — the content's end, not the document's, whose height adds the bottom margin.
+        @Test func framesOnlyLastPageEndsAtTheContentBottom() throws {
+            let result = try Self.breaks(of: Self.trailingFrameScore(), options: Self.marginedOptions())
+            let box = try #require(result.document.frames.last)
+            try #require(result.document.size.height > box.bottom, "the bottom margin must be below the box")
+            #expect(result.offsets.count == 3)
+            #expect(abs((result.offsets.last ?? 0) - Double(box.bottom) * Self.ptToMM) < 1e-6)
+        }
+
+        /// A score without frames reports exactly the offsets it always did: the systems-only cut, ending at the last
+        /// system's bottom however large the bottom margin.
+        @Test func framelessOffsetsAreUnchanged() throws {
+            let result = try Self.breaks(
+                of: Self.pageBreakScore(), options: Self.marginedOptions(), pageHeightMM: 10000,
+            )
+            let document = result.document
+            let mmToPt = 72.0 / 25.4
+            let ranges = LayoutPaginator.paginate(
+                systems: document.systems, pageHeight: CGFloat(10000 * mmToPt), policy: .honor,
+            )
+            let tops = ranges.map { range -> Double in
+                guard range.lowerBound > 0 else { return 0 }
+                let previous = document.systems[range.lowerBound - 1]
+                return Double(previous.origin.y + previous.size.height) / mmToPt
+            }
+            let last = try #require(document.systems.last)
+            #expect(document.frames.isEmpty)
+            #expect(result.offsets == tops + [Double(last.origin.y + last.size.height) / mmToPt])
+        }
+
+        /// The second page starts where VBox B ends, not at the system above it: the box with the page break stays on
+        /// the page it closes (MuseScore `pagelayout.cpp:246`), so Kotlin lifts page 2 by the box's bottom.
+        @Test func thePageAfterABoxBreakStartsAtTheBoxsBottom() throws {
+            let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("frames-boxes"))
+            let result = try Self.breaks(of: score, options: Self.pageOptions().encodeToData(), pageHeightMM: 2000)
+            let boxMatch = result.document.frames.first { $0.pageBreakAfter }
+            let box = try #require(boxMatch)
+            try #require(result.offsets.count == 3, "offsets \(result.offsets)")
+            #expect(abs(result.offsets[1] - Double(box.bottom) * Self.ptToMM) < 1e-6)
+        }
+
+        /// `.page` mode draws a page per `document.paginate` range. On a page no music fills, frames-boxes still takes
+        /// two: VBox B's page break ends the first.
+        @Test func pageModeDrawsAPagePerRange() throws {
+            let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("frames-boxes"))
+            let wire = Self.pageOptions()
+            let laidOut = LayoutBridge.computePages(score: score, pageWidthMM: 210, pageHeightMM: 2000, options: wire)
+            let ranges = laidOut.document.paginate(pageHeight: CGFloat(2000 / Self.ptToMM), policy: wire.breakPolicy)
+            #expect(laidOut.pages.count == ranges.count)
+            #expect(ranges.count == 2)
+        }
+
+        /// Page 1 is drawn from a document that keeps the title block, the title's picture and the frames on it.
+        @Test func firstPageCarriesTheTitleAndItsFrames() throws {
+            let score = try MSCZReader.parse(MSCXFixtureLoader.msczData("frames-pictures"))
+            let wire = Self.pageOptions(breakPolicyRaw: 3)
+            let document = LayoutBridge.computePages(
+                score: score, pageWidthMM: 210, pageHeightMM: 2000, options: wire,
+            ).document
+            let ranges = LayoutBridge.pageRanges(document: document, options: wire, pageHeightMM: 2000, margins: .zero)
+            try #require(ranges.count == 1)
+            let first = LayoutBridge.pageDocument(0, of: ranges, in: document)
+            #expect(first.titleFrame == document.titleFrame)
+            #expect(first.titleImages.count == 1)
+            #expect(first.titleImages == document.titleImages)
+            #expect(first.frames.count == 1)
+            #expect(first.frames == document.frames)
+        }
+
+        /// Whether `commands` draw `string` as one `.text` command.
+        private static func drawsText(_ string: String, in commands: [DrawCommand]) -> Bool {
+            commands.contains { command in
+                if case let .text(text, _, _, _, _) = command { text == string } else { false }
+            }
+        }
+
+        /// Page 1's COMMANDS — not only the document it is drawn from — carry the title block, the title's picture and
+        /// the frames on that page, each frame in a span of its own. Under `.ignoreAll` VBox B's page break does not
+        /// count, so every box of frames-boxes is on the one page.
+        @Test func firstPageCommandsCarryTheTitleAndItsFrames() throws {
+            let wire = Self.pageOptions(breakPolicyRaw: 3)
+            let boxes = try MSCXParser.parse(MSCXFixtureLoader.mscxData("frames-boxes"))
+            let boxPages = LayoutBridge.computePages(score: boxes, pageWidthMM: 210, pageHeightMM: 2000, options: wire)
+            try #require(boxPages.pages.count == 1)
+            let commands = boxPages.pages[0].commands
+            for string in ["Frames", "Part II", "Interlude", "End"] {
+                #expect(Self.drawsText(string, in: commands), "\(string) is not drawn on page 1")
+            }
+            // The title's span, then one per frame.
+            let unindexed = boxPages.spans[0].filter { $0.systemIndex == nil }
+            #expect(unindexed.count == 1 + boxPages.document.frames.count)
+
+            let score = try MSCZReader.parse(MSCXFixtureLoader.msczData("frames-pictures"))
+            let pictures = LayoutBridge.computePages(score: score, pageWidthMM: 210, pageHeightMM: 2000, options: wire)
+            try #require(pictures.pages.count == 1)
+            let drawn = pictures.pages[0].commands.filter { if case .drawImage = $0 { true } else { false } }
+            #expect(drawn.count == 2)
+        }
+
+        /// A frames-only last page (the empty range after the last system) draws exactly its frames: the box's
+        /// commands, in one span without a system index, and nothing else.
+        @Test func framesOnlyLastPageDrawsOnlyItsFrames() throws {
+            let score = Self.trailingFrameScore(texts: [FrameText(style: .composer, text: "Fine")])
+            let wire = Self.pageOptions()
+            let probe = LayoutBridge.computePages(score: score, pageWidthMM: 210, pageHeightMM: 2000, options: wire)
+            let last = try #require(probe.document.systems.last)
+            // A point under the last system: every system fits on page 1, and the box under them does not.
+            let pageHeightMM = Double(last.origin.y + last.size.height + 1) * Self.ptToMM
+            let laidOut = LayoutBridge.computePages(
+                score: score, pageWidthMM: 210, pageHeightMM: pageHeightMM, options: wire,
+            )
+            let ranges = LayoutBridge.pageRanges(
+                document: laidOut.document, options: wire, pageHeightMM: pageHeightMM, margins: .zero,
+            )
+            let lastRange = try #require(ranges.last)
+            try #require(lastRange.isEmpty, "no frames-only page: \(ranges)")
+            let page = try #require(laidOut.pages.last)
+            let spans = try #require(laidOut.spans.last)
+            let onlyAFrame: [Int?] = [nil]
+            #expect(spans.map(\.systemIndex) == onlyAFrame)
+            #expect(spans.first?.commandRange == 0 ..< page.commands.count)
+            #expect(Self.drawsText("Fine", in: page.commands))
         }
     }
 #endif

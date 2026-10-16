@@ -507,5 +507,53 @@
                 #expect(try hiddenLedgerCount(lineCount: 3) == 1)
             }
         }
+
+        /// The draw program's half of an HBox's room (`LayoutSystem.staffLineGaps`), which Android, the web reader,
+        /// Windows and the PDF writer all draw from: each staff line is two runs, the first ending where the gap
+        /// starts and the second starting where it ends. A hand-built system pins the bridge apart from the engine
+        /// that fills the gaps (`HorizontalFrameLayoutTests`), and its origin is not zero, so the runs are pinned in
+        /// page coordinates. A separate extension so the suite's body stays inside the `type_body_length` budget.
+        extension StaffLineCountLayoutTests {
+            @Test("The bridge breaks each staff line over a staff-line gap")
+            func bridgeBreaksStaffLinesOverAGap() {
+                guard #available(macOS 15.0, *) else { return }
+                let metrics = StaffMetrics(staffSize: 20)
+                let system = LayoutSystem(
+                    origin: CGPoint(x: 3, y: 2),
+                    size: CGSize(width: 200, height: 60),
+                    measures: [],
+                    staffOrigins: [CGPoint(x: 10, y: 20)],
+                    staffAddresses: [],
+                    staffGeometries: [],
+                    partLabels: [],
+                    spanners: [],
+                    sp: metrics.sp,
+                    staffLineGaps: [80 ..< 110],
+                )
+                let document = LayoutDocument(size: system.size, systems: [system], metrics: metrics)
+                let commands = LayoutBridge.buildCommands(layout: document)
+                let ptToMM = 25.4 / 72.0
+                /// Back to points, rounded so the mm round trip cannot tell 83 from 82.99999.
+                func points(_ mm: Double) -> Double {
+                    (mm / ptToMM * 1000).rounded() / 1000
+                }
+                var runs: [(y: Double, from: Double, to: Double)] = []
+                for index in commands.indices where index >= 2 {
+                    guard case let .moveTo(fromX, fromY) = commands[index - 2],
+                          case let .lineTo(toX, toY) = commands[index - 1],
+                          case .stroke = commands[index],
+                          fromY == toY
+                    else { continue }
+                    runs.append((y: fromY, from: points(fromX), to: points(toX)))
+                }
+                #expect(Set(runs.map(\.y)).count == 5)
+                // The system starts at x = 3, so the staff at 10 and the gap at 80 ..< 110 land at 13 and 83 ..< 113;
+                // with no measures the lines end at the system's width, 200 + 3.
+                let line: [[Double]] = [[13, 83], [113, 203]]
+                let expected = Array(repeating: line, count: 5).flatMap(\.self)
+                let drawn = runs.sorted { ($0.y, $0.from) < ($1.y, $1.from) }.map { [$0.from, $0.to] }
+                #expect(drawn == expected)
+            }
+        }
     #endif
 #endif

@@ -56,6 +56,7 @@
             var dashOff: CGFloat = 0
             var rotationOpen = false
             var textStyleFlags: UInt8 = DrawCommand.TextStyleFlag.none
+            let images = ImageCache()
 
             init(ctx: CGContext, pxPerMM: CGFloat) {
                 self.ctx = ctx
@@ -135,8 +136,7 @@
                         fontSize: px(fontSize), xScale: CGFloat(xScale), fontId: fontId,
                     )
                 case let .setRotation(radians, pivotX, pivotY):
-                    // A state command like `setColor`: the next one replaces the rotation, so the open one is closed
-                    // first rather than stacked on (the wavy glissando sends one per wiggle and one reset after).
+                    // A state command: the next one replaces the open rotation rather than stacking on it.
                     if rotationOpen {
                         ctx.restoreGState()
                         applyColor()
@@ -152,6 +152,9 @@
                 case let .setDash(onMM, offMM):
                     dashOn = px(onMM)
                     dashOff = px(offMM)
+                case let .drawImage(data, x, y, w, h):
+                    let rect = CGRect(x: px(x), y: px(y), width: px(w), height: px(h))
+                    DrawProgramCGRenderer.drawImage(data, in: rect, ctx: ctx, cache: images)
                 }
             }
 

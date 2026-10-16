@@ -191,6 +191,8 @@ function boxMM(command: DrawCommand): Box | null {
         command.rightEdgeX,
         command.bottomY,
       );
+    case "drawImage":
+      return new Box(command.x, command.y, command.x + command.w, command.y + command.h);
     // State commands paint nothing themselves, so they contribute no box; nor do
     // the path terminators, whose points have already contributed theirs.
     case "stroke":

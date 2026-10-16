@@ -7,6 +7,10 @@ extension ScoreBlock {
         switch self {
         case let .verticalFrame(frame):
             return frame.encodeAsVBox(options: options)
+        case let .textFrame(frame):
+            return frame.encodeAsTBox(options: options)
+        case let .horizontalFrame(frame):
+            return frame.encodeAsHBox(options: options)
         case let .opaqueFrame(frame):
             var children: [XMLTreeNode] = []
             appendPreservedMarkup(

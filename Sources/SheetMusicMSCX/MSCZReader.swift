@@ -35,11 +35,13 @@ public enum MSCZReader {
                 ),
             )
         }
-        let score = try MSCXParser.parse(
+        let parsed = try MSCXParser.parse(
             mscxData, styleFileData: styleFileData(in: reader),
         )
         let settings = audioSettings(in: reader)
-        return settings.map { apply($0, to: score) } ?? score
+        var score = settings.map { apply($0, to: parsed) } ?? parsed
+        _ = MSCZPictures.load(from: reader, into: &score)
+        return score
     }
 
     /// Read `.mscz` bytes from a file URL and parse into a `Score`.
@@ -78,8 +80,9 @@ public enum MSCZReader {
             mscxData, styleFileData: styleFileData(in: reader),
         )
         let settings = audioSettings(in: reader)
-        let finalScore = settings.map { apply($0, to: inner.score) } ?? inner.score
-        return MSCXParseResult(score: finalScore, diagnostics: inner.diagnostics)
+        var finalScore = settings.map { apply($0, to: inner.score) } ?? inner.score
+        let pictureDiagnostics = MSCZPictures.load(from: reader, into: &finalScore)
+        return MSCXParseResult(score: finalScore, diagnostics: inner.diagnostics + pictureDiagnostics)
     }
 
     /// Read `.mscz` bytes from a file URL and parse with diagnostics.

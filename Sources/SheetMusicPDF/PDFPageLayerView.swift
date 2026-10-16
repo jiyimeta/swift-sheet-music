@@ -24,6 +24,14 @@
         public let systems: [LayoutSystem]
         public let pageStartY: CGFloat
         public let titleFrame: LayoutTitleFrame?
+        /// The frames between systems this page holds, in document coordinates (`LayoutDocument.frames`, cut as
+        /// `PDFExporter.export(document:sheets:…)` cuts them). One above the page's first system is drawn where it is,
+        /// so `pageStartY` must be at or above it — `LayoutDocument.pageTop(ofPageStartingAt:)`, as
+        /// `PDFExporter.Sheet.pageStartY` requires — or it lands in the top margin. A frame with a page break is on the
+        /// page it closes, under that page's last system.
+        public let frames: [LayoutFrame]
+        /// The title block's pictures, in document coordinates; only the page that carries `titleFrame` passes them.
+        public let titleImages: [LayoutFrameImage]
         public let metrics: StaffMetrics
         public let pageSize: CGSize
         public let margins: PageMargins
@@ -32,6 +40,8 @@
             systems: [LayoutSystem],
             pageStartY: CGFloat,
             titleFrame: LayoutTitleFrame? = nil,
+            frames: [LayoutFrame] = [],
+            titleImages: [LayoutFrameImage] = [],
             metrics: StaffMetrics,
             pageSize: CGSize,
             margins: PageMargins,
@@ -39,6 +49,8 @@
             self.systems = systems
             self.pageStartY = pageStartY
             self.titleFrame = titleFrame
+            self.frames = frames
+            self.titleImages = titleImages
             self.metrics = metrics
             self.pageSize = pageSize
             self.margins = margins
@@ -50,8 +62,8 @@
             ))
             view.configure(
                 systems: systems, pageStartY: pageStartY,
-                titleFrame: titleFrame, metrics: metrics,
-                pageSize: pageSize, margins: margins,
+                titleFrame: titleFrame, frames: frames, titleImages: titleImages,
+                metrics: metrics, pageSize: pageSize, margins: margins,
             )
             return view
         }
@@ -61,8 +73,8 @@
         ) {
             nsView.configure(
                 systems: systems, pageStartY: pageStartY,
-                titleFrame: titleFrame, metrics: metrics,
-                pageSize: pageSize, margins: margins,
+                titleFrame: titleFrame, frames: frames, titleImages: titleImages,
+                metrics: metrics, pageSize: pageSize, margins: margins,
             )
         }
     }
@@ -90,6 +102,8 @@
             systems: [LayoutSystem],
             pageStartY: CGFloat,
             titleFrame: LayoutTitleFrame?,
+            frames: [LayoutFrame],
+            titleImages: [LayoutFrameImage],
             metrics: StaffMetrics,
             pageSize: CGSize,
             margins: PageMargins,
@@ -103,6 +117,8 @@
                 pageStartY: pageStartY,
                 titleHash: titleFrame?.texts.map(\.text)
                     .joined(separator: "|"),
+                frames: frames,
+                titleImages: titleImages,
                 pageSize: pageSize,
                 margins: margins,
                 staffSize: metrics.staffHeight,
@@ -130,6 +146,15 @@
                 }
             }
 
+            // The title's pictures and the boxes between systems, from the screen's builder.
+            let boxes = Self.boxLayers(
+                titleFrame: titleFrame, titleImages: titleImages, frames: frames,
+                pageStartY: pageStartY, pageSize: pageSize, margins: margins,
+            )
+            for box in boxes {
+                host.addSublayer(box)
+            }
+
             // Systems — reuse the proven ScoreLayerBuilder output.
             for system in systems {
                 let systemLayer = SheetMusicUI
@@ -155,6 +180,8 @@
         let firstSystemId: ObjectIdentifier?
         let pageStartY: CGFloat
         let titleHash: String?
+        let frames: [LayoutFrame]
+        let titleImages: [LayoutFrameImage]
         let pageSize: CGSize
         let margins: PageMargins
         let staffSize: CGFloat

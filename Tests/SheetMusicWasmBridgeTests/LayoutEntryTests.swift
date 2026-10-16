@@ -100,6 +100,37 @@ struct LayoutEntryTests {
         #expect(pageBreaks(handle: handle, pageHeightMM: 10000).count == expectedBoundaries)
     }
 
+    /// Every system fits on one page and the box after the last bar does not, so it gets a page of its own — which
+    /// ends at the box's bottom: the content's end, not the document's, whose height adds the 6 sp bottom margin.
+    @Test("pageBreaks ends a frames-only last page at the content bottom")
+    func pageBreaksEndAFramesOnlyPageAtTheContentBottom() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.trailingFrameScore())))
+        defer { releaseScore(handle: handle) }
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions(marginBottom: 6))
+        let document = try #require(LayoutDocumentCache.value(for: Int64(handle)))
+        let last = try #require(document.systems.last)
+        let box = try #require(document.frames.last)
+        try #require(document.size.height > box.bottom, "the bottom margin must be below the box")
+        let ptToMM = 25.4 / 72
+        let breaks = pageBreaks(handle: handle, pageHeightMM: Double(last.origin.y + last.size.height + 1) * ptToMM)
+        #expect(breaks.count == 3)
+        #expect(abs((breaks.last ?? 0) - Double(box.bottom) * ptToMM) < 1e-6)
+    }
+
+    /// Without frames the last offset is the last system's bottom, as it always was, whatever the bottom margin.
+    @Test("pageBreaks of a score without frames still ends at the last system")
+    func pageBreaksWithoutFramesEndAtTheLastSystem() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.pageBreakScore())))
+        defer { releaseScore(handle: handle) }
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions(marginBottom: 6))
+        let document = try #require(LayoutDocumentCache.value(for: Int64(handle)))
+        let last = try #require(document.systems.last)
+        let breaks = pageBreaks(handle: handle, pageHeightMM: 10000)
+        #expect(document.frames.isEmpty)
+        #expect(breaks.count == 3)
+        #expect(breaks.last == Double(last.origin.y + last.size.height) / (72.0 / 25.4))
+    }
+
     /// The web's options reach the same resolution Android's do, so `.ignoreSystemBreaks` is not a policy one
     /// platform can express and the other cannot.
     @Test("breakPolicyRaw resolves through LayoutOptionsWire.breakPolicy")
@@ -223,6 +254,7 @@ struct LayoutEntryTests {
         transposeSemitones: Int = 0,
         hiddenStaves: [HiddenStaff] = [],
         clefOverrides: [ClefOverride] = [],
+        marginBottom: Double = -1,
     ) -> LayoutOptions {
         LayoutOptions(
             layoutMode: layoutMode,
@@ -240,7 +272,7 @@ struct LayoutEntryTests {
                 systemStretch: -1,
                 marginTop: -1,
                 marginLeading: -1,
-                marginBottom: -1,
+                marginBottom: marginBottom,
                 marginTrailing: -1,
                 firstSystemIndent: -1,
                 continuationSystemIndent: -1,

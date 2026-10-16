@@ -71,7 +71,22 @@ struct PDFPageWalker {
         case let .setDash(onMM, offMM):
             dash = (onMM, offMM)
             emitDash()
+        case let .drawImage(data, x, y, w, h):
+            image(data, x: x, y: y, w: w, h: h)
         }
+    }
+
+    // MARK: - Images
+
+    /// A picture filling the rectangle (millimetres, y down): the image's unit square, whose origin is its
+    /// bottom-left corner, scaled to the rectangle's size and moved there. `q … Q` keeps the matrix to itself.
+    /// A file the PDF cannot hold (`PDFImageXObject.make`) draws nothing.
+    private mutating func image(_ data: Data, x: Double, y: Double, w: Double, h: Double) {
+        guard let name = resources.imageName(data) else { return }
+        let k = Self.pointsPerMM
+        let matrix = [w * k, 0, 0, h * k, x * k, pageHeight - (y + h) * k]
+        let opaque = resources.alphaState(255)
+        emit("q /\(opaque) gs \(matrix.map(Self.number).joined(separator: " ")) cm /\(name) Do Q")
     }
 
     // MARK: - State

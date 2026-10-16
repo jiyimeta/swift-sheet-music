@@ -101,6 +101,29 @@ public enum PDFExporter {
         score: Score,
         options: Options = Options(),
     ) throws -> Data {
+        let paged = pagedLayout(score: score, options: options)
+        let sheets = paged.batches.enumerated().map { idx, page in
+            Sheet(
+                systems: page.systems,
+                pageStartY: page.startY,
+                pageSize: paged.resolved.page.size,
+                margins: paged.resolved.page.margins(forPageIndex: idx),
+            )
+        }
+        return try export(
+            document: paged.document,
+            sheets: sheets,
+            score: score,
+            options: SheetOptions(title: options.title, author: options.author),
+        )
+    }
+
+    /// What `export(score:options:)` draws: `score` laid out into the printable width of its resolved page
+    /// (`resolve(options:score:)`) and cut into batches by `paginate(document:page:policy:)`.
+    static func pagedLayout(
+        score: Score,
+        options: Options,
+    ) -> (document: LayoutDocument, resolved: Resolved, batches: [PageBatch]) {
         // Trigger Bravura registration on the export thread. The
         // on-screen views do this via their own bodies, but
         // `PDFExporter` is the first contact with `ImageRenderer` in
@@ -129,26 +152,8 @@ public enum PDFExporter {
             score: score, options: layoutOptions,
             availableWidth: availableWidth,
         )
-        let pages = paginate(
-            systems: document.systems,
-            page: resolved.page,
-            policy: options.breakPolicy,
-        )
-
-        let sheets = pages.enumerated().map { idx, page in
-            Sheet(
-                systems: page.systems,
-                pageStartY: page.startY,
-                pageSize: resolved.page.size,
-                margins: resolved.page.margins(forPageIndex: idx),
-            )
-        }
-        return try export(
-            document: document,
-            sheets: sheets,
-            score: score,
-            options: SheetOptions(title: options.title, author: options.author),
-        )
+        let batches = paginate(document: document, page: resolved.page, policy: options.breakPolicy)
+        return (document, resolved, batches)
     }
 
     /// Render `score` and write the resulting PDF to `url`.
@@ -184,11 +189,42 @@ public enum PDFExporter {
     /// single system is allowed to exceed the usable height (it
     /// just spills off its page) rather than being clipped or
     /// dropped.
+    ///
+    /// The frames between systems (`LayoutDocument.frames`) enter as `LayoutPaginator.paginate` takes them:
+    /// `pageBreaksBefore` starts a page at each listed system (the one below a frame with `pageBreakAfter`; ignored
+    /// under `.ignoreAll` and outside `1 ..< systems.count`), its value the lowest bottom of those frames. They stay at
+    /// the bottom of the page they close, so that page must hold them under its last system — one that does not fit
+    /// with them moves to the next page with them, unless it is the page's first — and the next page starts at their
+    /// bottom. A `trailingFramesBottom` — the lowest bottom of the frames after the last system — adds a batch with no
+    /// systems, whose `startY` is the last system's bottom, when those frames do not fit on the last page or an
+    /// honored page break on the last system already closed it. A page whose first system is in
+    /// `systemsWithFrameAbove` (a frame sits between it and the system before) starts at that previous system's bottom
+    /// rather than at its own top, so the frame is on this page and not lost between two — or, for a system in
+    /// `pageBreaksBefore`, at the bottom of the frames whose break it is, so they stay on the page above. Every other
+    /// page starts where it always did. Each page therefore starts at `LayoutDocument.pageTop(ofPageStartingAt:)` when
+    /// a frame sits above its first system. With frames, `policy` must be the break policy the document was laid out
+    /// with, as `LayoutDocument.paginate(pageHeight:policy:)` says.
+    ///
+    /// The three frame parameters are derived from a document internally — `export(score:options:)` cuts through
+    /// `paginate(document:page:policy:)`, which reads the `package` helpers behind
+    /// `LayoutDocument.paginate(pageHeight:policy:)` — so a host cannot compute them itself. A host printing a
+    /// document with frames calls `export(score:options:)`, or cuts its own pages with
+    /// `LayoutDocument.paginate(pageHeight:policy:)` and draws them with `export(document:sheets:score:options:)`, each
+    /// sheet starting as `Sheet.pageStartY` requires. Called without them, this paginates the systems as if there were
+    /// no frames.
     public static func paginate(
         systems: [LayoutSystem],
         page: EngravingPage,
         policy: LayoutBreakPolicy = .honor,
+        pageBreaksBefore: [Int: CGFloat] = [:],
+        trailingFramesBottom: CGFloat? = nil,
+        systemsWithFrameAbove: Set<Int> = [],
     ) -> [PageBatch] {
+        let forced: [Int: CGFloat] = policy == .ignoreAll
+            ? [:]
+            : pageBreaksBefore.filter { $0.key >= 1 && $0.key < systems.count }
+        // A frame's page break sits in a frame above the system it breaks before.
+        let framed = systemsWithFrameAbove.union(pageBreaksBefore.keys)
         var pages: [PageBatch] = []
         var currentSystems: [LayoutSystem] = []
         var currentStartY: CGFloat = 0
@@ -203,51 +239,69 @@ public enum PDFExporter {
             return system.measures.last?.pageBreak ?? false
         }
 
-        for system in systems {
+        /// Where a later page starting with system `index` starts: its own top, or — when a frame sits between it and
+        /// the previous system — that system's bottom, so the frame is drawn on this page rather than lost between
+        /// two, or the bottom of the frames whose page break comes before `index`, which stay on the page above.
+        func startY(ofPageAt index: Int) -> CGFloat {
+            guard index > 0, framed.contains(index) else { return systems[index].origin.y }
+            let previousBottom = systems[index - 1].origin.y + systems[index - 1].size.height
+            return max(previousBottom, forced[index] ?? previousBottom)
+        }
+
+        for (index, system) in systems.enumerated() {
             if currentSystems.isEmpty {
                 // Page 1 always anchors at doc Y = 0 so a leading
                 // title frame (which sits above the first system in
                 // doc coords) lands inside the page's content area
                 // rather than off the top. Without a title, system
                 // 0's origin.y is also 0 — same answer either way.
-                currentStartY = pages.isEmpty ? 0 : system.origin.y
+                currentStartY = pages.isEmpty ? 0 : startY(ofPageAt: index)
                 currentSystems.append(system)
                 if systemEndsPage(system) {
-                    pages.append(PageBatch(
-                        startY: currentStartY,
-                        systems: currentSystems,
-                    ))
+                    pages.append(PageBatch(startY: currentStartY, systems: currentSystems))
                     currentSystems = []
                 }
                 continue
             }
-            let bottomOnPage =
-                (system.origin.y + system.size.height) - currentStartY
-            if bottomOnPage > usableHeight(forPageIndex: pages.count) {
-                pages.append(PageBatch(
-                    startY: currentStartY,
-                    systems: currentSystems,
-                ))
-                currentStartY = system.origin.y
+            // Down to the frames under this system when their page break ends the page there.
+            let reach = max(system.origin.y + system.size.height, forced[index + 1] ?? -CGFloat.infinity)
+            if forced[index] != nil || reach - currentStartY > usableHeight(forPageIndex: pages.count) {
+                pages.append(PageBatch(startY: currentStartY, systems: currentSystems))
+                currentStartY = startY(ofPageAt: index)
                 currentSystems = [system]
             } else {
                 currentSystems.append(system)
             }
             if systemEndsPage(system) && !currentSystems.isEmpty {
-                pages.append(PageBatch(
-                    startY: currentStartY,
-                    systems: currentSystems,
-                ))
+                pages.append(PageBatch(startY: currentStartY, systems: currentSystems))
                 currentSystems = []
             }
         }
+        // As in `LayoutPaginator`: the trailing frames get a batch of their own when they do not fit on the open page,
+        // and always when a page break on the last system's last measure has already closed it.
+        let lastBottom = systems.last.map { $0.origin.y + $0.size.height }
+        let closedByPageBreak = currentSystems.isEmpty
+        let openPageIndex = pages.count
         if !currentSystems.isEmpty {
-            pages.append(PageBatch(
-                startY: currentStartY,
-                systems: currentSystems,
-            ))
+            pages.append(PageBatch(startY: currentStartY, systems: currentSystems))
+        }
+        if let trailingFramesBottom, let lastBottom,
+           closedByPageBreak || trailingFramesBottom - currentStartY > usableHeight(forPageIndex: openPageIndex)
+        {
+            pages.append(PageBatch(startY: lastBottom, systems: []))
         }
         return pages
+    }
+
+    /// `paginate(systems:page:policy:…)` of `document.systems` with what its frames ask of the cut, derived as
+    /// `LayoutDocument.paginate(pageHeight:policy:)` derives it, so the PDF and the page-mode readers put every frame
+    /// on the same page.
+    static func paginate(document: LayoutDocument, page: EngravingPage, policy: LayoutBreakPolicy) -> [PageBatch] {
+        paginate(
+            systems: document.systems, page: page, policy: policy,
+            pageBreaksBefore: document.pageBreakFrameBottoms, trailingFramesBottom: document.trailingFramesBottom,
+            systemsWithFrameAbove: document.systemsBelowFrames,
+        )
     }
 
     // MARK: - Resolution

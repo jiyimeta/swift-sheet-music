@@ -70,13 +70,10 @@ public enum BarLineGeometry {
     /// C++: `TLayout::layoutStaffLines`
     /// (`src/engraving/rendering/score/tlayout.cpp:5184-5188`).
     public static func staffLineEndX(for system: LayoutSystem) -> CGFloat {
-        guard let bar = system.trailingBarLine else {
+        guard let last = system.measures.last, let bar = trailingBarLine(of: last) else {
             return system.size.width
         }
-        let barEnd = bar.x + rightExtent(
-            subtype: bar.subtype, sp: system.sp,
-        )
-        guard let last = system.measures.last else { return barEnd }
+        let barEnd = strokeEndX(of: bar, sp: system.sp)
         let barX = bar.x - last.origin.x
         let announcesCourtesy = last.elements.contains { element in
             switch element {
@@ -89,6 +86,65 @@ public enum BarLineGeometry {
         }
         guard announcesCourtesy else { return barEnd }
         return max(barEnd, last.origin.x + last.width)
+    }
+
+    /// The system-local x runs one staff's lines are drawn over, left to right: from `startX` (where the staff starts)
+    /// to `staffEndX`, broken at each of `system.staffLineGaps` — an `<HBox>`'s room, where MuseScore draws no staff
+    /// because staff lines belong to measures. A system without gaps gives the one run every renderer drew before.
+    /// The one place the split rule lives, so the Apple renderers, the draw program and the staff bands break the
+    /// lines at the same x.
+    ///
+    /// `staffEndX` is `staffLineEndX(for: system)`. The caller works it out once per system and passes it for every
+    /// staff, as the renderers did before the split: it scans the last measure's elements, so per staff it would cost
+    /// a system of N staves N scans.
+    ///
+    /// Without a gap inside the staff this is exactly `[startX ..< max(startX, staffEndX)]`, so a score without an
+    /// HBox draws the lines it always drew, byte for byte.
+    package static func staffLineSegments(
+        for system: LayoutSystem, startX: CGFloat, staffEndX: CGFloat,
+    ) -> [Range<CGFloat>] {
+        let endX = max(startX, staffEndX)
+        let gaps = system.staffLineGaps.filter { $0.upperBound > startX && $0.lowerBound < endX }
+        guard !gaps.isEmpty else { return [startX ..< endX] }
+        var runs: [Range<CGFloat>] = []
+        var runStart = startX
+        for gap in gaps {
+            if gap.lowerBound > runStart {
+                runs.append(runStart ..< gap.lowerBound)
+            }
+            runStart = max(runStart, gap.upperBound)
+        }
+        if runStart < endX {
+            runs.append(runStart ..< endX)
+        }
+        return runs
+    }
+
+    /// Where the rightmost barline stroke `measure` draws ends, in system-local x: that barline's `origin.x` plus its
+    /// subtype's `rightExtent`. Staff lines stop there at a system's end (`staffLineEndX(for:)`) and before an
+    /// `<HBox>`'s room (`LayoutSystem.staffLineGaps`), as MuseScore's stop at the barline. `nil` when the measure draws
+    /// no barline.
+    static func barLineEndX(of measure: LayoutMeasure, sp: CGFloat) -> CGFloat? {
+        trailingBarLine(of: measure).map { strokeEndX(of: $0, sp: sp) }
+    }
+
+    /// Subtype and system-local x of the rightmost barline `measure` draws, `nil` when it draws none. The first of two
+    /// at the same x wins. Backs `LayoutSystem.trailingBarLine`.
+    static func trailingBarLine(of measure: LayoutMeasure) -> (subtype: String?, x: CGFloat)? {
+        var rightmostX: CGFloat = -.infinity
+        var rightmostSubtype: String?
+        for el in measure.elements {
+            if case let .barLine(s, p, _, _, _) = el, p.x > rightmostX {
+                rightmostX = p.x
+                rightmostSubtype = s
+            }
+        }
+        guard rightmostX.isFinite else { return nil }
+        return (rightmostSubtype, measure.origin.x + rightmostX)
+    }
+
+    private static func strokeEndX(of bar: (subtype: String?, x: CGFloat), sp: CGFloat) -> CGFloat {
+        bar.x + rightExtent(subtype: bar.subtype, sp: sp)
     }
 
     /// Distance from the barline `origin.x` to the right edge of the

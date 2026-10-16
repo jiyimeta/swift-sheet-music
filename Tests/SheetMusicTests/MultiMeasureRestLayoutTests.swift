@@ -148,5 +148,24 @@
             // Two separate 2-measure runs, each emitted as one H-bar.
             #expect(hbarCounts == [2, 2])
         }
+
+        @Test("an authored line break on a collapsed run's last measure ends the system")
+        func authoredBreakAfterACollapsedRestEndsTheSystem() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            // Rests 0…19 with a note in 15 and a line break on 14: the planner closes the run `0 ..< 15` at the
+            // break, so the break sits on an interior measure the packer used to skip without checking it.
+            var measures = (0 ..< 20).map { _ in Self.restMeasure() }
+            measures[14].lineBreak = true
+            measures[15] = Self.soundingMeasure()
+            let opts = ScoreViewOptions(
+                multiMeasureRest: .collapse(minimumMeasures: 2),
+            )
+            let doc = LayoutEngine.layout(
+                score: Self.score(measures), options: opts, availableWidth: 1200,
+            )
+            #expect(doc.systems.flatMap(\.measures).compactMap(\.multiMeasureRest) == [15, 4])
+            let starts = doc.systems.compactMap { $0.measures.first?.measureIndex }
+            #expect(starts.contains(15))
+        }
     }
 #endif

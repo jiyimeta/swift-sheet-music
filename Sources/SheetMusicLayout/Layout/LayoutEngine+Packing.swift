@@ -53,6 +53,8 @@ extension LayoutEngine {
         // staves subdivide a long element — see
         // `crossStaffMinimumMeasureWidth`.)
         let plan = context.multiMeasureRestPlan
+        // HBox room before a measure (`LayoutEngine+HorizontalGaps`): counted wherever a system's width is tested.
+        let horizontalGaps = context.horizontalGaps
         // Read from the context, not recomputed here: it is built once
         // at layout entry (see `LayoutEngine.layout`), not once per
         // system-pack call.
@@ -273,6 +275,8 @@ extension LayoutEngine {
                     contentAvail: contentAvail,
                     staves: staves,
                     policy: context.options.breakPolicy,
+                    frameBreaks: context.frameBreaks,
+                    horizontalGaps: horizontalGaps,
                 )
                 : Int.max
             // MuseScore-style natural-stretch target. Systems
@@ -297,13 +301,27 @@ extension LayoutEngine {
                 // run's start.
                 if context.multiMeasureRestPlan.isInteriorOfRun(cursor) {
                     cursor += 1
+                    // A run's last measure is interior: its break (authored, or a frame right after the run) ends
+                    // the system here, as the check at the bottom of this loop does for a drawn measure.
+                    if context.options.wrapToViewWidth,
+                       cursor > systemStart,
+                       measureForcesLineBreak(
+                           at: cursor - 1, staves: staves, policy: context.options.breakPolicy,
+                           frameBreaks: context.frameBreaks,
+                       )
+                    {
+                        break
+                    }
                     continue
                 }
-                let baseW = minWidths[cursor]
+                let room = roomBefore(cursor, systemStart: systemStart, in: horizontalGaps)
+                let baseW = minWidths[cursor] + room
                 let w = cursor == systemStart
                     ? baseW + firstHeaderBoost
                     : baseW
-                let naturalW = naturalWidthRatio(cursor, w)
+                // An HBox's room does not stretch: against the line it costs its width once, which in these
+                // `÷ naturalStretch` units is `room / naturalStretch` (MS adds a box 1:1 to `curSysWidth`).
+                let naturalW = naturalWidthRatio(cursor, w - room) + room / naturalStretch
                 // Hard ceiling — never let a system overflow the
                 // page horizontally.
                 if context.options.wrapToViewWidth
@@ -348,6 +366,7 @@ extension LayoutEngine {
                        at: cursor - 1,
                        staves: staves,
                        policy: context.options.breakPolicy,
+                       frameBreaks: context.frameBreaks,
                    )
                 {
                     break
@@ -377,7 +396,7 @@ extension LayoutEngine {
                     }
                     guard candidate > systemStart else { break }
                     for idx in candidate ..< cursor {
-                        widthSoFar -= minWidths[idx]
+                        widthSoFar -= minWidths[idx] + roomBefore(idx, systemStart: systemStart, in: horizontalGaps)
                     }
                     cursor = candidate
                 }
@@ -404,7 +423,7 @@ extension LayoutEngine {
             if context.options.wrapToViewWidth {
                 stretched = stretchWidths(
                     widths: widthsSlice,
-                    availableWidth: contentAvail,
+                    availableWidth: contentAvail - roomInside(systemStart ..< cursor, gaps: horizontalGaps),
                     shouldStretch: true,
                 )
             } else {
@@ -430,6 +449,8 @@ extension LayoutEngine {
                     )
                 }
             }
+            // HBox room joins its measure's slot only now, so no stretch scales it; `buildSystem` takes it back out.
+            let slots = slotsWithRoom(stretched, systemStart: systemStart, gaps: horizontalGaps)
             // Snapshot carry-in state BEFORE buildSystem mutates it.
             // Used either as cache key (on miss store) or for hit check.
             let activeClefsIn = activeClefs
@@ -438,7 +459,7 @@ extension LayoutEngine {
             let inputs = systemInputs(
                 measureStart: systemStart,
                 measureCount: measureCount,
-                widths: stretched,
+                widths: slots,
                 isFirstSystem: isFirstSystem,
                 activeClefsIn: activeClefsIn,
                 activeKeysIn: activeKeysIn,
@@ -461,7 +482,7 @@ extension LayoutEngine {
                 // then shift to currentY for placement.
                 let unshifted = buildSystem(
                     measureRange: systemStart ..< cursor,
-                    widths: stretched,
+                    widths: slots,
                     systemOriginY: 0,
                     isFirstSystem: isFirstSystem,
                     trailingCourtesy: trailingCourtesy,

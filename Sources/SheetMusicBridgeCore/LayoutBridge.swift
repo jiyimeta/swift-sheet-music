@@ -31,9 +31,11 @@ import SheetMusicLayout
 /// (converted back to pt). Real multi-page pagination is a future task.
 ///
 /// ### Draw commands emitted
-/// For each `LayoutSystem` the bridge emits:
+/// First the title block — its texts, then its pictures — and each box between systems (`LayoutDocument.frames`, see
+/// `LayoutBridge+Frames`) just before the system below it. For each `LayoutSystem` the bridge emits:
 /// 1. Each staff's own lines — `StaffLineGeometry.lineCount` of them, which
-///    is five only for a standard staff (moveTo + lineTo + stroke triples).
+///    is five only for a standard staff (moveTo + lineTo + stroke triples,
+///    one per run: an HBox's room breaks every line in two).
 /// 2. Per `LayoutMeasure`: its elements — clef glyphs, time-sig glyphs,
 ///    note-head glyphs, rest glyphs, and barline strokes. Unknown/unhandled
 ///    element types fall back to a small `fillRect` placeholder.
@@ -122,40 +124,62 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         if let titleFrame = layout.titleFrame {
             let start = out.count
             appendTitleFrame(titleFrame, into: &out)
+            // Its pictures, in document coordinates, inside its span after its texts.
+            appendImages(layout.titleImages, originY: 0, into: &out)
             closeSpan(systemIndex: nil, from: start, frameMM: DrawRect(
                 x: 0, y: 0, width: Double(layout.size.width) * ptToMM, height: Double(titleFrame.height) * ptToMM,
             ))
         }
 
+        // The boxes between systems, top to bottom: each just before the first system below it (those after the last
+        // system at the end), in a span of its own, so a walker of the spans meets the page in order.
+        var pendingFrames = layout.frames[...]
+        /// Emits, each in its own span, the pending frames whose top is above `limitY` (all of them for nil).
+        func emitFrames(above limitY: Double?) {
+            while let frame = pendingFrames.first {
+                if let limitY, Double(frame.originY) >= limitY { return }
+                pendingFrames.removeFirst()
+                let start = out.count
+                appendFrames([frame], into: &out)
+                closeSpan(
+                    systemIndex: nil, from: start,
+                    frameMM: frameBoxMM(frame, documentWidthPt: Double(layout.size.width)),
+                )
+            }
+        }
+
         for (systemIndex, system) in layout.systems.enumerated() {
+            emitFrames(above: Double(system.origin.y))
             let spanStart = out.count
             let sysOriginX = Double(system.origin.x)
             let sysOriginY = Double(system.origin.y)
             // Clip at the terminal barline on a plain system end, or span
             // through the trailing announcement band when it carries
             // courtesy signatures.
-            let endX = Double(BarLineGeometry.staffLineEndX(for: system))
+            let endX = BarLineGeometry.staffLineEndX(for: system)
             let showsInvisible = system.showsInvisibleElements && drawsInvisibleElements
 
             // ── 1. Staff lines ──────────────────────────────────────────────
+            // One triple per run: an HBox's room breaks every line in two.
             for (staffIndex, staffOrigin) in system.staffOrigins.enumerated() {
-                let ox = Double(staffOrigin.x) + sysOriginX
+                let runs = BarLineGeometry.staffLineSegments(for: system, startX: staffOrigin.x, staffEndX: endX)
                 let oy = Double(staffOrigin.y) + sysOriginY
-                let rightX = endX + sysOriginX
                 let geometry = system.geometry(atFlatIndex: staffIndex)
                 for line in 0 ..< geometry.lineCount {
                     let y = oy + Double(
                         geometry.lineY(line, sp: CGFloat(context.sp)),
                     )
-                    out.append(.moveTo(
-                        x: ox * ptToMM,
-                        y: y * ptToMM,
-                    ))
-                    out.append(.lineTo(
-                        x: rightX * ptToMM,
-                        y: y * ptToMM,
-                    ))
-                    out.append(.stroke(width: staffLineThickness * ptToMM))
+                    for run in runs {
+                        out.append(.moveTo(
+                            x: (Double(run.lowerBound) + sysOriginX) * ptToMM,
+                            y: y * ptToMM,
+                        ))
+                        out.append(.lineTo(
+                            x: (Double(run.upperBound) + sysOriginX) * ptToMM,
+                            y: y * ptToMM,
+                        ))
+                        out.append(.stroke(width: staffLineThickness * ptToMM))
+                    }
                 }
             }
 
@@ -243,6 +267,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 height: Double(system.size.height) * ptToMM,
             ))
         }
+        emitFrames(above: nil)
         return (out, spans)
     }
 

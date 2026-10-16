@@ -15,6 +15,7 @@
     // swiftlint:disable:next no_foundation_umbrella
     import Foundation
 #endif
+import SheetMusicFoundation
 
 /// A page-level frame that holds free-form text — typically the
 /// title block at the top of the score (`<VBox>` in MuseScore's
@@ -34,20 +35,46 @@ public struct ScoreFrame: Sendable, Equatable, Hashable {
     /// Source children that the typed frame model does not represent.
     /// This is fidelity, not semantics; no layout or editing pass reads it.
     public var preservedMarkup: [PreservedXML]
+    /// Gap above the frame in spatium; `nil` is MS's default of 7 sp (`box.cpp:255-258`).
+    public var topGapSp: CGFloat?
+    /// Gap below the frame in spatium; `nil` is MS's default of 7 sp.
+    public var bottomGapSp: CGFloat?
+    /// MS `boxAutoSize`; `nil` is the MS default, true (`box.cpp:265-266`). Optional so a written `1` is written
+    /// back like a written gap.
+    public var autoSize: Bool?
+    /// The `<Image>` children (MS `image.cpp`); the bytes live in `Score.pictures`.
+    public var images: [FrameImage]
+
+    /// Whether the frame carries a page break (a `LayoutBreak` whose `subtype` is `page`). Computed from
+    /// `preservedMarkup` so it cannot go stale when a host edits the bag.
+    public var pageBreakAfter: Bool {
+        preservedMarkup.hasPageBreak
+    }
 
     public init(
         heightSp: CGFloat,
         texts: [FrameText],
         preservedMarkup: [PreservedXML] = [],
+        topGapSp: CGFloat? = nil,
+        bottomGapSp: CGFloat? = nil,
+        autoSize: Bool? = nil,
+        images: [FrameImage] = [],
     ) {
         self.heightSp = heightSp
         self.texts = texts
         self.preservedMarkup = preservedMarkup
+        self.topGapSp = topGapSp
+        self.bottomGapSp = bottomGapSp
+        self.autoSize = autoSize
+        self.images = images
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(heightSp)
         hasher.combine(texts)
+        hasher.combine(topGapSp)
+        hasher.combine(bottomGapSp)
+        hasher.combine(autoSize)
     }
 }
 
@@ -86,6 +113,9 @@ public struct FrameText: Sendable, Equatable, Hashable {
     /// resolved via `ScoreStyle`. MuseScore writes this child only
     /// when the element diverges from the style's alignment.
     public var align: TextAlign?
+    /// The `<style>` value as written when it names none of the modeled roles (a TBox's `frame`, a user style); `nil`
+    /// when the style is modeled or absent.
+    public var otherStyleName: String?
 
     public init(
         style: Style, text: String,
@@ -93,12 +123,29 @@ public struct FrameText: Sendable, Equatable, Hashable {
         fontSize: Double? = nil,
         align: TextAlign? = nil,
         preservedTextMarkup: PreservedTextMarkup? = nil,
+        otherStyleName: String? = nil,
     ) {
+        self.otherStyleName = otherStyleName
         self.style = style
         self.text = text
         self.preservedTextMarkup = preservedTextMarkup
         self.offsetMm = offsetMm
         self.fontSize = fontSize
         self.align = align
+    }
+
+    /// The text on one line: each `\n` (a run of them too) becomes one space, and the ends are trimmed.
+    public var singleLineText: String {
+        text.joinedOnOneLine()
+    }
+}
+
+extension String {
+    /// Each `\n` (a run of them too) becomes one space and the ends are trimmed — the one rule behind
+    /// `FrameText.singleLineText` and `SetScoreInfo`'s restatement check.
+    func joinedOnOneLine() -> String {
+        split(separator: "\n", omittingEmptySubsequences: true)
+            .joined(separator: " ")
+            .trimmingWhitespaceAndNewlines()
     }
 }

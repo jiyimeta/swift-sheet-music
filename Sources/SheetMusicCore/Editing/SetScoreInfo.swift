@@ -53,13 +53,29 @@ public struct SetScoreInfo: EditCommand {
         }
         guard !writes.isEmpty else { throw Self.refused(.nothingToApply) }
         for write in writes {
-            let value = write.normalizedText
+            let value = Self.value(of: write, in: score)
             score.metaTags[write.field.metaTagKey] = value
             if let style = write.field.frameTextStyle {
                 Self.write(value, as: style, into: &score)
             }
         }
         return SetScoreInfo(restoringBlocks: previousBlocks, metaTags: previousMetaTags)
+    }
+
+    /// The text `apply` writes for `write`: the write's own, unless it restates the field's current text — that text
+    /// itself, or the one-line form the hosts display and send back (`FrameText.singleLineText`) — in which case the
+    /// current text, line breaks included.
+    ///
+    /// The hosts send every field of their info sheet on save, so without this a save that changed only the composer
+    /// would flatten a two-line subtitle into one line. Writing the current text rather than skipping the write keeps
+    /// the repair `isRestatement` protects: a field whose text lives only in the metaTag is still engraved. The cost
+    /// is that removing nothing but a line break ("A\nB" → "A B") through this command changes nothing.
+    private static func value(of write: ScoreInfoWrite, in score: Score) -> String? {
+        let value = write.normalizedText
+        guard let existing = current(write.field, in: score),
+              existing == value || existing.joinedOnOneLine() == value
+        else { return value }
+        return existing
     }
 
     /// Put `value` in the title frame under `style`, or take that text out when `value` is `nil`.
@@ -127,11 +143,16 @@ public struct SetScoreInfo: EditCommand {
             // A field with an engraved style is a restatement only when BOTH places already agree: a metaTag that
             // matches while the title block is empty is exactly the state this command exists to repair, and
             // planning it to `nil` would leave the page blank forever.
-            guard current(write.field, in: score) == write.normalizedText else { return false }
+            // The hosts show a multi-line title on one line and send that line back, so the one-line form of the
+            // current value restates it too — otherwise saving unchanged would flatten the engraved line breaks.
+            let existing = current(write.field, in: score)
+            guard existing == write.normalizedText || existing?.joinedOnOneLine() == write.normalizedText else {
+                return false
+            }
             guard let style = write.field.frameTextStyle else { return true }
             let engraved = score.titleFrame?.texts
-                .first { $0.style == style }?.text.trimmingWhitespaceAndNewlines()
-            let stored = score.metaTags[write.field.metaTagKey]?.trimmingWhitespaceAndNewlines()
+                .first { $0.style == style }?.text.joinedOnOneLine()
+            let stored = score.metaTags[write.field.metaTagKey]?.joinedOnOneLine()
             return (engraved?.isEmpty == false ? engraved : nil) == (stored?.isEmpty == false ? stored : nil)
         }
     }

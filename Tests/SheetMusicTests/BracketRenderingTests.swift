@@ -186,5 +186,50 @@
             )
             #expect((root.sublayers ?? []).isEmpty)
         }
+
+        /// `drawStaves` strokes one path per staff with a subpath per run of each line, so a staff-line gap
+        /// (`LayoutSystem.staffLineGaps`, an HBox's room) is a hole in all five lines: each line is two runs, the
+        /// first ending where the gap starts and the second starting where it ends. Without measures the lines end at
+        /// the system's width.
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test func staffLinesBreakOverAGap() throws {
+            let metrics = StaffMetrics(staffSize: 28)
+            let system = LayoutSystem(
+                origin: .zero,
+                size: CGSize(width: 200, height: 200),
+                measures: [],
+                staffOrigins: [CGPoint(x: 60, y: 20)],
+                staffAddresses: [],
+                staffGeometries: [],
+                partLabels: [],
+                spanners: [],
+                sp: metrics.sp,
+                staffLineGaps: [100 ..< 130],
+            )
+            let root = CALayer()
+            ScoreLayerBuilder.drawStaves(
+                system: system, metrics: metrics,
+                height: system.size.height, into: root,
+            )
+            let shapes = (root.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
+            #expect(shapes.count == 1)
+            let path = try #require(shapes.first?.path)
+            var runs: [(y: CGFloat, from: CGFloat, to: CGFloat)] = []
+            path.applyWithBlock { element in
+                let type = element.pointee.type
+                guard type == .moveToPoint || type == .addLineToPoint else { return }
+                let point = element.pointee.points[0]
+                if type == .moveToPoint {
+                    runs.append((y: point.y, from: point.x, to: point.x))
+                } else if let last = runs.indices.last {
+                    runs[last].to = point.x
+                }
+            }
+            #expect(Set(runs.map(\.y)).count == 5)
+            let line: [[CGFloat]] = [[60, 100], [130, 200]]
+            let expected = Array(repeating: line, count: 5).flatMap(\.self)
+            let drawn = runs.sorted { ($0.y, $0.from) < ($1.y, $1.from) }.map { [$0.from, $0.to] }
+            #expect(drawn == expected)
+        }
     }
 #endif

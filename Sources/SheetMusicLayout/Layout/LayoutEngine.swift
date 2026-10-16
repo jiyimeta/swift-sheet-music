@@ -106,38 +106,50 @@ public enum LayoutEngine {
             multiMeasureRestPlan: multiMeasureRestPlan,
             measureDurations: measureDurations,
             staffMeasureDurations: staffMeasureDurations,
+            frameBreaks: frameBreakIndexes(
+                score: score, measureCount: staves.first?.measures.count ?? 0,
+                plan: multiMeasureRestPlan, options: options,
+            ),
+            horizontalGaps: horizontalGapIndexes(
+                score: score, measureCount: staves.first?.measures.count ?? 0,
+                plan: multiMeasureRestPlan, sp: metrics.sp,
+            ),
         )
         let packedSystems = packSystems(context: context)
-        // Title block at the top of the document. Built first so we
-        // know how much vertical space to leave above the first
-        // system.
-        let unshiftedTitleFrame: LayoutTitleFrame? = {
-            guard options.includeTitleFrame, let src = score.titleFrame
-            else { return nil }
-            return buildTitleFrame(
-                source: src,
-                style: score.style,
-                metrics: metrics,
-                docWidth: max(
-                    availableWidth,
-                    packedSystems.reduce(CGFloat(0)) { acc, s in
-                        max(acc, s.origin.x + s.size.width)
-                    },
-                ),
-            )
-        }()
         // Use the actual rendered system extent — not `availableWidth`,
         // which may be larger than the content needs. Measure before the
         // leading-margin shift so that margin is added exactly once below.
         let totalWidth = packedSystems.reduce(CGFloat(0)) { acc, system in
             max(acc, system.origin.x + system.size.width)
         }
+        // The width the title block's (and every frame's) texts are
+        // placed against.
+        let titleDocWidth = max(availableWidth, totalWidth)
+        // Title block at the top of the document, with its pictures.
+        // Built first so we know how much vertical space to leave above
+        // the first system.
+        let titleBlock: (frame: LayoutTitleFrame, images: [LayoutFrameImage])? = {
+            guard options.includeTitleFrame, let src = score.titleFrame
+            else { return nil }
+            return buildTitleBlock(
+                source: src, style: score.style, metrics: metrics,
+                docWidth: titleDocWidth, pictures: score.pictures,
+            )
+        }()
+        let unshiftedTitleFrame = titleBlock?.frame
         let topMargin = metrics.sp * margins.top
         let leadingMargin = metrics.sp * margins.leading
         let yShift = (unshiftedTitleFrame?.height ?? 0) + topMargin
-        let systems = packedSystems.map { system in
-            let shiftedY = yShift != 0
-                ? shift(system, byY: yShift) : system
+        // The boxes after the title, and how far each system moves down
+        // for them on top of `yShift` (all zero when there are none).
+        let stream = frameStream(
+            context: context, packed: packedSystems,
+            title: unshiftedTitleFrame, docWidth: titleDocWidth,
+        )
+        let systems = zip(packedSystems, stream.systemShifts).map { system, frameShift in
+            let dy = yShift + frameShift
+            let shiftedY = dy != 0
+                ? shift(system, byY: dy) : system
             return leadingMargin != 0
                 ? shift(shiftedY, byX: leadingMargin) : shiftedY
         }
@@ -150,9 +162,16 @@ public enum LayoutEngine {
         let titleFrame = unshiftedTitleFrame.map { frame in
             shift(frame, byX: leadingMargin, byY: topMargin)
         }
-        let totalHeight = systems.reduce(CGFloat(0)) { acc, system in
+        let titleImages = (titleBlock?.images ?? []).map { image in
+            moved(image, dx: leadingMargin, dy: topMargin)
+        }
+        // The lowest of the last system and the last frame.
+        let systemsBottom = systems.reduce(CGFloat(0)) { acc, system in
             max(acc, system.origin.y + system.size.height)
-        } + metrics.sp * margins.bottom
+        }
+        let contentBottom = stream.frames.map(\.bottom).max()
+            .map { max(systemsBottom, $0) } ?? systemsBottom
+        let totalHeight = contentBottom + metrics.sp * margins.bottom
         let systemsWithSpanners = attachSpanners(
             to: systems,
             anchors: anchors,
@@ -219,6 +238,8 @@ public enum LayoutEngine {
             metrics: metrics,
             titleFrame: titleFrame,
             chordSymbolCase: score.style.chordSymbolCase,
+            frames: stream.frames,
+            titleImages: titleImages,
         )
     }
 
@@ -261,225 +282,6 @@ public enum LayoutEngine {
                 )
             },
         )
-    }
-
-    private static func buildTitleFrame(
-        source: ScoreFrame,
-        style: ScoreStyle,
-        metrics: StaffMetrics,
-        docWidth: CGFloat,
-    ) -> LayoutTitleFrame {
-        // MuseScore stores offsets for the title-block styles in
-        // millimetres (`OffsetType::ABS` — see `styledef.cpp`).
-        // Conversion to typographic points: 72 pt ÷ 25.4 mm.  We use
-        // the same conversion for both the per-text override
-        // (`<offset>` in `.mscx`) and the styledef defaults (e.g.
-        // `subTitleOffset = PointF(0, 10)` ⇒ 10 mm below VBox top).
-        let mmToPt: CGFloat = 72.0 / 25.4
-
-        // MuseScore's `<height>` is in spatium units. We use it as a
-        // *minimum* — never shrink — but if the declared VBox is too
-        // small to fit its own top-anchored texts (typical when the
-        // user hand-edits `<height>` shorter than the subtitle stack
-        // needs), grow the frame to keep them from being clipped by
-        // the renderer's canvas. Bottom-anchored texts (composer /
-        // lyricist) follow the resolved bottom edge.
-        // SwiftUI `Text` resolved by `GraphicsContext.resolve` uses
-        // the system font's natural line height (~1.2 × point size);
-        // 1.3 leaves a small breathing margin above the next system.
-        let textHeightFactor: CGFloat = 1.3
-        var requiredFromTopAnchors: CGFloat = 0
-        for (idx, t) in source.texts.enumerated() {
-            let layout = titleBlockLayout(
-                for: t.style, idx: idx, style: style,
-                override: t.align, mmToPt: mmToPt,
-            )
-            // Bottom-anchored texts grow downward from the frame
-            // bottom — they don't constrain how *tall* the frame
-            // needs to be.
-            guard layout.align.vertical == .top else { continue }
-            let fontSize = CGFloat(t.fontSize ?? Double(layout.fontSize))
-            let dy = (t.offsetMm?.y ?? 0) * mmToPt
-            let bottom = layout.topOffset + dy + lastLineOffset(of: t, fontSize: fontSize)
-                + fontSize * textHeightFactor
-            if bottom > requiredFromTopAnchors {
-                requiredFromTopAnchors = bottom
-            }
-        }
-        let frameHeight = max(
-            metrics.sp * 4,
-            source.heightSp * metrics.sp,
-            requiredFromTopAnchors,
-        )
-
-        var laidOut: [LayoutFrameText] = []
-        for (idx, t) in source.texts.enumerated() {
-            let layout = titleBlockLayout(
-                for: t.style, idx: idx, style: style,
-                override: t.align, mmToPt: mmToPt,
-            )
-            let baseX = baseX(for: layout.align, docWidth: docWidth)
-            let baseY: CGFloat = layout.align.vertical == .top
-                ? layout.topOffset
-                : frameHeight
-            let dx = (t.offsetMm?.x ?? 0) * mmToPt
-            let dy = (t.offsetMm?.y ?? 0) * mmToPt
-            // Per-element `<size>` overrides the styledef default.
-            // Used by scores that hand-tune font sizes — e.g.
-            // test-platinum.mscx ships `<size>7</size>` on its
-            // three Lyricist columns to tighten each verse block.
-            let fontSize = CGFloat(t.fontSize ?? Double(layout.fontSize))
-            laidOut.append(LayoutFrameText(
-                text: t.text,
-                style: t.style,
-                position: CGPoint(x: baseX + dx, y: baseY + dy),
-                fontSize: fontSize,
-                anchor: anchor(for: layout.align),
-                richText: t.richText.map { titleRichText($0, style: t.style, fontSize: fontSize) },
-            ))
-        }
-        return LayoutTitleFrame(
-            height: frameHeight, texts: laidOut,
-        )
-    }
-
-    /// How far below its first line's top a title-block text's last line starts: 0 for a one-line text, so only a text
-    /// broken over lines (`<br/>`, or a newline in a plain one) grows the frame. Measured by the placement the
-    /// renderers draw from (`LayoutTitleFrame.placedLines`), so the frame holds every line they draw.
-    private static func lastLineOffset(of text: FrameText, fontSize: CGFloat) -> CGFloat {
-        let entry = LayoutFrameText(
-            text: text.text, style: text.style, position: CGPoint(x: 0, y: 0), fontSize: fontSize,
-            anchor: .topLeading,
-            richText: text.richText.map { titleRichText($0, style: text.style, fontSize: fontSize) },
-        )
-        return LayoutTitleFrame(height: 0, texts: [entry]).placedLines().last?.position.y ?? 0
-    }
-
-    /// A title-block text's runs, in the face the block is set in (`LayoutTitleFrame.font(size:)`). Title-block styles
-    /// are not spatium dependent, so a `<font size>` is literal points; symbols take the style's musical-symbol size.
-    private static func titleRichText(
-        _ richText: RichText, style: FrameText.Style, fontSize: CGFloat,
-    ) -> LayoutRichText {
-        let textStyle: TextStyleType = switch style {
-        case .title: .title
-        case .subtitle: .subtitle
-        case .composer: .composer
-        case .lyricist: .lyricist
-        case .other: .staffText
-        }
-        return LayoutRichText(
-            richText,
-            baseFont: FontMetrics.provider.renderingTextFont(LayoutTitleFrame.font(size: fontSize)),
-            pointScale: 1,
-            symbolPointSize: LayoutRichText.musicalSymbolSize(for: textStyle),
-        )
-    }
-
-    /// Resolved layout properties for a title-block text style.
-    /// `align` picks horizontal/vertical anchor, `topOffset` is the
-    /// styledef vertical offset applied when `align.vertical == .top`
-    /// (e.g. subtitle's 10 mm), `fontSize` is the styledef default.
-    private struct TitleBlockLayout {
-        let align: TextAlign
-        let topOffset: CGFloat
-        let fontSize: CGFloat
-    }
-
-    /// Defaults sourced from MuseScore's `engraving/style/styledef.cpp`:
-    ///   Title    — Align(HCENTER, TOP),    offset (0,  0) mm, font 22pt
-    ///   Subtitle — Align(HCENTER, TOP),    offset (0, 10) mm, font 14pt
-    ///   Composer — Align(RIGHT,   BOTTOM), offset (0,  0) mm, font 10pt
-    ///   Lyricist — Align(LEFT,    BOTTOM), offset (0,  0) mm, font 10pt
-    /// Per-style align overrides on `ScoreStyle` (e.g.
-    /// `<lyricistAlign>center,bottom</lyricistAlign>`) replace the
-    /// styledef horizontal/vertical pair while leaving the offset
-    /// and font size unchanged.
-    private static func titleBlockLayout(
-        for textStyle: FrameText.Style,
-        idx: Int,
-        style scoreStyle: ScoreStyle,
-        override: TextAlign?,
-        mmToPt: CGFloat,
-    ) -> TitleBlockLayout {
-        // Per-element `<align>` overrides both the styledef default
-        // and any `<{role}Align>` style-wide override — MuseScore's
-        // `read460/tread.cpp` writes `<align>` only when the element
-        // diverges from the resolved style, so when present it is the
-        // final word.
-        let base = switch textStyle {
-        case .title:
-            TitleBlockLayout(
-                align: scoreStyle.titleAlign
-                    ?? TextAlign(horizontal: .center, vertical: .top),
-                topOffset: 0,
-                fontSize: 22,
-            )
-        case .subtitle:
-            TitleBlockLayout(
-                align: scoreStyle.subtitleAlign
-                    ?? TextAlign(horizontal: .center, vertical: .top),
-                topOffset: 10 * mmToPt,
-                fontSize: 14,
-            )
-        case .composer:
-            TitleBlockLayout(
-                align: scoreStyle.composerAlign
-                    ?? TextAlign(horizontal: .right, vertical: .bottom),
-                topOffset: 0,
-                fontSize: 10,
-            )
-        case .lyricist:
-            TitleBlockLayout(
-                align: scoreStyle.lyricistAlign
-                    ?? TextAlign(horizontal: .left, vertical: .bottom),
-                topOffset: 0,
-                fontSize: 10,
-            )
-        case .other:
-            TitleBlockLayout(
-                align: TextAlign(horizontal: .center, vertical: .top),
-                topOffset: 10 * mmToPt + CGFloat(idx) * 4 * mmToPt,
-                fontSize: 10,
-            )
-        }
-        guard let override else { return base }
-        return TitleBlockLayout(
-            align: override,
-            // Switching a default-bottom role (composer / lyricist)
-            // to a top anchor brings the text up to the frame top
-            // edge — keep the styledef `topOffset` so titles in a
-            // mixed top stack don't all collapse to y=0.
-            topOffset: base.topOffset,
-            fontSize: base.fontSize,
-        )
-    }
-
-    private static func baseX(
-        for align: TextAlign, docWidth: CGFloat,
-    ) -> CGFloat {
-        switch align.horizontal {
-        case .left: 0
-        case .center: docWidth / 2
-        case .right: docWidth
-        }
-    }
-
-    /// `LayoutFrameText.Anchor` only models the six rectangular
-    /// corners. Vertical `.center` / `.baseline` (rare for title
-    /// roles) collapse to the top-side anchor of the same horizontal
-    /// axis — adequate for the cases that actually appear in MSCX
-    /// title blocks.
-    private static func anchor(
-        for align: TextAlign,
-    ) -> LayoutFrameText.Anchor {
-        switch (align.horizontal, align.vertical) {
-        case (.left, .bottom): return .bottomLeading
-        case (.center, .bottom): return .bottom
-        case (.right, .bottom): return .bottomTrailing
-        case (.left, _): return .topLeading
-        case (.center, _): return .top
-        case (.right, _): return .topTrailing
-        }
     }
 
     // MARK: - Context
@@ -528,5 +330,17 @@ public enum LayoutEngine {
         /// prevailing time signature is wanted (e.g. `placeMeasureElements`
         /// inputs), as opposed to the cross-staff merge.
         let staffMeasureDurations: [[Fraction]]
+        /// The `beforeMeasureIndex` of every frame-stream box (`Score.frameStream`) that sits between two measures
+        /// (`1 ..< measureCount`); an index inside a multi-measure-rest run moves to the run's start. A frame always
+        /// ends the system before it, whatever the break policy says. Empty unless the title block is laid out in wrap
+        /// mode (`includeTitleFrame && wrapToViewWidth`). A defaulted `var` so the memberwise initializer keeps its
+        /// other call sites (`NoteInputPipelineBenchmark`) compiling.
+        var frameBreaks: Set<Int> = []
+        /// Room in points before measure `m` for the HBoxes of `score.frameStream` that sit there: each is
+        /// `(widthSp ?? 5) + (topGapSp ?? 0) + (bottomGapSp ?? 0)` spatium (MS `box.cpp:71-74`), summed over
+        /// consecutive boxes, for `m` in `1 ..< measureCount` only and never inside a collapsed multi-measure rest
+        /// (`horizontalGapIndexes`). Where `m` opens a system the room is dropped. Wrap and horizontal mode alike. A
+        /// defaulted `var` for the same reason as `frameBreaks`.
+        var horizontalGaps: [Int: CGFloat] = [:]
     }
 }

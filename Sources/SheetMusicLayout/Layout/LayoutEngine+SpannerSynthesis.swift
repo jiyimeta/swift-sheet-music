@@ -241,9 +241,9 @@ extension LayoutEngine {
     /// also covers multi-measure-rest placeholders, whose branch of
     /// pass 2 never reads `perStaffElements` at all.
     ///
-    /// `xCursor` walks the same `partLabelWidth + Σ width` sequence as
-    /// pass 1's `xOffsets` and pass 2's own cursor — that identity is
-    /// what makes the measure-local X round-trip exact.
+    /// `xCursor` walks the same `partLabelWidth + Σ (leadingGap + width)`
+    /// sequence as pass 1's `xOffsets` and pass 2's own cursor — that
+    /// identity is what makes the measure-local X round-trip exact.
     static func extractLineSpanners(
         from untranslated: inout [UntranslatedMeasure],
         staffOrigins: [CGPoint],
@@ -253,6 +253,7 @@ extension LayoutEngine {
         var out: [LayoutElement] = []
         var xCursor = partLabelWidth
         for idx in untranslated.indices {
+            xCursor += untranslated[idx].leadingGap
             // Sorted so the emitted order is staff-by-staff and
             // reproducible; `Dictionary` iteration order is not.
             for staffIdx in untranslated[idx]

@@ -35,9 +35,62 @@ function recordOffset(bytes: Uint8Array, index: number): number {
   for (let i = 0; i < stringCount; i += 1) {
     offset += 4 + view.getInt32(offset, true);
   }
+  // v3: the blob table (i32 count, then i32 length + bytes each) follows the strings.
+  const blobCount = view.getInt32(offset, true);
+  offset += 4;
+  for (let i = 0; i < blobCount; i += 1) {
+    offset += 4 + view.getInt32(offset, true);
+  }
   // widthMM, heightMM, commandCount
   offset += 8 + 8 + 4;
   return offset + index * COMMAND_STRIDE;
+}
+
+/**
+ * A hand-assembled v3 stream: one page whose commands are `drawImage` records
+ * (slots x, y, w, h; `integer` = blob index), over the given blob table. For what
+ * the Swift-recorded fixture cannot say: two records sharing one blob index, and
+ * an index past the table.
+ */
+function flatStream(
+  blobs: readonly Uint8Array[],
+  records: ReadonlyArray<{ blobIndex: number; rect: [number, number, number, number] }>,
+  version = 3,
+): Uint8Array {
+  const size =
+    16 + 4 + blobs.reduce((sum, b) => sum + 4 + b.length, 0) + 20 + records.length * COMMAND_STRIDE;
+  const bytes = new Uint8Array(size);
+  const view = new DataView(bytes.buffer);
+  let at = 0;
+  const u32 = (v: number) => {
+    view.setUint32(at, v >>> 0, true);
+    at += 4;
+  };
+  const f64 = (v: number) => {
+    view.setFloat64(at, v, true);
+    at += 8;
+  };
+  u32(0x534d4446);
+  u32(version);
+  u32(1); // pageCount
+  u32(0); // stringCount
+  u32(blobs.length);
+  for (const blob of blobs) {
+    u32(blob.length);
+    bytes.set(blob, at);
+    at += blob.length;
+  }
+  f64(210);
+  f64(297);
+  u32(records.length);
+  for (const { blobIndex, rect } of records) {
+    u32(13);
+    for (let i = 0; i < 6; i += 1) f64(rect[i] ?? 0);
+    u32(0xffffffff); // stringIndex -1
+    u32(blobIndex);
+    u32(0xffffffff); // fontId -1
+  }
+  return bytes;
 }
 
 /** A copy of the fixture with one little-endian i32 / u32 overwritten. */
@@ -72,9 +125,46 @@ describe("decodeDrawProgram", () => {
       "setDash",
       "setTextStyle",
       "fillPath",
+      "drawImage",
       // Tail: a text in the system face, so every font id crosses the decoder.
       "text",
     ]);
+  });
+
+  it("decodes opcode 13 with a blob", () => {
+    const image = decodeDrawProgram(fixture)[0]!.commands[13]!;
+    expect(image.kind).toBe("drawImage");
+    if (image.kind !== "drawImage") return;
+    expect([image.x, image.y, image.w, image.h]).toEqual([30, 31, 32, 33]);
+    // The recorded 2 x 2 PNG: 76 bytes, PNG signature first.
+    expect(image.blob).toBeInstanceOf(Uint8Array);
+    expect(image.blob.length).toBe(76);
+    expect(Array.from(image.blob.slice(0, 8))).toEqual([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+  });
+
+  it("dedupes identical blobs to one index", () => {
+    // Two pictures of one file: the stream carries its bytes once, and both
+    // records name index 0. Both must resolve to equal bytes.
+    const bytes = flatStream(
+      [Uint8Array.from([1, 2, 3, 4])],
+      [
+        { blobIndex: 0, rect: [1, 2, 3, 4] },
+        { blobIndex: 0, rect: [5, 6, 7, 8] },
+      ],
+    );
+    const commands = decodeDrawProgram(bytes)[0]!.commands;
+    expect(commands).toHaveLength(2);
+    const [a, b] = commands;
+    expect(a!.kind === "drawImage" && Array.from(a.blob)).toEqual([1, 2, 3, 4]);
+    expect(b!.kind === "drawImage" && Array.from(b.blob)).toEqual([1, 2, 3, 4]);
+    expect(b).toMatchObject({ kind: "drawImage", x: 5, y: 6, w: 7, h: 8 });
+  });
+
+  it("rejects a blob index past the table", () => {
+    const bytes = flatStream([Uint8Array.from([1])], [{ blobIndex: 1, rect: [0, 0, 1, 1] }]);
+    expect(() => decodeDrawProgram(bytes)).toThrow(/blob index 1\b/);
   });
 
   it("reads scalar payloads", () => {
@@ -120,7 +210,7 @@ describe("decodeDrawProgram", () => {
       size: 14,
       fontId: 0,
     });
-    expect(commands[13]).toEqual({
+    expect(commands[14]).toEqual({
       kind: "text",
       text: "12",
       x: 27,
@@ -168,16 +258,25 @@ describe("decodeDrawProgram", () => {
   });
 
   /**
-   * v1 numbered `setTextStyle` 12 and had no `fillPath`; read as v2 it would
+   * v1 numbered `setTextStyle` 12 and had no `fillPath`; read as v3 it would
    * decode without error and draw the wrong thing, so it must be refused.
    */
   it("rejects a version-1 stream", () => {
     expect(() => decodeDrawProgram(withU32(4, 1))).toThrow(/version 1\b/);
   });
 
-  it("rejects an opcode past fillPath", () => {
-    expect(() => decodeDrawProgram(withU32(recordOffset(fixture, 0), 13))).toThrow(
-      /unknown opcode 13\b/,
+  /**
+   * v2 had no blob table: it would read the blob count as the first page's
+   * width. Refused by the version word before any record is read.
+   */
+  it("rejects flat version 2", () => {
+    expect(() => decodeDrawProgram(withU32(4, 2))).toThrow(/unsupported version 2\b/);
+    expect(() => decodeDrawProgram(flatStream([], [], 2))).toThrow(/unsupported version 2\b/);
+  });
+
+  it("rejects an opcode past drawImage", () => {
+    expect(() => decodeDrawProgram(withU32(recordOffset(fixture, 0), 14))).toThrow(
+      /unknown opcode 14\b/,
     );
   });
 
@@ -199,6 +298,6 @@ describe("decodeDrawProgram", () => {
     const padded = new Uint8Array(fixture.length + 8);
     padded.set(fixture, 8);
     const view = padded.subarray(8);
-    expect(decodeDrawProgram(view)[0]!.commands).toHaveLength(14);
+    expect(decodeDrawProgram(view)[0]!.commands).toHaveLength(15);
   });
 });

@@ -10,20 +10,28 @@ import io.github.jiyimeta.wirelet.WireType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.util.Base64
 
 private const val MAGIC: UInt = 0x534D_4450u // "SMDP"
-private const val VERSION: UInt = 8u
+private const val VERSION: UInt = 9u
+
+/**
+ * One page holding a single `drawImage` of the 12 bytes 0x00…0x0B at (12.5, 20.25) sized 30 × 15.75 mm,
+ * encoded by Swift's `DrawProgramCodec.encode` (base64). Printed by
+ * `SM_PRINT_KOTLIN_FIXTURE=1 swift test --filter DrawProgramRoundTripTests` as a line starting `W7-T12-B64:`.
+ */
+private const val SWIFT_V9_IMAGE_PROGRAM_BASE64 = "UwjQiLWaBRAJGklICQAAAAAAQGpAEQAAAAAAkHJAGjQzDQoMAAECAwQFBgcICQoLEQAAAAAAAClAGQAAAAAAQDRAIQAAAAAAAD5AKQAAAAAAgC9A"
 
 /**
  * Exercises the auto-generated [DrawProgramWireCodec] / [EncodablePageCodec] /
  * [DrawCommandCodec] / [FontIDCodec] objects via the [DrawProgramReader]
- * façade, against wire v8.
+ * façade, against wire v9.
  *
  * Two kinds of input: round trips through the generated encoder, and streams
  * built by hand with the runtime's [BinaryWriter] in the TLV layout the Swift
  * `@WireFormat` / `@WireFormatChoice` macros write (see [program]). Only a
  * hand-built stream can carry what no model value expresses — a foreign
- * magic, an old version, discriminator 13, font id 3 — and
+ * magic, an old version, discriminator 14, font id 3 — and
  * [handBuiltV8StreamDecodes] is the control showing the builder itself is
  * sound, so each rejection test differs from it in the one value under test.
  */
@@ -156,8 +164,43 @@ class DrawProgramReaderTest {
 
     @Test(expected = WireFormatException.UnknownChoiceDiscriminator::class)
     fun unknownOpcodeThrows() {
-        // 12 (fillPath) is v8's last case, so 13 is a command this reader cannot draw.
-        DrawProgramReader.decode(program { command(13) })
+        // 13 (drawImage) is v9's last case, so 14 is a command this reader cannot draw.
+        DrawProgramReader.decode(program { command(14) })
+    }
+
+    @Test
+    fun swiftEncodedImageProgramDecodes() {
+        val bytes = Base64.getDecoder().decode(SWIFT_V9_IMAGE_PROGRAM_BASE64)
+        val commands = DrawProgramReader.decode(bytes).pages.single().commands
+        assertEquals(
+            listOf<DrawCommand>(
+                DrawCommand.DrawImage(ByteArray(12) { it.toByte() }, 12.5, 20.25, 30.0, 15.75),
+            ),
+            commands,
+        )
+        // `data` is a copy of Swift's 12 bytes, compared by content (DrawImage.equals), not by identity.
+        assertEquals(12, (commands.single() as DrawCommand.DrawImage).data.size)
+    }
+
+    @Test
+    fun swiftEncodedImageProgramAtVersion8IsRefused() {
+        // The same bytes with only the version field changed from 9 to 8: the structure decodes (discriminator
+        // 13 is known to this reader), so it is the version word alone that must stop it.
+        val bytes = Base64.getDecoder().decode(SWIFT_V9_IMAGE_PROGRAM_BASE64)
+        // Header fields are TLV: tag 1 + magic varint + tag 2, then the version varint (9 fits in one byte).
+        val prefix = BinaryWriter().apply {
+            writeTag(1, WireType.VARINT)
+            writeVarint(MAGIC.toLong())
+            writeTag(2, WireType.VARINT)
+        }.toByteArray()
+        val at = (0..bytes.size - prefix.size).first { start ->
+            prefix.indices.all { bytes[start + it] == prefix[it] }
+        } + prefix.size
+        assertEquals(9, bytes[at].toInt())
+        val patched = bytes.copyOf().also { it[at] = 8 }
+        assertThrows(DrawProgramReader.UnsupportedVersionException::class.java) {
+            DrawProgramReader.decode(patched)
+        }
     }
 
     @Test(expected = WireFormatException.InvalidCount::class)

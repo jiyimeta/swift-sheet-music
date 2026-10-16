@@ -32,6 +32,9 @@ extension LayoutEngine {
         /// the run instead of the per-staff aggregation. The value is
         /// the source-measure count covered by the run.
         let multiMeasureRestCount: Int?
+        /// HBox room before the measure (0 for the system's first). Every walk over the measures' x — pass 1's
+        /// `xOffsets`, `extractLineSpanners` and pass 2 — advances by it before the measure.
+        let leadingGap: CGFloat
     }
 
     // MARK: - Per-system layout
@@ -127,6 +130,8 @@ extension LayoutEngine {
         var clefs = activeClefs
         var keys = activeKeys
         let plan = context.multiMeasureRestPlan
+        // `widths` are slots: a measure's HBox room plus its own width.
+        let gapBefore = roomsBefore(measureRange, gaps: context.horizontalGaps)
         // The measure that carries the end-of-system announcement: the
         // last one in the range that actually draws. A multi-measure-rest
         // run's interiors emit nothing, so the run's start announces for
@@ -153,15 +158,15 @@ extension LayoutEngine {
             if let runLen = plan.runLength(startingAt: measureIdx) {
                 // Run-start: skip per-staff placement entirely. Pass 2 will
                 // synthesize an H-bar LayoutMeasure of width `widths[j]`
-                // (which Task 6 set to `collapsedRunWidth`).
+                // (which Task 6 set to `collapsedRunWidth`), less its HBox room.
                 let staff0Measure: Measure? = measureIdx
                     < (staves.first?.measures.count ?? 0)
                     ? staves.first?.measures[measureIdx]
                     : nil
                 untranslated.append(UntranslatedMeasure(
                     measureIdx: measureIdx,
-                    width: widths[j],
-                    contentWidth: widths[j] - courtesyReserve(
+                    width: widths[j] - gapBefore[j],
+                    contentWidth: widths[j] - gapBefore[j] - courtesyReserve(
                         trailingCourtesy,
                         at: measureIdx,
                         announcingAt: announcingMeasureIdx,
@@ -171,6 +176,7 @@ extension LayoutEngine {
                     staff0Measure: staff0Measure,
                     tickCols: [:],
                     multiMeasureRestCount: runLen,
+                    leadingGap: gapBefore[j],
                 ))
                 continue
             }
@@ -178,7 +184,7 @@ extension LayoutEngine {
             // the announcement lives in the reserved band beyond it, so
             // the notes never spread into the glyphs that follow the
             // end barline.
-            let fullWidth = widths[j]
+            let fullWidth = widths[j] - gapBefore[j]
             let w = fullWidth - courtesyReserve(
                 trailingCourtesy,
                 at: measureIdx,
@@ -516,6 +522,7 @@ extension LayoutEngine {
                 staff0Measure: staff0Measure,
                 tickCols: tickCols,
                 multiMeasureRestCount: nil,
+                leadingGap: gapBefore[j],
             ))
         }
 
@@ -535,6 +542,7 @@ extension LayoutEngine {
         var contentWidth: CGFloat = partLabelWidth
         var xOffsets: [CGFloat] = []
         for um in untranslated {
+            contentWidth += um.leadingGap
             xOffsets.append(contentWidth)
             contentWidth += um.width
         }
@@ -860,8 +868,15 @@ extension LayoutEngine {
 
         // --- Pass 2: translate elements with adjusted origins ---
         var layoutMeasures: [LayoutMeasure] = []
+        var staffLineGaps: [Range<CGFloat>] = []
         var xCursor: CGFloat = partLabelWidth
         for um in untranslated {
+            xCursor += um.leadingGap
+            if let gap = staffLineGap(
+                after: layoutMeasures.last, room: um.leadingGap, endingAt: xCursor, sp: metrics.sp,
+            ) {
+                staffLineGaps.append(gap)
+            }
             if let runLen = um.multiMeasureRestCount {
                 // Determine barline subtype from the last source measure of
                 // the run. All staves agree on barline subtype (rule 1 of
@@ -1182,6 +1197,7 @@ extension LayoutEngine {
             spanners: adjustedSpanners,
             sp: metrics.sp,
             showsInvisibleElements: context.options.showsInvisibleElements,
+            staffLineGaps: staffLineGaps,
         )
     }
 

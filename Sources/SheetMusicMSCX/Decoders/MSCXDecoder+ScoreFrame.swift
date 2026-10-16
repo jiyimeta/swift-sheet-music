@@ -20,24 +20,29 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension ScoreFrame {
-    private static let consumedVBoxChildren: Set = ["height", "Text"]
+    private static let consumedVBoxChildren: Set = ["height", "Text", "boxAutoSize", "Image"]
 
     /// Parse a `<VBox>` element. Permissive — unknown children are
     /// preserved. Default height is 0 if `<height>` is missing /
     /// malformed; layout will still allocate at least enough space
     /// for the contained text in that case.
     static func decode(vbox node: XMLTreeNode) -> ScoreFrame {
-        var height: CGFloat = 0
-        if let raw = node.first("height")?.text, let parsed = Double(raw) {
-            height = CGFloat(parsed)
-        }
+        let box = BoxChildren(node, consuming: consumedVBoxChildren)
         // `FrameText.decode` returns nil only for a `<Text>` with neither text nor markup; `Text` is consumed either
         // way, so such an empty block is the one thing not written back.
         let texts = node.all("Text").compactMap(FrameText.decode(_:))
+        var autoSize: Bool?
+        if let raw = node.first("boxAutoSize")?.text {
+            autoSize = raw == "1" || raw == "true"
+        }
         return ScoreFrame(
-            heightSp: height,
+            heightSp: box.number("height") ?? 0,
             texts: texts,
-            preservedMarkup: node.preservedMarkup(consuming: consumedVBoxChildren),
+            preservedMarkup: box.preservedMarkup,
+            topGapSp: box.topGapSp,
+            bottomGapSp: box.bottomGapSp,
+            autoSize: autoSize,
+            images: node.all("Image").map(FrameImage.decode(_:)),
         )
     }
 }
@@ -59,8 +64,13 @@ extension FrameText {
         // A line whose markup holds only a symbol projects to "" but is still a line: dropping it lost it from the
         // saved file.
         guard !stripped.isEmpty || textNode?.children.isEmpty == false else { return nil }
-        let style = (node.first("style")?.text)
-            .flatMap(decodeStyle(_:)) ?? .other
+        let rawStyle = node.first("style")?.text
+        let style = rawStyle.flatMap(decodeStyle(_:)) ?? .other
+        // A present `<style>` that maps to no modeled role is kept by name so it is written back.
+        var otherStyleName: String?
+        if style == .other {
+            otherStyleName = rawStyle
+        }
         var offsetMm: CGPoint?
         if let off = node.first("offset"),
            let xs = off.attributes["x"], let ys = off.attributes["y"],
@@ -80,6 +90,7 @@ extension FrameText {
             preservedTextMarkup: textNode.flatMap {
                 StaffText.preservedTextMarkup(of: $0, derivedText: stripped)
             },
+            otherStyleName: otherStyleName,
         )
     }
 }

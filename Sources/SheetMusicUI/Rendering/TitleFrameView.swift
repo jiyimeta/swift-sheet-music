@@ -9,11 +9,10 @@ import SwiftUI
     import UIKit
 #endif
 
-/// SwiftUI host for the CALayer-rendered title block.
-/// `ScoreView`'s vertical and horizontal stacks place an instance
-/// at the document's top-leading corner so the title block sits
-/// above the first system in the same coordinate space the layout
-/// engine produced.
+/// SwiftUI host for the CALayer-rendered title block, without
+/// pictures: `FrameContentView` with no images, at the block's own
+/// height. `ScoreView` itself draws the title through
+/// `FrameContentView`, so that the block's pictures come with it.
 ///
 /// **A layer tree, for the same reason `SystemLayerView` is one.**
 /// This used to be a SwiftUI `Canvas`, which rasterises once at its
@@ -36,15 +35,45 @@ struct TitleFrameView: View {
     let width: CGFloat
 
     var body: some View {
-        _LayerBackedTitleFrame(frame: frame, width: width)
-            .frame(width: width, height: frame.height)
+        FrameContentView(frame: frame, images: [], width: width, height: frame.height)
+    }
+}
+
+/// One box's layer-rendered content, its texts and its pictures, `width` × `height` points: the title block with
+/// `LayoutDocument.titleImages`, or a frame between systems with its own `images`. `ScoreView` places it at the box's
+/// top. Picture rects are in the box's own space, y down from its top.
+@available(macOS 15.0, *)
+struct FrameContentView: View {
+    let frame: LayoutTitleFrame
+    let images: [LayoutFrameImage]
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        _LayerBackedTitleFrame(
+            content: FrameLayerContent(frame: frame, images: images, width: width, height: height),
+        )
+        .frame(width: width, height: height)
+    }
+}
+
+/// What one box's layer tree is built from. The host views rebuild the tree only when it changes.
+@available(macOS 15.0, *)
+private struct FrameLayerContent: Equatable {
+    let frame: LayoutTitleFrame
+    let images: [LayoutFrameImage]
+    let width: CGFloat
+    let height: CGFloat
+
+    func build() -> CALayer {
+        TitleFrameLayerBuilder.build(frame: frame, images: images, width: width, height: height)
     }
 }
 
 // MARK: - Layer building
 
 @available(macOS 15.0, *)
-enum TitleFrameLayerBuilder {
+package enum TitleFrameLayerBuilder {
     /// The block's own layer: a white page under the title texts.
     ///
     /// White, because the staff drawing assumes white paper and the
@@ -56,7 +85,16 @@ enum TitleFrameLayerBuilder {
     static func build(
         frame: LayoutTitleFrame, width: CGFloat,
     ) -> CALayer {
-        let height = frame.height
+        build(frame: frame, images: [], width: width, height: frame.height)
+    }
+
+    /// `build(frame:width:)` for a block `height` points tall that also holds `images`: the title block with
+    /// `LayoutDocument.titleImages`, or a frame between systems with its own. The texts are flipped about `height`,
+    /// and each picture becomes one image layer after them (`FrameImageDrawing.layers`), in the order the draw program
+    /// draws a box. Picture rects are in the block's own space, y down from its top.
+    package static func build(
+        frame: LayoutTitleFrame, images: [LayoutFrameImage], width: CGFloat, height: CGFloat,
+    ) -> CALayer {
         let root = CALayer()
         root.frame = CGRect(
             origin: .zero,
@@ -86,6 +124,9 @@ enum TitleFrameLayerBuilder {
             ) else { continue }
             root.addSublayer(layer)
         }
+        for layer in FrameImageDrawing.layers(for: images, height: height) {
+            root.addSublayer(layer)
+        }
         return root
     }
 }
@@ -95,19 +136,18 @@ enum TitleFrameLayerBuilder {
 #if os(macOS)
     @available(macOS 15.0, *)
     private struct _LayerBackedTitleFrame: NSViewRepresentable {
-        let frame: LayoutTitleFrame
-        let width: CGFloat
+        let content: FrameLayerContent
 
         func makeNSView(context: Context) -> LayerTitleFrameHostView {
             let view = LayerTitleFrameHostView()
-            view.configure(frame: frame, width: width)
+            view.configure(content)
             return view
         }
 
         func updateNSView(
             _ nsView: LayerTitleFrameHostView, context: Context,
         ) {
-            nsView.configure(frame: frame, width: width)
+            nsView.configure(content)
         }
     }
 
@@ -117,8 +157,7 @@ enum TitleFrameLayerBuilder {
     /// `ScoreLayerBuilder`, against the height passed to it.
     @available(macOS 15.0, *)
     private final class LayerTitleFrameHostView: NSView {
-        private var lastFrame: LayoutTitleFrame?
-        private var lastWidth: CGFloat?
+        private var lastContent: FrameLayerContent?
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
@@ -132,48 +171,39 @@ enum TitleFrameLayerBuilder {
             fatalError("init(coder:) is unavailable")
         }
 
-        func configure(frame: LayoutTitleFrame, width: CGFloat) {
+        func configure(_ content: FrameLayerContent) {
             guard let hostLayer = layer else { return }
-            guard lastFrame != frame || lastWidth != width else {
-                return
-            }
+            guard lastContent != content else { return }
             hostLayer.sublayers?.forEach {
                 $0.removeFromSuperlayer()
             }
-            hostLayer.addSublayer(
-                TitleFrameLayerBuilder.build(
-                    frame: frame, width: width,
-                ),
-            )
-            setFrameSize(NSSize(width: width, height: frame.height))
-            lastFrame = frame
-            lastWidth = width
+            hostLayer.addSublayer(content.build())
+            setFrameSize(NSSize(width: content.width, height: content.height))
+            lastContent = content
         }
     }
 
 #else
     @available(macOS 15.0, *)
     private struct _LayerBackedTitleFrame: UIViewRepresentable {
-        let frame: LayoutTitleFrame
-        let width: CGFloat
+        let content: FrameLayerContent
 
         func makeUIView(context: Context) -> LayerTitleFrameHostView {
             let view = LayerTitleFrameHostView()
-            view.configure(frame: frame, width: width)
+            view.configure(content)
             return view
         }
 
         func updateUIView(
             _ uiView: LayerTitleFrameHostView, context: Context,
         ) {
-            uiView.configure(frame: frame, width: width)
+            uiView.configure(content)
         }
     }
 
     @available(macOS 15.0, *)
     private final class LayerTitleFrameHostView: UIView {
-        private var lastFrame: LayoutTitleFrame?
-        private var lastWidth: CGFloat?
+        private var lastContent: FrameLayerContent?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -185,18 +215,11 @@ enum TitleFrameLayerBuilder {
             fatalError("init(coder:) is unavailable")
         }
 
-        func configure(frame: LayoutTitleFrame, width: CGFloat) {
-            guard lastFrame != frame || lastWidth != width else {
-                return
-            }
+        func configure(_ content: FrameLayerContent) {
+            guard lastContent != content else { return }
             layer.sublayers?.forEach { $0.removeFromSuperlayer() }
-            layer.addSublayer(
-                TitleFrameLayerBuilder.build(
-                    frame: frame, width: width,
-                ),
-            )
-            lastFrame = frame
-            lastWidth = width
+            layer.addSublayer(content.build())
+            lastContent = content
         }
     }
 #endif

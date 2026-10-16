@@ -9,38 +9,43 @@ and this project adheres to
 
 ### Added
 
-- **`SpannerGeometry.voltaLabelOrigin(from:to:label:sp:)` and `SpannerGeometry.voltaInk(…)`** — where a volta's typeset
-  label hangs by its top-left, and the ink a volta segment covers (line, hooks and label).
 - **MusicXML directions have a clock** — the importer now keeps a per-measure tick cursor (notes advance it,
   `<backup>` and `<forward>` move it, a direction's `<offset>` is added) and splices a direction's element into the
   staff named by `<staff>` at that tick, jogging the voice exactly as MuseScore's `<location>` does. The first
   direction to use it is a dynamic named by its element (`<f/>`, `<mp/>`), imported with MuseScore's velocity.
+
 - **MusicXML words become the text MuseScore makes of them** — a `<direction>`'s `<words>` import as a staff text, a
   system text (`system="only-top"`), an Expression (italic words below the staff), a play-technique annotation (from
   `<sound pizzicato>`, `<play>`, or — with the new internal text-type inference — words such as "pizz." and "con sord."),
   or a Sticking, with `font-weight`, `font-style`, `underline`, `line-through`, `font-size`, `font-family` and `color`
   kept as markup. A rehearsal mark now sits at its real tick on the direction's staff, and loses to words in the same
   direction, as in MuseScore.
+
 - **MusicXML tempo** — `<metronome>`, `<sound tempo>` (in a direction or directly in a measure) and the words beside
   them import as MuseScore builds them: a tempo text with its real tempo and beat (so MuseScore's own "a tempo" arrives
   at the tempo it exported, not 120), a hidden "♩ = N" for a bare `<sound tempo>`, and a second tempo on a tick that
   already holds one is dropped, across parts. With the new internal text-type inference, words such as "Allegro" and
   "a tempo" are tempo texts.
+
 - **MusicXML dynamics as MuseScore reads them** — `<sound dynamics>` sets the velocity (×0.9, clamped), `<other-dynamics>`
   text keeps its words ("subito p" is a `p` with its own text), several elements in one `<dynamics>` are several
   dynamics, two dynamics joined by a hyphen are one, and — with text-type inference — words that are a dynamic ("mf",
   "sfz") become one. A dynamic takes the `<dynamics>` color and the direction's `print-object`.
+
 - **MusicXML wedges** — `<wedge>` crescendos and diminuendos import as hairpins that start and end where the file says,
   honoring `<offset>`, `number`, a stop that arrives first, and a start on the bar line (which belongs to the next bar);
   one without a stop is dropped, as in MuseScore.
+
 - **MusicXML octave shifts and pedals** — `<octave-shift>` imports as an 8va / 8vb / 15ma / 15mb / 22ma / 22mb line
   whose notes are written the octave lower (or higher) the line implies and keep their sounding pitch, and `<pedal>`
   start / change / stop / resume / sostenuto / discontinue import as the pedal lines MuseScore builds, with their hooks
   and signs.
+
 - **MusicXML lines** — `<bracket>`, `<dashes>` and wavy lines import as text lines and trill lines; with text-type
   inference, "cresc." / "dim." become hairpin lines and "rit." / "accel." / … gradual tempo changes, ended by the next
   dynamic, tempo text or fermata within 24 quarter notes, as MuseScore ends them. This closes the gradual-tempo gap behind
   `testTempoLineFermata`.
+
 - **MusicXML from Finale and Sibelius** — a file's `<software>` is read; Finale's dynamic-font letters import as dynamics,
   Sibelius's metronome words ("q. = c. 78") and MetTimes symbols as a tempo text with its symbols and tempo, and a
   Sibelius ottava ends at the note after its stop.
@@ -51,36 +56,204 @@ and this project adheres to
   from the direction's `placement`, else from `default-y`, else above on a vocal staff (a part named Voice, Soprano,
   Alto, … exactly as MuseScore lists them) and below on any other; an inferred cresc. / dim. line takes only the
   `placement` attribute. The import now carries it, so a saved score puts each hairpin where MuseScore does.
+
 - **An opaque black `color` on a MusicXML direction is no color.** Black is every element's default, and MuseScore
   writes a color only when it differs from it; an imported ottava, wedge, pedal, text or dynamic marked `#000000`
   (as Sibelius writes them) no longer carries an explicit color into the saved score.
+
 - **An imported rehearsal mark draws in regular weight, as MuseScore draws it.** MuseScore puts an empty `<b></b>`
   before the mark's text — "explicitly turn bold off" — unless the text is bold already; the import took the plain
   letter, so folino drew it in the style's bold. Its formatting (font, size, weight, style) is now read as words are.
+
 - **A multi-staff MusicXML part gets its brace.** MuseScore gives every part of two or more staves a brace unless a
   part-group bracketing that part alone already does; the import left a piano part with none.
+
 - **A MusicXML score that ends without a bar line ends with a normal one.** MuseScore writes an explicit normal bar
   line into every staff's last measure in that case, or it would draw a light-heavy final bar line; the import now does
   the same.
+
 - **A MuseScore 5 score keeps its brackets and braces.** MuseScore 5 writes a staff's bracket as `<BracketItem>`
   (`<type>`, `<bracketSpan>`, `<level>`, `<visible>`) instead of the 4.x `<bracket type span col>` attribute form; ssm
   read only the 4.x form, so a piano part from MuseScore 5 drew no brace. The 5.x form now reads into the same
   brackets and saves in the 4.x form; a group bracket, which ssm does not model, stays in the file as it was.
+
 - **A MusicXML score keeps its encoder.** `<encoding><encoder>` is imported as the `encoder` meta tag, as MuseScore
   imports it.
+
 - **At one tick, a staff text imported from MusicXML comes before a rehearsal mark, tempo or system text**, in the
   order MuseScore adds them (it adds system elements once the whole score is read).
+
 - **An inferred rit. / accel. line has no continue text.** It was imported with an empty one where MuseScore's file
   carries none (the empty text is the line's default).
+
 - **A MusicXML `<coda/>` with `<sound tocoda>` is one To Coda, not a Coda and a To Coda** — a direction makes the one repeat
   MuseScore picks from its `<sound>` (coda, da capo, dal segno, fine, segno, to coda, in that order), else from its
   segno or coda sign; a D.S. with a `tocoda` or `fine` attribute is a jump that plays until there, not a jump plus a
   marker; a second coda in a bar is dropped; two segnos at one tick are one Segno labeled `segnoii`; a repeat with no
   text stays visible with its type's default text, as in MuseScore; and a bar-end item written at the next bar's start
   (or a bar-start item at the previous bar's end) lands in the bar MuseScore puts it in.
+
 - **An ottava now shifts the playback of every voice on its staff**, as MuseScore applies it, not only the voice that
   carries the line. A second voice under an 8va — a MusicXML `<backup>` voice, or any voice of a score whose ottava
   sits in voice 1 — played an octave away from the pitch it sounds in MuseScore.
+
+
+## [4.12.0] - 2026-10-17
+
+### Added
+
+- **`SpannerGeometry.voltaLabelOrigin(from:to:label:sp:)` and `SpannerGeometry.voltaInk(…)`** — where a volta's typeset
+  label hangs by its top-left, and the ink a volta segment covers (line, hooks and label).
+- **`FrameText.singleLineText`** — the text with each newline (a run of them too) replaced by one space and the ends
+  trimmed, for hosts whose displays show a multi-line title on one line.
+- **The Android and web readers draw `drawImage`** — the Kotlin readers (the `SheetMusicComposeAndroid` AAR and the
+  Examples app) read draw program v9 and decode the new image command (`DrawCommand.DrawImage`, bytes compared by
+  content), include its rect in a band's bounds, and draw it with `BitmapFactory`, decoded at a power-of-two
+  `inSampleSize` that keeps its long side within twice the destination's and 2048 px, into a 32 MiB cache keyed by the
+  command's content hash (computed once per command; a hit confirms the bytes); a picture Android cannot decode draws
+  nothing. The web reader reads the flat format v3 (a blob table after the
+  string table, opcode 13), bounds-checks the blob index, includes the rect in band bounds, and draws through a cached
+  `createImageBitmap` decode (`drawPage` / `drawTile` take `onImageReady` to repaint once a picture has decoded). A v8
+  Kotlin reader or a v2 web reader refuses a v9 stream instead of mis-reading it. The Kotlin half is compile-checked by
+  the Android stream at the folino re-pin, not here.
+- **`TextFrame`, `HorizontalFrame`, `FrameImage` and `Score.pictures`** — the box model the layout uses: a text frame
+  (MuseScore's TBox: one text, gaps, margins in mm), a horizontal frame (HBox: width and its left / right gap), the
+  pictures a vertical frame holds (`ScoreFrame.images`, with `<Image>`'s size, auto-scale, aspect lock and offset), and
+  an `.mscz`'s picture payloads keyed by their `<path>`. `ScoreFrame` also gains `topGapSp`, `bottomGapSp` and
+  `autoSize` (`nil` = MuseScore's defaults: 7 sp gaps, auto-sized), and `pageBreakAfter` reads a `<LayoutBreak>` page
+  break kept in a box's preserved markup.
+- **TBox, HBox and picture boxes now decode and save as typed values** — a `<TBox>` reads into `TextFrame` (its text,
+  `topGap` / `bottomGap`, margins in mm), an `<HBox>` into `HorizontalFrame` (width and its two gaps), and a `<VBox>`'s
+  `<Image>` children into `ScoreFrame.images`. Each writes back in MuseScore's child order, a written value is always
+  written back, and anything the model does not represent (`createSystemHeader`, an `<Image>` under a TBox, an image's
+  `z`) is kept in the preserved markup. A fret box (`<FBox>`) stays opaque.
+- **`Score.pictures`: an `.mscz`'s `Pictures/` payloads travel with the score and `MSCZWriter` writes them back** —
+  `MSCZReader` loads the `Pictures/<path>` bytes every VBox `<Image>` names (a missing one is a `mscz.picture.missing`
+  diagnostic, a name that escapes the archive `mscz.picture.badName`), and the two `MSCZWriter.write(score:…)` overloads
+  store each picture an image still references, so a save with no host sidecar keeps them. An entry a host already
+  passes in `extraEntries` is not written twice; a picture whose `<Image>` was removed is dropped. `Score ==` compares
+  `pictures`; `stableFingerprint` does not.
+- **`LayoutDocument.frames`, `LayoutFrame`, `LayoutFrameImage`: a mid-score box as layout geometry** — the engine can now
+  lay out a `<VBox>` (texts by the title builder, `max(10 sp, content)` tall unless `<boxAutoSize>` is 0, pictures fitted
+  or sized as written) or a `<TBox>` (its text at the margins, height = text + margins) as a `LayoutFrame`, and place the
+  stream between systems by MuseScore's `minDistance` rule (`FrameStreamPlacer`). `LayoutDocument` gains defaulted
+  `frames` and `titleImages` (the leading box's pictures, in document coordinates) and `frames(inDocumentYRange:)`; a
+  picture that cannot be read, an SVG, or a missing payload lays out nothing. Not applied yet: a TBox text's `<offset>`
+  (`FrameText.offsetMm`, kept and saved), so a text MuseScore draws moved from the margins sits at them here.
+- **A VBox or TBox after the title block is laid out in the page stream** — in wrap mode with the title block on, every
+  box after the leading one becomes a `LayoutDocument.frames` entry between the systems, in final document coordinates
+  (margins included): a box before measure 0 sits between the title and the first system, a trailing one below the
+  last system, and the document's height includes it. The leading box's pictures land in `LayoutDocument.titleImages`
+  whenever the title block is laid out (horizontal mode included), and the title block grows to the lowest of them so
+  a fixed-size picture cannot overlap the first system. Horizontal mode and `includeTitleFrame: false` lay out no
+  frames. A score whose only box is its title block lays out exactly as before.
+- **An HBox between two measures leaves its width as horizontal room** — `widthSp` (5 sp when unset) plus its left and
+  right gaps, summed over the boxes before one measure, opens before the measure the box sits before, in wrap and
+  horizontal mode alike. The room counts when a system is filled, so it can move a measure onto the next system; it is
+  never stretched, and a justified system gives its measures the available width minus the room, so the system still
+  ends at the page width (MuseScore's `justifySystem`). A box before a system's first measure, before measure 0, after
+  the last measure or inside a collapsed multi-measure rest takes no room; one at a collapsed run's start sits before
+  the run. Line spanners, hyphens and every other measure-relative position follow the measures they belong to.
+- **An HBox's room is blank: staff lines stop at the barline before it and resume at the next measure** — MuseScore's
+  staff lines belong to measures, so a box has none. `LayoutSystem.staffLineGaps` (system-local x ranges, empty
+  without room) runs from the right edge of the barline that closes the measure before the box (the same rule that ends
+  the lines at a system's last barline) to where the next measure starts. The Apple Canvas and layer renderers and the
+  draw program (Android, web, Windows, the PDF writer) draw each staff line as one run per side, and
+  `LayoutDocument.staffBands` gives one band per run, so a highlighted staff is not shaded in the box either. A score
+  without an HBox between two measures lays out, and emits its draw program, byte for byte as before; the Apple Canvas
+  and layer renderers now end a staff line at `staffLineEndX` itself instead of at its start plus its width, which can
+  move that end by one ulp. Not modeled yet: MuseScore redraws
+  the clef (and key) after an HBox by default (`createSystemHeader`); ssm starts the next measure without them.
+- **The paginators honor a frame's page break and give a frames-only last page** — a new
+  `LayoutDocument.paginate(pageHeight:policy:)` cuts the systems into pages with the frames taken into account, and
+  `.page` mode, the wasm `pageBreaks`, the JNI `nativePageBreaks` and `PDFExporter.export(score:)` all cut through it.
+  A VBox or TBox with a `page` `<LayoutBreak>` ends its page as MuseScore's does: the box stays at the bottom of the
+  page it closes — that page must hold it under its last system — and the next page starts below it, at the system
+  after it. Not under `.ignoreAll`, as for a measure's page break: the layout sets `LayoutFrame.pageBreakAfter` only
+  when its `ScoreViewOptions.breakPolicy` honors page breaks, so it is false under `.ignoreAll`. The new
+  `LayoutDocument.pageTop(ofPageStartingAt:)` is where a page starts — the previous system's bottom, or the bottom of
+  the boxes with a page break above its first system — and the `.page` lift, `LayoutBridge.PagePlacement` and the
+  page-break offsets use it; a PDF batch starts there when a frame sits above its first system, and at that system's
+  own top otherwise, as before. Pass `paginate` the break policy the document was laid out with. The boxes after the
+  last system — a break box among them too — move together to a page of their own when they do not fit under it, or
+  when a page break on the last measure closed its page; that page is the empty range
+  `systems.count ..< systems.count`, a PDF batch with no systems. Any other box
+  belongs to the page whose first system follows it, unless it carries the break —
+  `subdocument(systems:yOffset:isLastPage:)` carries the boxes whose top lies between its page's top and the next
+  page's, lifted with the page, and grows to them; the last page takes the trailing ones — and the first `.page` page
+  keeps the title's pictures and its frames. The page-break offsets end at the lowest frame when it is below the last
+  system (never at the bottom margin). New, all defaulted: `LayoutPaginator.paginate(…, pageBreaksBefore:,
+  trailingFramesBottom:)` and `PDFExporter.paginate(…, pageBreaksBefore:, trailingFramesBottom:,
+  systemsWithFrameAbove:)`, where `pageBreaksBefore` maps a system to the bottom of the break boxes above it, and a PDF
+  page whose first system has a plain frame above it starts at the previous system's bottom so the frame is not lost
+  between two pages. A score without frames paginates, and reports its page offsets, exactly as before. Differences
+  from MuseScore: a system that does not fit on its page together with the break box under it moves to the next page
+  with the box (MuseScore moves only the box); two break boxes between the same two systems both stay on the page
+  above (MuseScore gives the second a page of its own); and a break before the first system makes no cover page.
+- **Draw program v9: `drawImage`, and boxes in the program** — `DrawCommand.drawImage(data:x:y:w:h:)` (discriminator
+  13, appended at the tail, so nothing renumbers) carries a picture's PNG or JPEG bytes and the rectangle they fill, in
+  mm with the top-left corner at `x`, `y`; the reader decodes and scales them and draws nothing for a payload it cannot
+  decode. The color and the dash do not apply to a picture; an open `setRotation` does, as it does to every command
+  drawn under it (the layout emits no picture inside one). `LayoutBridge` now draws every box between systems
+  (`LayoutDocument.frames`): its texts as the title block's are drawn, at the box's own top, then its pictures, each box
+  in a `SystemSpan` of its own (`systemIndex` nil) just before the system below it, so the spans still follow the page
+  top to bottom; the title block's pictures (`titleImages`) follow its texts inside its span. `DrawCommandBounds`
+  counts a picture's whole rectangle, and page margins move it as they move everything else. A score without a box
+  after the title and without a picture draws the same commands, byte for byte, as before.
+- **PDF export and the preview renderer draw `drawImage`** — `ScorePDFWriter` embeds a picture as an image XObject
+  (`/Im1`, …) placed by `q w 0 0 h x y cm /ImN Do Q`, once per distinct file however often it is drawn: a JPEG as it
+  is (`DCTDecode`, device gray / RGB / CMYK by its component count, `/Decode` only for a CMYK file with an Adobe
+  marker), an 8-bit non-interlaced gray, RGB or palette PNG as its own deflate stream with PNG predictors
+  (`FlateDecode`, `/Predictor 15`), the palette as `/Indexed`. The writer reads headers only and decodes nothing. A
+  picture it cannot hold — a 16-bit or interlaced PNG, or bytes that are neither format — draws nothing, and a PNG's
+  `tRNS`, gamma and ICC chunks are ignored. The picture is drawn inside its own `q … Q` with the fill alpha reset, so
+  an open translucent color never reaches it. The `render-previews` CoreGraphics walk draws the picture through
+  `ImageIO` with high-quality interpolation, decoding each file once per render.
+- **PDF export of PNGs with alpha** — an 8-bit non-interlaced RGBA or gray+alpha PNG is inflated, unfiltered and split
+  into a color image (`FlateDecode`, device RGB or gray) and an 8-bit `/DeviceGray` soft mask the color image names in
+  `/SMask`, so the picture's transparency survives in the PDF. A chunk length or image size that overflows a 32-bit
+  `Int` makes the file unreadable (no picture) instead of trapping, and a picture that would inflate past 64 MiB of
+  samples (a 4096 × 4096 RGBA picture still fits) is refused rather than allocated.
+- **The Apple screen, print and PDF export draw boxes and pictures** — `ScoreView` draws every box between systems
+  (`LayoutDocument.frames`) at its `originY`, mounted by `visibleRect` with the systems' test, and the title block
+  with its pictures (`titleImages`) in both modes. A box's texts are set as the title block's are; each picture is an
+  image layer stretched to its rect, decoded by ImageIO at no more than 2048 px on its long side into a cache of at
+  most 96 MB (a file ImageIO cannot read is remembered, not retried). `PDFExporter.export(score:)` and
+  `export(document:sheets:…)` draw on each page the boxes that belong to it (the page whose first system follows the
+  box, or the page a box with a page break closes; a box after the last system on the last page, a frames-only page
+  included) and the title's pictures on the first, so a host's own
+  `Sheet`s need no new field; `PDFPageView` and the `PDFPageLayerView` preview take defaulted `frames` and
+  `titleImages`. A picture ImageIO cannot read draws nothing. A score without a box after the title block and without
+  a picture draws exactly as before. `render-previews` draws the boxes too: `SM_SCORE` renders always, and
+  `SM_PARITY_TITLE=1` lays out the title block and the boxes and draws them on both sides of the parity diff.
+
+### Changed
+
+- **The WebAssembly size ceiling is 5 MiB** (`CEILING_BYTES` in `Scripts/wasm-size.sh`, was 4.5 MiB) — the boxes and
+  pictures took the portable graph's brotli size to 4,824,468 bytes. The nightly check warns past it; nothing gates
+  on it.
+- **`ScoreBlock` gains `.textFrame` and `.horizontalFrame`** — breaking for an exhaustive `switch` over it.
+  `.opaqueFrame` and its `Kind.horizontal` / `.text` stay for source compatibility.
+- **The Windows walker accepts `drawImage` and draws nothing for it (tracked by a folino `PARITY(windows)` row)** —
+  `SheetMusicRenderWindows`' `DrawCommandWalker` reads a v9 program that carries pictures without failing and skips
+  each picture, so a Windows page shows a box's texts but not its pictures until the Windows renderer decodes them.
+- **A frame forces a system break on both sides and replaces the system gap with MuseScore's frame distance** — a VBox
+  or TBox between two measures always ends the system before it, whatever `breakPolicy` says (MuseScore collects no
+  measures across a box), and bounds the balanced-wrap span like an authored break. The systems around it sit
+  `max(gap, 2 sp)` away — its `topGap` above, its `bottomGap` below, 7 sp when unset — instead of the engine's
+  `systemGap`; a box right after the title block sits `max(title bottomGap, box topGap)` below it. A box inside a
+  multi-measure-rest run attaches before the run. An `<HBox>` is not a break.
+- **Draw program v9 and flat format v3: a v8 program or SMDF v2 stream is refused by a v9 reader, and a v9 one by a v8
+  reader (no reader skips an unknown opcode) — hosts move their Swift, Kotlin and TypeScript readers together** —
+  `DrawProgram.version` is 9 and `DrawProgramFlat.version` 3. The flat header gains a blob table after the string
+  table (`i32 blobCount`, then `i32 byteLen` + bytes each, deduplicated by content), and opcode 13's record carries
+  `[x, y, w, h]` in its slots and the blob index in its integer; `DrawProgramFlat.DecodeError` gains `badBlobIndex`.
+  Neither format can step over a command it does not know, so an older reader never mis-parses a newer stream or drops
+  a picture silently: a v8 Swift or Kotlin reader fails on the version word (or, when the stream carries a picture,
+  earlier on the unknown discriminator 13), and a v2 TypeScript reader on the version word before it reads a record.
+
+### Fixed
+
 - **A wavy glissando no longer tilts everything drawn after it on Android and the web.** The draw program's
   `setRotation` is a state command — the next one replaces the rotation in force — and a wavy glissando sends one per
   wiggle with a single reset after the run. The Compose renderer and `canvas.ts` stacked each one onto the canvas
@@ -118,6 +291,29 @@ and this project adheres to
   a bar at natural width (stretched 1.5×) widened each symbol's beat by half again. A symbol is now a floor on the span
   of the element it names — room the beat must keep, shared by weight over any other voice's columns inside it — so it
   widens a beat only where it would otherwise run into the next symbol.
+- **Saving a one-line title or subtitle unchanged keeps its line breaks, also when another credit changed** —
+  `SetScoreInfo.isRestatement` compared a write to the raw engraved text, so the one-line form
+  (`FrameText.singleLineText`) of a multi-line title was a real edit and flattened "A\nB" to "A B". It now also counts
+  the one-line form of the current value as a restatement, through the same joining rule. And since the hosts send
+  every field on save, `SetScoreInfo.apply` writes the field's current text, line breaks included, for any write that
+  restates it in either form, so changing the composer no longer flattens a two-line subtitle; a credit stored only in
+  its metaTag is still engraved. The cost: removing nothing but a line break ("A\nB" → "A B") through `SetScoreInfo`
+  is now a no-op, since the one-line form counts as unchanged.
+- **An inline credit editor over a bold title shows and measures bold** — `CreditTextLine.font` was always the regular
+  title face, so the editor over a `<b>` title showed regular text. `CreditTextLine` now reports `isBold` / `isItalic`
+  (true when every text run of the line is), `font` carries those traits, and a line without rich runs is measured in
+  the face it is drawn in — the provider's `renderingTextFont` of that font, so under the table provider (wasm,
+  Android) the Edwin the draw program sets it in rather than the stub's fallback for the system face.
+- **A VBox's `topGap` / `bottomGap` and its `<Image>` children are no longer opaque** — they were kept as preserved
+  markup that no layout or host could read; they now decode into `ScoreFrame.topGapSp`, `bottomGapSp`, `autoSize`
+  (`<boxAutoSize>`) and `images`.
+- **A frame text's unmodeled `<style>` is written back** — a TBox text's `frame` style or a user style on a VBox text
+  decoded to `.other` and was dropped on save; `FrameText.otherStyleName` now keeps the name as written.
+- **A line or page break on the last measure of a collapsed multi-measure rest ends the system** — the planner closes a
+  run at an authored break, so the break sits on the run's last measure, which the packer skipped without checking it:
+  with the rest collapsed, the measures after the run joined its system — unless the break fell within the system's
+  first 12 measures (`balancedSpanLimit`), where the balanced wrap already ended the system at it. The same check now
+  ends the system before a frame that follows a collapsed run.
 
 ## [4.11.0] - 2026-10-16
 

@@ -1,4 +1,4 @@
-// `CGFloat` / `CGPoint` for WebAssembly.
+// `CGFloat` / `CGPoint` / `CGSize` for WebAssembly.
 //
 // `ScoreFrame` describes a vertical frame's height in staff spaces and a text
 // block's offset in millimetres, and has always spelled those `CGFloat` and
@@ -32,6 +32,19 @@
         }
 
         public static let zero = CGPoint()
+    }
+
+    /// A box picture's `<size>` (`FrameImage.size`).
+    public struct CGSize: Hashable, Sendable {
+        public var width: CGFloat
+        public var height: CGFloat
+
+        public init(width: CGFloat = 0, height: CGFloat = 0) {
+            self.width = width
+            self.height = height
+        }
+
+        public static let zero = CGSize()
     }
 
 #endif

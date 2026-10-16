@@ -34,6 +34,9 @@
     ///   SM_PARITY_THRESHOLD  — per-pixel max-channel difference that counts as "differing", 0–255 (default 48)
     ///   SM_PARITY_SHIFT      — whole-pixel nudge "dx,dy" applied to the draw-program render (default 0,0)
     ///   SM_PARITY_ONLY       — with `samples`, run just the catalog entry with this name
+    ///   SM_PARITY_TITLE      — `1` lays out the title block and the boxes between systems (with `SM_PARITY_WIDTH`,
+    ///                          since boxes need wrap mode) and draws them on both sides: the title's and the boxes'
+    ///                          texts and pictures enter the diff. Default off: systems only, as before
     ///   SM_PARITY_MAX_MEAN   — exit 1 when the mean differing share (in percent) exceeds this budget
     ///   SM_PARITY_EXPORT     — `1` also writes each score's page as `<name>-page.bin` (a `DrawProgramCodec` payload)
     ///                          and its canvas as `<name>-page.txt` ("widthPx heightPx pxPerMM offsetX offsetY"),
@@ -120,12 +123,13 @@
             }
 
             let exports = env["SM_PARITY_EXPORT"] == "1"
+            let boxes = env["SM_PARITY_TITLE"] == "1"
             var rows: [Row] = []
             var windowsRows: [WindowsRow] = []
             for (name, score) in subjects {
                 let row = try compare(
                     name: name, score: score, width: width, threshold: threshold, nudge: nudge, outDir: outDir,
-                    exports: exports,
+                    exports: exports, boxes: boxes,
                 )
                 rows.append(row)
                 print(row.line)
@@ -156,19 +160,21 @@
         static func compare(
             name: String, score: Score, width: CGFloat?, threshold: UInt8, nudge: CGPoint, outDir: URL,
             exports: Bool = false,
+            boxes: Bool = false,
         ) throws -> Row {
-            // `includeTitleFrame: false` on purpose: `renderDocumentImage` composites systems only (it never draws
-            // `TitleFrameView`), and the draw program would draw the title block, so the two would disagree on
-            // something that is not a renderer difference. The systems are what this probe is about.
+            // `includeTitleFrame` follows `boxes`, which is off by default: the draw program draws the title block
+            // and the boxes whenever they are laid out, so the Apple side draws them exactly when they are
+            // (`renderDocumentImage(drawsBoxes:)`) and the two never disagree on something that is not a renderer
+            // difference. Without `boxes` the probe is about the systems alone, as it always was.
             let options = ScoreViewOptions(
-                staffSize: 28, systemGap: 40, wrapToViewWidth: width != nil, includeTitleFrame: false,
+                staffSize: 28, systemGap: 40, wrapToViewWidth: width != nil, includeTitleFrame: boxes,
             )
             let available = width ?? LayoutEngine.naturalContentWidth(score: score, options: options)
             let document = LayoutEngine.layout(score: score, options: options, availableWidth: available)
 
             let scale: CGFloat = 2
             let padding: CGFloat = 16
-            let apple = try renderDocumentImage(document, scale: scale, padding: padding)
+            let apple = try renderDocumentImage(document, scale: scale, padding: padding, drawsBoxes: boxes)
 
             // The same page assembly the Android reader gets in vertical mode — one page, the document's own
             // size, every command in document millimetres. Only `mode` is read from the wire here; the layout

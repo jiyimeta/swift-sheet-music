@@ -338,7 +338,7 @@
             #expect(painted)
         }
 
-        @Test("the stream keeps the v8 wire: nothing new to decode")
+        @Test("the stream keeps the v9 wire: nothing new to decode")
         func noNewOpcode() throws {
             let commands = try Self.commands(Self.staffText("Solo", [
                 .element(.init(name: "b", content: [.characters("Solo")])),
@@ -346,7 +346,7 @@
             let page = EncodablePage(widthMM: 100, heightMM: 100, commands: commands)
             let encoded = DrawProgramCodec.encode(pages: [page])
             #expect(try DrawProgramCodec.decode(encoded).first?.commands == commands)
-            #expect(DrawProgram.version == 8)
+            #expect(DrawProgram.version == 9)
         }
     }
 #endif

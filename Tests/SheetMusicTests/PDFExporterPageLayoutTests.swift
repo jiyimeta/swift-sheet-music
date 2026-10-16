@@ -10,6 +10,8 @@
     import Testing
 
     @MainActor struct PDFExporterPageLayoutTests {
+        private let _installApple = TestSupport.installApple
+
         /// Default options should yield a MediaBox matching
         /// `pageLayout.{width,height} × 72`. testArpeggio.mscx declares
         /// A4-sized paper.
@@ -156,6 +158,193 @@
             layout.evenLeftMargin = 1.5
             #expect(layout.oddRightMargin == 1)
             #expect(layout.evenRightMargin == 0.5)
+        }
+
+        // MARK: - Frames
+
+        /// A page `height` tall with 30 pt margins all round: `height - 60` of room.
+        private func page(height: CGFloat) -> EngravingPage {
+            EngravingPage(
+                size: CGSize(width: 600, height: height),
+                oddMargins: PageMargins(uniform: 30),
+                evenMargins: PageMargins(uniform: 30),
+                twosided: false,
+            )
+        }
+
+        /// A 200 pt tall system at `originY`, its measure carrying a page break when `pageBreak`.
+        private func system(originY: CGFloat, pageBreak: Bool = false) -> LayoutSystem {
+            LayoutSystem(
+                origin: CGPoint(x: 0, y: originY), size: CGSize(width: 100, height: 200),
+                measures: [
+                    LayoutMeasure(measureIndex: 0, origin: .zero, width: 100, elements: [], pageBreak: pageBreak),
+                ],
+                staffOrigins: [.zero], staffAddresses: [], staffGeometries: [], partLabels: [], spanners: [], sp: 7,
+            )
+        }
+
+        /// A box `height` points tall at `originY`, a page break after it when `pageBreakAfter`.
+        private func frame(originY: CGFloat, height: CGFloat, pageBreakAfter: Bool = false) -> LayoutFrame {
+            LayoutFrame(
+                kind: .vertical, beforeMeasureIndex: 0, originY: originY, height: height,
+                content: LayoutTitleFrame(height: height, texts: []), images: [], pageBreakAfter: pageBreakAfter,
+            )
+        }
+
+        /// Systems at `origins` and one box over `box` with a page break after it; the last system's measure ends in a
+        /// page break of its own when `closing`.
+        private func breakingDocument(
+            origins: [CGFloat], box: Range<CGFloat>, closing: Bool = false,
+        ) -> LayoutDocument {
+            let systems = origins.enumerated().map { index, originY in
+                system(originY: originY, pageBreak: closing && index == origins.count - 1)
+            }
+            return LayoutDocument(
+                size: CGSize(width: 600, height: (origins.last ?? 0) + 200),
+                systems: systems, metrics: StaffMetrics(staffSize: 28),
+                frames: [frame(originY: box.lowerBound, height: box.upperBound - box.lowerBound, pageBreakAfter: true)],
+            )
+        }
+
+        /// A box with a page break after the last system has no system to stay above, so it goes to the frames-only
+        /// sheet with the other trailing frames — whether it does not fit under the last system, or a measure page
+        /// break on the last system closed that page — never onto the last sheet with music, past its bottom margin.
+        /// S0 [0, 200], S1 [220, 420] on 540 pt of room.
+        @Test func aTrailingBoxBreakStaysOnTheFramesOnlySheet() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let size = CGSize(width: 600, height: 600)
+            let margins = PageMargins(uniform: 30)
+            for (closing, box) in [(false, CGFloat(430) ..< 690), (true, CGFloat(430) ..< 470)] {
+                let document = breakingDocument(origins: [0, 220], box: box, closing: closing)
+                let batches = PDFExporter.paginate(document: document, page: page(height: 600), policy: .honor)
+                #expect(batches.map(\.systems.count) == [2, 0], "closing \(closing)")
+                let sheets = batches.map {
+                    PDFExporter.Sheet(systems: $0.systems, pageStartY: $0.startY, pageSize: size, margins: margins)
+                }
+                let held = PDFExporter.frames(of: sheets, in: document).map { $0.map(\.originY) }
+                #expect(held == [[], [430]], "closing \(closing)")
+            }
+        }
+
+        /// A box with a page break stays on the sheet it closes (MuseScore `pagelayout.cpp:246`): the batch after it
+        /// starts at the box's bottom, not at the system above it, and the host's sheets put the box on the sheet
+        /// above. S0 [0, 200], the box [210, 290], S1 [300, 500], S2 [520, 720] on 1140 pt of room.
+        @Test func theBatchAfterABoxBreakStartsAtTheBoxsBottom() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let document = breakingDocument(origins: [0, 300, 520], box: 210 ..< 290)
+            let batches = PDFExporter.paginate(document: document, page: page(height: 1200), policy: .honor)
+            #expect(batches.map(\.systems.count) == [1, 2])
+            #expect(batches.map(\.startY) == [0, 290])
+            let size = CGSize(width: 600, height: 1200)
+            let sheets = batches.map { batch in
+                PDFExporter.Sheet(
+                    systems: batch.systems, pageStartY: batch.startY, pageSize: size, margins: PageMargins(uniform: 30),
+                )
+            }
+            #expect(PDFExporter.frames(of: sheets, in: document).map { $0.map(\.originY) } == [[210], []])
+        }
+
+        /// The sheet above must hold the box too: when the box does not fit under S1, S1 moves to the next sheet with
+        /// it. S0 [0, 200], S1 [220, 420], the box [430, 690], S2 [700, 900] on 540 pt of room.
+        @Test func aBoxBreakThatDoesNotFitTakesTheSystemAboveItAlong() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let document = breakingDocument(origins: [0, 220, 700], box: 430 ..< 690)
+            let batches = PDFExporter.paginate(document: document, page: page(height: 600), policy: .honor)
+            #expect(batches.map(\.systems.count) == [1, 1, 1])
+            #expect(batches.map(\.startY) == [0, 220, 690])
+        }
+
+        /// A frame's page break starts a page at the system below it with room to spare, and that page starts at the
+        /// frame's bottom (the value in `pageBreaksBefore`), so the frame stays on the page it closes. `.ignoreAll`
+        /// ignores the break, as it does a measure's.
+        @Test func pageBreakStartsAPageAtTheBreakingFramesBottom() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let systems = [system(originY: 0), system(originY: 300), system(originY: 520)]
+            let pages = PDFExporter.paginate(
+                systems: systems, page: page(height: 1200), pageBreaksBefore: [1: 280], systemsWithFrameAbove: [1],
+            )
+            #expect(pages.map(\.systems.count) == [1, 2])
+            #expect(pages.map(\.startY) == [0, 280])
+            let ignored = PDFExporter.paginate(
+                systems: systems, page: page(height: 1200), policy: .ignoreAll,
+                pageBreaksBefore: [1: 280], systemsWithFrameAbove: [1],
+            )
+            #expect(ignored.map(\.systems.count) == [3])
+        }
+
+        /// A frame between the last system of one page and the first of the next is on the later page: that page
+        /// starts at the previous system's bottom, not at its first system's top. Without a frame there the start is
+        /// unchanged.
+        @Test func frameBetweenPagesLandsOnTheLaterPage() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            // On 400 pt of room the second system does not fit under the first; a frame sits between them.
+            let systems = [system(originY: 0), system(originY: 300)]
+            let framed = PDFExporter.paginate(systems: systems, page: page(height: 460), systemsWithFrameAbove: [1])
+            let bare = PDFExporter.paginate(systems: systems, page: page(height: 460))
+            #expect(framed.map(\.startY) == [0, 200])
+            #expect(bare.map(\.startY) == [0, 300])
+        }
+
+        /// The sheets a host builds follow the same rule: the frame above a sheet's first system is that sheet's even
+        /// when the sheet starts at the system's top, and the last sheet takes the frames after the last system.
+        @Test func sheetFramesFollowThePageRule() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let systems = [system(originY: 0), system(originY: 300)]
+            let document = LayoutDocument(
+                size: CGSize(width: 600, height: 550), systems: systems, metrics: StaffMetrics(staffSize: 28),
+                frames: [frame(originY: 210, height: 80), frame(originY: 510, height: 40)],
+            )
+            let size = CGSize(width: 600, height: 460)
+            let margins = PageMargins(uniform: 30)
+            let sheets = [
+                PDFExporter.Sheet(systems: [systems[0]], pageStartY: 0, pageSize: size, margins: margins),
+                PDFExporter.Sheet(systems: [systems[1]], pageStartY: 300, pageSize: size, margins: margins),
+            ]
+            let tops = PDFExporter.frames(of: sheets, in: document).map { $0.map(\.originY) }
+            #expect(tops == [[], [210, 510]])
+        }
+
+        /// Frames after the last system that do not fit under it get a batch with no systems, starting at the last
+        /// system's bottom; frames that fit get none.
+        @Test func trailingFrameThatDoesNotFitMakesAFramesOnlyBatch() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let systems = [system(originY: 0), system(originY: 220)]
+            let spilled = PDFExporter.paginate(systems: systems, page: page(height: 1200), trailingFramesBottom: 1200)
+            let fitting = PDFExporter.paginate(systems: systems, page: page(height: 1200), trailingFramesBottom: 1100)
+            #expect(spilled.map(\.systems.count) == [2, 0])
+            #expect(spilled.last?.startY == 420)
+            #expect(fitting.map(\.systems.count) == [2])
+        }
+
+        /// A page break on the last system's last measure sends the frames after it to a batch of their own even when
+        /// they would fit under it (MuseScore `pagelayout.cpp:246`); `.ignoreAll` drops the break, so they stay.
+        @Test func trailingFramesAfterAPageBreakGetTheirOwnBatch() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let systems = [system(originY: 0), system(originY: 220, pageBreak: true)]
+            let honored = PDFExporter.paginate(systems: systems, page: page(height: 1200), trailingFramesBottom: 500)
+            let ignored = PDFExporter.paginate(
+                systems: systems, page: page(height: 1200), policy: .ignoreAll, trailingFramesBottom: 500,
+            )
+            #expect(honored.map(\.systems.count) == [2, 0])
+            #expect(honored.last?.startY == 420)
+            #expect(ignored.map(\.systems.count) == [2])
+        }
+
+        /// `export(score:)` of frames-boxes draws a PDF page per batch, and VBox B's page break starts the batch that
+        /// holds the system below it.
+        @Test func exportOfFramesBoxesDrawsAPagePerBatch() throws {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("frames-boxes"))
+            let paged = PDFExporter.pagedLayout(score: score, options: PDFExporter.Options())
+            let breakMatch = paged.document.frames.first { $0.pageBreakAfter }
+            let breaking = try #require(breakMatch)
+            let belowMatch = paged.document.systems.first { $0.origin.y >= breaking.bottom }
+            let below = try #require(belowMatch)
+            let starts = paged.batches.compactMap { $0.systems.first?.origin.y }
+            #expect(starts.contains(below.origin.y))
+            let data = try PDFExporter.export(score: score)
+            let pdf = try #require(PDFDocument(data: data))
+            #expect(pdf.pageCount == paged.batches.count)
         }
     }
 #endif
