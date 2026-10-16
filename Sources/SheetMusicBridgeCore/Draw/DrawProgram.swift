@@ -173,7 +173,8 @@ public enum DrawCommand: Sendable, Equatable {
     case fillPath
     /// A picture of a box (`<VBox>`): `data` is the file's bytes, PNG or JPEG only, which the reader decodes and scales
     /// to fill the rectangle whose top-left corner is (`x`, `y`) and whose size is `w` × `h`, in document mm. A payload
-    /// the reader cannot decode draws nothing. The color, dash and rotation state do not apply to it.
+    /// the reader cannot decode draws nothing. The `setColor` and `setDash` state do not apply to it; an open
+    /// `setRotation` does, as it does to every command drawn under it (the layout emits no picture inside one).
     case drawImage(data: Data, x: Double, y: Double, w: Double, h: Double)
 }
 

@@ -24,7 +24,10 @@
         public let systems: [LayoutSystem]
         public let pageStartY: CGFloat
         public let titleFrame: LayoutTitleFrame?
-        /// The frames between systems this page holds, in document coordinates.
+        /// The frames between systems this page holds, in document coordinates (`LayoutDocument.frames`, cut as
+        /// `PDFExporter.export(document:sheets:…)` cuts them). One above the page's first system is drawn where it is,
+        /// so `pageStartY` must be at or above it — the previous page's last-system bottom, as
+        /// `PDFExporter.Sheet.pageStartY` requires — or it lands in the top margin.
         public let frames: [LayoutFrame]
         /// The title block's pictures, in document coordinates; only the page that carries `titleFrame` passes them.
         public let titleImages: [LayoutFrameImage]

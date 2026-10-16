@@ -196,9 +196,17 @@ public enum PDFExporter {
     /// frames after the last system — adds a batch with no systems, whose `startY` is the last system's bottom, when
     /// those frames do not fit on the last page or an honored page break on the last system already closed it. A page
     /// whose first system is in `systemsWithFrameAbove` (a frame sits between it and the system before) starts at that
-    /// previous system's bottom rather than at its own top, so the frame is on this page and not lost between two;
-    /// every other page starts where it always did. `paginate(document:page:policy:)` derives all three from a
-    /// document.
+    /// previous system's bottom rather than at its own top, so the frame is on this page and not lost between two; a
+    /// system in `forcedBreaksBefore` counts as one too, since the frame whose break it is sits above it. Every other
+    /// page starts where it always did.
+    ///
+    /// The three frame parameters are derived from a document internally — `export(score:options:)` cuts through
+    /// `paginate(document:page:policy:)`, which reads the `package` helpers behind
+    /// `LayoutDocument.paginate(pageHeight:policy:)` — so a host cannot compute them itself. A host printing a
+    /// document with frames calls `export(score:options:)`, or cuts its own pages with
+    /// `LayoutDocument.paginate(pageHeight:policy:)` and draws them with `export(document:sheets:score:options:)`, each
+    /// sheet starting as `Sheet.pageStartY` requires. Called without them, this paginates the systems as if there were
+    /// no frames.
     public static func paginate(
         systems: [LayoutSystem],
         page: EngravingPage,

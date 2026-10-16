@@ -83,7 +83,8 @@ and this project adheres to
   or sized as written) or a `<TBox>` (its text at the margins, height = text + margins) as a `LayoutFrame`, and place the
   stream between systems by MuseScore's `minDistance` rule (`FrameStreamPlacer`). `LayoutDocument` gains defaulted
   `frames` and `titleImages` (the leading box's pictures, in document coordinates) and `frames(inDocumentYRange:)`; a
-  picture that cannot be read, an SVG, or a missing payload lays out nothing.
+  picture that cannot be read, an SVG, or a missing payload lays out nothing. Not applied yet: a TBox text's `<offset>`
+  (`FrameText.offsetMm`, kept and saved), so a text MuseScore draws moved from the margins sits at them here.
 - **A VBox or TBox after the title block is laid out in the page stream** — in wrap mode with the title block on, every
   box after the leading one becomes a `LayoutDocument.frames` entry between the systems, in final document coordinates
   (margins included): a box before measure 0 sits between the title and the first system, a trailing one below the
@@ -104,14 +105,16 @@ and this project adheres to
   the lines at a system's last barline) to where the next measure starts. The Apple Canvas and layer renderers and the
   draw program (Android, web, Windows, the PDF writer) draw each staff line as one run per side, and
   `LayoutDocument.staffBands` gives one band per run, so a highlighted staff is not shaded in the box either. A score
-  without an HBox between two measures draws and lays out byte for byte as before. Not modeled yet: MuseScore redraws
+  without an HBox between two measures lays out, and emits its draw program, byte for byte as before; the Apple Canvas
+  and layer renderers now end a staff line at `staffLineEndX` itself instead of at its start plus its width, which can
+  move that end by one ulp. Not modeled yet: MuseScore redraws
   the clef (and key) after an HBox by default (`createSystemHeader`); ssm starts the next measure without them.
 - **The paginators honor a frame's page break and give a frames-only last page** — a new
   `LayoutDocument.paginate(pageHeight:policy:)` cuts the systems into pages with the frames taken into account, and
   `.page` mode, the wasm `pageBreaks`, the JNI `nativePageBreaks` and `PDFExporter.export(score:)` all cut through it.
   A VBox or TBox with a `page` `<LayoutBreak>` starts a page at the system after it (not under `.ignoreAll`, as for a
-  measure's page break), and boxes after the last system get a last page of their own when they do not fit under it,
-  or always when a page break on the last measure closed its page: the empty range
+  measure's page break). The boxes after the last system move together to a page of their own when they do not fit
+  under it, or when a page break on the last measure closed its page; that page is the empty range
   `systems.count ..< systems.count`, a PDF batch with no systems. A frame belongs to the page whose first system
   follows it — `subdocument(systems:yOffset:isLastPage:)` carries it, lifted with the page, and grows to it; the last
   page takes the trailing ones — and the first `.page` page keeps the title's pictures and its frames. The page-break
@@ -124,8 +127,9 @@ and this project adheres to
   system makes no cover page.
 - **Draw program v9: `drawImage`, and boxes in the program** — `DrawCommand.drawImage(data:x:y:w:h:)` (discriminator
   13, appended at the tail, so nothing renumbers) carries a picture's PNG or JPEG bytes and the rectangle they fill, in
-  mm with the top-left corner at `x`, `y`; the reader decodes and scales them, draws nothing for a payload it cannot
-  decode, and applies no color, dash or rotation state. `LayoutBridge` now draws every box between systems
+  mm with the top-left corner at `x`, `y`; the reader decodes and scales them and draws nothing for a payload it cannot
+  decode. The color and the dash do not apply to a picture; an open `setRotation` does, as it does to every command
+  drawn under it (the layout emits no picture inside one). `LayoutBridge` now draws every box between systems
   (`LayoutDocument.frames`): its texts as the title block's are drawn, at the box's own top, then its pictures, each box
   in a `SystemSpan` of its own (`systemIndex` nil) just before the system below it, so the spans still follow the page
   top to bottom; the title block's pictures (`titleImages`) follow its texts inside its span. `DrawCommandBounds`
@@ -157,6 +161,8 @@ and this project adheres to
 
 ### Changed
 
+- **`ScoreBlock` gains `.textFrame` and `.horizontalFrame`** — breaking for an exhaustive `switch` over it.
+  `.opaqueFrame` and its `Kind.horizontal` / `.text` stay for source compatibility.
 - **The Windows walker accepts `drawImage` and draws nothing for it (tracked by a folino `PARITY(windows)` row)** —
   `SheetMusicRenderWindows`' `DrawCommandWalker` reads a v9 program that carries pictures without failing and skips
   each picture, so a Windows page shows a box's texts but not its pictures until the Windows renderer decodes them.
@@ -177,14 +183,19 @@ and this project adheres to
 
 ### Fixed
 
-- **Saving a one-line title or subtitle unchanged keeps its line breaks** — `SetScoreInfo.isRestatement` compared a
-  write to the raw engraved text, so the one-line form (`FrameText.singleLineText`) of a multi-line title was a real
-  edit and flattened "A\nB" to "A B". It now also counts the one-line form of the current value as a restatement,
-  through the same joining rule.
+- **Saving a one-line title or subtitle unchanged keeps its line breaks, also when another credit changed** —
+  `SetScoreInfo.isRestatement` compared a write to the raw engraved text, so the one-line form
+  (`FrameText.singleLineText`) of a multi-line title was a real edit and flattened "A\nB" to "A B". It now also counts
+  the one-line form of the current value as a restatement, through the same joining rule. And since the hosts send
+  every field on save, `SetScoreInfo.apply` writes the field's current text, line breaks included, for any write that
+  restates it in either form, so changing the composer no longer flattens a two-line subtitle; a credit stored only in
+  its metaTag is still engraved. The cost: removing nothing but a line break ("A\nB" → "A B") through `SetScoreInfo`
+  is now a no-op, since the one-line form counts as unchanged.
 - **An inline credit editor over a bold title shows and measures bold** — `CreditTextLine.font` was always the regular
   title face, so the editor over a `<b>` title showed regular text. `CreditTextLine` now reports `isBold` / `isItalic`
   (true when every text run of the line is), `font` carries those traits, and a line without rich runs is measured in
-  that font.
+  the face it is drawn in — the provider's `renderingTextFont` of that font, so under the table provider (wasm,
+  Android) the Edwin the draw program sets it in rather than the stub's fallback for the system face.
 - **A VBox's `topGap` / `bottomGap` and its `<Image>` children are no longer opaque** — they were kept as preserved
   markup that no layout or host could read; they now decode into `ScoreFrame.topGapSp`, `bottomGapSp`, `autoSize`
   (`<boxAutoSize>`) and `images`.
@@ -192,8 +203,9 @@ and this project adheres to
   decoded to `.other` and was dropped on save; `FrameText.otherStyleName` now keeps the name as written.
 - **A line or page break on the last measure of a collapsed multi-measure rest ends the system** — the planner closes a
   run at an authored break, so the break sits on the run's last measure, which the packer skipped without checking it:
-  with the rest collapsed, the measures after the run joined its system (unless the break also bounded a balanced span
-  of 12 measures or fewer). The same check now ends the system before a frame that follows a collapsed run.
+  with the rest collapsed, the measures after the run joined its system — unless the break fell within the system's
+  first 12 measures (`balancedSpanLimit`), where the balanced wrap already ended the system at it. The same check now
+  ends the system before a frame that follows a collapsed run.
 
 ## [4.11.0] - 2026-10-16
 
@@ -378,8 +390,6 @@ and this project adheres to
 
 ### Changed
 
-- **`ScoreBlock` gains `.textFrame` and `.horizontalFrame`** — breaking for an exhaustive `switch` over it. `.opaqueFrame`
-  and its `Kind.horizontal` / `.text` stay for source compatibility.
 - **Pedals, text lines, palm mutes, let rings and the guitar lines lay out from one text-line geometry** — begin label,
   line, hooks and end label as MuseScore's `layoutTextLineBaseSegment` (`SpannerGeometry.textLineBase`,
   `TextLineBaseParts`, `TextLineBaseStyle`). A pedal is its label and a line (or its hooks, or its ✱), no longer a 'Ped'

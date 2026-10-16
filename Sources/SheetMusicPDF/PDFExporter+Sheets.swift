@@ -18,6 +18,12 @@ extension PDFExporter {
         /// The systems on this page, in document coordinates.
         public var systems: [LayoutSystem]
         /// The document Y drawn at the page's top margin.
+        ///
+        /// **A sheet whose first system has a frame above it (`LayoutDocument.frames`) must start at or above that
+        /// frame** — at the previous sheet's last-system bottom, as `paginate(systems:page:policy:…)` starts such a
+        /// page. The export draws on each sheet the frames `frames(of:in:)` assigns it, which include the frame above
+        /// its first system; a sheet that starts at that system's top instead draws the frame into its top margin. The
+        /// first sheet starts at 0, above the title block.
         public var pageStartY: CGFloat
         /// The page's media box, in points.
         public var pageSize: CGSize

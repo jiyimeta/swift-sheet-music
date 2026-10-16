@@ -23,7 +23,9 @@ public struct PDFPageView: View {
     /// score with a leading `<VBox>` carries one; other pages pass
     /// `nil`.
     let titleFrame: LayoutTitleFrame?
-    /// The frames between systems this page holds (`PDFExporter.frames(of:in:)`), in document coordinates.
+    /// The frames between systems this page holds (`PDFExporter.frames(of:in:)`), in document coordinates. One above
+    /// the page's first system is drawn where it is, so `pageStartY` must be at or above it — the previous page's
+    /// last-system bottom, as `PDFExporter.Sheet.pageStartY` requires — or it lands in the top margin.
     let frames: [LayoutFrame]
     /// The title block's pictures (`LayoutDocument.titleImages`), in document coordinates; only the page that carries
     /// `titleFrame` passes them.
