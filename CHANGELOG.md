@@ -11,46 +11,6 @@ and this project adheres to
 
 - **`SpannerGeometry.voltaLabelOrigin(from:to:label:sp:)` and `SpannerGeometry.voltaInk(…)`** — where a volta's typeset
   label hangs by its top-left, and the ink a volta segment covers (line, hooks and label).
-
-### Fixed
-
-- **A wavy glissando no longer tilts everything drawn after it on Android and the web.** The draw program's
-  `setRotation` is a state command — the next one replaces the rotation in force — and a wavy glissando sends one per
-  wiggle with a single reset after the run. The Compose renderer and `canvas.ts` stacked each one onto the canvas
-  instead, so the reset undid only the last: the rest of the page (or band) came out rotated by every other wiggle's
-  angle, and a tap no longer landed on the note drawn under it. Both now close the open rotation before opening the
-  next, and close one left open at the end of a run, as the PDF writer and the Windows walker already did. The
-  RenderPreviews CoreGraphics walk had the same fault and is fixed with them.
-- **A volta's label is no longer struck through by its own bracket.** It hangs inside the hook as MuseScore draws it:
-  aligned LEFT, BASELINE at `voltaOffset` (0.6, 2.2) sp below the line's left end (`styledef.cpp:625-626`), and the
-  hooks drop `voltaHook` 2.2 sp instead of 1 sp. It used to be centered half a spatium under the line, so the line ran
-  through the upper half of every "1." and "Last time", authored or synthesized. A volta's vertical extent and skyline
-  shape now measure that ink instead of a band centered on the line. `voltaLabelOrigin(from:to:sp:)` keeps its meaning,
-  the point a plain label hung by `(0, 0.5)` takes, now on the same baseline.
-- **A title-block text broken over lines keeps every line inside its frame.** The frame grew only by one line per text,
-  so when the frame's own `<height>` was not already tall enough a two-line subtitle ("First line<br/>arr. Second") lost
-  its second line under the first system — at a 20 pt staff the frame stopped 11 pt short of it. The frame now reaches
-  each top-anchored text's last line, measured by the placement the renderers draw from.
-- **A fret diagram's `<orientation>` is read and written as MuseScore spells it, "vertical" / "horizontal"**
-  (`TConv::toXml(Orientation)`). ssm read and wrote the enum ordinal, so a horizontal diagram from MuseScore drew
-  upright and lost its orientation on save, and a diagram ssm saved as horizontal went to MuseScore as `1`, which
-  MuseScore reads as vertical. A number is now kept as `Orientation.other` — read upright, as MuseScore reads it — and
-  written back unchanged.
-- **An offset cannot push a stacked fingering into its chord.** MuseScore's autoplace lifts a fingering moved into its
-  chord back out to where it stacked — MuseScore 4.7 draws a right-hand "i" with `<offset y="1.5"/>` exactly where it
-  draws it without one — so the "i" sat on the stem tip inside the staff in folino and above the staff in MuseScore.
-  A stacked, autoplaced fingering now keeps no part of its offset that points into its chord; an offset away from it
-  or along it still moves it, and one with `<autoplace>0</autoplace>` takes its offset whole.
-- **Autoplace sees a stem where it is drawn.** A chord's skyline put its stem on the chord's column — the notehead's
-  center — while every renderer draws it on the notehead's edge (`StemGeometry.compute`), so with two voices on a staff
-  a dynamic could sit on the other voice's down-stem: `dynamics-voices` bar 2's f overlapped the half notes' stem. The
-  skyline stem now stands where it is drawn, and the f clears it.
-- **A chord symbol no longer widens its beat in a stretched bar.** Its width was weight in its beat, and weight
-  stretches with the line, so every justified bar with chord symbols spaced its beats by the symbols' widths:
-  `chord-symbol-case`'s four quarters stood 275 / 415 / 323 px apart in folino where MuseScore spaces them evenly, and
-  a bar at natural width (stretched 1.5×) widened each symbol's beat by half again. A symbol is now a floor on the span
-  of the element it names — room the beat must keep, shared by weight over any other voice's columns inside it — so it
-  widens a beat only where it would otherwise run into the next symbol.
 - **`FrameText.singleLineText`** — the text with each newline (a run of them too) replaced by one space and the ends
   trimmed, for hosts whose displays show a multi-line title on one line.
 - **The Android and web readers draw `drawImage`** — the Kotlin readers (the `SheetMusicComposeAndroid` AAR and the
@@ -187,6 +147,43 @@ and this project adheres to
 
 ### Fixed
 
+- **A wavy glissando no longer tilts everything drawn after it on Android and the web.** The draw program's
+  `setRotation` is a state command — the next one replaces the rotation in force — and a wavy glissando sends one per
+  wiggle with a single reset after the run. The Compose renderer and `canvas.ts` stacked each one onto the canvas
+  instead, so the reset undid only the last: the rest of the page (or band) came out rotated by every other wiggle's
+  angle, and a tap no longer landed on the note drawn under it. Both now close the open rotation before opening the
+  next, and close one left open at the end of a run, as the PDF writer and the Windows walker already did. The
+  RenderPreviews CoreGraphics walk had the same fault and is fixed with them.
+- **A volta's label is no longer struck through by its own bracket.** It hangs inside the hook as MuseScore draws it:
+  aligned LEFT, BASELINE at `voltaOffset` (0.6, 2.2) sp below the line's left end (`styledef.cpp:625-626`), and the
+  hooks drop `voltaHook` 2.2 sp instead of 1 sp. It used to be centered half a spatium under the line, so the line ran
+  through the upper half of every "1." and "Last time", authored or synthesized. A volta's vertical extent and skyline
+  shape now measure that ink instead of a band centered on the line. `voltaLabelOrigin(from:to:sp:)` keeps its meaning,
+  the point a plain label hung by `(0, 0.5)` takes, now on the same baseline.
+- **A title-block text broken over lines keeps every line inside its frame.** The frame grew only by one line per text,
+  so when the frame's own `<height>` was not already tall enough a two-line subtitle ("First line<br/>arr. Second") lost
+  its second line under the first system — at a 20 pt staff the frame stopped 11 pt short of it. The frame now reaches
+  each top-anchored text's last line, measured by the placement the renderers draw from.
+- **A fret diagram's `<orientation>` is read and written as MuseScore spells it, "vertical" / "horizontal"**
+  (`TConv::toXml(Orientation)`). ssm read and wrote the enum ordinal, so a horizontal diagram from MuseScore drew
+  upright and lost its orientation on save, and a diagram ssm saved as horizontal went to MuseScore as `1`, which
+  MuseScore reads as vertical. A number is now kept as `Orientation.other` — read upright, as MuseScore reads it — and
+  written back unchanged.
+- **An offset cannot push a stacked fingering into its chord.** MuseScore's autoplace lifts a fingering moved into its
+  chord back out to where it stacked — MuseScore 4.7 draws a right-hand "i" with `<offset y="1.5"/>` exactly where it
+  draws it without one — so the "i" sat on the stem tip inside the staff in folino and above the staff in MuseScore.
+  A stacked, autoplaced fingering now keeps no part of its offset that points into its chord; an offset away from it
+  or along it still moves it, and one with `<autoplace>0</autoplace>` takes its offset whole.
+- **Autoplace sees a stem where it is drawn.** A chord's skyline put its stem on the chord's column — the notehead's
+  center — while every renderer draws it on the notehead's edge (`StemGeometry.compute`), so with two voices on a staff
+  a dynamic could sit on the other voice's down-stem: `dynamics-voices` bar 2's f overlapped the half notes' stem. The
+  skyline stem now stands where it is drawn, and the f clears it.
+- **A chord symbol no longer widens its beat in a stretched bar.** Its width was weight in its beat, and weight
+  stretches with the line, so every justified bar with chord symbols spaced its beats by the symbols' widths:
+  `chord-symbol-case`'s four quarters stood 275 / 415 / 323 px apart in folino where MuseScore spaces them evenly, and
+  a bar at natural width (stretched 1.5×) widened each symbol's beat by half again. A symbol is now a floor on the span
+  of the element it names — room the beat must keep, shared by weight over any other voice's columns inside it — so it
+  widens a beat only where it would otherwise run into the next symbol.
 - **Saving a one-line title or subtitle unchanged keeps its line breaks, also when another credit changed** —
   `SetScoreInfo.isRestatement` compared a write to the raw engraved text, so the one-line form
   (`FrameText.singleLineText`) of a multi-line title was a real edit and flattened "A\nB" to "A B". It now also counts
