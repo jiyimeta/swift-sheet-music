@@ -167,6 +167,8 @@ private fun DrawCommand.boxMM(): Box? = when (this) {
     is DrawCommand.Glyph -> Box(x, y - 2.0 * size, x + 2.0 * size, y + size)
     is DrawCommand.Text -> Box(x, y - 2.0 * size, x + 2.0 * size, y + size)
     is DrawCommand.StretchedGlyph -> Box(rightEdgeX - fontSize, topY, rightEdgeX, bottomY)
+    // Phase A stub: Phase B returns the image rect, `Box(x, y, x + w, y + h)`.
+    is DrawCommand.DrawImage -> null
     // State commands paint nothing themselves, and the path terminators paint what their path's points
     // already reported, so none of them contributes a box.
     is DrawCommand.Stroke, is DrawCommand.FillPath, is DrawCommand.SetColor, is DrawCommand.SetDash,

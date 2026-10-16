@@ -279,6 +279,8 @@ private fun DrawScope.drawPage(
             is DrawCommand.SetTextStyle -> {
                 textStyleFlags = cmd.flags
             }
+            // Phase A stub: Phase B decodes the bytes with BitmapFactory and draws them.
+            is DrawCommand.DrawImage -> Unit
         }
     }
     if (rotationSaveCount >= 0) drawIntoCanvas { it.nativeCanvas.restoreToCount(rotationSaveCount) }

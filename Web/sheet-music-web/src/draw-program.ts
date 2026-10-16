@@ -95,6 +95,19 @@ export type DrawCommand =
        * draws it rather than perpendicular to a stroked center line.
        */
       kind: "fillPath";
+    }
+  | {
+      /**
+       * An encoded raster image (PNG or JPEG) drawn into the rect `x, y, w, h`
+       * (document millimetres, top-left origin). `blob` is the picture's file,
+       * resolved from the flat stream's blob table.
+       */
+      kind: "drawImage";
+      blob: Uint8Array;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
     };
 
 /** Bit positions in a `setTextStyle` mask. Mirrors Swift's `DrawCommand.TextStyleFlag`. */

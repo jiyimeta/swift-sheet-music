@@ -329,6 +329,19 @@
             )
         }
 
+        /// Prints the v9 macro-wire bytes of one page holding a single `drawImage`, as base64, for the Kotlin
+        /// `DrawProgramReaderTest` (`SWIFT_V9_IMAGE_PROGRAM_BASE64`). Off unless `SM_PRINT_KOTLIN_FIXTURE=1`.
+        @Test(.enabled(if: ProcessInfo.processInfo.environment["SM_PRINT_KOTLIN_FIXTURE"] == "1"))
+        func printKotlinImageFixture() {
+            let data = Data((0 ..< 12).map { UInt8($0) })
+            let page = EncodablePage(
+                widthMM: 210, heightMM: 297,
+                commands: [.drawImage(data: data, x: 12.5, y: 20.25, w: 30, h: 15.75)],
+            )
+            let encoded = DrawProgramCodec.encode(pages: [page])
+            print("W7-T12-B64:" + encoded.base64EncodedString())
+        }
+
         #if canImport(CryptoKit)
             @Test
             func programWithoutImagesIsByteStable() {

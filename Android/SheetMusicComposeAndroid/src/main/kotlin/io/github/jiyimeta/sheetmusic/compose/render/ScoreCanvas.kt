@@ -291,6 +291,8 @@ internal fun DrawScope.drawCommands(
             is DrawCommand.SetTextStyle -> {
                 textStyleFlags = cmd.flags
             }
+            // Phase A stub: Phase B decodes the bytes with BitmapFactory and draws them.
+            is DrawCommand.DrawImage -> Unit
         }
     }
     // A run may end with a rotation still open. The native canvas belongs to the host, which may draw more into it
