@@ -12,7 +12,8 @@ extension LayoutEngine {
 
     /// The pictures of a `<VBox>`, sized and placed relative to the box's top (`tlayout.cpp:3245-3285`). A payload
     /// `ImageSniffer` cannot read, an SVG, or a path missing from `pictures` yields nothing, as does a picture whose
-    /// size comes out empty. `fitHeight` is the box height an `autoScale` picture is fitted into, in points.
+    /// size comes out empty, or whose written offset or size is not a finite number (a NaN frame crashes a layer).
+    /// `fitHeight` is the box height an `autoScale` picture is fitted into, in points.
     static func layoutImages(
         of frame: ScoreFrame,
         pictures: [String: Data],
@@ -23,8 +24,9 @@ extension LayoutEngine {
         frame.images.compactMap { image in
             guard let data = pictures[image.path], let info = ImageSniffer.sniff(data) else { return nil }
             let size = imageSize(image, info: info, docWidth: docWidth, fitHeight: fitHeight, sp: sp)
-            guard size.width > 0, size.height > 0 else { return nil }
+            guard size.width > 0, size.height > 0, size.width.isFinite, size.height.isFinite else { return nil }
             let origin = CGPoint(x: (image.offsetSp?.x ?? 0) * sp, y: (image.offsetSp?.y ?? 0) * sp)
+            guard origin.x.isFinite, origin.y.isFinite else { return nil }
             let format: LayoutFrameImage.Format = info.format == .png ? .png : .jpeg
             return LayoutFrameImage(data: data, format: format, rect: CGRect(origin: origin, size: size))
         }

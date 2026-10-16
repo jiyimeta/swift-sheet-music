@@ -109,6 +109,19 @@ import Testing
         #expect(first.rect == CGRect(x: 10, y: 5, width: 120, height: 60))
     }
 
+    @Test("a picture whose written offset or size is not a finite number lays out nothing")
+    func nonFiniteImageGeometryIsDropped() {
+        let images = [
+            FrameImage(path: "a.png", size: CGSize(width: 12, height: 6), offsetSp: CGPoint(x: CGFloat.nan, y: 0)),
+            FrameImage(path: "a.png", size: CGSize(width: CGFloat.infinity, height: 6)),
+        ]
+        let source = ScoreFrame(heightSp: 6, texts: [], images: images)
+        let placed = LayoutEngine.layoutImages(
+            of: source, pictures: ["a.png": pngHeader(width: 40, height: 20)], docWidth: 200, fitHeight: 60, sp: 10,
+        )
+        #expect(placed.isEmpty)
+    }
+
     @Test("an SVG, an unreadable payload and a missing path lay out no picture, and the frame still lays out")
     func undecodablePictureIsKeptNotLaidOut() throws {
         let images = [
