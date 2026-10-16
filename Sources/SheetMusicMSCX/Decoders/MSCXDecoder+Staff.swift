@@ -6,7 +6,7 @@ extension Staff {
     /// Every declaration-level `<Staff>` child this decoder reads.
     /// Anything else becomes preserved markup — see `PreservedXML`.
     private static let consumedStaffChildren: Set = [
-        "StaffType", "bracket", "defaultClef", "defaultConcertClef",
+        "StaffType", "bracket", "BracketItem", "defaultClef", "defaultConcertClef",
         "defaultTransposingClef", EIDXML.childName,
     ]
 
@@ -71,7 +71,24 @@ extension Staff {
             ?? node.first("defaultTransposingClef")?.text
             ?? node.first("defaultConcertClef")?.text
         let mscxID = node.attributes["id"]
+        let (brackets, unmodeledBracketItems) = decodedBrackets(of: node)
 
+        return (mscxID, EIDXML.decode(from: node), Staff(
+            staffType: staffType,
+            group: group,
+            lineCount: lineCount,
+            defaultClefType: defaultClef,
+            brackets: brackets,
+            measures: [],
+            staffTypePreservedMarkup: staffTypeNode?.preservedMarkup(
+                consuming: consumedStaffTypeChildren,
+            ) ?? [],
+            preservedMarkup: node.preservedMarkup(consuming: consumedStaffChildren) + unmodeledBracketItems,
+        ))
+    }
+
+    /// The staff's brackets, and the MuseScore 5 `<BracketItem>`s this model cannot hold (kept as preserved markup).
+    private static func decodedBrackets(of node: XMLTreeNode) -> (brackets: [BracketItem], unmodeled: [PreservedXML]) {
         // Per spec: walk every <bracket> child in document order so
         // column ordering is preserved. Unknown / malformed values
         // are silently dropped (parser's permissive policy).
@@ -93,19 +110,40 @@ extension Staff {
                 visible: visible,
             ))
         }
+        // MuseScore 5's form of the same bracket, in document order after the 4.x ones (a file holds one form).
+        var unmodeledBracketItems: [PreservedXML] = []
+        for el in node.all("BracketItem") {
+            if let item = bracketItem(fromMuseScore5: el) {
+                brackets.append(item)
+            } else {
+                unmodeledBracketItems.append(PreservedXML(el))
+            }
+        }
+        return (brackets, unmodeledBracketItems)
+    }
 
-        return (mscxID, EIDXML.decode(from: node), Staff(
-            staffType: staffType,
-            group: group,
-            lineCount: lineCount,
-            defaultClefType: defaultClef,
-            brackets: brackets,
-            measures: [],
-            staffTypePreservedMarkup: staffTypeNode?.preservedMarkup(
-                consuming: consumedStaffTypeChildren,
-            ) ?? [],
-            preservedMarkup: node.preservedMarkup(consuming: consumedStaffChildren),
-        ))
+    /// A MuseScore 5 `<BracketItem>` (`TWrite::write(const BracketItem*)`, `rw/write/twrite.cpp:2952-2971`; read by
+    /// `read500/tread.cpp:4217-4221`, `4267-4285`): `<type>` as `TConv::toXml(BracketType)` ("Normal", "Brace",
+    /// "Square", "Line"), `<bracketSpan>`, `<level>` (the column) and `<visible>`. An unknown type reads as Normal, as
+    /// `TConv::fromXml(…, BracketType::NORMAL)` reads it. `nil` (kept as preserved markup) for "Group", "NoBracket"
+    /// (never written) and a missing span: this model has no case for the first two.
+    static func bracketItem(fromMuseScore5 node: XMLTreeNode) -> BracketItem? {
+        let type: BracketType
+        switch node.first("type")?.text ?? "" {
+        case "Brace": type = .brace
+        case "Square": type = .square
+        case "Line": type = .line
+        case "Group", "NoBracket": return nil
+        default: type = .normal
+        }
+        // The writer always writes the span (`force`); without one there is no bracket to make, as for `<bracket>`.
+        guard let span = node.first("bracketSpan").flatMap({ Int($0.text) }) else { return nil }
+        return BracketItem(
+            type: type,
+            span: span,
+            column: node.first("level").flatMap { Int($0.text) } ?? 0,
+            visible: node.first("visible")?.text != "0",
+        )
     }
 }
 

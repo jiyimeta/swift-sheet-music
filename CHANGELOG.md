@@ -47,6 +47,31 @@ and this project adheres to
 
 ### Fixed
 
+- **A hairpin imported from MusicXML keeps its side.** MuseScore stores a hairpin's side as its `<direction>`, set
+  from the direction's `placement`, else from `default-y`, else above on a vocal staff (a part named Voice, Soprano,
+  Alto, … exactly as MuseScore lists them) and below on any other; an inferred cresc. / dim. line takes only the
+  `placement` attribute. The import now carries it, so a saved score puts each hairpin where MuseScore does.
+- **An opaque black `color` on a MusicXML direction is no color.** Black is every element's default, and MuseScore
+  writes a color only when it differs from it; an imported ottava, wedge, pedal, text or dynamic marked `#000000`
+  (as Sibelius writes them) no longer carries an explicit color into the saved score.
+- **An imported rehearsal mark draws in regular weight, as MuseScore draws it.** MuseScore puts an empty `<b></b>`
+  before the mark's text — "explicitly turn bold off" — unless the text is bold already; the import took the plain
+  letter, so folino drew it in the style's bold. Its formatting (font, size, weight, style) is now read as words are.
+- **A multi-staff MusicXML part gets its brace.** MuseScore gives every part of two or more staves a brace unless a
+  part-group bracketing that part alone already does; the import left a piano part with none.
+- **A MusicXML score that ends without a bar line ends with a normal one.** MuseScore writes an explicit normal bar
+  line into every staff's last measure in that case, or it would draw a light-heavy final bar line; the import now does
+  the same.
+- **A MuseScore 5 score keeps its brackets and braces.** MuseScore 5 writes a staff's bracket as `<BracketItem>`
+  (`<type>`, `<bracketSpan>`, `<level>`, `<visible>`) instead of the 4.x `<bracket type span col>` attribute form; ssm
+  read only the 4.x form, so a piano part from MuseScore 5 drew no brace. The 5.x form now reads into the same
+  brackets and saves in the 4.x form; a group bracket, which ssm does not model, stays in the file as it was.
+- **A MusicXML score keeps its encoder.** `<encoding><encoder>` is imported as the `encoder` meta tag, as MuseScore
+  imports it.
+- **At one tick, a staff text imported from MusicXML comes before a rehearsal mark, tempo or system text**, in the
+  order MuseScore adds them (it adds system elements once the whole score is read).
+- **An inferred rit. / accel. line has no continue text.** It was imported with an empty one where MuseScore's file
+  carries none (the empty text is the line's default).
 - **A MusicXML `<coda/>` with `<sound tocoda>` is one To Coda, not a Coda and a To Coda** — a direction makes the one repeat
   MuseScore picks from its `<sound>` (coda, da capo, dal segno, fine, segno, to coda, in that order), else from its
   segno or coda sign; a D.S. with a `tocoda` or `fine` attribute is a jump that plays until there, not a jump plus a
