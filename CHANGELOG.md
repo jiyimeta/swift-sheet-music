@@ -16,10 +16,10 @@ and this project adheres to
 
 - **MusicXML words become the text MuseScore makes of them** — a `<direction>`'s `<words>` import as a staff text, a
   system text (`system="only-top"`), an Expression (italic words below the staff), a play-technique annotation (from
-  `<sound pizzicato>`, `<play>`, or — with the new internal text-type inference — words such as "pizz." and "con sord."),
-  or a Sticking, with `font-weight`, `font-style`, `underline`, `line-through`, `font-size`, `font-family` and `color`
-  kept as markup. A rehearsal mark now sits at its real tick on the direction's staff, and loses to words in the same
-  direction, as in MuseScore.
+  `<sound pizzicato>`, `<play>`, or — with the new internal text-type inference — words such as "pizz." and "con
+  sord."), or a Sticking, with `font-weight`, `font-style`, `underline`, `line-through`, `font-size`, `font-family` and
+  `color` kept as markup. A rehearsal mark now sits at its real tick on the direction's staff, and loses to words in the
+  same direction, as in MuseScore.
 
 - **MusicXML tempo** — `<metronome>`, `<sound tempo>` (in a direction or directly in a measure) and the words beside
   them import as MuseScore builds them: a tempo text with its real tempo and beat (so MuseScore's own "a tempo" arrives
@@ -27,10 +27,10 @@ and this project adheres to
   already holds one is dropped, across parts. With the new internal text-type inference, words such as "Allegro" and
   "a tempo" are tempo texts.
 
-- **MusicXML dynamics as MuseScore reads them** — `<sound dynamics>` sets the velocity (×0.9, clamped), `<other-dynamics>`
-  text keeps its words ("subito p" is a `p` with its own text), several elements in one `<dynamics>` are several
-  dynamics, two dynamics joined by a hyphen are one, and — with text-type inference — words that are a dynamic ("mf",
-  "sfz") become one. A dynamic takes the `<dynamics>` color and the direction's `print-object`.
+- **MusicXML dynamics as MuseScore reads them** — `<sound dynamics>` sets the velocity (×0.9, clamped),
+  `<other-dynamics>` text keeps its words ("subito p" is a `p` with its own text), several elements in one `<dynamics>`
+  are several dynamics, two dynamics joined by a hyphen are one, and — with text-type inference — words that are a
+  dynamic ("mf", "sfz") become one. A dynamic takes the `<dynamics>` color and the direction's `print-object`.
 
 - **MusicXML wedges** — `<wedge>` crescendos and diminuendos import as hairpins that start and end where the file says,
   honoring `<offset>`, `number`, a stop that arrives first, and a start on the bar line (which belongs to the next bar);
@@ -43,12 +43,12 @@ and this project adheres to
 
 - **MusicXML lines** — `<bracket>`, `<dashes>` and wavy lines import as text lines and trill lines; with text-type
   inference, "cresc." / "dim." become hairpin lines and "rit." / "accel." / … gradual tempo changes, ended by the next
-  dynamic, tempo text or fermata within 24 quarter notes, as MuseScore ends them. This closes the gradual-tempo gap behind
-  `testTempoLineFermata`.
+  dynamic, tempo text or fermata within 24 quarter notes, as MuseScore ends them. An inferred line has no continue
+  text (MuseScore's file carries none). This closes the gradual-tempo gap behind `testTempoLineFermata`.
 
-- **MusicXML from Finale and Sibelius** — a file's `<software>` is read; Finale's dynamic-font letters import as dynamics,
-  Sibelius's metronome words ("q. = c. 78") and MetTimes symbols as a tempo text with its symbols and tempo, and a
-  Sibelius ottava ends at the note after its stop.
+- **MusicXML from Finale and Sibelius** — a file's `<software>` is read; Finale's dynamic-font letters import as
+  dynamics, Sibelius's metronome words ("q. = c. 78") and MetTimes symbols as a tempo text with its symbols and tempo,
+  and a Sibelius ottava ends at the note after its stop.
 
 ### Fixed
 
@@ -66,7 +66,8 @@ and this project adheres to
   letter, so folino drew it in the style's bold. Its formatting (font, size, weight, style) is now read as words are.
 
 - **A multi-staff MusicXML part gets its brace.** MuseScore gives every part of two or more staves a brace unless a
-  part-group bracketing that part alone already does; the import left a piano part with none.
+  part-group bracketing that part alone already does; the import left a piano part with none. The brace sits in
+  column 0, so the gutter has no empty column before it.
 
 - **A MusicXML score that ends without a bar line ends with a normal one.** MuseScore writes an explicit normal bar
   line into every staff's last measure in that case, or it would draw a light-heavy final bar line; the import now does
@@ -83,12 +84,9 @@ and this project adheres to
 - **At one tick, a staff text imported from MusicXML comes before a rehearsal mark, tempo or system text**, in the
   order MuseScore adds them (it adds system elements once the whole score is read).
 
-- **An inferred rit. / accel. line has no continue text.** It was imported with an empty one where MuseScore's file
-  carries none (the empty text is the line's default).
-
-- **A MusicXML `<coda/>` with `<sound tocoda>` is one To Coda, not a Coda and a To Coda** — a direction makes the one repeat
-  MuseScore picks from its `<sound>` (coda, da capo, dal segno, fine, segno, to coda, in that order), else from its
-  segno or coda sign; a D.S. with a `tocoda` or `fine` attribute is a jump that plays until there, not a jump plus a
+- **A MusicXML `<coda/>` with `<sound tocoda>` is one To Coda, not a Coda and a To Coda** — a direction makes the one
+  repeat MuseScore picks from its `<sound>` (coda, da capo, dal segno, fine, segno, to coda, in that order), else from
+  its segno or coda sign; a D.S. with a `tocoda` or `fine` attribute is a jump that plays until there, not a jump plus a
   marker; a second coda in a bar is dropped; two segnos at one tick are one Segno labeled `segnoii`; a repeat with no
   text stays visible with its type's default text, as in MuseScore; and a bar-end item written at the next bar's start
   (or a bar-start item at the previous bar's end) lands in the bar MuseScore puts it in.
