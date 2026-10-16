@@ -702,10 +702,10 @@ there is something to look into when convenient: measure the size from a clean
 build, decide whether the growth was intended, and raise `CEILING_BYTES` (or
 replace the absolute line, as the script's comment discusses) if it was.
 
-The wider brotli measurement has a 4.5 MiB ceiling — `CEILING_BYTES` in
+The wider brotli measurement has a 5 MiB ceiling — `CEILING_BYTES` in
 `Scripts/wasm-size.sh`, which is the one place it is written down; quote the
 script rather than a number remembered from an earlier release, because this
-line has already been raised once. The script also reports the optimized
+line has already been raised twice. The script also reports the optimized
 artifact that a browser downloads; these numbers are intentionally different
 and are not interchangeable.
 

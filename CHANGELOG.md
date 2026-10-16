@@ -125,6 +125,9 @@ and this project adheres to
 
 ### Changed
 
+- **The WebAssembly size ceiling is 5 MiB** (`CEILING_BYTES` in `Scripts/wasm-size.sh`, was 4.5 MiB) — the boxes and
+  pictures took the portable graph's brotli size to 4,824,468 bytes. The nightly check warns past it; nothing gates
+  on it.
 - **`ScoreBlock` gains `.textFrame` and `.horizontalFrame`** — breaking for an exhaustive `switch` over it.
   `.opaqueFrame` and its `Kind.horizontal` / `.text` stay for source compatibility.
 - **The Windows walker accepts `drawImage` and draws nothing for it (tracked by a folino `PARITY(windows)` row)** —
