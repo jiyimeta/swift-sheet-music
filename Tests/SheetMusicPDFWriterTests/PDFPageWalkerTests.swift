@@ -125,6 +125,25 @@ struct PDFPageWalkerTests {
         #expect(dictionary.contains("/XObject << /Im1 "))
     }
 
+    /// Each name is followed by a space before its reference: `/Im1 5 0 R`, never the name `/Im15` and `0 R`.
+    @Test func twoImagesAreListedWithSpacedReferences() throws {
+        let first = try ImageFixtures.png(width: 40, height: 20, colorType: 2)
+        let second = try ImageFixtures.png(width: 20, height: 40, colorType: 2)
+        let resources = try PDFResources(fonts: WriterFixtures.fonts())
+        var walker = PDFPageWalker(resources: resources, pageHeightMM: 150)
+
+        walker.walk([
+            .drawImage(data: first.file, x: 0, y: 0, w: 10, h: 5),
+            .drawImage(data: second.file, x: 20, y: 0, w: 5, h: 10),
+        ])
+        let dictionary = try resources.write(into: PDFObjectWriter())
+
+        #expect(dictionary.contains("/XObject << /Im1 "))
+        #expect(dictionary.contains(" 0 R /Im2 "))
+        #expect(dictionary.hasSuffix(" 0 R >> >>"))
+        #expect(!dictionary.contains("/Im11"))
+    }
+
     @Test func `a brace is stretched between its top and bottom with its right edge in place`() throws {
         let walked = try WriterFixtures.walk([.stretchedGlyph(
             codepoint: 0xE000, rightEdgeX: 20, topY: 30, bottomY: 80, fontSize: 7, xScale: 1, fontId: .smufl,

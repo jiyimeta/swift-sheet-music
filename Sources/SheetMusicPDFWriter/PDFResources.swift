@@ -199,7 +199,7 @@ final class PDFResources {
         for (index, image) in images.enumerated() {
             let number = writer.reserve()
             try writer.stream(number, dictionary: image.dictionary, data: image.data, compress: false)
-            xObjects.append("/\(Self.resourceName(ofImage: index + 1))\(number) 0 R")
+            xObjects.append("/\(Self.resourceName(ofImage: index + 1)) \(number) 0 R")
         }
         let pictures = xObjects.isEmpty ? "" : " /XObject << \(xObjects.joined(separator: " ")) >>"
         return "<< /Font << \(fonts.joined(separator: " ")) >> /ExtGState << \(states.joined(separator: " ")) >>"
