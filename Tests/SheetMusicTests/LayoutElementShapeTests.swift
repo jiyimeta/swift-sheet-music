@@ -125,7 +125,14 @@ struct LayoutElementShapeTests {
         // Notehead is 1.18 sp × mag wide, centered on x = 40.
         let halfWidth = metrics.sp * 1.18 * 0.7 / 2
         #expect(abs(box.minX - (40 - halfWidth)) < 0.01)
-        #expect(abs(box.maxX - (40 + halfWidth)) < 0.01)
+        // The up-stem stands on the notehead's right edge where it is drawn, its 0.2 sp skyline band reaching just
+        // past the head.
+        let stem = try #require(StemGeometry.compute(
+            noteOrigins: [CGPoint(x: 40, y: 14)], direction: .up, beamY: nil,
+            defaultStemLength: metrics.defaultStemLength * 0.7, stemThickness: metrics.stemThickness * 0.7,
+            sp: metrics.sp * 0.7,
+        ))
+        #expect(abs(box.maxX - (stem.xStem + metrics.sp * 0.1)) < 0.01)
     }
 
     @Test func beamShapeSpansBothEndpoints() throws {

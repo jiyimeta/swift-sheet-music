@@ -172,8 +172,15 @@ extension LayoutElementShape {
                 : top + stemLength
             let stemTop = min(tipY, top)
             let stemBottom = max(tipY, bottom)
+            // Where the renderers draw it (`StemGeometry.compute`): on the notehead's edge, the right one up and the
+            // left one down, not on `stemOrigin`, which is the chord's column. A dynamic or text the skyline lets sit
+            // beside the column would otherwise run into the drawn stem — another voice's down-stem, for one.
+            let stemX = StemGeometry.compute(
+                noteOrigins: notes.map(\.origin), direction: stem, beamY: nil, defaultStemLength: stemLength,
+                stemThickness: metrics.stemThickness * mag, sp: sp * mag,
+            )?.xStem ?? stemOrigin.x
             rects.append(CGRect(
-                x: stemOrigin.x - sp * 0.1, y: stemTop,
+                x: stemX - sp * 0.1, y: stemTop,
                 width: sp * 0.2, height: stemBottom - stemTop,
             ))
         }

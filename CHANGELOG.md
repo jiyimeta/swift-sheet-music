@@ -41,6 +41,10 @@ and this project adheres to
   draws it without one — so the "i" sat on the stem tip inside the staff in folino and above the staff in MuseScore.
   A stacked, autoplaced fingering now keeps no part of its offset that points into its chord; an offset away from it
   or along it still moves it, and one with `<autoplace>0</autoplace>` takes its offset whole.
+- **Autoplace sees a stem where it is drawn.** A chord's skyline put its stem on the chord's column — the notehead's
+  center — while every renderer draws it on the notehead's edge (`StemGeometry.compute`), so with two voices on a staff
+  a dynamic could sit on the other voice's down-stem: `dynamics-voices` bar 2's f overlapped the half notes' stem. The
+  skyline stem now stands where it is drawn, and the f clears it.
 
 ## [4.11.0] - 2026-10-16
 
