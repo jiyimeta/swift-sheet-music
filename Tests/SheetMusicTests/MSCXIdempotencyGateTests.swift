@@ -190,6 +190,8 @@ struct MSCXIdempotencyTests {
     ///   diagrams with an offset, two barres and a horizontal orientation.
     /// - `fret-diagrams` — fret diagrams writing every property MuseScore reads before `<fretDiagram>` at its default,
     ///   and the old compatibility block after it.
+    /// - `frames-boxes`, `frames-pictures` — a TBox with margins, an HBox, VBoxes with gaps, `boxAutoSize` and a page
+    ///   break, and `<Image>`s with size, offset and `autoScale` (import fidelity W7).
     @Test("committed MSCX fixtures encode to a fixed point", arguments: [
         "testVoltaTemp",
         "testSingleNoteDynamics",
@@ -210,6 +212,8 @@ struct MSCXIdempotencyTests {
         "w5-play-techniques",
         "w5-diagrams",
         "fret-diagrams",
+        "frames-boxes",
+        "frames-pictures",
     ])
     func mscxFixtureIsAFixedPoint(_ name: String) throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData(name))

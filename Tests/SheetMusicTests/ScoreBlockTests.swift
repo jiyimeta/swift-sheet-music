@@ -100,9 +100,7 @@ struct ScoreBlockTests {
     @Test func codaFixtureDecodesMidScoreHorizontalFrames() throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("testCodaHBox_ref"))
         let horizontalIndices = score.blocks.compactMap { positioned -> Int? in
-            guard case let .opaqueFrame(frame) = positioned.block,
-                  frame.kind == .horizontal
-            else { return nil }
+            guard case .horizontalFrame = positioned.block else { return nil }
             return positioned.beforeMeasureIndex
         }
 
@@ -150,32 +148,70 @@ struct ScoreBlockTests {
         #expect(reparsed.blocks == decoded.blocks)
     }
 
-    @Test func textFrameRestoresItsUnmodeledChildren() throws {
+    @Test func fixtureDecodesHBoxAndTBoxAsTypedBlocks() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("score-blocks"))
+        let kinds = score.blocks.map { positioned -> String in
+            switch positioned.block {
+            case .verticalFrame: "vertical"
+            case .horizontalFrame: "horizontal"
+            case .textFrame: "text"
+            case .opaqueFrame: "opaque"
+            }
+        }
+
+        #expect(kinds == ["vertical", "horizontal", "text", "opaque"])
+    }
+
+    @Test func textFrameDecodesAndWritesItsMarginAndText() throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("score-blocks"))
         let positioned = try #require(score.blocks.first { block in
-            guard case let .opaqueFrame(frame) = block.block else { return false }
-            return frame.kind == .text
+            if case .textFrame = block.block { return true }
+            return false
         })
+        guard case let .textFrame(frame) = positioned.block else {
+            Issue.record("expected a text frame")
+            return
+        }
         let encoded = positioned.block.encode()
 
+        #expect(frame.margins.top == 2)
+        #expect(frame.text?.text == "Interlude")
         #expect(encoded.name == "TBox")
-        #expect(encoded.children.map(\.name) == ["Text", "topMargin"])
-        #expect(encoded.first("topMargin")?.text == "2")
+        #expect(encoded.children.map(\.name) == ["topMargin", "Text"])
+        #expect(encoded.first("topMargin").flatMap { Double($0.text) } == 2)
         #expect(encoded.first("Text")?.first("text")?.text == "Interlude")
     }
 
-    @Test func preservedMarkupOptOutKeepsOpaqueFrameElement() {
+    @Test func preservedMarkupOptOutKeepsFretFrameElement() {
         let block = ScoreBlock.opaqueFrame(OpaqueFrame(
-            kind: .horizontal,
-            preservedMarkup: [PreservedXML(name: "width", text: "10")],
+            kind: .fret,
+            preservedMarkup: [PreservedXML(name: "fretFrameTextScale", text: "10")],
         ))
         var options = MSCXEncoderOptions()
         options.emitPreservedMarkup = false
 
         let encoded = block.encode(options: options)
 
-        #expect(encoded.name == "HBox")
+        #expect(encoded.name == "FBox")
         #expect(encoded.children.isEmpty)
+    }
+
+    @Test func preservedMarkupOptOutKeepsTypedBoxElements() {
+        var options = MSCXEncoderOptions()
+        options.emitPreservedMarkup = false
+        let hbox = ScoreBlock.horizontalFrame(HorizontalFrame(
+            preservedMarkup: [PreservedXML(name: "createSystemHeader", text: "false")],
+        ))
+        let tbox = ScoreBlock.textFrame(TextFrame(
+            preservedMarkup: [PreservedXML(name: "Image")],
+        ))
+
+        #expect(hbox.encode(options: options).name == "HBox")
+        // swiftlint:disable:next contains_over_first_not_nil
+        #expect(hbox.encode(options: options).first("createSystemHeader") == nil)
+        #expect(tbox.encode(options: options).name == "TBox")
+        // swiftlint:disable:next contains_over_first_not_nil
+        #expect(tbox.encode(options: options).first("Image") == nil)
     }
 
     @Test func strippingPreservedMarkupClearsBothFrameBags() {

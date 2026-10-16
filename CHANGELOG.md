@@ -57,6 +57,17 @@ and this project adheres to
   an `.mscz`'s picture payloads keyed by their `<path>`. `ScoreFrame` also gains `topGapSp`, `bottomGapSp` and
   `autoSize` (`nil` = MuseScore's defaults: 7 sp gaps, auto-sized), and `pageBreakAfter` reads a `<LayoutBreak>` page
   break kept in a box's preserved markup.
+- **TBox, HBox and picture boxes now decode and save as typed values** — a `<TBox>` reads into `TextFrame` (its text,
+  `topGap` / `bottomGap`, margins in mm), an `<HBox>` into `HorizontalFrame` (width and its two gaps), and a `<VBox>`'s
+  `<Image>` children into `ScoreFrame.images`. Each writes back in MuseScore's child order, a written value is always
+  written back, and anything the model does not represent (`createSystemHeader`, an `<Image>` under a TBox, an image's
+  `z`) is kept in the preserved markup. A fret box (`<FBox>`) stays opaque.
+
+### Fixed
+
+- **A VBox's `topGap` / `bottomGap` and its `<Image>` children are no longer opaque** — they were kept as preserved
+  markup that no layout or host could read; they now decode into `ScoreFrame.topGapSp`, `bottomGapSp`, `autoSize`
+  (`<boxAutoSize>`) and `images`.
 
 ## [4.11.0] - 2026-10-16
 
