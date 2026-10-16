@@ -717,6 +717,10 @@ extension LayoutEngine {
             var weight: CGFloat
         }
         var voiceElements: [[TimedElement]] = []
+        // The room each chord symbol needs over the element it names, as a floor on that element's span rather than
+        // weight in it: weight stretches with the line, so a symbol carried as weight widened its beat in every
+        // justified bar, where MuseScore spaces by duration and lets a symbol push only where it would collide.
+        var harmonyDemands: [(startTick: Int, endTick: Int, width: CGFloat)] = []
         var allTicks: Set<Int> = []
         var measureEnd = 0
         // A clef the NEXT bar opens with stands before this one's barline
@@ -812,11 +816,13 @@ extension LayoutEngine {
                             lyricSpacing.pairWidth(at: idx, lyrics: c.lyrics),
                             inflection.rightward,
                         )
-                        let w = max(baseWeight, pendingHarmonyWidth)
-                        pendingHarmonyWidth = 0
                         let end = tick + c.duration.resolved(in: measureDuration).ticks(division: division)
+                        if pendingHarmonyWidth > 0 {
+                            harmonyDemands.append((tick, end, pendingHarmonyWidth))
+                            pendingHarmonyWidth = 0
+                        }
                         elements.append(TimedElement(
-                            startTick: tick, endTick: end, weight: w,
+                            startTick: tick, endTick: end, weight: baseWeight,
                         ))
                         staffInks[tick, default: ColumnInk()].formUnion(ink(of: c))
                         previousChord = c
@@ -827,11 +833,13 @@ extension LayoutEngine {
                         let baseWeight = durationWidth(
                             r.duration, metrics: metrics,
                         )
-                        let w = max(baseWeight, pendingHarmonyWidth)
-                        pendingHarmonyWidth = 0
                         let end = tick + r.duration.resolved(in: measureDuration).ticks(division: division)
+                        if pendingHarmonyWidth > 0 {
+                            harmonyDemands.append((tick, end, pendingHarmonyWidth))
+                            pendingHarmonyWidth = 0
+                        }
                         elements.append(TimedElement(
-                            startTick: tick, endTick: end, weight: w,
+                            startTick: tick, endTick: end, weight: baseWeight,
                         ))
                         staffInks[tick, default: ColumnInk()].formUnion(ink(of: r))
                         allTicks.insert(tick)
@@ -971,6 +979,7 @@ extension LayoutEngine {
         var gapFloors = collisionFloors(
             inks: inks, sortedTicks: sortedTicks, gapWeights: gapWeights,
         )
+        applyHarmonyFloors(harmonyDemands, sortedTicks: sortedTicks, gapWeights: gapWeights, to: &gapFloors)
         // Trailing graces before the barline: the barline stands
         // `sp / 2 + trailingClefWidth` past the last gap (`trailingGap`,
         // less the half staff space the barline is drawn inside of), so

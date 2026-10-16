@@ -277,8 +277,16 @@
         /// hairpin line, non-plain fermata, caesura variant or chord-symbol case style, so the W6 geometry those
         /// carry is pinned by its own suites (`TextLineBaseGeometryTests`, `LineLabelRunsLayoutTests`,
         /// `HairpinVoltaTextLayoutTests`, `FermataGlyphVariantsTests`, `HarmonyCaseTests`), not here.
+        ///
+        /// **Re-recorded 2026-10-16 when a chord symbol became a floor on its beat instead of weight in it, after
+        /// reading the diff** against origin/main's digest (`ee59ea6d…`, which the volta, title-frame, fret-diagram,
+        /// fingering and skyline-stem fixes before it left unchanged). One block of 68 moved: `harmony-basic` at
+        /// natural width, 6 lines. Its third bar, a measure rest under "F#m7b5/A" (62.69 pt), narrows from 141.29 to
+        /// the empty bar's 109.20 pt — the symbol, from x 14 to 76.69, still ends 29 pt short of its barline — and
+        /// the two bars after it, the system and the block shift left by the 32.09 pt it gave up. Wrapped, every
+        /// block is identical: there the bars already stretched past what their symbols need.
         private static let expectedDigestSHA256 =
-            "ee59ea6d100eb7a3e963fb62745836e0fb50b5e24ca7e899b8181b4e70721d3d"
+            "02d33e22e9bf34aa01a5a4fad529cc47f6ceb59ca869ed47c065d614301d9094"
 
         @Test("write digest")
         func writeDigest() throws {

@@ -45,6 +45,12 @@ and this project adheres to
   center — while every renderer draws it on the notehead's edge (`StemGeometry.compute`), so with two voices on a staff
   a dynamic could sit on the other voice's down-stem: `dynamics-voices` bar 2's f overlapped the half notes' stem. The
   skyline stem now stands where it is drawn, and the f clears it.
+- **A chord symbol no longer widens its beat in a stretched bar.** Its width was weight in its beat, and weight
+  stretches with the line, so every justified bar with chord symbols spaced its beats by the symbols' widths:
+  `chord-symbol-case`'s four quarters stood 275 / 415 / 323 px apart in folino where MuseScore spaces them evenly, and
+  a bar at natural width (stretched 1.5×) widened each symbol's beat by half again. A symbol is now a floor on the span
+  of the element it names — room the beat must keep, shared by weight over any other voice's columns inside it — so it
+  widens a beat only where it would otherwise run into the next symbol.
 
 ## [4.11.0] - 2026-10-16
 
