@@ -109,8 +109,10 @@ extension LayoutBridge {
             layout = LayoutEngine.layout(score: prepared, options: opts, availableWidth: pageWidthPt)
         case .horizontal:
             let opts = scoreViewOptions(from: optionsWire, wrap: false, title: false)
-            let natural = LayoutEngine.naturalContentWidth(score: prepared, options: opts)
-            layout = LayoutEngine.layout(score: prepared, options: opts, availableWidth: natural)
+            // One cache across the pair, so the layout reuses the widths the walk just measured.
+            let cache = LayoutCache()
+            let natural = LayoutEngine.naturalContentWidth(score: prepared, options: opts, cache: cache)
+            layout = LayoutEngine.layout(score: prepared, options: opts, availableWidth: natural, cache: cache)
         }
 
         return (layout, prepared)

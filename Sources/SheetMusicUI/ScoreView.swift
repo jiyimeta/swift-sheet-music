@@ -139,12 +139,14 @@ public struct ScoreView: View {
                 }
             }
         } else {
+            // One cache across the pair, so the layout reuses the widths the walk just measured.
+            let cache = LayoutCache()
             let naturalWidth = LayoutEngine.naturalContentWidth(
-                score: score, options: options,
+                score: score, options: options, cache: cache,
             )
             let doc = LayoutEngine.layout(
                 score: score, options: options,
-                availableWidth: naturalWidth,
+                availableWidth: naturalWidth, cache: cache,
             )
             horizontalStack(doc: doc, selection: selState)
         }
