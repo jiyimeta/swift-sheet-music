@@ -36,10 +36,16 @@ extension LayoutEngine {
     }
 
     /// A VBox's or TBox's gaps in spatium (`nil` = the 7 sp default); `nil` for the blocks that are not frames.
+    ///
+    /// Each gap is converted explicitly: on Android and Windows `SheetMusicCore`'s `CGFloat` is Foundation's struct
+    /// while this module's is `Double` (`CGTypes+Android.swift`), and the implicit `CGFloat` ↔ `Double` conversion
+    /// reaches a bare value but not one inside an optional or a tuple.
     private static func gaps(of block: ScoreBlock) -> (top: CGFloat?, bottom: CGFloat?)? {
         switch block {
-        case let .verticalFrame(frame): (top: frame.topGapSp, bottom: frame.bottomGapSp)
-        case let .textFrame(frame): (top: frame.topGapSp, bottom: frame.bottomGapSp)
+        case let .verticalFrame(frame):
+            (top: frame.topGapSp.map { CGFloat($0) }, bottom: frame.bottomGapSp.map { CGFloat($0) })
+        case let .textFrame(frame):
+            (top: frame.topGapSp.map { CGFloat($0) }, bottom: frame.bottomGapSp.map { CGFloat($0) })
         case .horizontalFrame, .opaqueFrame: nil
         }
     }
@@ -114,7 +120,9 @@ extension LayoutEngine {
             let top = system.origin.y + yShift
             items.append(FrameStreamPlacer.Item(kind: .system(top: top, bottom: top + system.size.height)))
         }
-        let titleEdge = title.map { (bottom: topMargin + $0.height, bottomGap: context.score.titleFrame?.bottomGapSp) }
+        // Converted explicitly, as in `gaps(of:)`: Core's `CGFloat?` is not this module's off Apple.
+        let titleBottomGap = context.score.titleFrame?.bottomGapSp.map { CGFloat($0) }
+        let titleEdge = title.map { (bottom: topMargin + $0.height, bottomGap: titleBottomGap) }
         let placed = FrameStreamPlacer.place(title: titleEdge, items: items, sp: sp, top: topMargin)
         let leadingMargin = sp * margins.leading
         let frames = zip(order, placed.frameOriginY).map { entryIndex, originY in

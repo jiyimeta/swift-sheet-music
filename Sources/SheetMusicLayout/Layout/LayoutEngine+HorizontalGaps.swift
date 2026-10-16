@@ -25,8 +25,11 @@ extension LayoutEngine {
             guard case let .horizontalFrame(frame) = positioned.block else { continue }
             let index = positioned.beforeMeasureIndex
             guard index >= 1, index < measureCount, !plan.isInteriorOfRun(index) else { continue }
-            let roomSp = (frame.widthSp ?? defaultHorizontalFrameWidthSp) + (frame.topGapSp ?? 0)
-                + (frame.bottomGapSp ?? 0)
+            // Each converted before `??`: off Apple Core's `CGFloat?` is Foundation's, not this module's `Double`.
+            let widthSp = frame.widthSp.map { CGFloat($0) } ?? defaultHorizontalFrameWidthSp
+            let topGapSp = frame.topGapSp.map { CGFloat($0) } ?? 0
+            let bottomGapSp = frame.bottomGapSp.map { CGFloat($0) } ?? 0
+            let roomSp = widthSp + topGapSp + bottomGapSp
             guard roomSp > 0 else { continue }
             gaps[index, default: 0] += roomSp * sp
         }

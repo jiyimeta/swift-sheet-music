@@ -1,8 +1,11 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
-#else
-    // On non-Apple platforms (Android, Linux), swift-corelibs-foundation
-    // provides CGFloat via Foundation.
+#elseif !os(WASI)
+    // This file names `CGFloat`, which Android, Windows and Linux take from swift-corelibs-foundation's umbrella. See
+    // `MSCXDecoder+ScoreFrame.swift` for why this file may reach past `SheetMusicFoundation`; WASI takes
+    // `SheetMusicCore`'s own type.
+    // swiftlint:disable:next no_foundation_umbrella
+    import Foundation
 #endif
 import SheetMusicCore
 import SheetMusicFoundation
