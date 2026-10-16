@@ -396,20 +396,23 @@ describe("drawPage", () => {
   });
 
   describe("drawImage", () => {
-    const image: DrawProgramPage["commands"][number] = {
+    // The decode cache is keyed by blob identity, so every test builds its own
+    // command (and Uint8Array): a shared one would carry a cached failure over.
+    const makeImage = (): DrawProgramPage["commands"][number] => ({
       kind: "drawImage",
       blob: Uint8Array.from([0x89, 0x50, 0x4e, 0x47]),
       x: 3,
       y: 4,
       w: 5,
       h: 6,
-    };
+    });
 
     afterEach(() => {
       vi.unstubAllGlobals();
     });
 
     it("draws without throwing when createImageBitmap rejects", async () => {
+      const image = makeImage();
       const decode = vi.fn(() => Promise.reject(new Error("undecodable")));
       vi.stubGlobal("createImageBitmap", decode);
       const { ctx, calls } = fakeContext();
@@ -422,6 +425,7 @@ describe("drawPage", () => {
     });
 
     it("decodes once per blob, then draws the cached bitmap scaled by pxPerMM", async () => {
+      const image = makeImage();
       const bitmap = { width: 2, height: 2, close() {} } as unknown as ImageBitmap;
       const decode = vi.fn(() => Promise.resolve(bitmap));
       vi.stubGlobal("createImageBitmap", decode);

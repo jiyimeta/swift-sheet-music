@@ -82,7 +82,8 @@ function faceFor(fontId: number, fonts: ScoreFonts): string {
  * decoded yet draws nothing: the first draw starts the decode, and when it
  * settles the `onImageReady` callbacks that were waiting on it fire so the host
  * repaints. A failed decode is remembered as `null` and never retried; it draws
- * nothing, as on the Android reader.
+ * nothing, as on the Android reader. The cache is keyed by blob identity and lives
+ * as long as the decoded page's blob does (a re-decoded program gets fresh blobs).
  */
 const imageBitmaps = new WeakMap<Uint8Array, ImageBitmap | null>();
 const pendingImages = new WeakMap<Uint8Array, Set<() => void>>();
