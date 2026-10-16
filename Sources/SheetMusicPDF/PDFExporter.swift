@@ -192,18 +192,19 @@ public enum PDFExporter {
     ///
     /// The frames between systems (`LayoutDocument.frames`) enter as `LayoutPaginator.paginate` takes them:
     /// `forcedBreaksBefore` starts a page at each listed system (the one below a frame with `pageBreakAfter`; ignored
-    /// under `.ignoreAll` and outside `1 ..< systems.count`), and a `contentBottom` — the lowest bottom of the frames
-    /// after the last system — that does not fit on the last page adds a batch with no systems whose `startY` is the
-    /// last system's bottom. A page whose first system is in `systemsWithFrameAbove` (a frame sits between it and the
-    /// system before) starts at that previous system's bottom rather than at its own top, so the frame is on this page
-    /// and not lost between two; every other page starts where it always did. `paginate(document:page:policy:)`
-    /// derives all three from a document.
+    /// under `.ignoreAll` and outside `1 ..< systems.count`), and a `trailingFramesBottom` — the lowest bottom of the
+    /// frames after the last system — adds a batch with no systems, whose `startY` is the last system's bottom, when
+    /// those frames do not fit on the last page or an honored page break on the last system already closed it. A page
+    /// whose first system is in `systemsWithFrameAbove` (a frame sits between it and the system before) starts at that
+    /// previous system's bottom rather than at its own top, so the frame is on this page and not lost between two;
+    /// every other page starts where it always did. `paginate(document:page:policy:)` derives all three from a
+    /// document.
     public static func paginate(
         systems: [LayoutSystem],
         page: EngravingPage,
         policy: LayoutBreakPolicy = .honor,
         forcedBreaksBefore: Set<Int> = [],
-        contentBottom: CGFloat? = nil,
+        trailingFramesBottom: CGFloat? = nil,
         systemsWithFrameAbove: Set<Int> = [],
     ) -> [PageBatch] {
         let forced: Set<Int> = policy == .ignoreAll ? [] : forcedBreaksBefore
@@ -258,16 +259,16 @@ public enum PDFExporter {
                 currentSystems = []
             }
         }
-        // The trailing frames join the open page, or the next one when a page break closed the last; as in
-        // `LayoutPaginator`, they get a page of their own only when they do not fit on that one.
+        // As in `LayoutPaginator`: the trailing frames get a batch of their own when they do not fit on the open page,
+        // and always when a page break on the last system's last measure has already closed it.
         let lastBottom = systems.last.map { $0.origin.y + $0.size.height }
-        let trailingTop = currentSystems.isEmpty ? lastBottom ?? 0 : currentStartY
-        let trailingPageIndex = pages.count
+        let closedByPageBreak = currentSystems.isEmpty
+        let openPageIndex = pages.count
         if !currentSystems.isEmpty {
             pages.append(PageBatch(startY: currentStartY, systems: currentSystems))
         }
-        if let contentBottom, let lastBottom,
-           contentBottom - trailingTop > usableHeight(forPageIndex: trailingPageIndex)
+        if let trailingFramesBottom, let lastBottom,
+           closedByPageBreak || trailingFramesBottom - currentStartY > usableHeight(forPageIndex: openPageIndex)
         {
             pages.append(PageBatch(startY: lastBottom, systems: []))
         }
@@ -280,7 +281,7 @@ public enum PDFExporter {
     static func paginate(document: LayoutDocument, page: EngravingPage, policy: LayoutBreakPolicy) -> [PageBatch] {
         paginate(
             systems: document.systems, page: page, policy: policy,
-            forcedBreaksBefore: document.framePageBreaksBefore, contentBottom: document.trailingFramesBottom,
+            forcedBreaksBefore: document.framePageBreaksBefore, trailingFramesBottom: document.trailingFramesBottom,
             systemsWithFrameAbove: document.systemsBelowFrames,
         )
     }

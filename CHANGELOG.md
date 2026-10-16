@@ -100,18 +100,18 @@ and this project adheres to
   `LayoutDocument.paginate(pageHeight:policy:)` cuts the systems into pages with the frames taken into account, and
   `.page` mode, the wasm `pageBreaks`, the JNI `nativePageBreaks` and `PDFExporter.export(score:)` all cut through it.
   A VBox or TBox with a `page` `<LayoutBreak>` starts a page at the system after it (not under `.ignoreAll`, as for a
-  measure's page break), and boxes after the last system that do not fit under it get a last page of their own: the
-  empty range
+  measure's page break), and boxes after the last system get a last page of their own when they do not fit under it,
+  or always when a page break on the last measure closed its page: the empty range
   `systems.count ..< systems.count`, a PDF batch with no systems. A frame belongs to the page whose first system
   follows it — `subdocument(systems:yOffset:isLastPage:)` carries it, lifted with the page, and grows to it; the last
   page takes the trailing ones — and the first `.page` page keeps the title's pictures and its frames. The page-break
   offsets end at the lowest frame when it is below the last system (never at the bottom margin). New, all defaulted:
-  `LayoutPaginator.paginate(…, forcedBreaksBefore:, contentBottom:)` and
-  `PDFExporter.paginate(…, forcedBreaksBefore:, contentBottom:, systemsWithFrameAbove:)`, where a PDF page whose first
-  system has a frame above it starts at the previous system's bottom so the frame is not lost between two pages. A
-  score without frames paginates, and reports its page offsets, exactly as before. Differences from MuseScore: the
-  box with the break opens the new page rather than ending the old one, and a break before the first system makes no
-  cover page.
+  `LayoutPaginator.paginate(…, forcedBreaksBefore:, trailingFramesBottom:)` and
+  `PDFExporter.paginate(…, forcedBreaksBefore:, trailingFramesBottom:, systemsWithFrameAbove:)`, where a PDF page
+  whose first system has a frame above it starts at the previous system's bottom so the frame is not lost between two
+  pages. A score without frames paginates, and reports its page offsets, exactly as before. Differences from
+  MuseScore: the box with the break opens the new page rather than ending the old one, and a break before the first
+  system makes no cover page.
 
 ### Changed
 

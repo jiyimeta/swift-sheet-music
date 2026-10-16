@@ -53,14 +53,14 @@ public struct LayoutDocument: Sendable, Equatable {
 extension LayoutDocument {
     /// `systems` cut into pages of `pageHeight` points, the frames taken into account: a frame whose `pageBreakAfter`
     /// is set starts a page at the first system below it (not under `.ignoreAll`, as for a measure's page break), and
-    /// frames after the last system that do not fit under it get a page of their own, the empty range
-    /// `systems.count ..< systems.count`. See `LayoutPaginator.paginate`, which this feeds. Without frames it is
-    /// `LayoutPaginator.paginate(systems:pageHeight:policy:)` exactly. Every page-mode caller cuts through here, so the
-    /// bridge, wasm, JNI and PDF pages agree on where a frame lands.
+    /// frames after the last system that do not fit under it, or that follow a page break closing the last page, get a
+    /// page of their own, the empty range `systems.count ..< systems.count`. See `LayoutPaginator.paginate`, which this
+    /// feeds. Without frames it is `LayoutPaginator.paginate(systems:pageHeight:policy:)` exactly. Every page-mode
+    /// caller cuts through here, so the bridge, wasm, JNI and PDF pages agree on where a frame lands.
     public func paginate(pageHeight: CGFloat, policy: LayoutBreakPolicy) -> [Range<Int>] {
         LayoutPaginator.paginate(
             systems: systems, pageHeight: pageHeight, policy: policy,
-            forcedBreaksBefore: framePageBreaksBefore, contentBottom: trailingFramesBottom,
+            forcedBreaksBefore: framePageBreaksBefore, trailingFramesBottom: trailingFramesBottom,
         )
     }
 

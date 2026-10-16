@@ -172,11 +172,13 @@
             )
         }
 
-        /// A 200 pt tall system at `originY`.
-        private func system(originY: CGFloat) -> LayoutSystem {
+        /// A 200 pt tall system at `originY`, its measure carrying a page break when `pageBreak`.
+        private func system(originY: CGFloat, pageBreak: Bool = false) -> LayoutSystem {
             LayoutSystem(
                 origin: CGPoint(x: 0, y: originY), size: CGSize(width: 100, height: 200),
-                measures: [LayoutMeasure(measureIndex: 0, origin: .zero, width: 100, elements: [])],
+                measures: [
+                    LayoutMeasure(measureIndex: 0, origin: .zero, width: 100, elements: [], pageBreak: pageBreak),
+                ],
                 staffOrigins: [.zero], staffAddresses: [], staffGeometries: [], partLabels: [], spanners: [], sp: 7,
             )
         }
@@ -243,11 +245,25 @@
         @Test func trailingFrameThatDoesNotFitMakesAFramesOnlyBatch() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let systems = [system(originY: 0), system(originY: 220)]
-            let spilled = PDFExporter.paginate(systems: systems, page: page(height: 1200), contentBottom: 1200)
-            let fitting = PDFExporter.paginate(systems: systems, page: page(height: 1200), contentBottom: 1100)
+            let spilled = PDFExporter.paginate(systems: systems, page: page(height: 1200), trailingFramesBottom: 1200)
+            let fitting = PDFExporter.paginate(systems: systems, page: page(height: 1200), trailingFramesBottom: 1100)
             #expect(spilled.map(\.systems.count) == [2, 0])
             #expect(spilled.last?.startY == 420)
             #expect(fitting.map(\.systems.count) == [2])
+        }
+
+        /// A page break on the last system's last measure sends the frames after it to a batch of their own even when
+        /// they would fit under it (MuseScore `pagelayout.cpp:246`); `.ignoreAll` drops the break, so they stay.
+        @Test func trailingFramesAfterAPageBreakGetTheirOwnBatch() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let systems = [system(originY: 0), system(originY: 220, pageBreak: true)]
+            let honored = PDFExporter.paginate(systems: systems, page: page(height: 1200), trailingFramesBottom: 500)
+            let ignored = PDFExporter.paginate(
+                systems: systems, page: page(height: 1200), policy: .ignoreAll, trailingFramesBottom: 500,
+            )
+            #expect(honored.map(\.systems.count) == [2, 0])
+            #expect(honored.last?.startY == 420)
+            #expect(ignored.map(\.systems.count) == [2])
         }
 
         /// `export(score:)` of frames-boxes draws a PDF page per batch, and VBox B's page break starts the batch that

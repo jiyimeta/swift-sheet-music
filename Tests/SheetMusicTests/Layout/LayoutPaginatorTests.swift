@@ -247,27 +247,30 @@ struct LayoutPaginatorTests {
         }
     }
 
-    // MARK: - Frames
-
-    @Test("a forced break starts a page with room to spare; a trailing bound past the page adds an empty range")
+    @Test("a forced break starts a page with room to spare; trailing frames past the page get an empty range")
     func framePaginationInputs() {
         let origins: [CGFloat] = [0, 120, 240]
         let systems = origins.map { makeSystem(originY: $0, height: 100) }
-        func cut(_ policy: LayoutBreakPolicy, forced: Set<Int> = [], trailing: CGFloat? = nil) -> [Range<Int>] {
+        let broken = origins.map { makeSystem(originY: $0, height: 100, pageBreak: $0 == 240) }
+        func cut(
+            _ policy: LayoutBreakPolicy, forced: Set<Int> = [], trailing: CGFloat? = nil, list: [LayoutSystem]? = nil,
+        ) -> [Range<Int>] {
             LayoutPaginator.paginate(
-                systems: systems, pageHeight: 1000, policy: policy, forcedBreaksBefore: forced, contentBottom: trailing,
+                systems: list ?? systems, pageHeight: 1000, policy: policy,
+                forcedBreaksBefore: forced, trailingFramesBottom: trailing,
             )
         }
         #expect(cut(.honor, forced: [2]) == [0 ..< 2, 2 ..< 3])
         #expect(cut(.ignoreAll, forced: [2]) == [0 ..< 3])
-        // A break before system 0 or past the last makes no empty page.
-        #expect(cut(.honor, forced: [0, 3]) == [0 ..< 3])
+        #expect(cut(.honor, forced: [0, 3]) == [0 ..< 3]) // a break before system 0 or past the last: no empty page
         #expect(cut(.honor, trailing: 1100) == [0 ..< 3, 3 ..< 3])
         #expect(cut(.honor, trailing: 1000) == [0 ..< 3])
+        // After a page break on the last system trailing frames get a page even when they fit; `.ignoreAll` drops it.
+        #expect(cut(.honor, trailing: 400, list: broken) == [0 ..< 3, 3 ..< 3])
+        #expect(cut(.ignoreAll, trailing: 400, list: broken) == [0 ..< 3])
     }
 
-    /// `frames-boxes.mscx` wrapped at 700 pt: system 0, VBox B (a page break after it), the systems of measures 4–7,
-    /// the TBox, those of 8–11, and VBox C after the last.
+    /// `frames-boxes.mscx` wrapped at 700 pt: S0, VBox B (a page break after it), S1, the TBox, S2, VBox C.
     private func framesDocument() throws -> LayoutDocument {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("frames-boxes"))
         return LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 700)
@@ -277,14 +280,12 @@ struct LayoutPaginatorTests {
         system.origin.y + system.size.height
     }
 
-    /// The index of the first system below `frame`.
     private func systemIndex(below frame: LayoutFrame, in document: LayoutDocument) throws -> Int {
         let index = document.systems.firstIndex { $0.origin.y >= frame.bottom }
         return try #require(index)
     }
 
-    /// Each range as the page a renderer draws (`LayoutBridge.pageDocument`), with the top it was lifted by: the
-    /// bottom of the system before it, 0 for the first. The last range takes the frames after the last system.
+    /// Each range's page (`LayoutBridge.pageDocument`) and the top it was lifted by; the last takes trailing frames.
     private func pages(_ ranges: [Range<Int>], of document: LayoutDocument) -> [(top: CGFloat, page: LayoutDocument)] {
         ranges.enumerated().map { index, range in
             let top = range.lowerBound > 0 ? bottom(document.systems[range.lowerBound - 1]) : 0
@@ -318,8 +319,9 @@ struct LayoutPaginatorTests {
         let count = document.systems.count
         let lastSystemHeight = bottom(document.systems[count - 1]) - bottom(document.systems[count - 2])
         // A cut with room under the last system for VBox C, and one without, which gives C a frames-only page.
-        for pageHeight in [document.size.height / 2, lastSystemHeight + 1] {
+        for (pageHeight, framesOnly) in [(document.size.height / 2, false), (lastSystemHeight + 1, true)] {
             let ranges = document.paginate(pageHeight: pageHeight, policy: .honor)
+            #expect((ranges.last == count ..< count) == framesOnly, "page height \(pageHeight)")
             let carried = pages(ranges, of: document).flatMap { top, page in
                 page.frames.map { frame in
                     var moved = frame
@@ -371,9 +373,8 @@ struct LayoutPaginatorTests {
         #expect(page.size.height > 0)
     }
 
-    @Test("without frames document.paginate is the systems-only pagination")
+    @Test("without frames document.paginate is the systems-only cut: 8 bars, frames-boxes title-only, 29 bars")
     func noFramesIsTheOldPagination() throws {
-        // The eight-measure score above, frames-boxes with only its title block, and a 29-bar fixture.
         var stripped = try MSCXParser.parse(MSCXFixtureLoader.mscxData("frames-boxes"))
         stripped.blocks.removeAll { $0.beforeMeasureIndex > 0 }
         let repeats = try MSCXParser.parse(MSCXFixtureLoader.mscxData("testMeasureRepeats"))

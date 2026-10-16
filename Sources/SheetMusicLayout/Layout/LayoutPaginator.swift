@@ -26,16 +26,19 @@ public enum LayoutPaginator {
     /// `LayoutDocument.paginate(pageHeight:policy:)` derives. A system index in `forcedBreaksBefore` starts a page
     /// whatever room is left — the system below a frame whose `pageBreakAfter` is set (MuseScore `pagelayout.cpp:246`);
     /// like a measure's page break it is ignored under `.ignoreAll`, and an index outside `1 ..< systems.count` is
-    /// ignored. `contentBottom` is the lowest bottom of the frames after the last system: when it does not fit on the
-    /// last page (`contentBottom - pageTop > pageHeight`), one more empty range `systems.count ..< systems.count` is
-    /// appended — a page holding only those frames, as MuseScore gives a trailing box that does not fit a page of its
-    /// own. The defaults are the cut without frames.
+    /// ignored. `trailingFramesBottom` is the lowest bottom of the frames after the last system (not the document's
+    /// content bottom, which is never `nil` and would ask for a page that holds nothing). One more empty range
+    /// `systems.count ..< systems.count` — a page holding only those frames — is appended when they do not fit on the
+    /// last page (`trailingFramesBottom - pageTop > pageHeight`; MuseScore gives a trailing box that does not fit a
+    /// page of its own), and always when an honored page break closed the last page: the frames come after the break
+    /// (`pagelayout.cpp:246`), and the page before it has no room reserved for them. The defaults are the cut without
+    /// frames.
     public static func paginate(
         systems: [LayoutSystem],
         pageHeight: CGFloat,
         policy: LayoutBreakPolicy,
         forcedBreaksBefore: Set<Int> = [],
-        contentBottom: CGFloat? = nil,
+        trailingFramesBottom: CGFloat? = nil,
     ) -> [Range<Int>] {
         guard !systems.isEmpty, pageHeight > 0 else { return [] }
         let forced: Set<Int> = policy == .ignoreAll ? [] : forcedBreaksBefore
@@ -61,10 +64,12 @@ public enum LayoutPaginator {
                 pageTopDoc = systemBottom
             }
         }
+        // A page break on the last system's last measure has already closed the last page.
+        let closedByPageBreak = pageStart == systems.count
         if pageStart < systems.count {
             pages.append(pageStart ..< systems.count)
         }
-        if let contentBottom, contentBottom - pageTopDoc > pageHeight {
+        if let trailingFramesBottom, closedByPageBreak || trailingFramesBottom - pageTopDoc > pageHeight {
             pages.append(systems.count ..< systems.count)
         }
         return pages
