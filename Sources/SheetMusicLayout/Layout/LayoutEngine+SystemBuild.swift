@@ -39,6 +39,9 @@ extension LayoutEngine {
 
     // MARK: - Per-system layout
 
+    /// - Parameter widthPassAggregates: Every measure's tick aggregate as `packSystems`'s width pass computed it,
+    ///   indexed by measure — what this reads when `context.cache` has no entry to serve it, rather than computing
+    ///   the aggregate a second time. Empty means compute it here.
     static func buildSystem( // swiftlint:disable:this function_body_length
         measureRange: Range<Int>,
         widths: [CGFloat],
@@ -48,6 +51,7 @@ extension LayoutEngine {
         lineAggregates: [TickAggregate?] = [],
         activeClefs: inout [NotatedClef],
         activeKeys: inout [Int],
+        widthPassAggregates: [TickAggregate?] = [],
         context: RenderContext,
     ) -> LayoutSystem {
         let metrics = context.metrics
@@ -221,7 +225,8 @@ extension LayoutEngine {
             // nil (caching disabled): `packSystems`'s width pass always
             // populates `entries[measureIdx]` — hit or miss — for every
             // index in `0 ..< measureCount` before any system is built,
-            // so a real cache always finds an entry here.
+            // so a real cache always finds an entry here. Without one the
+            // width pass hands its aggregates over directly.
             let cachedAggregate = context.cache?
                 .entries[measureIdx]?.tickAggregate
             if cachedAggregate != nil {
@@ -230,7 +235,9 @@ extension LayoutEngine {
             // As spaced with the next measure after it on this line, where that moves its floors
             // (`LayoutEngine+LyricJoin`) — the aggregate its width was justified by.
             let lineAggregate = lineAggregates.indices.contains(j) ? lineAggregates[j] : nil
-            let aggregate = lineAggregate ?? cachedAggregate ?? aggregatedTickWeights(
+            let widthPassAggregate = measureIdx < widthPassAggregates.count
+                ? widthPassAggregates[measureIdx] : nil
+            let aggregate = lineAggregate ?? cachedAggregate ?? widthPassAggregate ?? aggregatedTickWeights(
                 staves: staves,
                 measureIdx: measureIdx,
                 metrics: metrics,

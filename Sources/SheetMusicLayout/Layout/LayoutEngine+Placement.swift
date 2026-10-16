@@ -202,8 +202,11 @@ extension LayoutEngine {
 
         var remainingSynthClef = synthesizeLeadingClef
         var remainingSynthKeySig = synthesizeLeadingKeySig
-        // What a chord's trailing graces stand before: the staff's columns, in every voice.
-        let columnsOnStaff = staffColumns(of: measure, measureDuration: measureDuration, division: division)
+        // What a chord's trailing graces stand before: the staff's columns, in every voice. Read only for a chord that
+        // has trailing graces, so a measure with none skips building them.
+        let columnsOnStaff = hasTrailingGraces(measure)
+            ? staffColumns(of: measure, measureDuration: measureDuration, division: division)
+            : StaffColumns()
         for (voiceIdx, voice) in measure.voices.enumerated() {
             var tickCursor = 0
             var inHeader = true

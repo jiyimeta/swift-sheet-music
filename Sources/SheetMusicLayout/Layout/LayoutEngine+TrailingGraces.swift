@@ -35,6 +35,17 @@ extension LayoutEngine {
         }
     }
 
+    /// Whether any chord in `measure` has trailing graces: the one thing `staffColumns` is built for. Most measures
+    /// have none, and asking is much cheaper than building the columns, which copies every chord in the measure.
+    static func hasTrailingGraces(_ measure: Measure) -> Bool {
+        measure.voices.contains { voice in
+            voice.elements.contains { element in
+                if case let .chord(chord) = element { return !chord.graceNotesAfter.isEmpty }
+                return false
+            }
+        }
+    }
+
     /// `measure`'s columns on its own staff, at the ticks `aggregatedTickWeights` and `placeMeasureElements` give them.
     static func staffColumns(of measure: Measure, measureDuration: Fraction, division: Int) -> StaffColumns {
         var columns = StaffColumns()

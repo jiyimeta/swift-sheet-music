@@ -26,6 +26,17 @@ public final class LayoutCache: @unchecked Sendable {
     /// Per-measure cache entries. The key is `measureIdx`.
     var entries: [Int: Entry] = [:]
 
+    /// The natural-width walk's own per-measure entries
+    /// (`LayoutEngine.naturalContentWidth(score:options:cache:)`), keyed like
+    /// `entries`; their `placements` are always empty. A separate table
+    /// because that walk reads the score as given while the layout reads it
+    /// with redundant accidentals suppressed: a measure carrying one has a
+    /// different `measures` key in each, and a shared slot would have the two
+    /// passes evict each other's entry on every call. Each pass still serves
+    /// itself from the other's table when the inputs match — which, for a
+    /// measure the suppression leaves alone, they do.
+    var naturalWidthEntries: [Int: Entry] = [:]
+
     /// Per-system cache entries. The key is the system's starting
     /// `measureIdx`. A hit lets `packSystems` skip the entire
     /// `buildSystem` call for that system (and with it the
@@ -111,6 +122,25 @@ public final class LayoutCache: @unchecked Sendable {
 
         /// --- Per-staff placement results ---
         var placements: [Int: StaffPlacement]
+
+        /// Whether this entry was built from exactly `inputs`, so that its `minWidth` and `tickAggregate` still hold.
+        func matches(_ inputs: LayoutEngine.WidthInputs) -> Bool {
+            sp == inputs.sp
+                && division == inputs.division && spacing == inputs.spacing
+                && graceNoteMag == inputs.graceNoteMag
+                && chordSymbolCase == inputs.chordSymbolCase
+                && measures == inputs.measures
+                && measureDuration == inputs.measureDuration
+                && followingClefs == inputs.followingClefs
+                && leadingClefDrawnBefore == inputs.leadingClefDrawnBefore
+        }
+
+        /// This entry with no placements, for a table that keeps widths only (`naturalWidthEntries`).
+        var widthOnly: Entry {
+            var entry = self
+            entry.placements = [:]
+            return entry
+        }
     }
 
     struct StaffPlacement {

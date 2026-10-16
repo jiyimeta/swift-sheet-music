@@ -345,6 +345,19 @@ extension LayoutEngine {
     public static func naturalContentWidth(
         score: Score, options: ScoreViewOptions,
     ) -> CGFloat {
+        naturalContentWidth(score: score, options: options, cache: nil)
+    }
+
+    /// `naturalContentWidth(score:options:)`, keeping each measure's width in `cache`.
+    ///
+    /// Pass the cache the `layout(score:options:availableWidth:cache:)` call that follows uses — a horizontal host
+    /// lays out at exactly this width. Without it, every call measured every measure afresh, so a one-note edit in a
+    /// long score paid for the whole score here before the layout's own cache could help; and the layout then
+    /// measured each measure a second time for its own widths. With it, a measure is measured once for both, and only
+    /// when one of its inputs changed.
+    public static func naturalContentWidth(
+        score: Score, options: ScoreViewOptions, cache: LayoutCache?,
+    ) -> CGFloat {
         let metrics = StaffMetrics(
             staffSize: options.staffSize,
             spacing: options.spacing,
@@ -366,28 +379,28 @@ extension LayoutEngine {
         let cancellations = cancellationNaturalWidths(
             staves: staves, metrics: metrics,
         )
+        // Rebuilt in place, as `packSystems` rebuilds `entries`: an entry is
+        // carried forward only while its inputs still match.
+        let priorEntries = cache?.naturalWidthEntries ?? [:]
+        cache?.naturalWidthEntries = [:]
         var aggregates: [TickAggregate?] = []
         for i in 0 ..< measureCount {
-            let baseHeader = computeHeaderSchedule(
-                measureIdx: i,
-                staves: staves,
-                metrics: metrics,
-                synthesizeClefForAllStaves: false,
-                synthesizeKeySigForAllStaves: false,
-                leadingClefDrawnBefore: leadingClefDrawnBefore(measureIdx: i, staves: staves, plan: nil),
-            )
-            let measured = crossStaffMinimumMeasureWidthWithAggregate(
-                staves: staves,
-                measureIdx: i,
-                metrics: metrics,
-                headerSchedule: baseHeader,
-                division: score.division,
-                measureDuration: measureDuration(durations, at: i),
-                graceNoteMag: options.graceNoteMag,
+            let inputs = WidthInputs(
+                measureIdx: i, staves: staves, measureDuration: measureDuration(durations, at: i),
+                metrics: metrics, division: score.division, options: options,
                 chordSymbolCase: score.style.chordSymbolCase,
             )
-            aggregates.append(measured.aggregate)
-            total += measured.width + (i < cancellations.count ? cancellations[i] : 0)
+            let entry: LayoutCache.Entry = if let prior = priorEntries[i], prior.matches(inputs) {
+                prior
+            } else if let laidOut = cache?.entries[i], laidOut.matches(inputs) {
+                // The last layout measured this measure from these same inputs.
+                laidOut.widthOnly
+            } else {
+                widthEntry(measureIdx: i, inputs: inputs, staves: staves, metrics: metrics)
+            }
+            cache?.naturalWidthEntries[i] = entry
+            aggregates.append(entry.tickAggregate)
+            total += entry.minWidth + (i < cancellations.count ? cancellations[i] : 0)
         }
         // One line, so every measure but the last has the next after it (`packSystems`' join growth).
         let joined = lyricJoinedAggregates(aggregates, staves: staves, metrics: metrics)
@@ -975,6 +988,7 @@ extension LayoutEngine {
             // A chord's trailing graces stand before the next column on the
             // staff, in any voice, or before the barline; either way they are
             // left ink of what they stand before (`LayoutEngine+GraceGroup`).
+            guard hasTrailingGraces(staff.measures[measureIdx]) else { continue }
             let columns = staffColumns(
                 of: staff.measures[measureIdx], measureDuration: measureDuration, division: division,
             )

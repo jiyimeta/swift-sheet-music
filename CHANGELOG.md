@@ -83,6 +83,11 @@ and this project adheres to
   follows the style; layout reads it as MuseScore's default style, since the score's own `<tupletNumberType>` and
   friends are kept but not yet read. `TupletBracketGeometry.labelHalfWidth(for:sp:)` and the `labelHalfWidth`
   argument of `segments(from:to:isAbove:sp:labelHalfWidth:)` size the bracket's gap to the label.
+- **`LayoutEngine.naturalContentWidth(score:options:cache:)`** keeps each measure's natural width in the `LayoutCache`
+  the following `layout(score:options:availableWidth:cache:)` call uses, which is how a horizontal host lays out — at
+  exactly that width. The walk used to measure every measure of the score on every call, a one-note edit included, and
+  the layout then measured each one again for its own widths; now a measure is measured once for both, and again only
+  when one of its inputs changes. The two-argument form is unchanged and keeps no cache.
 
 ### Changed
 
@@ -103,6 +108,17 @@ and this project adheres to
 - **`Accidental.semitoneOffset` is MuseScore's `AccidentalVal` for Wyschnegradsky's six twelfths**, a semitone (it was
   zero), so `SetAccidental` with `.sixTwelfthFlat` / `.sixTwelfthSharp` moves the note a semitone as MuseScore does.
   Every other microtonal glyph still stores the natural letter, its alteration riding in `centOffset`.
+- **Laying out a long score is faster**, with identical output (the layout and cursor frames of 47 scores compare byte
+  for byte with the code before this change). On a 508-measure, six-staff score with 4,300 lyrics, thread CPU time
+  interleaved against that code on the same machine, a one-note edit in horizontal mode (the natural-width walk and the
+  layout) went from 91–117 to 52–64 ms. Two costs went:
+  - The horizontal pair measured every measure twice (above), and a layout without a cache computed each measure's tick
+    aggregate twice — once for its width and once to place it. The placement now takes the width pass's.
+  - Every staff of every measure collected its columns for trailing grace notes, copying each chord, and every chord
+    read its accidentals' glyph bounds for leading grace notes — whether or not it had any.
+- **The playback cursor resolves a beat without walking the score.** A `.beat` cursor re-derived every staff's measure
+  durations from its whole measure list on each update, 0.55–0.64 ms on that score; `LayoutDocument` now keeps the
+  durations its layout computed, and the same frames cost 0.03–0.04 ms.
 
 ### Fixed
 

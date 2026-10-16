@@ -85,22 +85,12 @@ extension LayoutEngine {
         // `naturalWidth`.
         var aggregates = [TickAggregate?](repeating: nil, count: measureCount)
         let cachedMinWidths: [CGFloat] = (0 ..< measureCount).map { i in
-            let measuresAt = staves.map { staff in
-                i < staff.measures.count ? staff.measures[i] : nil
-            }
-            let durationAt = measureDuration(measureDurations, at: i)
-            let followingClefsAt = followingClefs(after: i, staves: staves, plan: nil)
-            let clefDrawnBefore = leadingClefDrawnBefore(measureIdx: i, staves: staves, plan: nil)
-            if let prior = priorEntries[i],
-               prior.sp == sp,
-               prior.division == division, prior.spacing == context.options.spacing,
-               prior.graceNoteMag == context.options.graceNoteMag,
-               prior.chordSymbolCase == context.score.style.chordSymbolCase,
-               prior.measures == measuresAt,
-               prior.measureDuration == durationAt,
-               prior.followingClefs == followingClefsAt,
-               prior.leadingClefDrawnBefore == clefDrawnBefore
-            {
+            let inputs = WidthInputs(
+                measureIdx: i, staves: staves, measureDuration: measureDuration(measureDurations, at: i),
+                metrics: context.metrics, division: division, options: context.options,
+                chordSymbolCase: context.score.style.chordSymbolCase,
+            )
+            if let prior = priorEntries[i], prior.matches(inputs) {
                 // Cache hit: copy the prior entry forward verbatim. Its
                 // `minWidth` is the natural width, so it stays valid under
                 // any plan — only the returned value is overridden.
@@ -109,11 +99,20 @@ extension LayoutEngine {
                 aggregates[i] = prior.tickAggregate
                 return collapsedOverride(for: i, baseline: prior.minWidth)
             }
+            // The natural-width walk a horizontal host runs just before this
+            // (`naturalContentWidth(score:options:cache:)`) may have computed
+            // this measure from the very same inputs — it reads the score
+            // before accidentals are suppressed, which leaves most measures
+            // as they are. Its width and aggregate are then this measure's;
+            // only the placements, which that walk never builds, start empty.
+            if let natural = context.cache?.naturalWidthEntries[i], natural.matches(inputs) {
+                context.cache?.entries[i] = natural
+                context.cache?.widthHits += 1
+                aggregates[i] = natural.tickAggregate
+                return collapsedOverride(for: i, baseline: natural.minWidth)
+            }
             context.cache?.widthMisses += 1
-            let entry = widthEntry(
-                measureIdx: i, measures: measuresAt, staves: staves, measureDuration: durationAt,
-                followingClefs: followingClefsAt, leadingClefDrawnBefore: clefDrawnBefore, context: context,
-            )
+            let entry = widthEntry(measureIdx: i, inputs: inputs, staves: staves, metrics: context.metrics)
             context.cache?.entries[i] = entry
             aggregates[i] = entry.tickAggregate
             return collapsedOverride(for: i, baseline: entry.minWidth)
@@ -521,6 +520,7 @@ extension LayoutEngine {
                     lineAggregates: lineAggregates,
                     activeClefs: &activeClefs,
                     activeKeys: &activeKeys,
+                    widthPassAggregates: aggregates,
                     context: context,
                 )
                 system = shift(unshifted, byY: currentY)
@@ -540,37 +540,70 @@ extension LayoutEngine {
         return systems
     }
 
-    /// One measure's width-pass entry, computed afresh — what `packSystems`
+    /// Every input a measure's natural width and tick aggregate are derived from — the cache-hit predicate of a width
+    /// entry (`LayoutCache.Entry`). One value for both passes that read widths, `packSystems` and
+    /// `naturalContentWidth(score:options:cache:)`, so the two cannot drift apart in what they compare.
+    struct WidthInputs {
+        let measures: [Measure?]
+        let sp: CGFloat
+        let division: Int
+        let spacing: EngravingSpacing
+        let graceNoteMag: CGFloat
+        let chordSymbolCase: ChordSymbolCaseStyle
+        let measureDuration: Fraction
+        let followingClefs: [FollowingClef?]
+        let leadingClefDrawnBefore: Bool
+
+        init(
+            measureIdx: Int, staves: [Staff], measureDuration: Fraction, metrics: StaffMetrics, division: Int,
+            options: ScoreViewOptions, chordSymbolCase: ChordSymbolCaseStyle,
+        ) {
+            measures = staves.map { staff in
+                measureIdx < staff.measures.count ? staff.measures[measureIdx] : nil
+            }
+            sp = metrics.sp
+            self.division = division
+            spacing = options.spacing
+            graceNoteMag = options.graceNoteMag
+            self.chordSymbolCase = chordSymbolCase
+            self.measureDuration = measureDuration
+            followingClefs = LayoutEngine.followingClefs(after: measureIdx, staves: staves, plan: nil)
+            leadingClefDrawnBefore = LayoutEngine.leadingClefDrawnBefore(
+                measureIdx: measureIdx, staves: staves, plan: nil,
+            )
+        }
+    }
+
+    /// One measure's width-pass entry, computed afresh — what a width pass
     /// stores on a cache miss: the natural width and the aggregate behind it,
     /// keyed by every input that went into them.
-    private static func widthEntry(
-        measureIdx: Int, measures: [Measure?], staves: [Staff], measureDuration: Fraction,
-        followingClefs: [FollowingClef?], leadingClefDrawnBefore: Bool, context: RenderContext,
+    static func widthEntry(
+        measureIdx: Int, inputs: WidthInputs, staves: [Staff], metrics: StaffMetrics,
     ) -> LayoutCache.Entry {
         let baseHeader = computeHeaderSchedule(
-            measureIdx: measureIdx, staves: staves, metrics: context.metrics,
+            measureIdx: measureIdx, staves: staves, metrics: metrics,
             synthesizeClefForAllStaves: false, synthesizeKeySigForAllStaves: false,
-            leadingClefDrawnBefore: leadingClefDrawnBefore,
+            leadingClefDrawnBefore: inputs.leadingClefDrawnBefore,
         )
         let result = crossStaffMinimumMeasureWidthWithAggregate(
             staves: staves,
             measureIdx: measureIdx,
-            metrics: context.metrics,
+            metrics: metrics,
             headerSchedule: baseHeader,
-            division: context.score.division,
-            measureDuration: measureDuration,
-            graceNoteMag: context.options.graceNoteMag,
-            chordSymbolCase: context.score.style.chordSymbolCase,
+            division: inputs.division,
+            measureDuration: inputs.measureDuration,
+            graceNoteMag: inputs.graceNoteMag,
+            chordSymbolCase: inputs.chordSymbolCase,
         )
         return LayoutCache.Entry(
-            measures: measures,
-            sp: context.metrics.sp,
-            division: context.score.division, spacing: context.options.spacing,
-            graceNoteMag: context.options.graceNoteMag,
-            chordSymbolCase: context.score.style.chordSymbolCase,
-            measureDuration: measureDuration,
-            followingClefs: followingClefs,
-            leadingClefDrawnBefore: leadingClefDrawnBefore,
+            measures: inputs.measures,
+            sp: inputs.sp,
+            division: inputs.division, spacing: inputs.spacing,
+            graceNoteMag: inputs.graceNoteMag,
+            chordSymbolCase: inputs.chordSymbolCase,
+            measureDuration: inputs.measureDuration,
+            followingClefs: inputs.followingClefs,
+            leadingClefDrawnBefore: inputs.leadingClefDrawnBefore,
             minWidth: result.width,
             tickAggregate: result.aggregate,
             placements: [:],

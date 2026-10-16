@@ -167,7 +167,10 @@ extension LayoutEngine {
     static func beforeGraceOffsets(
         of chord: Chord, stems: [StemDirection]? = nil, mag: CGFloat, metrics: StaffMetrics,
     ) -> [CGFloat] {
-        graceGroupOffsets(
+        // Placement asks this of every chord, and measuring the chord's obstacles reads each accidental's glyph bounds
+        // from the font — for nothing, when there is no grace to place against them.
+        guard !chord.graceNotesBefore.isEmpty else { return [] }
+        return graceGroupOffsets(
             Array(chord.graceNotesBefore.values), stems: stems, clearing: obstacles(ofChord: chord, metrics: metrics),
             mag: mag, metrics: metrics,
         )
