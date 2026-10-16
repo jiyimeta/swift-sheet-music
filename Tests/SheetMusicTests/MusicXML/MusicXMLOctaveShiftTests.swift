@@ -1,5 +1,6 @@
 import Foundation
 @testable import SheetMusicCore
+@testable import SheetMusicMIDI
 @testable import SheetMusicMusicXML
 import Testing
 
@@ -31,6 +32,7 @@ struct MusicXMLOctaveShiftTests {
 
     private static let shapeRows: [(String, Int, Spanner.OttavaPayload.Subtype, Int)] = [
         ("down", 15, .fifteenMA, -24), ("up", 8, .eightVB, 12), ("up", 15, .fifteenMB, 24),
+        ("down", 22, .twentyTwoMA, -36),
     ]
 
     @Test("the type and size choose the ottava and the written pitch", arguments: shapeRows)
@@ -42,7 +44,7 @@ struct MusicXMLOctaveShiftTests {
         #expect(F.spanners(in: voice).first?.spanner.ottava?.subtype == subtype)
     }
 
-    @Test("a size other than 8 or 15 makes nothing")
+    @Test("a size other than 8, 15 or 22 makes nothing")
     func unknownSize() throws {
         let body = F.quarter("C", octave: 5) + Self.shift("down", size: 9) + Self.c5(3) + Self.shift("stop", size: 9)
         let voice = try F.voice(F.score(measures: [body]))
@@ -71,5 +73,53 @@ struct MusicXMLOctaveShiftTests {
         let body = start + Self.c5(2) + Self.shift("stop") + Self.c5(2)
         let begin = try F.spanners(in: F.voice(F.score(measures: [body]))).first?.spanner
         #expect(begin?.placement == .below)
+    }
+
+    /// Every note of each chord, in voice order.
+    private static func chordPitches(in voice: Voice) -> [[Int]] {
+        voice.elements.values.compactMap { element -> [Int]? in
+            guard case let .chord(chord) = element else { return nil }
+            return chord.notes.map(\.pitch)
+        }
+    }
+
+    /// Every note-on of the rendered score, sorted by tick then pitch.
+    private static func noteOns(_ score: Score) throws -> [Int] {
+        let midi = try MidiRenderer.render(score: score)
+        let ons = midi.tracks.flatMap(\.events).compactMap { event -> (tick: Int, pitch: Int)? in
+            guard case let .noteOn(_, pitch, _) = event.event else { return nil }
+            return (event.tick, pitch)
+        }
+        return ons.sorted { $0.tick == $1.tick ? $0.pitch < $1.pitch : $0.tick < $1.tick }.map(\.pitch)
+    }
+
+    @Test("a <chord/> tone takes the shift at its chord's start, not at the clock past it (P2:7183)")
+    func chordTone() throws {
+        let e5 = F.quarter("E", octave: 5, extra: "<chord/>")
+        let body = Self.shift("down") + Self.c5(2) + e5 + Self.shift("stop") + Self.c5(2)
+        let voice = try F.voice(F.score(measures: [body]))
+        #expect(Self.chordPitches(in: voice) == [[60], [60, 64], [72], [72]])
+    }
+
+    @Test("a shift on staff 1 leaves staff 2's notes as written")
+    func otherStaff() throws {
+        let staff2 = F.whole("C", octave: 3, voice: 5, staff: 2)
+        let body = Self.shift("down") + Self.c5(4) + Self.shift("stop") + "<backup><duration>1920</duration></backup>"
+            + staff2
+        let score = try F.score(measures: [body], staves: 2)
+        #expect(F.pitches(in: F.voice(score, staff: 0)) == [60, 60, 60, 60])
+        #expect(F.pitches(in: F.voice(score, staff: 1)) == [48])
+    }
+
+    @Test("a <backup> voice under an 8va is written lower and still sounds as the file says")
+    func backupVoiceSounds() throws {
+        let voice2 = F.half("A", voice: 2) + F.half("A", voice: 2)
+        let body = Self.shift("down") + Self.c5(4) + Self.shift("stop") + "<backup><duration>1920</duration></backup>"
+            + voice2
+        let score = try F.score(measures: [body])
+        #expect(F.pitches(in: F.voice(score, voice: 0)) == [60, 60, 60, 60])
+        #expect(F.pitches(in: F.voice(score, voice: 1)) == [57, 57])
+        // The ottava sits in voice 0 only; playback applies it to the whole staff, so voice 2 sounds A4 (69).
+        #expect(try Self.noteOns(score) == [69, 72, 72, 69, 72, 72])
     }
 }

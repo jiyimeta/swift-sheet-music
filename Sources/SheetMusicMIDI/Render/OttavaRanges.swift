@@ -2,7 +2,7 @@ import SheetMusicCore
 import SheetMusicFoundation
 
 /// One resolved ottava: a tick range during which every sounding note
-/// in the voice gets its pitch shifted by `semitones`. Built by
+/// on the staff gets its pitch shifted by `semitones`. Built by
 /// `OttavaRanges.collect` and consulted at chord-onset time by
 /// `MidiRenderer+Voice`. End tick is half-open: a chord whose onset
 /// equals `endTick` is OUTSIDE the range (the spanner ends just as
@@ -26,10 +26,11 @@ enum OttavaRanges {
             ?? 0
     }
 
-    /// Walk one voice in original (pre-repeat) ticks and resolve every
-    /// `<Spanner type="Ottava">` into a concrete `OttavaRange`.
+    /// Walk every voice of the staff in original (pre-repeat) ticks, each with its own running tick, and resolve every
+    /// begin-side `<Spanner type="Ottava">` into a concrete `OttavaRange`. An ottava shifts the whole staff, as
+    /// MuseScore applies it (`Staff::updateOttava` / `pitchOffset`, `dom/staff.cpp:1266-1290`), whichever voice
+    /// carries it — a MusicXML import puts it in voice 0 while the `<backup>` voices under it are written shifted too.
     static func collect(
-        voiceIndex: Int,
         staff: Staff,
         division: Int,
         tempoMap: ResolvedTempoMap,
@@ -46,9 +47,9 @@ enum OttavaRanges {
                 measureDuration: measureDuration,
                 measureIndex: measureIdx, tempoMap: tempoMap,
             )
-            if voiceIndex < measure.voices.count {
+            for voice in measure.voices {
                 walkVoice(
-                    measure.voices[voiceIndex],
+                    voice,
                     measureIdx: measureIdx,
                     measureBase: measureBase,
                     measureDuration: measureDuration,

@@ -40,6 +40,9 @@ and this project adheres to
 
 ### Fixed
 
+- **An ottava now shifts the playback of every voice on its staff**, as MuseScore applies it, not only the voice that
+  carries the line. A second voice under an 8va — a MusicXML `<backup>` voice, or any voice of a score whose ottava
+  sits in voice 1 — played an octave away from the pitch it sounds in MuseScore.
 - **A wavy glissando no longer tilts everything drawn after it on Android and the web.** The draw program's
   `setRotation` is a state command — the next one replaces the rotation in force — and a wavy glissando sends one per
   wiggle with a single reset after the run. The Compose renderer and `canvas.ts` stacked each one onto the canvas

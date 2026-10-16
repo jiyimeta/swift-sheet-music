@@ -50,7 +50,6 @@ extension MidiRenderer {
             tempoMap: tempoMap,
         )
         let ottavaRanges = OttavaRanges.collect(
-            voiceIndex: voiceIndex,
             staff: staff,
             division: division,
             tempoMap: tempoMap,

@@ -129,4 +129,45 @@ struct OttavaMidiTests {
         // Inside the range → +12. After tick 480 (end of range) → original.
         #expect(pitches == [72, 60])
     }
+
+    /// An ottava shifts the whole staff, as MuseScore applies it: the spanner sits in voice 0, and the chords of voice
+    /// 1 under it are shifted too. Voice 0: 8va over the first half, C4 C4 C4(half); voice 1: G3(half) G3(half).
+    @Test func ottavaInVoiceZeroShiftsEveryVoiceOfTheStaff() throws {
+        let begin = Spanner(
+            kind: .ottava, rawType: "Ottava",
+            nextMeasuresOffset: 0,
+            nextFractionsOffset: Fraction(numerator: 1, denominator: 2),
+            ottava: .init(subtype: .eightVA),
+        )
+        let end = Spanner(kind: .ottava, rawType: "Ottava", visible: false)
+        let c4 = Note(pitch: 60, tpc: 14)
+        let g3 = Note(pitch: 55, tpc: 15)
+        let voice0 = Voice(elements: [
+            .spanner(begin),
+            .chord(Chord(duration: .quarter, notes: [c4])),
+            .chord(Chord(duration: .quarter, notes: [c4])),
+            .spanner(end),
+            .chord(Chord(duration: .half, notes: [c4])),
+        ])
+        let voice1 = Voice(elements: [
+            .chord(Chord(duration: .half, notes: [g3])),
+            .chord(Chord(duration: .half, notes: [g3])),
+        ])
+        let score = Score(division: 480, parts: [
+            Part(
+                id: "1",
+                instrument: Instrument(id: "x"),
+                staves: [Staff(measures: [Measure(voices: [voice0, voice1])])],
+            ),
+        ])
+        let midi = try MidiRenderer.render(score: score)
+        let ons = midi.tracks.flatMap(\.events).compactMap { event -> (tick: Int, pitch: Int)? in
+            guard case let .noteOn(_, pitch, _) = event.event else { return nil }
+            return (event.tick, pitch)
+        }
+        let sorted = ons.sorted { $0.tick == $1.tick ? $0.pitch < $1.pitch : $0.tick < $1.tick }
+        // Tick 0: G3 → G4 (67) in voice 1, C4 → C5 (72) in voice 0; 480: C5; 960 (range ended): G3, C4.
+        #expect(sorted.map(\.tick) == [0, 0, 480, 960, 960])
+        #expect(sorted.map(\.pitch) == [67, 72, 72, 55, 60])
+    }
 }
