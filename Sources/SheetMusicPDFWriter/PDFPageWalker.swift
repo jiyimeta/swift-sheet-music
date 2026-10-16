@@ -85,7 +85,8 @@ struct PDFPageWalker {
         guard let name = resources.imageName(data) else { return }
         let k = Self.pointsPerMM
         let matrix = [w * k, 0, 0, h * k, x * k, pageHeight - (y + h) * k]
-        emit("q \(matrix.map(Self.number).joined(separator: " ")) cm /\(name) Do Q")
+        let opaque = resources.alphaState(255)
+        emit("q /\(opaque) gs \(matrix.map(Self.number).joined(separator: " ")) cm /\(name) Do Q")
     }
 
     // MARK: - State

@@ -197,8 +197,14 @@ final class PDFResources {
         }
         var xObjects: [String] = []
         for (index, image) in images.enumerated() {
+            var dictionary = image.dictionary
+            if let mask = image.softMask {
+                let maskNumber = writer.reserve()
+                try writer.stream(maskNumber, dictionary: mask.dictionary, data: mask.data, compress: false)
+                dictionary += " /SMask \(maskNumber) 0 R"
+            }
             let number = writer.reserve()
-            try writer.stream(number, dictionary: image.dictionary, data: image.data, compress: false)
+            try writer.stream(number, dictionary: dictionary, data: image.data, compress: false)
             xObjects.append("/\(Self.resourceName(ofImage: index + 1)) \(number) 0 R")
         }
         let pictures = xObjects.isEmpty ? "" : " /XObject << \(xObjects.joined(separator: " ")) >>"

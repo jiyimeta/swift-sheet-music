@@ -126,10 +126,14 @@ and this project adheres to
   is (`DCTDecode`, device gray / RGB / CMYK by its component count, `/Decode` only for a CMYK file with an Adobe
   marker), an 8-bit non-interlaced gray, RGB or palette PNG as its own deflate stream with PNG predictors
   (`FlateDecode`, `/Predictor 15`), the palette as `/Indexed`. The writer reads headers only and decodes nothing. A
-  picture it cannot hold — a PNG with alpha, 16-bit or interlaced, or bytes that are neither format — draws nothing
-  yet (alpha follows in the next change), and a PNG's `tRNS`, gamma and ICC chunks are ignored. The `render-previews`
-  CoreGraphics walk draws the picture through `ImageIO` with high-quality interpolation, decoding each file once per
-  render.
+  picture it cannot hold — a 16-bit or interlaced PNG, or bytes that are neither format — draws nothing, and a PNG's
+  `tRNS`, gamma and ICC chunks are ignored. The picture is drawn inside its own `q … Q` with the fill alpha reset, so
+  an open translucent color never reaches it. The `render-previews` CoreGraphics walk draws the picture through
+  `ImageIO` with high-quality interpolation, decoding each file once per render.
+- **PDF export of PNGs with alpha** — an 8-bit non-interlaced RGBA or gray+alpha PNG is inflated, unfiltered and split
+  into a color image (`FlateDecode`, device RGB or gray) and an 8-bit `/DeviceGray` soft mask the color image names in
+  `/SMask`, so the picture's transparency survives in the PDF. A chunk length or image size that overflows a 32-bit
+  `Int` makes the file unreadable (no picture) instead of trapping.
 
 ### Changed
 
