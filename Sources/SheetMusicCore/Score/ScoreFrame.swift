@@ -136,7 +136,15 @@ public struct FrameText: Sendable, Equatable, Hashable {
 
     /// The text on one line: each `\n` (a run of them too) becomes one space, and the ends are trimmed.
     public var singleLineText: String {
-        text.split(separator: "\n", omittingEmptySubsequences: true)
+        text.joinedOnOneLine()
+    }
+}
+
+extension String {
+    /// Each `\n` (a run of them too) becomes one space and the ends are trimmed — the one rule behind
+    /// `FrameText.singleLineText` and `SetScoreInfo`'s restatement check.
+    func joinedOnOneLine() -> String {
+        split(separator: "\n", omittingEmptySubsequences: true)
             .joined(separator: " ")
             .trimmingWhitespaceAndNewlines()
     }

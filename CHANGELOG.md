@@ -177,6 +177,10 @@ and this project adheres to
 
 ### Fixed
 
+- **Saving a one-line title or subtitle unchanged keeps its line breaks** — `SetScoreInfo.isRestatement` compared a
+  write to the raw engraved text, so the one-line form (`FrameText.singleLineText`) of a multi-line title was a real
+  edit and flattened "A\nB" to "A B". It now also counts the one-line form of the current value as a restatement,
+  through the same joining rule.
 - **An inline credit editor over a bold title shows and measures bold** — `CreditTextLine.font` was always the regular
   title face, so the editor over a `<b>` title showed regular text. `CreditTextLine` now reports `isBold` / `isItalic`
   (true when every text run of the line is), `font` carries those traits, and a line without rich runs is measured in

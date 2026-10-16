@@ -127,11 +127,16 @@ public struct SetScoreInfo: EditCommand {
             // A field with an engraved style is a restatement only when BOTH places already agree: a metaTag that
             // matches while the title block is empty is exactly the state this command exists to repair, and
             // planning it to `nil` would leave the page blank forever.
-            guard current(write.field, in: score) == write.normalizedText else { return false }
+            // The hosts show a multi-line title on one line and send that line back, so the one-line form of the
+            // current value restates it too — otherwise saving unchanged would flatten the engraved line breaks.
+            let existing = current(write.field, in: score)
+            guard existing == write.normalizedText || existing?.joinedOnOneLine() == write.normalizedText else {
+                return false
+            }
             guard let style = write.field.frameTextStyle else { return true }
             let engraved = score.titleFrame?.texts
-                .first { $0.style == style }?.text.trimmingWhitespaceAndNewlines()
-            let stored = score.metaTags[write.field.metaTagKey]?.trimmingWhitespaceAndNewlines()
+                .first { $0.style == style }?.text.joinedOnOneLine()
+            let stored = score.metaTags[write.field.metaTagKey]?.joinedOnOneLine()
             return (engraved?.isEmpty == false ? engraved : nil) == (stored?.isEmpty == false ? stored : nil)
         }
     }
