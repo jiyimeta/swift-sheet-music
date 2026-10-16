@@ -24,8 +24,9 @@ public struct PDFPageView: View {
     /// `nil`.
     let titleFrame: LayoutTitleFrame?
     /// The frames between systems this page holds (`PDFExporter.frames(of:in:)`), in document coordinates. One above
-    /// the page's first system is drawn where it is, so `pageStartY` must be at or above it — the previous page's
-    /// last-system bottom, as `PDFExporter.Sheet.pageStartY` requires — or it lands in the top margin.
+    /// the page's first system is drawn where it is, so `pageStartY` must be at or above it —
+    /// `LayoutDocument.pageTop(ofPageStartingAt:)`, as `PDFExporter.Sheet.pageStartY` requires — or it lands in the
+    /// top margin. A frame with a page break is on the page it closes, under that page's last system.
     let frames: [LayoutFrame]
     /// The title block's pictures (`LayoutDocument.titleImages`), in document coordinates; only the page that carries
     /// `titleFrame` passes them.

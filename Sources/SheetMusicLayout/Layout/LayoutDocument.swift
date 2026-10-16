@@ -52,24 +52,35 @@ public struct LayoutDocument: Sendable, Equatable {
 
 extension LayoutDocument {
     /// `systems` cut into pages of `pageHeight` points, the frames taken into account: a frame whose `pageBreakAfter`
-    /// is set starts a page at the first system below it (not under `.ignoreAll`, as for a measure's page break), and
-    /// frames after the last system that do not fit under it, or that follow a page break closing the last page, get a
-    /// page of their own, the empty range `systems.count ..< systems.count`. See `LayoutPaginator.paginate`, which this
-    /// feeds. Without frames it is `LayoutPaginator.paginate(systems:pageHeight:policy:)` exactly. Every page-mode
-    /// caller cuts through here, so the bridge, wasm, JNI and PDF pages agree on where a frame lands.
+    /// is set ends its page — it stays at the bottom of the page it closes, and the page after starts below it at the
+    /// first system that follows (not under `.ignoreAll`, as for a measure's page break) — and frames after the last
+    /// system that do not fit under it, or that follow a page break closing the last page, get a page of their own,
+    /// the empty range `systems.count ..< systems.count`. See `LayoutPaginator.paginate`, which this feeds. Without
+    /// frames it is `LayoutPaginator.paginate(systems:pageHeight:policy:)` exactly. Every page-mode caller cuts through
+    /// here, and places each page at `pageTop(ofPageStartingAt:)`, so the bridge, wasm, JNI and PDF pages agree on
+    /// where a frame lands.
     public func paginate(pageHeight: CGFloat, policy: LayoutBreakPolicy) -> [Range<Int>] {
         LayoutPaginator.paginate(
             systems: systems, pageHeight: pageHeight, policy: policy,
-            forcedBreaksBefore: framePageBreaksBefore, trailingFramesBottom: trailingFramesBottom,
+            pageBreaksBefore: pageBreakFrameBottoms, trailingFramesBottom: trailingFramesBottom,
         )
     }
 
-    /// Where, in document y, a page whose first system is `systemIndex` starts. Stub until Task 8b lands: still the
-    /// previous system's bottom (0 for the first page), the value every page consumer used before.
+    /// Where, in document y, a page whose first system is `systemIndex` starts — the one definition every paginator and
+    /// page consumer uses. `0` for the first page. Otherwise the bottom of the system before it, or, when boxes with a
+    /// page break (`LayoutFrame.pageBreakAfter`) sit between that system and this one, the lowest bottom of those
+    /// boxes: a box with a page break stays at the bottom of the page it closes and the next page starts below it
+    /// (MuseScore `pagelayout.cpp:246`). A plain box between the two belongs to the next page and does not move its
+    /// top. For `systems.count` — a frames-only last page — the last system's bottom: no system follows the boxes
+    /// after it, so no break of theirs applies.
+    ///
+    /// No policy argument: the layout sets `pageBreakAfter` only when its `ScoreViewOptions.breakPolicy` honors page
+    /// breaks, so under `.ignoreAll` every page starts at the previous system's bottom.
     public func pageTop(ofPageStartingAt systemIndex: Int) -> CGFloat {
-        guard systemIndex > 0, systems.indices.contains(systemIndex - 1) else { return 0 }
-        let previous = systems[systemIndex - 1]
-        return previous.origin.y + previous.size.height
+        guard systemIndex > 0, let previous = systems.prefix(systemIndex).last else { return 0 }
+        let previousBottom = previous.origin.y + previous.size.height
+        guard let breakBottom = pageBreakFrameBottoms[systemIndex] else { return previousBottom }
+        return max(previousBottom, breakBottom)
     }
 
     /// The index of the first system at or below `frame`'s bottom: the system the frame sits above. `nil` for a frame
@@ -78,9 +89,16 @@ extension LayoutDocument {
         systems.firstIndex { $0.origin.y >= frame.bottom }
     }
 
-    /// The systems a frame's page break starts a page at: the one below each frame whose `pageBreakAfter` is set.
-    package var framePageBreaksBefore: Set<Int> {
-        Set(frames.filter(\.pageBreakAfter).compactMap { systemIndex(below: $0) })
+    /// The systems a frame's page break starts a page at, each with where that page starts: system index → the lowest
+    /// bottom of the frames with `pageBreakAfter` between it and the system before (or the title block, for system 0).
+    /// The frames after the last system have no system below them and are not listed.
+    package var pageBreakFrameBottoms: [Int: CGFloat] {
+        var bottoms: [Int: CGFloat] = [:]
+        for frame in frames where frame.pageBreakAfter {
+            guard let below = systemIndex(below: frame) else { continue }
+            bottoms[below] = max(bottoms[below] ?? frame.bottom, frame.bottom)
+        }
+        return bottoms
     }
 
     /// The systems with a frame between them and the system before (or the title block, for system 0).
@@ -112,22 +130,21 @@ extension LayoutDocument {
 
     /// A document containing only `systems[range]`, each system's origin shifted by `yOffset` (a negative value lifts
     /// a page's first system to y ≈ 0 so a page-mode renderer can paint page-local coordinates), and the frames that
-    /// page holds, shifted the same way: a frame belongs to the page whose first system follows it, so those in
-    /// `[pageTop, lastSystemBottom)`, where `pageTop` is the bottom of the system before the range and
-    /// `lastSystemBottom` the bottom of its last system — or `.infinity` when `isLastPage`, so the last page takes the
-    /// frames after the last system. An empty range (a frames-only page) holds, as the last page, the frames at or
-    /// below `pageTop`. `size.height` is the lowest shifted bottom of those systems and frames. `titleFrame` and
-    /// `titleImages` are dropped because only the first page carries them, and that page re-attaches both.
+    /// page holds, shifted the same way: those whose top lies in `[pageTop(range.lowerBound),
+    /// pageTop(range.upperBound))` (`pageTop(ofPageStartingAt:)`) — from `-.infinity` for the first page, to
+    /// `.infinity` when `isLastPage`, so the last page takes the frames after the last system. A frame between two
+    /// pages' systems is therefore on the page below it, unless it carries a page break: then its top lies above the
+    /// next page's top (its bottom), and it stays on the page it closes. An empty range (a frames-only page) holds, as
+    /// the last page, the frames at or below the last system's bottom. `size.height` is the lowest shifted bottom of
+    /// those systems and frames. `titleFrame` and `titleImages` are dropped because only the first page carries them,
+    /// and that page re-attaches both.
     public func subdocument(systems range: Range<Int>, yOffset: CGFloat, isLastPage: Bool) -> LayoutDocument {
         let slice = systems[range].map { $0.movedBy(dy: yOffset) }
-        // Half-open bands on the frame's top edge: consecutive pages share their boundary (one page's last system
-        // bottom is the next one's top), so every frame lands on exactly one page.
-        let pageTop = range.lowerBound > 0
-            ? systems[range.lowerBound - 1].origin.y + systems[range.lowerBound - 1].size.height
-            : -CGFloat.infinity
-        let lastSystemBottom = systems[range].last.map { $0.origin.y + $0.size.height } ?? pageTop
-        let pageBottom = isLastPage ? CGFloat.infinity : lastSystemBottom
-        let carried = frames.filter { $0.originY >= pageTop && $0.originY < pageBottom }.map { frame in
+        // Half-open bands on the frame's top edge: consecutive pages share their boundary (one page's band ends at
+        // the next one's `pageTop`), so every frame lands on exactly one page.
+        let bandTop = range.lowerBound > 0 ? pageTop(ofPageStartingAt: range.lowerBound) : -CGFloat.infinity
+        let bandBottom = isLastPage ? CGFloat.infinity : pageTop(ofPageStartingAt: range.upperBound)
+        let carried = frames.filter { $0.originY >= bandTop && $0.originY < bandBottom }.map { frame in
             var moved = frame
             moved.originY += yOffset
             return moved

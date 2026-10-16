@@ -20,10 +20,12 @@ extension PDFExporter {
         /// The document Y drawn at the page's top margin.
         ///
         /// **A sheet whose first system has a frame above it (`LayoutDocument.frames`) must start at or above that
-        /// frame** — at the previous sheet's last-system bottom, as `paginate(systems:page:policy:…)` starts such a
-        /// page. The export draws on each sheet the frames `frames(of:in:)` assigns it, which include the frame above
-        /// its first system; a sheet that starts at that system's top instead draws the frame into its top margin. The
-        /// first sheet starts at 0, above the title block.
+        /// frame** — at `LayoutDocument.pageTop(ofPageStartingAt:)` of that system, as
+        /// `paginate(systems:page:policy:…)` starts such a page: the previous sheet's last-system bottom, or the bottom
+        /// of the frames with a page break between the two, which stay on the sheet before. The export draws on each
+        /// sheet the frames `frames(of:in:)` assigns it, which include the plain frames above its first system; a sheet
+        /// that starts at that system's top instead draws them into its top margin. The first sheet starts at 0, above
+        /// the title block.
         public var pageStartY: CGFloat
         /// The page's media box, in points.
         public var pageSize: CGSize
@@ -124,18 +126,30 @@ extension PDFExporter {
         return data as Data
     }
 
-    /// The frames each of `sheets` holds, in document coordinates, by the rule every paginator follows: a frame belongs
-    /// to the sheet whose first system follows it — the sheet whose `[previous sheet's last system bottom, its own last
-    /// system bottom)` holds it — and the last sheet takes every frame below the sheets before it. Not
-    /// `pageStartY ..< next sheet's pageStartY`: a host whose sheet starts at its first system's top would leave the
-    /// frame above that system on the sheet before. A sheet with no systems other than the last holds none. One entry
-    /// per sheet, in order: what `export(document:sheets:…)` draws on each.
+    /// The frames each of `sheets` holds, in document coordinates, by the rule every paginator follows
+    /// (`LayoutDocument.subdocument`): a frame belongs to the sheet whose first system follows it, unless it carries a
+    /// page break (`LayoutFrame.pageBreakAfter`) — then it stays on the sheet it closes. So a sheet holds the frames
+    /// whose top lies in `[the sheet before's upper bound, its own)`, its upper bound being its last system's bottom,
+    /// or the lowest bottom of the page-break frames between that system and the next sheet's first when that is
+    /// further down, and the last sheet takes every frame below the sheets before it. Sheets carry systems rather than
+    /// indices, hence the positions. Not `pageStartY ..< next sheet's pageStartY`: a host whose sheet starts at its
+    /// first system's top would leave the frame above that system on the sheet before. A sheet with no systems other
+    /// than the last holds none. One entry per sheet, in order: what `export(document:sheets:…)` draws on each.
     static func frames(of sheets: [Sheet], in document: LayoutDocument) -> [[LayoutFrame]] {
         var lower = -CGFloat.infinity
         var result: [[LayoutFrame]] = []
         for (index, sheet) in sheets.enumerated() {
-            let lastBottom = sheet.systems.last.map { $0.origin.y + $0.size.height } ?? lower
-            let upper = index == sheets.count - 1 ? CGFloat.infinity : max(lower, lastBottom)
+            let upper: CGFloat
+            if index == sheets.count - 1 {
+                upper = .infinity
+            } else {
+                let lastBottom = sheet.systems.last.map { $0.origin.y + $0.size.height } ?? lower
+                let nextTop = sheets[index + 1].systems.first?.origin.y ?? .infinity
+                let breakBottoms = document.frames
+                    .filter { $0.pageBreakAfter && $0.originY >= lastBottom && $0.bottom <= nextTop }
+                    .map(\.bottom)
+                upper = max(lower, lastBottom, breakBottoms.max() ?? lastBottom)
+            }
             result.append(document.frames.filter { $0.originY >= lower && $0.originY < upper })
             lower = upper
         }

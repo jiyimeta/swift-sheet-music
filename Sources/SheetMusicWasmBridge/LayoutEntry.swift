@@ -76,11 +76,14 @@ import SheetMusicLayout
 /// content bottom, so the count is `pageCount + 1`. Empty when no layout has
 /// been computed for the handle.
 ///
-/// The pages are `LayoutDocument.paginate`'s, frames included: a frames-only
-/// last page starts at the last system's bottom, and the content bottom is
-/// the lowest frame's bottom when that is below the last system (never the
-/// document's bottom margin), so a score without frames reports exactly the
-/// offsets it always did.
+/// The pages are `LayoutDocument.paginate`'s, frames included, and each starts
+/// at `LayoutDocument.pageTop(ofPageStartingAt:)` — the `.page` draw
+/// program's lift: the previous system's bottom, or the bottom of the boxes
+/// with a page break before its first system, which stay on the page they
+/// close. A frames-only last page starts at the last system's bottom, and the
+/// content bottom is the lowest frame's bottom when that is below the last
+/// system (never the document's bottom margin), so a score without frames
+/// reports exactly the offsets it always did.
 ///
 /// Android: `nativePageBreaks`, which returns the same sequence as a
 /// `PageBreaksWire` payload. BridgeJS lowers `[Double]` through the typed-array
@@ -93,16 +96,7 @@ import SheetMusicLayout
     let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
     let ranges = entry.document.paginate(pageHeight: pageHeightPt, policy: entry.options.breakPolicy)
     guard !ranges.isEmpty, let contentBottom = entry.document.contentBottom else { return [] }
-    var offsetsMM: [Double] = []
-    for (i, range) in ranges.enumerated() {
-        if i == 0 {
-            offsetsMM.append(0)
-        } else {
-            // An empty (frames-only) range's previous system is the last one, so this index is always valid.
-            let previous = entry.document.systems[range.lowerBound - 1]
-            offsetsMM.append(Double(previous.origin.y + previous.size.height) / mmToPt)
-        }
-    }
+    var offsetsMM = ranges.map { Double(entry.document.pageTop(ofPageStartingAt: $0.lowerBound)) / mmToPt }
     offsetsMM.append(Double(contentBottom) / mmToPt)
     return offsetsMM
 }

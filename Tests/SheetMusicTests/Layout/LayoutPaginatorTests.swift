@@ -253,16 +253,17 @@ struct LayoutPaginatorTests {
         let systems = origins.map { makeSystem(originY: $0, height: 100) }
         let broken = origins.map { makeSystem(originY: $0, height: 100, pageBreak: $0 == 240) }
         func cut(
-            _ policy: LayoutBreakPolicy, forced: Set<Int> = [], trailing: CGFloat? = nil, list: [LayoutSystem]? = nil,
+            _ policy: LayoutBreakPolicy, forced: [Int: CGFloat] = [:], trailing: CGFloat? = nil,
+            list: [LayoutSystem]? = nil,
         ) -> [Range<Int>] {
             LayoutPaginator.paginate(
                 systems: list ?? systems, pageHeight: 1000, policy: policy,
-                forcedBreaksBefore: forced, trailingFramesBottom: trailing,
+                pageBreaksBefore: forced, trailingFramesBottom: trailing,
             )
         }
-        #expect(cut(.honor, forced: [2]) == [0 ..< 2, 2 ..< 3])
-        #expect(cut(.ignoreAll, forced: [2]) == [0 ..< 3])
-        #expect(cut(.honor, forced: [0, 3]) == [0 ..< 3]) // a break before system 0 or past the last: no empty page
+        #expect(cut(.honor, forced: [2: 230]) == [0 ..< 2, 2 ..< 3])
+        #expect(cut(.ignoreAll, forced: [2: 230]) == [0 ..< 3])
+        #expect(cut(.honor, forced: [0: 0, 3: 400]) == [0 ..< 3]) // a break before system 0 or past the last: no page
         #expect(cut(.honor, trailing: 1100) == [0 ..< 3, 3 ..< 3])
         #expect(cut(.honor, trailing: 1000) == [0 ..< 3])
         // After a page break on the last system trailing frames get a page even when they fit; `.ignoreAll` drops it.
@@ -281,8 +282,7 @@ struct LayoutPaginatorTests {
     }
 
     private func systemIndex(below frame: LayoutFrame, in document: LayoutDocument) throws -> Int {
-        let index = document.systems.firstIndex { $0.origin.y >= frame.bottom }
-        return try #require(index)
+        try #require(document.systems.firstIndex { $0.origin.y >= frame.bottom })
     }
 
     /// Each range's page (`LayoutBridge.pageDocument`) and the top it was lifted by; the last takes trailing frames.

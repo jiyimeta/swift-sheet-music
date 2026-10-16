@@ -20,7 +20,10 @@ public struct LayoutFrame: Sendable, Equatable {
     public let content: LayoutTitleFrame
     /// The box's pictures (`LayoutFrameImage.rect`: document x, y relative to this frame's top).
     public let images: [LayoutFrameImage]
-    /// Whether a page break follows the box.
+    /// Whether a page break follows the box: the box stays at the bottom of the page it closes, and the next page
+    /// starts below it (`LayoutDocument.pageTop(ofPageStartingAt:)`). The layout bakes its break policy in — this is
+    /// set only when the box carries a `page` `<LayoutBreak>` and `ScoreViewOptions.breakPolicy` honors page breaks,
+    /// never under `.ignoreAll` — so the page geometry built on it needs no policy argument.
     public let pageBreakAfter: Bool
 
     /// The box's bottom edge in document coordinates.

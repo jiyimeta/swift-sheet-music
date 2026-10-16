@@ -191,14 +191,18 @@ public enum PDFExporter {
     /// dropped.
     ///
     /// The frames between systems (`LayoutDocument.frames`) enter as `LayoutPaginator.paginate` takes them:
-    /// `forcedBreaksBefore` starts a page at each listed system (the one below a frame with `pageBreakAfter`; ignored
-    /// under `.ignoreAll` and outside `1 ..< systems.count`), and a `trailingFramesBottom` — the lowest bottom of the
-    /// frames after the last system — adds a batch with no systems, whose `startY` is the last system's bottom, when
-    /// those frames do not fit on the last page or an honored page break on the last system already closed it. A page
-    /// whose first system is in `systemsWithFrameAbove` (a frame sits between it and the system before) starts at that
-    /// previous system's bottom rather than at its own top, so the frame is on this page and not lost between two; a
-    /// system in `forcedBreaksBefore` counts as one too, since the frame whose break it is sits above it. Every other
-    /// page starts where it always did.
+    /// `pageBreaksBefore` starts a page at each listed system (the one below a frame with `pageBreakAfter`; ignored
+    /// under `.ignoreAll` and outside `1 ..< systems.count`), its value the lowest bottom of those frames. They stay at
+    /// the bottom of the page they close, so that page must hold them under its last system — one that does not fit
+    /// with them moves to the next page with them, unless it is the page's first — and the next page starts at their
+    /// bottom. A `trailingFramesBottom` — the lowest bottom of the frames after the last system — adds a batch with no
+    /// systems, whose `startY` is the last system's bottom, when those frames do not fit on the last page or an
+    /// honored page break on the last system already closed it. A page whose first system is in
+    /// `systemsWithFrameAbove` (a frame sits between it and the system before) starts at that previous system's bottom
+    /// rather than at its own top, so the frame is on this page and not lost between two — or, for a system in
+    /// `pageBreaksBefore`, at the bottom of the frames whose break it is, so they stay on the page above. Every other
+    /// page starts where it always did. Each page therefore starts at `LayoutDocument.pageTop(ofPageStartingAt:)` when
+    /// a frame sits above its first system.
     ///
     /// The three frame parameters are derived from a document internally — `export(score:options:)` cuts through
     /// `paginate(document:page:policy:)`, which reads the `package` helpers behind
@@ -211,13 +215,15 @@ public enum PDFExporter {
         systems: [LayoutSystem],
         page: EngravingPage,
         policy: LayoutBreakPolicy = .honor,
-        forcedBreaksBefore: Set<Int> = [],
+        pageBreaksBefore: [Int: CGFloat] = [:],
         trailingFramesBottom: CGFloat? = nil,
         systemsWithFrameAbove: Set<Int> = [],
     ) -> [PageBatch] {
-        let forced: Set<Int> = policy == .ignoreAll ? [] : forcedBreaksBefore
+        let forced: [Int: CGFloat] = policy == .ignoreAll
+            ? [:]
+            : pageBreaksBefore.filter { $0.key >= 1 && $0.key < systems.count }
         // A frame's page break sits in a frame above the system it breaks before.
-        let framed = systemsWithFrameAbove.union(forcedBreaksBefore)
+        let framed = systemsWithFrameAbove.union(pageBreaksBefore.keys)
         var pages: [PageBatch] = []
         var currentSystems: [LayoutSystem] = []
         var currentStartY: CGFloat = 0
@@ -232,11 +238,13 @@ public enum PDFExporter {
             return system.measures.last?.pageBreak ?? false
         }
 
-        /// Where a later page starting with system `index` starts: its own top, or the previous system's bottom when a
-        /// frame sits between the two, so the frame is drawn on this page rather than lost between two.
+        /// Where a later page starting with system `index` starts: its own top, or — when a frame sits between it and
+        /// the previous system — that system's bottom, so the frame is drawn on this page rather than lost between
+        /// two, or the bottom of the frames whose page break comes before `index`, which stay on the page above.
         func startY(ofPageAt index: Int) -> CGFloat {
             guard index > 0, framed.contains(index) else { return systems[index].origin.y }
-            return systems[index - 1].origin.y + systems[index - 1].size.height
+            let previousBottom = systems[index - 1].origin.y + systems[index - 1].size.height
+            return max(previousBottom, forced[index] ?? previousBottom)
         }
 
         for (index, system) in systems.enumerated() {
@@ -254,8 +262,9 @@ public enum PDFExporter {
                 }
                 continue
             }
-            let bottomOnPage = (system.origin.y + system.size.height) - currentStartY
-            if forced.contains(index) || bottomOnPage > usableHeight(forPageIndex: pages.count) {
+            // Down to the frames under this system when their page break ends the page there.
+            let reach = max(system.origin.y + system.size.height, forced[index + 1] ?? -CGFloat.infinity)
+            if forced[index] != nil || reach - currentStartY > usableHeight(forPageIndex: pages.count) {
                 pages.append(PageBatch(startY: currentStartY, systems: currentSystems))
                 currentStartY = startY(ofPageAt: index)
                 currentSystems = [system]
@@ -289,7 +298,7 @@ public enum PDFExporter {
     static func paginate(document: LayoutDocument, page: EngravingPage, policy: LayoutBreakPolicy) -> [PageBatch] {
         paginate(
             systems: document.systems, page: page, policy: policy,
-            forcedBreaksBefore: document.framePageBreaksBefore, trailingFramesBottom: document.trailingFramesBottom,
+            pageBreaksBefore: document.pageBreakFrameBottoms, trailingFramesBottom: document.trailingFramesBottom,
             systemsWithFrameAbove: document.systemsBelowFrames,
         )
     }

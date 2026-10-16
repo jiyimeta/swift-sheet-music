@@ -125,8 +125,9 @@ extension LayoutEngine {
         let titleEdge = title.map { (bottom: topMargin + $0.height, bottomGap: titleBottomGap) }
         let placed = FrameStreamPlacer.place(title: titleEdge, items: items, sp: sp, top: topMargin)
         let leadingMargin = sp * margins.leading
+        let honorsPageBreaks = context.options.breakPolicy != .ignoreAll
         let frames = zip(order, placed.frameOriginY).map { entryIndex, originY in
-            finished(entries[entryIndex].frame, originY: originY, dx: leadingMargin)
+            finished(entries[entryIndex].frame, originY: originY, dx: leadingMargin, honorsPageBreaks: honorsPageBreaks)
         }
         return (frames, placed.systemShift)
     }
@@ -155,8 +156,11 @@ extension LayoutEngine {
     }
 
     /// `frame` at its final `originY`, its texts and pictures moved right by the leading margin like the title's
-    /// (`shift(_:byX:byY:)`); their y stays frame-local.
-    private static func finished(_ frame: LayoutFrame, originY: CGFloat, dx: CGFloat) -> LayoutFrame {
+    /// (`shift(_:byX:byY:)`); their y stays frame-local. Its page break is kept only when `honorsPageBreaks` (the
+    /// layout's break policy is not `.ignoreAll`), so `LayoutFrame.pageBreakAfter` already says whether it counts.
+    private static func finished(
+        _ frame: LayoutFrame, originY: CGFloat, dx: CGFloat, honorsPageBreaks: Bool,
+    ) -> LayoutFrame {
         LayoutFrame(
             kind: frame.kind,
             beforeMeasureIndex: frame.beforeMeasureIndex,
@@ -164,7 +168,7 @@ extension LayoutEngine {
             height: frame.height,
             content: shift(frame.content, byX: dx, byY: 0),
             images: dx == 0 ? frame.images : frame.images.map { moved($0, dx: dx, dy: 0) },
-            pageBreakAfter: frame.pageBreakAfter,
+            pageBreakAfter: honorsPageBreaks && frame.pageBreakAfter,
         )
     }
 }

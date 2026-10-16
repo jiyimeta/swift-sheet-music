@@ -229,18 +229,19 @@
         }
 
         /// A frame's page break starts a page at the system below it with room to spare, and that page starts at the
-        /// previous system's bottom so the frame is on it. `.ignoreAll` ignores the break, as it does a measure's.
-        @Test func forcedBreakStartsAPageAtThePreviousSystemsBottom() {
+        /// frame's bottom (the value in `pageBreaksBefore`), so the frame stays on the page it closes. `.ignoreAll`
+        /// ignores the break, as it does a measure's.
+        @Test func pageBreakStartsAPageAtTheBreakingFramesBottom() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let systems = [system(originY: 0), system(originY: 300), system(originY: 520)]
             let pages = PDFExporter.paginate(
-                systems: systems, page: page(height: 1200), forcedBreaksBefore: [1], systemsWithFrameAbove: [1],
+                systems: systems, page: page(height: 1200), pageBreaksBefore: [1: 280], systemsWithFrameAbove: [1],
             )
             #expect(pages.map(\.systems.count) == [1, 2])
-            #expect(pages.map(\.startY) == [0, 200])
+            #expect(pages.map(\.startY) == [0, 280])
             let ignored = PDFExporter.paginate(
                 systems: systems, page: page(height: 1200), policy: .ignoreAll,
-                forcedBreaksBefore: [1], systemsWithFrameAbove: [1],
+                pageBreaksBefore: [1: 280], systemsWithFrameAbove: [1],
             )
             #expect(ignored.map(\.systems.count) == [3])
         }
