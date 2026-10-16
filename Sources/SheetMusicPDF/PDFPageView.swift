@@ -23,6 +23,11 @@ public struct PDFPageView: View {
     /// score with a leading `<VBox>` carries one; other pages pass
     /// `nil`.
     let titleFrame: LayoutTitleFrame?
+    /// The frames between systems this page holds (`PDFExporter.frames(of:in:)`), in document coordinates.
+    let frames: [LayoutFrame]
+    /// The title block's pictures (`LayoutDocument.titleImages`), in document coordinates; only the page that carries
+    /// `titleFrame` passes them.
+    let titleImages: [LayoutFrameImage]
     let metrics: StaffMetrics
     let pageSize: CGSize
     let margins: PageMargins
@@ -50,6 +55,8 @@ public struct PDFPageView: View {
         systems: [LayoutSystem],
         pageStartY: CGFloat,
         titleFrame: LayoutTitleFrame? = nil,
+        frames: [LayoutFrame] = [],
+        titleImages: [LayoutFrameImage] = [],
         metrics: StaffMetrics,
         pageSize: CGSize,
         margins: PageMargins,
@@ -61,6 +68,9 @@ public struct PDFPageView: View {
         self.systems = systems
         self.pageStartY = pageStartY
         self.titleFrame = titleFrame
+        // W7 Task 14 Phase A: stored, not drawn yet.
+        self.frames = frames
+        self.titleImages = titleImages
         self.metrics = metrics
         self.pageSize = pageSize
         self.margins = margins

@@ -41,6 +41,23 @@ struct TitleFrameView: View {
     }
 }
 
+/// One box's layer-rendered content, its texts and its pictures, `width` × `height` points: the title block with
+/// `LayoutDocument.titleImages`, or a frame between systems with its own `images`. `ScoreView` places it at the box's
+/// top. Picture rects are in the box's own space, y down from its top.
+///
+/// W7 Task 14 Phase A stub: draws nothing yet.
+@available(macOS 15.0, *)
+struct FrameContentView: View {
+    let frame: LayoutTitleFrame
+    let images: [LayoutFrameImage]
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        Color.clear.frame(width: width, height: height)
+    }
+}
+
 // MARK: - Layer building
 
 @available(macOS 15.0, *)
@@ -87,6 +104,17 @@ enum TitleFrameLayerBuilder {
             root.addSublayer(layer)
         }
         return root
+    }
+
+    /// `build(frame:width:)` for a block `height` points tall that also holds `images`: the title block with
+    /// `LayoutDocument.titleImages`, or a frame between systems with its own. Picture rects are in the block's own
+    /// space, y down from its top.
+    ///
+    /// W7 Task 14 Phase A stub: `images` and `height` are not used yet.
+    static func build(
+        frame: LayoutTitleFrame, images: [LayoutFrameImage], width: CGFloat, height: CGFloat,
+    ) -> CALayer {
+        build(frame: frame, width: width)
     }
 }
 

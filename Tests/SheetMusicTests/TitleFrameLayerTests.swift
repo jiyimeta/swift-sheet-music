@@ -4,6 +4,7 @@
     import QuartzCore
     import SheetMusicCore
     @testable import SheetMusicLayout
+    import SheetMusicMSCX
     @testable import SheetMusicUI
     import Testing
 
@@ -154,6 +155,87 @@
             let rich = try titleFrame(FrameText(style: .title, text: "Big", preservedTextMarkup: markup))
             let plain = try titleFrame(FrameText(style: .title, text: "Big"))
             #expect(inkWidth(rich) > inkWidth(plain) + 5)
+        }
+
+        // MARK: - Pictures
+
+        /// frames-pictures laid out: a PNG in the title block, a JPEG in the box before measure 2.
+        private static func picturesDocument() throws -> LayoutDocument {
+            let score = try MSCZReader.parse(MSCXFixtureLoader.msczData("frames-pictures"))
+            return LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: availableWidth)
+        }
+
+        /// `rect`, y down from the top of a block `height` tall, in the host layer's native Y-up space.
+        private static func flipped(_ rect: CGRect, height: CGFloat) -> CGRect {
+            CGRect(x: rect.minX, y: height - rect.maxY, width: rect.width, height: rect.height)
+        }
+
+        /// Equal to a thousandth of a point: a layer's `frame` is read back from its `position` and `bounds`.
+        private static func closeEnough(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+            let deltas = [lhs.minX - rhs.minX, lhs.minY - rhs.minY, lhs.width - rhs.width, lhs.height - rhs.height]
+            let worst = deltas.map { abs($0) }.max() ?? 0
+            return worst < 0.001
+        }
+
+        /// Each picture of a block is one layer holding the decoded image, stretched to its rect and flipped against
+        /// the block's height exactly as the texts are. The title block's pictures are in document coordinates and a
+        /// frame's are relative to the frame's top; both are the block's own space, so the two are built alike.
+        @Test("A picture becomes one image layer filling its rect, flipped like the texts")
+        func pictureBecomesAnImageLayer() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let doc = try Self.picturesDocument()
+            let title = try #require(doc.titleFrame)
+            let frame = try #require(doc.frames.first)
+            let blocks = [
+                (title, doc.titleImages, title.height),
+                (frame.content, frame.images, frame.height),
+            ]
+            for (content, images, height) in blocks {
+                let picture = try #require(images.first)
+                let root = TitleFrameLayerBuilder.build(
+                    frame: content, images: images, width: doc.size.width, height: height,
+                )
+                let pictureLayers = (root.sublayers ?? []).filter { $0.contents != nil }
+                #expect(pictureLayers.count == 1)
+                let layer = try #require(pictureLayers.first)
+                let expected = Self.flipped(picture.rect, height: height)
+                #expect(Self.closeEnough(layer.frame, expected), "layer at \(layer.frame), picture at \(expected)")
+                #expect(layer.contentsGravity == .resize)
+                let contents = try #require(layer.contents)
+                #expect(CFGetTypeID(contents as AnyObject) == CGImage.typeID)
+            }
+        }
+
+        /// A score whose only box is its title block lays out no frame, and its block builds through the
+        /// picture-aware builder exactly the tree `TitleFrameView(frame:width:)` has always hosted: one ink layer per
+        /// placed line, in the same places, and no picture layer.
+        @Test("A title-only score's block builds the same layer tree through the picture-aware builder")
+        func titleOnlyViewIsUnchanged() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let doc = LayoutEngine.layout(
+                score: Self.titledScore(),
+                options: ScoreViewOptions(includeTitleFrame: true),
+                availableWidth: Self.availableWidth,
+            )
+            let frame = try #require(doc.titleFrame)
+            #expect(doc.frames.isEmpty)
+            #expect(doc.titleImages.isEmpty)
+            let legacy = TitleFrameLayerBuilder.build(frame: frame, width: Self.availableWidth)
+            let current = TitleFrameLayerBuilder.build(
+                frame: frame, images: doc.titleImages, width: Self.availableWidth, height: frame.height,
+            )
+            let legacyLayers = legacy.sublayers ?? []
+            let currentLayers = current.sublayers ?? []
+            #expect(current.frame == legacy.frame)
+            #expect(currentLayers.count == TitleFrameRenderer.placedLines(frame).count)
+            #expect(currentLayers.count == legacyLayers.count)
+            #expect(currentLayers.map(\.frame) == legacyLayers.map(\.frame))
+            func inkBoxes(_ layers: [CALayer]) -> [CGRect?] {
+                layers.map { ($0 as? CAShapeLayer)?.path?.boundingBoxOfPath }
+            }
+            #expect(inkBoxes(currentLayers) == inkBoxes(legacyLayers))
+            let pictureLayerCount = currentLayers.count { $0.contents != nil }
+            #expect(pictureLayerCount == 0)
         }
     }
 #endif

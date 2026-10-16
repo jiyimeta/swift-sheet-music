@@ -282,6 +282,14 @@ extension ScoreView {
         }
     }
 
+    /// Indices of the frames between systems (`LayoutDocument.frames`) that `visibleRect` meets, by the systems'
+    /// test, one point of slack below each included — every index when it is `nil`.
+    ///
+    /// W7 Task 14 Phase A stub: mounts none yet.
+    nonisolated static func mountedFrameIndices(of doc: LayoutDocument, in visibleRect: CGRect?) -> [Int] {
+        []
+    }
+
     /// The part of `system` that `visibleRect` reaches, in the system's
     /// own X, for `SystemLayerView` to mount — or `nil`, mount it all,
     /// when there is no rect or it spans the system from end to end.

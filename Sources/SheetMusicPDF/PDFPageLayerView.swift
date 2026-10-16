@@ -24,6 +24,10 @@
         public let systems: [LayoutSystem]
         public let pageStartY: CGFloat
         public let titleFrame: LayoutTitleFrame?
+        /// The frames between systems this page holds, in document coordinates.
+        public let frames: [LayoutFrame]
+        /// The title block's pictures, in document coordinates; only the page that carries `titleFrame` passes them.
+        public let titleImages: [LayoutFrameImage]
         public let metrics: StaffMetrics
         public let pageSize: CGSize
         public let margins: PageMargins
@@ -32,6 +36,8 @@
             systems: [LayoutSystem],
             pageStartY: CGFloat,
             titleFrame: LayoutTitleFrame? = nil,
+            frames: [LayoutFrame] = [],
+            titleImages: [LayoutFrameImage] = [],
             metrics: StaffMetrics,
             pageSize: CGSize,
             margins: PageMargins,
@@ -39,6 +45,9 @@
             self.systems = systems
             self.pageStartY = pageStartY
             self.titleFrame = titleFrame
+            // W7 Task 14 Phase A: stored, not drawn yet.
+            self.frames = frames
+            self.titleImages = titleImages
             self.metrics = metrics
             self.pageSize = pageSize
             self.margins = margins

@@ -58,5 +58,41 @@
             let rect = CGRect(x: 0, y: doc.size.height + 50, width: doc.size.width, height: 100)
             #expect(ScoreView.mountedSystemIndices(of: doc, in: rect).isEmpty)
         }
+
+        // MARK: - Frames
+
+        /// frames-boxes wrapped: a VBox, a TBox and a trailing VBox between and after its systems.
+        @available(macOS 15.0, *)
+        private func framedDocument() throws -> LayoutDocument {
+            _ = TestSupport.installApple
+            let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("frames-boxes"))
+            return LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(wrapToViewWidth: true), availableWidth: 700,
+            )
+        }
+
+        @Test("no visible rect mounts every frame")
+        func nilMountsEveryFrame() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let doc = try framedDocument()
+            try #require(doc.frames.count == 3)
+            #expect(ScoreView.mountedFrameIndices(of: doc, in: nil) == [0, 1, 2])
+        }
+
+        /// A frame is mounted by the systems' test: the rect meets it, or starts within the point of slack below it.
+        @Test("a rect over one frame mounts that frame and no other")
+        func rectMountsOnlyTheFrameItMeets() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let doc = try framedDocument()
+            try #require(doc.frames.count == 3)
+            let middle = doc.frames[1]
+            let width = doc.size.width
+            let inside = CGRect(x: 0, y: middle.originY + 1, width: width, height: max(1, middle.height - 2))
+            #expect(ScoreView.mountedFrameIndices(of: doc, in: inside) == [1])
+            let withinSlack = CGRect(x: 0, y: middle.bottom + 0.5, width: width, height: 1)
+            #expect(ScoreView.mountedFrameIndices(of: doc, in: withinSlack) == [1])
+            let pastSlack = CGRect(x: 0, y: middle.bottom + 2, width: width, height: 1)
+            #expect(ScoreView.mountedFrameIndices(of: doc, in: pastSlack).isEmpty)
+        }
     }
 #endif
