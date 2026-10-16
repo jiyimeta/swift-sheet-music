@@ -121,8 +121,23 @@ struct PDFPageWalkerTests {
         walker.walk([.drawImage(data: png.file, x: 20, y: 30, w: 10, h: 5)])
         let dictionary = try resources.write(into: PDFObjectWriter())
 
-        #expect(walker.content == "q 28.346 0 0 14.173 56.693 325.984 cm /Im1 Do Q\n")
+        #expect(walker.content == "q /GS255 gs 28.346 0 0 14.173 56.693 325.984 cm /Im1 Do Q\n")
         #expect(dictionary.contains("/XObject << /Im1 "))
+    }
+
+    /// A translucent fill color must not reach a picture: the CG renderer ignores it, so the PDF resets the alpha
+    /// inside the picture's own `q … Q` (state 255 is always defined).
+    @Test func openAlphaDoesNotLeakIntoAPicture() throws {
+        let png = try ImageFixtures.png(width: 40, height: 20, colorType: 2)
+        let resources = try PDFResources(fonts: WriterFixtures.fonts())
+        var walker = PDFPageWalker(resources: resources, pageHeightMM: 150)
+
+        walker.walk([.setColor(argb: 0x80FF_0000), .drawImage(data: png.file, x: 20, y: 30, w: 10, h: 5)])
+        let dictionary = try resources.write(into: PDFObjectWriter())
+
+        #expect(walker.content.contains("q /GS255 gs 28.346 0 0 14.173 56.693 325.984 cm /Im1 Do Q\n"))
+        #expect(walker.content.hasPrefix("/GS128 gs 1 0 0 rg 1 0 0 RG\nq /GS255 gs "))
+        #expect(dictionary.contains("/GS255 << /Type /ExtGState /ca 1 /CA 1 >>"))
     }
 
     /// Each name is followed by a space before its reference: `/Im1 5 0 R`, never the name `/Im15` and `0 R`.
