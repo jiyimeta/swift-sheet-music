@@ -11,6 +11,10 @@ and this project adheres to
 
 - **`SpannerGeometry.voltaLabelOrigin(from:to:label:sp:)` and `SpannerGeometry.voltaInk(…)`** — where a volta's typeset
   label hangs by its top-left, and the ink a volta segment covers (line, hooks and label).
+- **MusicXML directions have a clock** — the importer now keeps a per-measure tick cursor (notes advance it,
+  `<backup>` and `<forward>` move it, a direction's `<offset>` is added) and splices a direction's element into the
+  staff named by `<staff>` at that tick, jogging the voice exactly as MuseScore's `<location>` does. The first
+  direction to use it is a dynamic named by its element (`<f/>`, `<mp/>`), imported with MuseScore's velocity.
 
 ### Fixed
 
