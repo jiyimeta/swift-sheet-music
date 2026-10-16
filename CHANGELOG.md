@@ -17,8 +17,8 @@ and this project adheres to
 - **MusicXML words become the text MuseScore makes of them** — a `<direction>`'s `<words>` import as a staff text, a
   system text (`system="only-top"`), an Expression (italic words below the staff), a play-technique annotation (from
   `<sound pizzicato>`, `<play>`, or — with the new internal text-type inference — words such as "pizz." and "con
-  sord."), or a Sticking, with `font-weight`, `font-style`, `underline`, `line-through`, `font-size`, `font-family` and
-  `color` kept as markup. A rehearsal mark now sits at its real tick on the direction's staff, and loses to words in the
+  sord."), or a Sticking, with `font-weight`, `font-style`, `underline`, `line-through`, `font-size` and `font-family`
+  kept as markup and `color` as the element's color. A rehearsal mark now sits at its real tick on the direction's staff, and loses to words in the
   same direction, as in MuseScore.
 
 - **MusicXML tempo** — `<metronome>`, `<sound tempo>` (in a direction or directly in a measure) and the words beside
@@ -52,10 +52,11 @@ and this project adheres to
 
 ### Fixed
 
-- **A hairpin imported from MusicXML keeps its side.** MuseScore stores a hairpin's side as its `<direction>`, set
-  from the direction's `placement`, else from `default-y`, else above on a vocal staff (a part named Voice, Soprano,
-  Alto, … exactly as MuseScore lists them) and below on any other; an inferred cresc. / dim. line takes only the
-  `placement` attribute. The import now carries it, so a saved score puts each hairpin where MuseScore does.
+- **A hairpin, dynamic or Expression imported from MusicXML keeps its side.** MuseScore stores the side of each of
+  these as its `<direction>`, set from the direction's `placement`, else from `default-y`, else above on a vocal staff
+  (a part named Voice, Soprano, Alto, … exactly as MuseScore lists them) and below on any other; an inferred cresc. /
+  dim. line takes only the `placement` attribute, and an Expression, made only below the staff, is always below. The
+  import now carries it, so a saved score puts each of them where MuseScore does.
 
 - **An opaque black `color` on a MusicXML direction is no color.** Black is every element's default, and MuseScore
   writes a color only when it differs from it; an imported ottava, wedge, pedal, text or dynamic marked `#000000`
@@ -94,7 +95,6 @@ and this project adheres to
 - **An ottava now shifts the playback of every voice on its staff**, as MuseScore applies it, not only the voice that
   carries the line. A second voice under an 8va — a MusicXML `<backup>` voice, or any voice of a score whose ottava
   sits in voice 1 — played an octave away from the pitch it sounds in MuseScore.
-
 
 ## [4.12.0] - 2026-10-17
 

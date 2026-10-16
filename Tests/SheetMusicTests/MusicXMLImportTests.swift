@@ -100,6 +100,8 @@ struct MusicXMLImportTests {
         options.normalizesTrailingEndMarkers = true
         options.roundsTempoToFilePrecision = true
         options.canonicalizesBracketColumns = true
+        // Text formatting and the dynamics' / Expressions' `<direction>` are what the import reads; compare them.
+        options.keepsTextMarkup = true
         return options
     }
 

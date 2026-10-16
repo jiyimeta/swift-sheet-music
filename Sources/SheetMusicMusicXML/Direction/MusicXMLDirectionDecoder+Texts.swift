@@ -81,7 +81,12 @@ extension MusicXMLDirectionDecoder {
             return
         case .expression:
             let properties = ElementProperties(visible: facts.visible, color: facts.color)
-            let expression = ExpressionText(text: plain, elementProperties: properties, preservedTextMarkup: markup)
+            // Its side is its `<direction>` (`addElemOffset`, `P2:1007-1011`): an Expression is only made below
+            // (`P2:3595`), so it is always `down`.
+            let direction = voiceAssignmentDirection(placement: facts.placement, isVocalStaff: context.isVocalStaff)
+            let expression = ExpressionText(
+                text: plain, elementProperties: properties, preservedMarkup: [direction], preservedTextMarkup: markup,
+            )
             output.events.append(MusicXMLDirectionEvent(
                 measure: context.measure, staff: staff, tick: tick, payload: .voice(.expression(expression)),
             ))

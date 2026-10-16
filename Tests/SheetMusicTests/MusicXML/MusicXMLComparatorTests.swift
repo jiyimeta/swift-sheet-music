@@ -276,4 +276,62 @@ struct MusicXMLComparatorTests {
         #expect(rounded.with == true)
         #expect(other.with == false)
     }
+
+    private static let bold = PreservedTextMarkup(
+        content: [.element(PreservedTextMarkup.Element(name: "b", content: [.characters("dolce")]))],
+        derivedText: "dolce",
+    )
+
+    private static func side(_ text: String) -> PreservedXML {
+        PreservedXML(name: "direction", text: text)
+    }
+
+    @Test("text formatting is compared only when keepsTextMarkup is on")
+    func textMarkupIsComparedWhenKept() {
+        let plain = Self.score(lane: [Self.text], voice: [Self.quarter])
+        let boldText = PositionedSystemElement(
+            position: .start, element: .staffText(StaffText(text: "dolce", preservedTextMarkup: Self.bold)),
+        )
+        let sticking = VoiceElement.sticking(Sticking(text: "dolce", preservedTextMarkup: Self.bold))
+        let staffText = Self.equality(plain, Self.score(lane: [boldText], voice: [Self.quarter])) {
+            $0.keepsTextMarkup = true
+        }
+        let stickings = Self.equality(
+            Self.score(voice: [.sticking(Sticking(text: "dolce")), Self.quarter]),
+            Self.score(voice: [sticking, Self.quarter]),
+        ) { $0.keepsTextMarkup = true }
+        #expect(staffText.without == true)
+        #expect(staffText.with == false)
+        #expect(stickings.without == true)
+        #expect(stickings.with == false)
+    }
+
+    @Test("a dynamic's or an Expression's <direction> is compared when keepsTextMarkup is on; other children are not")
+    func directionIsComparedWhenKept() {
+        func dynamic(_ markup: [PreservedXML]) -> VoiceElement {
+            .dynamic(Dynamic(subtype: "p", velocity: 49, preservedMarkup: markup))
+        }
+        func expression(_ markup: [PreservedXML]) -> VoiceElement {
+            .expression(ExpressionText(text: "dolce", preservedMarkup: markup))
+        }
+        let writerOnly = PreservedXML(name: "family", text: "Edwin")
+        // A `.preserved` voice element on the reference side only: the strip drops it, and the rest still lines up.
+        let loose = VoiceElement.preserved(PreservedXML(name: "Unknown"))
+        let flipped = Self.equality(
+            Self.score(voice: [dynamic([Self.side("down")]), expression([Self.side("down")]), Self.quarter]),
+            Self.score(voice: [loose, dynamic([Self.side("up")]), expression([Self.side("down")]), Self.quarter]),
+        ) { $0.keepsTextMarkup = true }
+        let flippedExpression = Self.equality(
+            Self.score(voice: [expression([Self.side("down")]), Self.quarter]),
+            Self.score(voice: [expression([Self.side("up")]), Self.quarter]),
+        ) { $0.keepsTextMarkup = true }
+        let extra = Self.equality(
+            Self.score(voice: [dynamic([Self.side("down")]), Self.quarter]),
+            Self.score(voice: [loose, dynamic([writerOnly, Self.side("down")]), Self.quarter]),
+        ) { $0.keepsTextMarkup = true }
+        #expect(flipped.without == true)
+        #expect(flipped.with == false)
+        #expect(flippedExpression.with == false)
+        #expect(extra.with == true)
+    }
 }

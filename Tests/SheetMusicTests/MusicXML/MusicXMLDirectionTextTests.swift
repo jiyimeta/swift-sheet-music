@@ -93,4 +93,30 @@ struct MusicXMLDirectionTextTests {
         let texts = try Self.staffTexts(F.score(measures: [body]))
         #expect(texts.first?.text.color == ScoreColor(red: 255, green: 0, blue: 0, alpha: 255))
     }
+
+    /// The Expression a direction makes, with `attributes` on `<direction>` and `wordsAttributes` on `<words>`.
+    private static func expression(
+        _ attributes: String, wordsAttributes: String = "", partName: String? = nil,
+    ) throws -> ExpressionText? {
+        let words = F.words("dolce", attributes: "font-style=\"italic\"" + wordsAttributes)
+        let body = F.direction(words, attributes: attributes) + F.fourQuarters
+        return try F.expressions(in: F.voice(F.score(measures: [body], partName: partName))).first?.expression
+    }
+
+    @Test("an Expression carries MuseScore's <direction>down</direction>, as it is only made below")
+    func expressionDirection() throws {
+        let down = [PreservedXML(name: "direction", text: "down")]
+        #expect(try Self.expression("placement=\"below\"")?.preservedMarkup == down)
+        #expect(try Self.expression("placement=\"below\"", partName: "Soprano")?.preservedMarkup == down)
+        #expect(try Self.expression("", wordsAttributes: " default-y=\"-80\"")?.preservedMarkup == down)
+    }
+
+    @Test("a color is #RRGGBB or #AARRGGBB of hex digits only; a sign is not a digit")
+    func colorRejectsNonHexDigits() {
+        #expect(MusicXMLColor.parse("#-1ffff") == nil)
+        #expect(MusicXMLColor.parse("#+1ffff") == nil)
+        #expect(MusicXMLColor.parse("#FF00zz") == nil)
+        #expect(MusicXMLColor.parse("#00ff00") == ScoreColor(red: 0, green: 255, blue: 0, alpha: 255))
+        #expect(MusicXMLColor.parse("#8000ff00") == ScoreColor(red: 0, green: 255, blue: 0, alpha: 128))
+    }
 }

@@ -90,4 +90,41 @@ struct MusicXMLDirectionDynamicsTests {
         let dynamic = try Self.first(F.score(measures: [body]))
         #expect(dynamic?.elementProperties.color == ScoreColor(red: 0, green: 0, blue: 255, alpha: 255))
     }
+
+    /// The `<direction>` MuseScore stores a dynamic's side in (`addElemOffset`, `P2:1007-1011`): `placement`, else
+    /// `default-y`'s side (`P2:3372-3379`), else above on a vocal staff and below on any other (`P2:3748-3752`).
+    private static func side(
+        _ attributes: String = "", dynamicsAttributes: String = "", partName: String? = nil,
+    ) throws -> [PreservedXML]? {
+        let body = F.direction(
+            "<dynamics\(dynamicsAttributes)><p/></dynamics>", attributes: attributes,
+        ) + F.fourQuarters
+        return try Self.first(F.score(measures: [body], partName: partName))?.preservedMarkup
+    }
+
+    private static func direction(_ text: String) -> [PreservedXML] {
+        [PreservedXML(name: "direction", text: text)]
+    }
+
+    @Test("a dynamic's side is its <direction>: the placement attribute first, then default-y")
+    func sideFromPlacement() throws {
+        #expect(try Self.side("placement=\"above\"") == Self.direction("up"))
+        #expect(try Self.side("placement=\"below\"", partName: "Soprano") == Self.direction("down"))
+        #expect(try Self.side(dynamicsAttributes: " default-y=\"20\"") == Self.direction("up"))
+        #expect(try Self.side(dynamicsAttributes: " default-y=\"-80\"") == Self.direction("down"))
+    }
+
+    @Test("with neither, a dynamic is above on a vocal staff and below on any other")
+    func sideFromStaff() throws {
+        #expect(try Self.side() == Self.direction("down"))
+        #expect(try Self.side(partName: "Soprano") == Self.direction("up"))
+        #expect(try Self.side(partName: "Soprano Sax") == Self.direction("down"))
+    }
+
+    @Test("a dynamic inferred from words carries the same <direction>")
+    func inferredDynamicSide() throws {
+        let body = F.direction(F.words("mf"), attributes: "placement=\"above\"") + F.fourQuarters
+        let dynamic = try Self.first(F.score(measures: [body]))
+        #expect(dynamic?.preservedMarkup == Self.direction("up"))
+    }
 }

@@ -223,6 +223,8 @@ enum MusicXMLColor {
         guard text.first == "#" else { return nil }
         let digits = Array(text.dropFirst())
         guard digits.count == 6 || digits.count == 8 else { return nil }
+        // `Int(_:radix:)` alone would take a sign ("-1"), so every character must be a hex digit.
+        guard digits.allSatisfy({ $0.isASCII && $0.isHexDigit }) else { return nil }
         var bytes: [Int] = []
         var index = 0
         while index < digits.count {

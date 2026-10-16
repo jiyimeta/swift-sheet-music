@@ -11,7 +11,7 @@ extension MusicXMLDirectionDecoder {
         let isRange = isLikelyDynamicRange(facts, context: context)
         var made: [Dynamic] = []
         for (index, entry) in facts.dynamics.enumerated() {
-            let dynamic = makeDynamic(from: entry, facts: facts)
+            let dynamic = makeDynamic(from: entry, facts: facts, isVocalStaff: context.isVocalStaff)
             // The last of a range joins the first, after a hyphen (`P2:3725-3734`).
             if isRange, index == facts.dynamics.count - 1, var first = made.first {
                 first.setCustomText(
@@ -48,8 +48,9 @@ extension MusicXMLDirectionDecoder {
 
     /// One list entry as a dynamic (`Dynamic::setDynamicType`, `engraving/dom/dynamic.cpp:231-241`): a known token
     /// gives the subtype and, with words around it, the dynamic's own text; none makes MuseScore's `OTHER` with the
-    /// entry, as read, as its text.
-    private static func makeDynamic(from entry: String, facts: MusicXMLDirectionFacts) -> Dynamic {
+    /// entry, as read, as its text. Its side is its `<direction>`, always set: the direction's placement, else above on
+    /// a vocal staff and below on any other (`dynamicsPlacement`, `P2:3748-3752`; `addElemOffset`, `P2:1007-1011`).
+    private static func makeDynamic(from entry: String, facts: MusicXMLDirectionFacts, isVocalStaff: Bool) -> Dynamic {
         let parsed = MusicXMLDynamicText.parse(entry)
         var dynamic = Dynamic(
             subtype: parsed.subtype, velocity: velocity(facts.dynamicsVelocity, subtype: parsed.subtype),
@@ -62,6 +63,7 @@ extension MusicXMLDirectionDecoder {
         }
         dynamic.elementProperties.color = facts.dynamicsColor
         dynamic.visible = facts.visible
+        dynamic.preservedMarkup = [voiceAssignmentDirection(placement: facts.placement, isVocalStaff: isVocalStaff)]
         return dynamic
     }
 

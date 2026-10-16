@@ -199,12 +199,50 @@ enum MSCXPreservation {
             + "Staff.brackets and re-emitted in the 4.x <bracket type span col> form every MuseScore reader accepts, "
             + "so preserving it too would write the bracket twice."
 
-    /// The losses the W8 MusicXML direction fixtures (MuseScore 4.7.5 `_ref.mscx` and `own/directions-all-*.mscx`)
-    /// and the MuseScore 5 refs (`testCodaHBox_ref`, `testPartNames_ref`) bring in.
+    /// A loss accepted only in the named fixture files (by `lastPathComponent`), so the same loss anywhere else still
+    /// fails the gate.
+    struct FileScopedLoss: Sendable, Equatable {
+        let files: Set<String>
+        let reason: String
+    }
+
+    /// `parent/child` to the files that may lose it and why. The W8 MusicXML direction refs bring these in; each is a
+    /// real gap that only those files exercise, so it is not a global allowance.
+    static let fileScopedLosses = makeFileScopedLosses()
+
+    /// Whether `file` may lose `pair`: everywhere (`allowedLosses`) or in that file (`fileScopedLosses`).
+    static func isAllowed(_ pair: String, in file: String) -> Bool {
+        allowedLosses[pair] != nil || fileScopedLosses[pair]?.files.contains(file) == true
+    }
+
+    private static func makeFileScopedLosses() -> [String: FileScopedLoss] {
+        var result: [String: FileScopedLoss] = [:]
+        func scope(_ pairs: [String], to files: Set<String>, because reason: String) {
+            for pair in pairs {
+                precondition(allowedLosses[pair] == nil, "allowed both globally and per file: \(pair)")
+                let entry = FileScopedLoss(files: files, reason: reason)
+                precondition(result.updateValue(entry, forKey: pair) == nil, "duplicate allowed loss: \(pair)")
+            }
+        }
+        scope(
+            ["location/timeTick"], to: ["directions-all-infer.mscx", "directions-all-plain.mscx"],
+            because: timeTickReason,
+        )
+        scope(
+            ["Spanner/next", "next/location"],
+            to: [
+                "testInferredCrescLines_ref.mscx", "testInferredCrescLines2_ref.mscx",
+                "testInferredDynamicsExpression_ref.mscx",
+            ],
+            because: zeroLengthBeginReason,
+        )
+        scope(["Tie/up"], to: ["testSibOttavas_ref.mscx"], because: tieDirectionReason)
+        return result
+    }
+
+    /// The losses the MuseScore 5 refs (`testCodaHBox_ref`, `testPartNames_ref`) bring in. The W8 direction refs'
+    /// own losses are `fileScopedLosses`.
     private static func addDirectionFixtureLosses(to result: inout [String: String]) {
-        allow(["location/timeTick"], because: timeTickReason, into: &result)
-        allow(["Spanner/next", "next/location"], because: zeroLengthBeginReason, into: &result)
-        allow(["Tie/up"], because: tieDirectionReason, into: &result)
         allow([
             "Staff/BracketItem", "BracketItem/type", "BracketItem/bracketSpan", "BracketItem/level",
         ], because: museScore5BracketReason, into: &result)
@@ -385,7 +423,7 @@ struct MSCXPreservationGateTests {
             let encoded = try MSCXEncoder.encode(score)
             let losses = try MSCXPreservation.losses(source: source, encoded: encoded)
             for (pair, count) in losses.sorted(by: { $0.key < $1.key })
-                where MSCXPreservation.allowedLosses[pair] == nil
+                where !MSCXPreservation.isAllowed(pair, in: url.lastPathComponent)
             {
                 let message = "\(url.lastPathComponent): lost \(pair) x\(count) — "
                     + "model it, preserve it, or add it to allowedLosses with a reason"
@@ -397,17 +435,26 @@ struct MSCXPreservationGateTests {
     @Test("the allowlist has no entry that no fixture exercises")
     func allowlistHasNoDeadEntries() throws {
         var seen: Set<String> = []
+        var seenByFile: [String: Set<String>] = [:]
         for url in MSCXFixtureLoader.allMSCXURLs() {
             let source = try Data(contentsOf: url)
             guard let score = try? MSCXParser.parse(source),
                   let encoded = try? MSCXEncoder.encode(score)
             else { continue }
-            try seen.formUnion(MSCXPreservation.losses(source: source, encoded: encoded).keys)
+            let lost = try MSCXPreservation.losses(source: source, encoded: encoded).keys
+            seen.formUnion(lost)
+            seenByFile[url.lastPathComponent, default: []].formUnion(lost)
         }
         for pair in MSCXPreservation.allowedLosses.keys where !seen.contains(pair) {
             Issue.record("allowedLosses[\(pair)] is stale — no fixture loses it any more; delete it")
         }
-        for (pair, reason) in MSCXPreservation.allowedLosses {
+        for (pair, entry) in MSCXPreservation.fileScopedLosses {
+            for file in entry.files.sorted() where seenByFile[file]?.contains(pair) != true {
+                Issue.record("fileScopedLosses[\(pair)] is stale for \(file) — it no longer loses it; drop the file")
+            }
+        }
+        let scopedReasons = MSCXPreservation.fileScopedLosses.mapValues(\.reason)
+        for (pair, reason) in MSCXPreservation.allowedLosses.merging(scopedReasons, uniquingKeysWith: { $1 }) {
             let normalized = reason.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             if normalized.isEmpty || normalized.contains("TODO") || normalized.contains("TBD") {
                 Issue.record("allowedLosses[\(pair)] needs a complete, non-placeholder reason")
@@ -451,7 +498,7 @@ struct MSCXPreservationSweep {
             do {
                 let encoded = try MSCXEncoder.encode(score)
                 let losses = try MSCXPreservation.losses(source: source, encoded: encoded)
-                    .filter { MSCXPreservation.allowedLosses[$0.key] == nil }
+                    .filter { !MSCXPreservation.isAllowed($0.key, in: file.lastPathComponent) }
                 guard !losses.isEmpty else { continue }
                 let details = losses.sorted(by: { $0.key < $1.key })
                     .map { "\($0.key) x\($0.value)" }

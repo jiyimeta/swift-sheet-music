@@ -162,13 +162,15 @@ extension MusicXMLDirectionDecoder {
             hairpin: Spanner.HairpinPayload(subtype: subtype), isEndMarker: false,
         )
         spanner.elementProperties.color = wedge.color
-        spanner.payloadMarkup = [hairpinDirection(placement: facts.placement, isVocalStaff: isVocalStaff)]
+        spanner.payloadMarkup = [voiceAssignmentDirection(placement: facts.placement, isVocalStaff: isVocalStaff)]
         return spanner
     }
 
-    /// A hairpin's `<direction>` as `setSLinePlacement` sets Pid::DIRECTION (UNSTYLED, so MuseScore writes it):
-    /// `up` for above, `down` for below; with no placement, up on a vocal staff and down on any other.
-    static func hairpinDirection(placement: String?, isVocalStaff: Bool) -> PreservedXML {
+    /// The `<direction>` of an item with voice-assignment properties — a hairpin, a dynamic, an Expression — as
+    /// `setSLinePlacement` (`P2:1641-1653`) and `addElemOffset` (`P2:1007-1011`) set Pid::DIRECTION (UNSTYLED, so
+    /// MuseScore writes it): `up` for above, `down` for below; with no placement, up on a vocal staff and down on any
+    /// other.
+    static func voiceAssignmentDirection(placement: String?, isVocalStaff: Bool) -> PreservedXML {
         let above = switch placement {
         case "above": true
         case "below": false

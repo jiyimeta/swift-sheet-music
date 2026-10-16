@@ -123,7 +123,7 @@ extension MusicXMLDirectionDecoder {
             hairpin: Spanner.HairpinPayload(subtype: isCresc ? .crescLine : .dimLine), continueText: "",
             isEndMarker: false, lineProperties: Spanner.LineProperties(lineVisible: false),
             payloadMarkup: [
-                hairpinDirection(placement: facts.placementAttribute, isVocalStaff: context.isVocalStaff),
+                voiceAssignmentDirection(placement: facts.placementAttribute, isVocalStaff: context.isVocalStaff),
             ],
         )
         output.inferredLines.append(MusicXMLInferredLine(

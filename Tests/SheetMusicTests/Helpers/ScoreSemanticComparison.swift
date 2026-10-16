@@ -69,6 +69,11 @@ enum ScoreSemanticComparison {
         /// Pid::TEMPO (`TConv::toXml(tempo, Constants::TEMPO_PRECISION)`, `twrite.cpp:3327`, `constants.h:110`), so a
         /// reference file holds 1.666667 where the import's exact value is 100 / 60.
         var roundsTempoToFilePrecision = false
+        /// If true, keep text formatting and the direction elements' sides through the preserved-markup strip
+        /// (`strippingPreservedMarkupKeepingText`): `preservedTextMarkup` on staff / system texts, tempos, rehearsal
+        /// marks, swings, instrument changes, markers, jumps, dynamics, Expressions and Stickings, and the
+        /// `<direction>` children of dynamics and Expressions. Off by default, which strips them with the rest.
+        var keepsTextMarkup = false
     }
 
     /// The `metaTag` keys MuseScore's app (not its importer) writes when `mscore` saves outside test mode:
@@ -259,7 +264,7 @@ enum ScoreSemanticComparison {
         // carry `<Order>`, `<Synthesizer>`, and the rest that the
         // other side cannot. Strip it for the same reason `style` is
         // reset: it is not the notation.
-        s = s.strippingPreservedMarkup()
+        s = options.keepsTextMarkup ? strippingPreservedMarkupKeepingText(s) : s.strippingPreservedMarkup()
         if options.ignoreEmptyMetaTags {
             s.metaTags = s.metaTags.filter { !$0.value.isEmpty }
         }
