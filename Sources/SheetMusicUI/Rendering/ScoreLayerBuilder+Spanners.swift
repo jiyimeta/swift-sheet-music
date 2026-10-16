@@ -193,16 +193,18 @@ extension ScoreLayerBuilder {
             path: p, height: height,
             lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
         ))
-        let origin = SpannerGeometry.voltaLabelOrigin(from: from, to: to, sp: metrics.sp)
-        let anchor = CGPoint(x: 0, y: 0.5)
         // The label is the segment's typeset text: authored, or the endings label layout synthesized. Only a segment
         // that carries none (hand-built) falls back to the endings here, and never in addition to authored text.
         let layer: CAShapeLayer? = if let richText {
-            richTextLayer(richText, at: origin, anchor: anchor, color: inkColor, height: height)
+            richTextLayer(
+                richText, at: SpannerGeometry.voltaLabelOrigin(from: from, to: to, label: richText, sp: metrics.sp),
+                anchor: LayoutRichText.anchor(for: .lineLabel), color: inkColor, height: height,
+            )
         } else if !continuesLeft, let text = SpannerGeometry.voltaLabelText(endings: endings) {
             textLayer(
-                text: text, at: origin, size: metrics.sp * SpannerGeometry.voltaLabelSizeSp, italic: false,
-                anchor: anchor, height: height,
+                text: text, at: SpannerGeometry.voltaLabelOrigin(from: from, to: to, sp: metrics.sp),
+                size: metrics.sp * SpannerGeometry.voltaLabelSizeSp, italic: false, anchor: CGPoint(x: 0, y: 0.5),
+                height: height,
             )
         } else {
             nil

@@ -26,17 +26,18 @@ extension LayoutBridge {
         emitSegment(from: segs.lowerFrom, to: segs.lowerTo, lineWidth: lineWidth, into: &out)
     }
 
-    /// A volta's label: the segment's typeset text (authored, or the endings label layout synthesized), at the
-    /// `(0, 0.5)` anchor. Only a segment that carries none (hand-built) falls back to the plain endings label, and
-    /// never in addition to a typeset one.
+    /// A volta's label: the segment's typeset text (authored, or the endings label layout synthesized), hung on its
+    /// baseline inside the hook (`SpannerGeometry.voltaLabelOrigin`). Only a segment that carries none (hand-built)
+    /// falls back to the plain endings label, and never in addition to a typeset one.
     static func encodeVoltaLabel(
         from: TextInkPoint, to: TextInkPoint, endings: [Int], continuesLeft: Bool, richText: LayoutRichText?,
         sp: Double, into out: inout [DrawCommand],
     ) {
-        let origin = SpannerGeometry.voltaLabelOrigin(from: from, to: to, sp: CGFloat(sp))
         if let richText {
-            emitRichText(richText, origin: origin, anchor: TextInkPoint(x: 0, y: 0.5), into: &out)
+            let origin = SpannerGeometry.voltaLabelOrigin(from: from, to: to, label: richText, sp: CGFloat(sp))
+            emitRichText(richText, origin: origin, anchor: LayoutRichText.anchor(for: .lineLabel), into: &out)
         } else if !continuesLeft, let text = SpannerGeometry.voltaLabelText(endings: endings) {
+            let origin = SpannerGeometry.voltaLabelOrigin(from: from, to: to, sp: CGFloat(sp))
             encodeNotationText(
                 text: text, role: .markerText, originX: Double(origin.x), originY: Double(origin.y), sp: sp,
                 into: &out,

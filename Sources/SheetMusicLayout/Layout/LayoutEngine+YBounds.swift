@@ -95,10 +95,8 @@ extension LayoutEngine {
             // bars stack a fraction of sp away and are accounted for
             // by the generic glyphPad in elementYBounds.
             return [from.y, to.y]
-        case let .spannerSegment(kind, from, to, _, _, _, _, richText, detail):
-            return spannerSegmentYPoints(
-                kind: kind, from: from, to: to, richText: richText, detail: detail, sp: sp,
-            )
+        case .spannerSegment:
+            return spannerSegmentYPoints(element, sp: sp)
         case let .tieArc(from, to, _, _),
              let .glissandoLine(from, to, _, _, _),
              let .lyricsMelisma(from, to, _),
@@ -219,11 +217,17 @@ extension LayoutEngine {
 
     /// Y extent of a spanner segment: its full ink band when `sp` is
     /// known, otherwise just the anchor line.
-    private static func spannerSegmentYPoints(
-        kind: LayoutElement.SpannerKind,
-        from: CGPoint, to: CGPoint, richText: LayoutRichText?, detail: LayoutLineDetail?, sp: CGFloat?,
-    ) -> [CGFloat] {
+    private static func spannerSegmentYPoints(_ segment: LayoutElement, sp: CGFloat?) -> [CGFloat] {
+        guard case let .spannerSegment(kind, from, to, continuesLeft, continuesRight, _, _, richText, detail) = segment
+        else { return [] }
         guard let sp else { return [from.y, to.y] }
+        if case .volta = kind {
+            let ink = SpannerGeometry.voltaInk(
+                from: from, to: to, continuesLeft: continuesLeft, continuesRight: continuesRight, label: richText,
+                sp: sp,
+            )
+            return [ink.minY, ink.maxY]
+        }
         if kind == .gradualTempoChange {
             let ink = SpannerGeometry.gradualTempoChangeInk(
                 from: from, to: to, label: richText, endLabel: detail?.endRichText, sp: sp,

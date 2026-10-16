@@ -64,11 +64,69 @@ struct HairpinVoltaTextLayoutTests {
         #expect(voltas.contains { $0.0 == "3." && $0.1 })
     }
 
-    @Test("a volta's bracket geometry is unchanged: the label origin keeps the (sp, sp/2) offset")
-    func voltaOrigin() {
-        let sp = StaffMetrics(staffSize: 20).sp
-        let from = CGPoint(x: 50, y: 40)
-        let origin = SpannerGeometry.voltaLabelOrigin(from: from, to: CGPoint(x: 150, y: 40), sp: sp)
-        #expect(origin == CGPoint(x: 50 + sp, y: 40 + sp / 2))
+    /// The metrics `segments()` lays the fixture out at, which its labels are typeset for.
+    private static let metrics = StaffMetrics(staffSize: ScoreViewOptions().staffSize)
+
+    /// A volta segment that starts its volta, with the label it carries.
+    private typealias Volta = (element: LayoutElement, from: CGPoint, to: CGPoint, label: LayoutRichText)
+
+    /// Each volta segment that starts its volta.
+    private static func voltas() throws -> [Volta] {
+        try segments().compactMap { element in
+            guard case let .spannerSegment(.volta, from, to, false, _, _, _, rich?, _) = element else { return nil }
+            return (element, from, to, rich)
+        }
+    }
+
+    @Test("a volta's label hangs on its baseline 2.2 sp under the bracket, 0.6 sp in (voltaOffset, voltaAlign)")
+    func voltaLabelBaseline() throws {
+        let sp = Self.metrics.sp
+        let label = try #require(try Self.voltas().first?.label)
+        let origin = SpannerGeometry.voltaLabelOrigin(
+            from: CGPoint(x: 50, y: 40), to: CGPoint(x: 150, y: 40), label: label, sp: sp,
+        )
+        #expect(abs(origin.x - (50 + 0.6 * sp)) < 1e-9)
+        #expect(abs(origin.y + label.firstBaseline - (40 + 2.2 * sp)) < 1e-9)
+    }
+
+    @Test("a volta's label sits wholly under its bracket line instead of being struck through by it")
+    func voltaLabelClearsItsLine() throws {
+        let sp = Self.metrics.sp
+        let voltas = try Self.voltas()
+        #expect(voltas.count == 2)
+        for volta in voltas {
+            let origin = SpannerGeometry.voltaLabelOrigin(from: volta.from, to: volta.to, label: volta.label, sp: sp)
+            let ink = try #require(volta.label.inkRect(at: origin, anchor: LayoutRichText.anchor(for: .lineLabel)))
+            let lineBottom = min(volta.from.y, volta.to.y) + SpannerGeometry.strokeThicknessSp * sp / 2
+            #expect(ink.minY > lineBottom)
+        }
+    }
+
+    @Test("a volta's hooks drop 2.2 sp (voltaHook)")
+    func voltaHooks() {
+        let sp = Self.metrics.sp
+        let points = SpannerGeometry.voltaBracketPoints(
+            from: CGPoint(x: 50, y: 40), to: CGPoint(x: 150, y: 40), continuesLeft: false, continuesRight: false,
+            sp: sp,
+        )
+        #expect(points.first == CGPoint(x: 50, y: 40 + 2.2 * sp))
+        #expect(points.last == CGPoint(x: 150, y: 40 + 2.2 * sp))
+    }
+
+    @Test("the system and the skyline reserve a volta's hooks and label, below its line")
+    func voltaVerticalExtent() throws {
+        let sp = Self.metrics.sp
+        let volta = try #require(try Self.voltas().first)
+        let top = min(volta.from.y, volta.to.y)
+        let origin = SpannerGeometry.voltaLabelOrigin(from: volta.from, to: volta.to, label: volta.label, sp: sp)
+        let bottom = max(top + 2.2 * sp, origin.y + volta.label.size.height)
+        let points = LayoutEngine.elementYPoints(volta.element, sp: sp)
+        #expect(abs((points.max() ?? 0) - bottom) < 1e-9)
+        let shape = try #require(LayoutElementShape.shape(
+            for: volta.element, id: 0, xOffset: 0, metrics: Self.metrics,
+        ))
+        let rects = shape.rects.map(\.rect)
+        #expect(abs((rects.map(\.maxY).max() ?? 0) - bottom) < 1e-9)
+        #expect((rects.map(\.minY).min() ?? .infinity) <= top)
     }
 }

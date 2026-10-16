@@ -18,8 +18,12 @@ public enum SpannerGeometry {
     /// (`sp * 0.10`).
     public static let lineThicknessSp: CGFloat = 0.10
 
-    /// Volta label point size (`sp * 2.0`).
+    /// Point size of the plain endings label a hand-built volta segment falls back to (`sp * 2.0`); a laid-out
+    /// segment carries its typeset label instead.
     public static let voltaLabelSizeSp: CGFloat = 2.0
+
+    /// How far a volta's hooks drop below its line (`voltaHook` 2.2 sp, `styledef.cpp:614`).
+    public static let voltaHookSp: CGFloat = 2.2
 
     /// Ottava label point size (`sp * 2.5`).
     public static let ottavaLabelSizeSp: CGFloat = 2.5
@@ -47,6 +51,7 @@ public enum SpannerGeometry {
         case .hairpinLine:
             sp * hairpinLineLabelSizeSp
         case .volta:
+            // A volta measures its own ink (`voltaInk`), hanging below its line; this is only the plain-band fallback.
             sp * voltaLabelSizeSp
         case .ottava:
             sp * ottavaLabelSizeSp
@@ -77,25 +82,25 @@ public enum SpannerGeometry {
 
     // MARK: - Volta
 
-    /// Volta bracket polyline: optional left hook, top run, optional
-    /// right hook. `continuesLeft` / `continuesRight` suppress the
-    /// hooks at the corresponding ends (system-spanning voltas).
+    /// Volta bracket polyline: optional left hook, top run, optional right hook, each hook `voltaHookSp` deep.
+    /// `continuesLeft` / `continuesRight` suppress the hooks at the corresponding ends (system-spanning voltas).
     public static func voltaBracketPoints(
         from: CGPoint, to: CGPoint,
         continuesLeft: Bool, continuesRight: Bool,
         sp: CGFloat,
     ) -> [CGPoint] {
         let top = min(from.y, to.y)
+        let hook = top + sp * voltaHookSp
         var pts: [CGPoint] = []
         if !continuesLeft {
-            pts.append(CGPoint(x: from.x, y: top + sp))
+            pts.append(CGPoint(x: from.x, y: hook))
             pts.append(CGPoint(x: from.x, y: top))
         } else {
             pts.append(CGPoint(x: from.x, y: top))
         }
         pts.append(CGPoint(x: to.x, y: top))
         if !continuesRight {
-            pts.append(CGPoint(x: to.x, y: top + sp))
+            pts.append(CGPoint(x: to.x, y: hook))
         }
         return pts
     }

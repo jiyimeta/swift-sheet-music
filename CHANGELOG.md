@@ -7,6 +7,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`SpannerGeometry.voltaLabelOrigin(from:to:label:sp:)` and `SpannerGeometry.voltaInk(…)`** — where a volta's typeset
+  label hangs by its top-left, and the ink a volta segment covers (line, hooks and label).
+
 ### Fixed
 
 - **A wavy glissando no longer tilts everything drawn after it on Android and the web.** The draw program's
@@ -16,6 +21,12 @@ and this project adheres to
   angle, and a tap no longer landed on the note drawn under it. Both now close the open rotation before opening the
   next, and close one left open at the end of a run, as the PDF writer and the Windows walker already did. The
   RenderPreviews CoreGraphics walk had the same fault and is fixed with them.
+- **A volta's label is no longer struck through by its own bracket.** It hangs inside the hook as MuseScore draws it:
+  aligned LEFT, BASELINE at `voltaOffset` (0.6, 2.2) sp below the line's left end (`styledef.cpp:625-626`), and the
+  hooks drop `voltaHook` 2.2 sp instead of 1 sp. It used to be centered half a spatium under the line, so the line ran
+  through the upper half of every "1." and "Last time", authored or synthesized. A volta's vertical extent and skyline
+  shape now measure that ink instead of a band centered on the line. `voltaLabelOrigin(from:to:sp:)` keeps its meaning,
+  the point a plain label hung by `(0, 0.5)` takes, now on the same baseline.
 
 ## [4.11.0] - 2026-10-16
 

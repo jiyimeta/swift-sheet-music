@@ -202,19 +202,11 @@ extension LayoutElementShape {
             return [box]
         case let .lyricsMelisma(from, to, _), let .lyricHyphen(from, to, _):
             return [spanRect(from, to, thickness: sp * 0.3)]
-        case let .spannerSegment(.gradualTempoChange, from, to, _, _, _, _, richText, detail):
-            return [SpannerGeometry.gradualTempoChangeInk(
-                from: from, to: to, label: richText, endLabel: detail?.endRichText, sp: sp,
-            )]
-        case let .spannerSegment(spannerKind, from, to, _, _, _, _, richText, detail):
-            if let parts = SpannerGeometry.textLineSegmentInkParts(
-                kind: spannerKind, from: from, to: to, label: richText, detail: detail, sp: sp,
-            ) {
-                return parts
-            }
-            return [spannerRect(
-                kind: spannerKind, from: from, to: to, sp: sp,
-            )]
+        case let .spannerSegment(spannerKind, from, to, continuesLeft, continuesRight, _, _, richText, detail):
+            return spannerSegmentRects(
+                kind: spannerKind, from: from, to: to, continues: (continuesLeft, continuesRight), label: richText,
+                detail: detail, sp: sp,
+            )
         case let .figure(_, figure, _, _):
             return figure.ink.isEmpty ? [] : [figure.ink]
         default:
@@ -314,6 +306,29 @@ extension LayoutElementShape {
         ) {
         case .none: return inner
         case let .rectangle(rect), let .ellipse(rect): return rect.insetBy(dx: -stroke, dy: -stroke)
+        }
+    }
+
+    /// A spanner segment's ink: a gradual tempo change and a volta measure their own (label and line, label and
+    /// hooks), a text-line family member its parts, any other kind a band on its line.
+    private static func spannerSegmentRects(
+        kind: LayoutElement.SpannerKind, from: CGPoint, to: CGPoint, continues: (left: Bool, right: Bool),
+        label: LayoutRichText?, detail: LayoutLineDetail?, sp: CGFloat,
+    ) -> [CGRect] {
+        switch kind {
+        case .gradualTempoChange:
+            return [SpannerGeometry.gradualTempoChangeInk(
+                from: from, to: to, label: label, endLabel: detail?.endRichText, sp: sp,
+            )]
+        case .volta:
+            return [SpannerGeometry.voltaInk(
+                from: from, to: to, continuesLeft: continues.left, continuesRight: continues.right, label: label,
+                sp: sp,
+            )]
+        default:
+            return SpannerGeometry.textLineSegmentInkParts(
+                kind: kind, from: from, to: to, label: label, detail: detail, sp: sp,
+            ) ?? [spannerRect(kind: kind, from: from, to: to, sp: sp)]
         }
     }
 

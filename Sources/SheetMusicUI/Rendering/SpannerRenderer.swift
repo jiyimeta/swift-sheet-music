@@ -135,16 +135,18 @@ enum SpannerRenderer {
             p, with: .color(.primary),
             lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
         )
-        let origin = SpannerGeometry.voltaLabelOrigin(from: from, to: to, sp: metrics.sp)
         // The label is the segment's typeset text: authored, or the endings label layout synthesized. Only a segment
         // that carries none (hand-built) falls back to the endings here, and never in addition to authored text.
         if let richText {
             TextInkRenderer.drawRich(
-                context: &context, richText: richText, origin: origin, anchor: CGPoint(x: 0, y: 0.5), color: .primary,
+                context: &context, richText: richText,
+                origin: SpannerGeometry.voltaLabelOrigin(from: from, to: to, label: richText, sp: metrics.sp),
+                anchor: LayoutRichText.anchor(for: .lineLabel), color: .primary,
             )
         } else if !continuesLeft, let text = SpannerGeometry.voltaLabelText(endings: endings) {
             context.drawExpressionText(
-                text, at: origin, size: metrics.sp * SpannerGeometry.voltaLabelSizeSp, italic: false,
+                text, at: SpannerGeometry.voltaLabelOrigin(from: from, to: to, sp: metrics.sp),
+                size: metrics.sp * SpannerGeometry.voltaLabelSizeSp, italic: false,
             )
         }
     }
