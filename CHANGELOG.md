@@ -44,6 +44,12 @@ and this project adheres to
 
 ### Fixed
 
+- **A MusicXML `<coda/>` with `<sound tocoda>` is one To Coda, not a Coda and a To Coda** — a direction makes the one repeat
+  MuseScore picks from its `<sound>` (coda, da capo, dal segno, fine, segno, to coda, in that order), else from its
+  segno or coda sign; a D.S. with a `tocoda` or `fine` attribute is a jump that plays until there, not a jump plus a
+  marker; a second coda in a bar is dropped; two segnos at one tick are one Segno labeled `segnoii`; a repeat with no
+  text stays visible with its type's default text, as in MuseScore; and a bar-end item written at the next bar's start
+  (or a bar-start item at the previous bar's end) lands in the bar MuseScore puts it in.
 - **An ottava now shifts the playback of every voice on its staff**, as MuseScore applies it, not only the voice that
   carries the line. A second voice under an 8va — a MusicXML `<backup>` voice, or any voice of a score whose ottava
   sits in voice 1 — played an octave away from the pitch it sounds in MuseScore.

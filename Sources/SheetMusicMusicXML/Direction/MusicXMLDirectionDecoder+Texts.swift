@@ -12,7 +12,7 @@ extension MusicXMLDirectionDecoder {
         _ facts: MusicXMLDirectionFacts, staff: Int, tick: Fraction, context: Context, to output: inout Output,
     ) {
         // A repeat direction's words are its marker's or jump's text (`handleRepeats` clears them).
-        let words = facts.sound.isRepeat ? "" : facts.wordsXML
+        let words = facts.isRepeat ? "" : facts.wordsXML
         let traits = MusicXMLTextTraits(
             xmlText: words, placement: facts.placement, isScoreTopStaff: context.partIndex == 0 && staff == 0,
             hasMetronome: facts.hasMetronome, soundTempo: facts.sound.tempo, isSystemDirection: facts.isSystem,

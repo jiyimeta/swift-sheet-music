@@ -17,8 +17,6 @@ struct StaffMeasureBuilder {
     private var startRepeat = false
     private var endRepeatCount: Int?
     private var trailingBarline: BarLine?
-    private var markers: [Marker] = []
-    private var jumps: [Jump] = []
     /// System-level elements lifted out during decode (rehearsal
     /// marks and the texts a direction's words make). The caller pulls these
     /// out via `build()` and merges them into `Score.systemMeasures`.
@@ -41,14 +39,6 @@ struct StaffMeasureBuilder {
         let systemElements: [PositionedSystemElement]
         /// Where positional voice 0's chords and rests sit by the measure clock (`MusicXMLChordAnchor`).
         let anchors: [MusicXMLChordAnchor]
-    }
-
-    mutating func addMarkers(_ newMarkers: [Marker]) {
-        markers.append(contentsOf: newMarkers)
-    }
-
-    mutating func addJumps(_ newJumps: [Jump]) {
-        jumps.append(contentsOf: newJumps)
     }
 
     /// Record a system-lane element (a staff text, a rehearsal mark, …) at `position` in this measure.
@@ -188,13 +178,8 @@ struct StaffMeasureBuilder {
         let builtVoices = final.isEmpty
             ? [Voice(elements: [])]
             : final.map { Voice(elements: $0) }
-        let measure = Measure(
-            voices: builtVoices,
-            startRepeat: startRepeat,
-            endRepeatCount: endRepeatCount,
-            markers: markers,
-            jumps: jumps,
-        )
+        // Markers and jumps join the part's first staff after the walk (`MusicXMLRepeatLog`).
+        let measure = Measure(voices: builtVoices, startRepeat: startRepeat, endRepeatCount: endRepeatCount)
         return Built(measure: measure, systemElements: systemElements, anchors: anchors.first ?? [])
     }
 

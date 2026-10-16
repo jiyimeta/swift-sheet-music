@@ -62,6 +62,7 @@ enum MusicXMLMeasureWalker {
         // The lines inferred from words live across measures; their limit is measured from the part's start.
         var inferredLines = MusicXMLInferredLineLog()
         var partTick = Fraction.zeroTick
+        var repeats = MusicXMLRepeatLog()
         // The octave shifts are read before the notes, as MuseScore's pass 1 reads them (`P2:7264`).
         let octaveShifts = MusicXMLOctaveShiftScan.scan(partNode: partNode)
         for (index, measureNode) in partNode.all("measure").enumerated() {
@@ -75,20 +76,17 @@ enum MusicXMLMeasureWalker {
                 ? octaveShifts.measureStarts[index] : .zeroTick
             state.inferredLines = inferredLines
             state.partTick = partTick
+            state.repeats = repeats
             let built = try decodeOne(
-                measureNode: measureNode,
-                state: &state,
-                divisions: &divisions,
-                previousAttributes: &previousAttributes,
-                isFirstMeasure: isFirstMeasure,
-                drumTable: drumTable,
-                glideTracker: &glideTracker,
+                measureNode: measureNode, state: &state, divisions: &divisions, previousAttributes: &previousAttributes,
+                isFirstMeasure: isFirstMeasure, drumTable: drumTable, glideTracker: &glideTracker,
                 directionEvents: &directionEvents,
             )
             tempoElements.append(state.tempoElements)
             let length = measureLength(state, attributes: previousAttributes)
             measureLengths.append(length)
             inferredLines = state.inferredLines
+            repeats = state.repeats
             partTick += length
             for (staffIdx, item) in built.enumerated() {
                 perStaffMeasures[staffIdx].append(item.measure)
@@ -96,6 +94,8 @@ enum MusicXMLMeasureWalker {
                 anchors[staffIdx].append(item.anchors)
             }
         }
+        // The markers and jumps settle into their bars by the recorded lengths (the clock `partTick` sums).
+        repeats.apply(measureLengths: measureLengths, to: &perStaffMeasures[0])
         var withGlides = applyGlides(attachments: glideTracker.attachments, measures: perStaffMeasures)
         // Spanner starts and stops pair part-wide once the part is walked, and the inferred lines close at their ends
         // (`P2:2307-2314`); their begin sides and end markers join the queue after the direction's other voice

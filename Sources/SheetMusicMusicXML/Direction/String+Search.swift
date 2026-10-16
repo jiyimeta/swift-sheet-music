@@ -10,4 +10,20 @@ extension String {
         }
         return false
     }
+
+    /// How many times `needle` occurs, counted without overlap from the start (`QString::count`).
+    func occurrences(of needle: String) -> Int {
+        guard !needle.isEmpty else { return 0 }
+        var count = 0
+        var index = startIndex
+        while index < endIndex {
+            if self[index...].hasPrefix(needle) {
+                count += 1
+                index = self.index(index, offsetBy: needle.count)
+            } else {
+                index = self.index(after: index)
+            }
+        }
+        return count
+    }
 }

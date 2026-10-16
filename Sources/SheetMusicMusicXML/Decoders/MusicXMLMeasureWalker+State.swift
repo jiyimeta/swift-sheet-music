@@ -31,6 +31,10 @@ struct MusicXMLMeasureState {
     /// by the lengths the walk has recorded.
     var inferredLines = MusicXMLInferredLineLog()
     var partTick = Fraction.zeroTick
+    /// The bar already holds a coda or To Coda (`handleRepeats`' `measureHasCoda`, which each measure starts without).
+    var measureHasCoda = false
+    /// The part's markers and jumps so far, which the walk hands from measure to measure and places after it.
+    var repeats = MusicXMLRepeatLog()
 
     init(
         measureIndex: Int, staffCount: Int, options: MusicXMLImportOptions, partIndex: Int,
@@ -132,18 +136,12 @@ extension MusicXMLMeasureWalker {
         )
     }
 
-    /// One `<direction>`: navigation as before, and every other kind through `MusicXMLDirectionDecoder` at the
-    /// clock — voice elements as events, texts and rehearsal marks into the lane of the direction's staff.
+    /// One `<direction>`: its one repeat into the part's repeat log at `tick + offset`, and every other kind through
+    /// `MusicXMLDirectionDecoder` at the clock — voice elements as events, texts and rehearsal marks into the lane of
+    /// the direction's staff.
     static func decodeDirectionChild(
         _ child: XMLTreeNode, state: inout MusicXMLMeasureState, divisions: DivisionsContext,
     ) {
-        // MuseScore attaches measure-level jumps/markers to the first staff only, matching the .mscx layout where
-        // they live on `<Staff id="1">`'s `<Measure>`.
-        let navigation = MusicXMLJumpDecoder.decode(child)
-        if !state.builders.isEmpty {
-            state.builders[0].addMarkers(navigation.markers)
-            state.builders[0].addJumps(navigation.jumps)
-        }
         let context = MusicXMLDirectionDecoder.Context(
             measure: state.measureIndex,
             staffCount: state.staffCount,
@@ -153,6 +151,11 @@ extension MusicXMLMeasureWalker {
             partIndex: state.partIndex,
             measureStart: state.partTick,
             registry: state.registry,
+        )
+        let navigation = MusicXMLJumpDecoder.decode(child, measureHasCoda: &state.measureHasCoda)
+        state.repeats.add(
+            navigation, measure: state.measureIndex, tick: MusicXMLDirectionDecoder.tick(of: child, context: context),
+            partTick: state.partTick,
         )
         let output = MusicXMLDirectionDecoder.decode(child, context: context)
         state.directionEvents += output.events

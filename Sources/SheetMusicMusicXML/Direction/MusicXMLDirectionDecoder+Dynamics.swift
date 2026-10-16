@@ -41,7 +41,7 @@ extension MusicXMLDirectionDecoder {
     /// branches before it (a tempo text, a tempo line, a Sticking by their words) never take a lone dash, so it needs
     /// no check of them. A repeat direction's words are cleared before the chain.
     static func isLikelyDynamicRange(_ facts: MusicXMLDirectionFacts, context: Context) -> Bool {
-        guard context.options.inferTextType, facts.dynamics.count == 2, !facts.sound.isRepeat else { return false }
+        guard context.options.inferTextType, facts.dynamics.count == 2, !facts.isRepeat else { return false }
         let raw = MusicXMLFormattedWords.simplified(withoutTags(MusicXMLFormattedWords.simplified(facts.wordsXML)))
         return raw == "-" || raw == "\u{2014}"
     }

@@ -49,6 +49,9 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
     /// When inferring, the simplified plain text of the last `<words>` that holds "cresc" or "dim", which MuseScore
     /// takes out of the words to start a hairpin line (`textToCrescLine`, `P2:4543-4564`).
     var crescLineWords: String?
+    /// The direction makes a repeat (`MusicXMLRepeatClassifier`): its words are the marker's or the jump's text, not
+    /// a text element of their own (`handleRepeats` clears them, `P2:~4711-4745`).
+    var isRepeat = false
 
     /// The metronome's text is not empty (MuseScore's non-empty `m_metroText`).
     var hasMetronome: Bool {
@@ -81,6 +84,7 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
         placement = explicitPlacement ?? defaultY.map { $0 < 0 ? "above" : "below" }
         hasDefaultY = defaultY != nil
         rehearsals = MusicXMLRehearsalDecoder.decode(direction)
+        isRepeat = MusicXMLRepeatClassifier.classify(direction, source: MusicXMLRepeatSource(direction)) != nil
         for node in direction.all("sound") {
             sound.read(node)
             dynamicsVelocity = sound.dynamics.flatMap { $0.isEmpty ? nil : (Double($0) ?? 0) }
@@ -158,12 +162,6 @@ struct MusicXMLSoundFacts: Sendable, Equatable {
     var tocoda: String?
     /// `pizzicato="yes|no"`, then `<play><mute>` / `<other-play type>`, the later one winning.
     var technique: PlayingTechnique?
-
-    /// A repeat direction: its words are the marker's or the jump's text, not a text element of their own
-    /// (`handleRepeats` clears them, `P2:4743-4745`).
-    var isRepeat: Bool {
-        [coda, dacapo, dalsegno, fine, segno, tocoda].contains { $0 != nil }
-    }
 
     /// Each `<sound>` sets every attribute again, as MuseScore reads it; the technique carries over until one sets it.
     mutating func read(_ node: XMLTreeNode) {

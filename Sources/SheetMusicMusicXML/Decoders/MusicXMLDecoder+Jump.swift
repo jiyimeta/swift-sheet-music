@@ -11,47 +11,55 @@ import SheetMusicXMLTools
 ///    `<sound dacapo="yes"/>`, `<sound tocoda="…"/>`, `<sound coda="…"/>`,
 ///    `<sound segno="…"/>`, `<sound fine="yes"/>`.
 ///
-/// MuseScore's MSCX model splits these into `<Marker>` (measure-left) and
-/// `<Jump>` (measure-right), which this decoder mirrors.
+/// A direction makes ONE repeat, the one `MusicXMLRepeatClassifier` picks (`handleRepeats`,
+/// `importmusicxmlpass2.cpp:~4652-4773`): a `<Marker>` or a `<Jump>`, as MuseScore's MSCX model splits them.
 enum MusicXMLJumpDecoder {
     struct Decoded {
         var markers: [Marker] = []
         var jumps: [Jump] = []
+        /// When the direction made a segno: its words and glyphs as xml text (MuseScore's `m_wordsText`), which a
+        /// second segno at the same tick merges with (`P2:~4718-4730`).
+        var segnoWords: String?
     }
 
     /// Decode a single `<direction>` element. Returns empty decoded on a
     /// plain text direction that isn't navigation-related.
     static func decode(_ direction: XMLTreeNode) -> Decoded {
+        var measureHasCoda = false
+        return decode(direction, measureHasCoda: &measureHasCoda)
+    }
+
+    /// Decode a single `<direction>` element, given whether its bar already holds a coda or To Coda: a second one is
+    /// discarded, and the first sets the flag (`handleRepeats`' `measureHasCoda`, `P2:~4712-4737`).
+    static func decode(_ direction: XMLTreeNode, measureHasCoda: inout Bool) -> Decoded {
+        let source = MusicXMLRepeatSource(direction)
+        let sound = direction.all("sound").last
         var result = Decoded()
-        guard let directionType = direction.first("direction-type") else { return result }
-        let sound = direction.first("sound")
-
-        // A `<segno/>` or `<coda/>`: the glyph names the family, the `<sound>` label the member.
-        if let glyph = directionType.first("segno") {
-            result.markers.append(glyphMarker(
-                family: .segno, label: sound?.attributes["segno"], smufl: glyph.attributes["smufl"],
-            ))
+        guard let found = MusicXMLRepeatClassifier.classify(sound: sound, glyphs: source.glyphs) else { return result }
+        switch found {
+        case .coda, .toCoda:
+            guard !measureHasCoda else { return result }
+            measureHasCoda = true
+        default:
+            break
         }
-        if let glyph = directionType.first("coda") {
-            result.markers.append(glyphMarker(
-                family: .coda, label: sound?.attributes["coda"], smufl: glyph.attributes["smufl"],
-            ))
+        switch found {
+        case let .coda(label):
+            let marker = glyphMarker(family: .coda, label: label, smufl: source.codaSmufl)
+            result.markers = [withText(marker, glyphIsKind: true, source: source)]
+        case let .segno(label):
+            let marker = glyphMarker(family: .segno, label: label, smufl: source.segnoSmufl)
+            result.markers = [withText(marker, glyphIsKind: true, source: source)]
+            result.segnoWords = source.xmlText
+        case .fine:
+            result.markers = [withText(Marker(kind: .fine, label: "fine"), glyphIsKind: false, source: source)]
+        case let .toCoda(target):
+            result.markers = [withText(Marker(kind: .toCoda, label: target), glyphIsKind: false, source: source)]
+        case .daCapo:
+            result.jumps = [jump(to: "start", fallback: "D.C.", sound: sound, source: source)]
+        case let .dalSegno(target):
+            result.jumps = [jump(to: target, fallback: "D.S.", sound: sound, source: source)]
         }
-
-        // Word-based navigation ("To Coda", "D.C.", "D.S.", "Fine"): use
-        // <sound> hints as the authoritative signal; the <words> body is
-        // carried over for display text.
-        let words = directionType.first("words")?.text ?? ""
-        if let sound, let jump = jump(forSound: sound, words: words) {
-            result.jumps.append(jump)
-        }
-        if let sound, let toCoda = toCodaMarker(forSound: sound, words: words) {
-            result.markers.append(toCoda)
-        }
-        if let sound, let fine = fineMarker(forSound: sound, words: words) {
-            result.markers.append(fine)
-        }
-
         return result
     }
 
@@ -74,44 +82,37 @@ enum MusicXMLJumpDecoder {
         return Marker(kind: kind, label: label ?? kind.defaultLabel, text: "")
     }
 
-    // MARK: - sound-driven classifiers
-
-    private static func jump(forSound sound: XMLTreeNode, words: String) -> Jump? {
-        if let segno = sound.attributes["dalsegno"] {
-            return Jump(
-                jumpTo: segno,
-                playUntil: sound.attributes["tocoda"] ?? (sound.attributes["fine"] != nil ? "fine" : "end"),
-                continueAt: sound.attributes["coda"] ?? "",
-                text: words.isEmpty ? "D.S." : words,
-            )
-        }
-        if sound.attributes["dacapo"] != nil {
-            return Jump(
-                jumpTo: "start",
-                playUntil: sound.attributes["tocoda"] ?? (sound.attributes["fine"] != nil ? "fine" : "end"),
-                continueAt: sound.attributes["coda"] ?? "",
-                text: words.isEmpty ? "D.C." : words,
-            )
-        }
-        return nil
+    /// The marker with the direction's text and visibility. Words are the marker's text (plain, with the markup while
+    /// it is formatted) even when they equal the kind's default. A direction with only a glyph keeps no text of its
+    /// own when the glyph is the marker's own symbol (a coda or segno made of it, `glyphIsKind`) or the kind's
+    /// default; otherwise it stores the glyph (a To Coda made of a lone `<coda/>` prints the coda sign, as in
+    /// MuseScore). A direction with no text at all keeps the kind's default and stays visible: MuseScore hides it
+    /// (`setVisible(false)`) and then sets the direction's own visibility over that (`tb->setVisible(m_visible)`,
+    /// `P2:~4743-4769`).
+    private static func withText(_ marker: Marker, glyphIsKind: Bool, source: MusicXMLRepeatSource) -> Marker {
+        var result = marker
+        result.elementProperties.visible = source.visible
+        guard !source.xmlText.isEmpty else { return result }
+        if !source.hasWords, glyphIsKind || source.xmlText == marker.kind.defaultXMLText { return result }
+        let carrier = MusicXMLFormattedWords.carrier(fromXMLText: source.xmlText)
+        result.text = carrier.plain
+        result.preservedTextMarkup = carrier.markup
+        return result
     }
 
-    private static func toCodaMarker(forSound sound: XMLTreeNode, words: String) -> Marker? {
-        guard sound.attributes["tocoda"] != nil else { return nil }
-        // MuseScore's To Coda (`importmusicxmlpass2.cpp:4790-4794`).
-        return Marker(
-            kind: .toCoda,
-            label: sound.attributes["tocoda"] ?? "coda",
-            text: words.isEmpty ? "To Coda" : words,
+    /// A D.C. or D.S.: the `<sound>`'s other attributes steer it — `tocoda` or `fine` is where it plays until, `coda`
+    /// where it continues — and make no marker of their own. It prints its first words, else its abbreviation.
+    private static func jump(
+        to target: String, fallback: String, sound: XMLTreeNode?, source: MusicXMLRepeatSource,
+    ) -> Jump {
+        let attributes = sound?.attributes ?? [:]
+        var jump = Jump(
+            jumpTo: target,
+            playUntil: attributes["tocoda"] ?? (attributes["fine"] != nil ? "fine" : "end"),
+            continueAt: attributes["coda"] ?? "",
+            text: source.firstWords.isEmpty ? fallback : source.firstWords,
         )
-    }
-
-    private static func fineMarker(forSound sound: XMLTreeNode, words: String) -> Marker? {
-        guard sound.attributes["fine"] != nil else { return nil }
-        return Marker(
-            kind: .fine,
-            label: "fine",
-            text: words.isEmpty ? "Fine" : words,
-        )
+        jump.elementProperties.visible = source.visible
+        return jump
     }
 }

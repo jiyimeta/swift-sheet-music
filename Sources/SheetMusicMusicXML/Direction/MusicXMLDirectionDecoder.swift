@@ -43,7 +43,7 @@ enum MusicXMLDirectionDecoder {
 
     static func decode(_ direction: XMLTreeNode, context: Context) -> Output {
         let staff = staffIndex(direction, staffCount: context.staffCount)
-        let tick = context.now + offset(direction, context: context)
+        let tick = Self.tick(of: direction, context: context)
         var output = Output()
         let facts = MusicXMLDirectionFacts(direction, infers: context.options.inferTextType)
         appendDynamics(facts, staff: staff, tick: tick, context: context, to: &output)
@@ -59,6 +59,11 @@ enum MusicXMLDirectionDecoder {
         }
         appendSpanners(facts, staff: staff, tick: tick, context: context, to: &output)
         return output
+    }
+
+    /// Where the direction's elements land in the measure: the clock plus its `<offset>` (`tick + offset`).
+    static func tick(of direction: XMLTreeNode, context: Context) -> Fraction {
+        context.now + offset(direction, context: context)
     }
 
     /// `<offset>` in divisions as a fraction of a whole note; one that would place the direction before the start of
