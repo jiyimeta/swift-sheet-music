@@ -36,6 +36,13 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
     var dynamicsVelocity: Double?
     /// The `<wedge>` starts and stops, in order (`MusicXmlParserDirection::wedge`, `P2:5470-5514`).
     var wedges: [MusicXMLWedgeFact] = []
+    /// The `<octave-shift>` starts and stops, in order (`MusicXmlParserDirection::octaveShift`, `P2:5279-5330`).
+    var octaveShifts: [MusicXMLOctaveShiftFact] = []
+    /// The `<pedal>` marks, in order (`MusicXmlParserDirection::pedal`, `P2:5340-5458`).
+    var pedals: [MusicXMLPedalFact] = []
+    /// The direction's own `placement` attribute (`m_placement`, `P2:3447`), which an ottava's side falls back from
+    /// to its styled side without consulting `default-y` (`P2:5297`, `5306`).
+    var placementAttribute: String?
 
     /// The metronome's text is not empty (MuseScore's non-empty `m_metroText`).
     var hasMetronome: Bool {
@@ -62,6 +69,7 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
                 read(child, infers: infers, finale: finale)
             }
         }
+        placementAttribute = explicitPlacement
         placement = explicitPlacement ?? defaultY.map { $0 < 0 ? "above" : "below" }
         hasDefaultY = defaultY != nil
         rehearsals = MusicXMLRehearsalDecoder.decode(direction)
@@ -100,6 +108,12 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
             if let wedge = MusicXMLWedgeFact(child), !wedges.contains(where: { $0.repeats(wedge) }) {
                 wedges.append(wedge)
             }
+        case "octave-shift":
+            if let shift = MusicXMLOctaveShiftFact(child), !octaveShifts.contains(where: { $0.repeats(shift) }) {
+                octaveShifts.append(shift)
+            }
+        case "pedal":
+            if let pedal = MusicXMLPedalFact(child) { pedals.append(pedal) }
         case "eyeglasses":
             wordsXML += "<sym>miscEyeglasses</sym>"
         case "symbol":

@@ -29,11 +29,35 @@ struct MusicXMLSpannerSlot: Sendable, Hashable {
     }
 }
 
-/// What a stop element changes on the spanner it closes, as data so that an event's equality is real. A wedge's stop
-/// changes nothing; the pedal and bracket stops of later tasks add the changes they make as cases of an enum here.
+/// What a stop element changes on the spanner it closes, as data so that an event's equality is real. A wedge's and an
+/// ottava's stop change nothing; a pedal's carries its `Change` (`MusicXMLDirectionDecoder+Pedal.swift`).
 struct MusicXMLSpannerStopEdit: Sendable, Equatable {
-    /// Applies the stop's changes to the begin side.
-    func apply(_: inout Spanner) {}
+    enum Change: Sendable, Equatable {
+        /// `<pedal type="stop|discontinue">` (`P2:5410-5422`): its `line` attribute and its resolved `sign`.
+        case pedalStop(discontinue: Bool, line: String?, sign: String)
+        /// The stop half of `<pedal type="change">` (`P2:5426-5434`), which ends the open pedal with a 45° hook.
+        case pedalChange(line: String?)
+    }
+
+    var change: Change?
+
+    init(_ change: Change? = nil) {
+        self.change = change
+    }
+
+    /// A stop MuseScore makes only against an open spanner, never held for a start to come: a pedal change's stop
+    /// half (`P2:5426-5437`).
+    var closesOnlyAnOpenStart: Bool {
+        if case .pedalChange = change { return true }
+        return false
+    }
+
+    /// Applies the stop's changes to the begin side. `stopCameFirst` is the order MuseScore saw them in: a stop with
+    /// nothing open edits a fresh element that the later start takes over and rewrites (`P2:5389`, `5411`), so only
+    /// what the start leaves alone survives of it.
+    func apply(_ spanner: inout Spanner, stopCameFirst: Bool = false) {
+        change?.apply(&spanner, stopCameFirst: stopCameFirst)
+    }
 }
 
 /// A start and a stop paired: the begin side (carrying `<next>`) and the payload-less end marker, each a
@@ -78,10 +102,13 @@ enum MusicXMLSpannerPairing {
         return (end.measure - start.measure, delta.isZeroTick ? nil : delta)
     }
 
-    /// Walks the events once, in file order. A start in an open slot is ignored (`P2:3812-3815`); otherwise it closes
-    /// against a stop the slot holds (`P2:3827-3833`), or opens the slot. A stop closes the slot's open start, or is
-    /// held until the start comes (`P2:3799-3805`) unless the slot holds one already (`P2:3781-3783`). Whatever is
-    /// open or held at the end is dropped, as MuseScore deletes it at the part's end (`P2:2318-2341`).
+    /// Walks the events once, in file order. A start in an open slot is ignored (`P2:3812-3815`) — except a pedal's,
+    /// which drops the open pedal and opens in its place, as MuseScore deletes an unterminated pedal as an unrecorded
+    /// "discontinue", unless the open one began a change (`P2:5360-5388`). Otherwise a start closes against a stop the
+    /// slot holds (`P2:3827-3833`), or opens the slot. A stop closes the slot's open start, or is held until the start
+    /// comes (`P2:3799-3805`) unless the slot holds one already (`P2:3781-3783`) or it is a pedal change's
+    /// (`closesOnlyAnOpenStart`). Whatever is open or held at the end is dropped, as MuseScore deletes it at the part's
+    /// end (`P2:2318-2341`).
     static func pairClosed(
         _ events: [MusicXMLDirectionEvent], measureLengths: [Fraction],
     ) -> [MusicXMLClosedSpanner] {
@@ -91,10 +118,14 @@ enum MusicXMLSpannerPairing {
         for event in events {
             switch event.payload {
             case let .spannerStart(slot, spanner):
-                guard open[slot] == nil else { continue }
+                if let current = open[slot] {
+                    if replacesOpenStart(current.spanner, slot: slot) { open[slot] = (spanner, event) }
+                    continue
+                }
                 if let stop = held.removeValue(forKey: slot) {
                     let pair = closed(
                         spanner, begin: event, end: stop.event, measureLengths: measureLengths, edit: stop.edit,
+                        stopCameFirst: true,
                     )
                     if let pair { result.append(pair) }
                 } else {
@@ -106,7 +137,7 @@ enum MusicXMLSpannerPairing {
                         start.spanner, begin: start.event, end: event, measureLengths: measureLengths, edit: edit,
                     )
                     if let pair { result.append(pair) }
-                } else if held[slot] == nil {
+                } else if held[slot] == nil, !edit.closesOnlyAnOpenStart {
                     held[slot] = (edit, event)
                 }
             case .voice:
@@ -116,13 +147,19 @@ enum MusicXMLSpannerPairing {
         return result
     }
 
+    /// Whether a start replaces the spanner open in its slot: only a pedal's, and not over a change pedal (begin hook
+    /// 45°), whose follower MuseScore drops as "already started" (`P2:5364-5382`, `3813-3815`).
+    private static func replacesOpenStart(_ open: Spanner, slot: MusicXMLSpannerSlot) -> Bool {
+        slot.family == .pedal && open.lineProperties?.beginHook != .hook45
+    }
+
     /// The pair as a begin side at the start's rolled site, carrying `<next>` and the stop's edit, and an end marker
     /// at the stop's rolled site, each on the staff of its own direction; `nil` when the stop precedes the start.
     /// The begin side is `isEndMarker: false` explicitly — a hidden one (`visible: false`) would otherwise derive
-    /// `true` (`Spanner.init`).
+    /// `true` (`Spanner.init`). `stopCameFirst` says the stop was read before its start (`MusicXMLSpannerStopEdit`).
     static func closed(
         _ spanner: Spanner, begin: MusicXMLDirectionEvent, end: MusicXMLDirectionEvent, measureLengths: [Fraction],
-        edit: MusicXMLSpannerStopEdit,
+        edit: MusicXMLSpannerStopEdit, stopCameFirst: Bool = false,
     ) -> MusicXMLClosedSpanner? {
         guard let next = offsets(
             fromMeasure: begin.measure, fromTick: begin.tick, toMeasure: end.measure, toTick: end.tick,
@@ -132,7 +169,7 @@ enum MusicXMLSpannerPairing {
         side.isEndMarker = false
         side.nextMeasuresOffset = next.measures
         side.nextFractionsOffset = next.fractions
-        edit.apply(&side)
+        edit.apply(&side, stopCameFirst: stopCameFirst)
         var marker = Spanner(kind: side.kind, rawType: side.rawType, visible: false)
         marker.chordTextLine = side.chordTextLine
         let from = roll(measure: begin.measure, tick: begin.tick, measureLengths: measureLengths)

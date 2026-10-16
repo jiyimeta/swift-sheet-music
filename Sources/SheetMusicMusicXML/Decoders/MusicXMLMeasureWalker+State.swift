@@ -21,6 +21,12 @@ struct MusicXMLMeasureState {
     /// The `tempo` of the last `<sound>` standing directly in the measure, waiting for the next `<note>`
     /// (MuseScore's `tempoString`, `P2:2894-2896`).
     var pendingSoundTempo = ""
+    /// The part's octave shifts and this measure's part-absolute start, which a note's shift is looked up at.
+    var octaveShifts = MusicXMLOctaveShiftTable()
+    var measureStart = Fraction.zeroTick
+    /// Where the last chord or rest that took time started (MuseScore's `prevTime`, `P2:2858`): a `<chord/>` tone
+    /// takes its octave shift there (`P2:7183`).
+    var chordStart = Fraction.zeroTick
 
     init(
         measureIndex: Int, staffCount: Int, options: MusicXMLImportOptions, partIndex: Int,
@@ -49,11 +55,15 @@ extension MusicXMLMeasureWalker {
         let voice = child.first("voice")?.text ?? "1"
         state.builders[staffIdx].setDefaultVoice(voice)
         let existing = state.builders[staffIdx].elements(forVoice: voice)
+        // A `<chord/>` tone starts where its chord did, every other note at the clock (`P2:7183`).
+        let isChordTone = child.children.contains { $0.name == "chord" }
+        let noteStart = isChordTone ? state.chordStart : state.clock.now
         let decoded = try MusicXMLNoteDecoder.decodeNote(
             node: child,
             divisions: divisions,
             existingVoiceElements: existing,
             drumTable: drumTable,
+            octaveShift: state.octaveShifts.shift(staff: staffIdx, atTick: state.measureStart + noteStart),
         )
         switch decoded {
         case let .foldIntoLastChord(note, duration, trailingBreaths, articulations):
@@ -74,6 +84,7 @@ extension MusicXMLMeasureWalker {
             for element in elements {
                 state.builders[staffIdx].append(element, toVoice: voice, start: start, end: start + duration)
             }
+            if !duration.isZeroTick { state.chordStart = start }
             state.clock.advance(by: duration)
         case let .grace(note, shape, joinsChord, endsAfterGraces):
             state.builders[staffIdx].appendGrace(

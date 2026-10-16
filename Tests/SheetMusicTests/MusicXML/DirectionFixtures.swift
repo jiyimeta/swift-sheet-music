@@ -151,6 +151,14 @@ enum DirectionFixtures {
         }
     }
 
+    /// The pitch of each chord's first note, in voice order.
+    static func pitches(in voice: Voice) -> [Int] {
+        voice.elements.values.compactMap { element -> Int? in
+            guard case let .chord(chord) = element else { return nil }
+            return chord.notes.first?.pitch
+        }
+    }
+
     static func chordTicks(in voice: Voice) -> [Int] {
         placed(voice).compactMap { entry -> Int? in
             guard case .chord = entry.element else { return nil }

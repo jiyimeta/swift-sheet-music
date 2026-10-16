@@ -33,6 +33,10 @@ and this project adheres to
 - **MusicXML wedges** — `<wedge>` crescendos and diminuendos import as hairpins that start and end where the file says,
   honoring `<offset>`, `number`, a stop that arrives first, and a start on the bar line (which belongs to the next bar);
   one without a stop is dropped, as in MuseScore.
+- **MusicXML octave shifts and pedals** — `<octave-shift>` imports as an 8va / 8vb / 15ma / 15mb / 22ma / 22mb line
+  whose notes are written the octave lower (or higher) the line implies and keep their sounding pitch, and `<pedal>`
+  start / change / stop / resume / sostenuto / discontinue import as the pedal lines MuseScore builds, with their hooks
+  and signs.
 
 ### Fixed
 

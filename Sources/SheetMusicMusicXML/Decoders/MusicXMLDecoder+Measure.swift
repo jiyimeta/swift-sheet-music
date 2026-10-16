@@ -62,12 +62,17 @@ enum MusicXMLMeasureWalker {
         var anchors: [[[MusicXMLChordAnchor]]] = Array(repeating: [], count: staffCount)
         var tempoElements: [[PositionedSystemElement]] = []
         var measureLengths: [Fraction] = []
+        // The octave shifts are read before the notes, as MuseScore's pass 1 reads them (`P2:7264`).
+        let octaveShifts = MusicXMLOctaveShiftScan.scan(partNode: partNode)
         for (index, measureNode) in partNode.all("measure").enumerated() {
             let isFirstMeasure = (index == 0)
             var state = MusicXMLMeasureState(
                 measureIndex: index, staffCount: staffCount, options: options, partIndex: partIndex,
                 registry: registry,
             )
+            state.octaveShifts = octaveShifts.table
+            state.measureStart = octaveShifts.measureStarts.indices.contains(index)
+                ? octaveShifts.measureStarts[index] : .zeroTick
             let built = try decodeOne(
                 measureNode: measureNode,
                 state: &state,
@@ -145,7 +150,7 @@ enum MusicXMLMeasureWalker {
     /// Scan the part for the first `<attributes><staves>N</staves>` and return
     /// `N`. Defaults to 1. Most piano parts declare `<staves>2</staves>` in the
     /// first measure's attributes.
-    private static func detectStaffCount(partNode: XMLTreeNode) -> Int {
+    static func detectStaffCount(partNode: XMLTreeNode) -> Int {
         for measure in partNode.all("measure") {
             for attrs in measure.all("attributes") {
                 if let stavesText = attrs.first("staves")?.text,
