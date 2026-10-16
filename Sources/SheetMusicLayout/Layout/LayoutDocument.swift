@@ -16,6 +16,12 @@ public struct LayoutDocument: Sendable, Equatable {
     /// measures a chord symbol itself (`HarmonyRendering.runs`, `caretOffsets`) must pass this, or it measures a
     /// different string than the one drawn.
     public let chordSymbolCase: ChordSymbolCaseStyle
+    /// The boxes after the leading one (`<VBox>` / `<TBox>` between systems), top to bottom, in document coordinates.
+    /// Empty for a score with only a title block.
+    public let frames: [LayoutFrame]
+    /// The leading box's pictures, in document coordinates (margins included, like the texts of `titleFrame`). They
+    /// live here because `LayoutTitleFrame` carries no images.
+    public let titleImages: [LayoutFrameImage]
 
     public init(
         size: CGSize,
@@ -23,12 +29,23 @@ public struct LayoutDocument: Sendable, Equatable {
         metrics: StaffMetrics,
         titleFrame: LayoutTitleFrame? = nil,
         chordSymbolCase: ChordSymbolCaseStyle = .museScoreDefaults,
+        frames: [LayoutFrame] = [],
+        titleImages: [LayoutFrameImage] = [],
     ) {
         self.size = size
         self.systems = systems
         self.metrics = metrics
         self.titleFrame = titleFrame
         self.chordSymbolCase = chordSymbolCase
+        self.frames = frames
+        self.titleImages = titleImages
+    }
+
+    /// The boxes that overlap `range` (document y): those with `originY < range.upperBound` and
+    /// `bottom > range.lowerBound`.
+    public func frames(inDocumentYRange range: Range<CGFloat>) -> [LayoutFrame] {
+        // Phase A stub.
+        []
     }
 }
 
