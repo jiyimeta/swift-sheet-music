@@ -80,7 +80,9 @@ enum MSCXPreservation {
     private static let spannerPayloadEIDReason =
         "OPEN GAP, not a design decision: the identifier lives on the spanner payload "
             + "(<Spanner type=\"Tie\"|\"GuitarBend\"> → <Tie>/<GuitarBend>/<GuitarBendHold> → "
-            + "<eid>), confirmed against guitarbend_tied.mscx:169-171. Spanner.spanner was reverted "
+            + "<eid>), confirmed against guitarbend_tied.mscx:169-171 — and likewise on the <HairPin>, <Ottava> and "
+            + "<Pedal> payloads MuseScore 4.7 writes (musicxml/test*_ref.mscx, own/directions-all-*.mscx). "
+            + "Spanner.spanner was reverted "
             + "to .invalid in Task 4a of the P4 plan (MSCXEncoder+Spanner.swift's "
             + "encode(options:) comment), so no payload identity is modeled or written at all yet. "
             + "Fixing it needs this project's per-subtype spanner payload field ordering untangled "
@@ -177,7 +179,35 @@ enum MSCXPreservation {
     private static func makeAllowedLosses() -> [String: String] {
         var result: [String: String] = [:]
         addPermanentLosses(to: &result)
+        addDirectionFixtureLosses(to: &result)
         return result
+    }
+
+    private static let timeTickReason =
+        "genuinely lost, position kept: <location><timeTick> is Location::isTimeTick (twrite.cpp:2367), the flag "
+            + "MuseScore 4.x sets on a cursor move to an element anchored between chords, which "
+            + "VoiceElement.locationShift does not model while its <fractions> delta round-trips."
+    private static let zeroLengthBeginReason =
+        "open encoder gap: the empty <next><location/></next> MuseScore writes on a zero-length voice-level "
+            + "spanner's begin side is elided by MSCXEncoder+Spanner.nextLocationElement() when both offsets are at "
+            + "their defaults."
+    private static let tieDirectionReason =
+        "genuinely lost: <Tie><up> is the tie's Pid::SLUR_DIRECTION (twrite.cpp:2843, read500 tread.cpp:3842), which "
+            + "the Note tie model has no field for."
+    private static let museScore5BracketReason =
+        "by design: MuseScore 5's <BracketItem> (<type>, <bracketSpan>, <level>; twrite.cpp:2952-2971) is read into "
+            + "Staff.brackets and re-emitted in the 4.x <bracket type span col> form every MuseScore reader accepts, "
+            + "so preserving it too would write the bracket twice."
+
+    /// The losses the W8 MusicXML direction fixtures (MuseScore 4.7.5 `_ref.mscx` and `own/directions-all-*.mscx`)
+    /// and the MuseScore 5 refs (`testCodaHBox_ref`, `testPartNames_ref`) bring in.
+    private static func addDirectionFixtureLosses(to result: inout [String: String]) {
+        allow(["location/timeTick"], because: timeTickReason, into: &result)
+        allow(["Spanner/next", "next/location"], because: zeroLengthBeginReason, into: &result)
+        allow(["Tie/up"], because: tieDirectionReason, into: &result)
+        allow([
+            "Staff/BracketItem", "BracketItem/type", "BracketItem/bracketSpan", "BracketItem/level",
+        ], because: museScore5BracketReason, into: &result)
     }
 
     private static func allow(
@@ -249,7 +279,8 @@ enum MSCXPreservation {
         allow(["KeySig/eid"], because: keySigEIDMaskedReason, into: &result)
         allow(["Symbol/eid"], because: noteAttachedSymbolEIDReason, into: &result)
         allow([
-            "GradualTempoChange/eid", "GuitarBend/eid", "GuitarBendHold/eid", "Tie/eid",
+            "GradualTempoChange/eid", "GuitarBend/eid", "GuitarBendHold/eid", "HairPin/eid", "Ottava/eid", "Pedal/eid",
+            "Tie/eid",
         ], because: spannerPayloadEIDReason, into: &result)
         // `LaissezVib/eid` is deliberately NOT here. `<LaissezVib>` is
         // itself preserved whole, and the exclusion list only fires at

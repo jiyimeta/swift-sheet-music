@@ -52,15 +52,55 @@ struct MusicXMLImportTests {
         "testCodaHBox",
     ]
 
-    /// Phase 3 — Fermata support. `case fermata(Fermata)` added to
-    /// `VoiceElement`; both decoders emit it as a standalone VoiceElement
-    /// that precedes the chord/rest it decorates (matching MSCX layout).
-    /// No end-to-end fixture passes yet: `testTempoLineFermata` requires
-    /// MuseScore's `GradualTempoChange` spanner support (orthogonal to
-    /// fermata), and every other MuseScore fermata fixture requires grace
-    /// notes. Instead the decoder is exercised against a hand-rolled XML
-    /// snippet in `phase3_fermata_decoderUnit()` below.
+    /// Phase 3 — Fermata support. `case fermata(Fermata)` added to `VoiceElement`; both decoders emit it as a
+    /// standalone VoiceElement that precedes the chord/rest it decorates (matching MSCX layout). `testTempoLineFermata`
+    /// moved to `phase8Fixtures` (W8): its gradual tempo change is imported now. Every other MuseScore fermata fixture
+    /// requires grace notes, so the decoder is also exercised against a hand-rolled XML snippet in
+    /// `phase3_fermata_decoderUnit()` below.
     static let phase3Fixtures: [String] = []
+
+    /// MuseScore's own MusicXML Import fixtures that carry directions, each judged against its `_ref.mscx` — what
+    /// MuseScore itself made of the file, with text-type inference on (`musicxml_tests.cpp:136`). Admitted one at a
+    /// time (spec §11): a name is here only when the comparison is empty, and a fixture parked for an asymmetry that is
+    /// not a direction's is listed here with the reason. Filled by Step 3, in candidate order. Parked (reason):
+    /// - `testInferredTechnique` // parked — m9 "senza sord": MuseScore 4.7.5 reads Mute, current MuseScore
+    ///   (P2 getPlayingTechnique, "senza sord" → Open) reads Open; we follow current MuseScore
+    static let phase8Fixtures: [String] = [
+        "testTempoLineFermata",
+        "testInferredTempoText",
+        "testInferredTempoText2",
+        "testInferredDynamicsExpression",
+        "testWedgeOffset",
+        "testPlacementDefaults",
+        "testPlacementOffsetDefaults",
+        "testFinaleDynamics",
+        "testPedalChangesBroken",
+        "testSibMetronomeMarks",
+        "testTempoTextSpace1",
+        "testTempoTextSpace2",
+        "testTextOrder",
+        "testInferredCrescLines",
+        "testInferredCrescLines2",
+        "testSibRitLine",
+        "testSibOttavas",
+        "testInferredDynamicRange",
+    ]
+
+    static var directionOptions: ScoreSemanticComparison.Options {
+        var options = ScoreSemanticComparison.Options()
+        options.stripsStaffText = false
+        options.sortsAnnotationRuns = true
+        options.ignoresLineGeometry = true
+        // The refs are `mscore` 4.7.5 saves, not test-mode ones: what its writer adds whatever the MusicXML said.
+        options.ignoreMetaTagKeys = ScoreSemanticComparison.appWrittenMetaTagKeys
+        options.ignoresPartTrackName = true
+        options.ignoresPedalAutoTextPlace = true
+        options.ignoresLineHairpinStyledTexts = true
+        options.ignoresDefaultFermataPlacement = true
+        options.normalizesTrailingEndMarkers = true
+        options.roundsTempoToFilePrecision = true
+        return options
+    }
 
     @Test(arguments: phase0Fixtures)
     func phase0_semanticEquivalence(_ fixture: String) throws {
@@ -75,6 +115,15 @@ struct MusicXMLImportTests {
     @Test(arguments: phase2Fixtures)
     func phase2_jumpMarker_semanticEquivalence(_ fixture: String) throws {
         try runSemanticEquivalence(fixture: fixture)
+    }
+
+    @Test("direction fixtures are semantically equal to MuseScore's reading", arguments: phase8Fixtures)
+    func phase8_directions_semanticEquivalence(_ fixture: String) throws {
+        let produced = try MusicXMLFixtureLoader.score(fixture)
+        let reference = try MSCXParser.parse(MusicXMLFixtureLoader.referenceMscx(fixture))
+        ScoreSemanticComparison.assertEquivalent(
+            produced: produced, reference: reference, options: Self.directionOptions,
+        )
     }
 
     /// Phase 4 — Glissando.

@@ -38,7 +38,36 @@ enum ScoreSemanticComparison {
         var sortsAnnotationRuns = false
         /// If true, clear line geometry (hook heights, dash lengths) that MusicXML cannot carry.
         var ignoresLineGeometry = false
+        /// If true, clear `Part.trackName` — the `<Part><trackName>` MuseScore 4.x's writer emits (from the part name)
+        /// and master's no longer does (`twrite.cpp`, `Part::partName()` derived). The MusicXML decoder leaves it nil.
+        var ignoresPartTrackName = false
+        /// If true, drop a pedal's `<continueTextPlace>auto</continueTextPlace>` / `<endTextPlace>auto</endTextPlace>`
+        /// payload children — Pid::CONTINUE_TEXT_PLACE / END_TEXT_PLACE, which `Pedal::Pedal` leaves at AUTO while
+        /// their default is LEFT (`pedal.cpp:122,161-164`), so every pedal MuseScore saves writes both, whatever the
+        /// input said.
+        var ignoresPedalAutoTextPlace = false
+        /// If true, clear `beginText` / `continueText` on cresc. / dim. line hairpins (`crescLine` / `dimLine`). Those
+        /// texts are style-bound (`hairpin.cpp:53,59`, Sid::hairpinText) and MuseScore's importer sets them by setter
+        /// (`importmusicxmlpass2.cpp:4560-4561`), leaving them STYLED, so its file never carries them.
+        var ignoresLineHairpinStyledTexts = false
+        /// If true, clear a fermata's placement when it equals its voice's default — MuseScore writes Pid::PLACEMENT
+        /// only when it differs from the track's default, above for an even track, below for an odd one
+        /// (`fermata.cpp:190-191`); the MusicXML decoder sets it explicitly.
+        var ignoresDefaultFermataPlacement = false
+        /// If true, in a voice's trailing run of bar lines and spanner end markers, put the end markers before the bar
+        /// lines and collapse identical consecutive end markers. MuseScore 4.x's MSCX writer writes a spanner ending
+        /// on the score's last tick twice and before the end bar line; other versions write one, after it.
+        var normalizesTrailingEndMarkers = false
+        /// If true, round every tempo's beats per second to 6 decimals — the precision MuseScore's writer gives
+        /// Pid::TEMPO (`TConv::toXml(tempo, Constants::TEMPO_PRECISION)`, `twrite.cpp:3327`, `constants.h:110`), so a
+        /// reference file holds 1.666667 where the import's exact value is 100 / 60.
+        var roundsTempoToFilePrecision = false
     }
+
+    /// The `metaTag` keys MuseScore's app (not its importer) writes when `mscore` saves outside test mode:
+    /// `creationDate` / `platform` (`writer.cpp:172-173` drops them only under `MScore::testMode`) and
+    /// `originalFormat` (`notationproject.cpp:354`, set on open). For `Options.ignoreMetaTagKeys`.
+    static let appWrittenMetaTagKeys: Set<String> = ["creationDate", "platform", "originalFormat"]
 
     /// Assert that `produced` (from MusicXML) and `reference` (from MSCX)
     /// normalize to equal `Score` values. Emits a targeted diff message when
@@ -82,6 +111,7 @@ enum ScoreSemanticComparison {
                 diffs.append(staffDiff(index: i, produced: pair.0, reference: pair.1))
             }
         }
+        if let lane = systemMeasuresDiff(produced: lhs, reference: rhs) { diffs.append(lane) }
         if diffs.isEmpty {
             diffs.append("Scores differ but no component diff pinpointed; full dump:")
             diffs.append("produced=\(lhs)")
@@ -281,7 +311,7 @@ enum ScoreSemanticComparison {
         if options.stripsStaffText { s = removingStaffText(s) }
         if options.sortsAnnotationRuns { s = sortingAnnotationRuns(s) }
         if options.ignoresLineGeometry { s = ignoringLineGeometry(s) }
-        return s
+        return applyingWriterAllowances(s, options: options)
     }
 
     private static func canonicalizeDurations(_ element: VoiceElement) -> VoiceElement {

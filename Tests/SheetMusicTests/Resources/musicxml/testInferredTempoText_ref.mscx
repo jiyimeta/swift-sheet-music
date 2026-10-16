@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <programVersion>4.7.5</programVersion>
+  <programRevision>3654226</programRevision>
+  <Score>
+    <eid>Tp7rBdz4JUO_4NqnxiUbIxB</eid>
+    <Division>480</Division>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <open>1</open>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer"></metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="creationDate">2026-10-17</metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="originalFormat">xml</metaTag>
+    <metaTag name="platform">Apple Macintosh</metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber"></metaTag>
+    <metaTag name="workTitle"></metaTag>
+    <Part id="1">
+      <Staff>
+        <eid>kYAKtNbd18J_D2s8qyUh3oL</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        </Staff>
+      <trackName>Flute</trackName>
+      <Instrument id="flute">
+        <longName>Flute</longName>
+        <shortName>Fl.</shortName>
+        <trackName>Flute</trackName>
+        <minPitchP>59</minPitchP>
+        <maxPitchP>98</maxPitchP>
+        <minPitchA>60</minPitchA>
+        <maxPitchA>93</maxPitchA>
+        <instrumentId>wind.flutes.flute</instrumentId>
+        <Articulation>
+          <velocity>100</velocity>
+          <gateTime>95</gateTime>
+          </Articulation>
+        <Articulation name="staccatissimo">
+          <velocity>100</velocity>
+          <gateTime>33</gateTime>
+          </Articulation>
+        <Articulation name="staccato">
+          <velocity>100</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="portato">
+          <velocity>100</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="tenuto">
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="marcato">
+          <velocity>120</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="sforzato">
+          <velocity>150</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="sforzatoStaccato">
+          <velocity>150</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoStaccato">
+          <velocity>120</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoTenuto">
+          <velocity>120</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Channel>
+          <program value="73"/>
+          <controller ctrl="7" value="95"/>
+          <controller ctrl="10" value="69"/>
+          <synti>Fluid</synti>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <eid>XZpvKogRlpE_xnhVHc4b+GL</eid>
+        </VBox>
+      <Measure>
+        <eid>2L+EjJ4E2pK_fN2P0ofG+9D</eid>
+        <voice>
+          <Clef>
+            <concertClefType>G</concertClefType>
+            <transposingClefType>G</transposingClefType>
+            <isHeader>1</isHeader>
+            <eid>B92Wp//hc7D_y9wDEB4lQcL</eid>
+            </Clef>
+          <TimeSig>
+            <eid>58vYZL5QTML_G6CiiQWKK5L</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <Tempo>
+            <tempo>2</tempo>
+            <eid>JEE86ILwvQG_euSKPQ1bkqJ</eid>
+            <text><b>Moderately</b></text>
+            </Tempo>
+          <Rest>
+            <eid>WQtDseCqCqJ_FzAUrSuF1XK</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>8E5ht8ImEKG_ESqK5fytfuO</eid>
+        <LayoutBreak>
+          <eid>ZZiz89fYOIE_dkckHY94lvN</eid>
+          <subtype>line</subtype>
+          </LayoutBreak>
+        <voice>
+          <Tempo>
+            <tempo>2</tempo>
+            <eid>Ppij9VKrziI_sqxfCnsA2UG</eid>
+            <text><b>Allegro</b></text>
+            </Tempo>
+          <Rest>
+            <eid>46/e3UL392O_wI3pVQZOUKN</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>gQuML9BBgY_pOR7kF+nzDM</eid>
+        <voice>
+          <Tempo>
+            <tempo>2</tempo>
+            <eid>szMsuPh0jFD_KGCKu2If60C</eid>
+            <text><b>A tempo, warmly</b></text>
+            </Tempo>
+          <Rest>
+            <eid>fQkw/0XOSMD_HnpBGH/6JAI</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>Pl5rsMoHv8I_UZ2RciAFBvJ</eid>
+        <LayoutBreak>
+          <eid>lomo8G25RvL_THyXwFwlpaB</eid>
+          <subtype>line</subtype>
+          </LayoutBreak>
+        <voice>
+          <Tempo>
+            <tempo>2</tempo>
+            <eid>g1hJP97BfyO_l3//1w3t25H</eid>
+            <text><b>Fast three, in one</b></text>
+            </Tempo>
+          <Rest>
+            <eid>atEnQS/pNDK_miQpF7S4YDM</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>cNhdUY4kSqM_cZtEeG7USpI</eid>
+        <voice>
+          <Tempo>
+            <tempo>2</tempo>
+            <eid>KFo6hzdlL3E_JXXV2VGidQB</eid>
+            <text><b>Classic Ballad</b></text>
+            </Tempo>
+          <Rest>
+            <eid>Vwv6vNMjS5D_PENKvjezB5M</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>ofH/Siqx38N_MGH0oSWkF1O</eid>
+        <LayoutBreak>
+          <eid>CAP9ut60FZK_2rlrd6zIDC</eid>
+          <subtype>line</subtype>
+          </LayoutBreak>
+        <voice>
+          <Tempo>
+            <tempo>2</tempo>
+            <eid>MuM7FxwCeoH_UJfNn7Q2/M</eid>
+            <text><b>Moderato</b></text>
+            </Tempo>
+          <Rest>
+            <eid>/ZLbor/smeC_lL6rRfBYLVM</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>8p7ZTibLdJJ_qGYbXwCPuq</eid>
+        <voice>
+          <Tempo>
+            <tempo>2</tempo>
+            <eid>cegg36fEhl_QwAjlj7rQ2B</eid>
+            <text><b>Freely, with quiet intensity</b></text>
+            </Tempo>
+          <Rest>
+            <eid>3pa4YOw8OxO_SG0/xTj4iqJ</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>W47vikOqX9N_VhtEBB6tlOI</eid>
+        <LayoutBreak>
+          <eid>PAjN5JtZ0kE_o2TBOzy0SqN</eid>
+          <subtype>line</subtype>
+          </LayoutBreak>
+        <voice>
+          <StaffText>
+            <eid>PvjLedSNe8K_s2IHKhHLKiM</eid>
+            <text><b>“Andante”</b></text>
+            </StaffText>
+          <Rest>
+            <eid>eHpX1bCD/tK_g7kwtjNSEQG</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>WNaHCZvVCgC_HPU21GWk+vF</eid>
+        <voice>
+          <Tempo>
+            <tempo>2</tempo>
+            <eid>7Ip+Ww7e2JD_UgunimBTVPG</eid>
+            <text><b>Andantino</b></text>
+            </Tempo>
+          <Rest>
+            <eid>rwJG3qpU1KJ_RIjkjh9FYqH</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>dpdgQKvaWp_kr6Wa5hVVgD</eid>
+        <voice>
+          <Tempo>
+            <tempo>2</tempo>
+            <eid>uttVM+h1yHC_Gl81kbYCvMC</eid>
+            <text><b>BRISK</b></text>
+            </Tempo>
+          <Rest>
+            <eid>dimNCmLKJmG_u6zNZ5PXmsO</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          <BarLine>
+            <subtype>end</subtype>
+            <eid>KtSDVJwlLpG_iVyR+WFlhvE</eid>
+            </BarLine>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>

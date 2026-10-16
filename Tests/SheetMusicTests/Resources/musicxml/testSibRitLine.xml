@@ -1,0 +1,163 @@
+<?xml version='1.0' encoding="UTF-8" standalone='no'?>
+<!DOCTYPE score-partwise PUBLIC '-//Recordare//DTD MusicXML 4.0 Partwise//EN' 'http://www.musicxml.org/dtds/partwise.dtd'>
+<score-partwise version='4.0'>
+	<identification>
+		<encoding>
+			<software>Sibelius 2023.3</software>
+			<software>Dolet 8.3 for Sibelius</software>
+			<encoding-date>2023-04-17</encoding-date>
+			<supports element='accidental' type='yes'/>
+			<supports element='transpose' type='yes'/>
+			<supports attribute='new-page' element='print' type='yes' value='yes'/>
+			<supports attribute='new-system' element='print' type='yes' value='yes'/>
+		</encoding>
+	</identification>
+	<defaults>
+		<scaling>
+			<millimeters>7</millimeters>
+			<tenths>40</tenths>
+		</scaling>
+		<concert-score/>
+		<page-layout>
+			<page-height>1597</page-height>
+			<page-width>1234</page-width>
+			<page-margins type='both'>
+				<left-margin>72.5714</left-margin>
+				<right-margin>72.5714</right-margin>
+				<top-margin>72.5714</top-margin>
+				<bottom-margin>72.5714</bottom-margin>
+			</page-margins>
+		</page-layout>
+		<system-layout>
+			<system-margins>
+				<left-margin>0</left-margin>
+				<right-margin>0</right-margin>
+			</system-margins>
+			<system-distance>120</system-distance>
+			<top-system-distance>108.75</top-system-distance>
+		</system-layout>
+		<?DoletSibelius StaffJustificationPercentage=65?>
+		<appearance>
+			<line-width type='beam'>5</line-width>
+			<line-width type='heavy barline'>5</line-width>
+			<line-width type='leger'>1.5625</line-width>
+			<line-width type='light barline'>1.5625</line-width>
+			<line-width type='slur middle'>2.1875</line-width>
+			<line-width type='slur tip'>0.625</line-width>
+			<line-width type='staff'>0.9375</line-width>
+			<line-width type='stem'>1.25</line-width>
+			<line-width type='tie middle'>2.1875</line-width>
+			<line-width type='tie tip'>0.625</line-width>
+			<note-size type='grace'>60</note-size>
+			<note-size type='cue'>75</note-size>
+		</appearance>
+		<music-font font-family='Opus Std,engraved'/>
+	</defaults>
+	<part-list>
+		<score-part id='P1'>
+			<part-name print-object='no'>[Unnamed (treble staff)]</part-name>
+			<group>score</group>
+			<score-instrument id='P1-I1'>
+				<instrument-name></instrument-name>
+				<instrument-sound>keyboard.piano.grand</instrument-sound>
+			</score-instrument>
+			<midi-instrument id='P1-I1'>
+				<volume>79</volume>
+				<pan>0</pan>
+			</midi-instrument>
+		</score-part>
+	</part-list>
+<!--=========================================================-->
+	<part id='P1'>
+		<measure number='1'>
+			<print>
+				<system-layout>
+					<top-system-distance>181.5625</top-system-distance>
+				</system-layout>
+				<staff-layout>
+					<?DoletSibelius ExtraSpacesAbove=3?>
+				</staff-layout>
+				<measure-layout>
+					<measure-distance>50</measure-distance>
+				</measure-layout>
+			</print>
+			<attributes>
+				<divisions>768</divisions>
+				<key>
+					<fifths>0</fifths>
+					<mode>major</mode>
+				</key>
+				<time>
+					<beats>4</beats>
+					<beat-type>4</beat-type>
+				</time>
+				<clef>
+					<sign>G</sign>
+					<line>2</line>
+				</clef>
+			</attributes>
+			<direction placement='above' system='only-top'>
+				<direction-type>
+					<words  font-weight='bold'>Rit.</words>
+				</direction-type>
+				<direction-type>
+					<dashes type='start' number='1' />
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='2'>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='3'>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='4'>
+			<direction>
+				<direction-type>
+					<dashes type='stop' number='1' />
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='5'>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='6'>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+			<barline location='right'>
+				<bar-style>light-heavy</bar-style>
+			</barline>
+		</measure>
+	</part>
+<!--=========================================================-->
+</score-partwise>

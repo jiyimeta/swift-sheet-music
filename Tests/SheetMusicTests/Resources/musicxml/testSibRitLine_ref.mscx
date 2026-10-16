@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <programVersion>4.7.5</programVersion>
+  <programRevision>3654226</programRevision>
+  <Score>
+    <eid>LA/M6WRdzQI_BAn6ylFMNOJ</eid>
+    <Division>480</Division>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <open>1</open>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer"></metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="creationDate">2026-10-17</metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="originalFormat">xml</metaTag>
+    <metaTag name="platform">Apple Macintosh</metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber"></metaTag>
+    <metaTag name="workTitle"></metaTag>
+    <Part id="1">
+      <Staff>
+        <eid>eYbXT+7ReGH_uhXjtiZB3QH</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        </Staff>
+      <trackName>[Unnamed (treble staff)]</trackName>
+      <Instrument id="grand-piano">
+        <longName>[Unnamed (treble staff)]</longName>
+        <trackName></trackName>
+        <minPitchP>21</minPitchP>
+        <maxPitchP>108</maxPitchP>
+        <minPitchA>21</minPitchA>
+        <maxPitchA>108</maxPitchA>
+        <instrumentId>keyboard.piano.grand</instrumentId>
+        <clef staff="2">F</clef>
+        <singleNoteDynamics>0</singleNoteDynamics>
+        <Articulation>
+          <velocity>100</velocity>
+          <gateTime>95</gateTime>
+          </Articulation>
+        <Articulation name="staccatissimo">
+          <velocity>100</velocity>
+          <gateTime>33</gateTime>
+          </Articulation>
+        <Articulation name="staccato">
+          <velocity>100</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="portato">
+          <velocity>100</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="tenuto">
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="marcato">
+          <velocity>120</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="sforzato">
+          <velocity>150</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="sforzatoStaccato">
+          <velocity>150</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoStaccato">
+          <velocity>120</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoTenuto">
+          <velocity>120</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Channel>
+          <program value="0"/>
+          <controller ctrl="10" value="63"/>
+          <synti>Fluid</synti>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <eid>FJ4GB+5ZjRG_07lJhpH+B+N</eid>
+        </VBox>
+      <HBox>
+        <width>5</width>
+        <eid>KPWx6oLeXxK_z/DpSS/xCAM</eid>
+        </HBox>
+      <Measure>
+        <eid>4hoE+MobiSD_o8AnwoD56IN</eid>
+        <voice>
+          <Clef>
+            <concertClefType>G</concertClefType>
+            <transposingClefType>G</transposingClefType>
+            <isHeader>1</isHeader>
+            <eid>52PXT18ZV/F_kiehGASMU4I</eid>
+            </Clef>
+          <TimeSig>
+            <eid>xTphNyYBWiF_x/6rWUrvlbI</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <Spanner type="GradualTempoChange">
+            <GradualTempoChange>
+              <tempoChangeType>ritardando</tempoChangeType>
+              <beginHookHeight>1.9</beginHookHeight>
+              <endHookType>0</endHookType>
+              <endHookHeight>1.9</endHookHeight>
+              <beginText>Rit.</beginText>
+              <beginTextOffset x="0" y="0"/>
+              <eid>Q1CRrA0nCqP_zExG3YwjpPG</eid>
+              </GradualTempoChange>
+            <next>
+              <location>
+                <measures>3</measures>
+                </location>
+              </next>
+            </Spanner>
+          <Rest>
+            <eid>Eh7Bz30ZlKB_CRbuiaSMjLH</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>PbyTer8q5mH_rQ6rMl2GlxB</eid>
+        <voice>
+          <Rest>
+            <eid>jyARabdjPQL_VuEk4EwYEyD</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>Ap9gJdjAaD_FoSKDJz/77L</eid>
+        <voice>
+          <Rest>
+            <eid>4YLgluIFV1D_P1Egp/tDywE</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>bjhYwawbGmE_qESUoi9Q3tJ</eid>
+        <voice>
+          <Spanner type="GradualTempoChange">
+            <prev>
+              <location>
+                <measures>-3</measures>
+                </location>
+              </prev>
+            </Spanner>
+          <Rest>
+            <eid>YSoHRPOijBG_mwTggdWHjr</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>qTislF8DM6B_B7vtRbr/qZF</eid>
+        <voice>
+          <Rest>
+            <eid>2vA5lgVSDsH_1fQIUuWQHv</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>IXvS4SI/MEN_38Bk6dWfpME</eid>
+        <voice>
+          <Rest>
+            <eid>fpMSdIyUZSH_gr4qJE+SE0H</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          <BarLine>
+            <subtype>end</subtype>
+            <eid>UxzLP4+r5FP_/4/wWTC9xoJ</eid>
+            </BarLine>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>
