@@ -300,7 +300,7 @@ public enum LayoutEngine {
             guard layout.align.vertical == .top else { continue }
             let fontSize = CGFloat(t.fontSize ?? Double(layout.fontSize))
             let dy = (t.offsetMm?.y ?? 0) * mmToPt
-            let bottom = layout.topOffset + dy
+            let bottom = layout.topOffset + dy + lastLineOffset(of: t, fontSize: fontSize)
                 + fontSize * textHeightFactor
             if bottom > requiredFromTopAnchors {
                 requiredFromTopAnchors = bottom
@@ -341,6 +341,18 @@ public enum LayoutEngine {
         return LayoutTitleFrame(
             height: frameHeight, texts: laidOut,
         )
+    }
+
+    /// How far below its first line's top a title-block text's last line starts: 0 for a one-line text, so only a text
+    /// broken over lines (`<br/>`, or a newline in a plain one) grows the frame. Measured by the placement the
+    /// renderers draw from (`LayoutTitleFrame.placedLines`), so the frame holds every line they draw.
+    private static func lastLineOffset(of text: FrameText, fontSize: CGFloat) -> CGFloat {
+        let entry = LayoutFrameText(
+            text: text.text, style: text.style, position: CGPoint(x: 0, y: 0), fontSize: fontSize,
+            anchor: .topLeading,
+            richText: text.richText.map { titleRichText($0, style: text.style, fontSize: fontSize) },
+        )
+        return LayoutTitleFrame(height: 0, texts: [entry]).placedLines().last?.position.y ?? 0
     }
 
     /// A title-block text's runs, in the face the block is set in (`LayoutTitleFrame.font(size:)`). Title-block styles

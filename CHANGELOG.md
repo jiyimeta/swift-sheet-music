@@ -27,6 +27,10 @@ and this project adheres to
   through the upper half of every "1." and "Last time", authored or synthesized. A volta's vertical extent and skyline
   shape now measure that ink instead of a band centered on the line. `voltaLabelOrigin(from:to:sp:)` keeps its meaning,
   the point a plain label hung by `(0, 0.5)` takes, now on the same baseline.
+- **A title-block text broken over lines keeps every line inside its frame.** The frame grew only by one line per text,
+  so when the frame's own `<height>` was not already tall enough a two-line subtitle ("First line<br/>arr. Second") lost
+  its second line under the first system — at a 20 pt staff the frame stopped 11 pt short of it. The frame now reaches
+  each top-anchored text's last line, measured by the placement the renderers draw from.
 
 ## [4.11.0] - 2026-10-16
 
