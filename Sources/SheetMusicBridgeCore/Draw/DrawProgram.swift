@@ -5,11 +5,11 @@ import Wirelet
 /// boundary. Little-endian throughout. Both the Swift encoder and the Kotlin
 /// decoder must agree on the magic + version; mismatches are fail-fast.
 ///
-/// ### Wire layout (v8)
+/// ### Wire layout (v9)
 ///
 /// ```text
 /// u32 magic       = 0x534D4450 ("SMDP")
-/// u32 version     = 8
+/// u32 version     = 9
 /// i32 pageCount
 /// [page] × pageCount:
 ///     f64 widthMM
@@ -47,9 +47,15 @@ import Wirelet
 /// (12), the fill terminator beams are drawn with. It also added `FontID.system` and the `semibold` style bit, so a
 /// text command names the face the layout measured it in. Removing a case renumbers what follows it, so the version
 /// field is what keeps a v7 reader from taking v8's discriminators 11 and 12 for its own.
+///
+/// v9 appended `drawImage` (13), a box's picture: the PNG or JPEG bytes themselves (a length-delimited field) and the
+/// rectangle they fill. The boxes between systems (`LayoutDocument.frames`) are drawn in the program from v9 on — their
+/// texts as `text` runs, their pictures as `drawImage`. Neither encoding can step over a command it does not know, so a
+/// v8 reader refuses a v9 stream (by its version word, or earlier by the unknown discriminator 13) rather than
+/// mis-parsing it or dropping the picture, and a v9 reader refuses a v8 stream by its version word.
 public enum DrawProgram {
     public static let magic: UInt32 = 0x534D_4450 // "SMDP"
-    public static let version: UInt32 = 8
+    public static let version: UInt32 = 9
 
     /// The face a `glyph` / `text` / `stretchedGlyph` command is drawn in — the face the layout measured it in, which
     /// `TextFontMapping` derives from the resolved `LayoutFont`. Weight is not part of the id; it travels in
@@ -83,9 +89,9 @@ public struct EncodablePage: Sendable, Equatable {
 }
 
 /// One painter command. The encoded discriminator is the case's declaration order (`moveTo` = 0 … `setTextStyle` =
-/// 11, `fillPath` = 12), and `DrawProgramFlat`'s opcodes mirror it. Reorder with care: changes here are wire-breaking
-/// across the Kotlin and JavaScript boundaries. Only ever *append* new cases at the tail so existing discriminators
-/// hold; removing one renumbers everything after it and needs a version bump in both encodings.
+/// 11, `fillPath` = 12, `drawImage` = 13), and `DrawProgramFlat`'s opcodes mirror it. Reorder with care: changes here
+/// are wire-breaking across the Kotlin and JavaScript boundaries. Only ever *append* new cases at the tail so existing
+/// discriminators hold; removing one renumbers everything after it and needs a version bump in both encodings.
 @WireFormatChoice
 public enum DrawCommand: Sendable, Equatable {
     case moveTo(x: Double, y: Double)

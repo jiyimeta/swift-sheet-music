@@ -112,6 +112,15 @@ and this project adheres to
   pages. A score without frames paginates, and reports its page offsets, exactly as before. Differences from
   MuseScore: the box with the break opens the new page rather than ending the old one, and a break before the first
   system makes no cover page.
+- **Draw program v9: `drawImage`, and boxes in the program** — `DrawCommand.drawImage(data:x:y:w:h:)` (discriminator
+  13, appended at the tail, so nothing renumbers) carries a picture's PNG or JPEG bytes and the rectangle they fill, in
+  mm with the top-left corner at `x`, `y`; the reader decodes and scales them, draws nothing for a payload it cannot
+  decode, and applies no color, dash or rotation state. `LayoutBridge` now draws every box between systems
+  (`LayoutDocument.frames`): its texts as the title block's are drawn, at the box's own top, then its pictures, each box
+  in a `SystemSpan` of its own (`systemIndex` nil) just before the system below it, so the spans still follow the page
+  top to bottom; the title block's pictures (`titleImages`) follow its texts inside its span. `DrawCommandBounds`
+  counts a picture's whole rectangle, and page margins move it as they move everything else. A score without a box
+  after the title and without a picture draws the same commands, byte for byte, as before.
 
 ### Changed
 
@@ -121,6 +130,14 @@ and this project adheres to
   `max(gap, 2 sp)` away — its `topGap` above, its `bottomGap` below, 7 sp when unset — instead of the engine's
   `systemGap`; a box right after the title block sits `max(title bottomGap, box topGap)` below it. A box inside a
   multi-measure-rest run attaches before the run. An `<HBox>` is not a break.
+- **Draw program v9 and flat format v3: a v8 program or SMDF v2 stream is refused by a v9 reader, and a v9 one by a v8
+  reader (no reader skips an unknown opcode) — hosts move their Swift, Kotlin and TypeScript readers together** —
+  `DrawProgram.version` is 9 and `DrawProgramFlat.version` 3. The flat header gains a blob table after the string
+  table (`i32 blobCount`, then `i32 byteLen` + bytes each, deduplicated by content), and opcode 13's record carries
+  `[x, y, w, h]` in its slots and the blob index in its integer; `DrawProgramFlat.DecodeError` gains `badBlobIndex`.
+  Neither format can step over a command it does not know, so an older reader never mis-parses a newer stream or drops
+  a picture silently: a v8 Swift or Kotlin reader fails on the version word (or, when the stream carries a picture,
+  earlier on the unknown discriminator 13), and a v2 TypeScript reader on the version word before it reads a record.
 
 ### Fixed
 

@@ -313,7 +313,7 @@
 
         /// SHA-256 of the v8 macro encoding of `textFreeScore()`'s pages, recorded before v9 existed. A score without a
         /// box or a picture must draw the same commands, byte for byte, whatever the version word says.
-        private static let textFreeProgramSHA256 = "PHASE-A-PLACEHOLDER"
+        private static let textFreeProgramSHA256 = "bc6303383ffec755f8827cd6863a425aee1405182ccf34ca1273be7b55880a9d"
 
         /// Three whole-note bars on one staff: no title, no lyrics, no staff text, no instrument name — nothing whose
         /// position depends on a system font's measurement, so the hash pins the encoder and not the machine's fonts.
@@ -341,7 +341,6 @@
                     let digits = String(byte, radix: 16)
                     return digits.count == 1 ? "0" + digits : digits
                 }.joined()
-                print("W7-T9-SHA: \(hex)")
                 #expect(hex == Self.textFreeProgramSHA256, "W7-T9-SHA: \(hex)")
             }
         #endif

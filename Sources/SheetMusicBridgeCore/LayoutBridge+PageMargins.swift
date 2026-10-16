@@ -114,12 +114,12 @@ extension DrawCommand {
     /// This command moved `dx` right and `dy` down, in its own millimetres: every position it carries and none of its
     /// sizes.
     ///
-    /// Positions: `moveTo` / `lineTo`'s point, `cubicTo`'s two control points and end point, `fillRect`'s origin (not
-    /// its `w` / `h`), `glyph` and `text`'s origin (not their size), `stretchedGlyph`'s `rightEdgeX`, `topY` and
-    /// `bottomY` (not its `fontSize` or `xScale`), and a non-zero `setRotation`'s pivot. The reset
-    /// `setRotation(radians: 0, …)` rotates about no point and is left as emitted, as are the commands that carry no
-    /// position — `stroke`'s width, `setDash`'s lengths, `setColor`, `setTextStyle`, `fillPath`. The switch has no
-    /// default, so a new command does not compile until it says which of the two it is.
+    /// Positions: `moveTo` / `lineTo`'s point, `cubicTo`'s two control points and end point, `fillRect`'s and
+    /// `drawImage`'s origin (not their `w` / `h`, nor a picture's bytes), `glyph` and `text`'s origin (not their size),
+    /// `stretchedGlyph`'s `rightEdgeX`, `topY` and `bottomY` (not its `fontSize` or `xScale`), and a non-zero
+    /// `setRotation`'s pivot. The reset `setRotation(radians: 0, …)` rotates about no point and is left as emitted, as
+    /// are the commands that carry no position — `stroke`'s width, `setDash`'s lengths, `setColor`, `setTextStyle`,
+    /// `fillPath`. The switch has no default, so a new command does not compile until it says which of the two it is.
     func translated(dx: Double, dy: Double) -> DrawCommand {
         switch self {
         case let .moveTo(x, y):
@@ -141,7 +141,9 @@ extension DrawCommand {
             )
         case let .setRotation(radians, pivotX, pivotY):
             radians == 0 ? self : .setRotation(radians: radians, pivotX: pivotX + dx, pivotY: pivotY + dy)
-        case .stroke, .setColor, .setDash, .setTextStyle, .fillPath, .drawImage:
+        case let .drawImage(data, x, y, w, h):
+            .drawImage(data: data, x: x + dx, y: y + dy, w: w, h: h)
+        case .stroke, .setColor, .setDash, .setTextStyle, .fillPath:
             self
         }
     }
