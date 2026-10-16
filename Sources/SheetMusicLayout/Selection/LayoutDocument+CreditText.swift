@@ -115,10 +115,16 @@ extension LayoutDocument {
     }
 
     /// A plain line's box. The layer renderer aligns a title line on its INK box (`ScoreLayerBuilder.textLayer`), so
-    /// the box is measured the same way; an ink-less line (spaces only) falls back to its advance.
+    /// the box is measured the same way; an ink-less line (spaces only) falls back to its advance. It is measured in
+    /// the face the line is drawn in — the provider's `renderingTextFont` of the title face, as the draw program
+    /// (`LayoutBridge.appendTitleEntry`) and the rich placement (`LayoutTitleFrame.richLineTops`) resolve it — so a
+    /// table provider, which carries no system face, measures the Edwin it draws rather than its stub's fallback.
+    /// `CreditTextLine.font` stays the title face a host's editor asks its own platform for.
     private static func plainFrame(of line: LayoutTitleFrame.PlacedLine, isBold: Bool, isItalic: Bool) -> CGRect {
-        let font = CreditTextLine.font(size: line.fontSize, isBold: isBold, isItalic: isItalic)
         let provider = FontMetrics.provider
+        let font = provider.renderingTextFont(
+            CreditTextLine.font(size: line.fontSize, isBold: isBold, isItalic: isItalic),
+        )
         let width = provider.textInkBounds(text: line.text, font: font)?.width
             ?? provider.typographicWidth(text: line.text, font: font)
         let height = provider.ascent(font: font) + provider.descent(font: font)
