@@ -152,6 +152,17 @@
             #expect(result.offsets == tops + [Double(last.origin.y + last.size.height) / mmToPt])
         }
 
+        /// The second page starts where VBox B ends, not at the system above it: the box with the page break stays on
+        /// the page it closes (MuseScore `pagelayout.cpp:246`), so Kotlin lifts page 2 by the box's bottom.
+        @Test func thePageAfterABoxBreakStartsAtTheBoxsBottom() throws {
+            let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("frames-boxes"))
+            let result = try Self.breaks(of: score, options: Self.pageOptions().encodeToData(), pageHeightMM: 2000)
+            let boxMatch = result.document.frames.first { $0.pageBreakAfter }
+            let box = try #require(boxMatch)
+            try #require(result.offsets.count == 3, "offsets \(result.offsets)")
+            #expect(abs(result.offsets[1] - Double(box.bottom) * Self.ptToMM) < 1e-6)
+        }
+
         /// `.page` mode draws a page per `document.paginate` range. On a page no music fills, frames-boxes still takes
         /// two: VBox B's page break ends the first.
         @Test func pageModeDrawsAPagePerRange() throws {

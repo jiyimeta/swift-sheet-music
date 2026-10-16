@@ -183,12 +183,49 @@
             )
         }
 
-        /// A plain box `height` points tall at `originY`.
-        private func frame(originY: CGFloat, height: CGFloat) -> LayoutFrame {
+        /// A box `height` points tall at `originY`, a page break after it when `pageBreakAfter`.
+        private func frame(originY: CGFloat, height: CGFloat, pageBreakAfter: Bool = false) -> LayoutFrame {
             LayoutFrame(
                 kind: .vertical, beforeMeasureIndex: 0, originY: originY, height: height,
-                content: LayoutTitleFrame(height: height, texts: []), images: [], pageBreakAfter: false,
+                content: LayoutTitleFrame(height: height, texts: []), images: [], pageBreakAfter: pageBreakAfter,
             )
+        }
+
+        /// Systems at `origins` and one box over `box` with a page break after it.
+        private func breakingDocument(origins: [CGFloat], box: Range<CGFloat>) -> LayoutDocument {
+            LayoutDocument(
+                size: CGSize(width: 600, height: (origins.last ?? 0) + 200),
+                systems: origins.map { system(originY: $0) }, metrics: StaffMetrics(staffSize: 28),
+                frames: [frame(originY: box.lowerBound, height: box.upperBound - box.lowerBound, pageBreakAfter: true)],
+            )
+        }
+
+        /// A box with a page break stays on the sheet it closes (MuseScore `pagelayout.cpp:246`): the batch after it
+        /// starts at the box's bottom, not at the system above it, and the host's sheets put the box on the sheet
+        /// above. S0 [0, 200], the box [210, 290], S1 [300, 500], S2 [520, 720] on 1140 pt of room.
+        @Test func theBatchAfterABoxBreakStartsAtTheBoxsBottom() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let document = breakingDocument(origins: [0, 300, 520], box: 210 ..< 290)
+            let batches = PDFExporter.paginate(document: document, page: page(height: 1200), policy: .honor)
+            #expect(batches.map(\.systems.count) == [1, 2])
+            #expect(batches.map(\.startY) == [0, 290])
+            let size = CGSize(width: 600, height: 1200)
+            let sheets = batches.map { batch in
+                PDFExporter.Sheet(
+                    systems: batch.systems, pageStartY: batch.startY, pageSize: size, margins: PageMargins(uniform: 30),
+                )
+            }
+            #expect(PDFExporter.frames(of: sheets, in: document).map { $0.map(\.originY) } == [[210], []])
+        }
+
+        /// The sheet above must hold the box too: when the box does not fit under S1, S1 moves to the next sheet with
+        /// it. S0 [0, 200], S1 [220, 420], the box [430, 690], S2 [700, 900] on 540 pt of room.
+        @Test func aBoxBreakThatDoesNotFitTakesTheSystemAboveItAlong() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let document = breakingDocument(origins: [0, 220, 700], box: 430 ..< 690)
+            let batches = PDFExporter.paginate(document: document, page: page(height: 600), policy: .honor)
+            #expect(batches.map(\.systems.count) == [1, 1, 1])
+            #expect(batches.map(\.startY) == [0, 220, 690])
         }
 
         /// A frame's page break starts a page at the system below it with room to spare, and that page starts at the

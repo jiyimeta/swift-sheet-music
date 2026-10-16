@@ -1,13 +1,15 @@
 import Foundation
 @testable import SheetMusicBridgeCore
 import SheetMusicCore
-import SheetMusicLayout
+@testable import SheetMusicLayout
 import Testing
 
 #if !canImport(CoreGraphics)
     /// On Android and WebAssembly, Foundation's own CoreGraphics shims also export `CGFloat`, so anchor explicitly to
     /// SheetMusicLayout's own definition instead of leaving it ambiguous. File-scoped, as in every other file here.
     private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+    private typealias CGSize = SheetMusicLayout.CGSize
 #endif
 
 /// `LayoutBridge.PagePlacement`: where `encodePagesWithSpans` draws a document's points, and back — what a host needs
@@ -100,6 +102,33 @@ struct PagePlacementTests {
         #expect(placement.page(containingDocumentY: 9000) == 2)
         let empty = LayoutBridge.PagePlacement(pageTopsPt: [], contentOffsetXMM: 0, contentOffsetYMM: 0)
         #expect(empty.page(containingDocumentY: 0) == nil)
+    }
+
+    /// A box with a page break stays on the page it closes (MuseScore `pagelayout.cpp:246`), so the next page's top —
+    /// what a host lifts its marks by — is the box's bottom, and a point inside the box is on the page above. S0
+    /// [0, 100], the box [110, 170], S1 [200, 300].
+    @Test("in page mode the page after a box's page break starts at the box's bottom")
+    func pageAfterABoxBreakStartsAtTheBoxsBottom() {
+        let systems = [CGFloat(0), 200].map { top in
+            LayoutSystem(
+                origin: CGPoint(x: 0, y: top), size: CGSize(width: 100, height: 100), measures: [],
+                staffOrigins: [], staffAddresses: [], staffGeometries: [], partLabels: [], spanners: [], sp: 7,
+            )
+        }
+        let box = LayoutFrame(
+            kind: .vertical, beforeMeasureIndex: 0, originY: 110, height: 60,
+            content: LayoutTitleFrame(height: 60, texts: []), images: [], pageBreakAfter: true,
+        )
+        let document = LayoutDocument(
+            size: CGSize(width: 100, height: 300), systems: systems, metrics: StaffMetrics(staffSize: 28),
+            frames: [box],
+        )
+        let placement = LayoutBridge.pagePlacement(
+            document: document, options: Self.options(.page), pageHeightMM: Self.pageHeightMM,
+        )
+        #expect(placement.pageTopsPt == [0, 170])
+        #expect(placement.page(containingDocumentY: 140) == 0)
+        #expect(placement.page(containingDocumentY: 180) == 1)
     }
 
     // MARK: - Helpers

@@ -288,7 +288,7 @@ struct LayoutPaginatorTests {
     /// Each range's page (`LayoutBridge.pageDocument`) and the top it was lifted by; the last takes trailing frames.
     private func pages(_ ranges: [Range<Int>], of document: LayoutDocument) -> [(top: CGFloat, page: LayoutDocument)] {
         ranges.enumerated().map { index, range in
-            let top = range.lowerBound > 0 ? bottom(document.systems[range.lowerBound - 1]) : 0
+            let top = document.pageTop(ofPageStartingAt: range.lowerBound)
             let page = document.subdocument(systems: range, yOffset: -top, isLastPage: index == ranges.count - 1)
             return (top: top, page: page)
         }
@@ -302,7 +302,7 @@ struct LayoutPaginatorTests {
         let tbox = try #require(tboxMatch)
         let breaking = try #require(breakMatch)
         let below = try systemIndex(below: tbox, in: document)
-        let pageTop = try bottom(document.systems[systemIndex(below: breaking, in: document) - 1])
+        let pageTop = try document.pageTop(ofPageStartingAt: systemIndex(below: breaking, in: document))
         // VBox B's break starts a page at `pageTop`, with room for the systems above the TBox, not the one below it.
         let ranges = document.paginate(pageHeight: bottom(document.systems[below]) - pageTop - 1, policy: .honor)
         let nextMatch = ranges.firstIndex { $0.lowerBound == below }

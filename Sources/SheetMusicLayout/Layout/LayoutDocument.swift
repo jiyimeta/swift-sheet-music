@@ -64,6 +64,14 @@ extension LayoutDocument {
         )
     }
 
+    /// Where, in document y, a page whose first system is `systemIndex` starts. Stub until Task 8b lands: still the
+    /// previous system's bottom (0 for the first page), the value every page consumer used before.
+    public func pageTop(ofPageStartingAt systemIndex: Int) -> CGFloat {
+        guard systemIndex > 0, systems.indices.contains(systemIndex - 1) else { return 0 }
+        let previous = systems[systemIndex - 1]
+        return previous.origin.y + previous.size.height
+    }
+
     /// The index of the first system at or below `frame`'s bottom: the system the frame sits above. `nil` for a frame
     /// after the last system.
     func systemIndex(below frame: LayoutFrame) -> Int? {
