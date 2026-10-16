@@ -178,6 +178,16 @@ extension MusicXMLMeasureWalker {
         }
     }
 
+    /// The measure's length, which the spanners' `<next>` offsets roll over (`P1:2839-2852`): how far its clock went,
+    /// or, for an empty measure, the last `<time>`'s `beats / beat-type`, or 4/4 when there is none.
+    static func measureLength(_ state: MusicXMLMeasureState, attributes: MusicXMLAttributesSnapshot) -> Fraction {
+        guard state.clock.furthest.isZeroTick else { return state.clock.furthest }
+        if let beats = attributes.timeN, let beatType = attributes.timeD, beats > 0, beatType > 0 {
+            return Fraction(numerator: beats, denominator: beatType)
+        }
+        return Fraction(numerator: 4, denominator: 4)
+    }
+
     /// The node's `<duration>` as a fraction of a whole note, when it is a positive integer.
     private static func positiveDuration(_ node: XMLTreeNode, divisions: DivisionsContext) -> Fraction? {
         guard let text = node.first("duration")?.text, let value = Int(text), value > 0, divisions.perQuarter > 0

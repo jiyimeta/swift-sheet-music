@@ -61,6 +61,7 @@ enum MusicXMLMeasureWalker {
         var directionEvents: [MusicXMLDirectionEvent] = []
         var anchors: [[[MusicXMLChordAnchor]]] = Array(repeating: [], count: staffCount)
         var tempoElements: [[PositionedSystemElement]] = []
+        var measureLengths: [Fraction] = []
         for (index, measureNode) in partNode.all("measure").enumerated() {
             let isFirstMeasure = (index == 0)
             var state = MusicXMLMeasureState(
@@ -78,6 +79,7 @@ enum MusicXMLMeasureWalker {
                 directionEvents: &directionEvents,
             )
             tempoElements.append(state.tempoElements)
+            measureLengths.append(measureLength(state, attributes: previousAttributes))
             for (staffIdx, item) in built.enumerated() {
                 perStaffMeasures[staffIdx].append(item.measure)
                 perStaffSystemElements[staffIdx].append(item.systemElements)
@@ -88,7 +90,10 @@ enum MusicXMLMeasureWalker {
             attachments: glideTracker.attachments,
             measures: perStaffMeasures,
         )
-        MusicXMLDirectionSplicer.apply(directionEvents, anchors: anchors, to: &withGlides)
+        // Spanner starts and stops pair part-wide once the part is walked; their begin sides and end markers join the
+        // queue after the direction's other voice elements, in the pairing's order.
+        let spanners = MusicXMLSpannerPairing.pair(directionEvents, measureLengths: measureLengths)
+        MusicXMLDirectionSplicer.apply(directionEvents + spanners, anchors: anchors, to: &withGlides)
         let dropped = dropUnmatchedTies(withGlides)
         return PartResult(
             staffCount: staffCount,

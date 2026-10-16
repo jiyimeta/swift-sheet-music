@@ -42,6 +42,7 @@ enum MusicXMLDirectionDecoder {
         let facts = MusicXMLDirectionFacts(direction, infers: context.options.inferTextType)
         appendDynamics(facts, staff: staff, tick: tick, context: context, to: &output)
         appendTexts(facts, staff: staff, tick: tick, context: context, to: &output)
+        appendSpanners(facts, staff: staff, tick: tick, context: context, to: &output)
         return output
     }
 

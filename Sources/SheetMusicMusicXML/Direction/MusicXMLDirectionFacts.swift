@@ -34,6 +34,8 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
     /// velocity ÷ 0.9 (`P2:4536`), then each `<sound>` sets it again to its `dynamics` (`P2:4124`) — a value that is no
     /// number reads as 0 (`String::toDouble`).
     var dynamicsVelocity: Double?
+    /// The `<wedge>` starts and stops, in order (`MusicXmlParserDirection::wedge`, `P2:5470-5514`).
+    var wedges: [MusicXMLWedgeFact] = []
 
     /// The metronome's text is not empty (MuseScore's non-empty `m_metroText`).
     var hasMetronome: Bool {
@@ -94,6 +96,10 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
             }
         case "metronome":
             metronome = MusicXMLMetronome.parse(child)
+        case "wedge":
+            if let wedge = MusicXMLWedgeFact(child), !wedges.contains(where: { $0.repeats(wedge) }) {
+                wedges.append(wedge)
+            }
         case "eyeglasses":
             wordsXML += "<sym>miscEyeglasses</sym>"
         case "symbol":

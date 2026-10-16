@@ -30,6 +30,9 @@ and this project adheres to
   text keeps its words ("subito p" is a `p` with its own text), several elements in one `<dynamics>` are several
   dynamics, two dynamics joined by a hyphen are one, and — with text-type inference — words that are a dynamic ("mf",
   "sfz") become one. A dynamic takes the `<dynamics>` color and the direction's `print-object`.
+- **MusicXML wedges** — `<wedge>` crescendos and diminuendos import as hairpins that start and end where the file says,
+  honoring `<offset>`, `number`, a stop that arrives first, and a start on the bar line (which belongs to the next bar);
+  one without a stop is dropped, as in MuseScore.
 
 ### Fixed
 
