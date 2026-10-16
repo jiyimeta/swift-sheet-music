@@ -37,6 +37,9 @@ struct MusicXMLSpannerStopEdit: Sendable, Equatable {
         case pedalStop(discontinue: Bool, line: String?, sign: String)
         /// The stop half of `<pedal type="change">` (`P2:5426-5434`), which ends the open pedal with a 45° hook.
         case pedalChange(line: String?)
+        /// `<bracket type="stop">` or `<dashes type="stop">` (`P2:5180-5216`, `5254-5258`): the line the stop element
+        /// makes and its end hook (`MusicXMLLineStop`).
+        case lineStop(MusicXMLLineStop)
     }
 
     var change: Change?
@@ -105,46 +108,70 @@ enum MusicXMLSpannerPairing {
     /// Walks the events once, in file order. A start in an open slot is ignored (`P2:3812-3815`) — except a pedal's,
     /// which drops the open pedal and opens in its place, as MuseScore deletes an unterminated pedal as an unrecorded
     /// "discontinue", unless the open one began a change (`P2:5360-5388`). Otherwise a start closes against a stop the
-    /// slot holds (`P2:3827-3833`), or opens the slot. A stop closes the slot's open start, or is held until the start
-    /// comes (`P2:3799-3805`) unless the slot holds one already (`P2:3781-3783`) or it is a pedal change's
-    /// (`closesOnlyAnOpenStart`). Whatever is open or held at the end is dropped, as MuseScore deletes it at the part's
-    /// end (`P2:2318-2341`).
+    /// slot holds (`P2:3827-3833`), or opens the slot; a line's start first becomes what the held stop makes of it
+    /// (`MusicXMLLineStart`). A stop closes the slot's open start, or is held until the start comes (`P2:3799-3805`)
+    /// unless the slot holds one already (`P2:3781-3783`) or it is a pedal change's (`closesOnlyAnOpenStart`).
+    /// Whatever is open or held at the end is dropped, as MuseScore deletes it at the part's end (`P2:2318-2341`).
     static func pairClosed(
         _ events: [MusicXMLDirectionEvent], measureLengths: [Fraction],
     ) -> [MusicXMLClosedSpanner] {
-        var open: [MusicXMLSpannerSlot: (spanner: Spanner, event: MusicXMLDirectionEvent)] = [:]
-        var held: [MusicXMLSpannerSlot: (edit: MusicXMLSpannerStopEdit, event: MusicXMLDirectionEvent)] = [:]
-        var result: [MusicXMLClosedSpanner] = []
+        var pairer = Pairer(measureLengths: measureLengths)
         for event in events {
             switch event.payload {
             case let .spannerStart(slot, spanner):
-                if let current = open[slot] {
-                    if replacesOpenStart(current.spanner, slot: slot) { open[slot] = (spanner, event) }
-                    continue
-                }
-                if let stop = held.removeValue(forKey: slot) {
-                    let pair = closed(
-                        spanner, begin: event, end: stop.event, measureLengths: measureLengths, edit: stop.edit,
-                        stopCameFirst: true,
-                    )
-                    if let pair { result.append(pair) }
-                } else {
-                    open[slot] = (spanner, event)
-                }
+                pairer.start(spanner, slot: slot, event: event)
+            case let .lineStart(slot, line):
+                pairer.start(line.spanner(afterHeldStop: pairer.held[slot]?.edit), slot: slot, event: event)
             case let .spannerStop(slot, edit):
-                if let start = open.removeValue(forKey: slot) {
-                    let pair = closed(
-                        start.spanner, begin: start.event, end: event, measureLengths: measureLengths, edit: edit,
-                    )
-                    if let pair { result.append(pair) }
-                } else if held[slot] == nil, !edit.closesOnlyAnOpenStart {
-                    held[slot] = (edit, event)
-                }
+                pairer.stop(edit, slot: slot, event: event)
             case .voice:
                 continue
             }
         }
-        return result
+        return pairer.result
+    }
+
+    /// The open starts and held stops of `pairClosed`'s walk, and the pairs closed so far.
+    private struct Pairer {
+        let measureLengths: [Fraction]
+        var open: [MusicXMLSpannerSlot: (spanner: Spanner, event: MusicXMLDirectionEvent)] = [:]
+        var held: [MusicXMLSpannerSlot: (edit: MusicXMLSpannerStopEdit, event: MusicXMLDirectionEvent)] = [:]
+        var result: [MusicXMLClosedSpanner] = []
+
+        init(measureLengths: [Fraction]) {
+            self.measureLengths = measureLengths
+        }
+
+        mutating func start(_ spanner: Spanner, slot: MusicXMLSpannerSlot, event: MusicXMLDirectionEvent) {
+            if let current = open[slot] {
+                if MusicXMLSpannerPairing.replacesOpenStart(current.spanner, slot: slot) {
+                    open[slot] = (spanner, event)
+                }
+                return
+            }
+            if let stop = held.removeValue(forKey: slot) {
+                let pair = MusicXMLSpannerPairing.closed(
+                    spanner, begin: event, end: stop.event, measureLengths: measureLengths, edit: stop.edit,
+                    stopCameFirst: true,
+                )
+                if let pair { result.append(pair) }
+            } else {
+                open[slot] = (spanner, event)
+            }
+        }
+
+        mutating func stop(
+            _ edit: MusicXMLSpannerStopEdit, slot: MusicXMLSpannerSlot, event: MusicXMLDirectionEvent,
+        ) {
+            if let start = open.removeValue(forKey: slot) {
+                let pair = MusicXMLSpannerPairing.closed(
+                    start.spanner, begin: start.event, end: event, measureLengths: measureLengths, edit: edit,
+                )
+                if let pair { result.append(pair) }
+            } else if held[slot] == nil, !edit.closesOnlyAnOpenStart {
+                held[slot] = (edit, event)
+            }
+        }
     }
 
     /// Whether a start replaces the spanner open in its slot: only a pedal's, and not over a change pedal (begin hook

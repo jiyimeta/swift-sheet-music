@@ -2,7 +2,7 @@ import SheetMusicCore
 import SheetMusicFoundation
 
 /// A direction's words, metronome and rehearsal marks as the elements MuseScore makes of them (`P2:3525-3699`), in
-/// its `else if` order: a tempo text by its words, a tempo line (decided here, made by its own decoder), a Sticking,
+/// its `else if` order: a tempo text by its words, an inferred tempo line (`MusicXMLInferredLine`), a Sticking,
 /// a dynamic range's hyphen (which makes nothing here), then — when the direction has words, a rehearsal or a
 /// metronome — a tempo text by its sound tempo, or else a staff text, a system text, a play-technique annotation or an
 /// Expression, or else its rehearsal marks; a direction with none of those but a sound tempo is a hidden tempo. Only
@@ -26,8 +26,11 @@ extension MusicXMLDirectionDecoder {
         }
         let kind = MusicXMLWordsClassifier.classify(traits)
         switch kind {
-        case .tempoLine:
-            // Made by the tempo-line decoder; until it lands, these words are dropped as before.
+        case let .tempoLine(type):
+            // The words become the line's text (`P2:3539-3549`); the line ends where `MusicXMLInferredLineLog` says.
+            output.inferredLines.append(inferredTempoLine(
+                plainWords, type: type, facts: facts, staff: staff, tick: tick, context: context,
+            ))
             return
         case .sticking:
             appendSticking(facts, words: words, staff: staff, tick: tick, context: context, to: &output)

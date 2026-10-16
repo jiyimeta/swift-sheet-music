@@ -9,6 +9,9 @@ struct MusicXMLDirectionEvent: Sendable, Equatable {
         /// The start of a spanner in a part-wide slot; `MusicXMLSpannerPairing` closes it against its stop and turns
         /// the pair into a begin side and an end marker (`.voice(.spanner(…))`).
         case spannerStart(MusicXMLSpannerSlot, Spanner)
+        /// The start of a bracket or dashes line, whose spanner depends on a stop its slot already holds
+        /// (`MusicXMLLineStart`).
+        case lineStart(MusicXMLSpannerSlot, MusicXMLLineStart)
         /// The stop of the spanner open in a slot, with what the stop element says about the spanner as a whole.
         case spannerStop(MusicXMLSpannerSlot, MusicXMLSpannerStopEdit)
     }

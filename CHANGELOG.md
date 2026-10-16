@@ -37,6 +37,10 @@ and this project adheres to
   whose notes are written the octave lower (or higher) the line implies and keep their sounding pitch, and `<pedal>`
   start / change / stop / resume / sostenuto / discontinue import as the pedal lines MuseScore builds, with their hooks
   and signs.
+- **MusicXML lines** — `<bracket>`, `<dashes>` and wavy lines import as text lines and trill lines; with text-type
+  inference, "cresc." / "dim." become hairpin lines and "rit." / "accel." / … gradual tempo changes, ended by the next
+  dynamic, tempo text or fermata within 24 quarter notes, as MuseScore ends them. This closes the gradual-tempo gap behind
+  `testTempoLineFermata`.
 
 ### Fixed
 

@@ -27,6 +27,10 @@ struct MusicXMLMeasureState {
     /// Where the last chord or rest that took time started (MuseScore's `prevTime`, `P2:2858`): a `<chord/>` tone
     /// takes its octave shift there (`P2:7183`).
     var chordStart = Fraction.zeroTick
+    /// The part's inferred lines so far, which the walk hands from measure to measure, and where this measure starts
+    /// by the lengths the walk has recorded.
+    var inferredLines = MusicXMLInferredLineLog()
+    var partTick = Fraction.zeroTick
 
     init(
         measureIndex: Int, staffCount: Int, options: MusicXMLImportOptions, partIndex: Int,
@@ -58,6 +62,7 @@ extension MusicXMLMeasureWalker {
         // A `<chord/>` tone starts where its chord did, every other note at the clock (`P2:7183`).
         let isChordTone = child.children.contains { $0.name == "chord" }
         let noteStart = isChordTone ? state.chordStart : state.clock.now
+        endTempoLines(atFermataOf: child, staff: staffIdx, tick: noteStart, state: &state)
         let decoded = try MusicXMLNoteDecoder.decodeNote(
             node: child,
             divisions: divisions,
@@ -146,14 +151,47 @@ extension MusicXMLMeasureWalker {
             divisions: divisions,
             options: state.options,
             partIndex: state.partIndex,
+            measureStart: state.partTick,
             registry: state.registry,
         )
         let output = MusicXMLDirectionDecoder.decode(child, context: context)
         state.directionEvents += output.events
+        // A direction's dynamics and tempo text end earlier lines before its own words start one (`P2:3700-3705`,
+        // `3754-3764`).
+        for terminator in output.lineTerminators {
+            state.inferredLines.terminate(terminator)
+        }
+        for line in output.inferredLines {
+            state.inferredLines.open(line)
+        }
         for placed in output.systemElements where state.builders.indices.contains(placed.staff) {
             state.builders[placed.staff].addSystemElement(placed.element, at: placed.position)
         }
         state.tempoElements += output.tempoElements
+    }
+
+    /// A note's `<fermata>` ends the tempo lines inferred on its staff, at its chord's start (`P2:9472-9479`).
+    private static func endTempoLines(
+        atFermataOf note: XMLTreeNode, staff: Int, tick: Fraction, state: inout MusicXMLMeasureState,
+    ) {
+        guard note.all("notations").contains(where: { !$0.all("fermata").isEmpty }) else { return }
+        state.inferredLines.terminate(
+            kind: .tempo, staff: staff, atAbsolute: state.partTick + tick, measure: state.measureIndex, tick: tick,
+        )
+    }
+
+    /// A `<barline>`: applied to every staff; a `<fermata>` in it ends the tempo lines inferred on the part's first
+    /// staff, at the clock (`P2:5835-5860`).
+    static func decodeBarlineChild(_ child: XMLTreeNode, state: inout MusicXMLMeasureState) {
+        let decoded = MusicXMLBarlineDecoder.decode(child)
+        for builder in state.builders.indices {
+            state.builders[builder].apply(barline: decoded)
+        }
+        guard !child.all("fermata").isEmpty else { return }
+        let now = state.clock.now
+        state.inferredLines.terminate(
+            kind: .tempo, staff: 0, atAbsolute: state.partTick + now, measure: state.measureIndex, tick: now,
+        )
     }
 
     /// A `<sound>` directly in the measure: its `tempo` waits for the next `<note>`; each `<sound>` replaces it, one

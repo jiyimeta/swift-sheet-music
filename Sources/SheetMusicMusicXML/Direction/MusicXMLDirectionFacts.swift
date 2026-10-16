@@ -43,6 +43,12 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
     /// The direction's own `placement` attribute (`m_placement`, `P2:3447`), which an ottava's side falls back from
     /// to its styled side without consulting `default-y` (`P2:5297`, `5306`).
     var placementAttribute: String?
+    /// The `<bracket>` and `<dashes>` starts and stops, in order (`P2:5095-5258`), each start holding the words read
+    /// before it, which it takes out of `wordsXML`.
+    var lines: [MusicXMLLineFact] = []
+    /// When inferring, the simplified plain text of the last `<words>` that holds "cresc" or "dim", which MuseScore
+    /// takes out of the words to start a hairpin line (`textToCrescLine`, `P2:4543-4564`).
+    var crescLineWords: String?
 
     /// The metronome's text is not empty (MuseScore's non-empty `m_metroText`).
     var hasMetronome: Bool {
@@ -66,7 +72,9 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
                 defaultY = child.attributes["default-y"].flatMap { Double($0) }.map { $0 * -0.1 }
                 visible = child.attributes["print-object"] != "no"
                 color = child.attributes["color"].flatMap { MusicXMLColor.parse($0) }
-                read(child, infers: infers, finale: finale)
+                // `placement()` as a line reads it while its element is read (`P2:5243`).
+                let placementNow = explicitPlacement ?? defaultY.map { $0 < 0 ? "above" : "below" }
+                read(child, infers: infers, finale: finale, placement: placementNow)
             }
         }
         placementAttribute = explicitPlacement
@@ -86,17 +94,23 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
 
     /// One `<direction-type>` child's contribution to the words (`P2:4037-4103`). `<segno/>` and `<coda/>` add
     /// nothing here: the repeat decoding owns their glyph.
-    private mutating func read(_ child: XMLTreeNode, infers: Bool, finale: Bool) {
+    private mutating func read(_ child: XMLTreeNode, infers: Bool, finale: Bool, placement: String?) {
         switch child.name {
         case "words":
             let part = MusicXMLFormattedWords.xmlText(of: child)
-            // `textToDynamic` takes each `<words>` that is a dynamic out of the words (`P2:4044`).
+            let plain = MusicXMLFormattedWords.simplified(MusicXMLFormattedWords.plainText(ofXMLText: part))
+            // `textToDynamic` then `textToCrescLine` take each `<words>` that is a dynamic, or that holds "cresc" or
+            // "dim", out of the words (`P2:4044-4045`).
             if infers, let subtype = MusicXMLDynamicText.wordsDynamic(part, finale: finale) {
                 dynamics.append(subtype)
                 dynamicsVelocity = (Double(Dynamic.defaultVelocity(for: subtype)) / 0.9).rounded()
+            } else if infers, plain.hasSubstring("cresc") || plain.hasSubstring("dim") {
+                crescLineWords = plain
             } else {
                 wordsXML += part
             }
+        case "bracket", "dashes":
+            readLine(child, placement: placement)
         case "dynamics":
             dynamicsColor = child.attributes["color"].flatMap { MusicXMLColor.parse($0) }
             for mark in child.children {

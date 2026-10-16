@@ -97,6 +97,7 @@ extension MusicXMLDirectionDecoder {
             ))
         }
         let pedals = pedalEvents(facts)
+        let lines = lineEvents(facts, context: context)
         for wedge in facts.wedges where !wedge.isStart {
             let slot = MusicXMLSpannerSlot(family: .hairpin, number: wedge.number)
             append(.spannerStop(slot, MusicXMLSpannerStopEdit()), at: tick)
@@ -105,7 +106,7 @@ extension MusicXMLDirectionDecoder {
             let slot = MusicXMLSpannerSlot(family: .ottava, number: shift.number)
             append(.spannerStop(slot, MusicXMLSpannerStopEdit()), at: context.now)
         }
-        for stop in pedals.stops {
+        for stop in pedals.stops + lines.stops {
             append(stop, at: tick)
         }
         for wedge in facts.wedges {
@@ -118,7 +119,7 @@ extension MusicXMLDirectionDecoder {
             let slot = MusicXMLSpannerSlot(family: .ottava, number: shift.number)
             append(.spannerStart(slot, ottava(subtype, shift: shift, facts: facts)), at: tick)
         }
-        for start in pedals.starts {
+        for start in pedals.starts + lines.starts {
             append(start, at: tick)
         }
     }

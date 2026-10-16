@@ -134,6 +134,7 @@ extension MusicXMLSpannerStopEdit.Change {
     ///   `discontinue`). When the stop came first, it edited a fresh pedal (line drawn unless `line="no"`, no end
     ///   hook), and the start then rewrote everything but the end text (`P2:5389-5407`): only that survives.
     /// - `pedalChange` (`P2:5427-5433`): a 45° end hook, and `line` sets the visibility.
+    /// - `lineStop`: a bracket's or dashes' stop (`MusicXMLLineStop.apply`).
     func apply(_ spanner: inout Spanner, stopCameFirst: Bool) {
         var properties = spanner.lineProperties ?? Spanner.LineProperties()
         switch self {
@@ -154,6 +155,9 @@ extension MusicXMLSpannerStopEdit.Change {
         case let .pedalChange(line):
             properties.endHook = .hook45
             properties.lineVisible = Self.lineVisible(line, current: properties.lineVisible)
+        case let .lineStop(stop):
+            stop.apply(&spanner, stopCameFirst: stopCameFirst)
+            return
         }
         spanner.lineProperties = properties
         spanner.normalizePedal()

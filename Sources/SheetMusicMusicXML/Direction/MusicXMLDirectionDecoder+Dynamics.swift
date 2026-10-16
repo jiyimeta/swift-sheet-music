@@ -27,6 +27,13 @@ extension MusicXMLDirectionDecoder {
                 measure: context.measure, staff: staff, tick: tick, payload: .voice(.dynamic(dynamic)),
             ))
         }
+        // Each dynamic ends the hairpin lines inferred on its staff (`P2:3754-3755`).
+        if !made.isEmpty {
+            output.lineTerminators.append(MusicXMLInferredLineTerminator(
+                kind: .hairpin, staff: staff, measure: context.measure, tick: tick,
+                absolute: context.measureStart + tick,
+            ))
+        }
     }
 
     /// `isLikelyDynamicRange` (`P2:4993-5005`): with inference, two dynamics and words that are only a hyphen or a dash

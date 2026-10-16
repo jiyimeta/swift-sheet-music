@@ -45,10 +45,7 @@ enum MusicXMLMeasureWalker {
         var divisions = DivisionsContext(perQuarter: 1)
         var previousAttributes = MusicXMLAttributesSnapshot()
         var perStaffMeasures: [[Measure]] = Array(repeating: [], count: staffCount)
-        var perStaffSystemElements: [[[PositionedSystemElement]]] = Array(
-            repeating: [],
-            count: staffCount,
-        )
+        var perStaffSystemElements: [[[PositionedSystemElement]]] = Array(repeating: [], count: staffCount)
         // Glissando / slide events span notes (and possibly measures)
         // within a part; the tracker accumulates pending starts and
         // resolved attachments across the full per-part walk, then
@@ -62,6 +59,9 @@ enum MusicXMLMeasureWalker {
         var anchors: [[[MusicXMLChordAnchor]]] = Array(repeating: [], count: staffCount)
         var tempoElements: [[PositionedSystemElement]] = []
         var measureLengths: [Fraction] = []
+        // The lines inferred from words live across measures; their limit is measured from the part's start.
+        var inferredLines = MusicXMLInferredLineLog()
+        var partTick = Fraction.zeroTick
         // The octave shifts are read before the notes, as MuseScore's pass 1 reads them (`P2:7264`).
         let octaveShifts = MusicXMLOctaveShiftScan.scan(partNode: partNode)
         for (index, measureNode) in partNode.all("measure").enumerated() {
@@ -73,6 +73,8 @@ enum MusicXMLMeasureWalker {
             state.octaveShifts = octaveShifts.table
             state.measureStart = octaveShifts.measureStarts.indices.contains(index)
                 ? octaveShifts.measureStarts[index] : .zeroTick
+            state.inferredLines = inferredLines
+            state.partTick = partTick
             let built = try decodeOne(
                 measureNode: measureNode,
                 state: &state,
@@ -84,20 +86,21 @@ enum MusicXMLMeasureWalker {
                 directionEvents: &directionEvents,
             )
             tempoElements.append(state.tempoElements)
-            measureLengths.append(measureLength(state, attributes: previousAttributes))
+            let length = measureLength(state, attributes: previousAttributes)
+            measureLengths.append(length)
+            inferredLines = state.inferredLines
+            partTick += length
             for (staffIdx, item) in built.enumerated() {
                 perStaffMeasures[staffIdx].append(item.measure)
                 perStaffSystemElements[staffIdx].append(item.systemElements)
                 anchors[staffIdx].append(item.anchors)
             }
         }
-        var withGlides = applyGlides(
-            attachments: glideTracker.attachments,
-            measures: perStaffMeasures,
-        )
-        // Spanner starts and stops pair part-wide once the part is walked; their begin sides and end markers join the
-        // queue after the direction's other voice elements, in the pairing's order.
-        let spanners = MusicXMLSpannerPairing.pair(directionEvents, measureLengths: measureLengths)
+        var withGlides = applyGlides(attachments: glideTracker.attachments, measures: perStaffMeasures)
+        // Spanner starts and stops pair part-wide once the part is walked, and the inferred lines close at their ends
+        // (`P2:2307-2314`); their begin sides and end markers join the queue after the direction's other voice
+        // elements, in the pairing's order.
+        let spanners = spannerEvents(directionEvents, inferredLines: inferredLines, measureLengths: measureLengths)
         MusicXMLDirectionSplicer.apply(directionEvents + spanners, anchors: anchors, to: &withGlides)
         let dropped = dropUnmatchedTies(withGlides)
         return PartResult(
@@ -106,6 +109,16 @@ enum MusicXMLMeasureWalker {
             systemElementsByStaffMeasure: perStaffSystemElements,
             lineCountByStaff: previousAttributes.lineCountByStaff,
             tempoElementsByMeasure: tempoElements,
+        )
+    }
+
+    /// The part's spanners, paired and closed, as begin sides and end markers in the pairing's order.
+    private static func spannerEvents(
+        _ events: [MusicXMLDirectionEvent], inferredLines: MusicXMLInferredLineLog, measureLengths: [Fraction],
+    ) -> [MusicXMLDirectionEvent] {
+        MusicXMLSpannerPairing.ordered(
+            MusicXMLSpannerPairing.pairClosed(events, measureLengths: measureLengths)
+                + inferredLines.finished(measureLengths: measureLengths),
         )
     }
 
@@ -211,10 +224,7 @@ enum MusicXMLMeasureWalker {
                 moveClock(child, state: &state, divisions: divisions)
 
             case "barline":
-                let decoded = MusicXMLBarlineDecoder.decode(child)
-                for builder in state.builders.indices {
-                    state.builders[builder].apply(barline: decoded)
-                }
+                decodeBarlineChild(child, state: &state)
 
             case "sound":
                 decodeSoundChild(child, state: &state)
