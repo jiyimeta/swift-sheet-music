@@ -141,19 +141,46 @@ struct FingeringLayoutTests {
         #expect(abs(rect.height - (ink.height + 0.4 * F.sp)) < 0.01 || rect.width > rect.height)
     }
 
-    @Test("an offset moves a right-hand fingering, a hidden one is a ghost, an unknown style is not drawn")
-    func offsetHiddenOther() throws {
+    /// Where a right-hand "i" over a G4 whole note lands with `offset` (and `autoplace`), relative to none.
+    private static func rightHandShift(offset: ScoreOffset, autoplace: Bool? = nil) throws -> CGPoint {
+        func origin(_ fingering: Fingering) throws -> CGPoint {
+            var note = Note(pitch: 67, tpc: 15)
+            note.fingerings = [fingering]
+            let document = F.layout(F.score([.chord(Chord(duration: .whole, notes: ChordNotes([note])))]))
+            return try #require(Self.texts(document, style: .rhGuitarFingering).first).origin
+        }
+        let plain = try origin(Fingering(text: "i", role: .rightHandGuitar))
+        var moved = Fingering(text: "i", role: .rightHandGuitar)
+        moved.elementProperties.offset = offset
+        moved.elementProperties.autoplace = autoplace
+        let shifted = try origin(moved)
+        return CGPoint(x: shifted.x - plain.x, y: shifted.y - plain.y)
+    }
+
+    /// Measured in MuseScore 4.7 on `own/fingerings`: its "i" draws in the same place with its `<offset y="1.5"/>`
+    /// as without it, while y −1.5 lifts it and x 1.5 moves it right. Autoplace moves a fingering pushed into its chord
+    /// back out to where it stacked, so only an offset away from the chord, or along it, shows.
+    @Test("an offset into the chord leaves an autoplaced fingering where it stacked; away or sideways, it moves it")
+    func offsetAgainstAutoplace() throws {
+        let into = try Self.rightHandShift(offset: ScoreOffset(x: 0, y: 1.5))
+        #expect(abs(into.y) < 0.001)
+        let away = try Self.rightHandShift(offset: ScoreOffset(x: 0, y: -1.5))
+        #expect(abs(away.y + 1.5 * F.sp) < 0.001)
+        let sideways = try Self.rightHandShift(offset: ScoreOffset(x: 1.5, y: 1.5))
+        #expect(abs(sideways.x - 1.5 * F.sp) < 0.001 && abs(sideways.y) < 0.001)
+        let free = try Self.rightHandShift(offset: ScoreOffset(x: 0, y: 1.5), autoplace: false)
+        #expect(abs(free.y - 1.5 * F.sp) < 0.001)
+    }
+
+    @Test("the fixture's right-hand i stays over the staff, and a hidden one is not drawn")
+    func fixtureRightHandAndHidden() throws {
         let document = try F.layout(F.load("fingerings"))
-        var base = Note(pitch: 67, tpc: 15)
-        var rh = Fingering(text: "i", role: .rightHandGuitar)
-        base.fingerings = [rh]
-        let plain = F.layout(F.score([.chord(Chord(duration: .whole, notes: ChordNotes([base])))]))
-        rh.elementProperties.offset = ScoreOffset(x: 0, y: 1.5)
-        base.fingerings = [rh]
-        let moved = F.layout(F.score([.chord(Chord(duration: .whole, notes: ChordNotes([base])))]))
-        let a = try #require(Self.texts(plain, style: .rhGuitarFingering).first)
-        let b = try #require(Self.texts(moved, style: .rhGuitarFingering).first)
-        #expect(abs((b.origin.y - a.origin.y) - 1.5 * F.sp) < 0.001)
+        let rh = try #require(Self.texts(document, style: .rhGuitarFingering).first)
+        let font = TextInkGeometry.font(for: .rhGuitarFingering, metrics: F.metrics)
+        let drop = LayoutEngine.textPlacementOrigin(text: "i", font: font, baseline: .zero, center: false).y
+        // Its note is the second chord's G4, on the second line: the top line is three spaces above it.
+        let topLine = try #require(F.chordNoteY(document, nth: 1)) - 3 * F.sp
+        #expect(rh.origin.y - drop < topLine)
         // `own/fingerings` carries a hidden `user_1` fingering "5": neither drawn nor, being unmodeled, a ghost.
         #expect(!F.staffTexts(document).contains { $0.text == "5" })
     }

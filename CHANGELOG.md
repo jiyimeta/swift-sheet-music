@@ -36,6 +36,11 @@ and this project adheres to
   upright and lost its orientation on save, and a diagram ssm saved as horizontal went to MuseScore as `1`, which
   MuseScore reads as vertical. A number is now kept as `Orientation.other` — read upright, as MuseScore reads it — and
   written back unchanged.
+- **An offset cannot push a stacked fingering into its chord.** MuseScore's autoplace lifts a fingering moved into its
+  chord back out to where it stacked — MuseScore 4.7 draws a right-hand "i" with `<offset y="1.5"/>` exactly where it
+  draws it without one — so the "i" sat on the stem tip inside the staff in folino and above the staff in MuseScore.
+  A stacked, autoplaced fingering now keeps no part of its offset that points into its chord; an offset away from it
+  or along it still moves it, and one with `<autoplace>0</autoplace>` takes its offset whole.
 
 ## [4.11.0] - 2026-10-16
 

@@ -161,9 +161,18 @@ extension LayoutEngine {
             }
             elements += placeChordRelative(sideBlocks, side: side, chord: facts, sp: sp)
         }
-        for (block, origin, side) in elements {
-            emitFingering(block, origin: origin, side: side, sp: sp, out: &out, invisibleOut: &invisibleOut)
+        for placed in elements {
+            emitFingering(placed, sp: sp, out: &out, invisibleOut: &invisibleOut)
         }
+    }
+
+    /// A fingering where it was placed: `stacked` when it was stacked out from its chord, against the chord's extremes
+    /// as MuseScore's autoplace sets it against the skyline.
+    private struct PlacedFingering {
+        let block: FingeringBlock
+        let origin: CGPoint
+        let side: Placement
+        let stacked: Bool
     }
 
     /// Right-aligned left of the chord's leftmost note shape — its head, or its accidental hanging
@@ -172,7 +181,7 @@ extension LayoutEngine {
     /// `chordlayout.cpp:312-333`).
     private static func placeLeftHand(
         _ blocks: [FingeringBlock], chord: FingeringChord, sp: CGFloat,
-    ) -> [(FingeringBlock, CGPoint, Placement)] {
+    ) -> [PlacedFingering] {
         guard !blocks.isEmpty else { return [] }
         let leftmost = chord.notes.map { note in
             let head = noteheadLeftEdge(note.origin.x, sp: sp)
@@ -186,20 +195,23 @@ extension LayoutEngine {
         }.min() ?? chord.column
         let rightEdge = leftmost - 0.5 * sp
         return blocks.map { block in
-            (block, block.origin(left: rightEdge - block.width, centerY: block.note.origin.y), .above)
+            PlacedFingering(
+                block: block, origin: block.origin(left: rightEdge - block.width, centerY: block.note.origin.y),
+                side: .above, stacked: false,
+            )
         }
     }
 
     /// One side's chord-relative fingerings: the tight ones beside their note, the rest stacked from the chord.
     private static func placeChordRelative(
         _ blocks: [FingeringBlock], side: Placement, chord: FingeringChord, sp: CGFloat,
-    ) -> [(FingeringBlock, CGPoint, Placement)] {
+    ) -> [PlacedFingering] {
         guard !blocks.isEmpty else { return [] }
         let above = side == .above
         // Above in note order, below reversed: the first is the one nearest the chord.
         let ordered = above ? blocks : blocks.reversed()
         let tight = chord.hasVoices && chord.notes.count == 1 && !chord.isBeamed
-        var placed: [(FingeringBlock, CGPoint, Placement)] = []
+        var placed: [PlacedFingering] = []
         var stackable: [FingeringBlock] = []
         for block in ordered {
             guard tight, block.style != .stringNumber else {
@@ -208,7 +220,10 @@ extension LayoutEngine {
             }
             let x = chord.column + (chord.hasStem ? (above ? -0.8 : 0.8) * sp : 0)
             let centerY = block.note.origin.y + (above ? -1.5 : 1.5) * sp
-            placed.append((block, block.origin(left: x - block.width / 2, centerY: centerY), side))
+            placed.append(PlacedFingering(
+                block: block, origin: block.origin(left: x - block.width / 2, centerY: centerY), side: side,
+                stacked: false,
+            ))
         }
         guard !stackable.isEmpty else { return placed }
         let limit: CGFloat = if above {
@@ -220,18 +235,31 @@ extension LayoutEngine {
             heights: stackable.map { $0.stackHeight(sp: sp) }, side: side, limit: limit, minDistance: 0.5 * sp,
         )
         for (block, centerY) in zip(stackable, centers) {
-            placed.append((block, block.origin(left: chord.column - block.width / 2, centerY: centerY), side))
+            placed.append(PlacedFingering(
+                block: block, origin: block.origin(left: chord.column - block.width / 2, centerY: centerY),
+                side: side, stacked: true,
+            ))
         }
         return placed
     }
 
-    /// The fingering's `.staffText` (and a string number's circle) at `origin` plus its offset, visible or ghost.
+    /// The fingering's `.staffText` (and a string number's circle) where it was placed plus its offset, visible or
+    /// ghost. A stacked, autoplaced fingering keeps no part of its offset that points into its chord: MuseScore's
+    /// autoplace lifts one pushed there back out to where it stacked (MuseScore 4.7 draws `own/fingerings`' "i" with
+    /// `<offset y="1.5"/>` exactly where it draws it without), while an offset away from the chord or along it shows.
     private static func emitFingering(
-        _ block: FingeringBlock, origin: CGPoint, side: Placement, sp: CGFloat,
+        _ placedFingering: PlacedFingering, sp: CGFloat,
         out: inout [LayoutElement], invisibleOut: inout [LayoutElement],
     ) {
+        let block = placedFingering.block
+        let origin = placedFingering.origin
+        let side = placedFingering.side
         let offset = block.fingering.elementProperties.offset
-        let placed = CGPoint(x: origin.x + CGFloat(offset?.x ?? 0) * sp, y: origin.y + CGFloat(offset?.y ?? 0) * sp)
+        var dy = CGFloat(offset?.y ?? 0) * sp
+        if placedFingering.stacked, block.fingering.elementProperties.autoplace != false {
+            dy = side == .above ? min(dy, 0) : max(dy, 0)
+        }
+        let placed = CGPoint(x: origin.x + CGFloat(offset?.x ?? 0) * sp, y: origin.y + dy)
         let color = block.fingering.elementProperties.color
         let placement = TextPlacementMetadata(side: side, autoplace: false)
         var elements: [LayoutElement] = [.staffText(
