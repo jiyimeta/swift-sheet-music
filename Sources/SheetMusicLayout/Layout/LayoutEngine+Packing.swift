@@ -314,11 +314,14 @@ extension LayoutEngine {
                     }
                     continue
                 }
-                let baseW = minWidths[cursor] + roomBefore(cursor, systemStart: systemStart, in: horizontalGaps)
+                let room = roomBefore(cursor, systemStart: systemStart, in: horizontalGaps)
+                let baseW = minWidths[cursor] + room
                 let w = cursor == systemStart
                     ? baseW + firstHeaderBoost
                     : baseW
-                let naturalW = naturalWidthRatio(cursor, w)
+                // An HBox's room does not stretch: against the line it costs its width once, which in these
+                // `÷ naturalStretch` units is `room / naturalStretch` (MS adds a box 1:1 to `curSysWidth`).
+                let naturalW = naturalWidthRatio(cursor, w - room) + room / naturalStretch
                 // Hard ceiling — never let a system overflow the
                 // page horizontally.
                 if context.options.wrapToViewWidth

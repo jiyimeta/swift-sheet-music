@@ -260,30 +260,50 @@ import Testing
 
     /// At the narrowest width that still holds the four bars on one line, a 6 sp box between them no longer fits. At
     /// the default stretch the natural-stretch test closes the line first. At a stretch of 1 that test and the hard
-    /// ceiling both allow every bar the box leaves room for, so the balanced packer decides: it counts the room too
-    /// and splits 2 + 2, where one blind to it would allow all four and leave the greedy packer to make it 3 + 1.
+    /// ceiling both allow every bar a 2 sp box leaves room for, so the balanced packer decides: it counts the room too
+    /// and splits 2 + 2, where one blind to it would allow all four and leave the greedy packer to make it 3 + 1. That
+    /// needs the box wider than the bisection's 1 pt slack and narrower than bar 3, which the `#require` checks.
     @Test("an HBox's room counts when the line is filled, so it can push a measure onto the next system")
     func gapCanMoveTheWrap() throws {
-        let boxed = Self.score(blocks: [Self.hbox(6, before: 2)])
         let width = try narrowestOneSystemWidth(Self.score())
-        let document = laidOut(boxed, width: width)
+        let document = laidOut(Self.score(blocks: [Self.hbox(6, before: 2)]), width: width)
         #expect(document.systems.count == 2)
         #expect(document.systems.flatMap(\.measures).map(\.measureIndex) == [0, 1, 2, 3])
         let tight = ScoreViewOptions(spacing: EngravingSpacing(systemStretch: 1))
         let tightWidth = try narrowestOneSystemWidth(Self.score(), options: tight)
-        let balanced = laidOut(boxed, width: tightWidth, options: tight)
+        let bare = laidOut(Self.score(), width: tightWidth, options: tight)
+        let lastBar = try measure(3, in: bare)
+        try #require(lastBar.width > 2 * bare.metrics.sp + 1)
+        let balanced = laidOut(Self.score(blocks: [Self.hbox(2, before: 2)]), width: tightWidth, options: tight)
         #expect(balanced.systems.map { $0.measures.map(\.measureIndex) } == [[0, 1], [2, 3]])
     }
 
+    /// MuseScore adds a box's width once to the line's natural width (`horizontalspacing.cpp:120-123`) and compares
+    /// that with the line (`systemlayout.cpp:206`): the box does not stretch, so it costs its width once, not
+    /// `systemStretch` times. Both thresholds come from a whole-point bisection, so they agree within 1 pt.
+    @Test("an HBox makes the narrowest one-line width wider by its room, once")
+    func roomCountsOnceAgainstTheLine() throws {
+        let boxedScore = Self.score(blocks: [Self.hbox(6, before: 2)])
+        let bareWidth = try narrowestOneSystemWidth(Self.score())
+        let boxedWidth = try narrowestOneSystemWidth(boxedScore)
+        let sp = laidOut(boxedScore).metrics.sp
+        #expect(abs(boxedWidth - bareWidth - 6 * sp) <= 1)
+    }
+
+    /// The system-width check pins the run-start branch's `slot − room`: a run laid out at its whole slot would push
+    /// the system's end out by the room.
     @Test("an HBox inside a collapsed multi-measure rest takes no room, and one at the run's start sits before the run")
     func hboxInsideACollapsedRunTakesNoRoom() throws {
         let options = ScoreViewOptions(multiMeasureRest: .collapse(minimumMeasures: 2))
         let bare = laidOut(Self.restRunScore(blocks: []), options: options)
         try #require(bare.systems.flatMap(\.measures).compactMap(\.multiMeasureRest) == [4])
+        try #require(bare.systems.count == 1)
         let inside = laidOut(Self.restRunScore(blocks: [Self.hbox(6, before: 3)]), options: options)
         #expect(inside == bare)
         let atStart = laidOut(Self.restRunScore(blocks: [Self.hbox(6, before: 1)]), options: options)
+        try #require(atStart.systems.count == 1)
         let room = try roomBefore(1, in: atStart)
         #expect(closeEnough(room, 6 * atStart.metrics.sp))
+        #expect(closeEnough(atStart.systems[0].size.width, bare.systems[0].size.width))
     }
 }
