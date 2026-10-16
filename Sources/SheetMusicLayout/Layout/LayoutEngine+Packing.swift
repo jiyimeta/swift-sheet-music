@@ -53,6 +53,8 @@ extension LayoutEngine {
         // staves subdivide a long element — see
         // `crossStaffMinimumMeasureWidth`.)
         let plan = context.multiMeasureRestPlan
+        // HBox room before a measure (`LayoutEngine+HorizontalGaps`): counted wherever a system's width is tested.
+        let horizontalGaps = context.horizontalGaps
         // Read from the context, not recomputed here: it is built once
         // at layout entry (see `LayoutEngine.layout`), not once per
         // system-pack call.
@@ -274,6 +276,7 @@ extension LayoutEngine {
                     staves: staves,
                     policy: context.options.breakPolicy,
                     frameBreaks: context.frameBreaks,
+                    horizontalGaps: horizontalGaps,
                 )
                 : Int.max
             // MuseScore-style natural-stretch target. Systems
@@ -311,7 +314,7 @@ extension LayoutEngine {
                     }
                     continue
                 }
-                let baseW = minWidths[cursor]
+                let baseW = minWidths[cursor] + roomBefore(cursor, systemStart: systemStart, in: horizontalGaps)
                 let w = cursor == systemStart
                     ? baseW + firstHeaderBoost
                     : baseW
@@ -390,7 +393,7 @@ extension LayoutEngine {
                     }
                     guard candidate > systemStart else { break }
                     for idx in candidate ..< cursor {
-                        widthSoFar -= minWidths[idx]
+                        widthSoFar -= minWidths[idx] + roomBefore(idx, systemStart: systemStart, in: horizontalGaps)
                     }
                     cursor = candidate
                 }
@@ -417,7 +420,7 @@ extension LayoutEngine {
             if context.options.wrapToViewWidth {
                 stretched = stretchWidths(
                     widths: widthsSlice,
-                    availableWidth: contentAvail,
+                    availableWidth: contentAvail - roomInside(systemStart ..< cursor, gaps: horizontalGaps),
                     shouldStretch: true,
                 )
             } else {
@@ -443,6 +446,8 @@ extension LayoutEngine {
                     )
                 }
             }
+            // HBox room joins its measure's slot only now, so no stretch scales it; `buildSystem` takes it back out.
+            let slots = slotsWithRoom(stretched, systemStart: systemStart, gaps: horizontalGaps)
             // Snapshot carry-in state BEFORE buildSystem mutates it.
             // Used either as cache key (on miss store) or for hit check.
             let activeClefsIn = activeClefs
@@ -451,7 +456,7 @@ extension LayoutEngine {
             let inputs = systemInputs(
                 measureStart: systemStart,
                 measureCount: measureCount,
-                widths: stretched,
+                widths: slots,
                 isFirstSystem: isFirstSystem,
                 activeClefsIn: activeClefsIn,
                 activeKeysIn: activeKeysIn,
@@ -474,7 +479,7 @@ extension LayoutEngine {
                 // then shift to currentY for placement.
                 let unshifted = buildSystem(
                     measureRange: systemStart ..< cursor,
-                    widths: stretched,
+                    widths: slots,
                     systemOriginY: 0,
                     isFirstSystem: isFirstSystem,
                     trailingCourtesy: trailingCourtesy,

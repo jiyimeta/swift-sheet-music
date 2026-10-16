@@ -151,7 +151,8 @@ extension LayoutEngine {
     /// returns `Int.max` — letting the system packer fall back
     /// to width-only greedy wrap, matching MuseScore's behavior
     /// for unbroken stretches. A frame break (`frameBreaks`) bounds the
-    /// span like an authored one.
+    /// span like an authored one, and a chunk counts the HBox room
+    /// inside it (`horizontalGaps`) as the packer's fit test does.
     static func balancedMeasuresPerSystem(
         fromIndex startIdx: Int,
         measureCount: Int,
@@ -161,6 +162,7 @@ extension LayoutEngine {
         staves: [Staff],
         policy: LayoutBreakPolicy,
         frameBreaks: Set<Int> = [],
+        horizontalGaps: [Int: CGFloat] = [:],
     ) -> Int {
         // Find the END of the current break-bounded span.
         var endIdx = measureCount
@@ -193,6 +195,7 @@ extension LayoutEngine {
                 let slice = minWidths[i ..< upper]
                 var w: CGFloat = slice.reduce(0, +)
                 if i == startIdx { w += firstHeaderBoost }
+                w += roomInside(i ..< upper, gaps: horizontalGaps)
                 maxChunkWidth = max(maxChunkWidth, w)
                 i = upper
             }

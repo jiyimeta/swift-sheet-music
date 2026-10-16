@@ -81,6 +81,13 @@ and this project adheres to
   whenever the title block is laid out (horizontal mode included), and the title block grows to the lowest of them so
   a fixed-size picture cannot overlap the first system. Horizontal mode and `includeTitleFrame: false` lay out no
   frames. A score whose only box is its title block lays out exactly as before.
+- **An HBox between two measures leaves its width as horizontal room** — `widthSp` (5 sp when unset) plus its left and
+  right gaps, summed over the boxes before one measure, opens before the measure the box sits before, in wrap and
+  horizontal mode alike. The room counts when a system is filled, so it can move a measure onto the next system; it is
+  never stretched, and a justified system gives its measures the available width minus the room, so the system still
+  ends at the page width (MuseScore's `justifySystem`). A box before a system's first measure, before measure 0, after
+  the last measure or inside a collapsed multi-measure rest takes no room; one at a collapsed run's start sits before
+  the run. Line spanners, hyphens and every other measure-relative position follow the measures they belong to.
 
 ### Changed
 

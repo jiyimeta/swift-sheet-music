@@ -110,6 +110,10 @@ public enum LayoutEngine {
                 score: score, measureCount: staves.first?.measures.count ?? 0,
                 plan: multiMeasureRestPlan, options: options,
             ),
+            horizontalGaps: horizontalGapIndexes(
+                score: score, measureCount: staves.first?.measures.count ?? 0,
+                plan: multiMeasureRestPlan, sp: metrics.sp,
+            ),
         )
         let packedSystems = packSystems(context: context)
         // Use the actual rendered system extent — not `availableWidth`,
@@ -334,7 +338,8 @@ public enum LayoutEngine {
         var frameBreaks: Set<Int> = []
         /// Room in points before measure `m` for the HBoxes of `score.frameStream` that sit there: each is
         /// `(widthSp ?? 5) + (topGapSp ?? 0) + (bottomGapSp ?? 0)` spatium (MS `box.cpp:71-74`), summed over
-        /// consecutive boxes, for `m` in `1 ..< measureCount` only. Where `m` opens a system the room is dropped. A
+        /// consecutive boxes, for `m` in `1 ..< measureCount` only and never inside a collapsed multi-measure rest
+        /// (`horizontalGapIndexes`). Where `m` opens a system the room is dropped. Wrap and horizontal mode alike. A
         /// defaulted `var` for the same reason as `frameBreaks`.
         var horizontalGaps: [Int: CGFloat] = [:]
     }
