@@ -138,6 +138,35 @@ enum SampleScore {
         )
     }
 
+    /// Three whole-note bars and a ten-spatium box after the last one: a page can hold every system and not the box.
+    static func trailingFrameScore() -> Score {
+        let measures = (0 ..< 3).map { index in
+            Measure(
+                voices: [
+                    Voice(elements: [
+                        .chord(Chord(
+                            duration: .whole,
+                            notes: ChordNotes([Note(pitch: 60 + index, tpc: 14)]),
+                        )),
+                    ]),
+                ],
+            )
+        }
+        let box = ScoreFrame(heightSp: 10, texts: [], autoSize: false)
+        return Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [Staff(measures: measures)],
+                ),
+            ],
+            metaTags: ["workTitle": "wasm trailing frame", "composer": "test"],
+            blocks: [PositionedScoreBlock(beforeMeasureIndex: 3, block: .verticalFrame(box))],
+        )
+    }
+
     /// A two-staff score, used to prove hidden-staff options reach layout.
     static func twoStaffScore() -> Score {
         let upper = [

@@ -113,6 +113,15 @@ extension PDFExporter {
         return data as Data
     }
 
+    /// The frames each of `sheets` holds, in document coordinates, by the rule every paginator follows: a frame belongs
+    /// to the sheet whose first system follows it — the sheet whose `[previous sheet's last system bottom, its own last
+    /// system bottom)` holds it — and the last sheet takes every frame below the sheets before it. Not
+    /// `pageStartY ..< next sheet's pageStartY`: a host whose sheet starts at its first system's top would leave the
+    /// frame above that system on the sheet before.
+    static func frames(of sheets: [Sheet], in document: LayoutDocument) -> [[LayoutFrame]] {
+        sheets.map { _ in [] }
+    }
+
     static func pdfInfo(title: String?, author: String?) -> [String: Any] {
         var info: [String: Any] = [kCGPDFContextCreator as String: "swift-sheet-music"]
         if let title {

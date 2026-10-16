@@ -21,10 +21,21 @@ public enum LayoutPaginator {
     /// Authored `<LayoutBreak>page` on a system's last measure closes the page
     /// immediately under `.honor` / `.ignoreSystemBreaks`; `.ignoreAll` lets
     /// pages keep packing until vertical overflow.
+    ///
+    /// The frames between systems (`LayoutDocument.frames`) reach the cut through two inputs, which
+    /// `LayoutDocument.paginate(pageHeight:policy:)` derives. A system index in `forcedBreaksBefore` starts a page
+    /// whatever room is left — the system below a frame whose `pageBreakAfter` is set (MuseScore `pagelayout.cpp:246`);
+    /// like a measure's page break it is ignored under `.ignoreAll`, and an index outside `1 ..< systems.count` is
+    /// ignored. `contentBottom` is the lowest bottom of the frames after the last system: when it does not fit on the
+    /// last page (`contentBottom - pageTop > pageHeight`), one more empty range `systems.count ..< systems.count` is
+    /// appended — a page holding only those frames, as MuseScore gives a trailing box that does not fit a page of its
+    /// own. The defaults are the cut without frames.
     public static func paginate(
         systems: [LayoutSystem],
         pageHeight: CGFloat,
         policy: LayoutBreakPolicy,
+        forcedBreaksBefore: Set<Int> = [],
+        contentBottom: CGFloat? = nil,
     ) -> [Range<Int>] {
         guard !systems.isEmpty, pageHeight > 0 else { return [] }
         var pages: [Range<Int>] = []

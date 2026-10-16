@@ -101,6 +101,29 @@ public enum PDFExporter {
         score: Score,
         options: Options = Options(),
     ) throws -> Data {
+        let paged = pagedLayout(score: score, options: options)
+        let sheets = paged.batches.enumerated().map { idx, page in
+            Sheet(
+                systems: page.systems,
+                pageStartY: page.startY,
+                pageSize: paged.resolved.page.size,
+                margins: paged.resolved.page.margins(forPageIndex: idx),
+            )
+        }
+        return try export(
+            document: paged.document,
+            sheets: sheets,
+            score: score,
+            options: SheetOptions(title: options.title, author: options.author),
+        )
+    }
+
+    /// What `export(score:options:)` draws: `score` laid out into the printable width of its resolved page
+    /// (`resolve(options:score:)`) and cut into batches by `paginate(document:page:policy:)`.
+    static func pagedLayout(
+        score: Score,
+        options: Options,
+    ) -> (document: LayoutDocument, resolved: Resolved, batches: [PageBatch]) {
         // Trigger Bravura registration on the export thread. The
         // on-screen views do this via their own bodies, but
         // `PDFExporter` is the first contact with `ImageRenderer` in
@@ -129,26 +152,8 @@ public enum PDFExporter {
             score: score, options: layoutOptions,
             availableWidth: availableWidth,
         )
-        let pages = paginate(
-            systems: document.systems,
-            page: resolved.page,
-            policy: options.breakPolicy,
-        )
-
-        let sheets = pages.enumerated().map { idx, page in
-            Sheet(
-                systems: page.systems,
-                pageStartY: page.startY,
-                pageSize: resolved.page.size,
-                margins: resolved.page.margins(forPageIndex: idx),
-            )
-        }
-        return try export(
-            document: document,
-            sheets: sheets,
-            score: score,
-            options: SheetOptions(title: options.title, author: options.author),
-        )
+        let batches = paginate(document: document, page: resolved.page, policy: options.breakPolicy)
+        return (document, resolved, batches)
     }
 
     /// Render `score` and write the resulting PDF to `url`.
@@ -184,10 +189,22 @@ public enum PDFExporter {
     /// single system is allowed to exceed the usable height (it
     /// just spills off its page) rather than being clipped or
     /// dropped.
+    ///
+    /// The frames between systems (`LayoutDocument.frames`) enter as `LayoutPaginator.paginate` takes them:
+    /// `forcedBreaksBefore` starts a page at each listed system (the one below a frame with `pageBreakAfter`; ignored
+    /// under `.ignoreAll` and outside `1 ..< systems.count`), and a `contentBottom` — the lowest bottom of the frames
+    /// after the last system — that does not fit on the last page adds a batch with no systems whose `startY` is the
+    /// last system's bottom. A page whose first system is in `systemsWithFrameAbove` (a frame sits between it and the
+    /// system before) starts at that previous system's bottom rather than at its own top, so the frame is on this page
+    /// and not lost between two; every other page starts where it always did. `paginate(document:page:policy:)`
+    /// derives all three from a document.
     public static func paginate(
         systems: [LayoutSystem],
         page: EngravingPage,
         policy: LayoutBreakPolicy = .honor,
+        forcedBreaksBefore: Set<Int> = [],
+        contentBottom: CGFloat? = nil,
+        systemsWithFrameAbove: Set<Int> = [],
     ) -> [PageBatch] {
         var pages: [PageBatch] = []
         var currentSystems: [LayoutSystem] = []
@@ -248,6 +265,13 @@ public enum PDFExporter {
             ))
         }
         return pages
+    }
+
+    /// `paginate(systems:page:policy:…)` of `document.systems` with what its frames ask of the cut, derived as
+    /// `LayoutDocument.paginate(pageHeight:policy:)` derives it, so the PDF and the page-mode readers put every frame
+    /// on the same page.
+    static func paginate(document: LayoutDocument, page: EngravingPage, policy: LayoutBreakPolicy) -> [PageBatch] {
+        paginate(systems: document.systems, page: page, policy: policy)
     }
 
     // MARK: - Resolution
