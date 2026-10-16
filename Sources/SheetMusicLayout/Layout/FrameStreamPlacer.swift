@@ -48,15 +48,18 @@ package enum FrameStreamPlacer {
 
     /// Places `items`. `title` is the leading box's bottom edge and its `bottomGap` in spatium (`nil` gap = 7 sp), or
     /// `nil` when the document has no title block. A title followed by a system keeps its baked distance (shift 0).
+    /// `top` is where the stream starts when there is no title (the document's top margin); a box that comes first
+    /// sits on it.
     package static func place(
         title: (bottom: CGFloat, bottomGap: CGFloat?)?,
         items: [Item],
         sp: CGFloat,
+        top: CGFloat = 0,
     ) -> Result {
         var shifts: [CGFloat] = []
         var origins: [CGFloat] = []
         var previous: Previous = title.map { Previous.title(gap: $0.bottomGap) } ?? Previous.start
-        var lastBottom: CGFloat = title?.bottom ?? 0
+        var lastBottom: CGFloat = title?.bottom ?? top
         var shift: CGFloat = 0
         for item in items {
             switch item.kind {

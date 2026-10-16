@@ -19,6 +19,7 @@ extension LayoutEngine {
     static func measureForcesLineBreak(
         at idx: Int, staves: [Staff], policy: LayoutBreakPolicy, frameBreaks: Set<Int> = [],
     ) -> Bool {
+        if frameBreaks.contains(idx + 1) { return true }
         guard let s0 = staves.first,
               idx < s0.measures.count else { return false }
         let m = s0.measures[idx]

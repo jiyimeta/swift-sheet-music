@@ -33,9 +33,16 @@
             #expect(lines.count >= 2)
         }
 
-        /// One line per `LayoutDocument.frames` entry — empty until the frames exist (Task 5).
-        private static func frameLines(_: LayoutDocument) -> [String] {
-            []
+        /// One line per `LayoutDocument.frames` entry: kind, top edge, height and picture count, to 0.001.
+        private static func frameLines(_ document: LayoutDocument) -> [String] {
+            document.frames.map { frame in
+                "  \(frame.kind) originY=\(rounded(frame.originY)) height=\(rounded(frame.height))"
+                    + " images=\(frame.images.count)"
+            }
+        }
+
+        private static func rounded(_ value: CGFloat) -> String {
+            String(format: "%.3f", Double(value))
         }
     }
 #endif

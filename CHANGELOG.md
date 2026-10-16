@@ -73,8 +73,23 @@ and this project adheres to
   or sized as written) or a `<TBox>` (its text at the margins, height = text + margins) as a `LayoutFrame`, and place the
   stream between systems by MuseScore's `minDistance` rule (`FrameStreamPlacer`). `LayoutDocument` gains defaulted
   `frames` and `titleImages` (the leading box's pictures, in document coordinates) and `frames(inDocumentYRange:)`; a
-  picture that cannot be read, an SVG, or a missing payload lays out nothing. Nothing fills `frames` yet, so output for
-  existing scores is unchanged.
+  picture that cannot be read, an SVG, or a missing payload lays out nothing.
+- **A VBox or TBox after the title block is laid out in the page stream** — in wrap mode with the title block on, every
+  box after the leading one becomes a `LayoutDocument.frames` entry between the systems, in final document coordinates
+  (margins included): a box before measure 0 sits between the title and the first system, a trailing one below the
+  last system, and the document's height includes it. The leading box's pictures land in `LayoutDocument.titleImages`
+  whenever the title block is laid out (horizontal mode included), and the title block grows to the lowest of them so
+  a fixed-size picture cannot overlap the first system. Horizontal mode and `includeTitleFrame: false` lay out no
+  frames. A score whose only box is its title block lays out exactly as before.
+
+### Changed
+
+- **A frame forces a system break on both sides and replaces the system gap with MuseScore's frame distance** — a VBox
+  or TBox between two measures always ends the system before it, whatever `breakPolicy` says (MuseScore collects no
+  measures across a box), and bounds the balanced-wrap span like an authored break. The systems around it sit
+  `max(gap, 2 sp)` away — its `topGap` above, its `bottomGap` below, 7 sp when unset — instead of the engine's
+  `systemGap`; a box right after the title block sits `max(title bottomGap, box topGap)` below it. A box inside a
+  multi-measure-rest run attaches before the run. An `<HBox>` is not a break.
 
 ### Fixed
 

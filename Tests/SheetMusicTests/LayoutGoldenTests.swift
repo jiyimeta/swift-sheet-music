@@ -410,6 +410,14 @@
             if let title = doc.titleFrame {
                 s += "  title \(String(describing: title))\n"
             }
+            // Printed only when present, so a document without them keeps
+            // every line it had before the frame stream existed.
+            if !doc.titleImages.isEmpty {
+                s += "  titleImages \(String(describing: doc.titleImages))\n"
+            }
+            for frame in doc.frames {
+                s += "  frames \(String(describing: frame))\n"
+            }
             for (i, sys) in doc.systems.enumerated() {
                 s += digest(ofSystem: sys, index: i)
             }

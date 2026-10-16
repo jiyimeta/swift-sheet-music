@@ -273,6 +273,7 @@ extension LayoutEngine {
                     contentAvail: contentAvail,
                     staves: staves,
                     policy: context.options.breakPolicy,
+                    frameBreaks: context.frameBreaks,
                 )
                 : Int.max
             // MuseScore-style natural-stretch target. Systems
@@ -348,6 +349,7 @@ extension LayoutEngine {
                        at: cursor - 1,
                        staves: staves,
                        policy: context.options.breakPolicy,
+                       frameBreaks: context.frameBreaks,
                    )
                 {
                     break

@@ -106,38 +106,46 @@ public enum LayoutEngine {
             multiMeasureRestPlan: multiMeasureRestPlan,
             measureDurations: measureDurations,
             staffMeasureDurations: staffMeasureDurations,
+            frameBreaks: frameBreakIndexes(
+                score: score, measureCount: staves.first?.measures.count ?? 0,
+                plan: multiMeasureRestPlan, options: options,
+            ),
         )
         let packedSystems = packSystems(context: context)
-        // Title block at the top of the document. Built first so we
-        // know how much vertical space to leave above the first
-        // system.
-        let unshiftedTitleFrame: LayoutTitleFrame? = {
-            guard options.includeTitleFrame, let src = score.titleFrame
-            else { return nil }
-            return buildTitleFrame(
-                source: src,
-                style: score.style,
-                metrics: metrics,
-                docWidth: max(
-                    availableWidth,
-                    packedSystems.reduce(CGFloat(0)) { acc, s in
-                        max(acc, s.origin.x + s.size.width)
-                    },
-                ),
-            )
-        }()
         // Use the actual rendered system extent — not `availableWidth`,
         // which may be larger than the content needs. Measure before the
         // leading-margin shift so that margin is added exactly once below.
         let totalWidth = packedSystems.reduce(CGFloat(0)) { acc, system in
             max(acc, system.origin.x + system.size.width)
         }
+        // The width the title block's (and every frame's) texts are
+        // placed against.
+        let titleDocWidth = max(availableWidth, totalWidth)
+        // Title block at the top of the document, with its pictures.
+        // Built first so we know how much vertical space to leave above
+        // the first system.
+        let titleBlock: (frame: LayoutTitleFrame, images: [LayoutFrameImage])? = {
+            guard options.includeTitleFrame, let src = score.titleFrame
+            else { return nil }
+            return buildTitleBlock(
+                source: src, style: score.style, metrics: metrics,
+                docWidth: titleDocWidth, pictures: score.pictures,
+            )
+        }()
+        let unshiftedTitleFrame = titleBlock?.frame
         let topMargin = metrics.sp * margins.top
         let leadingMargin = metrics.sp * margins.leading
         let yShift = (unshiftedTitleFrame?.height ?? 0) + topMargin
-        let systems = packedSystems.map { system in
-            let shiftedY = yShift != 0
-                ? shift(system, byY: yShift) : system
+        // The boxes after the title, and how far each system moves down
+        // for them on top of `yShift` (all zero when there are none).
+        let stream = frameStream(
+            context: context, packed: packedSystems,
+            title: unshiftedTitleFrame, docWidth: titleDocWidth,
+        )
+        let systems = zip(packedSystems, stream.systemShifts).map { system, frameShift in
+            let dy = yShift + frameShift
+            let shiftedY = dy != 0
+                ? shift(system, byY: dy) : system
             return leadingMargin != 0
                 ? shift(shiftedY, byX: leadingMargin) : shiftedY
         }
@@ -150,9 +158,16 @@ public enum LayoutEngine {
         let titleFrame = unshiftedTitleFrame.map { frame in
             shift(frame, byX: leadingMargin, byY: topMargin)
         }
-        let totalHeight = systems.reduce(CGFloat(0)) { acc, system in
+        let titleImages = (titleBlock?.images ?? []).map { image in
+            moved(image, dx: leadingMargin, dy: topMargin)
+        }
+        // The lowest of the last system and the last frame.
+        let systemsBottom = systems.reduce(CGFloat(0)) { acc, system in
             max(acc, system.origin.y + system.size.height)
-        } + metrics.sp * margins.bottom
+        }
+        let contentBottom = stream.frames.map(\.bottom).max()
+            .map { max(systemsBottom, $0) } ?? systemsBottom
+        let totalHeight = contentBottom + metrics.sp * margins.bottom
         let systemsWithSpanners = attachSpanners(
             to: systems,
             anchors: anchors,
@@ -219,6 +234,8 @@ public enum LayoutEngine {
             metrics: metrics,
             titleFrame: titleFrame,
             chordSymbolCase: score.style.chordSymbolCase,
+            frames: stream.frames,
+            titleImages: titleImages,
         )
     }
 

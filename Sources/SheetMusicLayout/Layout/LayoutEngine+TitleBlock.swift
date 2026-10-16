@@ -4,11 +4,14 @@
 import SheetMusicCore
 
 extension LayoutEngine {
+    /// `minHeight` is a floor in points on top of the rules below — the lowest bottom of the title's pictures
+    /// (`buildTitleBlock`); 0 leaves the height exactly as it was.
     static func buildTitleFrame(
         source: ScoreFrame,
         style: ScoreStyle,
         metrics: StaffMetrics,
         docWidth: CGFloat,
+        minHeight: CGFloat = 0,
     ) -> LayoutTitleFrame {
         // MuseScore stores offsets for the title-block styles in
         // millimetres (`OffsetType::ABS` — see `styledef.cpp`).
@@ -51,6 +54,7 @@ extension LayoutEngine {
             metrics.sp * 4,
             source.heightSp * metrics.sp,
             requiredFromTopAnchors,
+            minHeight,
         )
 
         var laidOut: [LayoutFrameText] = []
