@@ -286,7 +286,7 @@
         /// the two bars after it, the system and the block shift left by the 32.09 pt it gave up. Wrapped, every
         /// block is identical: there the bars already stretched past what their symbols need.
         private static let expectedDigestSHA256 =
-            "02d33e22e9bf34aa01a5a4fad529cc47f6ceb59ca869ed47c065d614301d9094"
+            "df99d64e173776786c17bbeff86012cacf48447e74ceaa26263d149227d71664"
 
         @Test("write digest")
         func writeDigest() throws {
