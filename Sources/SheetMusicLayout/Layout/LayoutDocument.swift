@@ -41,11 +41,12 @@ public struct LayoutDocument: Sendable, Equatable {
         self.titleImages = titleImages
     }
 
-    /// The boxes that overlap `range` (document y): those with `originY < range.upperBound` and
-    /// `bottom > range.lowerBound`.
+    /// The boxes that touch `range` (document y), in order. A box is included when
+    /// `originY + height + 1 >= range.lowerBound && originY <= range.upperBound`: the bounds are inclusive and one
+    /// point of slack sits below the box, so a renderer mounting what is on screen never drops a box whose edge lies
+    /// on the viewport edge.
     public func frames(inDocumentYRange range: Range<CGFloat>) -> [LayoutFrame] {
-        // Phase A stub.
-        []
+        frames.filter { $0.originY + $0.height + 1 >= range.lowerBound && $0.originY <= range.upperBound }
     }
 }
 

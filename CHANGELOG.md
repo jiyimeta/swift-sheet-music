@@ -68,6 +68,13 @@ and this project adheres to
   store each picture an image still references, so a save with no host sidecar keeps them. An entry a host already
   passes in `extraEntries` is not written twice; a picture whose `<Image>` was removed is dropped. `Score ==` compares
   `pictures`; `stableFingerprint` does not.
+- **`LayoutDocument.frames`, `LayoutFrame`, `LayoutFrameImage`: a mid-score box as layout geometry** — the engine can now
+  lay out a `<VBox>` (texts by the title builder, `max(10 sp, content)` tall unless `<boxAutoSize>` is 0, pictures fitted
+  or sized as written) or a `<TBox>` (its text at the margins, height = text + margins) as a `LayoutFrame`, and place the
+  stream between systems by MuseScore's `minDistance` rule (`FrameStreamPlacer`). `LayoutDocument` gains defaulted
+  `frames` and `titleImages` (the leading box's pictures, in document coordinates) and `frames(inDocumentYRange:)`; a
+  picture that cannot be read, an SVG, or a missing payload lays out nothing. Nothing fills `frames` yet, so output for
+  existing scores is unchanged.
 
 ### Fixed
 

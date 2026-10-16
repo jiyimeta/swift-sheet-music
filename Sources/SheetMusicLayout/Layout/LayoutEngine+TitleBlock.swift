@@ -98,7 +98,7 @@ extension LayoutEngine {
 
     /// A title-block text's runs, in the face the block is set in (`LayoutTitleFrame.font(size:)`). Title-block styles
     /// are not spatium dependent, so a `<font size>` is literal points; symbols take the style's musical-symbol size.
-    private static func titleRichText(
+    static func titleRichText(
         _ richText: RichText, style: FrameText.Style, fontSize: CGFloat,
     ) -> LayoutRichText {
         let textStyle: TextStyleType = switch style {

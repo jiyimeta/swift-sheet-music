@@ -35,26 +35,59 @@ package enum FrameStreamPlacer {
         package var contentBottom: CGFloat
     }
 
+    private static let defaultGap: CGFloat = 7
+    private static let paddingToNotation: CGFloat = 2
+
+    /// What the stream's last entry was.
+    private enum Previous {
+        case start
+        case title(gap: CGFloat?)
+        case system
+        case frame(gap: CGFloat?)
+    }
+
     /// Places `items`. `title` is the leading box's bottom edge and its `bottomGap` in spatium (`nil` gap = 7 sp), or
-    /// `nil` when the document has no title block.
+    /// `nil` when the document has no title block. A title followed by a system keeps its baked distance (shift 0).
     package static func place(
         title: (bottom: CGFloat, bottomGap: CGFloat?)?,
         items: [Item],
         sp: CGFloat,
     ) -> Result {
-        // Phase A stub: sized zeros, so a caller indexing the result does not trap.
-        var systemCount = 0
-        var frameCount = 0
+        var shifts: [CGFloat] = []
+        var origins: [CGFloat] = []
+        var previous: Previous = title.map { Previous.title(gap: $0.bottomGap) } ?? Previous.start
+        var lastBottom: CGFloat = title?.bottom ?? 0
+        var shift: CGFloat = 0
         for item in items {
             switch item.kind {
-            case .system: systemCount += 1
-            case .frame: frameCount += 1
+            case let .system(top, bottom):
+                if case let .frame(gap) = previous {
+                    shift = lastBottom + max(gap ?? defaultGap, paddingToNotation) * sp - top
+                }
+                shifts.append(shift)
+                lastBottom = bottom + shift
+                previous = .system
+            case let .frame(topGap, bottomGap, height):
+                let originY = lastBottom + distance(from: previous, topGap: topGap) * sp
+                origins.append(originY)
+                lastBottom = originY + height
+                previous = .frame(gap: bottomGap)
             }
         }
-        return Result(
-            systemShift: Array(repeating: 0, count: systemCount),
-            frameOriginY: Array(repeating: 0, count: frameCount),
-            contentBottom: 0,
-        )
+        return Result(systemShift: shifts, frameOriginY: origins, contentBottom: lastBottom)
+    }
+
+    /// The distance in spatium from the previous entry's bottom to a box's top (MS `minDistance`).
+    private static func distance(from previous: Previous, topGap: CGFloat?) -> CGFloat {
+        switch previous {
+        case .start:
+            return 0
+        case .system:
+            return max(topGap ?? defaultGap, paddingToNotation)
+        case let .title(gap), let .frame(gap):
+            let above = gap ?? defaultGap
+            let below = topGap ?? defaultGap
+            return above >= 0 && below >= 0 ? max(above, below) : above + below
+        }
     }
 }
