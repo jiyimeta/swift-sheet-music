@@ -95,6 +95,7 @@ extension DrawProgramFlat {
         // style bit for a whole page that does not draw.
         case 11: return .setTextStyle(flags: UInt8(truncatingIfNeeded: integer))
         case 12: return .fillPath
+        case 13: return .drawImage(data: Data(), x: 0, y: 0, w: 0, h: 0)
         default: throw DecodeError.unknownOpcode(opcode)
         }
     }

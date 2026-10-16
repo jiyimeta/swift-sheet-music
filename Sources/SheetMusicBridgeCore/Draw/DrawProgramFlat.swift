@@ -158,6 +158,8 @@ public enum DrawProgramFlat {
             write(11, integer: UInt32(flags))
         case .fillPath:
             write(12)
+        case .drawImage:
+            write(13)
         }
     }
 

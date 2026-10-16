@@ -5,7 +5,7 @@ import Testing
 
 @Suite("DrawProgramFlat")
 struct DrawProgramFlatTests {
-    /// One page carrying every opcode (0…12, in order) and every font id, so a
+    /// One page carrying every opcode (0…13, in order) and every font id, so a
     /// mis-slotted field in any single case shows up as a round-trip failure
     /// rather than as a rendering bug nobody notices until the browser draws it.
     private var allOpcodesPage: EncodablePage {
@@ -29,6 +29,7 @@ struct DrawProgramFlatTests {
                 .setDash(onMM: 0.75, offMM: 0.25),
                 .setTextStyle(flags: DrawCommand.TextStyleFlag.semibold | DrawCommand.TextStyleFlag.italic),
                 .fillPath,
+                .drawImage(data: Self.pictureBytes, x: 30, y: 31, w: 32, h: 33),
                 // Tail: the system face, so every FontID crosses the encoder.
                 .text(text: "12", x: 27, y: 28, size: 29, fontId: .system),
             ],
@@ -36,11 +37,39 @@ struct DrawProgramFlatTests {
     }
 
     /// Opcodes mirror `DrawCommand`'s declaration order, one record per command.
-    private static let expectedOpcodes: [Int32] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 5]
+    private static let expectedOpcodes: [Int32] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 5]
 
-    @Test("the version is 2")
-    func theVersionIsTwo() {
-        #expect(DrawProgramFlat.version == 2)
+    /// A picture payload: the codecs carry the bytes as they are and never decode them, so a PNG signature followed
+    /// by bytes that are no image at all is enough.
+    private static let pictureBytes = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4])
+
+    @Test("the versions are 9 (the macro wire) and 3 (the flat one)")
+    func versionsAre9And3() {
+        #expect(DrawProgram.version == 9)
+        #expect(DrawProgramFlat.version == 3)
+    }
+
+    /// Two pictures with the same bytes share one entry of the blob table, as repeated strings share one of the string
+    /// table, and a third with other bytes takes a second.
+    @Test("drawImage round-trips through the flat encoding, its bytes in a deduplicated blob table")
+    func drawImageRoundTripsFlat() throws {
+        let other = Data([0xFF, 0xD8, 0xFF, 0xE0, 9, 8, 7])
+        let shared = EncodablePage(
+            widthMM: 10, heightMM: 10,
+            commands: [
+                .drawImage(data: Self.pictureBytes, x: 1, y: 2, w: 3, h: 4),
+                .drawImage(data: Self.pictureBytes, x: 5, y: 6, w: 7, h: 8),
+            ],
+        )
+        let sharedBytes = DrawProgramFlat.encode(pages: [shared])
+        #expect(try DrawProgramFlat.decode(sharedBytes) == [shared])
+        #expect(Self.readI32(sharedBytes, at: Self.blobCountOffset(sharedBytes)) == 1)
+
+        var distinct = shared
+        distinct.commands.append(.drawImage(data: other, x: 9, y: 10, w: 11, h: 12))
+        let distinctBytes = DrawProgramFlat.encode(pages: [distinct])
+        #expect(try DrawProgramFlat.decode(distinctBytes) == [distinct])
+        #expect(Self.readI32(distinctBytes, at: Self.blobCountOffset(distinctBytes)) == 2)
     }
 
     @Test("round-trips every opcode")
@@ -52,7 +81,7 @@ struct DrawProgramFlatTests {
 
     /// The round trip alone would pass with two opcodes swapped in both directions; the web
     /// reader decodes the numbers, so pin them.
-    @Test("writes the declaration-order opcodes 0…12")
+    @Test("writes the declaration-order opcodes 0…13")
     func writesDeclarationOrderOpcodes() throws {
         let page = allOpcodesPage
         let bytes = DrawProgramFlat.encode(pages: [page])
@@ -149,12 +178,12 @@ struct DrawProgramFlatTests {
         }
     }
 
-    @Test("rejects opcode 13")
+    @Test("rejects opcode 14")
     func rejectsUnknownOpcode() throws {
         var bytes = DrawProgramFlat.encode(pages: [EncodablePage(widthMM: 1, heightMM: 1, commands: [.fillPath])])
         let opcodeOffset = try Self.firstCommandOffset(bytes)
-        Self.writeI32(13, into: &bytes, at: opcodeOffset)
-        #expect(throws: DrawProgramFlat.DecodeError.unknownOpcode(13)) {
+        Self.writeI32(14, into: &bytes, at: opcodeOffset)
+        #expect(throws: DrawProgramFlat.DecodeError.unknownOpcode(14)) {
             try DrawProgramFlat.decode(bytes)
         }
     }
@@ -204,13 +233,24 @@ struct DrawProgramFlatTests {
 
     // MARK: - Byte helpers
 
-    /// Byte offset of page 0's first command record: the header, the string table, then page 0's
-    /// width, height and command count.
-    private static func firstCommandOffset(_ bytes: Data) throws -> Int {
+    /// Byte offset of the blob table's count: past the header (magic, version, pageCount) and the string table.
+    private static func blobCountOffset(_ bytes: Data) -> Int {
         var offset = 12 // magic, version, pageCount
         let stringCount = Int(readI32(bytes, at: offset))
         offset += 4
         for _ in 0 ..< stringCount {
+            offset += 4 + Int(readI32(bytes, at: offset))
+        }
+        return offset
+    }
+
+    /// Byte offset of page 0's first command record: the header, the string table, the blob table,
+    /// then page 0's width, height and command count.
+    private static func firstCommandOffset(_ bytes: Data) throws -> Int {
+        var offset = blobCountOffset(bytes)
+        let blobCount = Int(readI32(bytes, at: offset))
+        offset += 4
+        for _ in 0 ..< blobCount {
             offset += 4 + Int(readI32(bytes, at: offset))
         }
         offset += 8 + 8 + 4

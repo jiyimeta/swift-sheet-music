@@ -68,14 +68,14 @@
 
         private static let ptToMM = 25.4 / 72
 
-        /// Three whole-note bars and a ten-spatium box after the last one.
-        private static func trailingFrameScore() -> Score {
+        /// Three whole-note bars and a ten-spatium box after the last one, holding `texts`.
+        private static func trailingFrameScore(texts: [FrameText] = []) -> Score {
             let measures = (0 ..< 3).map { index in
                 Measure(voices: [Voice(elements: [
                     .chord(Chord(duration: .whole, notes: [Note(pitch: 60 + index, tpc: 14)])),
                 ])])
             }
-            let box = ScoreFrame(heightSp: 10, texts: [], autoSize: false)
+            let box = ScoreFrame(heightSp: 10, texts: texts, autoSize: false)
             return Score(
                 division: 480,
                 parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: measures)])],
@@ -178,6 +178,61 @@
             #expect(first.titleImages == document.titleImages)
             #expect(first.frames.count == 1)
             #expect(first.frames == document.frames)
+        }
+
+        /// Whether `commands` draw `string` as one `.text` command.
+        private static func drawsText(_ string: String, in commands: [DrawCommand]) -> Bool {
+            commands.contains { command in
+                if case let .text(text, _, _, _, _) = command { text == string } else { false }
+            }
+        }
+
+        /// Page 1's COMMANDS — not only the document it is drawn from — carry the title block, the title's picture and
+        /// the frames on that page, each frame in a span of its own. Under `.ignoreAll` VBox B's page break does not
+        /// count, so every box of frames-boxes is on the one page.
+        @Test func firstPageCommandsCarryTheTitleAndItsFrames() throws {
+            let wire = Self.pageOptions(breakPolicyRaw: 3)
+            let boxes = try MSCXParser.parse(MSCXFixtureLoader.mscxData("frames-boxes"))
+            let boxPages = LayoutBridge.computePages(score: boxes, pageWidthMM: 210, pageHeightMM: 2000, options: wire)
+            try #require(boxPages.pages.count == 1)
+            let commands = boxPages.pages[0].commands
+            for string in ["Frames", "Part II", "Interlude", "End"] {
+                #expect(Self.drawsText(string, in: commands), "\(string) is not drawn on page 1")
+            }
+            // The title's span, then one per frame.
+            let unindexed = boxPages.spans[0].filter { $0.systemIndex == nil }
+            #expect(unindexed.count == 1 + boxPages.document.frames.count)
+
+            let score = try MSCZReader.parse(MSCXFixtureLoader.msczData("frames-pictures"))
+            let pictures = LayoutBridge.computePages(score: score, pageWidthMM: 210, pageHeightMM: 2000, options: wire)
+            try #require(pictures.pages.count == 1)
+            let drawn = pictures.pages[0].commands.filter { if case .drawImage = $0 { true } else { false } }
+            #expect(drawn.count == 2)
+        }
+
+        /// A frames-only last page (the empty range after the last system) draws exactly its frames: the box's
+        /// commands, in one span without a system index, and nothing else.
+        @Test func framesOnlyLastPageDrawsOnlyItsFrames() throws {
+            let score = Self.trailingFrameScore(texts: [FrameText(style: .composer, text: "Fine")])
+            let wire = Self.pageOptions()
+            let probe = LayoutBridge.computePages(score: score, pageWidthMM: 210, pageHeightMM: 2000, options: wire)
+            let last = try #require(probe.document.systems.last)
+            // A point under the last system: every system fits on page 1, and the box under them does not.
+            let pageHeightMM = Double(last.origin.y + last.size.height + 1) * Self.ptToMM
+            let laidOut = LayoutBridge.computePages(
+                score: score, pageWidthMM: 210, pageHeightMM: pageHeightMM, options: wire,
+            )
+            let ranges = LayoutBridge.pageRanges(
+                document: laidOut.document, options: wire, pageHeightMM: pageHeightMM, margins: .zero,
+            )
+            let lastRange = try #require(ranges.last)
+            try #require(lastRange.isEmpty, "no frames-only page: \(ranges)")
+            let page = try #require(laidOut.pages.last)
+            let spans = try #require(laidOut.spans.last)
+            let onlyAFrame: [Int?] = [nil]
+            #expect(spans.map(\.systemIndex) == onlyAFrame)
+            #expect(spans.first?.commandRange == 0 ..< page.commands.count)
+            #expect(Self.drawsText("Fine", in: page.commands))
         }
     }
 #endif

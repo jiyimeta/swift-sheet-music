@@ -118,8 +118,8 @@
         // MARK: - Wire
 
         @Test
-        func theVersionIsEight() {
-            #expect(DrawProgram.version == 8)
+        func theVersionIsNine() {
+            #expect(DrawProgram.version == 9)
         }
 
         /// Both encodings — the `@WireFormatChoice` one the JNI bridge uses and the flat

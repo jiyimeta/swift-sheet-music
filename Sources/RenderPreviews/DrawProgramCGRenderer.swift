@@ -152,6 +152,8 @@
                 case let .setDash(onMM, offMM):
                     dashOn = px(onMM)
                     dashOff = px(offMM)
+                case .drawImage:
+                    break
                 }
             }
 

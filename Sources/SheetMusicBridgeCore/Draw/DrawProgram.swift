@@ -165,6 +165,10 @@ public enum DrawCommand: Sendable, Equatable {
     /// apply. No payload, so it fits the flat encoding's fixed record — a four-corner `fillQuad` would need eight
     /// doubles against its six slots. Beams are drawn with it (`moveTo`, three `lineTo`, `fillPath`).
     case fillPath
+    /// A picture of a box (`<VBox>`): `data` is the file's bytes, PNG or JPEG only, which the reader decodes and scales
+    /// to fill the rectangle whose top-left corner is (`x`, `y`) and whose size is `w` × `h`, in document mm. A payload
+    /// the reader cannot decode draws nothing. The color, dash and rotation state do not apply to it.
+    case drawImage(data: Data, x: Double, y: Double, w: Double, h: Double)
 }
 
 extension DrawCommand {

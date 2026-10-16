@@ -270,6 +270,15 @@ struct PageMarginsTests {
         }
     }
 
+    /// Margins move a box's picture with everything else on the page — left in place it would sit in the corner of
+    /// the paper — and leave its size and its bytes as they are.
+    @Test("translated moves a picture's corner and keeps its size and bytes")
+    func translatedMovesAnImageButKeepsItsSize() {
+        let bytes = Data([0x89, 0x50, 0x4E, 0x47])
+        let moved = DrawCommand.drawImage(data: bytes, x: 1, y: 2, w: 3, h: 4).translated(dx: 10, dy: 5)
+        #expect(moved == .drawImage(data: bytes, x: 11, y: 7, w: 3, h: 4))
+    }
+
     // MARK: - Helpers
 
     private static func load(_ name: String) throws -> Score {

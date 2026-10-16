@@ -130,6 +130,8 @@ package struct DrawCommandBounds {
             include(DrawRect(x: x - size, y: y - 1.5 * size, width: size * (length + 1), height: 2.25 * size))
         case let .setRotation(radians, pivotX, pivotY):
             rotation = (radians, pivotX, pivotY)
+        case .drawImage:
+            break
         }
     }
 

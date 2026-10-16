@@ -71,6 +71,8 @@ struct PDFPageWalker {
         case let .setDash(onMM, offMM):
             dash = (onMM, offMM)
             emitDash()
+        case .drawImage:
+            break
         }
     }
 

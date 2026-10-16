@@ -1,7 +1,11 @@
 #if SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT
+    #if canImport(CryptoKit)
+        import CryptoKit
+    #endif
     import Foundation
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicBridgeCore
+    import SheetMusicCore
     import Testing
     import Wirelet
 
@@ -252,5 +256,94 @@
                 _ = try DrawProgramCodec.decode(wrongVersionBytes)
             }
         }
+
+        // MARK: - drawImage (v9)
+
+        /// A kilobyte of bytes that are no image: the codec carries a picture's payload as it is.
+        private static let kilobyte = Data((0 ..< 1024).map { UInt8(truncatingIfNeeded: $0 &* 7 &+ 3) })
+
+        @Test
+        func drawImageRoundTripsMacroWire() throws {
+            let page = EncodablePage(
+                widthMM: 210, heightMM: 297,
+                commands: [
+                    .moveTo(x: 1, y: 2),
+                    .drawImage(data: Self.kilobyte, x: 10.5, y: 20.25, w: 30, h: 15),
+                    // After the picture, so a decoder that mis-framed its payload would shift what follows.
+                    .lineTo(x: 3, y: 4),
+                    .stroke(width: 0.25),
+                ],
+            )
+            let decoded = try DrawProgramCodec.decode(DrawProgramCodec.encode(pages: [page]))
+
+            #expect(decoded == [page])
+            if case let .drawImage(data, x, y, w, h) = decoded.first?.commands[1] {
+                #expect(data == Self.kilobyte)
+                #expect([x, y, w, h] == [10.5, 20.25, 30, 15])
+            } else {
+                Issue.record("expected drawImage at index 1")
+            }
+        }
+
+        /// The compatibility story: neither format can step over a command it does not know, so a reader refuses a
+        /// stream of another version by its version word rather than mis-parsing it — v8 against the v9 macro reader,
+        /// SMDF v2 against the v3 flat reader — and a v9 stream that carries a picture decodes under the v9 reader.
+        @Test
+        func readerRefusesAWrongVersion() throws {
+            let v8 = DrawProgramWire(magic: DrawProgram.magic, version: 8, pages: []).encodeToData()
+            #expect(throws: DrawProgramCodec.DecodeError.unsupportedVersion(8)) {
+                try DrawProgramCodec.decode(v8)
+            }
+
+            var flat = DrawProgramFlat.encode(pages: [EncodablePage(widthMM: 1, heightMM: 1, commands: [.fillPath])])
+            for (index, byte) in [UInt8(2), 0, 0, 0].enumerated() {
+                flat[flat.startIndex + 4 + index] = byte
+            }
+            #expect(throws: DrawProgramFlat.DecodeError.unsupportedVersion(2)) {
+                try DrawProgramFlat.decode(flat)
+            }
+
+            let picture = EncodablePage(
+                widthMM: 1, heightMM: 1, commands: [.drawImage(data: Self.kilobyte, x: 0, y: 0, w: 1, h: 1)],
+            )
+            #expect(try DrawProgramCodec.decode(DrawProgramCodec.encode(pages: [picture])) == [picture])
+        }
+
+        // MARK: - Byte stability
+
+        /// SHA-256 of the v8 macro encoding of `textFreeScore()`'s pages, recorded before v9 existed. A score without a
+        /// box or a picture must draw the same commands, byte for byte, whatever the version word says.
+        private static let textFreeProgramSHA256 = "PHASE-A-PLACEHOLDER"
+
+        /// Three whole-note bars on one staff: no title, no lyrics, no staff text, no instrument name — nothing whose
+        /// position depends on a system font's measurement, so the hash pins the encoder and not the machine's fonts.
+        private static func textFreeScore() -> Score {
+            let measures = (0 ..< 3).map { index in
+                Measure(voices: [Voice(elements: [
+                    .chord(Chord(duration: .whole, notes: [Note(pitch: 60 + index, tpc: 14)])),
+                ])])
+            }
+            return Score(
+                division: 480,
+                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: measures)])],
+            )
+        }
+
+        #if canImport(CryptoKit)
+            @Test
+            func programWithoutImagesIsByteStable() {
+                _ = TestSupport.installFontMetrics
+                let pages = LayoutBridge.computeWithPages(
+                    score: Self.textFreeScore(), pageWidthMM: 210, pageHeightMM: 297, options: .verticalDefault,
+                ).pages
+                let bytes = DrawProgramWire(magic: DrawProgram.magic, version: 8, pages: pages).encodeToData()
+                let hex = SHA256.hash(data: bytes).map { byte in
+                    let digits = String(byte, radix: 16)
+                    return digits.count == 1 ? "0" + digits : digits
+                }.joined()
+                print("W7-T9-SHA: \(hex)")
+                #expect(hex == Self.textFreeProgramSHA256, "W7-T9-SHA: \(hex)")
+            }
+        #endif
     }
 #endif

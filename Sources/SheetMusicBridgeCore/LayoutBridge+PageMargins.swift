@@ -141,7 +141,7 @@ extension DrawCommand {
             )
         case let .setRotation(radians, pivotX, pivotY):
             radians == 0 ? self : .setRotation(radians: radians, pivotX: pivotX + dx, pivotY: pivotY + dy)
-        case .stroke, .setColor, .setDash, .setTextStyle, .fillPath:
+        case .stroke, .setColor, .setDash, .setTextStyle, .fillPath, .drawImage:
             self
         }
     }
