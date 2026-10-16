@@ -31,6 +31,12 @@ enum ScoreSemanticComparison {
         var ignoreInstrumentPlaybackFields = true
         /// Additional meta-tag keys to drop from both sides before comparing.
         var ignoreMetaTagKeys: Set<String> = []
+        /// If true (default), drop every `.staffText` system element before comparing.
+        var stripsStaffText = true
+        /// If true, stable-sort each run of untimed annotations (MuseScore's order inside a segment is arbitrary).
+        var sortsAnnotationRuns = false
+        /// If true, clear line geometry (hook heights, dash lengths) that MusicXML cannot carry.
+        var ignoresLineGeometry = false
     }
 
     /// Assert that `produced` (from MusicXML) and `reference` (from MSCX)
@@ -271,20 +277,9 @@ enum ScoreSemanticComparison {
             }
             return pt
         }
-        // Strip staff/system text entries from systemMeasures — only
-        // the MSCX decoder picks them up today, so keeping them
-        // would break cross-format equivalence of fixtures that
-        // round-trip through both. (Tempo / rehearsal mark / swing
-        // are kept; only `.staffText` mirrors the old voice-level
-        // strip semantics.)
-        s.systemMeasures.mapValues { measure in
-            var copy = measure
-            copy.elements.removeAll { element in
-                if case .staffText = element.element { return true }
-                return false
-            }
-            return copy
-        }
+        if options.stripsStaffText { s = removingStaffText(s) }
+        if options.sortsAnnotationRuns { s = sortingAnnotationRuns(s) }
+        if options.ignoresLineGeometry { s = ignoringLineGeometry(s) }
         return s
     }
 

@@ -5,6 +5,7 @@
     import SheetMusicCore
     import SheetMusicMIDI
     import SheetMusicMSCX
+    import SheetMusicMusicXML
     import Testing
 
     /// What every playback consumer makes of every committed fixture — the SMF, the cursor timeline, the notated clock
@@ -37,9 +38,20 @@
                 }
                 out += try Self.digest(of: score, label: name)
             }
+            let xmlNames = try #require(FileManager.default.subpaths(atPath: root.path))
+                .filter { $0.hasSuffix(".xml") || $0.hasSuffix(".musicxml") }
+                .sorted()
+            for name in xmlNames {
+                let data = try Data(contentsOf: root.appendingPathComponent(name))
+                guard let score = try? MusicXMLParser.parse(data) else {
+                    out += "\(name)\tPARSE-FAILED\n"
+                    continue
+                }
+                out += try Self.digest(of: score, label: name)
+            }
             let dest = URL(fileURLWithPath: ".build/playback-golden.txt")
             try out.write(to: dest, atomically: true, encoding: .utf8)
-            print("wrote \(dest.path): \(names.count) fixtures, \(out.count) bytes")
+            print("wrote \(dest.path): \(names.count) mscx + \(xmlNames.count) musicxml fixtures, \(out.count) bytes")
             #expect(!names.isEmpty)
         }
 

@@ -10,6 +10,11 @@ public enum MusicXMLParser {
         return try Score.decodeMusicXML(root)
     }
 
+    /// Parse uncompressed MusicXML bytes with explicit import options. Task 4 threads `options` into the decoder.
+    package static func parse(_ data: Data, options: MusicXMLImportOptions) throws -> Score {
+        try parse(data)
+    }
+
     /// Parse a `.mxl` (zipped MusicXML) archive. Resolves the rootfile from
     /// `META-INF/container.xml` and delegates to `parse(_:)`.
     public static func parse(mxlData: Data) throws -> Score {

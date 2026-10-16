@@ -1,4 +1,6 @@
 import Foundation
+import SheetMusicCore
+import SheetMusicMusicXML
 import Testing
 
 /// Loads the paired MusicXML input (`<name>.xml`) and the MuseScore
@@ -15,6 +17,11 @@ enum MusicXMLFixtureLoader {
             "fixture xml not bundled: \(name).xml",
         )
         return try Data(contentsOf: url)
+    }
+
+    /// The fixture parsed with `inferTextType` set to `infer`.
+    static func score(_ name: String, infer: Bool = true) throws -> Score {
+        try MusicXMLParser.parse(xml(name), options: MusicXMLImportOptions(inferTextType: infer))
     }
 
     /// Reference MSCX bytes for the fixture named `name` (without extension).
