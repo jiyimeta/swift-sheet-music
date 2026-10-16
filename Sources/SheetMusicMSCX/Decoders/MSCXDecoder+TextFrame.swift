@@ -33,7 +33,8 @@ struct BoxChildren {
 extension XMLTreeNode {
     /// A numeric child's value, `nil` when absent or malformed.
     func boxNumber(_ name: String) -> CGFloat? {
-        first(name)?.text.flatMap { Double($0) }.map { CGFloat($0) }
+        guard let raw = first(name)?.text, let parsed = Double(raw) else { return nil }
+        return CGFloat(parsed)
     }
 }
 

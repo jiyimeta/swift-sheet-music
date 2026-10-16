@@ -10,12 +10,18 @@ import SheetMusicXMLTools
 
 /// A numeric child, or nothing when the value is `nil` — the one writer the three box kinds share.
 func boxChild(_ name: String, _ value: CGFloat?) -> XMLTreeNode? {
-    value.map { XMLTreeNode(name: name, text: FormatG.string(Double($0))) }
+    guard let value else { return nil }
+    return XMLTreeNode(name: name, text: FormatG.string(Double(value)))
 }
 
 /// `<topGap>` then `<bottomGap>`, each only when set.
 func appendBoxGaps(top: CGFloat?, bottom: CGFloat?, to children: inout [XMLTreeNode]) {
-    children.append(contentsOf: [boxChild("topGap", top), boxChild("bottomGap", bottom)].compactMap(\.self))
+    if let topNode = boxChild("topGap", top) {
+        children.append(topNode)
+    }
+    if let bottomNode = boxChild("bottomGap", bottom) {
+        children.append(bottomNode)
+    }
 }
 
 extension TextFrame {
@@ -27,9 +33,11 @@ extension TextFrame {
             ("leftMargin", margins.left), ("rightMargin", margins.right),
             ("topMargin", margins.top), ("bottomMargin", margins.bottom),
         ]
-        children.append(contentsOf: entries.compactMap { name, value in
-            value == 0 ? nil : boxChild(name, value)
-        })
+        for entry in entries where entry.1 != 0 {
+            if let child = boxChild(entry.0, entry.1) {
+                children.append(child)
+            }
+        }
         if let text {
             children.append(text.encode(options: options))
         }

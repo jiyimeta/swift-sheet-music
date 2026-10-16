@@ -31,13 +31,17 @@ extension ScoreFrame {
         // `FrameText.decode` returns nil only for a `<Text>` with neither text nor markup; `Text` is consumed either
         // way, so such an empty block is the one thing not written back.
         let texts = node.all("Text").compactMap(FrameText.decode(_:))
+        var autoSize: Bool?
+        if let raw = node.first("boxAutoSize")?.text {
+            autoSize = raw == "1" || raw == "true"
+        }
         return ScoreFrame(
             heightSp: box.number("height") ?? 0,
             texts: texts,
             preservedMarkup: box.preservedMarkup,
             topGapSp: box.topGapSp,
             bottomGapSp: box.bottomGapSp,
-            autoSize: node.first("boxAutoSize")?.text.map { $0 == "1" || $0 == "true" },
+            autoSize: autoSize,
             images: node.all("Image").map(FrameImage.decode(_:)),
         )
     }
