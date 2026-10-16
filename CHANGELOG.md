@@ -79,10 +79,12 @@ and this project adheres to
   after it. Not under `.ignoreAll`, as for a measure's page break: the layout sets `LayoutFrame.pageBreakAfter` only
   when its `ScoreViewOptions.breakPolicy` honors page breaks, so it is false under `.ignoreAll`. The new
   `LayoutDocument.pageTop(ofPageStartingAt:)` is where a page starts — the previous system's bottom, or the bottom of
-  the boxes with a page break above its first system — and every page consumer uses it: the `.page` lift,
-  `LayoutBridge.PagePlacement`, the page-break offsets and the PDF batches. The boxes after the last system move
-  together to a page of their own when they do not fit under it, or when a page break on the last measure closed its
-  page; that page is the empty range `systems.count ..< systems.count`, a PDF batch with no systems. Any other box
+  the boxes with a page break above its first system — and the `.page` lift, `LayoutBridge.PagePlacement` and the
+  page-break offsets use it; a PDF batch starts there when a frame sits above its first system, and at that system's
+  own top otherwise, as before. Pass `paginate` the break policy the document was laid out with. The boxes after the
+  last system — a break box among them too — move together to a page of their own when they do not fit under it, or
+  when a page break on the last measure closed its page; that page is the empty range
+  `systems.count ..< systems.count`, a PDF batch with no systems. Any other box
   belongs to the page whose first system follows it, unless it carries the break —
   `subdocument(systems:yOffset:isLastPage:)` carries the boxes whose top lies between its page's top and the next
   page's, lifted with the page, and grows to them; the last page takes the trailing ones — and the first `.page` page

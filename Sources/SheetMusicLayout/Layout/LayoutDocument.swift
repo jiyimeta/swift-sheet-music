@@ -59,6 +59,10 @@ extension LayoutDocument {
     /// frames it is `LayoutPaginator.paginate(systems:pageHeight:policy:)` exactly. Every page-mode caller cuts through
     /// here, and places each page at `pageTop(ofPageStartingAt:)`, so the bridge, wasm, JNI and PDF pages agree on
     /// where a frame lands.
+    ///
+    /// Pass the `ScoreViewOptions.breakPolicy` this document was laid out with: a frame's page break was resolved at
+    /// layout time (`LayoutFrame.pageBreakAfter`), and `pageTop` and `subdocument` read it without a policy, so a
+    /// different `policy` here would cut pages they do not place.
     public func paginate(pageHeight: CGFloat, policy: LayoutBreakPolicy) -> [Range<Int>] {
         LayoutPaginator.paginate(
             systems: systems, pageHeight: pageHeight, policy: policy,

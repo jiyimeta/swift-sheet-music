@@ -202,7 +202,8 @@ public enum PDFExporter {
     /// rather than at its own top, so the frame is on this page and not lost between two — or, for a system in
     /// `pageBreaksBefore`, at the bottom of the frames whose break it is, so they stay on the page above. Every other
     /// page starts where it always did. Each page therefore starts at `LayoutDocument.pageTop(ofPageStartingAt:)` when
-    /// a frame sits above its first system.
+    /// a frame sits above its first system. With frames, `policy` must be the break policy the document was laid out
+    /// with, as `LayoutDocument.paginate(pageHeight:policy:)` says.
     ///
     /// The three frame parameters are derived from a document internally — `export(score:options:)` cuts through
     /// `paginate(document:page:policy:)`, which reads the `package` helpers behind

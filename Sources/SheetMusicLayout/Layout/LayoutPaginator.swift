@@ -37,7 +37,8 @@ public enum LayoutPaginator {
     /// appended when they do not fit on the last page (`trailingFramesBottom - pageTop > pageHeight`; MuseScore gives
     /// a trailing box that does not fit a page of its own), and always when an honored page break closed the last
     /// page: the frames come after the break (`pagelayout.cpp:246`), and the page before it has no room reserved for
-    /// them. The defaults are the cut without frames.
+    /// them. The defaults are the cut without frames. With frames, `policy` must be the break policy the document was
+    /// laid out with, as `LayoutDocument.paginate(pageHeight:policy:)` says.
     public static func paginate(
         systems: [LayoutSystem],
         pageHeight: CGFloat,
