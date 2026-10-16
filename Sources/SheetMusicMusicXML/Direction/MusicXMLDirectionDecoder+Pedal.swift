@@ -158,6 +158,9 @@ extension MusicXMLSpannerStopEdit.Change {
         case let .lineStop(stop):
             stop.apply(&spanner, stopCameFirst: stopCameFirst)
             return
+        case .delayedOttavaStop:
+            // Only the stop's site changes.
+            return
         }
         spanner.lineProperties = properties
         spanner.normalizePedal()

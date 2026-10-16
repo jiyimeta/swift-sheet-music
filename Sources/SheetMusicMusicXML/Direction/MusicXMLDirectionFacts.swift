@@ -63,9 +63,14 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
         metronome?.xmlText ?? ""
     }
 
-    /// `infers` is `MusicXMLImportOptions.inferTextType`, which lets words be a dynamic; `finale` reads them with
-    /// Finale's letters (the exporter is Finale, `P2:4519`).
-    init(_ direction: XMLTreeNode, infers: Bool, finale: Bool = false) {
+    /// MuseScore's `m_tpoMetro`: the quarter-note tempo the last `<metronome>`, or the last `<words>` read as a
+    /// metronome (`MusicXMLMetronomeWords`), implies; each sets it again (`P2:4038`, `4974`).
+    var metronomeTempo = 0.0
+
+    /// `infers` is `MusicXMLImportOptions.inferTextType`, which lets words be a dynamic or a metronome; `software` is
+    /// the exporter, whose habits bend the words: Finale's dynamic letters (`P2:4519`), Sibelius's metronome letters
+    /// (`P2:4928`).
+    init(_ direction: XMLTreeNode, infers: Bool, software: MusicXMLExporterSoftware = .other) {
         let explicitPlacement = direction.attributes["placement"].flatMap { $0.isEmpty ? nil : $0 }
         isSystem = direction.attributes["system"] == "only-top"
         var defaultY: Double?
@@ -77,7 +82,7 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
                 color = child.attributes["color"].flatMap { MusicXMLColor.parse($0) }
                 // `placement()` as a line reads it while its element is read (`P2:5243`).
                 let placementNow = explicitPlacement ?? defaultY.map { $0 < 0 ? "above" : "below" }
-                read(child, infers: infers, finale: finale, placement: placementNow)
+                read(child, infers: infers, software: software, placement: placementNow)
             }
         }
         placementAttribute = explicitPlacement
@@ -91,28 +96,19 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
         }
         // Sibelius 7.1.3 writes a metronome without `<sound tempo>`: the metronome's tempo stands in, before anything
         // reads the tempo (`P2:3494-3499`).
-        if sound.tempo < 0.1, let metronomeTempo = metronome?.quarterBeatsPerMinute, metronomeTempo > 0.1 {
+        if sound.tempo < 0.1, metronomeTempo > 0.1 {
             sound.tempo = metronomeTempo
         }
     }
 
     /// One `<direction-type>` child's contribution to the words (`P2:4037-4103`). `<segno/>` and `<coda/>` add
     /// nothing here: the repeat decoding owns their glyph.
-    private mutating func read(_ child: XMLTreeNode, infers: Bool, finale: Bool, placement: String?) {
+    private mutating func read(
+        _ child: XMLTreeNode, infers: Bool, software: MusicXMLExporterSoftware, placement: String?,
+    ) {
         switch child.name {
         case "words":
-            let part = MusicXMLFormattedWords.xmlText(of: child)
-            let plain = MusicXMLFormattedWords.simplified(MusicXMLFormattedWords.plainText(ofXMLText: part))
-            // `textToDynamic` then `textToCrescLine` take each `<words>` that is a dynamic, or that holds "cresc" or
-            // "dim", out of the words (`P2:4044-4045`).
-            if infers, let subtype = MusicXMLDynamicText.wordsDynamic(part, finale: finale) {
-                dynamics.append(subtype)
-                dynamicsVelocity = (Double(Dynamic.defaultVelocity(for: subtype)) / 0.9).rounded()
-            } else if infers, plain.hasSubstring("cresc") || plain.hasSubstring("dim") {
-                crescLineWords = plain
-            } else {
-                wordsXML += part
-            }
+            readWords(child, infers: infers, software: software)
         case "bracket", "dashes":
             readLine(child, placement: placement)
         case "dynamics":
@@ -121,7 +117,9 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
                 dynamics.append(mark.name == "other-dynamics" ? mark.text : mark.name)
             }
         case "metronome":
-            metronome = MusicXMLMetronome.parse(child)
+            let parsed = MusicXMLMetronome.parse(child)
+            metronome = parsed
+            metronomeTempo = parsed.quarterBeatsPerMinute
         case "wedge":
             if let wedge = MusicXMLWedgeFact(child), !wedges.contains(where: { $0.repeats(wedge) }) {
                 wedges.append(wedge)
@@ -145,6 +143,27 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
             }
         default:
             break
+        }
+    }
+
+    /// One `<words>`: `textToDynamic` then `textToCrescLine` take one that is a dynamic, or that holds "cresc" or
+    /// "dim", out of the words (`P2:4044-4045`); `handleTempo` then reads what is left as a metronome when it is one
+    /// (`P2:4046`), which rewrites the words and sets the metronome tempo. Each is only done when inferring.
+    private mutating func readWords(_ child: XMLTreeNode, infers: Bool, software: MusicXMLExporterSoftware) {
+        let part = MusicXMLFormattedWords.xmlText(of: child)
+        let plain = MusicXMLFormattedWords.simplified(MusicXMLFormattedWords.plainText(ofXMLText: part))
+        if infers, let subtype = MusicXMLDynamicText.wordsDynamic(part, finale: software == .finale) {
+            dynamics.append(subtype)
+            dynamicsVelocity = (Double(Dynamic.defaultVelocity(for: subtype)) / 0.9).rounded()
+        } else if infers, plain.hasSubstring("cresc") || plain.hasSubstring("dim") {
+            crescLineWords = plain
+        } else if infers, let words = MusicXMLDirectionDecoder.metronomeWords(
+            plain: plain, software: software, fontFamily: child.attributes["font-family"],
+        ) {
+            wordsXML += words.xmlText
+            if let tempo = words.quarterBeatsPerMinute { metronomeTempo = tempo }
+        } else {
+            wordsXML += part
         }
     }
 }

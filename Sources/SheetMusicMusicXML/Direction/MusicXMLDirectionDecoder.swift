@@ -21,6 +21,8 @@ enum MusicXMLDirectionDecoder {
         var measureStart = Fraction.zeroTick
         /// The import's tempo markings so far, shared by every part (`canAddTempoText`).
         let registry: MusicXMLTempoRegistryBox
+        /// The program that wrote the file (`m_pass1.exporterSoftware()`).
+        var software = MusicXMLExporterSoftware.other
     }
 
     /// A system-lane element the direction made, on a staff of the part, at a position in the measure.
@@ -45,7 +47,9 @@ enum MusicXMLDirectionDecoder {
         let staff = staffIndex(direction, staffCount: context.staffCount)
         let tick = Self.tick(of: direction, context: context)
         var output = Output()
-        let facts = MusicXMLDirectionFacts(direction, infers: context.options.inferTextType)
+        let facts = MusicXMLDirectionFacts(
+            direction, infers: context.options.inferTextType, software: context.software,
+        )
         appendDynamics(facts, staff: staff, tick: tick, context: context, to: &output)
         appendInferredHairpin(facts, staff: staff, tick: tick, context: context, to: &output)
         let tempoCount = output.tempoElements.count

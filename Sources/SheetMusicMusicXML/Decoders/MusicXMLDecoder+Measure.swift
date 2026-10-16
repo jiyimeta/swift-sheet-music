@@ -40,6 +40,7 @@ enum MusicXMLMeasureWalker {
         options: MusicXMLImportOptions = .default,
         partIndex: Int = 0,
         registry: MusicXMLTempoRegistryBox = MusicXMLTempoRegistryBox(),
+        software: MusicXMLExporterSoftware = .other,
     ) throws -> PartResult {
         let staffCount = detectStaffCount(partNode: partNode)
         var divisions = DivisionsContext(perQuarter: 1)
@@ -63,13 +64,13 @@ enum MusicXMLMeasureWalker {
         var inferredLines = MusicXMLInferredLineLog()
         var partTick = Fraction.zeroTick
         var repeats = MusicXMLRepeatLog()
+        var delayedOttavas = MusicXMLDelayedOttavaLog()
         // The octave shifts are read before the notes, as MuseScore's pass 1 reads them (`P2:7264`).
         let octaveShifts = MusicXMLOctaveShiftScan.scan(partNode: partNode)
         for (index, measureNode) in partNode.all("measure").enumerated() {
-            let isFirstMeasure = (index == 0)
             var state = MusicXMLMeasureState(
                 measureIndex: index, staffCount: staffCount, options: options, partIndex: partIndex,
-                registry: registry,
+                registry: registry, software: software,
             )
             state.octaveShifts = octaveShifts.table
             state.measureStart = octaveShifts.measureStarts.indices.contains(index)
@@ -77,9 +78,10 @@ enum MusicXMLMeasureWalker {
             state.inferredLines = inferredLines
             state.partTick = partTick
             state.repeats = repeats
+            state.delayedOttavas = delayedOttavas
             let built = try decodeOne(
                 measureNode: measureNode, state: &state, divisions: &divisions, previousAttributes: &previousAttributes,
-                isFirstMeasure: isFirstMeasure, drumTable: drumTable, glideTracker: &glideTracker,
+                isFirstMeasure: index == 0, drumTable: drumTable, glideTracker: &glideTracker,
                 directionEvents: &directionEvents,
             )
             tempoElements.append(state.tempoElements)
@@ -87,6 +89,7 @@ enum MusicXMLMeasureWalker {
             measureLengths.append(length)
             inferredLines = state.inferredLines
             repeats = state.repeats
+            delayedOttavas = state.delayedOttavas
             partTick += length
             for (staffIdx, item) in built.enumerated() {
                 perStaffMeasures[staffIdx].append(item.measure)
@@ -97,6 +100,8 @@ enum MusicXMLMeasureWalker {
         // The markers and jumps settle into their bars by the recorded lengths (the clock `partTick` sums).
         repeats.apply(measureLengths: measureLengths, to: &perStaffMeasures[0])
         var withGlides = applyGlides(attachments: glideTracker.attachments, measures: perStaffMeasures)
+        // The delayed ottava stops move to the notes they waited for, or to the part's end (`P2:2297-2304`).
+        directionEvents = delayedOttavas.finished(directionEvents, measureLengths: measureLengths, partEnd: partTick)
         // Spanner starts and stops pair part-wide once the part is walked, and the inferred lines close at their ends
         // (`P2:2307-2314`); their begin sides and end markers join the queue after the direction's other voice
         // elements, in the pairing's order.
@@ -191,6 +196,7 @@ enum MusicXMLMeasureWalker {
         directionEvents: inout [MusicXMLDirectionEvent],
     ) throws -> [StaffMeasureBuilder.Built] {
         let staffCount = state.staffCount
+        state.eventBase = directionEvents.count
         for child in measureNode.children {
             switch child.name {
             case "attributes":
@@ -213,6 +219,7 @@ enum MusicXMLMeasureWalker {
 
             case "note":
                 placePendingSoundTempo(state: &state)
+                moveDelayedOttavaStop(state: &state)
                 try decodeNoteChild(
                     child, state: &state, divisions: divisions, drumTable: drumTable, glideTracker: &glideTracker,
                 )

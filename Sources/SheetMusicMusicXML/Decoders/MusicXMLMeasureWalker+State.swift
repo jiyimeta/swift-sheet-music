@@ -35,12 +35,19 @@ struct MusicXMLMeasureState {
     var measureHasCoda = false
     /// The part's markers and jumps so far, which the walk hands from measure to measure and places after it.
     var repeats = MusicXMLRepeatLog()
+    /// The program that wrote the file.
+    let software: MusicXMLExporterSoftware
+    /// How many direction events the part's earlier measures made, which this measure's events are numbered after.
+    var eventBase = 0
+    /// The part's delayed Sibelius ottava stop and the moves made so far, handed from measure to measure.
+    var delayedOttavas = MusicXMLDelayedOttavaLog()
 
     init(
         measureIndex: Int, staffCount: Int, options: MusicXMLImportOptions, partIndex: Int,
-        registry: MusicXMLTempoRegistryBox,
+        registry: MusicXMLTempoRegistryBox, software: MusicXMLExporterSoftware = .other,
     ) {
         builders = (0 ..< staffCount).map { _ in StaffMeasureBuilder() }
+        self.software = software
         self.measureIndex = measureIndex
         self.staffCount = staffCount
         self.options = options
@@ -151,6 +158,7 @@ extension MusicXMLMeasureWalker {
             partIndex: state.partIndex,
             measureStart: state.partTick,
             registry: state.registry,
+            software: state.software,
         )
         let navigation = MusicXMLJumpDecoder.decode(child, measureHasCoda: &state.measureHasCoda)
         state.repeats.add(
@@ -158,6 +166,7 @@ extension MusicXMLMeasureWalker {
             partTick: state.partTick,
         )
         let output = MusicXMLDirectionDecoder.decode(child, context: context)
+        delayOttavaStops(output.events, now: context.now, state: &state)
         state.directionEvents += output.events
         // A direction's dynamics and tempo text end earlier lines before its own words start one (`P2:3700-3705`,
         // `3754-3764`).
@@ -171,6 +180,26 @@ extension MusicXMLMeasureWalker {
             state.builders[placed.staff].addSystemElement(placed.element, at: placed.position)
         }
         state.tempoElements += output.tempoElements
+    }
+
+    /// A Sibelius ottava stop among a direction's events waits for the next note (`P2:3788-3794`): numbered by its
+    /// place in the part's events, at the clock where it was read.
+    private static func delayOttavaStops(
+        _ events: [MusicXMLDirectionEvent], now: Fraction, state: inout MusicXMLMeasureState,
+    ) {
+        let base = state.eventBase + state.directionEvents.count
+        for (offset, event) in events.enumerated() {
+            guard case let .spannerStop(_, edit) = event.payload, case .delayedOttavaStop? = edit.change else {
+                continue
+            }
+            state.delayedOttavas.delay(eventIndex: base + offset, absolute: state.partTick + now)
+        }
+    }
+
+    /// Before a `<note>`: a delayed ottava stop read before the clock moves here (`P2:2835-2839`).
+    static func moveDelayedOttavaStop(state: inout MusicXMLMeasureState) {
+        let now = state.clock.now
+        state.delayedOttavas.noteStarts(measure: state.measureIndex, tick: now, absolute: state.partTick + now)
     }
 
     /// A note's `<fermata>` ends the tempo lines inferred on its staff, at its chord's start (`P2:9472-9479`).

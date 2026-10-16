@@ -38,7 +38,11 @@ extension Score {
                 ),
             )
         }
-        let (parts, systemMeasures) = try decodeParts(root: root, partList: partList, options: options)
+        // The exporter, which a few readings bend for (`MusicXMLExporterSoftware`).
+        let software = MusicXMLExporterSoftware.detect(root: root)
+        let (parts, systemMeasures) = try decodeParts(
+            root: root, partList: partList, options: options, software: software,
+        )
 
         // Hard-code division = 480 ticks per quarter, matching MuseScore's default
         // and the `*_ref.mscx` fixtures we semantic-compare against. MusicXML's
@@ -119,6 +123,7 @@ extension Score {
         root: XMLTreeNode,
         partList: XMLTreeNode,
         options: MusicXMLImportOptions,
+        software: MusicXMLExporterSoftware,
     ) throws -> (parts: [Part], systemMeasures: [SystemMeasure]) {
         let scoreParts = partList.all("score-part")
         var parts: [Part] = []
@@ -137,6 +142,7 @@ extension Score {
                 index: index,
                 partIndex: parts.count,
                 options: options,
+                software: software,
                 tempoRegistry: tempoRegistry,
             )
             parts.append(part)
@@ -177,6 +183,7 @@ extension Score {
         index: Int,
         partIndex: Int,
         options: MusicXMLImportOptions,
+        software: MusicXMLExporterSoftware,
         tempoRegistry: MusicXMLTempoRegistryBox,
     ) throws -> (part: Part, staffElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])]) {
         let id = partNode.attributes["id"] ?? ""
@@ -201,6 +208,7 @@ extension Score {
             options: options,
             partIndex: partIndex,
             registry: tempoRegistry,
+            software: software,
         )
         let (partTemplate, _, instrumentByID) = try Part.decodeMusicXML(
             scorePart: scorePart,

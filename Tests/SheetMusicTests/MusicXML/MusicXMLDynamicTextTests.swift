@@ -26,4 +26,12 @@ struct MusicXMLDynamicTextTests {
         #expect(parsed.subtype == subtype)
         #expect(parsed.customXML == custom)
     }
+
+    @Test("Finale's letters are dynamics only when the exporter is Finale (P2:4519-4528)")
+    func finaleLetters() {
+        #expect(MusicXMLDynamicText.wordsDynamic("π", finale: true) == "pp")
+        #expect(MusicXMLDynamicText.wordsDynamic("S", finale: true) == "sf")
+        #expect(MusicXMLDynamicText.wordsDynamic("π", finale: false) == nil)
+        #expect(MusicXMLDynamicText.wordsDynamic("S", finale: false) == nil)
+    }
 }

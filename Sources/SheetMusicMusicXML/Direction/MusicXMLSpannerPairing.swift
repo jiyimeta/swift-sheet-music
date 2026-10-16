@@ -30,7 +30,8 @@ struct MusicXMLSpannerSlot: Sendable, Hashable {
 }
 
 /// What a stop element changes on the spanner it closes, as data so that an event's equality is real. A wedge's and an
-/// ottava's stop change nothing; a pedal's carries its `Change` (`MusicXMLDirectionDecoder+Pedal.swift`).
+/// ottava's stop change nothing (a Sibelius ottava's carries only where it was read); a pedal's carries its `Change`
+/// (`MusicXMLDirectionDecoder+Pedal.swift`).
 struct MusicXMLSpannerStopEdit: Sendable, Equatable {
     enum Change: Sendable, Equatable {
         /// `<pedal type="stop|discontinue">` (`P2:5410-5422`): its `line` attribute and its resolved `sign`.
@@ -40,6 +41,10 @@ struct MusicXMLSpannerStopEdit: Sendable, Equatable {
         /// `<bracket type="stop">` or `<dashes type="stop">` (`P2:5180-5216`, `5254-5258`): the line the stop element
         /// makes and its end hook (`MusicXMLLineStop`).
         case lineStop(MusicXMLLineStop)
+        /// An ottava's stop in a Sibelius file, which `MusicXMLDelayedOttavaLog` moves to the next note
+        /// (`P2:3788-3794`); `measure` and `tick` are where it was read, which it keeps when it finds no open ottava,
+        /// as MuseScore delays only a stop that closes one (`P2:3785`, `3799-3805`). It changes nothing on the ottava.
+        case delayedOttavaStop(measure: Int, tick: Fraction)
     }
 
     var change: Change?
@@ -53,6 +58,12 @@ struct MusicXMLSpannerStopEdit: Sendable, Equatable {
     var closesOnlyAnOpenStart: Bool {
         if case .pedalChange = change { return true }
         return false
+    }
+
+    /// The stop as the slot holds it when no start is open: a delayed ottava stop back where it was read.
+    func held(_ event: MusicXMLDirectionEvent) -> MusicXMLDirectionEvent {
+        guard case let .delayedOttavaStop(measure, tick)? = change else { return event }
+        return MusicXMLDirectionEvent(measure: measure, staff: event.staff, tick: tick, payload: event.payload)
     }
 
     /// Applies the stop's changes to the begin side. `stopCameFirst` is the order MuseScore saw them in: a stop with
@@ -169,7 +180,7 @@ enum MusicXMLSpannerPairing {
                 )
                 if let pair { result.append(pair) }
             } else if held[slot] == nil, !edit.closesOnlyAnOpenStart {
-                held[slot] = (edit, event)
+                held[slot] = (edit, edit.held(event))
             }
         }
     }

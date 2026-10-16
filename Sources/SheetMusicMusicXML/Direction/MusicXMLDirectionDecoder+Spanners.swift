@@ -85,8 +85,8 @@ struct MusicXMLOctaveShiftFact: Sendable, Equatable {
 
 /// A direction's spanner starts and stops, as events the part's pairing closes (`MusicXMLSpannerPairing`): the stops
 /// first, then the starts (`P2:3777-3839`), at the direction's tick on its staff — except an ottava's stop, which
-/// ignores `<offset>` (`P2:3786-3787`, `3801`). The Sibelius habit of ending an ottava a note early (`P2:3788-3794`)
-/// is not mirrored here.
+/// ignores `<offset>` (`P2:3786-3787`, `3801`). In a Sibelius file an ottava's stop is marked delayed, as Sibelius ends
+/// an ottava a note early (`P2:3788-3794`); `MusicXMLDelayedOttavaLog` moves it.
 extension MusicXMLDirectionDecoder {
     static func appendSpanners(
         _ facts: MusicXMLDirectionFacts, staff: Int, tick: Fraction, context: Context, to output: inout Output,
@@ -104,7 +104,11 @@ extension MusicXMLDirectionDecoder {
         }
         for shift in facts.octaveShifts where !shift.isStart {
             let slot = MusicXMLSpannerSlot(family: .ottava, number: shift.number)
-            append(.spannerStop(slot, MusicXMLSpannerStopEdit()), at: context.now)
+            // Only Sibelius, not Dolet (`delayOttava`, `P2:3452`).
+            let edit = context.software == .sibelius
+                ? MusicXMLSpannerStopEdit(.delayedOttavaStop(measure: context.measure, tick: context.now))
+                : MusicXMLSpannerStopEdit()
+            append(.spannerStop(slot, edit), at: context.now)
         }
         for stop in pedals.stops + lines.stops {
             append(stop, at: tick)
@@ -156,5 +160,61 @@ extension MusicXMLDirectionDecoder {
         )
         spanner.elementProperties.color = wedge.color
         return spanner
+    }
+}
+
+/// MuseScore's `m_delayedOttava` for one part (`P2:3788-3794`, `2835-2839`, `2301-2304`): the last delayed ottava stop
+/// waits for the first `<note>` that starts after it, at the measure clock — any note, a chord tone or a grace note
+/// too — and moves there; one still waiting at the part's end moves to the end of the last measure. The stop keeps its
+/// place in the file's order, so it closes the ottava it closed where it was read; only its site changes.
+struct MusicXMLDelayedOttavaLog: Sendable, Equatable {
+    /// A (measure, tick) a stop moves to.
+    struct Site: Sendable, Equatable {
+        let measure: Int
+        let tick: Fraction
+    }
+
+    /// A waiting stop: its index in the part's direction events and its part-absolute tick (`tick2`).
+    private struct Pending: Sendable, Equatable {
+        let index: Int
+        let absolute: Fraction
+    }
+
+    private var pending: Pending?
+    /// The moves made so far, by event index.
+    private var moves: [Int: Site] = [:]
+
+    /// A delayed stop read at `absolute`. It takes the place of one still waiting, which then never moves
+    /// (`setDelayedOttava`).
+    mutating func delay(eventIndex: Int, absolute: Fraction) {
+        pending = Pending(index: eventIndex, absolute: absolute)
+    }
+
+    /// A `<note>` starting at `tick` of `measure`, `absolute` in the part: the waiting stop moves there when it was
+    /// read before it (`tick2() < time + mTime`, `P2:2836`).
+    mutating func noteStarts(measure: Int, tick: Fraction, absolute: Fraction) {
+        guard let waiting = pending, waiting.absolute.precedes(absolute) else { return }
+        moves[waiting.index] = Site(measure: measure, tick: tick)
+        pending = nil
+    }
+
+    /// The part's events once it is walked, each moved stop at its new site and in its old place: a stop still waiting
+    /// before `partEnd`, the end of the last measure, moves there (`P2:2301-2304`).
+    func finished(
+        _ events: [MusicXMLDirectionEvent], measureLengths: [Fraction], partEnd: Fraction,
+    ) -> [MusicXMLDirectionEvent] {
+        var log = self
+        if let length = measureLengths.last {
+            log.noteStarts(measure: measureLengths.count - 1, tick: length, absolute: partEnd)
+        }
+        guard !log.moves.isEmpty else { return events }
+        var result = events
+        for (index, site) in log.moves where result.indices.contains(index) {
+            let event = result[index]
+            result[index] = MusicXMLDirectionEvent(
+                measure: site.measure, staff: event.staff, tick: site.tick, payload: event.payload,
+            )
+        }
+        return result
     }
 }

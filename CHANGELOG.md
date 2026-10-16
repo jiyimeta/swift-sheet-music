@@ -41,6 +41,9 @@ and this project adheres to
   inference, "cresc." / "dim." become hairpin lines and "rit." / "accel." / … gradual tempo changes, ended by the next
   dynamic, tempo text or fermata within 24 quarter notes, as MuseScore ends them. This closes the gradual-tempo gap behind
   `testTempoLineFermata`.
+- **MusicXML from Finale and Sibelius** — a file's `<software>` is read; Finale's dynamic-font letters import as dynamics,
+  Sibelius's metronome words ("q. = c. 78") and MetTimes symbols as a tempo text with its symbols and tempo, and a
+  Sibelius ottava ends at the note after its stop.
 
 ### Fixed
 
