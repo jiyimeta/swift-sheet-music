@@ -77,7 +77,7 @@
         <FretDiagram>
           <frets>4</frets>
           <strings>6</strings>
-          <orientation>1</orientation>
+          <orientation>horizontal</orientation>
           <fretDiagram>
             <string no="1"><dot fret="1">normal</dot></string>
             <string no="3"><dot fret="2">normal</dot></string>

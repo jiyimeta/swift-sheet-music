@@ -24,7 +24,7 @@
             <strings>6</strings>
             <showNut>1</showNut>
             <mag>1</mag>
-            <orientation>0</orientation>
+            <orientation>vertical</orientation>
             <Harmony>
               <harmonyType>0</harmonyType>
               <harmonyInfo>

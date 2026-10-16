@@ -31,6 +31,11 @@ and this project adheres to
   so when the frame's own `<height>` was not already tall enough a two-line subtitle ("First line<br/>arr. Second") lost
   its second line under the first system — at a 20 pt staff the frame stopped 11 pt short of it. The frame now reaches
   each top-anchored text's last line, measured by the placement the renderers draw from.
+- **A fret diagram's `<orientation>` is read and written as MuseScore spells it, "vertical" / "horizontal"**
+  (`TConv::toXml(Orientation)`). ssm read and wrote the enum ordinal, so a horizontal diagram from MuseScore drew
+  upright and lost its orientation on save, and a diagram ssm saved as horizontal went to MuseScore as `1`, which
+  MuseScore reads as vertical. A number is now kept as `Orientation.other` — read upright, as MuseScore reads it — and
+  written back unchanged.
 
 ## [4.11.0] - 2026-10-16
 

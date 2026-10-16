@@ -23,7 +23,7 @@ extension FretDiagram {
             barres: contents?.all("barre").map(decodeBarre) ?? [],
             fretOffset: node.first("fretOffset").flatMap { Int($0.text) },
             showNut: node.first("showNut").map { $0.text != "0" },
-            orientation: node.first("orientation").flatMap { Int($0.text) }.map(FretDiagram.Orientation.init),
+            orientation: node.first("orientation").flatMap { FretDiagram.Orientation(mscxText: $0.text) },
             harmony: node.first("Harmony").flatMap { try? Harmony.decode($0) },
             preservedMarkup: node.preservedMarkup(consuming: consumedChildren),
         )

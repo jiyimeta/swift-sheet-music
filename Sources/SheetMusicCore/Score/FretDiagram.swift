@@ -69,12 +69,14 @@ public struct FretDiagram: Sendable, Equatable {
         self.preservedMarkup = preservedMarkup
     }
 
-    /// MuseScore's `Orientation` ordinal: 0 vertical, 1 horizontal; any other value survives as-is.
+    /// MuseScore's `Orientation`: vertical or horizontal. `.other` keeps a number from a file ssm wrote before 4.12,
+    /// which stored the enum ordinal; MuseScore reads such a value as vertical, and so does layout.
     public enum Orientation: Sendable, Hashable {
         case vertical
         case horizontal
         case other(Int)
 
+        /// MuseScore's enum ordinal: 0 vertical, 1 horizontal.
         public var mscxOrdinal: Int {
             switch self {
             case .vertical: 0
@@ -88,6 +90,28 @@ public struct FretDiagram: Sendable, Equatable {
             case 0: self = .vertical
             case 1: self = .horizontal
             default: self = .other(mscxOrdinal)
+            }
+        }
+
+        /// How `<orientation>` spells it: MuseScore's "vertical" / "horizontal" (`TConv::toXml(Orientation)`,
+        /// `typesconv.cpp:1072-1089`), and an `.other` as the number it was read from.
+        package var mscxText: String {
+            switch self {
+            case .vertical: "vertical"
+            case .horizontal: "horizontal"
+            case let .other(value): String(value)
+            }
+        }
+
+        /// Reverse of `mscxText`. A number is kept as `.other` rather than mapped by ordinal: MuseScore only ever
+        /// writes the names, and reads anything else as vertical. Any other text is `nil`.
+        package init?(mscxText: String) {
+            switch mscxText {
+            case "vertical": self = .vertical
+            case "horizontal": self = .horizontal
+            default:
+                guard let value = Int(mscxText) else { return nil }
+                self = .other(value)
             }
         }
     }

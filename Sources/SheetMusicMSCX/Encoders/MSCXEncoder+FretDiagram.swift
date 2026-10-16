@@ -28,7 +28,7 @@ extension FretDiagram {
                 if let showNut { children.append(XMLTreeNode(name: "showNut", text: showNut ? "1" : "0")) }
             case "orientation":
                 if let orientation {
-                    children.append(XMLTreeNode(name: "orientation", text: String(orientation.mscxOrdinal)))
+                    children.append(XMLTreeNode(name: "orientation", text: orientation.mscxText))
                 }
             default:
                 appendPreservedMarkup(leading.filter { $0.name == property }, to: &children, options: options)

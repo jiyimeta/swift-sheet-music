@@ -32,7 +32,7 @@ struct FretDiagramPropertiesTests {
         #expect(diagrams[1].fretOffset == nil && diagrams[1].showNut == nil && diagrams[1].barres.isEmpty)
     }
 
-    @Test("the fixture with explicit defaults keeps them: fretOffset 0, showNut 1, orientation 0")
+    @Test("the fixture with explicit defaults keeps them: fretOffset 0, showNut 1, orientation vertical")
     func absentStaysAbsent() throws {
         let diagrams = try Self.diagrams("fret-diagrams")
         try #require(diagrams.count == 2)
@@ -45,7 +45,7 @@ struct FretDiagramPropertiesTests {
         let xml = try Self.xml(AnnotationFixtures.load("w5-diagrams"))
         #expect(xml.components(separatedBy: "<barre ").count == 3)
         #expect(xml.contains("<fretOffset>2</fretOffset>"))
-        #expect(xml.contains("<orientation>1</orientation>"))
+        #expect(xml.contains("<orientation>horizontal</orientation>"))
         let again = try Self.xml(MSCXParser.parse(Data(xml.utf8)))
         #expect(again == xml)
         let defaults = try Self.xml(AnnotationFixtures.load("fret-diagrams"))
@@ -64,6 +64,25 @@ struct FretDiagramPropertiesTests {
         let positions = order.compactMap { defaults.range(of: $0)?.lowerBound }
         #expect(positions.count == order.count)
         #expect(positions == positions.sorted())
+    }
+
+    /// MuseScore reads and writes `<orientation>` as "vertical" / "horizontal" (`TConv::fromXml(…, Orientation)`,
+    /// `typesconv.cpp:1072-1089`) and reads anything else as vertical. ssm before 4.12 wrote the enum ordinal, so a
+    /// number can only come from such a file: it reads upright, as MuseScore reads it, and goes back out unchanged.
+    @Test("a number in <orientation> is not horizontal, as in MuseScore, and is written back as it was")
+    func numericOrientation() throws {
+        let source = try #require(String(bytes: MSCXFixtureLoader.mscxData("w5-diagrams"), encoding: .utf8))
+        let numeric = source.replacingOccurrences(
+            of: "<orientation>horizontal</orientation>", with: "<orientation>1</orientation>",
+        )
+        let score = try MSCXParser.parse(Data(numeric.utf8))
+        let diagrams = score.parts.flatMap(\.staves).flatMap(\.measures).flatMap(\.voices).flatMap(\.elements)
+            .compactMap { element -> FretDiagram? in
+                if case let .fretDiagram(diagram) = element { diagram } else { nil }
+            }
+        try #require(diagrams.count == 2)
+        #expect(diagrams[1].orientation == .other(1))
+        #expect(try Self.xml(score).contains("<orientation>1</orientation>"))
     }
 
     private static func fingerprint(_ diagram: FretDiagram) -> UInt64 {
