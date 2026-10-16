@@ -111,6 +111,20 @@ struct PDFPageWalkerTests {
         #expect(roman.used[edwin.glyphCount] == [0x524D])
     }
 
+    /// A 10 x 5 mm picture at (20, 30) on a 100 x 150 mm page: the unit square scaled to 10k x 5k points, its
+    /// bottom-left corner at x = 20k and y = (150 - (30 + 5))k from the page's bottom (k = 72 / 25.4).
+    @Test func drawImageEmitsDoOverItsRectangle() throws {
+        let png = try ImageFixtures.png(width: 40, height: 20, colorType: 2)
+        let resources = try PDFResources(fonts: WriterFixtures.fonts())
+        var walker = PDFPageWalker(resources: resources, pageHeightMM: 150)
+
+        walker.walk([.drawImage(data: png.file, x: 20, y: 30, w: 10, h: 5)])
+        let dictionary = try resources.write(into: PDFObjectWriter())
+
+        #expect(walker.content == "q 28.346 0 0 14.173 56.693 325.984 cm /Im1 Do Q\n")
+        #expect(dictionary.contains("/XObject << /Im1 "))
+    }
+
     @Test func `a brace is stretched between its top and bottom with its right edge in place`() throws {
         let walked = try WriterFixtures.walk([.stretchedGlyph(
             codepoint: 0xE000, rightEdgeX: 20, topY: 30, bottomY: 80, fontSize: 7, xScale: 1, fontId: .smufl,
