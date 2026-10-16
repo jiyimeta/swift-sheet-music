@@ -84,4 +84,40 @@ struct MusicXMLWedgeTests {
         #expect(F.spanners(in: F.voice(score, measure: 0)).isEmpty)
         #expect(F.spanners(in: F.voice(score, measure: 1)).map(\.tick) == [0, 960])
     }
+
+    /// The `<direction>` MuseScore stores a hairpin's side in (`setSLinePlacement`, `P2:1641-1652`): `placement`,
+    /// else `default-y`'s side (`P2:3372-3379`), else above on a vocal staff and below on any other (`P2:3818-3824`).
+    private static func side(
+        _ attributes: String = "", wedgeAttributes: String = "", partName: String? = nil,
+    ) throws -> [PreservedXML] {
+        let start = F.direction("<wedge type=\"crescendo\" number=\"1\"\(wedgeAttributes)/>", attributes: attributes)
+        let body = start + F.quarter("C") + F.quarter("D") + Self.wedge("stop") + F.quarter("E") + F.quarter("F")
+        let score = try F.score(measures: [body], partName: partName)
+        return try #require(Self.begins(F.voice(score)).first).spanner.payloadMarkup
+    }
+
+    private static func direction(_ text: String) -> [PreservedXML] {
+        [PreservedXML(name: "direction", text: text)]
+    }
+
+    @Test("a wedge's side is its <direction>: the placement attribute first")
+    func sideFromPlacement() throws {
+        #expect(try Self.side("placement=\"below\"") == Self.direction("down"))
+        #expect(try Self.side("placement=\"above\"") == Self.direction("up"))
+        #expect(try Self.side("placement=\"below\"", partName: "Soprano") == Self.direction("down"))
+    }
+
+    @Test("without placement, default-y's sign decides the wedge's side")
+    func sideFromDefaultY() throws {
+        #expect(try Self.side(wedgeAttributes: " default-y=\"20\"") == Self.direction("up"))
+        #expect(try Self.side(wedgeAttributes: " default-y=\"-80\"") == Self.direction("down"))
+    }
+
+    @Test("with neither, a wedge is above on a vocal staff and below on any other")
+    func sideFromStaff() throws {
+        #expect(try Self.side() == Self.direction("down"))
+        #expect(try Self.side(partName: "Soprano") == Self.direction("up"))
+        #expect(try Self.side(partName: "Voice") == Self.direction("up"))
+        #expect(try Self.side(partName: "Soprano Sax") == Self.direction("down"))
+    }
 }

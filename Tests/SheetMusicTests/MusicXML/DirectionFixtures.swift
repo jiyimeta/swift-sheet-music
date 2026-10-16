@@ -60,9 +60,15 @@ enum DirectionFixtures {
             + "<time><beats>4</beats><beat-type>4</beat-type></time>\(stavesTag)\(clefs)</attributes>"
     }
 
-    static func data(parts: [(measures: [String], staves: Int)], software: String? = nil) -> Data {
+    /// `partName` names the first part (MuseScore's vocal-staff test reads it); the others are "Part N".
+    static func data(
+        parts: [(measures: [String], staves: Int)], software: String? = nil, partName: String? = nil,
+    ) -> Data {
         let list = parts.indices
-            .map { "<score-part id=\"P\($0 + 1)\"><part-name>Part \($0 + 1)</part-name></score-part>" }
+            .map { index in
+                let name = index == 0 ? partName ?? "Part 1" : "Part \(index + 1)"
+                return "<score-part id=\"P\(index + 1)\"><part-name>\(name)</part-name></score-part>"
+            }
             .joined()
         let identification = software
             .map { "<identification><encoding><software>\($0)</software></encoding></identification>" } ?? ""
@@ -82,10 +88,10 @@ enum DirectionFixtures {
     }
 
     static func score(
-        measures: [String], staves: Int = 1, software: String? = nil, infer: Bool = true,
+        measures: [String], staves: Int = 1, software: String? = nil, infer: Bool = true, partName: String? = nil,
     ) throws -> Score {
         let options = MusicXMLImportOptions(inferTextType: infer)
-        let document = data(parts: [(measures: measures, staves: staves)], software: software)
+        let document = data(parts: [(measures: measures, staves: staves)], software: software, partName: partName)
         return try MusicXMLParser.parse(document, options: options)
     }
 

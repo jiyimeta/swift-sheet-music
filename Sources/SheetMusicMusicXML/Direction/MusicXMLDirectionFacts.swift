@@ -211,9 +211,15 @@ struct MusicXMLSoundFacts: Sendable, Equatable {
     }
 }
 
-/// MusicXML's `color`: `#RRGGBB` or `#AARRGGBB`.
+/// MusicXML's `color`: `#RRGGBB` or `#AARRGGBB`. An opaque black is `nil`: it is every element's default color, and
+/// MuseScore writes a property only when it differs from its default, so its file carries no color for it.
 enum MusicXMLColor {
     static func parse(_ text: String) -> ScoreColor? {
+        let color = parsed(text)
+        return color == ScoreColor(red: 0, green: 0, blue: 0, alpha: 255) ? nil : color
+    }
+
+    private static func parsed(_ text: String) -> ScoreColor? {
         guard text.first == "#" else { return nil }
         let digits = Array(text.dropFirst())
         guard digits.count == 6 || digits.count == 8 else { return nil }

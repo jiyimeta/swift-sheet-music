@@ -90,4 +90,36 @@ struct MusicXMLInferredLineTests {
         #expect(found.map(\.tick) == [0, 0])
         #expect(found.last?.spanner.isEndMarker == true)
     }
+
+    @Test("an inferred tempo line has no continue text: GradualTempoChange's default is \"\", so the file omits it")
+    func tempoLineHasNoContinueText() throws {
+        let score = try F.score(measures: [
+            F.direction(F.words("rit.")) + F.fourQuarters,
+            F.direction(F.words("a tempo"), "<sound tempo=\"90\"/>") + F.fourQuarters,
+        ])
+        let spanner = try #require(Self.begin(F.voice(score)))
+        #expect(spanner.kind == .gradualTempoChange)
+        #expect(spanner.continueText == nil)
+    }
+
+    /// An inferred hairpin line's `<direction>` (`addInferredHairpin`, `P2:4575-4579`): the placement attribute
+    /// only — `default-y` is not consulted — else above on a vocal staff, below on any other.
+    private static func crescSide(_ attributes: String, wordsAttributes: String = "", partName: String? = nil)
+        throws -> [PreservedXML]
+    {
+        let body = F.direction(F.words("cresc.", attributes: wordsAttributes), attributes: attributes)
+            + F.quarter("C") + F.quarter("D") + F.direction("<dynamics><f/></dynamics>") + F.half("E")
+        let spanner = try #require(try Self.begin(F.voice(F.score(measures: [body], partName: partName))))
+        return spanner.payloadMarkup
+    }
+
+    @Test("an inferred cresc. line's side is its placement attribute, else the staff's default")
+    func crescLineSide() throws {
+        let down = [PreservedXML(name: "direction", text: "down")]
+        let up = [PreservedXML(name: "direction", text: "up")]
+        #expect(try Self.crescSide("placement=\"above\"") == up)
+        #expect(try Self.crescSide("placement=\"below\"", partName: "Alto") == down)
+        #expect(try Self.crescSide("", wordsAttributes: "default-y=\"20\"") == down)
+        #expect(try Self.crescSide("", partName: "Alto") == up)
+    }
 }

@@ -9,6 +9,14 @@ import Testing
 /// `SheetMusicError.malformedScore`; this suite locks in support so the same
 /// regression doesn't sneak back.
 struct MusicXMLUnpitchedTests {
+    /// The voice's last chord or rest.
+    private static func lastChord(_ voice: Voice) -> VoiceElement? {
+        voice.elements.values.last { element in
+            if case .chord = element { return true }
+            return false
+        }
+    }
+
     @Test func parsesUnpitchedNote() throws {
         // Minimal partwise MusicXML: one part, one measure, one <unpitched>
         // note (display position A5 → MIDI 81). Mirrors the shape MuseScore
@@ -43,7 +51,8 @@ struct MusicXMLUnpitchedTests {
         #expect(score.parts.count == 1)
         #expect(score.totalStaffCount == 1)
         let voice = try #require(score.allStaves.first?.staff.measures.first?.voices.first)
-        guard case let .chord(chord) = voice.elements.last else {
+        // The last element is MuseScore's closing normal bar line (the file has none); the chord comes before it.
+        guard case let .chord(chord) = Self.lastChord(voice) else {
             Issue.record("expected a chord, got \(voice.elements)")
             return
         }
@@ -99,7 +108,7 @@ struct MusicXMLUnpitchedTests {
         #expect(part.instrument.useDrumset == true)
         // Note pitch resolved via the drum table, NOT via display-step.
         let voice = try #require(score.allStaves.first?.staff.measures.first?.voices.first)
-        guard case let .chord(chord) = voice.elements.last else {
+        guard case let .chord(chord) = Self.lastChord(voice) else {
             Issue.record("expected a chord, got \(voice.elements)"); return
         }
         #expect(chord.notes.first?.pitch == 35)

@@ -41,6 +41,7 @@ enum MusicXMLMeasureWalker {
         partIndex: Int = 0,
         registry: MusicXMLTempoRegistryBox = MusicXMLTempoRegistryBox(),
         software: MusicXMLExporterSoftware = .other,
+        isVocalStaff: Bool = false,
     ) throws -> PartResult {
         let staffCount = detectStaffCount(partNode: partNode)
         var divisions = DivisionsContext(perQuarter: 1)
@@ -79,6 +80,7 @@ enum MusicXMLMeasureWalker {
             state.partTick = partTick
             state.repeats = repeats
             state.delayedOttavas = delayedOttavas
+            state.isVocalStaff = isVocalStaff
             let built = try decodeOne(
                 measureNode: measureNode, state: &state, divisions: &divisions, previousAttributes: &previousAttributes,
                 isFirstMeasure: index == 0, drumTable: drumTable, glideTracker: &glideTracker,

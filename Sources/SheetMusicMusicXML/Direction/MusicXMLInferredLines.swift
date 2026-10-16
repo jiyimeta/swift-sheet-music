@@ -109,7 +109,9 @@ struct MusicXMLInferredLineLog: Sendable, Equatable {
 extension MusicXMLDirectionDecoder {
     /// "cresc." / "dim." words (`textToCrescLine`, `P2:4543-4564`): a hairpin line with its line hidden and no
     /// continue text, whose text is saved only when it is not the style's "cresc." / "dim."; "cresc" wins when both
-    /// appear. Its side is the hairpin's `<direction>`, which this model does not carry.
+    /// appear. Its side is the hairpin's `<direction>`, kept as payload markup, from the placement attribute alone
+    /// (`default-y` is not consulted), else up on a vocal staff and down on any other (`addInferredHairpin`,
+    /// `P2:4575-4579`).
     static func appendInferredHairpin(
         _ facts: MusicXMLDirectionFacts, staff: Int, tick: Fraction, context: Context, to output: inout Output,
     ) {
@@ -119,6 +121,9 @@ extension MusicXMLDirectionDecoder {
             kind: .hairpin, rawType: "HairPin", beginText: text == (isCresc ? "cresc." : "dim.") ? nil : text,
             hairpin: Spanner.HairpinPayload(subtype: isCresc ? .crescLine : .dimLine), continueText: "",
             isEndMarker: false, lineProperties: Spanner.LineProperties(lineVisible: false),
+            payloadMarkup: [
+                hairpinDirection(placement: facts.placementAttribute, isVocalStaff: context.isVocalStaff),
+            ],
         )
         output.inferredLines.append(MusicXMLInferredLine(
             spanner: spanner, staff: staff, measure: context.measure, tick: tick,
@@ -127,14 +132,16 @@ extension MusicXMLDirectionDecoder {
     }
 
     /// Tempo-line words (`P2:3539-3549`): a gradual tempo change whose text is the simplified words, with no continue
-    /// text, below only when the direction says so (`addInferredTempoLine`, `P2:4593-4595`).
+    /// text, below only when the direction says so (`addInferredTempoLine`, `P2:4593-4595`). MuseScore sets the
+    /// continue text to "", which is GradualTempoChange's default (`gradualtempochange.cpp:228-231`), so its file
+    /// carries none: `nil` here.
     static func inferredTempoLine(
         _ plain: String, type: GradualTempoChangeType, facts: MusicXMLDirectionFacts, staff: Int, tick: Fraction,
         context: Context,
     ) -> MusicXMLInferredLine {
         var spanner = Spanner(
             kind: .gradualTempoChange, rawType: "GradualTempoChange", beginText: plain,
-            gradualTempoChange: Spanner.GradualTempoChangePayload(type: type), continueText: "", isEndMarker: false,
+            gradualTempoChange: Spanner.GradualTempoChangePayload(type: type), isEndMarker: false,
         )
         if facts.placement == "below" { spanner.placement = .below }
         return MusicXMLInferredLine(

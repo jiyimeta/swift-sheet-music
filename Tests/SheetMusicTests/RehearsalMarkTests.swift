@@ -289,4 +289,64 @@ struct RehearsalMarkTests {
         #expect(Self.rehearsals(score).isEmpty)
         #expect(Self.staffTexts(score).map(\.text.text) == ["Solo"])
     }
+
+    /// MuseScore turns bold off explicitly — `<b></b>` before the text — unless the text already holds `<b>`
+    /// (`P2:3608-3610`), so the mark draws regular, not in the style's bold.
+    @Test("a rehearsal mark's text starts with MuseScore's empty <b></b> unless it is bold already")
+    func rehearsalBoldOff() throws {
+        func mark(_ rehearsal: String) throws -> RehearsalMark {
+            let body = F.direction(rehearsal) + F.fourQuarters
+            return try #require(try Self.rehearsals(F.score(measures: [body])).first).mark
+        }
+        let plain = try mark("<rehearsal>A</rehearsal>")
+        #expect(plain.text == "A")
+        #expect(plain.preservedTextMarkup == PreservedTextMarkup(xmlText: "<b></b>A"))
+        let bold = try mark("<rehearsal font-weight=\"bold\">B</rehearsal>")
+        #expect(bold.text == "B")
+        #expect(bold.preservedTextMarkup == PreservedTextMarkup(xmlText: "<b>B</b>"))
+    }
+
+    /// MuseScore holds system elements back and adds them once the score is read (`P2:1040-1072`, `2122`), so at one
+    /// tick a staff text comes before a rehearsal mark read ahead of it (the own fixture's bar 4, inference off).
+    @Test("at one tick a staff text comes before a rehearsal mark read ahead of it")
+    func rehearsalAfterStaffText() throws {
+        let body = F.direction("<rehearsal>A</rehearsal>")
+            + F.direction(F.words("cresc."), attributes: "placement=\"below\"") + F.fourQuarters
+        let lane = try F.lane(F.score(measures: [body], infer: false))
+        // Both sit on the one staff, so the staff key ties and the system-element rule decides.
+        let top = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        #expect(lane.map(\.originalStaff) == [top, top])
+        #expect(Self.kinds(lane) == ["staffText@0", "rehearsal@0"])
+    }
+
+    private static func kinds(_ lane: [PositionedSystemElement]) -> [String] {
+        lane.map { entry -> String in
+            let staff = entry.originalStaff.map { "@\($0.partIndex)" } ?? ""
+            switch entry.element {
+            case .rehearsalMark: return "rehearsal" + staff
+            case .staffText: return "staffText" + staff
+            case .tempo: return "tempo" + staff
+            default: return "other" + staff
+            }
+        }
+    }
+
+    /// The MSCX reader builds a lane staff by staff and then sorts it by position (`MSCXDecoder+Staff`'s assembly), so
+    /// at one tick the top staff's tempo comes before a lower part's staff text (testInferredTempoText2), while an
+    /// earlier tick still comes first whatever its staff.
+    @Test("across parts the lane is by position, then by staff, then a staff's texts before its system elements")
+    func laneOrderAcrossParts() throws {
+        let tempo = F.direction(F.words("Slow"), "<sound tempo=\"60\"/>", attributes: "placement=\"above\"")
+        let atOnce = try F.lane(F.score(parts: [
+            [tempo + F.fourQuarters],
+            [F.direction(F.words("Use a slow stroke")) + F.fourQuarters],
+        ], infer: false))
+        #expect(Self.kinds(atOnce) == ["tempo@0", "staffText@1"])
+        let rehearsalLater = F.quarter("C") + F.direction("<rehearsal>A</rehearsal>") + F.quarter("D") + F.half("E")
+        let apart = try F.lane(F.score(parts: [
+            [rehearsalLater],
+            [F.direction(F.words("Use a slow stroke")) + F.fourQuarters],
+        ], infer: false))
+        #expect(Self.kinds(apart) == ["staffText@1", "rehearsal@0"])
+    }
 }

@@ -122,4 +122,20 @@ struct MusicXMLOctaveShiftTests {
         // The ottava sits in voice 0 only; playback applies it to the whole staff, so voice 2 sounds A4 (69).
         #expect(try Self.noteOns(score) == [69, 72, 72, 69, 72, 72])
     }
+
+    /// MuseScore writes a color only when it is not the default black, so an opaque `#000000` reads back as no color
+    /// (testSibOttavas); any other color is kept.
+    @Test("an opaque black color is no color; another color is kept")
+    func blackIsNoColor() throws {
+        func color(_ value: String) throws -> ScoreColor? {
+            let start = F.direction("<octave-shift type=\"down\" size=\"8\" number=\"1\" color=\"\(value)\"/>")
+            let body = F.quarter("C", octave: 5) + start + F.quarter("C", octave: 5) + Self.shift("stop")
+                + F.half("C", octave: 5)
+            let begin = try F.spanners(in: F.voice(F.score(measures: [body]))).first { !$0.spanner.isEndMarker }
+            return try #require(begin).spanner.elementProperties.color
+        }
+        #expect(try color("#000000") == nil)
+        #expect(try color("#FF000000") == nil)
+        #expect(try color("#FF0000") == ScoreColor(red: 255, green: 0, blue: 0, alpha: 255))
+    }
 }

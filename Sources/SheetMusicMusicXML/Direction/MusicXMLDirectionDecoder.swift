@@ -23,6 +23,8 @@ enum MusicXMLDirectionDecoder {
         let registry: MusicXMLTempoRegistryBox
         /// The program that wrote the file (`m_pass1.exporterSoftware()`).
         var software = MusicXMLExporterSoftware.other
+        /// The part is a vocal staff by MuseScore's name test (`MusicXMLVocalStaff`), where a hairpin goes above.
+        var isVocalStaff = false
     }
 
     /// A system-lane element the direction made, on a staff of the part, at a position in the measure.

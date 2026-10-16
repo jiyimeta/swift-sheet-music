@@ -41,6 +41,8 @@ struct MusicXMLMeasureState {
     var eventBase = 0
     /// The part's delayed Sibelius ottava stop and the moves made so far, handed from measure to measure.
     var delayedOttavas = MusicXMLDelayedOttavaLog()
+    /// The part is a vocal staff (`MusicXMLVocalStaff`).
+    var isVocalStaff = false
 
     init(
         measureIndex: Int, staffCount: Int, options: MusicXMLImportOptions, partIndex: Int,
@@ -159,6 +161,7 @@ extension MusicXMLMeasureWalker {
             measureStart: state.partTick,
             registry: state.registry,
             software: state.software,
+            isVocalStaff: state.isVocalStaff,
         )
         let navigation = MusicXMLJumpDecoder.decode(child, measureHasCoda: &state.measureHasCoda)
         state.repeats.add(

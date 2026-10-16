@@ -116,7 +116,8 @@ extension MusicXMLDirectionDecoder {
         for wedge in facts.wedges {
             guard let subtype = wedge.subtype else { continue }
             let slot = MusicXMLSpannerSlot(family: .hairpin, number: wedge.number)
-            append(.spannerStart(slot, hairpin(subtype, wedge: wedge, facts: facts)), at: tick)
+            let spanner = hairpin(subtype, wedge: wedge, facts: facts, isVocalStaff: context.isVocalStaff)
+            append(.spannerStart(slot, spanner), at: tick)
         }
         for shift in facts.octaveShifts {
             guard let subtype = shift.subtype else { continue }
@@ -149,17 +150,31 @@ extension MusicXMLDirectionDecoder {
     }
 
     /// The begin side of a wedge: MuseScore's `HairPin` with the direction's visibility (`P2:3826`) and the wedge's
-    /// color. Its placement is never set: MuseScore stores a hairpin's side as its `<direction>`
-    /// (`setSLinePlacement`, `P2:1641-1653`), which this model does not carry.
+    /// color. Its placement is never set: MuseScore stores a hairpin's side as its `<direction>` (`setSLinePlacement`,
+    /// `P2:1641-1653`), kept here as payload markup — the direction's placement, else above on a vocal staff and below
+    /// on any other (`P2:3818-3824`).
     private static func hairpin(
         _ subtype: Spanner.HairpinPayload.Subtype, wedge: MusicXMLWedgeFact, facts: MusicXMLDirectionFacts,
+        isVocalStaff: Bool,
     ) -> Spanner {
         var spanner = Spanner(
             kind: .hairpin, rawType: "HairPin", visible: facts.visible,
             hairpin: Spanner.HairpinPayload(subtype: subtype), isEndMarker: false,
         )
         spanner.elementProperties.color = wedge.color
+        spanner.payloadMarkup = [hairpinDirection(placement: facts.placement, isVocalStaff: isVocalStaff)]
         return spanner
+    }
+
+    /// A hairpin's `<direction>` as `setSLinePlacement` sets Pid::DIRECTION (UNSTYLED, so MuseScore writes it):
+    /// `up` for above, `down` for below; with no placement, up on a vocal staff and down on any other.
+    static func hairpinDirection(placement: String?, isVocalStaff: Bool) -> PreservedXML {
+        let above = switch placement {
+        case "above": true
+        case "below": false
+        default: isVocalStaff
+        }
+        return PreservedXML(name: "direction", text: above ? "up" : "down")
     }
 }
 
