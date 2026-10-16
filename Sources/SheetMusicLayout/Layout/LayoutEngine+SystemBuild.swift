@@ -868,9 +868,15 @@ extension LayoutEngine {
 
         // --- Pass 2: translate elements with adjusted origins ---
         var layoutMeasures: [LayoutMeasure] = []
+        var staffLineGaps: [Range<CGFloat>] = []
         var xCursor: CGFloat = partLabelWidth
         for um in untranslated {
             xCursor += um.leadingGap
+            if let gap = staffLineGap(
+                after: layoutMeasures.last, room: um.leadingGap, endingAt: xCursor, sp: metrics.sp,
+            ) {
+                staffLineGaps.append(gap)
+            }
             if let runLen = um.multiMeasureRestCount {
                 // Determine barline subtype from the last source measure of
                 // the run. All staves agree on barline subtype (rule 1 of
@@ -1191,6 +1197,7 @@ extension LayoutEngine {
             spanners: adjustedSpanners,
             sp: metrics.sp,
             showsInvisibleElements: context.options.showsInvisibleElements,
+            staffLineGaps: staffLineGaps,
         )
     }
 

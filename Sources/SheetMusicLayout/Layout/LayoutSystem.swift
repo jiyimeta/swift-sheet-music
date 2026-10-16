@@ -59,7 +59,7 @@ public struct LayoutSystem: Sendable, Equatable {
     /// System-local x ranges where every staff line breaks: an `<HBox>`'s room between two measures, from where the
     /// measure before it ends to where the measure after it starts. MuseScore draws staff lines per measure, so a box
     /// has none. Sorted and non-overlapping; empty for every system without such room. Renderers split the lines
-    /// through `BarLineGeometry.staffLineSegments(for:startX:)`.
+    /// through `BarLineGeometry.staffLineSegments(for:startX:staffEndX:)`.
     public let staffLineGaps: [Range<CGFloat>]
 
     public init(
@@ -178,16 +178,7 @@ public struct LayoutSystem: Sendable, Equatable {
     /// returns `nil`.
     public var trailingBarLine: (subtype: String?, x: CGFloat)? {
         guard let last = measures.last else { return nil }
-        var rightmostX: CGFloat = -.infinity
-        var rightmostSubtype: String?
-        for el in last.elements {
-            if case let .barLine(s, p, _, _, _) = el, p.x > rightmostX {
-                rightmostX = p.x
-                rightmostSubtype = s
-            }
-        }
-        guard rightmostX.isFinite else { return nil }
-        return (rightmostSubtype, last.origin.x + rightmostX)
+        return BarLineGeometry.trailingBarLine(of: last)
     }
 
     private static func buildEventColumns(

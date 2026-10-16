@@ -12,23 +12,26 @@ import SheetMusicLayout
 extension ScoreLayerBuilder {
     // MARK: - Staves, brackets, part labels
 
+    /// One stroke layer per staff, with a subpath per run of each line: the runs end at the system's terminal barline
+    /// (or past its courtesy announcement) and break over each HBox's room
+    /// (`BarLineGeometry.staffLineSegments(for:startX:staffEndX:)`).
     static func drawStaves(
         system: LayoutSystem,
         metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer,
     ) {
-        let staffEndX = StaffRenderer.endX(for: system)
+        let staffEndX = BarLineGeometry.staffLineEndX(for: system)
         for (index, origin) in system.staffOrigins.enumerated() {
             let path = CGMutablePath()
-            let width = staffEndX - origin.x
+            let runs = BarLineGeometry.staffLineSegments(for: system, startX: origin.x, staffEndX: staffEndX)
             let geometry = system.geometry(atFlatIndex: index)
             for i in 0 ..< geometry.lineCount {
                 let y = origin.y + geometry.lineY(i, sp: metrics.sp)
-                path.move(to: CGPoint(x: origin.x, y: y))
-                path.addLine(
-                    to: CGPoint(x: origin.x + width, y: y),
-                )
+                for run in runs {
+                    path.move(to: CGPoint(x: run.lowerBound, y: y))
+                    path.addLine(to: CGPoint(x: run.upperBound, y: y))
+                }
             }
             parent.addSublayer(strokeLayer(
                 path: path,

@@ -88,6 +88,14 @@ and this project adheres to
   ends at the page width (MuseScore's `justifySystem`). A box before a system's first measure, before measure 0, after
   the last measure or inside a collapsed multi-measure rest takes no room; one at a collapsed run's start sits before
   the run. Line spanners, hyphens and every other measure-relative position follow the measures they belong to.
+- **An HBox's room is blank: staff lines stop at the barline before it and resume at the next measure** — MuseScore's
+  staff lines belong to measures, so a box has none. `LayoutSystem.staffLineGaps` (system-local x ranges, empty
+  without room) runs from the right edge of the barline that closes the measure before the box (the same rule that ends
+  the lines at a system's last barline) to where the next measure starts. The Apple Canvas and layer renderers and the
+  draw program (Android, web, Windows, the PDF writer) draw each staff line as one run per side, and
+  `LayoutDocument.staffBands` gives one band per run, so a highlighted staff is not shaded in the box either. A score
+  without an HBox between two measures draws and lays out byte for byte as before. Not modeled yet: MuseScore redraws
+  the clef (and key) after an HBox by default (`createSystemHeader`); ssm starts the next measure without them.
 
 ### Changed
 

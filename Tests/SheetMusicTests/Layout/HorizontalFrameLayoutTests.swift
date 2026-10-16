@@ -312,18 +312,35 @@ import Testing
 
     // MARK: - Staff-line gaps
 
-    /// MuseScore draws staff lines per measure, so an HBox's room has none: the system carries the room as one gap in
-    /// its own x, as wide as the room and ending where the measure after the box starts.
-    @Test("an HBox's room is one staff-line gap that ends where the next measure starts")
+    /// Where `measure`'s closing barline stroke ends, in system x: the rightmost barline it draws, plain in every bar
+    /// these fixtures put before a box, plus half a thin stroke.
+    private func plainBarLineEnd(of measure: LayoutMeasure, sp: CGFloat) throws -> CGFloat {
+        var bars: [(subtype: String?, x: CGFloat)] = []
+        for case let .barLine(subtype, origin, _, _, _) in measure.elements {
+            bars.append((subtype: subtype, x: origin.x))
+        }
+        let closing = bars.max { $0.x < $1.x }
+        let bar = try #require(closing, "measure \(measure.measureIndex) draws no barline")
+        #expect(bar.subtype == nil)
+        return measure.origin.x + bar.x + BarLineGeometry.thinThicknessSp / 2 * sp
+    }
+
+    /// MuseScore draws staff lines per measure, so an HBox's room has none: the system carries one gap in its own x,
+    /// from the right edge of the barline that closes the measure before the box — where MuseScore's lines stop, short
+    /// of that measure's right edge by the gutter after its barline — to where the measure after the box starts.
+    @Test("an HBox's room is one staff-line gap from the barline before it to the next measure")
     func staffLineGapsCoverTheRoom() throws {
         let document = laidOut(Self.score(blocks: [Self.hbox(6, before: 2)]))
         try #require(document.systems.count == 1)
         let gaps = document.systems[0].staffLineGaps
         #expect(gaps.count == 1)
         let gap = try #require(gaps.first)
+        let before = try measure(1, in: document)
         let after = try measure(2, in: document)
+        let barEnd = try plainBarLineEnd(of: before, sp: document.metrics.sp)
+        #expect(closeEnough(gap.lowerBound, barEnd))
+        #expect(gap.lowerBound < before.origin.x + before.width)
         #expect(closeEnough(gap.upperBound, after.origin.x))
-        #expect(closeEnough(gap.upperBound - gap.lowerBound, 6 * document.metrics.sp))
     }
 
     /// Pass 2 lays a collapsed run out in a branch of its own, so the room before a run's first measure is pinned
@@ -336,9 +353,12 @@ import Testing
         let gaps = document.systems[0].staffLineGaps
         #expect(gaps.count == 1)
         let gap = try #require(gaps.first)
+        let before = try measure(0, in: document)
         let run = try measure(1, in: document)
+        let barEnd = try plainBarLineEnd(of: before, sp: document.metrics.sp)
+        #expect(closeEnough(gap.lowerBound, barEnd))
+        #expect(gap.lowerBound < before.origin.x + before.width)
         #expect(closeEnough(gap.upperBound, run.origin.x))
-        #expect(closeEnough(gap.upperBound - gap.lowerBound, 6 * document.metrics.sp))
     }
 
     @Test("a score with no HBox between two measures has no staff-line gap", arguments: roomlessBlocks)

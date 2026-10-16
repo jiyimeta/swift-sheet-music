@@ -5,31 +5,27 @@ import SwiftUI
 
 @available(macOS 15.0, *)
 enum StaffRenderer {
-    /// Right edge (in system-local coords) for the staff lines: the
-    /// terminal barline at a plain end, or the measure edge after a
-    /// trailing courtesy announcement. Forwards to the shared geometry
-    /// so the Apple renderer and Android bridge agree.
-    static func endX(for system: LayoutSystem) -> CGFloat {
-        BarLineGeometry.staffLineEndX(for: system)
-    }
-
     /// Draw this staff's horizontal lines — `geometry.lineCount` of
-    /// them, not always five. `origin` is the top-left of the top line;
-    /// `width` is how far they run. The bottom line lies at
-    /// `origin.y + geometry.height(sp:)`, so a one-line staff draws a
-    /// single line right at `origin.y`.
+    /// them, not always five — over each of `runs`, the context x ranges
+    /// `BarLineGeometry.staffLineSegments(for:startX:staffEndX:)` gives
+    /// (one run, or one each side of every HBox's room). `top` is the y
+    /// of the top line; the bottom line lies at
+    /// `top + geometry.height(sp:)`, so a one-line staff draws a single
+    /// line right at `top`.
     static func draw(
         context: inout GraphicsContext,
-        origin: CGPoint,
-        width: CGFloat,
+        top: CGFloat,
+        runs: [Range<CGFloat>],
         geometry: StaffLineGeometry,
         metrics: StaffMetrics,
     ) {
         for i in 0 ..< geometry.lineCount {
-            let y = origin.y + geometry.lineY(i, sp: metrics.sp)
+            let y = top + geometry.lineY(i, sp: metrics.sp)
             var path = Path()
-            path.move(to: CGPoint(x: origin.x, y: y))
-            path.addLine(to: CGPoint(x: origin.x + width, y: y))
+            for run in runs {
+                path.move(to: CGPoint(x: run.lowerBound, y: y))
+                path.addLine(to: CGPoint(x: run.upperBound, y: y))
+            }
             context.stroke(
                 path,
                 with: .color(.primary),

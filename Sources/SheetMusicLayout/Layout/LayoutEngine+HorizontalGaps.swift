@@ -60,4 +60,16 @@ extension LayoutEngine {
     static func roomsBefore(_ range: Range<Int>, gaps: [Int: CGFloat]) -> [CGFloat] {
         range.map { roomBefore($0, systemStart: range.lowerBound, in: gaps) }
     }
+
+    /// The `LayoutSystem.staffLineGaps` entry for `room` before the measure that starts at `measureX`, `nil` without
+    /// room. MuseScore's staff lines belong to measures, so they stop where `previous`'s barline stroke ends — the
+    /// `staffLineEndX` rule at a system's end, short of `previous`'s right edge by the gutter after its barline — and
+    /// start again at `measureX`. A `previous` that draws no barline gives the room alone.
+    static func staffLineGap(
+        after previous: LayoutMeasure?, room: CGFloat, endingAt measureX: CGFloat, sp: CGFloat,
+    ) -> Range<CGFloat>? {
+        guard room > 0 else { return nil }
+        let barEnd = previous.flatMap { BarLineGeometry.barLineEndX(of: $0, sp: sp) } ?? measureX - room
+        return min(barEnd, measureX) ..< measureX
+    }
 }

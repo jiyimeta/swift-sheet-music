@@ -91,9 +91,8 @@ enum MeasureLayerDiffPlanner {
     /// shift; see `invisibleLayerIsUnchanged`.
     ///
     /// Also compares `BarLineGeometry.staffLineEndX(for:)`: `drawStaves`
-    /// (via `StaffRenderer.endX(for:)`) clips the staff lines to
-    /// that X, which is derived from the LAST measure's `origin.x` and
-    /// `width`, its trailing barline's subtype
+    /// clips the staff lines to that X, which is derived from the LAST
+    /// measure's `origin.x` and `width`, its trailing barline's subtype
     /// (`LayoutSystem.trailingBarLine`), and its key / time signature
     /// element origins. An edit that only makes the last measure start
     /// or stop announcing a courtesy signature is covered by the same
@@ -105,6 +104,12 @@ enum MeasureLayerDiffPlanner {
     /// barline), which would otherwise pass this predicate, diff only
     /// that measure, and leave the staff lines up to ~0.5 sp short of
     /// the new barline glyph (Task 8 review finding 3).
+    ///
+    /// And compares `staffLineGaps`: `drawStaves` breaks the same staff
+    /// lines over each HBox's room. Widening a box in wrapped mode keeps
+    /// `size` and the last measure's right edge — so `staffLineEndX` —
+    /// and moves only the gap, which a measure-level diff would leave
+    /// drawn at the old room.
     ///
     /// Deliberately leaves out `origin`. The layer tree is built in
     /// system-local coordinates (`ScoreLayerBuilder` never reads
@@ -127,6 +132,7 @@ enum MeasureLayerDiffPlanner {
             && invisibleLayerIsUnchanged(a, b)
             && BarLineGeometry.staffLineEndX(for: a)
             == BarLineGeometry.staffLineEndX(for: b)
+            && a.staffLineGaps == b.staffLineGaps
     }
 
     /// True when the shared system-level invisible-elements layer would
