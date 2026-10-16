@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.12.0] - 2026-10-17
+
 ### Added
 
 - **`SpannerGeometry.voltaLabelOrigin(from:to:label:sp:)` and `SpannerGeometry.voltaInk(…)`** — where a volta's typeset
