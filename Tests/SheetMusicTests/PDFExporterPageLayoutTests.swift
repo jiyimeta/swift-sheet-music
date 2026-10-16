@@ -191,13 +191,39 @@
             )
         }
 
-        /// Systems at `origins` and one box over `box` with a page break after it.
-        private func breakingDocument(origins: [CGFloat], box: Range<CGFloat>) -> LayoutDocument {
-            LayoutDocument(
+        /// Systems at `origins` and one box over `box` with a page break after it; the last system's measure ends in a
+        /// page break of its own when `closing`.
+        private func breakingDocument(
+            origins: [CGFloat], box: Range<CGFloat>, closing: Bool = false,
+        ) -> LayoutDocument {
+            let systems = origins.enumerated().map { index, originY in
+                system(originY: originY, pageBreak: closing && index == origins.count - 1)
+            }
+            return LayoutDocument(
                 size: CGSize(width: 600, height: (origins.last ?? 0) + 200),
-                systems: origins.map { system(originY: $0) }, metrics: StaffMetrics(staffSize: 28),
+                systems: systems, metrics: StaffMetrics(staffSize: 28),
                 frames: [frame(originY: box.lowerBound, height: box.upperBound - box.lowerBound, pageBreakAfter: true)],
             )
+        }
+
+        /// A box with a page break after the last system has no system to stay above, so it goes to the frames-only
+        /// sheet with the other trailing frames — whether it does not fit under the last system, or a measure page
+        /// break on the last system closed that page — never onto the last sheet with music, past its bottom margin.
+        /// S0 [0, 200], S1 [220, 420] on 540 pt of room.
+        @Test func aTrailingBoxBreakStaysOnTheFramesOnlySheet() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let size = CGSize(width: 600, height: 600)
+            let margins = PageMargins(uniform: 30)
+            for (closing, box) in [(false, CGFloat(430) ..< 690), (true, CGFloat(430) ..< 470)] {
+                let document = breakingDocument(origins: [0, 220], box: box, closing: closing)
+                let batches = PDFExporter.paginate(document: document, page: page(height: 600), policy: .honor)
+                #expect(batches.map(\.systems.count) == [2, 0], "closing \(closing)")
+                let sheets = batches.map {
+                    PDFExporter.Sheet(systems: $0.systems, pageStartY: $0.startY, pageSize: size, margins: margins)
+                }
+                let held = PDFExporter.frames(of: sheets, in: document).map { $0.map(\.originY) }
+                #expect(held == [[], [430]], "closing \(closing)")
+            }
         }
 
         /// A box with a page break stays on the sheet it closes (MuseScore `pagelayout.cpp:246`): the batch after it

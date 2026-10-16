@@ -131,10 +131,13 @@ extension PDFExporter {
     /// page break (`LayoutFrame.pageBreakAfter`) — then it stays on the sheet it closes. So a sheet holds the frames
     /// whose top lies in `[the sheet before's upper bound, its own)`, its upper bound being its last system's bottom,
     /// or the lowest bottom of the page-break frames between that system and the next sheet's first when that is
-    /// further down, and the last sheet takes every frame below the sheets before it. Sheets carry systems rather than
-    /// indices, hence the positions. Not `pageStartY ..< next sheet's pageStartY`: a host whose sheet starts at its
-    /// first system's top would leave the frame above that system on the sheet before. A sheet with no systems other
-    /// than the last holds none. One entry per sheet, in order: what `export(document:sheets:…)` draws on each.
+    /// further down, and the last sheet takes every frame below the sheets before it. A sheet followed by a frames-only
+    /// sheet (no systems) ends at its last system's bottom: no system follows the frames after the last system, so no
+    /// break of theirs keeps them above (`LayoutDocument.pageTop(ofPageStartingAt: systems.count)`). Sheets carry
+    /// systems rather than indices, hence the positions. Not `pageStartY ..< next sheet's pageStartY`: a host whose
+    /// sheet starts at its first system's top would leave the frame above that system on the sheet before. A sheet
+    /// with no systems other than the last holds none. One entry per sheet, in order: what
+    /// `export(document:sheets:…)` draws on each.
     static func frames(of sheets: [Sheet], in document: LayoutDocument) -> [[LayoutFrame]] {
         var lower = -CGFloat.infinity
         var result: [[LayoutFrame]] = []
@@ -144,10 +147,12 @@ extension PDFExporter {
                 upper = .infinity
             } else {
                 let lastBottom = sheet.systems.last.map { $0.origin.y + $0.size.height } ?? lower
-                let nextTop = sheets[index + 1].systems.first?.origin.y ?? .infinity
-                let breakBottoms = document.frames
-                    .filter { $0.pageBreakAfter && $0.originY >= lastBottom && $0.bottom <= nextTop }
-                    .map(\.bottom)
+                // A frames-only next sheet: the frames after the last system go to it, page break or not.
+                let breakBottoms = sheets[index + 1].systems.first.map { next in
+                    document.frames
+                        .filter { $0.pageBreakAfter && $0.originY >= lastBottom && $0.bottom <= next.origin.y }
+                        .map(\.bottom)
+                } ?? []
                 upper = max(lower, lastBottom, breakBottoms.max() ?? lastBottom)
             }
             result.append(document.frames.filter { $0.originY >= lower && $0.originY < upper })
