@@ -7,7 +7,7 @@ import SwiftUI
 
 /// The pictures of a box (`LayoutFrameImage`, already sized and placed by the layout): an image layer each on screen,
 /// and drawn into a `GraphicsContext` for the PDF. Both read the bytes through `FrameImageCache`, so a picture is
-/// decoded once however often it is drawn. A picture ImageIO cannot read draws nothing.
+/// decoded once while it stays cached, however often it is drawn. A picture ImageIO cannot read draws nothing.
 @available(macOS 15.0, *)
 enum FrameImageDrawing {
     /// One layer per picture, holding the decoded image stretched to its rect (`contentsGravity = .resize`: the layout
@@ -48,25 +48,57 @@ enum FrameImageDrawing {
 }
 
 /// Decoded pictures keyed by their bytes, so a picture redrawn on every view update, or repeated on several pages, is
-/// read by ImageIO once. Bounded: past `limit` distinct pictures it starts over. `@unchecked Sendable` because its one
-/// piece of mutable state is only touched under `lock`.
+/// read by ImageIO once while it stays cached. Bounded twice: no picture decodes with a side longer than
+/// `maxPixelSize`, and the cache evicts past `totalCostLimit` bytes of pixels. Bytes ImageIO cannot read are
+/// remembered too, so such a file is not retried on every draw. Its one piece of state is an `NSCache`, which
+/// synchronizes itself; that is what makes the `@unchecked Sendable` sound. Two threads missing the same picture at
+/// once may both decode it, and the second store wins — the same image either way.
 final class FrameImageCache: @unchecked Sendable {
     static let shared = FrameImageCache()
 
-    private let lock = NSLock()
-    private var decoded: [Data: CGImage] = [:]
-    private let limit = 64
+    /// The longest side, in pixels, a picture is decoded at: a picture a page wide on a 2× screen, or about 250 dpi
+    /// across an A4 page in a PDF. 2048 × 2048 RGBA is 16 MB.
+    static let maxPixelSize = 2048
+    /// The pixel bytes the cache holds before it evicts: six pictures at `maxPixelSize`, many more at score sizes.
+    static let totalCostLimit = 96 * 1024 * 1024
 
-    /// `data` decoded by ImageIO, or `nil` when it cannot read it (not remembered, so such a file costs a retry).
-    func image(for data: Data) -> CGImage? {
-        if let known = lock.withLock({ decoded[data] }) { return known }
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
-        else { return nil }
-        lock.withLock {
-            if decoded.count >= limit { decoded.removeAll() }
-            decoded[data] = image
+    /// One decode: the image, or `nil` for bytes ImageIO cannot read.
+    private final class Entry {
+        let image: CGImage?
+
+        init(_ image: CGImage?) {
+            self.image = image
         }
+    }
+
+    private let decoded: NSCache<NSData, Entry> = {
+        let cache = NSCache<NSData, Entry>()
+        cache.totalCostLimit = FrameImageCache.totalCostLimit
+        return cache
+    }()
+
+    /// `data` decoded by ImageIO at no more than `maxPixelSize` on its long side, or `nil` when it cannot read it.
+    func image(for data: Data) -> CGImage? {
+        let key = data as NSData
+        if let known = decoded.object(forKey: key) { return known.image }
+        let image = Self.decode(data)
+        decoded.setObject(Entry(image), forKey: key, cost: image.map { $0.bytesPerRow * $0.height } ?? 1)
         return image
+    }
+
+    /// The picture through ImageIO's thumbnail path, which decodes at the reduced size directly instead of decoding
+    /// the full image and scaling it. Always from the image itself (never a JPEG's embedded preview), decoded now
+    /// rather than on first draw, and with no EXIF orientation applied: the layout sized the rect from the stored
+    /// pixel size (`ImageSniffer`), and Android's `BitmapFactory` and the PDF writer's embedded JPEG do not rotate
+    /// either, so every renderer draws the same pixels into it.
+    private static func decode(_ data: Data) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailWithTransform: false,
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }
