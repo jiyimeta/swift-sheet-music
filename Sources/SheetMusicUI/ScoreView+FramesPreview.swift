@@ -62,9 +62,10 @@
 
     #Preview("Boxes and pictures") {
         if #available(macOS 15.0, *) {
-            ScoreView(score: ScoreViewFramesPreview.score, availableWidth: 560)
-                .padding(20)
-                .frame(width: 600, height: 760, alignment: .topLeading)
+            // 360 pt wide, so the whole page fits an iPhone's preview as well as a Mac's.
+            ScoreView(score: ScoreViewFramesPreview.score, availableWidth: 360)
+                .padding(16)
+                .frame(width: 392, height: 640, alignment: .topLeading)
                 .background(.white)
         } else {
             Text("ScoreView needs macOS 15")
