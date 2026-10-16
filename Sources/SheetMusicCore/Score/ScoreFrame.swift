@@ -132,4 +132,9 @@ public struct FrameText: Sendable, Equatable, Hashable {
         self.fontSize = fontSize
         self.align = align
     }
+
+    /// The text on one line: each `\n` (a run of them too) becomes one space, and the ends are trimmed.
+    public var singleLineText: String {
+        text
+    }
 }

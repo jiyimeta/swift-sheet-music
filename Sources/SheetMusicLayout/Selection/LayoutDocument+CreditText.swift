@@ -25,6 +25,30 @@ public struct CreditTextLine: Sendable, Equatable {
     /// the face's full ascent-plus-descent height below `origin.y`. A formatted line (bold, a `<font size>`, a symbol)
     /// takes the ink of the runs the renderers draw instead, so the box covers what is on the page.
     public let frame: CGRect
+    /// Whether every text run of the line is bold in its `LayoutFont`.
+    public let isBold: Bool
+    /// Whether every text run of the line is italic in its `LayoutFont`.
+    public let isItalic: Bool
+
+    init(
+        field: ScoreInfoWrite.Field,
+        text: String,
+        fontSize: CGFloat,
+        origin: CGPoint,
+        horizontalAnchor: CGFloat,
+        frame: CGRect,
+        isBold: Bool = false,
+        isItalic: Bool = false,
+    ) {
+        self.field = field
+        self.text = text
+        self.fontSize = fontSize
+        self.origin = origin
+        self.horizontalAnchor = horizontalAnchor
+        self.frame = frame
+        self.isBold = isBold
+        self.isItalic = isItalic
+    }
 
     /// The face the title block is drawn in. Title-block texts are set in the platform's system font at their
     /// resolved size (`LayoutTitleFrame.font(size:)`), which `LayoutFont`'s empty face names.

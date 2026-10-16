@@ -120,6 +120,48 @@ struct CreditTextLineTests {
         }
     }
 
+    private static func boldMarkup(_ bold: String, then rest: String = "") -> PreservedTextMarkup {
+        var content: [PreservedTextMarkup.ContentItem] = [.element(.init(name: "b", content: [.characters(bold)]))]
+        if !rest.isEmpty { content.append(.characters(rest)) }
+        return PreservedTextMarkup(content: content, derivedText: bold + rest)
+    }
+
+    private static func title(_ text: String, markup: PreservedTextMarkup? = nil) -> FrameText {
+        FrameText(style: .title, text: text, preservedTextMarkup: markup)
+    }
+
+    @Test("a title bold throughout reports bold, wider than its regular twin, and a font that differs")
+    func boldTitleIsBold() throws {
+        let boldLine = try #require(
+            Self.layout(Self.score(texts: [Self.title("Solo", markup: Self.boldMarkup("Solo"))]))
+                .creditTextLine(for: .title),
+        )
+        let plainLine = try #require(
+            Self.layout(Self.score(texts: [Self.title("Solo")])).creditTextLine(for: .title),
+        )
+        #expect(boldLine.isBold)
+        #expect(!boldLine.isItalic)
+        #expect(!plainLine.isBold)
+        #expect(boldLine.frame.width > plainLine.frame.width)
+        #expect(boldLine.font != plainLine.font)
+    }
+
+    @Test("a line bold in only some of its runs is not reported bold")
+    func mixedLineIsNotBold() throws {
+        let mixed = try #require(
+            Self.layout(Self.score(texts: [Self.title("ab", markup: Self.boldMarkup("a", then: "b"))]))
+                .creditTextLine(for: .title),
+        )
+        #expect(!mixed.isBold)
+    }
+
+    @Test("a plain title is neither bold nor italic")
+    func plainTitleIsRegular() throws {
+        let line = try #require(Self.layout(Self.score(texts: [Self.title("Solo")])).creditTextLine(for: .title))
+        #expect(!line.isBold)
+        #expect(!line.isItalic)
+    }
+
     @Test("a document with no title block offers nothing")
     func noTitleBlock() {
         var score = Self.score(texts: [])
