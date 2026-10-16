@@ -121,6 +121,15 @@ and this project adheres to
   top to bottom; the title block's pictures (`titleImages`) follow its texts inside its span. `DrawCommandBounds`
   counts a picture's whole rectangle, and page margins move it as they move everything else. A score without a box
   after the title and without a picture draws the same commands, byte for byte, as before.
+- **PDF export and the preview renderer draw `drawImage`** — `ScorePDFWriter` embeds a picture as an image XObject
+  (`/Im1`, …) placed by `q w 0 0 h x y cm /ImN Do Q`, once per distinct file however often it is drawn: a JPEG as it
+  is (`DCTDecode`, device gray / RGB / CMYK by its component count, `/Decode` only for a CMYK file with an Adobe
+  marker), an 8-bit non-interlaced gray, RGB or palette PNG as its own deflate stream with PNG predictors
+  (`FlateDecode`, `/Predictor 15`), the palette as `/Indexed`. The writer reads headers only and decodes nothing. A
+  picture it cannot hold — a PNG with alpha, 16-bit or interlaced, or bytes that are neither format — draws nothing
+  yet (alpha follows in the next change), and a PNG's `tRNS`, gamma and ICC chunks are ignored. The `render-previews`
+  CoreGraphics walk draws the picture through `ImageIO` with high-quality interpolation, decoding each file once per
+  render.
 
 ### Changed
 

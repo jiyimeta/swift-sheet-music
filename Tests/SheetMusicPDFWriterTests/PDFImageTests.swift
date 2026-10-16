@@ -147,6 +147,27 @@ struct PDFImageTests {
         #expect(Self.count(of: "/Subtype /Image", in: different) == 2)
     }
 
+    /// The real fixtures on a page, written to `.build/w7/img.pdf` to be looked at; runs with `SM_KEEP_ARTIFACTS=1`.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SM_KEEP_ARTIFACTS"] == "1"))
+    func realFixturesAreWrittenForALook() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let fixtures = root.appendingPathComponent("Tests/SheetMusicTests/Resources/own")
+        let png = try Data(contentsOf: fixtures.appendingPathComponent("frames-px-rgb.png"))
+        let jpeg = try Data(contentsOf: fixtures.appendingPathComponent("frames-photo.jpg"))
+
+        let file = try Self.write([
+            .setColor(argb: 0xFFDD_DDDD), .fillRect(x: 5, y: 5, w: 90, h: 140), .setColor(argb: 0xFF00_0000),
+            .drawImage(data: png, x: 10, y: 10, w: 40, h: 40),
+            .drawImage(data: jpeg, x: 10, y: 60, w: 80, h: 60),
+        ])
+        let output = root.appendingPathComponent(".build/w7", isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        try file.write(to: output.appendingPathComponent("img.pdf"))
+
+        #expect(Self.count(of: "/Subtype /Image", in: Self.text(of: file)) == 2)
+    }
+
     @Test func unreadablePayloadDrawsNothing() throws {
         let junk = Data("not an image at all".utf8)
         let file = try Self.write([Self.draw(junk), Self.draw(Data())])

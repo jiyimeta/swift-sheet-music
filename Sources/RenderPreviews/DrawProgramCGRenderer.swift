@@ -56,6 +56,7 @@
             var dashOff: CGFloat = 0
             var rotationOpen = false
             var textStyleFlags: UInt8 = DrawCommand.TextStyleFlag.none
+            let images = ImageCache()
 
             init(ctx: CGContext, pxPerMM: CGFloat) {
                 self.ctx = ctx
@@ -152,8 +153,10 @@
                 case let .setDash(onMM, offMM):
                     dashOn = px(onMM)
                     dashOff = px(offMM)
-                case .drawImage:
-                    break
+                case let .drawImage(data, x, y, w, h):
+                    DrawProgramCGRenderer.drawImage(
+                        data, in: CGRect(x: px(x), y: px(y), width: px(w), height: px(h)), ctx: ctx, cache: images,
+                    )
                 }
             }
 

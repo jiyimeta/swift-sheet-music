@@ -25,6 +25,10 @@ final class PDFResources {
     private var hostOrder: [PDFFontEmbedding] = []
     private var fallbacks: [ScorePDFTextLine: [Fallback]] = [:]
     private var alphas: Set<UInt8> = [255]
+    /// The XObject for each picture file asked so far, by the file's bytes (so a picture drawn twice is embedded once);
+    /// nil for one the PDF cannot hold.
+    private var imageIndices: [Data: Int?] = [:]
+    private var images: [PDFImageXObject] = []
 
     /// The bundled faces. Bravura for SMuFL; Edwin's four for text, picked by the text style as the Windows renderer
     /// picks them — semibold draws regular.
@@ -164,7 +168,24 @@ final class PDFResources {
         return Self.stateName(alpha)
     }
 
-    /// Embeds the fonts the pages used and returns the resources dictionary every page names.
+    /// The resource name (`Im1`, …) of the image XObject for a PNG or JPEG file, made the first time its bytes come up;
+    /// nil when the file is not one `PDFImageXObject` can embed.
+    func imageName(_ file: Data) -> String? {
+        if let known = imageIndices[file] { return known.map(Self.resourceName(ofImage:)) }
+        var index: Int?
+        if let image = PDFImageXObject.make(from: file) {
+            images.append(image)
+            index = images.count
+        }
+        imageIndices[file] = .some(index)
+        return index.map(Self.resourceName(ofImage:))
+    }
+
+    private static func resourceName(ofImage number: Int) -> String {
+        "Im\(number)"
+    }
+
+    /// Embeds the fonts and pictures the pages used and returns the resources dictionary every page names.
     func write(into writer: PDFObjectWriter) throws -> String {
         var fonts: [String] = []
         for embedding in faces + hostOrder where !embedding.used.isEmpty {
@@ -174,7 +195,15 @@ final class PDFResources {
             let fraction = PDFPageWalker.number(Double(alpha) / 255)
             return "/\(Self.stateName(alpha)) << /Type /ExtGState /ca \(fraction) /CA \(fraction) >>"
         }
-        return "<< /Font << \(fonts.joined(separator: " ")) >> /ExtGState << \(states.joined(separator: " ")) >> >>"
+        var xObjects: [String] = []
+        for (index, image) in images.enumerated() {
+            let number = writer.reserve()
+            try writer.stream(number, dictionary: image.dictionary, data: image.data, compress: false)
+            xObjects.append("/\(Self.resourceName(ofImage: index + 1))\(number) 0 R")
+        }
+        let pictures = xObjects.isEmpty ? "" : " /XObject << \(xObjects.joined(separator: " ")) >>"
+        return "<< /Font << \(fonts.joined(separator: " ")) >> /ExtGState << \(states.joined(separator: " ")) >>"
+            + "\(pictures) >>"
     }
 
     private static func stateName(_ alpha: UInt8) -> String {
