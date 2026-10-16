@@ -74,19 +74,27 @@ and this project adheres to
 - **The paginators honor a frame's page break and give a frames-only last page** — a new
   `LayoutDocument.paginate(pageHeight:policy:)` cuts the systems into pages with the frames taken into account, and
   `.page` mode, the wasm `pageBreaks`, the JNI `nativePageBreaks` and `PDFExporter.export(score:)` all cut through it.
-  A VBox or TBox with a `page` `<LayoutBreak>` starts a page at the system after it (not under `.ignoreAll`, as for a
-  measure's page break). The boxes after the last system move together to a page of their own when they do not fit
-  under it, or when a page break on the last measure closed its page; that page is the empty range
-  `systems.count ..< systems.count`, a PDF batch with no systems. A frame belongs to the page whose first system
-  follows it — `subdocument(systems:yOffset:isLastPage:)` carries it, lifted with the page, and grows to it; the last
-  page takes the trailing ones — and the first `.page` page keeps the title's pictures and its frames. The page-break
-  offsets end at the lowest frame when it is below the last system (never at the bottom margin). New, all defaulted:
-  `LayoutPaginator.paginate(…, forcedBreaksBefore:, trailingFramesBottom:)` and
-  `PDFExporter.paginate(…, forcedBreaksBefore:, trailingFramesBottom:, systemsWithFrameAbove:)`, where a PDF page
-  whose first system has a frame above it starts at the previous system's bottom so the frame is not lost between two
-  pages. A score without frames paginates, and reports its page offsets, exactly as before. Differences from
-  MuseScore: the box with the break opens the new page rather than ending the old one, and a break before the first
-  system makes no cover page.
+  A VBox or TBox with a `page` `<LayoutBreak>` ends its page as MuseScore's does: the box stays at the bottom of the
+  page it closes — that page must hold it under its last system — and the next page starts below it, at the system
+  after it. Not under `.ignoreAll`, as for a measure's page break: the layout sets `LayoutFrame.pageBreakAfter` only
+  when its `ScoreViewOptions.breakPolicy` honors page breaks, so it is false under `.ignoreAll`. The new
+  `LayoutDocument.pageTop(ofPageStartingAt:)` is where a page starts — the previous system's bottom, or the bottom of
+  the boxes with a page break above its first system — and every page consumer uses it: the `.page` lift,
+  `LayoutBridge.PagePlacement`, the page-break offsets and the PDF batches. The boxes after the last system move
+  together to a page of their own when they do not fit under it, or when a page break on the last measure closed its
+  page; that page is the empty range `systems.count ..< systems.count`, a PDF batch with no systems. Any other box
+  belongs to the page whose first system follows it, unless it carries the break —
+  `subdocument(systems:yOffset:isLastPage:)` carries the boxes whose top lies between its page's top and the next
+  page's, lifted with the page, and grows to them; the last page takes the trailing ones — and the first `.page` page
+  keeps the title's pictures and its frames. The page-break offsets end at the lowest frame when it is below the last
+  system (never at the bottom margin). New, all defaulted: `LayoutPaginator.paginate(…, pageBreaksBefore:,
+  trailingFramesBottom:)` and `PDFExporter.paginate(…, pageBreaksBefore:, trailingFramesBottom:,
+  systemsWithFrameAbove:)`, where `pageBreaksBefore` maps a system to the bottom of the break boxes above it, and a PDF
+  page whose first system has a plain frame above it starts at the previous system's bottom so the frame is not lost
+  between two pages. A score without frames paginates, and reports its page offsets, exactly as before. Differences
+  from MuseScore: a system that does not fit on its page together with the break box under it moves to the next page
+  with the box (MuseScore moves only the box); two break boxes between the same two systems both stay on the page
+  above (MuseScore gives the second a page of its own); and a break before the first system makes no cover page.
 - **Draw program v9: `drawImage`, and boxes in the program** — `DrawCommand.drawImage(data:x:y:w:h:)` (discriminator
   13, appended at the tail, so nothing renumbers) carries a picture's PNG or JPEG bytes and the rectangle they fill, in
   mm with the top-left corner at `x`, `y`; the reader decodes and scales them and draws nothing for a payload it cannot
@@ -117,7 +125,8 @@ and this project adheres to
   image layer stretched to its rect, decoded by ImageIO at no more than 2048 px on its long side into a cache of at
   most 96 MB (a file ImageIO cannot read is remembered, not retried). `PDFExporter.export(score:)` and
   `export(document:sheets:…)` draw on each page the boxes that belong to it (the page whose first system follows the
-  box; a box after the last system on the last page, a frames-only page included) and the title's pictures on the first, so a host's own
+  box, or the page a box with a page break closes; a box after the last system on the last page, a frames-only page
+  included) and the title's pictures on the first, so a host's own
   `Sheet`s need no new field; `PDFPageView` and the `PDFPageLayerView` preview take defaulted `frames` and
   `titleImages`. A picture ImageIO cannot read draws nothing. A score without a box after the title block and without
   a picture draws exactly as before. `render-previews` draws the boxes too: `SM_SCORE` renders always, and
