@@ -3,7 +3,7 @@
  *
  * The byte layout is defined by
  * `Sources/SheetMusicBridgeCore/Draw/DrawProgramFlat.swift` — magic, version, a
- * deduplicated string side table, then fixed-stride command records. Nothing
+ * deduplicated string side table and blob (picture) table, then fixed-stride command records. Nothing
  * here knows about Wirelet: the Swift side encodes to this format precisely so
  * that a hand-written decoder can be correct, unlike one written against
  * `@WireFormat`'s tag/varint framing.
@@ -15,8 +15,11 @@
  */
 
 const SMDF_MAGIC = 0x534d4446; // "SMDF"
-/** v2 follows DrawProgram v8: `italicText` gone, `setTextStyle` 11, `fillPath` 12. */
-const SMDF_VERSION = 2;
+/**
+ * v2 follows DrawProgram v8: `italicText` gone, `setTextStyle` 11, `fillPath` 12.
+ * v3 follows DrawProgram v9: a blob table after the string table, and `drawImage` 13.
+ */
+const SMDF_VERSION = 3;
 /** opcode + 6 × f64 + stringIndex + integer + fontId. */
 const COMMAND_STRIDE = 4 + 6 * 8 + 4 + 4 + 4;
 
@@ -224,6 +227,12 @@ export function decodeDrawProgram(bytes: Uint8Array): DrawProgramPage[] {
     strings.push(decoder.decode(cursor.bytes(cursor.i32())));
   }
 
+  const blobCount = cursor.i32();
+  const blobs: Uint8Array[] = [];
+  for (let i = 0; i < blobCount; i += 1) {
+    blobs.push(cursor.bytes(cursor.i32()));
+  }
+
   const pages: DrawProgramPage[] = [];
   for (let p = 0; p < pageCount; p += 1) {
     const widthMM = cursor.f64();
@@ -232,14 +241,18 @@ export function decodeDrawProgram(bytes: Uint8Array): DrawProgramPage[] {
     const commands: DrawCommand[] = [];
     for (let c = 0; c < commandCount; c += 1) {
       cursor.needCommandRecord();
-      commands.push(readCommand(cursor, strings));
+      commands.push(readCommand(cursor, strings, blobs));
     }
     pages.push({ widthMM, heightMM, commands });
   }
   return pages;
 }
 
-function readCommand(cursor: Cursor, strings: readonly string[]): DrawCommand {
+function readCommand(
+  cursor: Cursor,
+  strings: readonly string[],
+  blobs: readonly Uint8Array[],
+): DrawCommand {
   const opcode = cursor.i32();
   const s: number[] = [];
   for (let i = 0; i < 6; i += 1) {
@@ -321,6 +334,14 @@ function readCommand(cursor: Cursor, strings: readonly string[]): DrawCommand {
     case 12:
       // No payload: every slot is zero, the string index and font id -1.
       return { kind: "fillPath" };
+    case 13: {
+      // `integer` indexes the blob table; the slots are x, y, w, h.
+      const blob = blobs[integer];
+      if (blob === undefined) {
+        throw new Error(`draw program: bad blob index ${integer}`);
+      }
+      return { kind: "drawImage", blob, x: s[0]!, y: s[1]!, w: s[2]!, h: s[3]! };
+    }
     default:
       throw new Error(`draw program: unknown opcode ${opcode}`);
   }

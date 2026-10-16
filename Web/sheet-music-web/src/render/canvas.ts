@@ -75,7 +75,52 @@ function faceFor(fontId: number, fonts: ScoreFonts): string {
   return fontId === FontId.smufl ? fonts.smufl : fonts.textRoman;
 }
 
+/**
+ * Decoded `drawImage` pictures, keyed by the blob object the decoder produced
+ * (a page decodes once, so the same command draws the same blob on every
+ * repaint). `createImageBitmap` is asynchronous, so a picture that is not
+ * decoded yet draws nothing: the first draw starts the decode, and when it
+ * settles the `onImageReady` callbacks that were waiting on it fire so the host
+ * repaints. A failed decode is remembered as `null` and never retried; it draws
+ * nothing, as on the Android reader.
+ */
+const imageBitmaps = new WeakMap<Uint8Array, ImageBitmap | null>();
+const pendingImages = new WeakMap<Uint8Array, Set<() => void>>();
+
+function bitmapFor(blob: Uint8Array, onImageReady: (() => void) | undefined): ImageBitmap | null {
+  const known = imageBitmaps.get(blob);
+  if (known !== undefined) return known;
+  const waiting = pendingImages.get(blob);
+  if (waiting !== undefined) {
+    if (onImageReady) waiting.add(onImageReady);
+    return null;
+  }
+  const callbacks = new Set<() => void>();
+  if (onImageReady) callbacks.add(onImageReady);
+  pendingImages.set(blob, callbacks);
+  const settle = (bitmap: ImageBitmap | null): void => {
+    imageBitmaps.set(blob, bitmap);
+    pendingImages.delete(blob);
+    if (bitmap === null) return;
+    for (const callback of callbacks) callback();
+  };
+  try {
+    createImageBitmap(new Blob([blob as BlobPart])).then(settle, () => settle(null));
+  } catch {
+    settle(null);
+  }
+  return null;
+}
+
 export interface DrawPageOptions {
+  /**
+   * Called when a picture finishes decoding after a draw that had to skip it.
+   * The host should repaint (call `drawPage` / `drawTile` again); the bitmap is
+   * cached by then, so the repaint draws it. Never called for a picture that
+   * fails to decode.
+   */
+  readonly onImageReady?: () => void;
+
   /**
    * Distance in document millimetres from the top of the page to the top of
    * this canvas.
@@ -94,6 +139,7 @@ function drawCommandList(
   pxPerMM: number,
   fonts: ScoreFonts,
   offsetPx: number,
+  onImageReady?: () => void,
 ): void {
   let currentArgb = 0xff000000;
   let dashOnPx = 0;
@@ -252,6 +298,18 @@ function drawCommandList(
           rotationOpen = true;
         }
         break;
+      case "drawImage": {
+        const bitmap = bitmapFor(command.blob, onImageReady);
+        if (bitmap === null) break;
+        ctx.drawImage(
+          bitmap,
+          command.x * pxPerMM,
+          command.y * pxPerMM,
+          command.w * pxPerMM,
+          command.h * pxPerMM,
+        );
+        break;
+      }
       case "setDash":
         dashOnPx = command.onMM * pxPerMM;
         dashOffPx = command.offMM * pxPerMM;
@@ -297,7 +355,7 @@ export function drawPage(
   options: DrawPageOptions = {},
 ): void {
   const offsetPx = (options.offsetMM ?? 0) * pxPerMM;
-  drawCommandList(ctx, page.commands, pxPerMM, fonts, offsetPx);
+  drawCommandList(ctx, page.commands, pxPerMM, fonts, offsetPx, options.onImageReady);
 }
 
 /**
@@ -314,12 +372,13 @@ export function drawTile(
   pxPerMM: number,
   fonts: ScoreFonts,
   tile: PageTile,
+  options: Pick<DrawPageOptions, "onImageReady"> = {},
 ): void {
   const tileBottomMM = tile.offsetMM + tile.heightMM;
   const offsetPx = tile.offsetMM * pxPerMM;
   for (const band of bands) {
     if (band.topMM >= tileBottomMM) continue;
     if (band.topMM + band.heightMM <= tile.offsetMM) continue;
-    drawCommandList(ctx, band.commands, pxPerMM, fonts, offsetPx);
+    drawCommandList(ctx, band.commands, pxPerMM, fonts, offsetPx, options.onImageReady);
   }
 }

@@ -1,6 +1,13 @@
 package com.example.sheetmusic
 
 import android.graphics.Paint
+import android.graphics.BitmapFactory
+import android.util.LruCache
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -279,8 +286,24 @@ private fun DrawScope.drawPage(
             is DrawCommand.SetTextStyle -> {
                 textStyleFlags = cmd.flags
             }
-            // Phase A stub: Phase B decodes the bytes with BitmapFactory and draws them.
-            is DrawCommand.DrawImage -> Unit
+            is DrawCommand.DrawImage -> {
+                // The wire rect is document mm, top-left origin. A picture BitmapFactory cannot decode
+                // draws nothing, as on the other platforms.
+                val image = decodedImage(cmd.data)
+                if (image != null) {
+                    drawImage(
+                        image = image,
+                        dstOffset = IntOffset(
+                            (cmd.x.toFloat() * pxPerMM).roundToInt(),
+                            (cmd.y.toFloat() * pxPerMM).roundToInt(),
+                        ),
+                        dstSize = IntSize(
+                            (cmd.w.toFloat() * pxPerMM).roundToInt(),
+                            (cmd.h.toFloat() * pxPerMM).roundToInt(),
+                        ),
+                    )
+                }
+            }
         }
     }
     if (rotationSaveCount >= 0) drawIntoCanvas { it.nativeCanvas.restoreToCount(rotationSaveCount) }
@@ -288,3 +311,27 @@ private fun DrawScope.drawPage(
 
 private fun codepointToString(cp: Int): String =
     String(intArrayOf(cp), 0, 1)
+
+/** One decoded picture; [bitmap] is null when the bytes are not an image Android can decode. */
+private class DecodedImage(val bitmap: ImageBitmap?, val byteCount: Int)
+
+/**
+ * Decoded `drawImage` pictures, keyed by the content hash of their encoded bytes, so a score repainted on
+ * every scroll frame decodes each picture once. Size-bounded by decoded bytes (32 MiB); a failed decode is
+ * cached too (as a null bitmap), so an undecodable picture is not retried every frame.
+ */
+private val decodedImages = object : LruCache<Int, DecodedImage>(32 * 1024 * 1024) {
+    override fun sizeOf(key: Int, value: DecodedImage): Int = maxOf(value.byteCount, 1)
+}
+
+/** The bitmap for [bytes], decoded on first use; null draws nothing. */
+private fun decodedImage(bytes: ByteArray): ImageBitmap? {
+    val key = bytes.contentHashCode()
+    synchronized(decodedImages) {
+        decodedImages.get(key)?.let { return it.bitmap }
+    }
+    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    val entry = DecodedImage(decoded?.asImageBitmap(), decoded?.byteCount ?: 0)
+    synchronized(decodedImages) { decodedImages.put(key, entry) }
+    return entry.bitmap
+}

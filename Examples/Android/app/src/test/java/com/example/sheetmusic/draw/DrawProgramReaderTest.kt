@@ -19,9 +19,8 @@ private const val VERSION: UInt = 9u
  * One page holding a single `drawImage` of the 12 bytes 0x00…0x0B at (12.5, 20.25) sized 30 × 15.75 mm,
  * encoded by Swift's `DrawProgramCodec.encode` (base64). Printed by
  * `SM_PRINT_KOTLIN_FIXTURE=1 swift test --filter DrawProgramRoundTripTests` as a line starting `W7-T12-B64:`.
- * PLACEHOLDER until the controller pastes the printed value.
  */
-private const val SWIFT_V9_IMAGE_PROGRAM_BASE64 = "PLACEHOLDER"
+private const val SWIFT_V9_IMAGE_PROGRAM_BASE64 = "UwjQiLWaBRAJGklICQAAAAAAQGpAEQAAAAAAkHJAGjQzDQoMAAECAwQFBgcICQoLEQAAAAAAAClAGQAAAAAAQDRAIQAAAAAAAD5AKQAAAAAAgC9A"
 
 /**
  * Exercises the auto-generated [DrawProgramWireCodec] / [EncodablePageCodec] /

@@ -51,6 +51,14 @@ and this project adheres to
   a bar at natural width (stretched 1.5×) widened each symbol's beat by half again. A symbol is now a floor on the span
   of the element it names — room the beat must keep, shared by weight over any other voice's columns inside it — so it
   widens a beat only where it would otherwise run into the next symbol.
+- **The Android and web readers draw `drawImage`** — the Kotlin readers (the `SheetMusicComposeAndroid` AAR and the
+  Examples app) read draw program v9 and decode the new image command (`DrawCommand.DrawImage`, bytes compared by
+  content), include its rect in a band's bounds, and draw it with `BitmapFactory` into a size-bounded decoded-image
+  cache; a picture Android cannot decode draws nothing. The web reader reads the flat format v3 (a blob table after the
+  string table, opcode 13), bounds-checks the blob index, includes the rect in band bounds, and draws through a cached
+  `createImageBitmap` decode (`drawPage` / `drawTile` take `onImageReady` to repaint once a picture has decoded). A v8
+  Kotlin reader or a v2 web reader refuses a v9 stream instead of mis-reading it. The Kotlin half is compile-checked by
+  the Android stream at the folino re-pin, not here.
 - **`TextFrame`, `HorizontalFrame`, `FrameImage` and `Score.pictures`** — the box model the layout uses: a text frame
   (MuseScore's TBox: one text, gaps, margins in mm), a horizontal frame (HBox: width and its left / right gap), the
   pictures a vertical frame holds (`ScoreFrame.images`, with `<Image>`'s size, auto-scale, aspect lock and offset), and
