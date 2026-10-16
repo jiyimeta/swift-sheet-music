@@ -15,6 +15,7 @@ public enum TempoTextType: String, Sendable {
 
 /// Tempo change. mscx `<tempo>` is in beats per second (a float).
 /// C++: `mu::engraving::TempoText` / `mu::engraving::Tempo`.
+/// `beatUnit(inPrintedText:)` and `adoptText(_:plainText:)` are the shared importer rules.
 public struct Tempo: Sendable, Equatable {
     /// Beats per second as encoded in mscx. 2.0 = 120 BPM (since mscx tempo is per quarter).
     public var beatsPerSecond: Double

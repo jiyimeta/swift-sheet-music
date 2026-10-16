@@ -51,10 +51,7 @@ extension Tempo {
             tempo.visible = false
             return
         }
-        let markup = StaffText.preservedTextMarkup(of: textNode)
-        if let markup, tempo.isSynthesizedMarking(markup) { return }
-        tempo.text = StaffText.plainText(of: textNode)
-        tempo.preservedTextMarkup = markup
+        tempo.adoptText(StaffText.preservedTextMarkup(of: textNode), plainText: StaffText.plainText(of: textNode))
     }
 
     /// Recover the metronome beat unit from the marking. MuseScore stores playback tempo as a quarter-normalized
@@ -67,57 +64,9 @@ extension Tempo {
     static func decodeBeatUnit(
         _ node: XMLTreeNode, beatsPerSecond: Double,
     ) -> (note: NoteDuration, dots: Int) {
-        let fallback: (NoteDuration, Int) = (.quarter, 0)
-        guard followsText(node) else { return fallback }
-        guard let text = node.first("text").map(StaffText.plainText(of:)),
-              let printed = printedTempoValue(in: text),
-              printed > 0,
-              beatsPerSecond > 0
-        else { return fallback }
-        let quartersPerBeat = beatsPerSecond * 60 / printed
-        return matchBeat(quartersPerBeat: quartersPerBeat) ?? fallback
-    }
-
-    /// The metronome number printed in a tempo marking — the 80 in "♩. = 80". Reads the first number after the last
-    /// `=` (so a leading "Allegro 1:" or the note glyph don't get picked up); if there's no `=`, the first number in
-    /// the whole string.
-    private static func printedTempoValue(in text: String) -> Double? {
-        // `lastIndex(of:)` rather than `range(of:options: .backwards)`:
-        // the latter is umbrella-only and this target builds for wasm.
-        let scope: String = if let equals = text.lastIndex(of: "=") {
-            String(text[text.index(after: equals)...])
-        } else {
-            text
+        guard followsText(node), let text = node.first("text").map(StaffText.plainText(of:)) else {
+            return (.quarter, 0)
         }
-        var digits = ""
-        for ch in scope {
-            if ch.isNumber || (ch == "." && !digits.isEmpty) {
-                digits.append(ch)
-            } else if !digits.isEmpty {
-                break
-            }
-        }
-        return Double(digits)
-    }
-
-    /// Snap a beat length (in quarter notes) to the nearest standard note value carrying 0–2 augmentation dots.
-    /// Returns nil when nothing lands within tolerance.
-    private static func matchBeat(
-        quartersPerBeat target: Double,
-    ) -> (note: NoteDuration, dots: Int)? {
-        let bases: [NoteDuration] = [.whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond]
-        var best: (note: NoteDuration, dots: Int, error: Double)?
-        for base in bases {
-            for dots in 0 ... 2 {
-                let beat = base.dotted(dots).asFraction
-                let lengthInQuarters = (Double(beat.numerator) / Double(beat.denominator)) / 0.25
-                let error = abs(lengthInQuarters - target)
-                guard error < 0.01 else { continue }
-                if error < (best?.error ?? .greatestFiniteMagnitude) {
-                    best = (base, dots, error)
-                }
-            }
-        }
-        return best.map { ($0.note, $0.dots) }
+        return Tempo.beatUnit(inPrintedText: text, beatsPerSecond: beatsPerSecond)
     }
 }

@@ -7,7 +7,7 @@ extension PreservedTextMarkup {
     /// This markup as MuseScore xml text: characters escaped (`&`, `<`, `>`), each element `<name …>…</name>`, or
     /// `<name …/>` when it has no content — the form MuseScore's reader re-serializes a childless element in
     /// (`XmlReader::htmlToString`, `engraving/rw/xmlreader.cpp:169-176`). Attributes in name order, `"` escaped.
-    var xmlText: String {
+    package var xmlText: String {
         Self.xmlText(of: content)
     }
 
@@ -17,7 +17,7 @@ extension PreservedTextMarkup {
     /// end; a closing tag closes every tag opened after its match; one with no match is dropped. The text may be a
     /// peer's or another app's, so a tag whose name is not a plain word, an attribute whose name is not, and an
     /// element nested past `maximumNesting` are dropped too, their characters kept.
-    init(xmlText: String) {
+    package init(xmlText: String) {
         let source = Array(xmlText)
         var open = [OpenElement(name: "", attributes: [:])]
         var characters = ""
