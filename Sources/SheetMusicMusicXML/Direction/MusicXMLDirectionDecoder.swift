@@ -17,6 +17,8 @@ enum MusicXMLDirectionDecoder {
         var options: MusicXMLImportOptions
         /// The part's index in the score: a direction on part 0's first staff is on the score's top staff.
         var partIndex = 0
+        /// The import's tempo markings so far, shared by every part (`canAddTempoText`).
+        let registry: MusicXMLTempoRegistryBox
     }
 
     /// A system-lane element the direction made, on a staff of the part, at a position in the measure.
@@ -29,6 +31,8 @@ enum MusicXMLDirectionDecoder {
     struct Output: Sendable, Equatable {
         var events: [MusicXMLDirectionEvent] = []
         var systemElements: [SystemPlacement] = []
+        /// Tempo markings, which belong to the score's top staff whatever staff the direction names.
+        var tempoElements: [PositionedSystemElement] = []
     }
 
     static func decode(_ direction: XMLTreeNode, context: Context) -> Output {

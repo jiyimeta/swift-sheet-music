@@ -14,13 +14,24 @@ struct MusicXMLMeasureState {
     let options: MusicXMLImportOptions
     /// The part's index in the score.
     let partIndex: Int
+    /// The import's tempo markings so far, shared by every part.
+    let registry: MusicXMLTempoRegistryBox
+    /// The measure's tempo markings, which go to the score's top staff.
+    var tempoElements: [PositionedSystemElement] = []
+    /// The `tempo` of the last `<sound>` standing directly in the measure, waiting for the next `<note>`
+    /// (MuseScore's `tempoString`, `P2:2894-2896`).
+    var pendingSoundTempo = ""
 
-    init(measureIndex: Int, staffCount: Int, options: MusicXMLImportOptions, partIndex: Int) {
+    init(
+        measureIndex: Int, staffCount: Int, options: MusicXMLImportOptions, partIndex: Int,
+        registry: MusicXMLTempoRegistryBox,
+    ) {
         builders = (0 ..< staffCount).map { _ in StaffMeasureBuilder() }
         self.measureIndex = measureIndex
         self.staffCount = staffCount
         self.options = options
         self.partIndex = partIndex
+        self.registry = registry
     }
 }
 
@@ -124,12 +135,36 @@ extension MusicXMLMeasureWalker {
             divisions: divisions,
             options: state.options,
             partIndex: state.partIndex,
+            registry: state.registry,
         )
         let output = MusicXMLDirectionDecoder.decode(child, context: context)
         state.directionEvents += output.events
         for placed in output.systemElements where state.builders.indices.contains(placed.staff) {
             state.builders[placed.staff].addSystemElement(placed.element, at: placed.position)
         }
+        state.tempoElements += output.tempoElements
+    }
+
+    /// A `<sound>` directly in the measure: its `tempo` waits for the next `<note>`; each `<sound>` replaces it, one
+    /// without a tempo clearing it (`P2:2894-2896`).
+    static func decodeSoundChild(_ child: XMLTreeNode, state: inout MusicXMLMeasureState) {
+        state.pendingSoundTempo = child.attributes["tempo"] ?? ""
+    }
+
+    /// Before a `<note>`: a waiting measure-level sound tempo becomes a hidden "♩ = N" at the clock, unless a marking
+    /// there already blocks it, and stops waiting either way (`P2:2815-2833`).
+    static func placePendingSoundTempo(state: inout MusicXMLMeasureState) {
+        guard !state.pendingSoundTempo.isEmpty else { return }
+        let printed = state.pendingSoundTempo
+        state.pendingSoundTempo = ""
+        let now = state.clock.now
+        guard state.registry.registry.canAdd(measure: state.measureIndex, tick: now) else { return }
+        // `String::toDouble` reads a malformed tempo as 0, which `setTempo` clamps to its floor.
+        let tempo = MusicXMLDirectionDecoder.hiddenTempo(printedTempo: printed, quarterBPM: Double(printed) ?? 0)
+        state.tempoElements.append(PositionedSystemElement(
+            position: MeasurePosition(offset: now), element: .tempo(tempo),
+        ))
+        state.registry.registry.record(measure: state.measureIndex, tick: now, beatsPerSecond: tempo.beatsPerSecond)
     }
 
     /// `<forward>` and `<backup>` move the clock by their `<duration>` (`P2:2862-2887`); one without a positive

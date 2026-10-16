@@ -21,6 +21,11 @@ and this project adheres to
   or a Sticking, with `font-weight`, `font-style`, `underline`, `line-through`, `font-size`, `font-family` and `color`
   kept as markup. A rehearsal mark now sits at its real tick on the direction's staff, and loses to words in the same
   direction, as in MuseScore.
+- **MusicXML tempo** — `<metronome>`, `<sound tempo>` (in a direction or directly in a measure) and the words beside
+  them import as MuseScore builds them: a tempo text with its real tempo and beat (so MuseScore's own "a tempo" arrives
+  at the tempo it exported, not 120), a hidden "♩ = N" for a bare `<sound tempo>`, and a second tempo on a tick that
+  already holds one is dropped, across parts. With the new internal text-type inference, words such as "Allegro" and
+  "a tempo" are tempo texts.
 
 ### Fixed
 

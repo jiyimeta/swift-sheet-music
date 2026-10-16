@@ -15,12 +15,25 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
     var color: ScoreColor?
     /// Every `<words>` as xml text, in order, plus the glyphs MuseScore writes into the words as `<sym>`.
     var wordsXML = ""
-    /// A `<metronome>` is present.
-    var hasMetronome = false
+    /// The last `<metronome>` (`m_metroText` and `m_tpoMetro`, which each `<metronome>` sets again).
+    var metronome: MusicXMLMetronome.Parsed?
+    /// `default-y` parsed on the last `<direction-type>` child (`m_hasDefaultY`, `P2:4021`): MuseScore then holds a
+    /// text back with the measure's delayed directions (`hasTotalY`, `P2:3672-3677`).
+    var hasDefaultY = false
     /// The `<rehearsal>` marks.
     var rehearsals: [RehearsalMark] = []
-    /// What `<sound>` says.
+    /// What `<sound>` says — its `tempo` already replaced by the metronome's when it has none.
     var sound = MusicXMLSoundFacts()
+
+    /// The metronome's text is not empty (MuseScore's non-empty `m_metroText`).
+    var hasMetronome: Bool {
+        !metronomeXML.isEmpty
+    }
+
+    /// The metronome's xml text, or "".
+    var metronomeXML: String {
+        metronome?.xmlText ?? ""
+    }
 
     init(_ direction: XMLTreeNode) {
         let explicitPlacement = direction.attributes["placement"].flatMap { $0.isEmpty ? nil : $0 }
@@ -36,9 +49,15 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
             }
         }
         placement = explicitPlacement ?? defaultY.map { $0 < 0 ? "above" : "below" }
+        hasDefaultY = defaultY != nil
         rehearsals = MusicXMLRehearsalDecoder.decode(direction)
         for node in direction.all("sound") {
             sound.read(node)
+        }
+        // Sibelius 7.1.3 writes a metronome without `<sound tempo>`: the metronome's tempo stands in, before anything
+        // reads the tempo (`P2:3494-3499`).
+        if sound.tempo < 0.1, let metronomeTempo = metronome?.quarterBeatsPerMinute, metronomeTempo > 0.1 {
+            sound.tempo = metronomeTempo
         }
     }
 
@@ -49,7 +68,7 @@ struct MusicXMLDirectionFacts: Sendable, Equatable {
         case "words":
             wordsXML += MusicXMLFormattedWords.xmlText(of: child)
         case "metronome":
-            hasMetronome = true
+            metronome = MusicXMLMetronome.parse(child)
         case "eyeglasses":
             wordsXML += "<sym>miscEyeglasses</sym>"
         case "symbol":

@@ -1,9 +1,9 @@
 import SheetMusicFoundation
 
 extension Tempo {
-    /// The beat a marking's printed number counts in. MuseScore stores playback tempo as a quarter-normalized
-    /// `<tempo>` (beats/sec) but draws the marking in whatever note the author chose. The drawn value equals
-    /// `beatsPerSecond * 60 / (beatLength / quarter)`, so the beat length in quarters is
+    /// The beat a marking's printed number counts in. An imported tempo plays quarter-normalized (quarter beats per
+    /// second, whatever file format it came from) but the marking is drawn in whatever note the author chose. The
+    /// drawn value equals `beatsPerSecond * 60 / (beatLength / quarter)`, so the beat length in quarters is
     /// `beatsPerSecond * 60 / printedValue`. The printed number is read out of the text (after the last `=`, else the
     /// first number) and that ratio is snapped to the nearest standard note (0–2 dots). Falls back to a plain quarter
     /// when the text has no number, either value is not positive, or the ratio matches nothing — the same assumption

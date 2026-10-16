@@ -29,6 +29,9 @@ enum MusicXMLMeasureWalker {
         /// into the measure stream. Staves absent from the map keep
         /// `Staff.lineCount`'s default of 5.
         let lineCountByStaff: [Int: Int]
+        /// `tempoElementsByMeasure[measureIndex]` — the part's tempo markings, which belong to the score's top staff
+        /// whatever part wrote them.
+        let tempoElementsByMeasure: [[PositionedSystemElement]]
     }
 
     static func decode(
@@ -36,6 +39,7 @@ enum MusicXMLMeasureWalker {
         drumTable: MusicXMLDrumTable = MusicXMLDrumTable(),
         options: MusicXMLImportOptions = .default,
         partIndex: Int = 0,
+        registry: MusicXMLTempoRegistryBox = MusicXMLTempoRegistryBox(),
     ) throws -> PartResult {
         let staffCount = detectStaffCount(partNode: partNode)
         var divisions = DivisionsContext(perQuarter: 1)
@@ -56,21 +60,24 @@ enum MusicXMLMeasureWalker {
         // chord anchors (`anchors[staff][measure]`, positional voice 0).
         var directionEvents: [MusicXMLDirectionEvent] = []
         var anchors: [[[MusicXMLChordAnchor]]] = Array(repeating: [], count: staffCount)
+        var tempoElements: [[PositionedSystemElement]] = []
         for (index, measureNode) in partNode.all("measure").enumerated() {
             let isFirstMeasure = (index == 0)
+            var state = MusicXMLMeasureState(
+                measureIndex: index, staffCount: staffCount, options: options, partIndex: partIndex,
+                registry: registry,
+            )
             let built = try decodeOne(
                 measureNode: measureNode,
+                state: &state,
                 divisions: &divisions,
                 previousAttributes: &previousAttributes,
                 isFirstMeasure: isFirstMeasure,
-                staffCount: staffCount,
                 drumTable: drumTable,
-                measureIndex: index,
                 glideTracker: &glideTracker,
                 directionEvents: &directionEvents,
-                options: options,
-                partIndex: partIndex,
             )
+            tempoElements.append(state.tempoElements)
             for (staffIdx, item) in built.enumerated() {
                 perStaffMeasures[staffIdx].append(item.measure)
                 perStaffSystemElements[staffIdx].append(item.systemElements)
@@ -88,6 +95,7 @@ enum MusicXMLMeasureWalker {
             measuresByStaff: dropped,
             systemElementsByStaffMeasure: perStaffSystemElements,
             lineCountByStaff: previousAttributes.lineCountByStaff,
+            tempoElementsByMeasure: tempoElements,
         )
     }
 
@@ -151,20 +159,15 @@ enum MusicXMLMeasureWalker {
     /// (default 1).
     private static func decodeOne(
         measureNode: XMLTreeNode,
+        state: inout MusicXMLMeasureState,
         divisions: inout DivisionsContext,
         previousAttributes: inout MusicXMLAttributesSnapshot,
         isFirstMeasure: Bool,
-        staffCount: Int,
         drumTable: MusicXMLDrumTable,
-        measureIndex: Int,
         glideTracker: inout MusicXMLGlideTracker,
         directionEvents: inout [MusicXMLDirectionEvent],
-        options: MusicXMLImportOptions,
-        partIndex: Int,
     ) throws -> [StaffMeasureBuilder.Built] {
-        var state = MusicXMLMeasureState(
-            measureIndex: measureIndex, staffCount: staffCount, options: options, partIndex: partIndex,
-        )
+        let staffCount = state.staffCount
         for child in measureNode.children {
             switch child.name {
             case "attributes":
@@ -186,6 +189,7 @@ enum MusicXMLMeasureWalker {
                 }
 
             case "note":
+                placePendingSoundTempo(state: &state)
                 try decodeNoteChild(
                     child, state: &state, divisions: divisions, drumTable: drumTable, glideTracker: &glideTracker,
                 )
@@ -202,12 +206,17 @@ enum MusicXMLMeasureWalker {
                     state.builders[builder].apply(barline: decoded)
                 }
 
+            case "sound":
+                decodeSoundChild(child, state: &state)
+
             default:
-                // <print>, <sound>, ... — out of Phase 0 scope.
+                // <print>, ... — out of Phase 0 scope.
                 continue
             }
         }
 
+        // The measure's delayed directions join the score now (`P2:2984-2990`).
+        state.registry.registry.endMeasure()
         directionEvents += state.directionEvents
         return state.builders.map { $0.build() }
     }

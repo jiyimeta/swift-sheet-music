@@ -127,6 +127,9 @@ extension Score {
         // the end so every staff's contribution lands at the right
         // measure index with originalStaff stamped.
         var perStaffSystemElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])] = []
+        // One tempo registry for the whole score, as MuseScore reads the score's segments: a tempo any part placed
+        // blocks the next on that tick.
+        let tempoRegistry = MusicXMLTempoRegistryBox()
         for (index, partNode) in root.all("part").enumerated() {
             let (part, staffElements) = try decodeOnePart(
                 partNode: partNode,
@@ -134,6 +137,7 @@ extension Score {
                 index: index,
                 partIndex: parts.count,
                 options: options,
+                tempoRegistry: tempoRegistry,
             )
             parts.append(part)
             perStaffSystemElements.append(contentsOf: staffElements)
@@ -173,6 +177,7 @@ extension Score {
         index: Int,
         partIndex: Int,
         options: MusicXMLImportOptions,
+        tempoRegistry: MusicXMLTempoRegistryBox,
     ) throws -> (part: Part, staffElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])]) {
         let id = partNode.attributes["id"] ?? ""
         guard let scorePart = scoreParts.first(where: { $0.attributes["id"] == id })
@@ -195,6 +200,7 @@ extension Score {
             drumTable: prelimDrumTable,
             options: options,
             partIndex: partIndex,
+            registry: tempoRegistry,
         )
         let (partTemplate, _, instrumentByID) = try Part.decodeMusicXML(
             scorePart: scorePart,
@@ -237,6 +243,9 @@ extension Score {
             StaffAddress(partIndex: partIndex, staffIndexInPart: 0),
             instrumentChangesByMeasure,
         ))
+        // Tempo markings belong to the score's top staff whatever part wrote them (`addElemOffset`, "TempoText must
+        // be in track 0").
+        staffElements.append((StaffAddress(partIndex: 0, staffIndexInPart: 0), walker.tempoElementsByMeasure))
         return (part, staffElements)
     }
 }
