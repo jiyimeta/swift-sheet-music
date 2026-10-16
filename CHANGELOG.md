@@ -51,6 +51,8 @@ and this project adheres to
   a bar at natural width (stretched 1.5×) widened each symbol's beat by half again. A symbol is now a floor on the span
   of the element it names — room the beat must keep, shared by weight over any other voice's columns inside it — so it
   widens a beat only where it would otherwise run into the next symbol.
+- **`FrameText.singleLineText`** — the text with each newline (a run of them too) replaced by one space and the ends
+  trimmed, for hosts whose displays show a multi-line title on one line.
 - **The Android and web readers draw `drawImage`** — the Kotlin readers (the `SheetMusicComposeAndroid` AAR and the
   Examples app) read draw program v9 and decode the new image command (`DrawCommand.DrawImage`, bytes compared by
   content), include its rect in a band's bounds, and draw it with `BitmapFactory` into a size-bounded decoded-image
@@ -175,6 +177,10 @@ and this project adheres to
 
 ### Fixed
 
+- **An inline credit editor over a bold title shows and measures bold** — `CreditTextLine.font` was always the regular
+  title face, so the editor over a `<b>` title showed regular text. `CreditTextLine` now reports `isBold` / `isItalic`
+  (true when every text run of the line is), `font` carries those traits, and a line without rich runs is measured in
+  that font.
 - **A VBox's `topGap` / `bottomGap` and its `<Image>` children are no longer opaque** — they were kept as preserved
   markup that no layout or host could read; they now decode into `ScoreFrame.topGapSp`, `bottomGapSp`, `autoSize`
   (`<boxAutoSize>`) and `images`.

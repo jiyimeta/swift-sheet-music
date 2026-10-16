@@ -15,6 +15,7 @@
     // swiftlint:disable:next no_foundation_umbrella
     import Foundation
 #endif
+import SheetMusicFoundation
 
 /// A page-level frame that holds free-form text — typically the
 /// title block at the top of the score (`<VBox>` in MuseScore's
@@ -135,6 +136,8 @@ public struct FrameText: Sendable, Equatable, Hashable {
 
     /// The text on one line: each `\n` (a run of them too) becomes one space, and the ends are trimmed.
     public var singleLineText: String {
-        text
+        text.split(separator: "\n", omittingEmptySubsequences: true)
+            .joined(separator: " ")
+            .trimmingWhitespaceAndNewlines()
     }
 }
