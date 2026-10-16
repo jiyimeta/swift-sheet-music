@@ -195,6 +195,23 @@ struct MSCXEncoderScoreFrameTests {
         #expect(image.children.map(\.name) == ["path"])
     }
 
+    @Test("a VBox text with an unmodeled style writes it back, and a modeled style leaves the name nil")
+    func unmodeledTextStyleRoundTrips() throws {
+        let vbox = try XMLTreeParser.parse(Data("""
+        <VBox><height>10</height><Text><style>user1</style><text>x</text></Text>\
+        <Text><style>Title</style><text>y</text></Text></VBox>
+        """.utf8))
+        let decoded = ScoreFrame.decode(vbox: vbox)
+
+        let node = try reparsedVBox(decoded)
+
+        #expect(decoded.texts[0].style == .other)
+        #expect(decoded.texts[0].otherStyleName == "user1")
+        #expect(decoded.texts[1].style == .title)
+        #expect(decoded.texts[1].otherStyleName == nil)
+        #expect(node.all("Text").map { $0.first("style")?.text } == ["user1", "Title"])
+    }
+
     @Test("the typed fields do not reach the VBox's preserved bag")
     func typedChildrenAreNotStoredTwice() throws {
         let vbox = try XMLTreeParser.parse(Data("""

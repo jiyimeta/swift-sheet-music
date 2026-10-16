@@ -64,8 +64,13 @@ extension FrameText {
         // A line whose markup holds only a symbol projects to "" but is still a line: dropping it lost it from the
         // saved file.
         guard !stripped.isEmpty || textNode?.children.isEmpty == false else { return nil }
-        let style = (node.first("style")?.text)
-            .flatMap(decodeStyle(_:)) ?? .other
+        let rawStyle = node.first("style")?.text
+        let style = rawStyle.flatMap(decodeStyle(_:)) ?? .other
+        // A present `<style>` that maps to no modeled role is kept by name so it is written back.
+        var otherStyleName: String?
+        if style == .other {
+            otherStyleName = rawStyle
+        }
         var offsetMm: CGPoint?
         if let off = node.first("offset"),
            let xs = off.attributes["x"], let ys = off.attributes["y"],
@@ -85,6 +90,7 @@ extension FrameText {
             preservedTextMarkup: textNode.flatMap {
                 StaffText.preservedTextMarkup(of: $0, derivedText: stripped)
             },
+            otherStyleName: otherStyleName,
         )
     }
 }

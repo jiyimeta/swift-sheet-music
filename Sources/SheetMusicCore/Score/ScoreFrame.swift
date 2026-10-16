@@ -112,6 +112,9 @@ public struct FrameText: Sendable, Equatable, Hashable {
     /// resolved via `ScoreStyle`. MuseScore writes this child only
     /// when the element diverges from the style's alignment.
     public var align: TextAlign?
+    /// The `<style>` value as written when it names none of the modeled roles (a TBox's `frame`, a user style); `nil`
+    /// when the style is modeled or absent.
+    public var otherStyleName: String?
 
     public init(
         style: Style, text: String,
@@ -119,7 +122,9 @@ public struct FrameText: Sendable, Equatable, Hashable {
         fontSize: Double? = nil,
         align: TextAlign? = nil,
         preservedTextMarkup: PreservedTextMarkup? = nil,
+        otherStyleName: String? = nil,
     ) {
+        self.otherStyleName = otherStyleName
         self.style = style
         self.text = text
         self.preservedTextMarkup = preservedTextMarkup

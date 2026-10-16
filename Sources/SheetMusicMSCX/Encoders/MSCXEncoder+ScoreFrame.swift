@@ -47,6 +47,8 @@ extension FrameText {
             children.append(XMLTreeNode(
                 name: "style", text: style.rawValue,
             ))
+        } else if let otherStyleName {
+            children.append(XMLTreeNode(name: "style", text: otherStyleName))
         }
         if let fontSize {
             children.append(XMLTreeNode(

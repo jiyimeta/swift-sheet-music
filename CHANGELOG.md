@@ -68,6 +68,8 @@ and this project adheres to
 - **A VBox's `topGap` / `bottomGap` and its `<Image>` children are no longer opaque** — they were kept as preserved
   markup that no layout or host could read; they now decode into `ScoreFrame.topGapSp`, `bottomGapSp`, `autoSize`
   (`<boxAutoSize>`) and `images`.
+- **A frame text's unmodeled `<style>` is written back** — a TBox text's `frame` style or a user style on a VBox text
+  decoded to `.other` and was dropped on save; `FrameText.otherStyleName` now keeps the name as written.
 
 ## [4.11.0] - 2026-10-16
 

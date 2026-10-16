@@ -195,6 +195,17 @@ struct FrameBoxesRoundTripTests {
         #expect(frame.margins.top == 1)
     }
 
+    @Test func textFrameKeepsItsFrameStyleName() throws {
+        let score = try load("frames-boxes")
+        let frame = try #require(textFrame(score.blocks[2]))
+
+        let encoded = score.blocks[2].block.encode().first("Text")
+
+        #expect(frame.text?.style == .other)
+        #expect(frame.text?.otherStyleName == "frame")
+        #expect(encoded?.first("style")?.text == "frame")
+    }
+
     @Test func fretBoxStaysOpaque() throws {
         let blocks = try decodeBlocks("<FBox><fretFrameTextScale>1</fretFrameTextScale></FBox>")
 
