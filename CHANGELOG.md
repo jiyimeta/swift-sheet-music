@@ -18,6 +18,21 @@ and this project adheres to
   renderer tints a selected name. An empty name draws nothing and is not a target. `ScoreElementIDWire` appends choice
   15 for it; a part name has no `removalCommand`. Not yet tinted by the Android draw program.
 
+- **`EditIntent.formatRhythms(scope:policy:)` (wire 91), `FormatRhythms`, `FormatRhythmsScope`, `RhythmSpelling` and
+  `RhythmSpellingPolicy`: re-spell a score's rhythms the way the meter writes them, as one undo step.** The scope is
+  the whole score, one bar of one staff, or a range; a range takes only the spans lying entirely inside it, because
+  clipping a span at the edge would tie into territory the caller did not select. Ties that join what one note could
+  say are merged, and what a bar line or a beat would hide is split, by MuseScore's metric rules with three knobs: how
+  many augmentation dots a note may carry (`dotLevel`), whether a note may cross the middle of the bar
+  (`midBarSyncopations`), and whether a rest may cross an unstressed beat (`beatCrossingRests`). `.default` is
+  folino's own taste (two dots, syncopations split, written beat-crossing rests kept) and `.museScore` is what
+  MuseScore's own regroup produces. Markings are never dropped: a span carrying a slur end, a lyric melisma target, a
+  grace note or any other marking it could not carry over is left as written. A pickup bar is right-aligned, each bar
+  is read by its own meter, and tuplets are untouched. What sounds never changes, with one known exception:
+  `MidiRenderer` applies an instrument's articulation gate to the last tie link only, so on an instrument whose
+  default gate is below 100% a re-spelled note's release can move. A span the note values cannot cover to the tick
+  (a non-tuplet third of a whole) is carried as written.
+
 ### Fixed
 
 - **A syllable no longer widens its notes' gaps in a stretched bar.** The room a syllable needs to the next one was
