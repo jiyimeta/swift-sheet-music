@@ -51,13 +51,53 @@ struct RetimeRunTests {
         return chord
     }
 
-    /// Where the slur on `anchor` ends, in staff ticks, read the way playback and layout read `<next>`: the anchor's
-    /// onset, plus whole bars, plus the fraction (`HairpinRamps.computeEndTick`). Both bars are 1920 ticks long.
-    private static func slurEnd(on anchor: VoiceElementID, in score: Score) -> Int? {
-        guard let slur = chordValue(at: anchor, in: score)?.spanners.first, let onset = score.absoluteTick(of: anchor)
-        else { return nil }
-        return onset + slur.nextMeasuresOffset * 1920 + (slur.nextFractionsOffset?.ticks(division: 480) ?? 0)
+    /// `score` with a second voice in bar 0.
+    private static func withLowerVoice(_ elements: [VoiceElement], in score: Score) -> Score {
+        var score = score
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices.append(Voice(elements: elements))
+            }
+        }
+        return score
     }
+
+    /// Where the spanner begun at `id` ends, in staff ticks — a slur on the chord there, or the line whose begin
+    /// marker is the element there — read the way playback and layout read `<next>`: the begin's onset, plus whole
+    /// bars, plus the fraction (`HairpinRamps.computeEndTick`). Both bars are 1920 ticks long.
+    private static func spannerEnd(at id: VoiceElementID, in score: Score) -> Int? {
+        let spanner: Spanner?
+        switch score[id] {
+        case let .chord(chord)?: spanner = chord.spanners.first
+        case let .spanner(line)?: spanner = line
+        default: spanner = nil
+        }
+        guard let spanner, let onset = score.absoluteTick(of: id) else { return nil }
+        let fraction = spanner.nextFractionsOffset?.ticks(division: 480) ?? 0
+        return onset + spanner.nextMeasuresOffset * 1920 + fraction
+    }
+
+    /// Where bar 0's system lane holds the staff or system text reading `text`.
+    private static func textPosition(of text: String, in score: Score) -> MeasurePosition? {
+        guard let lane = score.systemMeasures.first else { return nil }
+        for positioned in lane.elements {
+            if case let .staffText(mark) = positioned.element, mark.text == text { return positioned.position }
+        }
+        return nil
+    }
+
+    /// Where bar 0's system lane holds its tempo mark.
+    private static func tempoPosition(in score: Score) -> MeasurePosition? {
+        guard let lane = score.systemMeasures.first else { return nil }
+        for positioned in lane.elements {
+            if case .tempo = positioned.element { return positioned.position }
+        }
+        return nil
+    }
+
+    /// The sixteenth's lane position before the re-time (tick 1800) and after it (tick 1680).
+    private static let oldSixteenthBeat = MeasurePosition(numerator: 15, denominator: 16)
+    private static let newSixteenthBeat = MeasurePosition(numerator: 7, denominator: 8)
 
     /// Where the verse-0 melisma on `id` ends, in staff ticks: `Lyric.ticks` past the syllable's own onset.
     private static func melismaEnd(on id: VoiceElementID, in score: Score) -> Int? {
@@ -94,21 +134,21 @@ struct RetimeRunTests {
         #expect(session.apply(.setSlur(over: VoiceElementRange(start: anchor, end: Self.sixteenth))))
         // The probe read before the edit: it finds the slur ending on the sixteenth, so the same reading afterwards
         // says something.
-        #expect(Self.slurEnd(on: anchor, in: session.score) == 1800)
+        #expect(Self.spannerEnd(at: anchor, in: session.score) == 1800)
         #expect(session.apply(Self.twoEighths))
         #expect(session.score.absoluteTick(of: Self.sixteenth) == 1680)
-        #expect(Self.slurEnd(on: anchor, in: session.score) == session.score.absoluteTick(of: Self.sixteenth))
+        #expect(Self.spannerEnd(at: anchor, in: session.score) == session.score.absoluteTick(of: Self.sixteenth))
         #expect(Self.chordValue(at: anchor, in: session.score)?.spanners.count == 1)
     }
 
     @Test func `a slur starting on the run and ending after it keeps both ends`() {
         let session = ScoreEditSession(score: Self.dottedPair())
         #expect(session.apply(.setSlur(over: VoiceElementRange(start: Self.sixteenth, end: Self.nextBar))))
-        #expect(Self.slurEnd(on: Self.sixteenth, in: session.score) == 1920)
+        #expect(Self.spannerEnd(at: Self.sixteenth, in: session.score) == 1920)
         #expect(session.apply(Self.twoEighths))
         // The begin moved a sixteenth earlier; the end is still the next bar's first chord.
         #expect(session.score.absoluteTick(of: Self.sixteenth) == 1680)
-        #expect(Self.slurEnd(on: Self.sixteenth, in: session.score) == session.score.absoluteTick(of: Self.nextBar))
+        #expect(Self.spannerEnd(at: Self.sixteenth, in: session.score) == session.score.absoluteTick(of: Self.nextBar))
     }
 
     @Test func `a dynamic between the two chords stays before the second chord`() {
@@ -197,17 +237,13 @@ struct RetimeRunTests {
     }
 
     @Test func `another voice of the staff is untouched`() {
-        var score = Self.dottedPair()
-        // A second voice under the pair, slurred from its quarter (960) to its second eighth (1680) — a tick inside
-        // the dotted eighth's span in voice 0, so a re-time that measured other voices against voice 0 would move it.
-        score.parts.updateValue(at: 0) { part in
-            part.staves.updateValue(at: 0) { staff in
-                staff.measures[0].voices.append(Voice(elements: [
-                    .rest(duration: .half), Self.chord(60, 14, .quarter),
-                    Self.chord(62, 16, .eighth), Self.chord(64, 18, .eighth),
-                ]))
-            }
-        }
+        // A second voice under the pair, slurred from its quarter (960) to its second eighth (1680). Every write the
+        // command makes is addressed in the run's own voice, so this holds by construction; it is pinned because a
+        // staff shared by two singers relies on it, not because a mutation of the voice filter reaches it.
+        let score = Self.withLowerVoice([
+            .rest(duration: .half), Self.chord(60, 14, .quarter),
+            Self.chord(62, 16, .eighth), Self.chord(64, 18, .eighth),
+        ], in: Self.dottedPair())
         let session = ScoreEditSession(score: score)
         let slurred = VoiceElementRange(start: Self.slot(1, voice: 1), end: Self.slot(3, voice: 1))
         #expect(session.apply(.setSlur(over: slurred)))
@@ -216,6 +252,90 @@ struct RetimeRunTests {
         #expect(session.apply(Self.twoEighths))
         #expect(session.score.absoluteTick(of: Self.sixteenth) == 1680)
         #expect(session.score[voice: lower] == before)
+    }
+
+    @Test func `another voice's slur at the run's element index leaves the run's own slur alone`() {
+        // Voice 1 is eight eighths, slurred from element 5 (1200) to element 6 (1440) — the same element index as the
+        // run's sixteenth, with a different extent. A spanner walk that did not keep to the run's voice would
+        // address that record at the sixteenth and write voice 1's extent over the sixteenth's own slur.
+        var lower = [VoiceElement](repeating: .rest(duration: .eighth), count: 5)
+        lower += [Self.chord(60, 14, .eighth), Self.chord(62, 16, .eighth), .rest(duration: .eighth)]
+        let session = ScoreEditSession(score: Self.withLowerVoice(lower, in: Self.dottedPair()))
+        #expect(session.apply(.setSlur(over: VoiceElementRange(start: Self.sixteenth, end: Self.nextBar))))
+        let lowerSlur = VoiceElementRange(start: Self.slot(5, voice: 1), end: Self.slot(6, voice: 1))
+        #expect(session.apply(.setSlur(over: lowerSlur)))
+        #expect(Self.spannerEnd(at: Self.sixteenth, in: session.score) == 1920)
+        #expect(session.apply(Self.twoEighths))
+        #expect(Self.spannerEnd(at: Self.sixteenth, in: session.score) == session.score.absoluteTick(of: Self.nextBar))
+        #expect(Self.spannerEnd(at: Self.slot(5, voice: 1), in: session.score) == 1440)
+    }
+
+    @Test func `a hairpin beginning before the sixteenth keeps both ends`() {
+        let session = ScoreEditSession(score: Self.dottedPair())
+        let over = VoiceElementRange(start: Self.sixteenth, end: Self.nextBar)
+        #expect(session.apply(.setHairpin(over: over, subtype: .crescendo)))
+        // The begin marker goes in before the sixteenth, which becomes element 6; the hairpin ends where the next
+        // bar's first chord does, at the onset of the rest after it (2400).
+        let marker = Self.slot(5)
+        let shifted = Self.slot(6)
+        let afterNext = Self.slot(1, measure: 1)
+        guard case .spanner? = session.score[marker] else {
+            Issue.record("expected the begin marker at element 5, got \(String(describing: session.score[marker]))")
+            return
+        }
+        #expect(Self.spannerEnd(at: marker, in: session.score) == 2400)
+        #expect(session.apply(Self.twoEighths))
+        #expect(session.score.absoluteTick(of: shifted) == 1680)
+        #expect(session.score.absoluteTick(of: marker) == session.score.absoluteTick(of: shifted))
+        #expect(Self.spannerEnd(at: marker, in: session.score) == session.score.absoluteTick(of: afterNext))
+    }
+
+    @Test func `a rest in the run stays a rest at its new length`() {
+        var score = Self.dottedPair()
+        score[Self.sixteenth] = .rest(duration: .sixteenth)
+        let session = ScoreEditSession(score: score)
+        #expect(session.apply(Self.twoEighths))
+        let rest = Self.chordValue(at: Self.sixteenth, in: session.score)
+        #expect(rest?.notes.isEmpty == true)
+        #expect(rest?.duration == .eighth)
+        #expect(Self.chordValue(at: Self.dotted, in: session.score)?.duration == .eighth)
+    }
+
+    @Test func `a staff text on the sixteenth moves to the sixteenth's new onset`() {
+        let session = ScoreEditSession(score: Self.dottedPair())
+        #expect(session.apply(.setStaffText(anchor: Self.sixteenth, text: "rit.", isSystemText: false)))
+        #expect(Self.textPosition(of: "rit.", in: session.score) == Self.oldSixteenthBeat)
+        let before = session.score
+        #expect(session.apply(Self.twoEighths))
+        #expect(Self.textPosition(of: "rit.", in: session.score) == Self.newSixteenthBeat)
+        // The move rides the same composite: one undo takes the chords and the text back together.
+        #expect(session.undo())
+        #expect(session.score == before)
+    }
+
+    @Test func `a staff text stays where another voice of the staff starts an element`() {
+        // Voice 1 starts a sixteenth at 1800, the same tick as the run's sixteenth: the text may be that one's.
+        let lower: [VoiceElement] = [
+            .rest(duration: .half), .rest(duration: .quarter),
+            .rest(duration: NoteDuration.eighth.dotted(1)), Self.chord(60, 14, .sixteenth),
+        ]
+        let session = ScoreEditSession(score: Self.withLowerVoice(lower, in: Self.dottedPair()))
+        #expect(session.apply(.setStaffText(anchor: Self.sixteenth, text: "rit.", isSystemText: false)))
+        #expect(session.apply(Self.twoEighths))
+        #expect(session.score.absoluteTick(of: Self.sixteenth) == 1680)
+        #expect(Self.textPosition(of: "rit.", in: session.score) == Self.oldSixteenthBeat)
+    }
+
+    @Test func `a tempo mark and a system text at the sixteenth's onset stay`() {
+        let session = ScoreEditSession(score: Self.dottedPair())
+        #expect(session.apply(.setTempo(anchor: Self.sixteenth, marking: SetTempo.Marking(beatsPerSecond: 2))))
+        #expect(session.apply(.setStaffText(anchor: Self.sixteenth, text: "Fine", isSystemText: true)))
+        #expect(Self.tempoPosition(in: session.score) == Self.oldSixteenthBeat)
+        #expect(Self.textPosition(of: "Fine", in: session.score) == Self.oldSixteenthBeat)
+        #expect(session.apply(Self.twoEighths))
+        #expect(session.score.absoluteTick(of: Self.sixteenth) == 1680)
+        #expect(Self.tempoPosition(in: session.score) == Self.oldSixteenthBeat)
+        #expect(Self.textPosition(of: "Fine", in: session.score) == Self.oldSixteenthBeat)
     }
 
     @Test func `the intent round-trips through the wire codec at index 91`() throws {

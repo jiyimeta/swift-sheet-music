@@ -538,9 +538,11 @@ public enum EditIntent: Sendable, Equatable {
     /// Give the `durations.count` consecutive chords and rests of `at`'s measure and voice, starting at `at`, one
     /// new length each, in place: every element keeps everything but its duration, elements that are not chords or
     /// rests between them stay where they are in element order, and no index moves. The spanners and lyric melismas
-    /// of that voice whose ends the re-time moves are restated so both ends stay on the same elements. Refused as
-    /// `.targetNotFound` when fewer members remain in the bar, `.insideTuplet` for a member inside a tuplet, and
-    /// `.insufficientRoom` when the new total differs from the old; resolves to nothing to apply when every member
-    /// already has its length. See `RetimeRun`.
+    /// of that voice whose ends the re-time moves are restated so both ends stay on the same elements, and a staff
+    /// text on a member's onset moves with it unless another voice of the staff starts an element there. Refused as
+    /// `.targetNotFound` when `at` does not resolve or fewer members remain in the bar, `.wrongElementKind` when `at`
+    /// is not a chord or rest or `.measure` is asked of a chord with notes, `.insideTuplet` for a member inside a
+    /// tuplet, and `.insufficientRoom` when the new total differs from the old or a length is not positive; resolves
+    /// to nothing to apply when every member already has its length. See `RetimeRun`.
     case retimeRun(at: VoiceElementID, durations: [NoteDuration])
 }

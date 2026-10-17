@@ -4,9 +4,10 @@ import SheetMusicFoundation
 /// mistyped rhythm needs, a dotted eighth and a sixteenth that should have been two eighths.
 ///
 /// The run is the `durations.count` consecutive chords and rests of `location`'s measure and voice, starting at
-/// `location`; each takes the duration at its position. Elements that are not chords or rests — a dynamic, a chord
-/// symbol, a spanner marker — between them keep their place in element order, so each stays at the onset of the
-/// chord after it wherever that onset moves. The element count never changes, so no index anywhere moves.
+/// `location`; each takes the duration at its position, and a rest stays a rest. Elements that are not chords or
+/// rests — a dynamic, a chord symbol, a breath, a spanner marker — between them keep their place in element order,
+/// so each stays at the onset of the chord after it wherever that onset moves. The element count never changes, so
+/// no index anywhere moves.
 ///
 /// Neither obvious composition does this. `SetDurationInRange`, like the `SetChordDuration` under it, shortens by
 /// writing a filler rest and lengthens by swallowing what follows, so a pair re-timed through it gains a rest or
@@ -20,10 +21,13 @@ import SheetMusicFoundation
 ///   or end the re-time moves gets its `nextMeasuresOffset` / `nextFractionsOffset` rewritten from its begin's new
 ///   onset to the new onset of the element it ended on;
 /// - every lyric melisma (`Lyric.ticks`) of that voice that starts in the run, or ends inside or after it, is
-///   rewritten to end on the same chord.
+///   rewritten to end on the same chord;
+/// - every staff text of the run's staff on a member's old onset moves to the member's new onset — unless another
+///   voice of the staff has a chord or rest starting at that tick, when the text may be that element's and stays.
+///   Tempo, swing and system text belong to the whole system and stay where they are.
 ///
-/// An end that fell part-way through a member rather than on an onset keeps its proportion of that member. Marks
-/// of other voices are left alone: each is measured against its own voice, and no other voice moves.
+/// An end that fell part-way through a member rather than on an onset keeps its proportion of that member. Other
+/// voices' spanners and melismas are not restated: each is measured against its own voice, which does not move.
 ///
 /// Refused, with nothing planned:
 ///
@@ -37,8 +41,8 @@ import SheetMusicFoundation
 ///
 /// Durations every member already has plan to nothing.
 ///
-/// > Note: This command is sugar over `ReplaceVoiceElement` (× element) bundled in a `CompositeEditCommand`. See
-/// > `docs/edit-commands.md`.
+/// > Note: This command is sugar over `ReplaceVoiceElement` (× element), plus one system-lane bar written back
+/// > wholesale when a staff text moves, bundled in a `CompositeEditCommand`. See `docs/edit-commands.md`.
 public struct RetimeRun: EditCommand {
     public let location: VoiceElementID
     public let durations: [NoteDuration]
@@ -97,9 +101,12 @@ public struct RetimeRun: EditCommand {
         rewritten += restateSpanners(from: score, into: &retimed, retiming: retiming)
         rewritten += restateMelismas(from: score, into: &retimed, retiming: retiming)
         var seen = Set<VoiceElementID>()
-        let commands: [any EditCommand] = rewritten.compactMap { id in
+        var commands: [any EditCommand] = rewritten.compactMap { id in
             guard seen.insert(id).inserted, let element = retimed[id], element != score[id] else { return nil }
             return ReplaceVoiceElement(at: id, with: element)
+        }
+        if let lane = movedStaffTexts(in: score, retiming: retiming) {
+            commands.append(ReplaceSystemMeasure(location: location, measure: lane))
         }
         return commands.isEmpty ? nil : CompositeEditCommand(commands: commands, location: location)
     }
@@ -246,6 +253,81 @@ extension RetimeRun {
             }
         }
         return rewritten
+    }
+
+    /// The run's bar of the system lane with each staff text of the run's staff that sat on a moving member's old
+    /// onset moved to the member's new one, or `nil` when none moves.
+    ///
+    /// A staff text is addressed by its beat (`SetStaffText`), not by an element, so the beat stands for the member
+    /// only when nothing else on the staff starts there: where another voice has a chord or rest at that tick, the
+    /// text may be that element's, and it stays. A text is the run's staff's by `SetStaffText`'s rule — its
+    /// `originalStaff`, or the canonical staff for one that names none. Tempo, swing and system text are the whole
+    /// system's and never move. A moved text is put back in document order, before the first element positioned
+    /// after it, keeping its identity.
+    private func movedStaffTexts(in score: Score, retiming: RunRetiming) -> SystemMeasure? {
+        let bar = MeasureRef(measureIndex: location.measureIndex)
+        guard let lane = score[system: bar], let measure = score[measure: bar, staff: location.staff]
+        else { return nil }
+        let barStart = retiming.barStarts[location.measureIndex]
+        let measureDuration = retiming.measureDurations[location.measureIndex]
+        // The bar ticks where another voice of the staff starts a chord or rest.
+        var taken = Set<Int>()
+        for (voiceIndex, voice) in measure.voices.enumerated() where voiceIndex != location.voiceIndex {
+            var tick = 0
+            for element in voice.elements {
+                if case .chord = element { taken.insert(tick) }
+                tick += element.cursorAdvance(division: score.division, in: measureDuration)
+            }
+        }
+        let lanePosition = { (staffTick: Int) in
+            MeasurePosition(numerator: staffTick - barStart, denominator: 4 * score.division)
+        }
+        var moves: [MeasurePosition: MeasurePosition] = [:]
+        for span in retiming.spans where span.newStart != span.oldStart && !taken.contains(span.oldStart - barStart) {
+            moves[lanePosition(span.oldStart)] = lanePosition(span.newStart)
+        }
+        guard !moves.isEmpty else { return nil }
+        var kept: [(EID, PositionedSystemElement)] = []
+        var moved: [(EID, PositionedSystemElement)] = []
+        for index in lane.elements.indices {
+            var positioned = lane.elements[index]
+            if case let .staffText(text) = positioned.element, !text.isSystemText,
+               (positioned.originalStaff ?? Score.canonicalStaff) == location.staff,
+               let target = moves[positioned.position]
+            {
+                positioned.position = target
+                moved.append((lane.elements.eid(at: index), positioned))
+            } else {
+                kept.append((lane.elements.eid(at: index), positioned))
+            }
+        }
+        guard !moved.isEmpty else { return nil }
+        for entry in moved {
+            kept.insert(entry, at: kept.firstIndex { $0.1.position > entry.1.position } ?? kept.count)
+        }
+        var updated = lane
+        updated.elements = IdentifiedArray(kept)
+        return updated
+    }
+}
+
+/// Writes one bar of the system lane wholesale and answers the command that writes it back — how `RetimeRun` moves
+/// a staff text inside the composite that re-times the chord under it. `SetStaffText`'s pre-image idiom, one bar
+/// wide.
+private struct ReplaceSystemMeasure: EditCommand {
+    let location: VoiceElementID
+    let measure: SystemMeasure
+
+    var affectedLocation: VoiceElementID {
+        location
+    }
+
+    @discardableResult
+    func apply(to score: inout Score, ids _: inout EIDAllocator) throws -> any EditCommand {
+        let bar = MeasureRef(measureIndex: location.measureIndex)
+        guard let previous = score[system: bar] else { throw Self.refused(.targetNotFound(location)) }
+        score[system: bar] = measure
+        return ReplaceSystemMeasure(location: location, measure: previous)
     }
 }
 

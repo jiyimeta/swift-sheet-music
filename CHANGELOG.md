@@ -14,14 +14,17 @@ and this project adheres to
   and each takes the length at its position and keeps everything else — pitches and spelling, lyrics,
   articulations, ties into and out of the run. The marks between them (a dynamic, a chord symbol, a spanner
   marker) stay where they are in element order, so each moves with the chord after it, and the element count
-  never changes, so no index anywhere moves. The voice's slurs and lines whose begin or end the re-time moves have
-  their `<next>` offsets restated so both ends stay on the same elements, and its lyric melismas are restated to
-  end on the same chord. The case this exists for is a mistyped dotted eighth and sixteenth that should have been
-  two eighths: `SetDurationInRange` shortens by filling with rests and lengthens by swallowing what follows, and
-  a paste of a rebuilt run clears the spanners reaching into it, so neither can say it. Refused, reusing existing
-  reasons, as `.targetNotFound` when fewer members remain in the bar, `.insideTuplet` for a member inside a
-  tuplet, and `.insufficientRoom` when the new total differs from the old; durations the run already has resolve
-  to nothing to apply.
+  never changes, so no index anywhere moves. A rest in the run stays a rest. The voice's slurs and lines whose begin
+  or end the re-time moves have their `<next>` offsets restated so both ends stay on the same elements, its lyric
+  melismas are restated to end on the same chord, and a staff text of the run's staff on a member's onset moves
+  with it — unless another voice of the staff starts an element at that tick, when the text may be that
+  element's and stays. Tempo, swing and system text stay where they are. The case this exists for is a mistyped
+  dotted eighth and sixteenth that should have been two eighths: `SetDurationInRange` shortens by filling with
+  rests and lengthens by swallowing what follows, and a paste of a rebuilt run clears the spanners reaching into
+  it, so neither can say it. Refused, reusing existing reasons, as `.targetNotFound` when `at` does not resolve or
+  fewer members remain in the bar, `.wrongElementKind` when `at` is not a chord or rest or `.measure` is asked of a
+  chord with notes, `.insideTuplet` for a member inside a tuplet, and `.insufficientRoom` when the new total
+  differs from the old or a length is not positive; durations the run already has resolve to nothing to apply.
 
 ## [4.12.0] - 2026-10-17
 

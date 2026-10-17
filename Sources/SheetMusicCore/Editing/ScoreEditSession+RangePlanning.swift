@@ -77,7 +77,15 @@ extension ScoreEditSession {
             }
         case let .retimeRun(location, durations):
             let command = RetimeRun(at: location, durations: durations)
-            return unlessInert(command, in: score) { try command.plan(in: $0) }
+            // The PLANNED COMPOSITE, for `.transposeScore`'s reason: handing back the command would plan it here and
+            // again in each of the session's two applies, and every plan walks the staff's spanners and melismas
+            // from bar 1 — for an intent a host may apply once per match of a pattern. A `nil` plan is still
+            // nothing to apply; one that throws falls back to the command, so the refusal is raised at apply time.
+            do {
+                return try command.plan(in: score)
+            } catch {
+                return command
+            }
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.
