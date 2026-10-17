@@ -123,6 +123,11 @@ private struct FormatRhythmsBarWriter {
         let durations = context.spell(
             ticks: context.totalTicks(range), at: context.onsets[range.lowerBound], isRest: true,
         )
+        // Nothing spelled: the span has no exact spelling, so it is carried as written.
+        guard !durations.isEmpty else {
+            carry(range)
+            return
+        }
         // Lengths that land where they already were are no re-spelling at all: the rests keep their identifiers and
         // their spelling (`DeleteRange`'s rule). A measure rest is always a change.
         let unchanged = durations.count == range.count
@@ -152,6 +157,10 @@ private struct FormatRhythmsBarWriter {
         let durations = context.spell(
             ticks: context.totalTicks(range), at: context.onsets[range.lowerBound], isRest: false,
         )
+        guard !durations.isEmpty else {
+            carry(range)
+            return
+        }
         let unchanged = durations.count == range.count
             && zip(durations, range).allSatisfy { context.ticks(of: $0) == context.lengths[$1] }
         guard !unchanged else {
@@ -197,6 +206,7 @@ private struct FormatRhythmsBarWriter {
             }
             var chord = Chord(duration: durations[piece], notes: ChordNotes(notes))
             chord.stemVisible = head.stemVisible
+            chord.beamVisible = head.beamVisible
             chord.elementProperties.visible = head.elementProperties.visible
             chord.elementProperties.color = head.elementProperties.color
             result.append(VoiceSlot(identity: .fresh, element: .chord(chord)))

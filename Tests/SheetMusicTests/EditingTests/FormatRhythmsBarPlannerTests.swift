@@ -552,4 +552,24 @@ extension FormatRhythmsBarPlannerTests {
         #expect(Self.respell(tidy) == nil)
         #expect(Self.respell(Self.voice([])) == nil)
     }
+
+    @Test("a 1/3-whole untied chord and a 1/7 rest are carried as written, never shortened")
+    func unspellableSpansAreCarried() {
+        #expect(Self.respell(Self.voice([Self.note(1, 3)])) == nil)
+        #expect(Self.respell(Self.voice([Self.rest(1, 7)])) == nil)
+    }
+
+    @Test("a split chord's fresh tail copies the head's stem and beam flags")
+    func splitTailCopiesBeamVisible() throws {
+        var hidden = Self.chord(3, 8, pitch: 64)
+        hidden.beamVisible = false
+        hidden.stemVisible = false
+        let voice = Self.voice([
+            Self.note(1, 4), Self.note(1, 8, pitch: 62), .chord(hidden), Self.note(1, 4, pitch: 65),
+        ])
+        let result = try #require(Self.respell(voice))
+        let tail = try #require(Self.chord(at: 3, in: result.slots))
+        #expect(tail.beamVisible == false)
+        #expect(tail.stemVisible == false)
+    }
 }

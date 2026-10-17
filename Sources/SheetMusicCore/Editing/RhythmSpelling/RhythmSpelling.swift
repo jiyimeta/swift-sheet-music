@@ -10,6 +10,8 @@ public enum RhythmSpelling {
     /// Rests carry at most one dot whatever `policy.dotLevel` says. A rest that is exactly one bar long, starts the
     /// bar and is not a pickup answers `[.measure]`; `isPickup` only disables that answer.
     ///
+    /// Answers `[]` when the spelled values do not add up to `length` exactly; the caller keeps the span as written.
+    ///
     /// A span that starts or ends on a position the dUnit cannot halve evenly down to (a third of a dUnit, say) is
     /// not judged against the meter at all and is spelled greedily, longest value first.
     public static func durations(
@@ -27,7 +29,11 @@ public enum RhythmSpelling {
         } else {
             splitter.populate(length: length, start: start)
         }
-        return splitter.result
+        // A span the values cannot cover to the tick (a non-tuplet third of a whole leaves a few ticks below a 256th)
+        // would come back shorter than it went in. Answer nothing instead, so the caller carries the span as written.
+        let measure = Fraction(ticks: barTicks, division: division)
+        let spelled = splitter.result.reduce(0) { $0 + $1.resolved(in: measure).ticks(division: division) }
+        return spelled == length ? splitter.result : []
     }
 }
 

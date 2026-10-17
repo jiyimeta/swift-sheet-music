@@ -19,7 +19,10 @@ and this project adheres to
   folino's own taste (two dots, syncopations split, written beat-crossing rests kept) and `.museScore` is what
   MuseScore's own regroup produces. Markings are never dropped: a span carrying a slur end, a lyric melisma target, a
   grace note or any other marking it could not carry over is left as written. A pickup bar is right-aligned, each bar
-  is read by its own meter, and tuplets are untouched.
+  is read by its own meter, and tuplets are untouched. What sounds never changes, with one known exception:
+  `MidiRenderer` applies an instrument's articulation gate to the last tie link only, so on an instrument whose
+  default gate is below 100% a re-spelled note's release can move. A span the note values cannot cover to the tick
+  (a non-tuplet third of a whole) is carried as written.
 
 ## [4.13.0] - 2026-10-17
 

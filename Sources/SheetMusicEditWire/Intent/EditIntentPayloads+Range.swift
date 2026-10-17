@@ -169,8 +169,8 @@ public struct TransposeScoreIntentWire {
     }
 }
 
-// Appended for Format Rhythms (spec 2026-10-17) — intent 91. Scalars only: the scope is a kind byte plus the fields
-// of the two scopes that carry something, and the policy is its three raw values.
+// Appended for Format Rhythms (spec 2026-10-17) — intent 91, a final wire number. Scalars only: the scope is a kind
+// byte plus the fields of the two scopes that carry something, and the policy is its three raw values.
 
 @WireFormat
 public struct FormatRhythmsIntentWire {

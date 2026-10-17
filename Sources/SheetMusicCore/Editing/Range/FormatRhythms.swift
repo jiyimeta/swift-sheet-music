@@ -15,10 +15,6 @@ public enum FormatRhythmsScope: Sendable, Equatable {
 /// the metric grid, runs of rests are re-spelled, and everything else — tuplets, anything whose sound depends on its
 /// length, measure rests — is carried over as written. The per-bar-voice rules live in `FormatRhythmsBarPlanner`;
 /// this command owns the scope, the bar facts (meter, pickup, window, protected onsets) and the bundling.
-///
-/// > Note: This command is sugar over one `ReplaceVoiceElements` per changed bar-voice, bundled in a
-/// > `CompositeEditCommand`. It exists to give the operation a domain-meaningful name and to own the scope and bar
-/// > rules; callers can equally construct the equivalent Composite directly. See `docs/edit-commands.md`.
 public struct FormatRhythms: EditCommand {
     public let scope: FormatRhythmsScope
     public let policy: RhythmSpellingPolicy

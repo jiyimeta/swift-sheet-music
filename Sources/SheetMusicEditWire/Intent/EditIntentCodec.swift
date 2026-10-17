@@ -154,7 +154,7 @@ import Wirelet
 /// (spec 2026-09-13). Cases 87 and 88 were appended for the score-transposition project (spec 2026-09-14) — the
 /// range form of the dot key, and the whole-score transposition. Case 89 was appended for the text font and color
 /// inspector — a tempo marking's font patch. Case 90 was appended for swing. Case 91 was appended for Format
-/// Rhythms — and 91 is the catalogue's last.
+/// Rhythms; its number is final.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```

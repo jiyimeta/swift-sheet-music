@@ -25,6 +25,12 @@ struct RhythmSpellingTests {
         )
     }
 
+    @Test("a length the values cannot cover to the tick spells nothing, so the caller keeps the span")
+    func unspellableLengthsAnswerEmpty() {
+        #expect(Self.spell(Self.fr(1, 3), at: Self.fr(0)).isEmpty)
+        #expect(Self.spell(Self.fr(1, 7), at: Self.fr(0), rest: true).isEmpty)
+    }
+
     struct Row {
         let numerator: Int
         let denominator: Int
