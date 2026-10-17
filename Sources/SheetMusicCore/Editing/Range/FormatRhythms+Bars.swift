@@ -55,8 +55,10 @@ enum FormatRhythmsProtectedOnsets {
         for (address, staff) in score.allStaves {
             let fractions = staff.measures.effectiveMeasureDurations()
             let lengths = fractions.map { $0.ticks(division: division) }
-            func protect(measure: Int, tick: Int) {
-                guard let landing = roll(measure: measure, tick: tick, lengths: lengths) else { return }
+            func protect(measure: Int, tick start: Int, plus delta: Int) {
+                // A malformed delta can overflow the sum; such a marking lands nowhere.
+                let (tick, overflow) = start.addingReportingOverflow(delta)
+                guard !overflow, let landing = roll(measure: measure, tick: tick, lengths: lengths) else { return }
                 result[Bar(staff: address, measure: landing.measure), default: []].insert(landing.tick)
             }
             for (measureIndex, measure) in staff.measures.enumerated() {
@@ -71,10 +73,10 @@ enum FormatRhythmsProtectedOnsets {
                             let fraction = spanner.nextFractionsOffset?.ticks(division: division) ?? 0
                             // Clamped to the staff so a malformed offset cannot overflow the sum.
                             let offset = min(max(0, spanner.nextMeasuresOffset), lengths.count)
-                            protect(measure: measureIndex + offset, tick: tick + fraction)
+                            protect(measure: measureIndex + offset, tick: tick, plus: fraction)
                         }
                         for lyric in chord.lyrics where lyric.ticks > 0 {
-                            protect(measure: measureIndex, tick: tick + lyric.ticks)
+                            protect(measure: measureIndex, tick: tick, plus: lyric.ticks)
                         }
                     }
                 }
@@ -85,7 +87,7 @@ enum FormatRhythmsProtectedOnsets {
 
     /// The bar and bar-relative tick that `measure` + `tick` names once the tick is walked through the bar lines on
     /// either side. `nil` past the end of the staff, including for a malformed `measure` that starts outside it.
-    static func roll(measure: Int, tick: Int, lengths: [Int]) -> (measure: Int, tick: Int)? {
+    private static func roll(measure: Int, tick: Int, lengths: [Int]) -> (measure: Int, tick: Int)? {
         guard lengths.indices.contains(measure) else { return nil }
         var measure = measure
         var tick = tick

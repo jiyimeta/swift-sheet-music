@@ -51,8 +51,9 @@ public struct FormatRhythms: EditCommand {
         let protected = FormatRhythmsProtectedOnsets.collect(in: score)
         var commands: [any EditCommand] = []
         var location: VoiceElementID?
-        // The "does it apply" check: every planned command is applied to a copy of the score and the copy is thrown
-        // away, so a plan the composite could not apply is refused here, at planning time, with the same error.
+        // The "does it apply" check: every planned command is applied, in order, to a private copy of the score that
+        // accumulates them and is never returned, so a plan the composite could not apply is refused here, at
+        // planning time, with the same error.
         var working = score
         var scratch = ids
         for (address, staff) in score.allStaves where region.staves.contains(address) {

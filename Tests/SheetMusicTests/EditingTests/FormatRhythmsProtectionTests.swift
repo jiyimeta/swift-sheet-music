@@ -125,8 +125,8 @@ struct FormatRhythmsProtectionTests {
     func meterChange() throws {
         let four = VoiceElement.timeSignature(TimeSignature(numerator: 4, denominator: 4))
         let six = VoiceElement.timeSignature(TimeSignature(numerator: 6, denominator: 8))
-        /// Eighth, eighth, quarter, quarter: the second quarter starts at 1/4 — on a beat in 4/4, across the dotted
-        /// beat boundary at 3/8 in 6/8.
+        /// Eighth, eighth, quarter, quarter: the FIRST quarter starts at 1/4 — on a beat in 4/4, and across the
+        /// dotted-beat boundary at 3/8 in 6/8.
         func body(_ meter: VoiceElement, rest: Bool) -> Measure {
             var elements: [VoiceElement] = [
                 meter, Bars.note(1, 8), Bars.note(1, 8), Bars.note(1, 4, pitch: 62), Bars.note(1, 4, pitch: 64),
@@ -140,31 +140,55 @@ struct FormatRhythmsProtectionTests {
         #expect(Base.durations(score, measure: 0) == Base.durations(before, measure: 0))
         let eighth = Bars.duration(1, 8)
         #expect(Base.durations(score, measure: 1).prefix(4) == [eighth, eighth, eighth, eighth])
-        // Control: the 6/8 bar alone under 4/4 would not have changed.
-        let asFour = Base.score([[body(four, rest: false)]])
+        // Control: the same figure completed to a full 4/4 bar, twice over, has nothing to change.
+        let asFour = Base.score([[body(four, rest: true), body(four, rest: true)]])
         #expect(try Self.plan(asFour) == nil)
     }
 
     // MARK: Malformed offsets
 
-    @Test("roll refuses a start outside the staff instead of indexing past it")
-    func rollOutOfRange() {
-        let lengths = [1920, 1920]
-        #expect(FormatRhythmsProtectedOnsets.roll(measure: 9, tick: -10, lengths: lengths) == nil)
-        #expect(FormatRhythmsProtectedOnsets.roll(measure: -1, tick: 0, lengths: lengths) == nil)
-        #expect(FormatRhythmsProtectedOnsets.roll(measure: 0, tick: -10, lengths: lengths) == nil)
-        let rolled = FormatRhythmsProtectedOnsets.roll(measure: 0, tick: 1920 + 480, lengths: lengths)
-        #expect(rolled?.measure == 1 && rolled?.tick == 480)
+    /// A two-bar staff whose SECOND bar starts with a whole note carrying `spanner` — so `1 + Int.max` would trap
+    /// without the offset clamp — followed by nothing else.
+    private static func collected(slur spanner: Spanner) -> [FormatRhythmsProtectedOnsets.Bar: Set<Int>] {
+        var chord = Bars.chord(1, 1)
+        chord.spanners = [spanner]
+        return FormatRhythmsProtectedOnsets.collect(
+            in: Base.score([[Base.bar(Base.tiedPair()), Base.bar([.chord(chord)])]]),
+        )
     }
 
-    @Test("a slur with a huge bar offset and a negative fraction collects without trapping")
-    func malformedSlurOffsets() {
-        var chord = Bars.chord(1, 1)
-        chord.spanners = [Spanner(
-            kind: .slur, rawType: "Slur", nextMeasuresOffset: Int.max,
+    @Test("a slur with a huge bar offset in a later bar collects without trapping")
+    func hugeBarOffset() {
+        for fraction in [-3, 0, 1] {
+            let spanner = Spanner(
+                kind: .slur, rawType: "Slur", nextMeasuresOffset: Int.max,
+                nextFractionsOffset: Fraction(numerator: fraction, denominator: 1),
+            )
+            #expect(Self.collected(slur: spanner).isEmpty)
+        }
+    }
+
+    @Test("a slur whose bar offset is in range but whose fraction runs before the staff collects nothing")
+    func negativeFraction() {
+        // Start at bar 1 tick 0, offset 0, three whole notes back: before bar 0.
+        let spanner = Spanner(
+            kind: .slur, rawType: "Slur", nextMeasuresOffset: 0,
             nextFractionsOffset: Fraction(numerator: -3, denominator: 1),
-        )]
-        let score = Base.score([[Base.bar([.chord(chord)]), Base.bar(Base.tiedPair())]])
+        )
+        #expect(Self.collected(slur: spanner).isEmpty)
+        // Control: one quarter forward lands inside the staff.
+        let forward = Spanner(
+            kind: .slur, rawType: "Slur", nextMeasuresOffset: 0,
+            nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
+        )
+        #expect(Self.collected(slur: forward).values.contains([480]))
+    }
+
+    @Test("a lyric melisma length that overflows the tick sum collects nothing instead of trapping")
+    func hugeMelisma() {
+        var head = Bars.chord(1, 2)
+        head.lyrics = [Lyric(text: "la", ticks: Int.max)]
+        let score = Base.score([[Base.bar([Bars.note(1, 2), .chord(head)])]])
         #expect(FormatRhythmsProtectedOnsets.collect(in: score).isEmpty)
     }
 }
