@@ -113,11 +113,13 @@ public enum ScoreLayerBuilder {
         drawStaves(system: system, metrics: metrics, height: height, into: root)
         drawSystemBar(system: system, metrics: metrics, height: height, into: root)
         drawBrackets(system: system, metrics: metrics, height: height, into: root)
-        drawPartLabels(system: system, metrics: metrics, height: height, into: root)
+        // The labels' layers live on the root with the staves, so they survive a measure-level diff, and their
+        // items join the system's own map (`itemLayers`) rather than any measure's.
+        let labelItems = drawPartLabels(system: system, metrics: metrics, height: height, into: root)
 
         var containers: [Int: CALayer] = [:]
         var perMeasureItems: [Int: [ScoreItemID: [CAShapeLayer]]] = [:]
-        var allItems: [ScoreItemID: [CAShapeLayer]] = [:]
+        var allItems = labelItems
         for measure in system.measures where SystemMount.meets(measure, visibleXRange) {
             let built = buildMeasure(
                 measure, metrics: metrics, systemSize: systemSize,

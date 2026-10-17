@@ -85,7 +85,8 @@ public struct ScoreHitTester: Sendable {
         }
         // 9. Engraved elements, after the earlier rungs in every measure have declined.
         //    System spanners and elements outside nominal measure bounds participate here too.
-        return hitElement(at: point)
+        // 10. Part names, in the systems' left margin.
+        return hitElement(at: point) ?? hitPartName(at: point)
     }
 
     /// Reports directly selectable notation identities, including clefs and engraved elements.
@@ -100,7 +101,7 @@ public struct ScoreHitTester: Sendable {
         case let .clef(anchor): return .clef(anchor)
         case let .graceNote(id): return .graceNote(id)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando, .swing:
+             .tie, .slur, .jump, .marker, .glissando, .swing, .partName:
             return target.elementID.map(ScoreItemID.element)
         case .stem, .flag, .beam, .lyric, .staffText, .harmony, .rehearsalMark:
             return nil

@@ -315,8 +315,14 @@
         /// and measures of one rhythm come out equally wide (`harmony-basic`'s m[1]–m[4] at 160.55, where the bar its
         /// chord symbol had widened stood at 185.64). Rendered and read: `lyrics_verses_melisma`'s bars 1 and 2 now
         /// space their quarters alike.
+        ///
+        /// **Re-recorded 2026-10-18 for part names becoming selectable, on the tree that already holds the two
+        /// spacing records above, after checking the diff mechanically** against the digest above (`e4928f1b…`):
+        /// every one of the 387 `label` lines gains an `elementID: Optional(…partName(partIndex:form:))` field, and
+        /// nothing else changes — with that field stripped from the label lines, the digest hashes to `e4928f1b…`
+        /// exactly. No origin moved. (The same change measured alone against `f386db1d…` gave `10666dba…`.)
         private static let expectedDigestSHA256 =
-            "e4928f1b412edd0091e7284bffa36e833af0840e9cddeee003a5f6eb1f8043f8"
+            "f346efcae7605cf96e15f46eb8d5327eacea9414e353297c02f80c4f022536f1"
 
         @Test("write digest")
         func writeDigest() throws {

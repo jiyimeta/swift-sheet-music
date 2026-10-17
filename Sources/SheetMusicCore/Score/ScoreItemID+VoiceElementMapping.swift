@@ -66,7 +66,7 @@ extension ScoreItemID {
                 return transform(anchor).map { .element(.slur(.chord(anchor: $0, ordinal: ordinal))) }
             case let .slur(.voice(anchor)):
                 return transform(anchor).map { .element(.slur(.voice($0))) }
-            case .keySignature, .timeSignature, .barLine, .jump, .marker: return self
+            case .keySignature, .timeSignature, .barLine, .jump, .marker, .partName: return self
             }
         case let .graceNote(id):
             // The grace list travels with its parent chord, so only the parent's slot moves.

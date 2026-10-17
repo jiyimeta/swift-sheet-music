@@ -14,6 +14,7 @@ enum ElementHitCommandChecks {
         case .tie, .slur, .jump, .marker, .glissando:
             Issue.record("Use remove(_:from:) with the real layout's score for selection-3 identities")
             return
+        case let .partName(partIndex, _): command = SetPartNames(partIndex: partIndex, longName: "Fl", shortName: nil)
         case let .swing(anchor):
             command = SetSwing(
                 anchor: anchor,

@@ -855,6 +855,7 @@ extension LayoutEngine {
             return LayoutPartLabel(
                 text: text,
                 origin: CGPoint(x: labelRightX, y: centerY),
+                elementID: .partName(partIndex: partIdx, form: isFirstSystem ? .long : .short),
             )
         }
 
@@ -1164,6 +1165,7 @@ extension LayoutEngine {
                 LayoutPartLabel(
                     text: $0.text,
                     origin: CGPoint(x: $0.origin.x, y: $0.origin.y + topShift),
+                    elementID: $0.elementID,
                 )
             }
             : labels

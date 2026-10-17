@@ -7,6 +7,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Part names are selectable** — the name at the left of a system (the long name on the first system, the
+  abbreviation on every system after it) is an element with an identity, `ScoreElementID.partName(partIndex:form:)`,
+  addressed as `SetPartNames` addresses it, with a new `PartNameForm` (`.long` / `.short`) saying which of the two the
+  label shows. `LayoutPartLabel` carries it (`elementID`, defaulting to `nil` for hand-built labels),
+  `ScoreHitTester.hitTest(at:)` reports it as `ScoreHitTarget.partName` after every other rung, `elementHitRects(for:)`
+  returns one box per system the name is drawn on (every abbreviation of a part is one identity), and the Apple layer
+  renderer tints a selected name. An empty name draws nothing and is not a target. `ScoreElementIDWire` appends choice
+  15 for it; a part name has no `removalCommand`. Not yet tinted by the Android draw program.
+
 ### Fixed
 
 - **A syllable no longer widens its notes' gaps in a stretched bar.** The room a syllable needs to the next one was

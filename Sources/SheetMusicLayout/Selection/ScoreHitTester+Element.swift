@@ -54,6 +54,26 @@ extension ScoreHitTester {
         return nil
     }
 
+    /// The part name drawn under `point`, if any — the last rung of the ladder (`hitTest(at:)`). A label sits in the
+    /// system's left margin, where no other rung has ink, so it is asked only once every element of every system has
+    /// declined. It takes the reach engraved text does (`textHitTolerance`), being text.
+    func hitPartName(at point: CGPoint) -> ScoreHitTarget? {
+        let padding = document.metrics.sp * Self.textHitTolerance
+        for system in document.systems {
+            for label in system.partLabels {
+                guard let id = label.elementID,
+                      let rect = TextInkGeometry.partLabelRect(label, metrics: document.metrics)
+                else { continue }
+                if rect.offsetBy(dx: system.origin.x, dy: system.origin.y)
+                    .insetBy(dx: -padding, dy: -padding).contains(point)
+                {
+                    return ScoreHitTarget(elementID: id)
+                }
+            }
+        }
+        return nil
+    }
+
     /// How far past a system's frame, in spatia, an element of it can be hit. See `hitElement(at:)`.
     static let elementSystemReach: CGFloat = 8
     /// How far past its measure's frame, in spatia, an element can be hit. See `hitElement(at:)`.
@@ -175,6 +195,12 @@ extension ScoreHitTester {
             }
             include(system.spanners, base: system.origin)
             include(system.invisibleSpanners, base: system.origin)
+            // A part's abbreviation is one identity drawn at the head of every continuation system — one place each.
+            for label in system.partLabels where label.elementID == id {
+                if let rect = TextInkGeometry.partLabelRect(label, metrics: document.metrics) {
+                    result.append(rect.offsetBy(dx: system.origin.x, dy: system.origin.y))
+                }
+            }
         }
         return result
     }

@@ -273,20 +273,27 @@ extension ScoreLayerBuilder {
         return path.copy(using: &t) ?? path
     }
 
+    /// Draws each part name and returns its layers keyed by the label's identity, so a selected name tints like any
+    /// other selected element. A label without an identity is drawn and not returned.
     static func drawPartLabels(
         system: LayoutSystem,
         metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer,
-    ) {
+    ) -> [ScoreItemID: [CAShapeLayer]] {
+        var context = BuildContext()
         for label in system.partLabels {
             guard !label.text.isEmpty else { continue }
             if let layer = notationTextLayer(
                 text: label.text, role: .partLabel, origin: label.origin, metrics: metrics, height: height,
             ) {
                 parent.addSublayer(layer)
+                if let id = label.elementID {
+                    context.attach(layer, to: .element(id))
+                }
             }
         }
+        return context.items
     }
 
     /// Vertical line at the left edge of every system, joining the top

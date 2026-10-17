@@ -248,10 +248,14 @@ public struct LayoutSystem: Sendable, Equatable {
 public struct LayoutPartLabel: Sendable, Equatable {
     public let text: String
     public let origin: CGPoint
+    /// The part name this label draws (`ScoreElementID.partName`) — the identity a click on it selects. `nil` for a
+    /// label built by hand without one, which is then drawn but not selectable, as any element without an identity.
+    public let elementID: ScoreElementID?
 
-    public init(text: String, origin: CGPoint) {
+    public init(text: String, origin: CGPoint, elementID: ScoreElementID? = nil) {
         self.text = text
         self.origin = origin
+        self.elementID = elementID
     }
 }
 
