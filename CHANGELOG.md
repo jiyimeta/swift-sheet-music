@@ -7,6 +7,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Android audio module compiles again.** 4.14.0's `ScoreElementIDWire` choice 15 (`partName`) generated Kotlin
+  codecs for a `ScoreElementID.PartName` and a `PartNameForm` the module did not declare, so `SheetMusicAudioAndroid`
+  failed to compile and 4.14.0 published no AAR. Both are now declared, mirroring the Swift types.
+
 ## [4.14.0] - 2026-10-18
 
 ### Added
