@@ -310,26 +310,31 @@ struct FormatRhythmsBarPlannerTests {
 
     // MARK: Writing back (§4.3)
 
-    @Test("graceNotesAfter of the span's last chord move to the last piece")
-    func graceNotesAfterMoveToTail() throws {
+    @Test("graceNotesAfter on a span's chord leaves the span untouched")
+    func graceNotesAfterLeaveSpanUntouched() throws {
         let grace = GraceChord(graceType: .grace8after, duration: .eighth, notes: [Note(pitch: 67, tpc: 15)])
-        let voice = Self.voice(Self.flawed { $0.graceNotesAfter = [grace] })
-        let result = try #require(Self.respell(voice))
-        #expect(Self.tokens(result.slots) == ["C:1/4", "C:1/8", "C:1/8~", "C:3/8", "C:1/8"])
-        #expect(try #require(Self.chord(at: 2, in: result.slots)).graceNotesAfter.isEmpty)
-        #expect(try #require(Self.chord(at: 3, in: result.slots)).graceNotesAfter.count == 1)
+        // Control: the same rhythm without after-graces is re-spelled.
+        #expect(try #require(Self.respell(Self.voice(Self.flawed()))).slots.count == 5)
+        #expect(Self.respell(Self.voice(Self.flawed { $0.graceNotesAfter = [grace] })) == nil)
 
-        let merged = Self.voice([
-            Self.note(1, 2), Self.note(1, 8, pitch: 62), Self.note(1, 8, pitch: 64, tieForward: true),
-            .chord({
-                var last = Self.chord(1, 4, pitch: 64, tieBack: true)
-                last.graceNotesAfter = [grace]
-                return last
-            }()),
-        ])
-        let mergedResult = try #require(Self.respell(merged))
-        #expect(Self.tokens(mergedResult.slots) == ["C:1/2", "C:1/8", "C:3/8"])
-        #expect(try #require(Self.chord(at: 2, in: mergedResult.slots)).graceNotesAfter.count == 1)
+        func merged(_ withGrace: Bool) -> Voice {
+            var last = Self.chord(1, 4, pitch: 64, tieBack: true)
+            if withGrace { last.graceNotesAfter = [grace] }
+            return Self.voice([
+                Self.note(1, 2), Self.note(1, 8, pitch: 62), Self.note(1, 8, pitch: 64, tieForward: true), .chord(last),
+            ])
+        }
+        let control = try #require(Self.respell(merged(false)))
+        #expect(Self.tokens(control.slots) == ["C:1/2", "C:1/8", "C:3/8"])
+        #expect(Self.respell(merged(true)) == nil)
+    }
+
+    @Test("protected onset inside a rest run is a wall")
+    func protectedOnsetInRestRun() throws {
+        let voice = Self.voice([Self.rest(1, 4), Self.rest(1, 4), Self.note(1, 2)])
+        #expect(Self.respell(voice, Self.facts(protected: [480])) == nil)
+        let control = try #require(Self.respell(voice))
+        #expect(Self.tokens(control.slots) == ["R:1/2", "C:1/2"])
     }
 
     @Test("tie into the next bar is kept on the last piece; tie from the previous bar on the head")

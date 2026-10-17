@@ -106,6 +106,10 @@ private struct FormatRhythmsBarWriter {
                 carry(index)
             } else if open == nil {
                 open = index
+            } else if context.facts.protectedOnsets.contains(context.onsets[index]), let start = open {
+                // A slur may end on a rest: no rest is folded into the one before it across that onset.
+                writeRestSpan(start ... index - 1)
+                open = index
             }
         }
         if let start = open { writeRestSpan(start ... run.upperBound) }
@@ -163,8 +167,8 @@ private struct FormatRhythmsBarWriter {
 
     /// The span as a tied chain of `durations`. This is `RebarPlanner.pieces` for a span of several chords: the head
     /// is the first chord itself (identity, attachments, incoming tie); the span's LAST chord supplies the
-    /// after-graces and the outgoing tie, both of which go to the last piece; the pieces in between are bare copies of
-    /// the head's notes. Every tie written is a complete pair.
+    /// outgoing tie, which goes to the last piece (a span with after-graces is never rewritten); the pieces in between
+    /// are bare copies of the head's notes. Every tie written is a complete pair.
     private static func pieces(of chords: [Chord], headID: EID, durations: [NoteDuration]) -> [VoiceSlot] {
         let head = chords[0]
         let last = chords[chords.count - 1]
@@ -178,7 +182,6 @@ private struct FormatRhythmsBarWriter {
         for noteIndex in first.notes.indices {
             first.notes.updateNote(at: noteIndex) { $0.tieForward = outgoingTie(noteIndex, piece: 0) }
         }
-        first.graceNotesAfter = count == 1 ? last.graceNotesAfter : []
         var result = [VoiceSlot(identity: .keep(headID), element: .chord(first))]
 
         for piece in 1 ..< count {
@@ -196,12 +199,7 @@ private struct FormatRhythmsBarWriter {
             chord.stemVisible = head.stemVisible
             chord.elementProperties.visible = head.elementProperties.visible
             chord.elementProperties.color = head.elementProperties.color
-            // The after-graces MOVE rather than being copied, so their identifiers go with them.
-            let movesGraces = piece == count - 1 && !last.graceNotesAfter.isEmpty
-            if movesGraces { chord.graceNotesAfter = last.graceNotesAfter }
-            result.append(VoiceSlot(
-                identity: .fresh, element: .chord(chord), nestedIdentity: movesGraces ? .carried : .cleared,
-            ))
+            result.append(VoiceSlot(identity: .fresh, element: .chord(chord)))
         }
         return result
     }

@@ -148,9 +148,8 @@ struct FormatRhythmsBarContext {
             if tremoloFollowers.contains(index) || chord.tremolo != nil || chord.arpeggio != nil { return true }
             if !chord.graceNotesBefore.isEmpty || !chord.articulations.isEmpty || !chord.ornaments.isEmpty
                 || !chord.chordLines.isEmpty { return true }
-            // After-graces take their time from the chord's tail: the last chord's move to the last piece, an
-            // earlier chord's would be stranded mid-chain.
-            if index != range.upperBound, !chord.graceNotesAfter.isEmpty { return true }
+            // After-graces are timed against their chord's length, so any re-spelling could change the sound.
+            if !chord.graceNotesAfter.isEmpty { return true }
             if chord.notes.contains(where: {
                 $0.glissando != nil || $0.guitarBend != nil || $0.guitarBendBack || $0.legacyBend != nil
             }) { return true }
@@ -181,11 +180,9 @@ struct FormatRhythmsBarContext {
         }
     }
 
-    /// Nothing on the chord would be lost by folding it into the chain before it. Its after-graces are allowed
-    /// because they travel to the span's last piece, and the span ends here when it has any.
+    /// Nothing on the chord would be lost by folding it into the chain before it.
     private func isBare(_ chord: Chord) -> Bool {
-        var bare = Chord(duration: chord.duration, notes: chord.notes)
-        bare.graceNotesAfter = chord.graceNotesAfter
+        let bare = Chord(duration: chord.duration, notes: chord.notes)
         guard chord == bare else { return false }
         return chord.notes.allSatisfy { note in
             note == Note(
