@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.14.0] - 2026-10-18
+
 ### Added
 
 - **Part names are selectable** — the name at the left of a system (the long name on the first system, the
