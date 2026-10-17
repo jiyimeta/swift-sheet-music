@@ -19,6 +19,14 @@ and this project adheres to
   the next one also used to reserve only its share of that distance, on the gap after its own note; the whole
   distance is now kept, spread over every gap up to the next syllable.
 
+- **A justified system spaces equal notes equally in every bar.** It used to scale each bar's width by one ratio, so a
+  bar got more of the line's leftover room the wider its minimum was — for the system's clef and key, a syllable, a
+  chord symbol or an accidental — and its notes stood further apart than the same rhythm's in the next bar: one
+  system of eighths ran from 1.75 to 9.8 sp. The leftover is now shared the way MuseScore's springs share it
+  (`HorizontalSpacing::justifySystem`): one stretch for every gap on the line, a gap already held open by a floor
+  taking nothing until the others have caught up with it, and the header, the room around a bar's content and a
+  courtesy announcement staying as wide as they are. Which measures a system holds does not change.
+
 ## [4.13.0] - 2026-10-17
 
 ### Added

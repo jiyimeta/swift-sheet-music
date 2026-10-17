@@ -305,8 +305,18 @@
         /// along; the system shrinks 975.86 → 853.11 pt. Wrapped, every measure keeps its width and origin and only
         /// the columns inside move toward their durations' spacing. Rendered and read: no two syllables, dashes or
         /// melisma lines touch in either.
+        ///
+        /// **Re-recorded 2026-10-18 when a justified system began sharing its leftover room by one stretch across
+        /// every measure (`justifiedWidths`) instead of scaling each measure's width by one ratio, after reading the
+        /// diff** against the digest above (`679f8627…`). 19 blocks of 68 moved, every one `wrap=true`; no block
+        /// changed its system count or which measures a system holds. In each, the width a system hands its measures
+        /// is redistributed: the measure carrying the system's clef and key narrows (`repeat52` m[0] 206.39 → 178.23,
+        /// `testSingleNoteDynamics` m[0] 295.91 → 245.08) because its header no longer takes a share of the stretch,
+        /// and measures of one rhythm come out equally wide (`harmony-basic`'s m[1]–m[4] at 160.55, where the bar its
+        /// chord symbol had widened stood at 185.64). Rendered and read: `lyrics_verses_melisma`'s bars 1 and 2 now
+        /// space their quarters alike.
         private static let expectedDigestSHA256 =
-            "679f862796d0591f47f19afba8aacbc963669b01b3bfd32eeffec2f2e7cff03c"
+            "e4928f1b412edd0091e7284bffa36e833af0840e9cddeee003a5f6eb1f8043f8"
 
         @Test("write digest")
         func writeDigest() throws {
