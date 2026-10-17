@@ -113,7 +113,7 @@ struct RichTextLyricLayoutTests {
             #expect(Self.close(LayoutEngine.lyricsTextWidth("gloria", sp: Self.metrics.sp), 33))
             #expect(Self.close(LayoutEngine.chordLyricMaxWidth([lyric], metrics: Self.metrics), 35.5))
             let pair = LayoutEngine.lyricsPairWidth(
-                currentLyrics: [lyric], next: (lyrics: [lyric], gaps: 1), metrics: Self.metrics,
+                currentLyrics: [lyric], nextLyrics: [lyric], metrics: Self.metrics,
             )
             #expect(Self.close(pair, 36.75) && pair >= (rich?.size.width ?? .infinity))
         }

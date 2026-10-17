@@ -87,14 +87,24 @@ public enum ScoreElementID: Hashable, Sendable {
     /// here would make "the swing here" two different selections depending on how it was written.
     case swing(anchor: VoiceElementID)
 
-    /// The voice-element owner anchor, or `nil` for bar and staff-owned navigation lists.
+    /// The name engraved at the left of the systems for the part at `partIndex` — `SetPartNames`' own address,
+    /// with `form` saying which of its two names the label shows: the long name on the first system, the
+    /// abbreviation on every system after it.
+    ///
+    /// **Every abbreviation of one part is one identity.** The short name is drawn at the head of every
+    /// continuation system, but it is one value that one command writes, so a selection of it names all of them —
+    /// as a glissando split across a break names both halves. A host that floats a control beside the selection
+    /// picks the drawn place the reader clicked out of `ScoreHitTester.elementHitRects(for:)`.
+    case partName(partIndex: Int, form: PartNameForm)
+
+    /// The voice-element owner anchor, or `nil` for bar and staff-owned navigation lists and for a part name.
     public var anchor: VoiceElementID? {
         switch self {
         case let .dynamic(anchor), let .fermata(anchor), let .breath(anchor), let .tempo(anchor),
              let .spanner(anchor, _), let .articulation(anchor, _), let .swing(anchor): return anchor
         case let .tie(start, _), let .glissando(start): return VoiceElementID(start)
         case let .slur(id): return id.anchor
-        case .keySignature, .timeSignature, .barLine, .jump, .marker: return nil
+        case .keySignature, .timeSignature, .barLine, .jump, .marker, .partName: return nil
         }
     }
 
@@ -103,17 +113,19 @@ public enum ScoreElementID: Hashable, Sendable {
         switch self {
         case let .keySignature(index, _), let .timeSignature(index, _), let .barLine(index, _): return index
         case .dynamic, .fermata, .breath, .tempo, .spanner, .articulation, .tie, .slur, .jump, .marker,
-             .glissando, .swing:
+             .glissando, .swing, .partName:
             return nil
         }
     }
 
-    /// The staff this identity names outright: a signature's selected glyph, or a navigation list's owner.
+    /// The staff this identity names outright: a signature's selected glyph, or a navigation list's owner — and
+    /// for a part name, the part's first staff, which is where the part's address starts.
     /// `nil` for anchored identities (their staff is the anchor's) and for a barline, which names no staff.
     public var staffIfAddressed: StaffAddress? {
         switch self {
         case let .keySignature(_, staff), let .timeSignature(_, staff),
              let .jump(staff, _, _), let .marker(staff, _, _): return staff
+        case let .partName(partIndex, _): return StaffAddress(partIndex: partIndex, staffIndexInPart: 0)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .barLine, .articulation, .tie, .slur, .glissando, .swing:
             return nil
         }

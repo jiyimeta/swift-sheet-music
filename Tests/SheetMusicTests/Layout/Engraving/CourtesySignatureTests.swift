@@ -307,9 +307,8 @@ private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         /// the renderer actually strides out, so sizing the courtesy that
         /// way put the last accidental past the system's right edge.
         /// The available width is deliberately narrow enough that
-        /// `stretchWidths` is the identity — a stretched system scales the
-        /// reservation up while the glyphs stay fixed, so slack from the
-        /// stretch would hide an under-reservation.
+        /// `justifiedWidths` is the identity — slack from a stretched
+        /// system would hide an under-reservation.
         @Test(
             "a wide modulation's announcement fits inside the system",
             arguments: [

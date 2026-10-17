@@ -59,6 +59,8 @@ extension Score {
                 return .item(.element(.keySignature(measureIndex: measureIndex, staff: full)))
             case let .timeSignature(measureIndex, _):
                 return .item(.element(.timeSignature(measureIndex: measureIndex, staff: full)))
+            case let .partName(_, form):
+                return .item(.element(.partName(partIndex: full.partIndex, form: form)))
             case .barLine:
                 // A barline's bar address has no staff field to re-stamp; this is not a deferred remapping.
                 return cursor
@@ -212,6 +214,7 @@ extension Score {
             return .item(.element(.keySignature(measureIndex: measureIndex, staff: staff)))
         case let .timeSignature(measureIndex, _):
             return .item(.element(.timeSignature(measureIndex: measureIndex, staff: staff)))
+        case let .partName(_, form): return .item(.element(.partName(partIndex: staff.partIndex, form: form)))
         case .tie, .barLine: return nil
         }
     }

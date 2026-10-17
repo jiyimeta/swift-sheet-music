@@ -58,8 +58,11 @@ struct TextFontOverrideLayoutTests {
         )], systemMeasures: [SystemMeasure(elements: lane)])
     }
 
-    private static func layout(_ score: Score) -> LayoutDocument {
-        LayoutEngine.layout(score: score, options: ScoreViewOptions(staffSize: 28), availableWidth: 900)
+    /// Wrapped at 900 pt, or `natural`ly wide — unwrapped, at the score's own natural width.
+    private static func layout(_ score: Score, natural: Bool = false) -> LayoutDocument {
+        let options = ScoreViewOptions(staffSize: 28, wrapToViewWidth: !natural)
+        let width = natural ? LayoutEngine.naturalContentWidth(score: score, options: options) : 900
+        return LayoutEngine.layout(score: score, options: options, availableWidth: width)
     }
 
     private static func elements(_ document: LayoutDocument) -> [LayoutElement] {
@@ -98,10 +101,13 @@ struct TextFontOverrideLayoutTests {
 
     // MARK: - Lyrics
 
+    /// A syllable pushes the next one along only where they would otherwise collide — it is a floor on their columns'
+    /// distance, not weight (`LyricSpacingLayoutTests`) — so this lays the bar out at its natural width, where both
+    /// pairs of "Wonderful" need more than two quarters' room and the larger one must get more.
     @Test("a lyric's size override widens its ink and pushes the next syllable along")
     func lyricSizeReachesInkAndSpacing() throws {
-        let plain = Self.layout(Self.score())
-        let large = Self.layout(Self.score(lyric: Self.big))
+        let plain = Self.layout(Self.score(), natural: true)
+        let large = Self.layout(Self.score(lyric: Self.big), natural: true)
         let plainLyrics = Self.lyrics(plain)
         let largeLyrics = Self.lyrics(large)
         try #require(plainLyrics.count == 2 && largeLyrics.count == 2)

@@ -421,10 +421,19 @@ extension LayoutEngine {
             }
             let stretched: [CGFloat]
             if context.options.wrapToViewWidth {
-                stretched = stretchWidths(
+                // A collapsed multi-measure rest, or a bar with nothing timed in it, has no gaps to stretch.
+                let springs = widthsSlice.indices.map { j -> TickAggregate? in
+                    let i = systemStart + j
+                    guard plan.runLength(startingAt: i) == nil, !plan.isInteriorOfRun(i),
+                          let aggregate = aggregates[i], aggregate.totalWeight > 0
+                    else { return nil }
+                    return aggregate
+                }
+                stretched = justifiedWidths(
                     widths: widthsSlice,
+                    springs: springs,
                     availableWidth: contentAvail - roomInside(systemStart ..< cursor, gaps: horizontalGaps),
-                    shouldStretch: true,
+                    sp: sp,
                 )
             } else {
                 // Horizontal (no-wrap) mode: there's no viewport
@@ -660,16 +669,59 @@ extension LayoutEngine {
         }
     }
 
-    static func stretchWidths(
-        widths: [CGFloat],
-        availableWidth: CGFloat,
-        shouldStretch: Bool,
+    /// The widths a wrapped system's measures take when the system is justified to `availableWidth`; `widths` itself
+    /// when they already fill it.
+    ///
+    /// MuseScore justifies a system with one spring per chord/rest segment across the whole line
+    /// (`HorizontalSpacing::justifySystem` → `stretchSegmentsToWidth`): a spring's constant comes from its duration
+    /// and its pre-tension from the width a collision already pushed it to, so the leftover room goes to the segments
+    /// still at their natural width first, and equal durations end up equally wide all along the line. A measure's
+    /// gaps are already such springs here (`max(floor, k · weight)`, `TickAggregate.contentWidth(atStretch:)`), so the
+    /// system finds the one stretch `k` every measure shares. Scaling each measure by one ratio instead — what this
+    /// did before — handed a measure more of the leftover the wider its minimum was, for a header, a syllable's room or
+    /// an accidental, and its notes stood further apart than the same rhythm's in the next bar.
+    ///
+    /// What does not stretch keeps its width: the header, the room around the content, a courtesy announcement.
+    /// `springs[j]` is `nil` for a measure with no gaps to stretch — a collapsed multi-measure rest — which scales
+    /// with `k` as a whole instead.
+    static func justifiedWidths(
+        widths: [CGFloat], springs: [TickAggregate?], availableWidth: CGFloat, sp: CGFloat,
     ) -> [CGFloat] {
         let total = widths.reduce(0, +)
-        guard shouldStretch, total > 0, availableWidth > total else {
-            return widths
+        guard total > 0, availableWidth > total else { return widths }
+        // The least content width a measure is given, as `crossStaffMinimumMeasureWidthWithAggregate` gives it.
+        let contentFloor = sp * 4
+        func width(_ j: Int, atStretch k: CGFloat) -> CGFloat {
+            guard let spring = springs[j] else { return widths[j] * k }
+            let minimum = max(contentFloor, spring.minimumContentWidth)
+            let content = max(contentFloor, spring.contentWidth(atStretch: k))
+            // `tickColumns` gives a measure at its minimum width one sp more content than its minimum, so a measure
+            // starts to widen only once the line's stretch passes the one it already has there; from then on its
+            // gaps are exactly `content`.
+            return widths[j] + max(0, content - minimum - sp)
         }
-        let ratio = availableWidth / total
-        return widths.map { $0 * ratio }
+        func totalWidth(atStretch k: CGFloat) -> CGFloat {
+            widths.indices.reduce(0) { $0 + width($1, atStretch: k) }
+        }
+        var low: CGFloat = 1
+        var high: CGFloat = 2
+        var doublings = 0
+        while totalWidth(atStretch: high) < availableWidth {
+            low = high
+            high *= 2
+            doublings += 1
+            // Nothing on the line stretches far enough (every gap held by a floor that never yields): scale it.
+            guard doublings < 64 else { return widths.map { $0 * availableWidth / total } }
+        }
+        for _ in 0 ..< 64 {
+            let mid = (low + high) / 2
+            if totalWidth(atStretch: mid) < availableWidth { low = mid } else { high = mid }
+        }
+        var justified = widths.indices.map { width($0, atStretch: high) }
+        // What the search leaves over, a rounding error, goes to the last measure so the line ends where it must.
+        if let last = justified.indices.last {
+            justified[last] += availableWidth - justified.reduce(0, +)
+        }
+        return justified
     }
 }

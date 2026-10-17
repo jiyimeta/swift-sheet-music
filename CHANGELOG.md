@@ -9,6 +9,15 @@ and this project adheres to
 
 ### Added
 
+- **Part names are selectable** — the name at the left of a system (the long name on the first system, the
+  abbreviation on every system after it) is an element with an identity, `ScoreElementID.partName(partIndex:form:)`,
+  addressed as `SetPartNames` addresses it, with a new `PartNameForm` (`.long` / `.short`) saying which of the two the
+  label shows. `LayoutPartLabel` carries it (`elementID`, defaulting to `nil` for hand-built labels),
+  `ScoreHitTester.hitTest(at:)` reports it as `ScoreHitTarget.partName` after every other rung, `elementHitRects(for:)`
+  returns one box per system the name is drawn on (every abbreviation of a part is one identity), and the Apple layer
+  renderer tints a selected name. An empty name draws nothing and is not a target. `ScoreElementIDWire` appends choice
+  15 for it; a part name has no `removalCommand`. Not yet tinted by the Android draw program.
+
 - **`EditIntent.formatRhythms(scope:policy:)` (wire 91), `FormatRhythms`, `FormatRhythmsScope`, `RhythmSpelling` and
   `RhythmSpellingPolicy`: re-spell a score's rhythms the way the meter writes them, as one undo step.** The scope is
   the whole score, one bar of one staff, or a range; a range takes only the spans lying entirely inside it, because
@@ -23,6 +32,26 @@ and this project adheres to
   `MidiRenderer` applies an instrument's articulation gate to the last tie link only, so on an instrument whose
   default gate is below 100% a re-spelled note's release can move. A span the note values cannot cover to the tick
   (a non-tuplet third of a whole) is carried as written.
+
+### Fixed
+
+- **A syllable no longer widens its notes' gaps in a stretched bar.** The room a syllable needs to the next one was
+  weight in the gap after its note, and weight stretches with the line, so every justified bar of equal notes was
+  spaced by its syllables' widths: eight eighths under "ん じゅ じゃ な い の よ" stood 1.50 / 3.30 / 4.31 / 3.30 /
+  2.28 / 2.28 / 2.28 sp apart times one factor however wide the line was, where MuseScore spaces them evenly, and a
+  bar at natural width (stretched 1.5×) gave its syllables half again the room they need. A syllable is now a floor on
+  the distance to the next syllable's column — shared by weight over the gaps in between, as a chord symbol's room is
+  over its beat — so it widens a gap only where the two would otherwise collide. A syllable two or more notes before
+  the next one also used to reserve only its share of that distance, on the gap after its own note; the whole
+  distance is now kept, spread over every gap up to the next syllable.
+
+- **A justified system spaces equal notes equally in every bar.** It used to scale each bar's width by one ratio, so a
+  bar got more of the line's leftover room the wider its minimum was — for the system's clef and key, a syllable, a
+  chord symbol or an accidental — and its notes stood further apart than the same rhythm's in the next bar: one
+  system of eighths ran from 1.75 to 9.8 sp. The leftover is now shared the way MuseScore's springs share it
+  (`HorizontalSpacing::justifySystem`): one stretch for every gap on the line, a gap already held open by a floor
+  taking nothing until the others have caught up with it, and the header, the room around a bar's content and a
+  courtesy announcement staying as wide as they are. Which measures a system holds does not change.
 
 ## [4.13.0] - 2026-10-17
 

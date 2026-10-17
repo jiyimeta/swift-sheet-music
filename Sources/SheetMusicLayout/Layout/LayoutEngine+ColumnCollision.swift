@@ -6,10 +6,10 @@ import SheetMusicFoundation
 
 /// Horizontal collision floors between neighboring note columns.
 ///
-/// The spacing weights (`durationWidth` plus the lyric / grace / harmony demands folded into them) say how far apart
-/// two columns SHOULD be. They say nothing about what hangs off a column's sides, so an accidental — drawn left of
-/// its notehead, inside the gap before its column — collides with the previous note whenever that gap is squeezed
-/// toward its weight: at a system's minimum width, or when a host's `systemStretch` asks for dense music.
+/// The spacing weights (`durationWidth`, and a jazz line's reach) say how far apart two columns SHOULD be. They say
+/// nothing about what hangs off a column's sides, so an accidental — drawn left of its notehead, inside the gap before
+/// its column — collides with the previous note whenever that gap is squeezed toward its weight: at a system's minimum
+/// width, or when a host's `systemStretch` asks for dense music.
 ///
 /// MuseScore keeps the two apart. `HorizontalSpacing::spaceAgainstPreviousSegments` places each segment at
 /// `max(previous + naturalWidth, previous + minHorizontalDistance(shapes))`, where the shape of a chord includes its
