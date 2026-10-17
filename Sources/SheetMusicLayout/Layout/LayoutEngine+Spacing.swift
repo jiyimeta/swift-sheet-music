@@ -717,10 +717,11 @@ extension LayoutEngine {
             var weight: CGFloat
         }
         var voiceElements: [[TimedElement]] = []
-        // The room each chord symbol needs over the element it names, as a floor on that element's span rather than
-        // weight in it: weight stretches with the line, so a symbol carried as weight widened its beat in every
-        // justified bar, where MuseScore spaces by duration and lets a symbol push only where it would collide.
-        var harmonyDemands: [(startTick: Int, endTick: Int, width: CGFloat)] = []
+        // The room each chord symbol needs over the element it names, and each syllable needs up to the next syllable,
+        // as a floor on that span rather than weight in it: weight stretches with the line, so a symbol or a syllable
+        // carried as weight widened its notes' gaps in every justified bar, where MuseScore spaces by duration and lets
+        // a symbol or a syllable push only where it would collide (`applySpanFloors`).
+        var spanDemands: [(startTick: Int, endTick: Int, width: CGFloat)] = []
         var allTicks: Set<Int> = []
         var measureEnd = 0
         // A clef the NEXT bar opens with stands before this one's barline
@@ -749,8 +750,8 @@ extension LayoutEngine {
                 var elements: [TimedElement] = []
                 var tick = 0
                 // Width demand contributed by any `.harmony` not yet
-                // attached to a chord/rest at this tick. Folded into
-                // the next timed element's weight so the chord segment
+                // attached to a chord/rest at this tick. Becomes a span
+                // demand of the next timed element, so the chord segment
                 // reserves enough room for the chord symbol.
                 var pendingHarmonyWidth: CGFloat = 0
                 // Previous notes-bearing chord, for the backward reach of
@@ -781,6 +782,16 @@ extension LayoutEngine {
                     }
                 }
                 var lyricSpacing = VoiceLyricSpacing(voice.elements.values, metrics: metrics)
+                // Each syllable's demand reaches the column of the next chord that carries one, whose tick is known
+                // only once the walk gets there: the demands wait on that chord's index, its tick is recorded here.
+                var lyricDemands: [(startTick: Int, nextIndex: Int, width: CGFloat)] = []
+                var chordTicks: [Int: Int] = [:]
+                defer {
+                    for demand in lyricDemands {
+                        guard let endTick = chordTicks[demand.nextIndex] else { continue }
+                        spanDemands.append((demand.startTick, endTick, demand.width))
+                    }
+                }
                 for (idx, el) in voice.elements.enumerated() {
                     switch el {
                     case let .chord(c) where !c.notes.isEmpty:
@@ -813,14 +824,17 @@ extension LayoutEngine {
                         }
                         let baseWeight = max(
                             durationWidth(c.duration, metrics: metrics),
-                            lyricSpacing.pairWidth(at: idx, lyrics: c.lyrics),
                             inflection.rightward,
                         )
                         let end = tick + c.duration.resolved(in: measureDuration).ticks(division: division)
                         if pendingHarmonyWidth > 0 {
-                            harmonyDemands.append((tick, end, pendingHarmonyWidth))
+                            spanDemands.append((tick, end, pendingHarmonyWidth))
                             pendingHarmonyWidth = 0
                         }
+                        if let demand = lyricSpacing.demand(at: idx, lyrics: c.lyrics) {
+                            lyricDemands.append((tick, demand.nextIndex, demand.width))
+                        }
+                        chordTicks[idx] = tick
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: baseWeight,
                         ))
@@ -835,7 +849,7 @@ extension LayoutEngine {
                         )
                         let end = tick + r.duration.resolved(in: measureDuration).ticks(division: division)
                         if pendingHarmonyWidth > 0 {
-                            harmonyDemands.append((tick, end, pendingHarmonyWidth))
+                            spanDemands.append((tick, end, pendingHarmonyWidth))
                             pendingHarmonyWidth = 0
                         }
                         elements.append(TimedElement(
@@ -979,7 +993,7 @@ extension LayoutEngine {
         var gapFloors = collisionFloors(
             inks: inks, sortedTicks: sortedTicks, gapWeights: gapWeights,
         )
-        applyHarmonyFloors(harmonyDemands, sortedTicks: sortedTicks, gapWeights: gapWeights, to: &gapFloors)
+        applySpanFloors(spanDemands, sortedTicks: sortedTicks, gapWeights: gapWeights, to: &gapFloors)
         // Trailing graces before the barline: the barline stands
         // `sp / 2 + trailingClefWidth` past the last gap (`trailingGap`,
         // less the half staff space the barline is drawn inside of), so
@@ -1125,64 +1139,6 @@ extension LayoutEngine {
             widths[measureIdx] = widest
         }
         return widths
-    }
-
-    static func minimumMeasureWidth(
-        measure: Measure,
-        metrics: StaffMetrics,
-    ) -> CGFloat {
-        // Edge padding inside the barlines. `rightPadding` must
-        // be wide enough that a flagged 8th / 16th at the end of
-        // the measure doesn't crash its flag glyph (extends ~1.1
-        // sp past the stem) into the right barline. 1 sp = ~3.4
-        // pt is the minimum that consistently clears the flag.
-        let leftPadding = metrics.sp * 1.0
-        let rightPadding = metrics.sp * 1.0
-        var maxVoiceWidth: CGFloat = 0
-        for voice in measure.voices {
-            var w: CGFloat = 0
-            var lyricSpacing = VoiceLyricSpacing(voice.elements.values, metrics: metrics)
-            for (idx, el) in voice.elements.enumerated() {
-                switch el {
-                // Header element widths sized against MuseScore's
-                // engraving defaults. Treble clef glyph ≈ 2.2 sp
-                // wide, but `Sid::clefBarlineDistance` overlaps the
-                // glyph with the barline by ~0.5 sp, netting ~1.7 sp.
-                case .clef:
-                    w += metrics.sp * 1.7
-                // Key sig: `|k|` accidentals × ~1 sp each, plus
-                // `keysigLeftMargin` (0.5 sp). `+ 0.5` instead of
-                // the previous `+ 1` more closely matches MuseScore.
-                case let .keySignature(k):
-                    w += metrics.sp
-                        * (CGFloat(abs(k.concertKey)) + 0.5)
-                // Time sig: 1.7 sp digit + 0.5 sp barline distance.
-                case .timeSignature:
-                    w += metrics.sp * 2.2
-                case .barLine:
-                    w += metrics.sp
-                case let .chord(c) where !c.notes.isEmpty:
-                    let tickW = durationWidth(c.duration, metrics: metrics)
-                    let lyricW = lyricSpacing.pairWidth(at: idx, lyrics: c.lyrics)
-                    w += max(tickW, lyricW)
-                case let .chord(r):
-                    // Empty chord = rest.
-                    w += durationWidth(r.duration, metrics: metrics)
-                // These modeled annotations do not have an engraving pass yet,
-                // so they reserve no width.
-                // `.preserved` is unmodeled source XML and likewise engraves
-                // nothing.
-                case .dynamic, .fermata, .breath,
-                     .measureRepeat, .spanner,
-                     .locationShift, .harmony, .sticking, .expression, .capo,
-                     .stringTunings, .ambitus, .figuredBass, .symbol, .fretDiagram,
-                     .preserved:
-                    break
-                }
-            }
-            maxVoiceWidth = max(maxVoiceWidth, w)
-        }
-        return leftPadding + maxVoiceWidth + rightPadding
     }
 
     /// Anchor-to-anchor room a chord's jazz inflection lines demand from
@@ -1366,41 +1322,41 @@ extension LayoutEngine {
     /// still applies via `durationWidth`.
     ///
     /// **The constraint runs to the next SYLLABLE, not to the next
-    /// note, and it is shared out over the gaps in between.** A lyric
-    /// only has to clear another lyric; over a note that carries none
-    /// it is free to spill into that note's space, which is what
-    /// MuseScore does and what this used to get wrong. The old rule
+    /// note.** A lyric only has to clear another lyric; over a note that
+    /// carries none it is free to spill into that note's space, which is
+    /// what MuseScore does and what this used to get wrong. The old rule
     /// asked the immediate neighbour's gap for `curWidth / 2 + 0.25 sp`
     /// even when nothing was written under it, so one long syllable in
     /// the middle of an otherwise plain run tore a hole beside it while
     /// MuseScore left the run evenly spaced (user report, 2026-09-20).
     ///
-    /// `next.gaps` is how many tick gaps separate the two syllables —
-    /// one per timed element crossed — so each gap is asked for its
-    /// share rather than the whole distance. Adjacent syllables
-    /// (`gaps == 1`) are unchanged, which is the common case and the
-    /// one every existing spacing expectation was written against.
+    /// **It is a floor, not weight.** `aggregatedTickWeights` makes it
+    /// the least distance between the two syllables' columns, shared by
+    /// weight over the gaps in between (`applySpanFloors`), so it widens
+    /// a gap only where the syllables would otherwise collide. As weight
+    /// it stretched with the line: every justified bar of equal notes
+    /// was spaced by its syllables' widths (user report, 2026-10-17).
     ///
     /// With no following syllable at all there is nothing to clear, so
     /// the answer is 0 and the tail of the line stays at duration
     /// spacing.
     static func lyricsPairWidth(
         currentLyrics: [Lyric],
-        next: (lyrics: [Lyric], gaps: Int)?,
+        nextLyrics: [Lyric]?,
         metrics: StaffMetrics,
     ) -> CGFloat {
         let curWidth = chordLyricMaxWidth(currentLyrics, metrics: metrics)
-        guard curWidth > 0, let next else { return 0 }
+        guard curWidth > 0, let nextLyrics else { return 0 }
         return lyricsPairWidth(
             currentLyrics: currentLyrics, currentWidth: curWidth,
-            nextWidth: chordLyricMaxWidth(next.lyrics, metrics: metrics), gaps: next.gaps, metrics: metrics,
+            nextWidth: chordLyricMaxWidth(nextLyrics, metrics: metrics), metrics: metrics,
         )
     }
 
-    /// `lyricsPairWidth(currentLyrics:next:metrics:)` from the two chords' widths (`chordLyricMaxWidth`), already
-    /// measured — what a voice walk that measures each chord once hands it (`VoiceLyricSpacing`).
+    /// `lyricsPairWidth(currentLyrics:nextLyrics:metrics:)` from the two chords' widths (`chordLyricMaxWidth`),
+    /// already measured — what a voice walk that measures each chord once hands it (`VoiceLyricSpacing`).
     static func lyricsPairWidth(
-        currentLyrics: [Lyric], currentWidth: CGFloat, nextWidth: CGFloat, gaps: Int, metrics: StaffMetrics,
+        currentLyrics: [Lyric], currentWidth: CGFloat, nextWidth: CGFloat, metrics: StaffMetrics,
     ) -> CGFloat {
         guard currentWidth > 0, nextWidth > 0 else { return 0 }
         let dashForce = currentLyrics.contains { lyric in
@@ -1410,8 +1366,7 @@ extension LayoutEngine {
         let inter: CGFloat = dashForce
             ? metrics.sp * 0.5
             : metrics.sp * 0.25
-        let required = currentWidth / 2 + inter + nextWidth / 2
-        return required / CGFloat(max(gaps, 1))
+        return currentWidth / 2 + inter + nextWidth / 2
     }
 
     /// Widest rendered lyric in a chord (verse-aware: takes the max
@@ -1432,48 +1387,36 @@ extension LayoutEngine {
     }
 
     /// The next chord after `startIndex` that actually CARRIES a
-    /// syllable, and how many tick gaps lie between the two — one per
-    /// timed element crossed, so an adjacent syllable answers 1.
+    /// syllable — the one whose column the syllable at `startIndex` has
+    /// to clear — and its position in `elements`.
     ///
-    /// Untimed elements (clefs, key signatures, barlines) are stepped
-    /// over without counting: they take width of their own but they do
-    /// not add a tick the lyric's requirement could be shared into.
+    /// Notes without a syllable, untimed elements (clefs, key
+    /// signatures, barlines) and RESTS are stepped over. The old
+    /// `nextChordLyrics` stopped at the first rest and reported "no
+    /// lyric follows", which made the syllable before a rest demand its
+    /// full half-width of the rest's own gap.
     ///
-    /// A REST counts as a gap and is stepped over rather than ending
-    /// the walk. The old `nextChordLyrics` stopped at the first rest and
-    /// reported "no lyric follows", which made the syllable before a
-    /// rest demand its full half-width of the rest's own gap.
-    ///
-    /// `nil` when no syllable follows in this voice at all. `index` is the chord's position in `elements`.
+    /// `nil` when no syllable follows in this voice at all.
     static func nextLyricBearingChord(
         in elements: [VoiceElement], after startIndex: Int,
-    ) -> (lyrics: [Lyric], gaps: Int, index: Int)? {
+    ) -> (lyrics: [Lyric], index: Int)? {
         guard startIndex + 1 < elements.count else { return nil }
-        var gaps = 1
         for j in (startIndex + 1) ..< elements.count {
-            switch elements[j] {
-            case let .chord(nc):
-                if !nc.notes.isEmpty,
-                   nc.lyrics.contains(where: lyricHasContent)
-                {
-                    return (nc.lyrics, gaps, j)
-                }
-                gaps += 1
-            default:
-                continue
+            if case let .chord(nc) = elements[j], !nc.notes.isEmpty, nc.lyrics.contains(where: lyricHasContent) {
+                return (nc.lyrics, j)
             }
         }
         return nil
     }
 }
 
-/// One voice's `lyricsPairWidth`s, with each lyric-bearing chord's width measured once.
+/// One voice's lyric demands (`lyricsPairWidth`), with each lyric-bearing chord's width measured once.
 ///
 /// A spacing walk asks for a chord's width twice — as the current syllable of its own pair, and before that as the
 /// next one of the pair ahead of it — and a formatted syllable is typeset each time it is measured
 /// (`LayoutEngine.chordLyricMaxWidth`). The width measured as the next one is carried to the chord's own pair, so a
 /// walk that asks in element order measures every chord once; asked out of order, a chord is simply measured again.
-/// The numbers are `lyricsPairWidth(currentLyrics:next:metrics:)`'s, to the bit.
+/// The numbers are `lyricsPairWidth(currentLyrics:nextLyrics:metrics:)`'s, to the bit.
 struct VoiceLyricSpacing {
     private let elements: [VoiceElement]
     private let metrics: StaffMetrics
@@ -1485,8 +1428,10 @@ struct VoiceLyricSpacing {
         self.metrics = metrics
     }
 
-    /// The lyric width demanded of the gap after the notes-bearing chord at `index`, whose syllables are `lyrics`.
-    mutating func pairWidth(at index: Int, lyrics: [Lyric]) -> CGFloat {
+    /// The distance the syllables under the notes-bearing chord at `index` (`lyrics`) need between its column and
+    /// the column of the next chord that carries one, at `nextIndex` in `elements`; `nil` when this chord carries no
+    /// syllable or none follows it in the voice.
+    mutating func demand(at index: Int, lyrics: [Lyric]) -> (width: CGFloat, nextIndex: Int)? {
         let current = if let carried, carried.index == index {
             carried.width
         } else {
@@ -1494,11 +1439,12 @@ struct VoiceLyricSpacing {
         }
         guard current > 0,
               let next = LayoutEngine.nextLyricBearingChord(in: elements, after: index)
-        else { return 0 }
+        else { return nil }
         let nextWidth = LayoutEngine.chordLyricMaxWidth(next.lyrics, metrics: metrics)
         carried = (next.index, nextWidth)
-        return LayoutEngine.lyricsPairWidth(
-            currentLyrics: lyrics, currentWidth: current, nextWidth: nextWidth, gaps: next.gaps, metrics: metrics,
+        let width = LayoutEngine.lyricsPairWidth(
+            currentLyrics: lyrics, currentWidth: current, nextWidth: nextWidth, metrics: metrics,
         )
+        return width > 0 ? (width, next.index) : nil
     }
 }

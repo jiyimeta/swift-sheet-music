@@ -296,8 +296,17 @@
         /// lists the box. The `wrap=false` blocks lay out no frames and did not change; no fixture has an `<HBox>`,
         /// a second `<VBox>` or a picture, so W7's other geometry is pinned by its own suites
         /// (`FrameStreamPlacerTests`, `FrameLayoutTests`, `HorizontalFrameLayoutTests`, `LayoutPaginatorTests`).
+        ///
+        /// **Re-recorded 2026-10-17 when a syllable became a floor on the distance to the next syllable instead of
+        /// weight in its note's gap, after reading the diff** against the digest above (`f386db1d…`, which 4.13.0
+        /// left unchanged). Two blocks of 68 moved, both `lyrics_verses_melisma`, the only fixture with lyrics. At
+        /// natural width five of its six bars narrow (m[0] 248.07 → 207.24 pt, m[3] 149.45 → 124.83; the whole
+        /// rests' m[2] keeps 109.20) because natural width stretches weight 1.5× and the syllables no longer ride
+        /// along; the system shrinks 975.86 → 853.11 pt. Wrapped, every measure keeps its width and origin and only
+        /// the columns inside move toward their durations' spacing. Rendered and read: no two syllables, dashes or
+        /// melisma lines touch in either.
         private static let expectedDigestSHA256 =
-            "f386db1db299bb8786de7c707e56bee786f66a7bb9d4ad7f37706204c13c61b4"
+            "679f862796d0591f47f19afba8aacbc963669b01b3bfd32eeffec2f2e7cff03c"
 
         @Test("write digest")
         func writeDigest() throws {

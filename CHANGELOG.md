@@ -7,6 +7,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A syllable no longer widens its notes' gaps in a stretched bar.** The room a syllable needs to the next one was
+  weight in the gap after its note, and weight stretches with the line, so every justified bar of equal notes was
+  spaced by its syllables' widths: eight eighths under "ん じゅ じゃ な い の よ" stood 1.50 / 3.30 / 4.31 / 3.30 /
+  2.28 / 2.28 / 2.28 sp apart times one factor however wide the line was, where MuseScore spaces them evenly, and a
+  bar at natural width (stretched 1.5×) gave its syllables half again the room they need. A syllable is now a floor on
+  the distance to the next syllable's column — shared by weight over the gaps in between, as a chord symbol's room is
+  over its beat — so it widens a gap only where the two would otherwise collide. A syllable two or more notes before
+  the next one also used to reserve only its share of that distance, on the gap after its own note; the whole
+  distance is now kept, spread over every gap up to the next syllable.
+
 ## [4.13.0] - 2026-10-17
 
 ### Added
