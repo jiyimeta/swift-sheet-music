@@ -62,7 +62,9 @@ struct FormatRhythmsBarContext {
     func isRestCandidate(_ index: Int) -> Bool {
         guard let chord = chord(at: index), chord.notes.isEmpty, !isTupletMember[index] else { return false }
         if case .measure = chord.duration { return false }
-        return true
+        // A rest that carries anything (hidden, colored, a spanner, graces, markup, ...) is a wall: replacing it
+        // would drop that. It is carried exactly as written and ends the run on both sides.
+        return chord == Chord(duration: chord.duration, notes: [])
     }
 
     /// A note chord outside tuplets. A note that spans "the whole bar" by name is carried as written.

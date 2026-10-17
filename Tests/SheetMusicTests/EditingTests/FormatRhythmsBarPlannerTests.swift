@@ -82,6 +82,9 @@ struct FormatRhythmsBarPlannerTests {
         if case let .chord(chord) = slots[index].element { chord } else { nil }
     }
 
+    static let afterGrace = GraceChord(graceType: .grace8after, duration: .eighth, notes: [Note(pitch: 67, tpc: 15)])
+    static let beforeGrace = GraceChord(graceType: .acciaccatura, duration: .eighth, notes: [Note(pitch: 61, tpc: 21)])
+
     static let thirdBarFlaw = [
         note(1, 4), note(1, 8, pitch: 62), note(1, 2, pitch: 64), note(1, 8, pitch: 65),
     ]
@@ -155,17 +158,24 @@ struct FormatRhythmsBarPlannerTests {
     }
 
     @Test("keepWritten notes: a written half at beat 2 stays; a quarter~quarter tie from beat 2 stays tied")
-    func keepWrittenNotes() {
+    func keepWrittenNotes() throws {
         let policy = RhythmSpellingPolicy(
             dotLevel: .double, midBarSyncopations: .keepWritten, beatCrossingRests: .keepWritten,
         )
+        let allow = RhythmSpellingPolicy(dotLevel: .double, midBarSyncopations: .allow, beatCrossingRests: .keepWritten)
         let half = Self.voice([Self.note(1, 4), Self.note(1, 2, pitch: 62), Self.note(1, 4, pitch: 64)])
         #expect(Self.respell(half, Self.facts(), policy) == nil)
+        // Under `.split` the same written half is split (fmt_policy2: C:1/4 C:1/4~ C:1/4 C:1/4).
+        let split = try #require(Self.respell(half, Self.facts(), .default))
+        #expect(Self.tokens(split.slots) == ["C:1/4", "C:1/4~", "C:1/4", "C:1/4"])
         let tied = Self.voice([
             Self.note(1, 4), Self.note(1, 4, pitch: 62, tieForward: true), Self.note(1, 4, pitch: 62, tieBack: true),
             Self.note(1, 4, pitch: 64),
         ])
         #expect(Self.respell(tied, Self.facts(), policy) == nil)
+        // Under `.allow` the tied pair is MERGED into a half (fmt_policy2: C:1/4 C:1/2 C:1/4).
+        let merged = try #require(Self.respell(tied, Self.facts(), allow))
+        #expect(Self.tokens(merged.slots) == ["C:1/4", "C:1/2", "C:1/4"])
     }
 
     @Test("split: a written half at beat 2 becomes quarter~quarter")
@@ -225,6 +235,18 @@ struct FormatRhythmsBarPlannerTests {
             ])),
             note(1, 2, pitch: 62),
         ]),
+        BlockedMerge(name: "different pitch", elements: [
+            note(1, 4, tieForward: true), note(1, 4, pitch: 62, tieBack: true), note(1, 2, pitch: 64),
+        ]),
+        BlockedMerge(name: "ornament", elements: tiedPair { $0.ornaments = [ChordOrnament(kind: .turn)] }),
+        BlockedMerge(name: "bracket", elements: tiedPair { $0.bracket = ChordBracket() }),
+        BlockedMerge(name: "stem hidden", elements: tiedPair { $0.stemVisible = false }),
+        BlockedMerge(name: "head type", elements: tiedPair {
+            $0.notes.updateNote(at: 0) { $0.headType = "cross" }
+        }),
+        BlockedMerge(name: "after-graces", elements: tiedPair {
+            $0.graceNotesAfter = [afterGrace]
+        }),
         BlockedMerge(name: "note fingering", elements: tiedPair {
             $0.notes.updateNote(at: 0) { $0.fingerings = [Fingering(text: "3")] }
         }),
@@ -236,9 +258,24 @@ struct FormatRhythmsBarPlannerTests {
         ])),
     ]
 
-    @Test("continuation with a lyric is not absorbed", arguments: blockedMerges)
+    @Test("a continuation that is not bare is not absorbed", arguments: blockedMerges)
     func blockedContinuation(_ example: BlockedMerge) {
         #expect(Self.respell(Self.voice(example.elements)) == nil)
+    }
+
+    @Test("a fully tied two-note chord IS absorbed (control for the partial-tie case)")
+    func twoNoteChordMerges() throws {
+        let result = try #require(Self.respell(Self.voice([
+            .chord(Chord(duration: .quarter, notes: [
+                Note(pitch: 60, tpc: 14, tieForward: 1), Note(pitch: 64, tpc: 18, tieForward: 1),
+            ])),
+            .chord(Chord(duration: .quarter, notes: [
+                Note(pitch: 60, tpc: 14, tieBack: 1), Note(pitch: 64, tpc: 18, tieBack: 1),
+            ])),
+            Self.note(1, 2, pitch: 62),
+        ])))
+        #expect(Self.tokens(result.slots) == ["C:1/2", "C:1/2"])
+        #expect(try #require(Self.chord(at: 0, in: result.slots)).notes.count == 2)
     }
 
     @Test("a bare tie continuation IS absorbed (control for the blocked-merge cases)")
@@ -284,6 +321,15 @@ struct FormatRhythmsBarPlannerTests {
         }),
         Untouchable(name: "single-chord tremolo", elements: flawed {
             $0.tremolo = Tremolo(subtype: .r16, span: .single)
+        }),
+        Untouchable(name: "arpeggio", elements: flawed { $0.arpeggio = Arpeggio(subtype: 0) }),
+        Untouchable(name: "ornament", elements: flawed { $0.ornaments = [ChordOrnament(kind: .turn)] }),
+        Untouchable(name: "chord line", elements: flawed { $0.chordLines = [ChordLine(kind: .fall)] }),
+        Untouchable(name: "guitar bend", elements: flawed {
+            $0.notes.updateNote(at: 0) { $0.guitarBend = GuitarBend(type: .bend) }
+        }),
+        Untouchable(name: "two-note tremolo", elements: flawed {
+            $0.tremolo = Tremolo(subtype: .r16, span: .between)
         }),
         Untouchable(name: "note glissando", elements: flawed {
             $0.notes.updateNote(at: 0) { $0.glissando = Glissando() }
@@ -391,7 +437,9 @@ struct FormatRhythmsBarPlannerTests {
         #expect(Self.tokens(result.slots) == ["C:3/8"])
         #expect(result.slots[0].identity == .keep(voice.elements.eid(at: 0)))
     }
+}
 
+extension FormatRhythmsBarPlannerTests {
     // MARK: Rests, tuplets, bars
 
     @Test("a rest run stops at a tuplet edge and the tuplet is unchanged")
@@ -422,6 +470,45 @@ struct FormatRhythmsBarPlannerTests {
         #expect(Self.tokens(result.slots) == ["R:measure"])
         #expect(result.slots[0].identity == .fresh)
         #expect(Self.respell(Self.voice([.rest(duration: .measure)])) == nil)
+    }
+
+    struct AttributedRest: CustomTestStringConvertible, Sendable {
+        let name: String
+        let attribute: @Sendable (inout Chord) -> Void
+        var testDescription: String {
+            name
+        }
+    }
+
+    static let attributedRests: [AttributedRest] = [
+        AttributedRest(name: "hidden") { $0.elementProperties.visible = false },
+        AttributedRest(name: "colored") { $0.elementProperties.color = ScoreColor(red: 255, green: 0, blue: 0) },
+        AttributedRest(name: "spanner") { $0.spanners = [Spanner(kind: .slur, rawType: "Slur")] },
+        AttributedRest(name: "grace before") {
+            $0.graceNotesBefore = [beforeGrace]
+        },
+        AttributedRest(name: "grace after") {
+            $0.graceNotesAfter = [afterGrace]
+        },
+        AttributedRest(name: "preserved markup") { $0.preservedMarkup = [PreservedXML(name: "Unknown")] },
+    ]
+
+    @Test("a rest that carries something is a wall: kept exactly as written", arguments: attributedRests)
+    func attributedRestIsAWall(_ example: AttributedRest) throws {
+        var marked = Chord(duration: Self.duration(1, 4), notes: [])
+        example.attribute(&marked)
+        let voice = Self.voice([Self.rest(1, 4), Self.rest(1, 4), .chord(marked), Self.rest(1, 4)])
+        let result = try #require(Self.respell(voice))
+        // The two bare rests before it merge; the marked rest is untouched and keeps its identifier.
+        #expect(Self.tokens(result.slots) == ["R:1/2", "R:1/4", "R:1/4"])
+        #expect(result.slots[1].identity == .keep(voice.elements.eid(at: 2)))
+        #expect(result.slots[1].element == .chord(marked))
+    }
+
+    @Test("the same rest run without an attribute is re-spelled (control for the wall cases)")
+    func bareRestRunControl() throws {
+        let voice = Self.voice([Self.rest(1, 4), Self.rest(1, 4), Self.rest(1, 4), Self.rest(1, 4)])
+        #expect(try Self.tokens(#require(Self.respell(voice)).slots) == ["R:measure"])
     }
 
     @Test("pickup: a rest run filling a pickup stays typed and right-aligned")
