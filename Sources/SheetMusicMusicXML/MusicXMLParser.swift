@@ -6,9 +6,20 @@ import SheetMusicXMLTools
 public enum MusicXMLParser {
     /// Parse uncompressed MusicXML bytes (`<score-partwise>` root) into a `Score`.
     public static func parse(_ data: Data) throws -> Score {
-        let root = try XMLTreeParser.parse(data)
-        return try Score.decodeMusicXML(root)
+        try parse(data, options: .default)
     }
+
+    /// Parse uncompressed MusicXML bytes with explicit import options.
+    ///
+    /// `<words>` and `<rehearsal>` keep their mixed content: the tree trims `text` once an element closes, but
+    /// MuseScore keeps a text's trailing space (`testTempoTextSpace1_ref.mscx`), so the words are read from it.
+    package static func parse(_ data: Data, options: MusicXMLImportOptions) throws -> Score {
+        let root = try XMLTreeParser.parse(data, preservingMixedContentIn: mixedContentElements)
+        return try Score.decodeMusicXML(root, options: options)
+    }
+
+    /// The elements whose characters are read untrimmed, as MuseScore reads them.
+    package static let mixedContentElements: Set = ["words", "rehearsal"]
 
     /// Parse a `.mxl` (zipped MusicXML) archive. Resolves the rootfile from
     /// `META-INF/container.xml` and delegates to `parse(_:)`.

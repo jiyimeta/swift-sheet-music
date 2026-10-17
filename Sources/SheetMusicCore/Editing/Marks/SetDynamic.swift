@@ -81,7 +81,7 @@ extension Dynamic {
     /// Sets the dynamic's own text from MuseScore xml text (`PreservedTextMarkup(xmlText:)`), or — `nil` — makes it
     /// print its subtype. Text without a tag is stored as plain text with no markup, as the decoder stores a `<text>`
     /// without child elements.
-    mutating func setCustomText(xmlText: String?) {
+    package mutating func setCustomText(xmlText: String?) {
         guard let xmlText else {
             text = nil
             preservedTextMarkup = nil

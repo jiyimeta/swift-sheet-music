@@ -338,14 +338,14 @@ struct RetimeRunTests {
         #expect(Self.textPosition(of: "Fine", in: session.score) == Self.oldSixteenthBeat)
     }
 
-    @Test func `the intent round-trips through the wire codec at index 91`() throws {
+    @Test func `the intent round-trips through the wire codec at index 92`() throws {
         let intent = EditIntent.retimeRun(
             at: Self.dotted,
             durations: [.eighth, NoteDuration.eighth.dotted(1), .fraction(Fraction(numerator: 1, denominator: 12))],
         )
         let bytes = EditIntentCodec.encode(intent)
         // `varint(payloadLength)` then `varint(caseIndex)`: this payload is short enough for both to be one byte.
-        #expect(bytes[1] == 91)
+        #expect(bytes[1] == 92)
         #expect(try EditIntentCodec.decode(bytes) == intent)
     }
 }

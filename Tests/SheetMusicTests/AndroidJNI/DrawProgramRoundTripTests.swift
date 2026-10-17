@@ -313,7 +313,11 @@
 
         /// SHA-256 of the v8 macro encoding of `textFreeScore()`'s pages, recorded before v9 existed. A score without a
         /// box or a picture must draw the same commands, byte for byte, whatever the version word says.
-        private static let textFreeProgramSHA256 = "bc6303383ffec755f8827cd6863a425aee1405182ccf34ca1273be7b55880a9d"
+        ///
+        /// Re-recorded 2026-10-18 when a justified system began sharing its leftover room by one stretch across every
+        /// measure (`justifiedWidths`) instead of scaling each by one ratio: the first bar no longer takes a share for
+        /// its clef, so the three whole notes move. The encoder is unchanged.
+        private static let textFreeProgramSHA256 = "234410354a01179dfa063ea79b456588b5436e96071e3c38636086c33fbe8fde"
 
         /// Three whole-note bars on one staff: no title, no lyrics, no staff text, no instrument name — nothing whose
         /// position depends on a system font's measurement, so the hash pins the encoder and not the machine's fonts.

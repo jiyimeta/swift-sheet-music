@@ -20,6 +20,17 @@ fixtures taken from the upstream MuseScore repository:
   - tempomap/gradual_tempo_change_{rallentando,accelerando,
     doesnt_overwrite_other_tempo}.mscx:
       src/engraving/tests/tempomap_data/<same name>/
+  - musicxml/ direction fixtures, each a `<name>.xml` with its
+    `<name>_ref.mscx` (the UTF-16 ones re-encoded as UTF-8, content
+    unchanged): testTempoLineFermata, testInferredTempoText,
+    testInferredTempoText2, testInferredDynamicsExpression,
+    testWedgeOffset, testPlacementDefaults, testPlacementOffsetDefaults,
+    testFinaleDynamics, testPedalChangesBroken, testSibMetronomeMarks,
+    testTempoTextSpace1, testTempoTextSpace2, testTextOrder,
+    testInferredCrescLines, testInferredCrescLines2,
+    testInferredTechnique, testSibRitLine, testSibOttavas,
+    testInferredDynamicRange:
+      src/importexport/musicxml/tests/data/
 
 They are reproduced here to allow the swift-sheet-music test suite to
 verify equivalence of its MIDI export against MuseScore's own exporter

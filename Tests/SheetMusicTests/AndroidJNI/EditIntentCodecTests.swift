@@ -260,6 +260,22 @@ struct EditIntentCodecTests {
             // Appended for the clipboard project (spec 2026-09-13) — index 86. The payload string carries a `<`
             // and an `&` so the round trip covers XML-flavored text getting escaped and unescaped correctly.
             .pasteRange(at: slot, payload: "<Chord duration=\"1/4\"> & </Chord>"),
+            // Appended for Format Rhythms — index 91. One entry per scope kind, each with a policy that differs
+            // from `.default` in every knob, so a knob written into the wrong tag, or a scope field dropped, cannot
+            // survive looking right.
+            .formatRhythms(scope: .score, policy: .museScore),
+            .formatRhythms(scope: .range(range), policy: RhythmSpellingPolicy(
+                dotLevel: .triple, midBarSyncopations: .keepWritten, beatCrossingRests: .allow,
+            )),
+            .formatRhythms(scope: .measure(staff: staff, measureIndex: 6), policy: RhythmSpellingPolicy(
+                dotLevel: .none, midBarSyncopations: .allow, beatCrossingRests: .split,
+            )),
+            // Appended for folino's pattern edit — index 92. Three durations of three shapes (a plain value, a
+            // dotted one and a fraction), so a repeated field that dropped or re-tagged one cannot survive looking
+            // right.
+            .retimeRun(at: slot, durations: [
+                .eighth, NoteDuration.eighth.dotted(1), .fraction(Fraction(numerator: 1, denominator: 12)),
+            ]),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -369,6 +385,47 @@ struct EditIntentCodecTests {
         // `bytes[1]` framing reason `setRehearsalMark` above uses a one-character mark: a real `.mscx` document
         // runs to thousands of bytes and would push the frame's own length prefix well past 127.
         #expect(EditIntentCodec.encode(.pasteRange(at: slot, payload: "x"))[1] == 86)
+    }
+
+    /// Appended for Format Rhythms. Its payload is a range plus scalars (well under 127 bytes), so `bytes[1]` still
+    /// reads the index, for the score form and the range form alike.
+    @Test func `format rhythms keeps wire index 91`() {
+        let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let slot = VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
+        let range = VoiceElementRange(start: slot, end: slot)
+        #expect(EditIntentCodec.encode(.formatRhythms(scope: .score, policy: .default))[1] == 91)
+        #expect(EditIntentCodec.encode(.formatRhythms(scope: .range(range), policy: .museScore))[1] == 91)
+    }
+
+    /// A log written by a newer build can carry a scope kind or a policy raw value this build has never heard of;
+    /// replaying it must apply the closest safe reading rather than refuse or trap: the whole score, and the
+    /// `.default` policy's value for each knob that does not parse.
+    @Test func `an unknown format-rhythms scope or policy value decodes to the default`() {
+        var wire = FormatRhythmsIntentWire(scope: .score, policy: .museScore)
+        wire.scopeKind = 200
+        wire.dotLevel = 200
+        wire.midBarSyncopations = 200
+        wire.beatCrossingRests = 200
+        let decoded = wire.decoded()
+        #expect(decoded.scope == .score)
+        #expect(decoded.policy == RhythmSpellingPolicy.default)
+
+        // Each knob falls back on its own: an unknown dot level does not reset the two that parse.
+        var oneBad = FormatRhythmsIntentWire(scope: .score, policy: .museScore)
+        oneBad.dotLevel = 200
+        #expect(oneBad.decoded().policy == RhythmSpellingPolicy(
+            dotLevel: RhythmSpellingPolicy.default.dotLevel,
+            midBarSyncopations: RhythmSpellingPolicy.museScore.midBarSyncopations,
+            beatCrossingRests: RhythmSpellingPolicy.museScore.beatCrossingRests,
+        ))
+    }
+
+    /// Appended for folino's pattern edit, after Format Rhythms. Its payload is a slot plus two durations (well under
+    /// 127 bytes), so `bytes[1]` still reads the index.
+    @Test func `retime run keeps wire index 92`() {
+        let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let slot = VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
+        #expect(EditIntentCodec.encode(.retimeRun(at: slot, durations: [.eighth, .eighth]))[1] == 92)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field

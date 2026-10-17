@@ -296,8 +296,33 @@
         /// lists the box. The `wrap=false` blocks lay out no frames and did not change; no fixture has an `<HBox>`,
         /// a second `<VBox>` or a picture, so W7's other geometry is pinned by its own suites
         /// (`FrameStreamPlacerTests`, `FrameLayoutTests`, `HorizontalFrameLayoutTests`, `LayoutPaginatorTests`).
+        ///
+        /// **Re-recorded 2026-10-17 when a syllable became a floor on the distance to the next syllable instead of
+        /// weight in its note's gap, after reading the diff** against the digest above (`f386db1d…`, which 4.13.0
+        /// left unchanged). Two blocks of 68 moved, both `lyrics_verses_melisma`, the only fixture with lyrics. At
+        /// natural width five of its six bars narrow (m[0] 248.07 → 207.24 pt, m[3] 149.45 → 124.83; the whole
+        /// rests' m[2] keeps 109.20) because natural width stretches weight 1.5× and the syllables no longer ride
+        /// along; the system shrinks 975.86 → 853.11 pt. Wrapped, every measure keeps its width and origin and only
+        /// the columns inside move toward their durations' spacing. Rendered and read: no two syllables, dashes or
+        /// melisma lines touch in either.
+        ///
+        /// **Re-recorded 2026-10-18 when a justified system began sharing its leftover room by one stretch across
+        /// every measure (`justifiedWidths`) instead of scaling each measure's width by one ratio, after reading the
+        /// diff** against the digest above (`679f8627…`). 19 blocks of 68 moved, every one `wrap=true`; no block
+        /// changed its system count or which measures a system holds. In each, the width a system hands its measures
+        /// is redistributed: the measure carrying the system's clef and key narrows (`repeat52` m[0] 206.39 → 178.23,
+        /// `testSingleNoteDynamics` m[0] 295.91 → 245.08) because its header no longer takes a share of the stretch,
+        /// and measures of one rhythm come out equally wide (`harmony-basic`'s m[1]–m[4] at 160.55, where the bar its
+        /// chord symbol had widened stood at 185.64). Rendered and read: `lyrics_verses_melisma`'s bars 1 and 2 now
+        /// space their quarters alike.
+        ///
+        /// **Re-recorded 2026-10-18 for part names becoming selectable, on the tree that already holds the two
+        /// spacing records above, after checking the diff mechanically** against the digest above (`e4928f1b…`):
+        /// every one of the 387 `label` lines gains an `elementID: Optional(…partName(partIndex:form:))` field, and
+        /// nothing else changes — with that field stripped from the label lines, the digest hashes to `e4928f1b…`
+        /// exactly. No origin moved. (The same change measured alone against `f386db1d…` gave `10666dba…`.)
         private static let expectedDigestSHA256 =
-            "f386db1db299bb8786de7c707e56bee786f66a7bb9d4ad7f37706204c13c61b4"
+            "f346efcae7605cf96e15f46eb8d5327eacea9414e353297c02f80c4f022536f1"
 
         @Test("write digest")
         func writeDigest() throws {

@@ -533,7 +533,15 @@ public enum EditIntent: Sendable, Equatable {
     /// when the beat already reads exactly this way.
     case setSwing(anchor: VoiceElementID, settings: SetSwing.Settings?, isSystemText: Bool)
 
-    // Appended for folino's pattern edit (spec 2026-10-17) — index 91.
+    // Appended for Format Rhythms — index 91.
+
+    /// Re-spell durations over `scope` the way `RhythmSpelling` would under `policy`, without changing a sounding
+    /// note or dropping a marking: tied chains are regrouped on the metric grid, rests re-spelled, tuplets left
+    /// alone. One undo step. A range that resolves to nothing is refused as `.targetNotFound`; a score already
+    /// written that way resolves to nothing to apply. See `FormatRhythms`.
+    case formatRhythms(scope: FormatRhythmsScope, policy: RhythmSpellingPolicy)
+
+    // Appended for folino's pattern edit (spec 2026-10-17) — index 92.
 
     /// Give the `durations.count` consecutive chords and rests of `at`'s measure and voice, starting at `at`, one
     /// new length each, in place: every element keeps everything but its duration, elements that are not chords or

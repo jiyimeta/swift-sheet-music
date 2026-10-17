@@ -55,24 +55,47 @@ struct MusicXMLMarkerTests {
         #expect(conflicting.markers.map(\.kind) == [.varcoda])
     }
 
-    /// Pins today's output for one `<direction>` carrying both; a later pass that dedupes the two replaces it.
-    @Test("a <coda/> glyph with <sound tocoda> yields a Coda and a To Coda")
-    func codaGlyphWithToCoda() throws {
+    @Test("<coda/> with <sound tocoda> is ONE To Coda (Review Focus 3)")
+    func codaGlyphWithToCodaSound() throws {
         let decoded = try Self.decode(
             "<direction><direction-type><coda/></direction-type><sound tocoda=\"coda\"/></direction>",
         )
-        #expect(decoded.markers == [
-            Marker(kind: .coda, label: "codab"),
-            Marker(kind: .toCoda, label: "coda", text: "To Coda"),
-        ])
+        #expect(decoded.markers.count == 1)
+        #expect(decoded.markers.first?.kind == .toCoda)
+        #expect(decoded.markers.first?.label == "coda")
+        #expect(decoded.markers.first?.elementProperties.visible == true)
         #expect(decoded.jumps.isEmpty)
     }
 
-    @Test("<sound tocoda> is a To Coda, not a Coda")
-    func toCoda() throws {
+    @Test("<coda/> with <sound coda> is one Coda")
+    func codaGlyphWithCodaSound() throws {
+        let decoded = try Self.decode(
+            "<direction><direction-type><coda/></direction-type><sound coda=\"codab\"/></direction>",
+        )
+        #expect(decoded.markers == [Marker(kind: .coda, label: "codab")])
+    }
+
+    @Test("<segno/> with <sound segno> is one Segno")
+    func segnoGlyphWithSegnoSound() throws {
+        let decoded = try Self.decode(
+            "<direction><direction-type><segno/></direction-type><sound segno=\"segno\"/></direction>",
+        )
+        #expect(decoded.markers == [Marker(kind: .segno, label: "segno")])
+    }
+
+    @Test("a glyph alone is still a marker of its family")
+    func glyphAlone() throws {
+        let decoded = try Self.decode("<direction><direction-type><segno/></direction-type></direction>")
+        #expect(decoded.markers == [Marker(kind: .segno, label: "segno")])
+    }
+
+    @Test("To Coda words keep their text")
+    func toCodaWords() throws {
         let decoded = try Self.decode(
             "<direction><direction-type><words>To Coda</words></direction-type><sound tocoda=\"coda\"/></direction>",
         )
-        #expect(decoded.markers == [Marker(kind: .toCoda, label: "coda", text: "To Coda")])
+        #expect(decoded.markers.count == 1)
+        #expect(decoded.markers.first?.kind == .toCoda)
+        #expect(decoded.markers.first?.text == "To Coda")
     }
 }

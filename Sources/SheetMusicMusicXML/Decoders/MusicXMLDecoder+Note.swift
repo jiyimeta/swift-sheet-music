@@ -38,6 +38,7 @@ enum MusicXMLNoteDecoder {
         divisions: DivisionsContext,
         existingVoiceElements: [VoiceElement],
         drumTable: MusicXMLDrumTable = MusicXMLDrumTable(),
+        octaveShift: Int = 0,
     ) throws -> Decoded {
         let isRest = node.children.contains(where: { $0.name == "rest" })
         let isChord = node.children.contains(where: { $0.name == "chord" })
@@ -66,7 +67,7 @@ enum MusicXMLNoteDecoder {
         let midi: Int
         let tpc: Int
         if let pitchNode = node.first("pitch") {
-            (midi, tpc) = try PitchDecoder.decode(pitchNode)
+            (midi, tpc) = try written(PitchDecoder.decode(pitchNode), octaveShift: octaveShift)
         } else if let unpitchedNode = node.first("unpitched") {
             // Unpitched percussion: prefer the part's drum table (built from
             // <score-part>'s <midi-instrument><midi-unpitched>) so the note
@@ -110,6 +111,12 @@ enum MusicXMLNoteDecoder {
         )
         _ = existingVoiceElements // reserved for future use (e.g. tie backrefs)
         return .new(prefix + [.chord(chord)] + suffix)
+    }
+
+    /// The written pitch of a sounding `<pitch>` under an octave shift (`xmlSetPitch`, `P2:290-310`): `midi + 12 ×
+    /// octaveShift`, clamped to 0…127 as MuseScore clamps it. An `<unpitched>` note is never shifted.
+    private static func written(_ pitch: (midi: Int, tpc: Int), octaveShift: Int) -> (midi: Int, tpc: Int) {
+        (min(max(pitch.midi + 12 * octaveShift, 0), 127), pitch.tpc)
     }
 
     /// `.grace` for a `<note>` that carries `<grace>`, nil for any other.

@@ -17,7 +17,7 @@ import SheetMusicCore
 ///
 /// `ScoreHitTester.hitTest(at:)` tries, in order:
 ///
-/// **notehead → rest → beam → flag → stem → tuplet → clef → text → engraved element.**
+/// **notehead → rest → beam → flag → stem → tuplet → clef → text → engraved element → part name.**
 ///
 /// The notehead rung covers grace noteheads too (`.graceNote`). Within it an ordinary head keeps first-match order,
 /// and a grace head wins only when the point is inside the grace head's own reach — the notehead radius scaled by
@@ -138,6 +138,10 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// a swing marking the reverse. That is also what keeps a caret from opening on one — a swing is edited
     /// through its popover, and no text-entry command addresses it.
     case swing(anchor: VoiceElementID)
+    /// A part's name at the left of a system, addressed by `SetPartNames(partIndex:)`; see `ScoreElementID.partName`.
+    /// Reported last of all — the label sits in the system's left margin, clear of every other rung's ink — and only
+    /// where a name is drawn: an empty one has no ink to click.
+    case partName(partIndex: Int, form: PartNameForm)
 }
 
 extension ScoreHitTarget {
@@ -174,7 +178,7 @@ extension ScoreHitTarget {
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote:
             return nil
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando, .swing:
+             .tie, .slur, .jump, .marker, .glissando, .swing, .partName:
             return nil
         }
     }
@@ -198,7 +202,7 @@ extension ScoreHitTarget {
         case .lyric, .staffText, .harmony, .rehearsalMark:
             return textID.map(ScoreItemID.text)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando, .swing:
+             .tie, .slur, .jump, .marker, .glissando, .swing, .partName:
             return elementID.map(ScoreItemID.element)
         }
     }
@@ -232,6 +236,7 @@ extension ScoreHitTarget {
             self = .marker(staff: staff, measureIndex: measureIndex, index: index)
         case let .glissando(start): self = .glissando(start: start)
         case let .swing(anchor): self = .swing(anchor: anchor)
+        case let .partName(partIndex, form): self = .partName(partIndex: partIndex, form: form)
         }
     }
 
@@ -264,6 +269,7 @@ extension ScoreHitTarget {
             return .marker(staff: staff, measureIndex: measureIndex, index: index)
         case let .glissando(start): return .glissando(start: start)
         case let .swing(anchor): return .swing(anchor: anchor)
+        case let .partName(partIndex, form): return .partName(partIndex: partIndex, form: form)
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
              .lyric, .staffText, .harmony, .rehearsalMark:
             return nil

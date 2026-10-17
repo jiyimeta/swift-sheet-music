@@ -120,6 +120,33 @@ struct TempoMarkingTextTests {
         #expect(!tempo.isSynthesizedMarking(otherNumber))
     }
 
+    @Test("a text that is exactly the derived marking stays derived")
+    func derivedText() {
+        var tempo = Tempo(beatsPerSecond: 2)
+        let markup = PreservedTextMarkup(
+            content: [
+                .element(PreservedTextMarkup.Element(name: "sym", content: [.characters("metNoteQuarterUp")])),
+                .characters(" = 120"),
+            ],
+            derivedText: " = 120",
+        )
+        tempo.adoptText(markup, plainText: " = 120")
+        #expect(tempo.text == nil)
+        #expect(tempo.preservedTextMarkup == nil)
+    }
+
+    @Test("any other text is authored and keeps its markup")
+    func authoredText() {
+        var tempo = Tempo(beatsPerSecond: 2)
+        let markup = PreservedTextMarkup(
+            content: [.element(PreservedTextMarkup.Element(name: "b", content: [.characters("Allegro")]))],
+            derivedText: "Allegro",
+        )
+        tempo.adoptText(markup, plainText: "Allegro")
+        #expect(tempo.text == "Allegro")
+        #expect(tempo.preservedTextMarkup == markup)
+    }
+
     // MARK: - MuseScore's reading of the words
 
     @Test("an equation alone is a whole-text metronome marking")

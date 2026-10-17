@@ -4,17 +4,16 @@
     @testable import SheetMusicLayout
     import Testing
 
-    /// A syllable's spacing requirement runs to the next SYLLABLE, not to the next note, and is shared out over the
-    /// gaps in between.
+    /// A syllable's spacing requirement runs to the next SYLLABLE, not to the next note.
     ///
     /// Reported 2026-09-20: typing a long word under one note in the middle of an otherwise plain run tore a wide
     /// hole beside that note, where MuseScore leaves the run evenly spaced and lets the text spill over its
     /// neighbours. The old rule asked the IMMEDIATE neighbour's gap for `curWidth / 2 + 0.25 sp` whether or not
     /// anything was written under it.
     ///
-    /// These measure `lyricsPairWidth` directly rather than through a laid-out score: it is the whole of the rule,
-    /// and a full layout would fold in duration spacing, which takes the `max` of the two and would hide the very
-    /// difference under test on any note long enough to dominate.
+    /// These measure `lyricsPairWidth` and the walk directly rather than through a laid-out score: a full layout
+    /// would fold in duration spacing, which takes over wherever it is the wider. How the requirement is shared over
+    /// the gaps up to the next syllable is pinned in layout (`LyricSpacingLayoutTests`).
     @Suite("Lyric spacing runs to the next syllable")
     struct LyricSpacingDistributionTests {
         private let _installApple = TestSupport.installApple
@@ -40,8 +39,8 @@
 
         // MARK: - The walk
 
-        @Test("the next syllable is found past notes that carry none, counting the gaps")
-        func walkCountsGaps() {
+        @Test("the next syllable is found past notes that carry none")
+        func walkSkipsBareNotes() {
             let elements: [VoiceElement] = [
                 Self.chord(Self.syllable("sing")),
                 Self.chord(),
@@ -49,7 +48,7 @@
                 Self.chord(Self.syllable("song")),
             ]
             let found = LayoutEngine.nextLyricBearingChord(in: elements, after: 0)
-            #expect(found?.gaps == 3, "three tick gaps lie between the two syllables")
+            #expect(found?.index == 3)
             #expect(found?.lyrics.first?.text == "song")
         }
 
@@ -64,7 +63,7 @@
                 Self.chord(Self.syllable("song")),
             ]
             let found = LayoutEngine.nextLyricBearingChord(in: elements, after: 0)
-            #expect(found?.gaps == 2)
+            #expect(found?.index == 2)
             #expect(found?.lyrics.first?.text == "song")
         }
 
@@ -80,35 +79,16 @@
 
         // MARK: - The requirement
 
-        /// Adjacent syllables are the common case and the one every existing spacing expectation was written
-        /// against, so they must come out exactly as before: the whole distance, on the one gap between them.
-        @Test("adjacent syllables ask for the whole distance, as they always did")
-        func adjacentIsUnchanged() {
-            let current = Self.syllable("la")
-            let next = Self.syllable("la")
-            let width = LayoutEngine.lyricsPairWidth(
-                currentLyrics: current, next: (lyrics: next, gaps: 1), metrics: Self.metrics,
-            )
+        /// The two syllables are centered on their columns, so the columns must stand both half-widths and the
+        /// inter-syllable room apart.
+        @Test("a pair asks for both half-widths and the room between them")
+        func pairAsksForBothHalves() {
+            let current = Self.syllable("Alleluia")
+            let next = Self.syllable("men")
+            let width = LayoutEngine.lyricsPairWidth(currentLyrics: current, nextLyrics: next, metrics: Self.metrics)
             let half = LayoutEngine.chordLyricMaxWidth(current, metrics: Self.metrics) / 2
             let nextHalf = LayoutEngine.chordLyricMaxWidth(next, metrics: Self.metrics) / 2
             #expect(width == half + Self.metrics.sp * 0.25 + nextHalf)
-        }
-
-        /// **The report, in one assertion.** The same two syllables three notes apart ask each gap for a THIRD of
-        /// what they ask of a single gap — so the note the long syllable sits on is no longer pushed away from its
-        /// neighbour on its own.
-        @Test("syllables further apart share the distance over the gaps between them")
-        func distanceIsShared() {
-            let current = Self.syllable("Alleluia")
-            let next = Self.syllable("men")
-            let adjacent = LayoutEngine.lyricsPairWidth(
-                currentLyrics: current, next: (lyrics: next, gaps: 1), metrics: Self.metrics,
-            )
-            let spread = LayoutEngine.lyricsPairWidth(
-                currentLyrics: current, next: (lyrics: next, gaps: 3), metrics: Self.metrics,
-            )
-            #expect(adjacent > 0, "the fixture must ask for something in the first place")
-            #expect(abs(spread - adjacent / 3) < 0.0001)
         }
 
         /// With nothing further to clear, a syllable constrains nothing and the tail stays at duration spacing.
@@ -116,7 +96,7 @@
         @Test("a syllable with none after it asks for nothing")
         func noFollowingSyllableAsksNothing() {
             let width = LayoutEngine.lyricsPairWidth(
-                currentLyrics: Self.syllable("Alleluia"), next: nil, metrics: Self.metrics,
+                currentLyrics: Self.syllable("Alleluia"), nextLyrics: nil, metrics: Self.metrics,
             )
             #expect(width == 0)
         }
@@ -124,7 +104,7 @@
         @Test("a chord with no syllable of its own asks for nothing")
         func noCurrentSyllableAsksNothing() {
             let width = LayoutEngine.lyricsPairWidth(
-                currentLyrics: [], next: (lyrics: Self.syllable("la"), gaps: 1), metrics: Self.metrics,
+                currentLyrics: [], nextLyrics: Self.syllable("la"), metrics: Self.metrics,
             )
             #expect(width == 0)
         }
@@ -136,19 +116,18 @@
             let dashed = [Lyric(text: "Al", syllabic: .begin)]
             let plain = Self.syllable("Al")
             let next = Self.syllable("le")
-            let withDash = LayoutEngine.lyricsPairWidth(
-                currentLyrics: dashed, next: (lyrics: next, gaps: 1), metrics: Self.metrics,
-            )
+            let withDash = LayoutEngine.lyricsPairWidth(currentLyrics: dashed, nextLyrics: next, metrics: Self.metrics)
             let withoutDash = LayoutEngine.lyricsPairWidth(
-                currentLyrics: plain, next: (lyrics: next, gaps: 1), metrics: Self.metrics,
+                currentLyrics: plain, nextLyrics: next, metrics: Self.metrics,
             )
             #expect(withDash - withoutDash == Self.metrics.sp * 0.25)
         }
 
         /// The spacing walks measure each chord once and carry the width to the chord's own pair
-        /// (`VoiceLyricSpacing`). Whatever they save, each gap must be asked for exactly what the pair rule asks:
-        /// across a note without a syllable, a rest, and a syllable of symbols alone (which only its runs give width).
-        @Test("a voice walk asks each gap for exactly what the pair rule asks")
+        /// (`VoiceLyricSpacing`). Whatever they save, each chord must be asked for exactly what the pair rule asks, up
+        /// to the chord the walk finds: across a note without a syllable, a rest, and a syllable of symbols alone
+        /// (which only its runs give width).
+        @Test("a voice walk asks each chord for exactly what the pair rule asks")
         func voiceWalkMatchesThePairRule() {
             let elision = Lyric(text: "", preservedTextMarkup: PreservedTextMarkup(
                 content: [.element(.init(name: "sym", content: [.characters("lyricsElision")]))], derivedText: "",
@@ -158,20 +137,21 @@
                 Self.chord(Self.syllable("lu", .middle)), Self.chord(Self.syllable("ia", .end)), Self.chord(),
             ]
             var walk = VoiceLyricSpacing(elements, metrics: Self.metrics)
-            var asked: [CGFloat] = []
+            var asked: [Int?] = []
             for (index, element) in elements.enumerated() {
                 guard case let .chord(chord) = element, !chord.notes.isEmpty else { continue }
                 let next = LayoutEngine.nextLyricBearingChord(in: elements, after: index)
                 let expected = LayoutEngine.lyricsPairWidth(
-                    currentLyrics: chord.lyrics, next: next.map { (lyrics: $0.lyrics, gaps: $0.gaps) },
-                    metrics: Self.metrics,
+                    currentLyrics: chord.lyrics, nextLyrics: next?.lyrics, metrics: Self.metrics,
                 )
-                let width = walk.pairWidth(at: index, lyrics: chord.lyrics)
-                #expect(width == expected, "chord \(index): \(width) vs \(expected)")
-                asked.append(width)
+                let demand = walk.demand(at: index, lyrics: chord.lyrics)
+                #expect((demand?.width ?? 0) == expected, "chord \(index): \(demand?.width ?? 0) vs \(expected)")
+                #expect(demand.map { $0.nextIndex == next?.index } ?? true, "chord \(index) reaches the wrong chord")
+                asked.append(demand?.nextIndex)
             }
-            // "Al", the elision and "lu" each have a syllable after them; "ia" and the bare notes do not.
-            #expect(asked.map { $0 > 0 } == [true, false, true, true, false, false])
+            // "Al" reaches the elision past a bare note and a rest, the elision "lu", "lu" "ia"; "ia" and the bare
+            // notes ask for nothing.
+            #expect(asked == [3, nil, 4, 5, nil, nil])
         }
     }
 #endif

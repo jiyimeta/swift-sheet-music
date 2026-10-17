@@ -14,8 +14,10 @@ extension ScoreElementID {
         // default), so that is the kind this resolver removes. A staff-bound one — which only a file can carry
         // in — is removed through `SetSwing` directly, with the flag its own editor read off the score.
         case let .swing(anchor): return SetSwing(anchor: anchor, settings: nil, isSystemText: true)
+        // A part name is not removed: its label is the part's own, and "no name" is a value `SetPartNames` writes
+        // through the editor that shows both names, not something Delete should do to a label clicked in passing.
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature,
-             .timeSignature, .barLine, .articulation:
+             .timeSignature, .barLine, .articulation, .partName:
             return nil
         }
     }

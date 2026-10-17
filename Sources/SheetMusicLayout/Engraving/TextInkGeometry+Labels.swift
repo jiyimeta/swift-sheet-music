@@ -37,6 +37,13 @@ extension TextInkGeometry {
         }
     }
 
+    /// The ink of a part name at the head of a system, in system coordinates — the box the renderers fill
+    /// (`NotationTextStyle.Role.partLabel`, anchored at its right edge). `nil` for an empty name, which draws nothing.
+    static func partLabelRect(_ label: LayoutPartLabel, metrics: StaffMetrics) -> CGRect? {
+        guard !label.text.isEmpty else { return nil }
+        return notationRects(text: label.text, role: .partLabel, origin: label.origin, metrics: metrics).first
+    }
+
     private static func notationRects(
         text: String, role: NotationTextStyle.Role, origin: CGPoint, metrics: StaffMetrics,
     ) -> [CGRect] {

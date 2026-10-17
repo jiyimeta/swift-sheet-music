@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <programVersion>4.7.5</programVersion>
+  <programRevision>3654226</programRevision>
+  <Score>
+    <eid>V4gjisLUTEN_m/aONyIBi5G</eid>
+    <Division>480</Division>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <open>1</open>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer">James M</metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="creationDate">2026-10-17</metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="originalFormat">xml</metaTag>
+    <metaTag name="platform">Apple Macintosh</metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber"></metaTag>
+    <metaTag name="workTitle">Dynamics and expression text</metaTag>
+    <Part id="1">
+      <Staff>
+        <eid>4a1cA4zZ+NM_7S7THvIo9CE</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        </Staff>
+      <trackName>Flute</trackName>
+      <Instrument id="flute">
+        <longName>Flute</longName>
+        <shortName>Fl.</shortName>
+        <trackName>Flute</trackName>
+        <minPitchP>59</minPitchP>
+        <maxPitchP>98</maxPitchP>
+        <minPitchA>60</minPitchA>
+        <maxPitchA>93</maxPitchA>
+        <instrumentId>wind.flutes.flute</instrumentId>
+        <Articulation>
+          <velocity>100</velocity>
+          <gateTime>95</gateTime>
+          </Articulation>
+        <Articulation name="staccatissimo">
+          <velocity>100</velocity>
+          <gateTime>33</gateTime>
+          </Articulation>
+        <Articulation name="staccato">
+          <velocity>100</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="portato">
+          <velocity>100</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="tenuto">
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="marcato">
+          <velocity>120</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="sforzato">
+          <velocity>150</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="sforzatoStaccato">
+          <velocity>150</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoStaccato">
+          <velocity>120</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoTenuto">
+          <velocity>120</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Channel>
+          <program value="73"/>
+          <controller ctrl="10" value="63"/>
+          <synti>Fluid</synti>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <eid>ecZoEW7GaOD_6yt4l0sZMkF</eid>
+        <Text>
+          <eid>sA1UuWds3JK_cXp84HCSEcC</eid>
+          <style>title</style>
+          <text>Dynamics and expression text</text>
+          </Text>
+        <Text>
+          <eid>M7qzMhsaHNG_Jkb6CamztHC</eid>
+          <style>composer</style>
+          <text>James M</text>
+          </Text>
+        </VBox>
+      <Measure>
+        <eid>bnpbwKf9URK_eRU3CPOxwFF</eid>
+        <voice>
+          <Clef>
+            <concertClefType>G</concertClefType>
+            <transposingClefType>G</transposingClefType>
+            <isHeader>1</isHeader>
+            <eid>eZOLMqpPDvK_VGWdIeU3wUJ</eid>
+            </Clef>
+          <TimeSig>
+            <eid>7IY24BOurgG_EsUj7tJ7N5M</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <Dynamic>
+            <subtype>pp</subtype>
+            <velocity>33</velocity>
+            <direction>down</direction>
+            <eid>b0UlIvKs2FO_N4k6CkzEQRG</eid>
+            </Dynamic>
+          <Chord>
+            <eid>qPN0gYMQn+H_HFyTXYlOoCM</eid>
+            <durationType>half</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>/0mKCxvZ6+_Fz12BwSFL4H</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>xXQ6OMnebVN_ggZIYBPxEtN</eid>
+            <durationType>half</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>N73Akws7ANF_P+/elcEucSJ</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>y5qJeA6+PWI_C8rjztjSa9D</eid>
+        <voice>
+          <Expression>
+            <direction>down</direction>
+            <eid>ZkA6dSICcqI_I94aNLfdELM</eid>
+            <text><i>sub.</i></text>
+            </Expression>
+          <Chord>
+            <eid>S6kES7mN1AM_MO34m8X936B</eid>
+            <durationType>half</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>vcZbfykN/pD_NOjRIYHEVnP</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>2AnCcdoZyVE_rpcZjD5e5zM</eid>
+            <durationType>half</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>lyOoUzyq/NI_kOjzO8HhpyL</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>XvYvacmSZ5D_cOEpvYwoxjF</eid>
+        <voice>
+          <Dynamic>
+            <subtype>f</subtype>
+            <velocity>96</velocity>
+            <direction>down</direction>
+            <eid>fQ7jg02r+BM_8JSnTptP/nG</eid>
+            </Dynamic>
+          <Expression>
+            <direction>down</direction>
+            <eid>O1LyfJ8BCJH_fFhWkzGFZ6F</eid>
+            <text><i>sub.</i></text>
+            </Expression>
+          <Chord>
+            <eid>nbFaXxgo0gM_kFo9xZYqdyL</eid>
+            <durationType>half</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>UpRZ+IX5uyJ_+6+d8nOh+SO</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>6OJiUPu2J/H_aZtW8BhJQSB</eid>
+            <durationType>half</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>j6b4eZTojrG_YHm+fO1IXTG</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>/qiiEWvRxtB_QEZsHikZ7yL</eid>
+        <voice>
+          <Dynamic>
+            <subtype>p</subtype>
+            <velocity>49</velocity>
+            <direction>down</direction>
+            <eid>bLlv63wGCmH_wjimo+uDLcF</eid>
+            </Dynamic>
+          <Chord>
+            <eid>UX+79XiMyEF_nH1vUkQZAGG</eid>
+            <durationType>half</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>3a29R/z8jQG_FIHQcuuHpdL</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>8xPxiZmtIOE_m1Qcp8Gn1zH</eid>
+            <durationType>half</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>GBrJrC3ACjM_aG0//FhtXfN</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>94rT1jsi9KD_90wwMjGJatJ</eid>
+        <voice>
+          <Dynamic>
+            <subtype>mf</subtype>
+            <velocity>80</velocity>
+            <direction>down</direction>
+            <eid>RTaXa3vMy7F_xPLyAw9UPeP</eid>
+            </Dynamic>
+          <Spanner type="HairPin">
+            <HairPin>
+              <subtype>2</subtype>
+              <direction>down</direction>
+              <lineVisible>0</lineVisible>
+              <eid>eV/vIjQakdD_GBxXLu0Lb9J</eid>
+              </HairPin>
+            <next>
+              <location>
+                </location>
+              </next>
+            </Spanner>
+          <Spanner type="HairPin">
+            <prev>
+              <location>
+                </location>
+              </prev>
+            </Spanner>
+          <Chord>
+            <eid>ZZzMFs0fK3G_QhWAkhHIkkI</eid>
+            <durationType>half</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>AGcOHhczAuO_S9whlyZDUDP</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>ESbOHxPNDDK_uRUXwzJQlYO</eid>
+            <durationType>half</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>Lx7+hEugl3O_fH4hNTXPSCB</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <BarLine>
+            <subtype>end</subtype>
+            <eid>+KjdUEzeJgF_ZsvY4rBQmlM</eid>
+            </BarLine>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>

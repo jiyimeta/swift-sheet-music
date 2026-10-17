@@ -169,7 +169,71 @@ public struct TransposeScoreIntentWire {
     }
 }
 
-// Appended for folino's pattern edit (spec 2026-10-17) — intent 91. A range payload in all but its addressing: the
+// Appended for Format Rhythms (spec 2026-10-17) — intent 91, a final wire number. Scalars only: the scope is a kind
+// byte plus the fields of the two scopes that carry something, and the policy is its three raw values.
+
+@WireFormat
+public struct FormatRhythmsIntentWire {
+    /// 0 score, 1 range, 2 measure. An unknown value decodes to the whole score.
+    public var scopeKind: UInt8
+    /// A `(0,0,0,0)…(0,0,0,0)` range unless `scopeKind == 1`.
+    public var range: VoiceElementRangeWire
+    /// Staff 0 unless `scopeKind == 2`.
+    public var staff: StaffAddressWire
+    public var measureIndex: Int32
+    public var dotLevel: UInt8
+    public var midBarSyncopations: UInt8
+    public var beatCrossingRests: UInt8
+
+    public init(scope: FormatRhythmsScope, policy: RhythmSpellingPolicy) {
+        let origin = VoiceElementID(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 0,
+        )
+        var kind: UInt8 = 0
+        var range = VoiceElementRange(start: origin, end: origin)
+        var staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        var measureIndex = 0
+        switch scope {
+        case .score:
+            break
+        case let .range(value):
+            kind = 1
+            range = value
+        case let .measure(address, index):
+            kind = 2
+            staff = address
+            measureIndex = index
+        }
+        scopeKind = kind
+        self.range = VoiceElementRangeWire(from: range)
+        self.staff = StaffAddressWire(from: staff)
+        self.measureIndex = Int32(measureIndex)
+        dotLevel = UInt8(policy.dotLevel.rawValue)
+        midBarSyncopations = UInt8(policy.midBarSyncopations.rawValue)
+        beatCrossingRests = UInt8(policy.beatCrossingRests.rawValue)
+    }
+
+    /// Unknown raw values fall back to the field's `RhythmSpellingPolicy.default` value, so a log written by a newer
+    /// build still replays.
+    public func decoded() -> (scope: FormatRhythmsScope, policy: RhythmSpellingPolicy) {
+        let scope: FormatRhythmsScope = switch scopeKind {
+        case 1: .range(range.decoded())
+        case 2: .measure(staff: staff.decoded(), measureIndex: Int(measureIndex))
+        default: .score
+        }
+        let fallback = RhythmSpellingPolicy.default
+        let policy = RhythmSpellingPolicy(
+            dotLevel: RhythmSpellingPolicy.DotLevel(rawValue: Int(dotLevel)) ?? fallback.dotLevel,
+            midBarSyncopations: RhythmSpellingPolicy.Crossing(rawValue: Int(midBarSyncopations))
+                ?? fallback.midBarSyncopations,
+            beatCrossingRests: RhythmSpellingPolicy.Crossing(rawValue: Int(beatCrossingRests))
+                ?? fallback.beatCrossingRests,
+        )
+        return (scope: scope, policy: policy)
+    }
+}
+
+// Appended for folino's pattern edit (spec 2026-10-17) — intent 92. A range payload in all but its addressing: the
 // run is a start slot and a count, and the count is how many durations it carries.
 
 @WireFormat

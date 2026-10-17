@@ -11,15 +11,14 @@ import SheetMusicFoundation
 struct StaffMeasureBuilder {
     private var voiceIndex: [String: Int] = [:]
     private var voices: [[VoiceElement]] = []
+    /// Where each voice's chords and rests sit by the measure clock, parallel to `voices`.
+    private var anchors: [[MusicXMLChordAnchor]] = []
     private var defaultVoiceId: String?
     private var startRepeat = false
     private var endRepeatCount: Int?
     private var trailingBarline: BarLine?
-    private var markers: [Marker] = []
-    private var jumps: [Jump] = []
-    /// System-level elements lifted out during decode (currently
-    /// just rehearsal marks; tempo / staff text / swing imports
-    /// would feed into this once added). The caller pulls these
+    /// System-level elements lifted out during decode (rehearsal
+    /// marks and the texts a direction's words make). The caller pulls these
     /// out via `build()` and merges them into `Score.systemMeasures`.
     /// `originalStaff` is left nil here and stamped by the caller
     /// once the staff address is known.
@@ -38,25 +37,13 @@ struct StaffMeasureBuilder {
     struct Built {
         let measure: Measure
         let systemElements: [PositionedSystemElement]
+        /// Where positional voice 0's chords and rests sit by the measure clock (`MusicXMLChordAnchor`).
+        let anchors: [MusicXMLChordAnchor]
     }
 
-    mutating func addMarkers(_ newMarkers: [Marker]) {
-        markers.append(contentsOf: newMarkers)
-    }
-
-    mutating func addJumps(_ newJumps: [Jump]) {
-        jumps.append(contentsOf: newJumps)
-    }
-
-    /// Record a rehearsal mark at the start of this measure.
-    /// MusicXML's `<direction-type><rehearsal>` doesn't carry a
-    /// fractional offset so the position defaults to
-    /// `MeasurePosition.start`.
-    mutating func addRehearsalMark(_ mark: RehearsalMark) {
-        systemElements.append(PositionedSystemElement(
-            position: .start,
-            element: .rehearsalMark(mark),
-        ))
+    /// Record a system-lane element (a staff text, a rehearsal mark, …) at `position` in this measure.
+    mutating func addSystemElement(_ element: SystemElement, at position: MeasurePosition) {
+        systemElements.append(PositionedSystemElement(position: position, element: element))
     }
 
     /// Append to the first voice index (MSCX attributes convention). Lazily
@@ -73,9 +60,15 @@ struct StaffMeasureBuilder {
     /// Append a note-sourced element under the MSCX index corresponding to
     /// this MusicXML voice id. A chord takes the voice's pending grace chords: those a slur or wavy line ended on
     /// become after-graces of the chord before it, and the rest lead into this one (MuseScore's
-    /// `addGraceChordsAfter` then `addGraceChordsBefore`).
-    mutating func append(_ element: VoiceElement, toVoice voiceId: String) {
+    /// `addGraceChordsAfter` then `addGraceChordsBefore`). A chord given its clock window (`start`, `end`) records a
+    /// `MusicXMLChordAnchor` at the index it is appended at.
+    mutating func append(
+        _ element: VoiceElement, toVoice voiceId: String, start: Fraction? = nil, end: Fraction? = nil,
+    ) {
         let idx = internVoice(voiceId)
+        if case .chord = element, let start, let end {
+            anchors[idx].append(MusicXMLChordAnchor(elementIndex: voices[idx].count, start: start, end: end))
+        }
         guard case var .chord(chord) = element, let pending = pendingGraces.removeValue(forKey: idx) else {
             voices[idx].append(element)
             return
@@ -185,14 +178,9 @@ struct StaffMeasureBuilder {
         let builtVoices = final.isEmpty
             ? [Voice(elements: [])]
             : final.map { Voice(elements: $0) }
-        let measure = Measure(
-            voices: builtVoices,
-            startRepeat: startRepeat,
-            endRepeatCount: endRepeatCount,
-            markers: markers,
-            jumps: jumps,
-        )
-        return Built(measure: measure, systemElements: systemElements)
+        // Markers and jumps join the part's first staff after the walk (`MusicXMLRepeatLog`).
+        let measure = Measure(voices: builtVoices, startRepeat: startRepeat, endRepeatCount: endRepeatCount)
+        return Built(measure: measure, systemElements: systemElements, anchors: anchors.first ?? [])
     }
 
     // MARK: - private helpers
@@ -234,6 +222,7 @@ struct StaffMeasureBuilder {
     private mutating func ensureFirstVoice() {
         if voices.isEmpty {
             voices.append([])
+            anchors.append([])
             voiceIndex["__implicit__"] = 0
         }
     }
@@ -251,6 +240,7 @@ struct StaffMeasureBuilder {
         }
         let idx = voices.count
         voices.append([])
+        anchors.append([])
         voiceIndex[voiceId] = idx
         return idx
     }

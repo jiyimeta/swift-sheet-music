@@ -1,0 +1,253 @@
+<?xml version='1.0' encoding="UTF-8" standalone='no'?>
+<!DOCTYPE score-partwise PUBLIC '-//Recordare//DTD MusicXML 3.0 Partwise//EN' 'http://www.musicxml.org/dtds/partwise.dtd'>
+<score-partwise version='3.0'>
+	<identification>
+		<encoding>
+			<software>Sibelius 20231.1</software>
+			<software>Dolet 6.6 for Sibelius</software>
+			<encoding-date>2024-02-19</encoding-date>
+			<supports element='accidental' type='yes'/>
+			<supports element='transpose' type='no'/>
+			<supports attribute='new-page' element='print' type='yes' value='yes'/>
+			<supports attribute='new-system' element='print' type='yes' value='yes'/>
+		</encoding>
+	</identification>
+	<defaults>
+		<scaling>
+			<millimeters>7</millimeters>
+			<tenths>40</tenths>
+		</scaling>
+		<page-layout>
+			<page-height>1597</page-height>
+			<page-width>1234</page-width>
+			<page-margins type='both'>
+				<left-margin>72.5714</left-margin>
+				<right-margin>72.5714</right-margin>
+				<top-margin>72.5714</top-margin>
+				<bottom-margin>72.5714</bottom-margin>
+			</page-margins>
+		</page-layout>
+		<system-layout>
+			<system-margins>
+				<left-margin>0</left-margin>
+				<right-margin>0</right-margin>
+			</system-margins>
+			<system-distance>120</system-distance>
+			<top-system-distance>108.75</top-system-distance>
+		</system-layout>
+		<?DoletSibelius StaffJustificationPercentage=65?>
+		<appearance>
+			<line-width type='beam'>5</line-width>
+			<line-width type='heavy barline'>5</line-width>
+			<line-width type='leger'>1.5625</line-width>
+			<line-width type='light barline'>1.5625</line-width>
+			<line-width type='slur middle'>2.1875</line-width>
+			<line-width type='slur tip'>0.625</line-width>
+			<line-width type='staff'>0.9375</line-width>
+			<line-width type='stem'>1.25</line-width>
+			<line-width type='tie middle'>2.1875</line-width>
+			<line-width type='tie tip'>0.625</line-width>
+			<note-size type='grace'>60</note-size>
+			<note-size type='cue'>75</note-size>
+		</appearance>
+		<music-font font-family='Opus Std,music'/>
+		<word-font font-family='Times New Roman'/>
+	</defaults>
+	<part-list>
+		<score-part id='P1'>
+			<part-name print-object='no'>[Unnamed (treble staff)]</part-name>
+			<score-instrument id='P1-I1'>
+				<instrument-name></instrument-name>
+				<instrument-sound>keyboard.piano.grand</instrument-sound>
+			</score-instrument>
+			<midi-instrument id='P1-I1'>
+				<volume>79</volume>
+				<pan>0</pan>
+			</midi-instrument>
+		</score-part>
+	</part-list>
+<!--=========================================================-->
+	<part id='P1'>
+		<measure number='1'>
+			<print>
+				<system-layout>
+					<top-system-distance>181.5625</top-system-distance>
+				</system-layout>
+				<staff-layout>
+					<?DoletSibelius ExtraSpacesAbove=3?>
+				</staff-layout>
+				<measure-layout>
+					<measure-distance>50</measure-distance>
+				</measure-layout>
+			</print>
+			<attributes>
+				<divisions>768</divisions>
+				<key>
+					<fifths>0</fifths>
+					<mode>major</mode>
+				</key>
+				<time>
+					<beats>4</beats>
+					<beat-type>4</beat-type>
+				</time>
+				<clef>
+					<sign>G</sign>
+					<line>2</line>
+				</clef>
+			</attributes>
+			<direction placement='above' directive='yes'>
+				<direction-type>
+					<words font-weight='bold'>Lingering  q = c. 40</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='2'>
+			<print new-system='no'/>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>q. = c. 78</words>
+				</direction-type>
+			</direction>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>q. = c. 78</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='3'>
+			<print new-system='yes'/>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>Andante (q = c. 90)</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='4'>
+			<print new-system='no'/>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>Leggero (q = c. 80)</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='5'>
+			<print new-system='yes'/>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>y. = c. 78</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='6'>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>x = c. 78</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='7'>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>e. = c. 78</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='8'>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>h = c. 78</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='9'>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>V. = c. 78</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='10'>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>w = c. 78</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+		</measure>
+<!--=========================================================-->
+		<measure number='11'>
+			<direction placement='above'>
+				<direction-type>
+					<words font-weight='bold'>W. = c. 78</words>
+				</direction-type>
+			</direction>
+			<note>
+				<rest measure='yes'/>
+				<duration>3072</duration>
+				<voice>1</voice>
+			</note>
+			<barline location='right'>
+				<bar-style>light-heavy</bar-style>
+			</barline>
+		</measure>
+	</part>
+<!--=========================================================-->
+</score-partwise>

@@ -118,6 +118,7 @@ own substantive logic.
 | `SetGlissando` | not in the example — host command registry | sugar |
 | `SetDots` | not in the example — host command registry | sugar |
 | `SetDotsInRange` | not in the example — host command registry (each element keeps its own base, so a quarter and an eighth dot to 3/8 and 3/16; a length with no dotted spelling is skipped rather than refused) | sugar |
+| `FormatRhythms` | not in the example — host command registry (a range, one bar or the whole score; re-spells ties, dots and rests by the meter, never dropping a slur, lyric melisma, grace note or any other marking — a span that cannot be rewritten safely is left as written; tuplets untouched) | — |
 | `RetimeRun` | not in the example — folino's pattern edit (gives a run of chords and rests in one bar and one voice a new length each, in place: a dotted eighth and a sixteenth become two eighths with their pitches, lyrics, ties and articulations, the marks between them stay before the chord they preceded, the voice's slurs, lines and melismas reaching into the run are restated to end on the same elements, and a staff text on a member's onset moves with it unless another voice of the staff starts an element there. The new total must equal the old — nothing is filled in or swallowed, which is what sets it apart from `SetDurationInRange`) | sugar |
 | `SetChordLine` | not in the example — host command registry | sugar |
 | `SetNoteParentheses` | not in the example — host command registry | sugar |

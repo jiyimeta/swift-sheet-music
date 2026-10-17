@@ -59,6 +59,28 @@ extension Score {
         return result
     }
 
+    /// `parts` with every staff's bracket columns compacted by `canonicalizedColumns`, in place: the same brackets,
+    /// renumbered onto `0 ..< n` across the score. An importer whose source numbers columns from a level that leaves
+    /// column 0 empty (MuseScore's `bracketLevels + 1`) calls it so the gutter has no empty column.
+    package static func canonicalizingBracketColumns(_ parts: [Part]) -> [Part] {
+        var entries: [(part: Int, staff: Int, bracket: BracketItem)] = []
+        for (partIndex, part) in parts.enumerated() {
+            for (staffIndex, staff) in part.staves.enumerated() {
+                entries += staff.brackets.map { (part: partIndex, staff: staffIndex, bracket: $0) }
+            }
+        }
+        var compacted = canonicalizedColumns(entries).makeIterator()
+        var result = parts
+        for partIndex in result.indices {
+            result[partIndex].staves.mapValues { staff in
+                var copy = staff
+                copy.brackets = staff.brackets.map { original in compacted.next()?.bracket ?? original }
+                return copy
+            }
+        }
+        return result
+    }
+
     /// Closes the gaps a re-anchor pass leaves in the bracket gutter: the columns still occupied are renumbered
     /// onto `0 ..< n`, keeping their order.
     ///

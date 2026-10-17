@@ -137,7 +137,8 @@ import Wirelet
 /// 88 = transposeScore(TransposeScoreIntentWire), see EditIntentPayloads+Range.swift
 /// 89 = setTempoFont(SetTempoFontIntentWire), see EditIntentPayloads+TextFont.swift
 /// 90 = setSwing(SetSwingIntentWire), see EditIntentPayloads+Marks.swift
-/// 91 = retimeRun(RetimeRunIntentWire), see EditIntentPayloads+Range.swift
+/// 91 = formatRhythms(FormatRhythmsIntentWire), see EditIntentPayloads+Range.swift
+/// 92 = retimeRun(RetimeRunIntentWire), see EditIntentPayloads+Range.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -153,8 +154,9 @@ import Wirelet
 /// appended for the duplicate-range project (spec 2026-09-13). Case 86 was appended for the clipboard project
 /// (spec 2026-09-13). Cases 87 and 88 were appended for the score-transposition project (spec 2026-09-14) — the
 /// range form of the dot key, and the whole-score transposition. Case 89 was appended for the text font and color
-/// inspector — a tempo marking's font patch. Case 90 was appended for swing directives, and case 91 for folino's
-/// pattern edit — a run re-timed in place — and 91 is the catalogue's last.
+/// inspector — a tempo marking's font patch. Case 90 was appended for swing. Case 91 was appended for Format
+/// Rhythms; its number is final. Case 92 was appended for folino's pattern edit — a run re-timed in place — and 92
+/// is the catalogue's last.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -513,7 +515,7 @@ import Wirelet
 /// tag 3: respellInKey            u8, varint — 0 / 1
 /// ```
 ///
-/// `RetimeRunIntentWire` (`retimeRun`'s payload, index 91 — listed with the range family, which it belongs to in
+/// `RetimeRunIntentWire` (`retimeRun`'s payload, index 92 — listed with the range family, which it belongs to in
 /// all but its addressing: a start slot and a count, the count being how many durations it carries):
 /// ```
 /// tag 1: location   VoiceElementIDWire, see PathIDCodecs.swift — the run's first chord or rest
@@ -1164,7 +1166,9 @@ public enum EditIntentWire {
     case setTempoFont(SetTempoFontIntentWire)
     /// Appended for swing directives — index 90. Never renumber anything above it.
     case setSwing(SetSwingIntentWire)
-    /// Appended for folino's pattern edit (spec 2026-10-17) — index 91. Never renumber anything above it.
+    /// Appended for Format Rhythms (spec 2026-10-17) — index 91. Never renumber anything above it.
+    case formatRhythms(FormatRhythmsIntentWire)
+    /// Appended for folino's pattern edit (spec 2026-10-17) — index 92. Never renumber anything above it.
     case retimeRun(RetimeRunIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
@@ -1370,6 +1374,8 @@ public enum EditIntentWire {
             self = .setTempoFont(SetTempoFontIntentWire(anchor: anchor, patch: patch))
         case let .setSwing(anchor, settings, isSystemText):
             self = .setSwing(SetSwingIntentWire(anchor: anchor, settings: settings, isSystemText: isSystemText))
+        case let .formatRhythms(scope, policy):
+            self = .formatRhythms(FormatRhythmsIntentWire(scope: scope, policy: policy))
         case let .retimeRun(location, durations):
             self = .retimeRun(RetimeRunIntentWire(location: location, durations: durations))
         case let .setTextVisible(text, visible):
@@ -1659,6 +1665,9 @@ public enum EditIntentWire {
             return .setSwing(
                 anchor: decoded.anchor, settings: decoded.settings, isSystemText: decoded.isSystemText,
             )
+        case let .formatRhythms(wire):
+            let decoded = wire.decoded()
+            return .formatRhythms(scope: decoded.scope, policy: decoded.policy)
         case let .retimeRun(wire):
             let decoded = try wire.decoded()
             return .retimeRun(at: decoded.location, durations: decoded.durations)

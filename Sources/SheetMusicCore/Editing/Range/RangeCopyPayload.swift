@@ -146,7 +146,8 @@ enum RangeCopyPayload {
         }
         shortenFirstMeasure(in: &measures, nominal: durations[measureRange.lowerBound], by: low, division: division)
         ensureLeadingTimeSignature(
-            in: &measures, prevailing: prevailingTimeSignature(in: staff, upTo: measureRange.lowerBound),
+            in: &measures, prevailing: staff.prevailingTimeSignature(upTo: measureRange.lowerBound)
+                ?? TimeSignature(numerator: 4, denominator: 4),
         )
 
         var copied = staff
@@ -273,27 +274,6 @@ enum RangeCopyPayload {
         }
         guard !alreadyDeclared else { return }
         measures[first].voices[0].prependElement(.timeSignature(prevailing))
-    }
-
-    /// The time signature carried forward to `measureIndex`, exactly the rule `[Measure].effectiveMeasureDurations()`
-    /// uses to pick a prevailing `Fraction` — the first `.timeSignature` at or before `measureIndex`, defaulting to
-    /// 4/4 when none has appeared yet.
-    private static func prevailingTimeSignature(in staff: Staff, upTo measureIndex: Int) -> TimeSignature {
-        var prevailing = TimeSignature(numerator: 4, denominator: 4)
-        guard staff.measures.indices.contains(measureIndex) else { return prevailing }
-        for measure in staff.measures[...measureIndex] {
-            var found: TimeSignature?
-            outer: for voice in measure.voices {
-                for element in voice.elements {
-                    if case let .timeSignature(timeSignature) = element {
-                        found = timeSignature
-                        break outer
-                    }
-                }
-            }
-            if let found { prevailing = found }
-        }
-        return prevailing
     }
 }
 

@@ -29,20 +29,25 @@ enum MusicXMLMeasureWalker {
         /// into the measure stream. Staves absent from the map keep
         /// `Staff.lineCount`'s default of 5.
         let lineCountByStaff: [Int: Int]
+        /// `tempoElementsByMeasure[measureIndex]` — the part's tempo markings, which belong to the score's top staff
+        /// whatever part wrote them.
+        let tempoElementsByMeasure: [[PositionedSystemElement]]
     }
 
     static func decode(
         partNode: XMLTreeNode,
         drumTable: MusicXMLDrumTable = MusicXMLDrumTable(),
+        options: MusicXMLImportOptions = .default,
+        partIndex: Int = 0,
+        registry: MusicXMLTempoRegistryBox = MusicXMLTempoRegistryBox(),
+        software: MusicXMLExporterSoftware = .other,
+        isVocalStaff: Bool = false,
     ) throws -> PartResult {
         let staffCount = detectStaffCount(partNode: partNode)
         var divisions = DivisionsContext(perQuarter: 1)
         var previousAttributes = MusicXMLAttributesSnapshot()
         var perStaffMeasures: [[Measure]] = Array(repeating: [], count: staffCount)
-        var perStaffSystemElements: [[[PositionedSystemElement]]] = Array(
-            repeating: [],
-            count: staffCount,
-        )
+        var perStaffSystemElements: [[[PositionedSystemElement]]] = Array(repeating: [], count: staffCount)
         // Glissando / slide events span notes (and possibly measures)
         // within a part; the tracker accumulates pending starts and
         // resolved attachments across the full per-part walk, then
@@ -50,33 +55,77 @@ enum MusicXMLMeasureWalker {
         // strictly per-part — no cross-part state leaks because the
         // tracker is a fresh local here.
         var glideTracker = MusicXMLGlideTracker()
+        // Direction elements wait for the part to be walked, then go into their voices at their ticks, placed by the
+        // chord anchors (`anchors[staff][measure]`, positional voice 0).
+        var directionEvents: [MusicXMLDirectionEvent] = []
+        var anchors: [[[MusicXMLChordAnchor]]] = Array(repeating: [], count: staffCount)
+        var tempoElements: [[PositionedSystemElement]] = []
+        var measureLengths: [Fraction] = []
+        // The lines inferred from words live across measures; their limit is measured from the part's start.
+        var inferredLines = MusicXMLInferredLineLog()
+        var partTick = Fraction.zeroTick
+        var repeats = MusicXMLRepeatLog()
+        var delayedOttavas = MusicXMLDelayedOttavaLog()
+        // The octave shifts are read before the notes, as MuseScore's pass 1 reads them (`P2:7264`).
+        let octaveShifts = MusicXMLOctaveShiftScan.scan(partNode: partNode)
         for (index, measureNode) in partNode.all("measure").enumerated() {
-            let isFirstMeasure = (index == 0)
-            let built = try decodeOne(
-                measureNode: measureNode,
-                divisions: &divisions,
-                previousAttributes: &previousAttributes,
-                isFirstMeasure: isFirstMeasure,
-                staffCount: staffCount,
-                drumTable: drumTable,
-                measureIndex: index,
-                glideTracker: &glideTracker,
+            var state = MusicXMLMeasureState(
+                measureIndex: index, staffCount: staffCount, options: options, partIndex: partIndex,
+                registry: registry, software: software,
             )
+            state.octaveShifts = octaveShifts.table
+            state.measureStart = octaveShifts.measureStarts.indices.contains(index)
+                ? octaveShifts.measureStarts[index] : .zeroTick
+            state.inferredLines = inferredLines
+            state.partTick = partTick
+            state.repeats = repeats
+            state.delayedOttavas = delayedOttavas
+            state.isVocalStaff = isVocalStaff
+            let built = try decodeOne(
+                measureNode: measureNode, state: &state, divisions: &divisions, previousAttributes: &previousAttributes,
+                isFirstMeasure: index == 0, drumTable: drumTable, glideTracker: &glideTracker,
+                directionEvents: &directionEvents,
+            )
+            tempoElements.append(state.tempoElements)
+            let length = measureLength(state, attributes: previousAttributes)
+            measureLengths.append(length)
+            inferredLines = state.inferredLines
+            repeats = state.repeats
+            delayedOttavas = state.delayedOttavas
+            partTick += length
             for (staffIdx, item) in built.enumerated() {
                 perStaffMeasures[staffIdx].append(item.measure)
                 perStaffSystemElements[staffIdx].append(item.systemElements)
+                anchors[staffIdx].append(item.anchors)
             }
         }
-        let withGlides = applyGlides(
-            attachments: glideTracker.attachments,
-            measures: perStaffMeasures,
-        )
+        // The markers and jumps settle into their bars by the recorded lengths (the clock `partTick` sums).
+        repeats.apply(measureLengths: measureLengths, to: &perStaffMeasures[0])
+        var withGlides = applyGlides(attachments: glideTracker.attachments, measures: perStaffMeasures)
+        // The delayed ottava stops move to the notes they waited for, or to the part's end (`P2:2297-2304`).
+        directionEvents = delayedOttavas.finished(directionEvents, measureLengths: measureLengths, partEnd: partTick)
+        // Spanner starts and stops pair part-wide once the part is walked, and the inferred lines close at their ends
+        // (`P2:2307-2314`); their begin sides and end markers join the queue after the direction's other voice
+        // elements, in the pairing's order.
+        let spanners = spannerEvents(directionEvents, inferredLines: inferredLines, measureLengths: measureLengths)
+        MusicXMLDirectionSplicer.apply(directionEvents + spanners, anchors: anchors, to: &withGlides)
         let dropped = dropUnmatchedTies(withGlides)
         return PartResult(
             staffCount: staffCount,
             measuresByStaff: dropped,
             systemElementsByStaffMeasure: perStaffSystemElements,
             lineCountByStaff: previousAttributes.lineCountByStaff,
+            tempoElementsByMeasure: tempoElements,
+        )
+    }
+
+    /// The part's spanners, paired and closed, as begin sides and end markers in the pairing's order.
+    private static func spannerEvents(
+        _ events: [MusicXMLDirectionEvent], inferredLines: MusicXMLInferredLineLog, measureLengths: [Fraction],
+    ) -> [MusicXMLDirectionEvent] {
+        MusicXMLSpannerPairing.ordered(
+            MusicXMLSpannerPairing.pairClosed(events, measureLengths: measureLengths)
+                + inferredLines.finished(measureLengths: measureLengths),
         )
     }
 
@@ -121,7 +170,7 @@ enum MusicXMLMeasureWalker {
     /// Scan the part for the first `<attributes><staves>N</staves>` and return
     /// `N`. Defaults to 1. Most piano parts declare `<staves>2</staves>` in the
     /// first measure's attributes.
-    private static func detectStaffCount(partNode: XMLTreeNode) -> Int {
+    static func detectStaffCount(partNode: XMLTreeNode) -> Int {
         for measure in partNode.all("measure") {
             for attrs in measure.all("attributes") {
                 if let stavesText = attrs.first("staves")?.text,
@@ -138,20 +187,18 @@ enum MusicXMLMeasureWalker {
     /// one per staff. Attributes and barlines broadcast to every staff;
     /// `<note>` elements go to the staff selected by `<staff>N</staff>`
     /// (default 1).
-    private static func decodeOne( // swiftlint:disable:this function_body_length
+    private static func decodeOne(
         measureNode: XMLTreeNode,
+        state: inout MusicXMLMeasureState,
         divisions: inout DivisionsContext,
         previousAttributes: inout MusicXMLAttributesSnapshot,
         isFirstMeasure: Bool,
-        staffCount: Int,
         drumTable: MusicXMLDrumTable,
-        measureIndex: Int,
         glideTracker: inout MusicXMLGlideTracker,
+        directionEvents: inout [MusicXMLDirectionEvent],
     ) throws -> [StaffMeasureBuilder.Built] {
-        var perStaff: [StaffMeasureBuilder] = (0 ..< staffCount).map { _ in
-            StaffMeasureBuilder()
-        }
-
+        let staffCount = state.staffCount
+        state.eventBase = directionEvents.count
         for child in measureNode.children {
             switch child.name {
             case "attributes":
@@ -164,119 +211,43 @@ enum MusicXMLMeasureWalker {
                 )
                 for emission in emitted {
                     if let idx = emission.staffIndex {
-                        perStaff[idx].appendAttribute(emission.element)
+                        state.builders[idx].appendAttribute(emission.element)
                     } else {
-                        for builder in perStaff.indices {
-                            perStaff[builder].appendAttribute(emission.element)
+                        for builder in state.builders.indices {
+                            state.builders[builder].appendAttribute(emission.element)
                         }
                     }
                 }
 
             case "note":
-                let staffIdx = noteStaffIndex(child, staffCount: staffCount)
-                let voice = child.first("voice")?.text ?? "1"
-                perStaff[staffIdx].setDefaultVoice(voice)
-                let existing = perStaff[staffIdx].elements(forVoice: voice)
-                let decoded = try MusicXMLNoteDecoder.decodeNote(
-                    node: child,
-                    divisions: divisions,
-                    existingVoiceElements: existing,
-                    drumTable: drumTable,
+                placePendingSoundTempo(state: &state)
+                moveDelayedOttavaStop(state: &state)
+                try decodeNoteChild(
+                    child, state: &state, divisions: divisions, drumTable: drumTable, glideTracker: &glideTracker,
                 )
-                switch decoded {
-                case let .foldIntoLastChord(note, duration, trailingBreaths, articulations):
-                    perStaff[staffIdx].foldIntoLastChord(
-                        voice: voice,
-                        note: note,
-                        duration: duration,
-                        articulations: articulations,
-                    )
-                    // Breath marks / caesuras on a chord-folded note still
-                    // belong after the host chord, which is the same chord
-                    // we just merged into.
-                    for breath in trailingBreaths {
-                        perStaff[staffIdx].append(.breath(breath), toVoice: voice)
-                    }
-                case let .new(elements):
-                    for element in elements {
-                        perStaff[staffIdx].append(element, toVoice: voice)
-                    }
-                case let .grace(note, shape, joinsChord, endsAfterGraces):
-                    perStaff[staffIdx].appendGrace(
-                        note, shape: shape, joinsChord: joinsChord, endsAfterGraces: endsAfterGraces, toVoice: voice,
-                    )
-                    // A grace note is not in the voice's elements yet, so the index below would name the chord
-                    // before it; glissandi from grace notes are not modelled.
-                    continue
-                }
-                // Glissando / slide events on this note: record the
-                // chord's voice + index now (after append) so the
-                // post-walk pass can mutate the start chord in place.
-                // For fold-into-chord notes, the chord index didn't
-                // change — `count - 1` still points at the same chord.
-                if let voiceIdx = perStaff[staffIdx].voicePositionIndex(forVoice: voice) {
-                    let elements = perStaff[staffIdx].elements(forVoice: voice)
-                    let chordIdx = elements.count - 1
-                    if chordIdx >= 0 {
-                        glideTracker.consume(
-                            noteNode: child,
-                            staffIndex: staffIdx,
-                            measureIndex: measureIndex,
-                            voiceIndex: voiceIdx,
-                            chordElementIndex: chordIdx,
-                        )
-                    }
-                }
 
             case "direction":
-                // MuseScore attaches measure-level jumps/markers to the
-                // first staff only, matching the .mscx layout where they
-                // live on `<Staff id="1">`'s `<Measure>`.
-                let navigation = MusicXMLJumpDecoder.decode(child)
-                if !perStaff.isEmpty {
-                    perStaff[0].addMarkers(navigation.markers)
-                    perStaff[0].addJumps(navigation.jumps)
-                }
-                // Rehearsal marks ride on the same `<direction>` element
-                // as a `<direction-type><rehearsal>` child. Attach to
-                // staff 0 so they match the MSCX `RehearsalMark` shape
-                // (system-flagged, drawn once above the top staff).
-                let rehearsals = MusicXMLRehearsalDecoder.decode(child)
-                if !perStaff.isEmpty {
-                    for mark in rehearsals {
-                        perStaff[0].addRehearsalMark(mark)
-                    }
-                }
+                decodeDirectionChild(child, state: &state, divisions: divisions)
 
             case "backup", "forward":
-                // For Phase 0 we rely on document order + <voice>/<staff> tags
-                // rather than tick arithmetic. MuseScore's pass2 maintains a
-                // per-voice cursor for more complex layouts — deferred until
-                // a fixture requires it.
-                continue
+                moveClock(child, state: &state, divisions: divisions)
 
             case "barline":
-                let decoded = MusicXMLBarlineDecoder.decode(child)
-                for builder in perStaff.indices {
-                    perStaff[builder].apply(barline: decoded)
-                }
+                decodeBarlineChild(child, state: &state)
+
+            case "sound":
+                decodeSoundChild(child, state: &state)
 
             default:
-                // <print>, <direction>, <sound>, ... — out of Phase 0 scope.
+                // <print>, ... — out of Phase 0 scope.
                 continue
             }
         }
 
-        return perStaff.map { $0.build() }
-    }
-
-    /// Read `<note><staff>N</staff>` and convert to a 0-based staff index.
-    /// Defaults to 0 when absent or out of range.
-    private static func noteStaffIndex(_ note: XMLTreeNode, staffCount: Int) -> Int {
-        guard let text = note.first("staff")?.text, let n = Int(text), n >= 1 else {
-            return 0
-        }
-        return min(n - 1, staffCount - 1)
+        // The measure's delayed directions join the score now (`P2:2984-2990`).
+        state.registry.registry.endMeasure()
+        directionEvents += state.directionEvents
+        return state.builders.map { $0.build() }
     }
 }
 

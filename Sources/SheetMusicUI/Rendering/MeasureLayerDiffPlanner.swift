@@ -154,7 +154,7 @@ enum MeasureLayerDiffPlanner {
     ///    horizontally takes `.reposition`: its own container slides while
     ///    its contribution to the shared invisible layer stays at the old
     ///    X. Reachable in `wrapToViewWidth` mode with
-    ///    `showsInvisibleElements` on — `stretchWidths` can redistribute
+    ///    `showsInvisibleElements` on — `justifiedWidths` can redistribute
     ///    space after an edit so that `size`, `staffOrigins`, `spanners`
     ///    and `staffLineEndX` all stay equal while the middle measures
     ///    move.

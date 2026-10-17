@@ -9,7 +9,31 @@ and this project adheres to
 
 ### Added
 
-- **`EditIntent.retimeRun(at:durations:)` (wire 91) and `RetimeRun`: a run of notes re-timed in place, as one undo
+- **Part names are selectable** — the name at the left of a system (the long name on the first system, the
+  abbreviation on every system after it) is an element with an identity, `ScoreElementID.partName(partIndex:form:)`,
+  addressed as `SetPartNames` addresses it, with a new `PartNameForm` (`.long` / `.short`) saying which of the two the
+  label shows. `LayoutPartLabel` carries it (`elementID`, defaulting to `nil` for hand-built labels),
+  `ScoreHitTester.hitTest(at:)` reports it as `ScoreHitTarget.partName` after every other rung, `elementHitRects(for:)`
+  returns one box per system the name is drawn on (every abbreviation of a part is one identity), and the Apple layer
+  renderer tints a selected name. An empty name draws nothing and is not a target. `ScoreElementIDWire` appends choice
+  15 for it; a part name has no `removalCommand`. Not yet tinted by the Android draw program.
+
+- **`EditIntent.formatRhythms(scope:policy:)` (wire 91), `FormatRhythms`, `FormatRhythmsScope`, `RhythmSpelling` and
+  `RhythmSpellingPolicy`: re-spell a score's rhythms the way the meter writes them, as one undo step.** The scope is
+  the whole score, one bar of one staff, or a range; a range takes only the spans lying entirely inside it, because
+  clipping a span at the edge would tie into territory the caller did not select. Ties that join what one note could
+  say are merged, and what a bar line or a beat would hide is split, by MuseScore's metric rules with three knobs: how
+  many augmentation dots a note may carry (`dotLevel`), whether a note may cross the middle of the bar
+  (`midBarSyncopations`), and whether a rest may cross an unstressed beat (`beatCrossingRests`). `.default` is
+  folino's own taste (two dots, syncopations split, written beat-crossing rests kept) and `.museScore` is what
+  MuseScore's own regroup produces. Markings are never dropped: a span carrying a slur end, a lyric melisma target, a
+  grace note or any other marking it could not carry over is left as written. A pickup bar is right-aligned, each bar
+  is read by its own meter, and tuplets are untouched. What sounds never changes, with one known exception:
+  `MidiRenderer` applies an instrument's articulation gate to the last tie link only, so on an instrument whose
+  default gate is below 100% a re-spelled note's release can move. A span the note values cannot cover to the tick
+  (a non-tuplet third of a whole) is carried as written.
+
+- **`EditIntent.retimeRun(at:durations:)` (wire 92) and `RetimeRun`: a run of notes re-timed in place, as one undo
   step.** The run is the `durations.count` consecutive chords and rests of `at`'s bar and voice, starting at `at`,
   and each takes the length at its position and keeps everything else — pitches and spelling, lyrics,
   articulations, ties into and out of the run. The marks between them (a dynamic, a chord symbol, a spanner
@@ -25,6 +49,117 @@ and this project adheres to
   fewer members remain in the bar, `.wrongElementKind` when `at` is not a chord or rest or `.measure` is asked of a
   chord with notes, `.insideTuplet` for a member inside a tuplet, and `.insufficientRoom` when the new total
   differs from the old or a length is not positive; durations the run already has resolve to nothing to apply.
+
+### Fixed
+
+- **A syllable no longer widens its notes' gaps in a stretched bar.** The room a syllable needs to the next one was
+  weight in the gap after its note, and weight stretches with the line, so every justified bar of equal notes was
+  spaced by its syllables' widths: eight eighths under "ん じゅ じゃ な い の よ" stood 1.50 / 3.30 / 4.31 / 3.30 /
+  2.28 / 2.28 / 2.28 sp apart times one factor however wide the line was, where MuseScore spaces them evenly, and a
+  bar at natural width (stretched 1.5×) gave its syllables half again the room they need. A syllable is now a floor on
+  the distance to the next syllable's column — shared by weight over the gaps in between, as a chord symbol's room is
+  over its beat — so it widens a gap only where the two would otherwise collide. A syllable two or more notes before
+  the next one also used to reserve only its share of that distance, on the gap after its own note; the whole
+  distance is now kept, spread over every gap up to the next syllable.
+
+- **A justified system spaces equal notes equally in every bar.** It used to scale each bar's width by one ratio, so a
+  bar got more of the line's leftover room the wider its minimum was — for the system's clef and key, a syllable, a
+  chord symbol or an accidental — and its notes stood further apart than the same rhythm's in the next bar: one
+  system of eighths ran from 1.75 to 9.8 sp. The leftover is now shared the way MuseScore's springs share it
+  (`HorizontalSpacing::justifySystem`): one stretch for every gap on the line, a gap already held open by a floor
+  taking nothing until the others have caught up with it, and the header, the room around a bar's content and a
+  courtesy announcement staying as wide as they are. Which measures a system holds does not change.
+
+## [4.13.0] - 2026-10-17
+
+### Added
+
+- **MusicXML directions have a clock** — the importer now keeps a per-measure tick cursor (notes advance it,
+  `<backup>` and `<forward>` move it, a direction's `<offset>` is added) and splices a direction's element into the
+  staff named by `<staff>` at that tick, jogging the voice exactly as MuseScore's `<location>` does. The first
+  direction to use it is a dynamic named by its element (`<f/>`, `<mp/>`), imported with MuseScore's velocity.
+
+- **MusicXML words become the text MuseScore makes of them** — a `<direction>`'s `<words>` import as a staff text, a
+  system text (`system="only-top"`), an Expression (italic words below the staff), a play-technique annotation (from
+  `<sound pizzicato>`, `<play>`, or — with the new internal text-type inference — words such as "pizz." and "con
+  sord."), or a Sticking, with `font-weight`, `font-style`, `underline`, `line-through`, `font-size` and `font-family`
+  kept as markup and `color` as the element's color. A rehearsal mark now sits at its real tick on the direction's staff, and loses to words in the
+  same direction, as in MuseScore.
+
+- **MusicXML tempo** — `<metronome>`, `<sound tempo>` (in a direction or directly in a measure) and the words beside
+  them import as MuseScore builds them: a tempo text with its real tempo and beat (so MuseScore's own "a tempo" arrives
+  at the tempo it exported, not 120), a hidden "♩ = N" for a bare `<sound tempo>`, and a second tempo on a tick that
+  already holds one is dropped, across parts. With the new internal text-type inference, words such as "Allegro" and
+  "a tempo" are tempo texts.
+
+- **MusicXML dynamics as MuseScore reads them** — `<sound dynamics>` sets the velocity (×0.9, clamped),
+  `<other-dynamics>` text keeps its words ("subito p" is a `p` with its own text), several elements in one `<dynamics>`
+  are several dynamics, two dynamics joined by a hyphen are one, and — with text-type inference — words that are a
+  dynamic ("mf", "sfz") become one. A dynamic takes the `<dynamics>` color and the direction's `print-object`.
+
+- **MusicXML wedges** — `<wedge>` crescendos and diminuendos import as hairpins that start and end where the file says,
+  honoring `<offset>`, `number`, a stop that arrives first, and a start on the bar line (which belongs to the next bar);
+  one without a stop is dropped, as in MuseScore.
+
+- **MusicXML octave shifts and pedals** — `<octave-shift>` imports as an 8va / 8vb / 15ma / 15mb / 22ma / 22mb line
+  whose notes are written the octave lower (or higher) the line implies and keep their sounding pitch, and `<pedal>`
+  start / change / stop / resume / sostenuto / discontinue import as the pedal lines MuseScore builds, with their hooks
+  and signs.
+
+- **MusicXML lines** — `<bracket>`, `<dashes>` and wavy lines import as text lines and trill lines; with text-type
+  inference, "cresc." / "dim." become hairpin lines and "rit." / "accel." / … gradual tempo changes, ended by the next
+  dynamic, tempo text or fermata within 24 quarter notes, as MuseScore ends them. An inferred line has no continue
+  text (MuseScore's file carries none). This closes the gradual-tempo gap behind `testTempoLineFermata`.
+
+- **MusicXML from Finale and Sibelius** — a file's `<software>` is read; Finale's dynamic-font letters import as
+  dynamics, Sibelius's metronome words ("q. = c. 78") and MetTimes symbols as a tempo text with its symbols and tempo,
+  and a Sibelius ottava ends at the note after its stop.
+
+### Fixed
+
+- **A hairpin, dynamic or Expression imported from MusicXML keeps its side.** MuseScore stores the side of each of
+  these as its `<direction>`, set from the direction's `placement`, else from `default-y`, else above on a vocal staff
+  (a part named Voice, Soprano, Alto, … exactly as MuseScore lists them) and below on any other; an inferred cresc. /
+  dim. line takes only the `placement` attribute, and an Expression, made only below the staff, is always below. The
+  import now carries it, so a saved score puts each of them where MuseScore does.
+
+- **An opaque black `color` on a MusicXML direction is no color.** Black is every element's default, and MuseScore
+  writes a color only when it differs from it; an imported ottava, wedge, pedal, text or dynamic marked `#000000`
+  (as Sibelius writes them) no longer carries an explicit color into the saved score.
+
+- **An imported rehearsal mark draws in regular weight, as MuseScore draws it.** MuseScore puts an empty `<b></b>`
+  before the mark's text — "explicitly turn bold off" — unless the text is bold already; the import took the plain
+  letter, so folino drew it in the style's bold. Its formatting (font, size, weight, style) is now read as words are.
+
+- **A multi-staff MusicXML part gets its brace.** MuseScore gives every part of two or more staves a brace unless a
+  part-group bracketing that part alone already does; the import left a piano part with none. The brace sits in
+  column 0, so the gutter has no empty column before it.
+
+- **A MusicXML score that ends without a bar line ends with a normal one.** MuseScore writes an explicit normal bar
+  line into every staff's last measure in that case, or it would draw a light-heavy final bar line; the import now does
+  the same.
+
+- **A MuseScore 5 score keeps its brackets and braces.** MuseScore 5 writes a staff's bracket as `<BracketItem>`
+  (`<type>`, `<bracketSpan>`, `<level>`, `<visible>`) instead of the 4.x `<bracket type span col>` attribute form; ssm
+  read only the 4.x form, so a piano part from MuseScore 5 drew no brace. The 5.x form now reads into the same
+  brackets and saves in the 4.x form; a group bracket, which ssm does not model, stays in the file as it was.
+
+- **A MusicXML score keeps its encoder.** `<encoding><encoder>` is imported as the `encoder` meta tag, as MuseScore
+  imports it.
+
+- **At one tick, a staff text imported from MusicXML comes before a rehearsal mark, tempo or system text**, in the
+  order MuseScore adds them (it adds system elements once the whole score is read).
+
+- **A MusicXML `<coda/>` with `<sound tocoda>` is one To Coda, not a Coda and a To Coda** — a direction makes the one
+  repeat MuseScore picks from its `<sound>` (coda, da capo, dal segno, fine, segno, to coda, in that order), else from
+  its segno or coda sign; a D.S. with a `tocoda` or `fine` attribute is a jump that plays until there, not a jump plus a
+  marker; a second coda in a bar is dropped; two segnos at one tick are one Segno labeled `segnoii`; a repeat with no
+  text stays visible with its type's default text, as in MuseScore; and a bar-end item written at the next bar's start
+  (or a bar-start item at the previous bar's end) lands in the bar MuseScore puts it in.
+
+- **An ottava now shifts the playback of every voice on its staff**, as MuseScore applies it, not only the voice that
+  carries the line. A second voice under an 8va — a MusicXML `<backup>` voice, or any voice of a score whose ottava
+  sits in voice 1 — played an octave away from the pitch it sounds in MuseScore.
 
 ## [4.12.0] - 2026-10-17
 

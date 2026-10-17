@@ -76,6 +76,27 @@ struct TempoBeatUnitDecodeTests {
         #expect(tempo.beatDots == 0)
     }
 
+    private static let beats: [(String, Double, NoteDuration, Int)] = [
+        (" = 120", 2.0, .quarter, 0),
+        (" = 80", 2.0, .quarter, 1),
+        (" = 60", 0.5, .eighth, 0),
+        ("Allegro 2 (= 90)", 3.0, .half, 0),
+    ]
+
+    @Test("the beat is recovered from the printed number", arguments: beats)
+    func beatFromNumber(text: String, bps: Double, note: NoteDuration, dots: Int) {
+        let beat = Tempo.beatUnit(inPrintedText: text, beatsPerSecond: bps)
+        #expect(beat.note == note)
+        #expect(beat.dots == dots)
+    }
+
+    @Test("a text with no number leaves a quarter")
+    func noNumber() {
+        let beat = Tempo.beatUnit(inPrintedText: "Allegro", beatsPerSecond: 2)
+        #expect(beat.note == .quarter)
+        #expect(beat.dots == 0)
+    }
+
     @Test("Beat glyph: quarter is noteQuarterUp")
     func quarterGlyph() throws {
         let tempo = try Tempo.decode(tempoNode(bps: "3", followText: "1", printed: "180"))

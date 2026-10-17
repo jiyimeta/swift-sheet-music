@@ -8,18 +8,17 @@ import SheetMusicXMLTools
 enum MusicXMLRehearsalDecoder {
     /// Pull every rehearsal mark out of a single `<direction>`. A direction
     /// can in principle hold several `<rehearsal>` siblings (one per
-    /// part), so we iterate.
+    /// part), so we iterate — over every `<direction-type>`, as MuseScore's `directionType` reads each one.
     static func decode(_ direction: XMLTreeNode) -> [RehearsalMark] {
-        guard let directionType = direction.first("direction-type") else {
-            return []
-        }
         var result: [RehearsalMark] = []
-        for child in directionType.children where child.name == "rehearsal" {
-            let text = plainText(of: child)
-            let frame = frameKind(
-                forEnclosure: child.attributes["enclosure"],
-            )
-            result.append(RehearsalMark(text: text, frame: frame))
+        for directionType in direction.all("direction-type") {
+            for child in directionType.children where child.name == "rehearsal" {
+                let frame = frameKind(
+                    forEnclosure: child.attributes["enclosure"],
+                )
+                let carrier = MusicXMLFormattedWords.carrier(fromXMLText: xmlText(of: child))
+                result.append(RehearsalMark(text: carrier.plain, frame: frame, preservedTextMarkup: carrier.markup))
+            }
         }
         return result
     }
@@ -39,11 +38,10 @@ enum MusicXMLRehearsalDecoder {
         }
     }
 
-    private static func plainText(of node: XMLTreeNode) -> String {
-        var result = node.text
-        for child in node.children {
-            result += plainText(of: child)
-        }
-        return result
+    /// The mark's xml text as MuseScore sets it: the formatted text (`nextPartOfFormattedString`, `P2:4053`), with an
+    /// empty `<b></b>` in front — "explicitly turn bold off" — unless it already holds `<b>` (`P2:3608-3610`).
+    private static func xmlText(of node: XMLTreeNode) -> String {
+        let xml = MusicXMLFormattedWords.xmlText(of: node)
+        return xml.hasSubstring("<b>") ? xml : "<b></b>" + xml
     }
 }
