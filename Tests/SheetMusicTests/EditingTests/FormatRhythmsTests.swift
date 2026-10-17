@@ -3,37 +3,37 @@ import Testing
 
 @Suite("FormatRhythms")
 struct FormatRhythmsTests {
-    private typealias Bars = FormatRhythmsBarPlannerTests
+    typealias Bars = FormatRhythmsBarPlannerTests
 
-    private static let staff0 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
-    private static let staff1 = StaffAddress(partIndex: 0, staffIndexInPart: 1)
-    private static let policy = RhythmSpellingPolicy.default
+    static let staff0 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+    static let staff1 = StaffAddress(partIndex: 0, staffIndexInPart: 1)
+    static let policy = RhythmSpellingPolicy.default
 
-    private static func slot(
+    static func slot(
         _ staff: StaffAddress = staff0, measure: Int = 0, voice: Int = 0, element: Int,
     ) -> VoiceElementID {
         VoiceElementID(staff: staff, measureIndex: measure, voiceIndex: voice, elementIndex: element)
     }
 
     /// Two tied quarters followed by a half rest — a bar that formats to a half note and a half rest.
-    private static func tiedPair(pitch: Int = 60) -> [VoiceElement] {
+    static func tiedPair(pitch: Int = 60) -> [VoiceElement] {
         [
             Bars.note(1, 4, pitch: pitch, tieForward: true), Bars.note(1, 4, pitch: pitch, tieBack: true),
             Bars.rest(1, 2),
         ]
     }
 
-    private static func score(_ staves: [[Measure]]) -> Score {
+    static func score(_ staves: [[Measure]]) -> Score {
         Score(division: 480, parts: [Part(
             id: "P1", instrument: Instrument(id: "piano"), staves: IdentifiedArray(staves.map { Staff(measures: $0) }),
         )], systemMeasures: IdentifiedArray(staves[0].map { _ in SystemMeasure() }))
     }
 
-    private static func bar(_ voices: [VoiceElement]...) -> Measure {
+    static func bar(_ voices: [VoiceElement]...) -> Measure {
         Measure(voices: voices.map { Voice(elements: $0) })
     }
 
-    private static func durations(_ score: Score, _ staff: StaffAddress = staff0, measure: Int = 0, voice: Int = 0)
+    static func durations(_ score: Score, _ staff: StaffAddress = staff0, measure: Int = 0, voice: Int = 0)
         -> [NoteDuration]
     {
         score[voice: VoiceRef(staff: staff, measureIndex: measure, voiceIndex: voice)]?.elements.values.compactMap {
@@ -44,7 +44,7 @@ struct FormatRhythmsTests {
         } ?? []
     }
 
-    private static func reason(_ body: () throws -> some Any) -> EditRefusal.Reason? {
+    static func reason(_ body: () throws -> some Any) -> EditRefusal.Reason? {
         do {
             _ = try body()
             return nil
@@ -55,7 +55,7 @@ struct FormatRhythmsTests {
         }
     }
 
-    private static let half = Bars.duration(1, 2)
+    static let half = Bars.duration(1, 2)
 
     @Test("score scope rewrites every staff and voice")
     func scoreScope() throws {
@@ -116,7 +116,8 @@ struct FormatRhythmsTests {
         _ = try FormatRhythms(scope: .score, policy: Self.policy).apply(to: &score)
         #expect(Self.durations(score, measure: 0) == [Bars.duration(1, 8), Bars.duration(1, 2)])
         #expect(Self.durations(score, measure: 1) == Self.durations(before, measure: 1))
-        // The half note starts the short bar, so it stays a half (right-aligned it would have been split).
+        // The final bar is short but not a pickup (it is not first, not irregular and no section break precedes it), so
+        // it is left-aligned: the half note starts the bar and stays a half.
         #expect(Self.durations(score, measure: 2) == Self.durations(before, measure: 2))
     }
 
@@ -171,6 +172,18 @@ struct FormatRhythmsTests {
         #expect(session.score == before)
         #expect(session.redo())
         #expect(session.score == applied)
+    }
+
+    @Test("the affected location is the first rewrite, not the origin, when earlier bars are already formatted")
+    func sessionLocationAwayFromOrigin() {
+        let formatted = Self.bar([Bars.note(1, 2), Bars.rest(1, 2)])
+        let secondBar = ScoreEditSession(score: Self.score([[formatted, Self.bar(Self.tiedPair())]]))
+        #expect(secondBar.apply(.formatRhythms(scope: .score, policy: Self.policy)))
+        #expect(secondBar.lastAffectedLocation == Self.slot(measure: 1, element: 0))
+
+        let secondStaff = ScoreEditSession(score: Self.score([[formatted], [Self.bar(Self.tiedPair())]]))
+        #expect(secondStaff.apply(.formatRhythms(scope: .score, policy: Self.policy)))
+        #expect(secondStaff.lastAffectedLocation == Self.slot(Self.staff1, element: 0))
     }
 
     @Test("empty range is refused targetNotFound")

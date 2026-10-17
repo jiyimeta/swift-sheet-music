@@ -1,3 +1,16 @@
+extension Measure {
+    /// The first `.timeSignature` this bar declares, in voice order then element order — the one that governs the bar,
+    /// following the rule `[Measure].effectiveMeasureDurations()` uses. `nil` when the bar declares none.
+    var declaredTimeSignature: TimeSignature? {
+        for voice in voices {
+            for element in voice.elements {
+                if case let .timeSignature(timeSignature) = element { return timeSignature }
+            }
+        }
+        return nil
+    }
+}
+
 extension Staff {
     /// The time signature in force at `measureIndex`: the last `.timeSignature` declared at or before that bar,
     /// following the rule `[Measure].effectiveMeasureDurations()` uses to pick a prevailing `Fraction` (the first one
@@ -10,23 +23,8 @@ extension Staff {
         guard measures.indices.contains(measureIndex) else { return nil }
         var prevailing: TimeSignature?
         for measure in measures[...measureIndex] {
-            outer: for voice in measure.voices {
-                for element in voice.elements {
-                    if case let .timeSignature(timeSignature) = element {
-                        prevailing = timeSignature
-                        break outer
-                    }
-                }
-            }
+            if let declared = measure.declaredTimeSignature { prevailing = declared }
         }
         return prevailing
-    }
-}
-
-extension Score {
-    /// `Staff.prevailingTimeSignature(upTo:)` for the staff at `staff`; `nil` when the staff or bar does not exist
-    /// or no time signature has been declared by then.
-    func prevailingTimeSignature(staff: StaffAddress, measureIndex: Int) -> TimeSignature? {
-        self[staff]?.prevailingTimeSignature(upTo: measureIndex)
     }
 }

@@ -14,7 +14,7 @@ struct FormatRhythmsBars {
         var meters: [TimeSignature] = []
         var current = TimeSignature(numerator: 4, denominator: 4)
         for measure in staff.measures {
-            if let declared = Self.declared(in: measure) { current = declared }
+            if let declared = measure.declaredTimeSignature { current = declared }
             meters.append(current)
         }
         self.meters = meters
@@ -37,16 +37,6 @@ struct FormatRhythmsBars {
             barTicks: barTicks[index], isPickup: isPickup[index], division: division,
             window: window, protectedOnsets: protectedOnsets,
         )
-    }
-
-    /// The first `.timeSignature` in the bar, the one that governs it.
-    private static func declared(in measure: Measure) -> TimeSignature? {
-        for voice in measure.voices {
-            for element in voice.elements {
-                if case let .timeSignature(timeSignature) = element { return timeSignature }
-            }
-        }
-        return nil
     }
 }
 
@@ -79,7 +69,9 @@ enum FormatRhythmsProtectedOnsets {
                             // `Spanner+Offsets`: the end sits `nextMeasuresOffset` bars on, at the start's own bar
                             // tick plus the fraction.
                             let fraction = spanner.nextFractionsOffset?.ticks(division: division) ?? 0
-                            protect(measure: measureIndex + max(0, spanner.nextMeasuresOffset), tick: tick + fraction)
+                            // Clamped to the staff so a malformed offset cannot overflow the sum.
+                            let offset = min(max(0, spanner.nextMeasuresOffset), lengths.count)
+                            protect(measure: measureIndex + offset, tick: tick + fraction)
                         }
                         for lyric in chord.lyrics where lyric.ticks > 0 {
                             protect(measure: measureIndex, tick: tick + lyric.ticks)
@@ -92,8 +84,9 @@ enum FormatRhythmsProtectedOnsets {
     }
 
     /// The bar and bar-relative tick that `measure` + `tick` names once the tick is walked through the bar lines on
-    /// either side. `nil` past the end of the staff.
-    private static func roll(measure: Int, tick: Int, lengths: [Int]) -> (measure: Int, tick: Int)? {
+    /// either side. `nil` past the end of the staff, including for a malformed `measure` that starts outside it.
+    static func roll(measure: Int, tick: Int, lengths: [Int]) -> (measure: Int, tick: Int)? {
+        guard lengths.indices.contains(measure) else { return nil }
         var measure = measure
         var tick = tick
         while tick < 0, measure > 0 {
