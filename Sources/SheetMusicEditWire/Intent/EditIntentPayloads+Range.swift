@@ -168,3 +168,23 @@ public struct TransposeScoreIntentWire {
         )
     }
 }
+
+// Appended for folino's pattern edit (spec 2026-10-17) — intent 91. A range payload in all but its addressing: the
+// run is a start slot and a count, and the count is how many durations it carries.
+
+@WireFormat
+public struct RetimeRunIntentWire {
+    public var location: VoiceElementIDWire
+    public var durations: [NoteDurationWire]
+
+    public init(location: VoiceElementID, durations: [NoteDuration]) {
+        self.location = VoiceElementIDWire(from: location)
+        self.durations = durations.map(NoteDurationWire.init(from:))
+    }
+
+    /// Throws what `NoteDurationWire.decoded()` throws for any one of the durations — an unknown kind, or a
+    /// fraction with no positive denominator.
+    public func decoded() throws -> (location: VoiceElementID, durations: [NoteDuration]) {
+        try (location: location.decoded(), durations: durations.map { try $0.decoded() })
+    }
+}

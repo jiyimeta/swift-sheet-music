@@ -532,4 +532,15 @@ public enum EditIntent: Sendable, Equatable {
     /// Trimmed engine-side; empty after trimming is refused as `.emptyStaffText`. Resolves to nothing to apply
     /// when the beat already reads exactly this way.
     case setSwing(anchor: VoiceElementID, settings: SetSwing.Settings?, isSystemText: Bool)
+
+    // Appended for folino's pattern edit (spec 2026-10-17) — index 91.
+
+    /// Give the `durations.count` consecutive chords and rests of `at`'s measure and voice, starting at `at`, one
+    /// new length each, in place: every element keeps everything but its duration, elements that are not chords or
+    /// rests between them stay where they are in element order, and no index moves. The spanners and lyric melismas
+    /// of that voice whose ends the re-time moves are restated so both ends stay on the same elements. Refused as
+    /// `.targetNotFound` when fewer members remain in the bar, `.insideTuplet` for a member inside a tuplet, and
+    /// `.insufficientRoom` when the new total differs from the old; resolves to nothing to apply when every member
+    /// already has its length. See `RetimeRun`.
+    case retimeRun(at: VoiceElementID, durations: [NoteDuration])
 }

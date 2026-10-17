@@ -1,11 +1,11 @@
 import SheetMusicFoundation
 
 /// `ScoreEditSession`'s planning half for the parity project's range intents (35…40), plus the later ones appended
-/// alongside them — `.duplicateRange` (85), `.pasteRange` (86), `.setDotsInRange` (87) and `.transposeScore` (88),
-/// the last of which takes no range but shares everything else. Its own file for the reason
-/// `+StructuralParityPlanning.swift` exists: `+Planning.swift` sits at its line budget.
+/// alongside them — `.duplicateRange` (85), `.pasteRange` (86), `.setDotsInRange` (87), `.transposeScore` (88),
+/// which takes no range but shares everything else, and `.retimeRun` (91), whose run is a start slot and a count.
+/// Its own file for the reason `+StructuralParityPlanning.swift` exists: `+Planning.swift` sits at its line budget.
 ///
-/// One rule for all ten: the command's own `plan(in:)` decides whether there is anything to do. `nil` from it is
+/// One rule for all eleven: the command's own `plan(in:)` decides whether there is anything to do. `nil` from it is
 /// the session's `.nothingToApply` (transposing by zero, deleting rests, re-timing a range already at that length);
 /// a `plan` that THROWS is not swallowed into `nil` — the command is returned as it is, so the refusal is raised
 /// again at apply time, where the session records it. An empty resolved range is such a refusal
@@ -75,6 +75,9 @@ extension ScoreEditSession {
             } catch {
                 return command
             }
+        case let .retimeRun(location, durations):
+            let command = RetimeRun(at: location, durations: durations)
+            return unlessInert(command, in: score) { try command.plan(in: $0) }
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.
