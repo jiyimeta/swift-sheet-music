@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.13.0] - 2026-10-17
+
 ### Added
 
 - **MusicXML directions have a clock** — the importer now keeps a per-measure tick cursor (notes advance it,
