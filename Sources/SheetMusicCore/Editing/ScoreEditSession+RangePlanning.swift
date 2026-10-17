@@ -1,9 +1,9 @@
 import SheetMusicFoundation
 
 /// `ScoreEditSession`'s planning half for the parity project's range intents (35…40), plus the later ones appended
-/// alongside them — `.duplicateRange` (85), `.pasteRange` (86), `.setDotsInRange` (87) and `.transposeScore` (88),
-/// the last of which takes no range but shares everything else. Its own file for the reason
-/// `+StructuralParityPlanning.swift` exists: `+Planning.swift` sits at its line budget.
+/// alongside them — `.duplicateRange` (85), `.pasteRange` (86), `.setDotsInRange` (87), `.transposeScore` (88) and
+/// `.formatRhythms` (91), the last two of which take no range (or a scope of their own) but share everything else.
+/// Its own file for the reason `+StructuralParityPlanning.swift` exists: `+Planning.swift` sits at its line budget.
 ///
 /// One rule for all ten: the command's own `plan(in:)` decides whether there is anything to do. `nil` from it is
 /// the session's `.nothingToApply` (transposing by zero, deleting rests, re-timing a range already at that length);
@@ -70,6 +70,15 @@ extension ScoreEditSession {
             // the repair preview, then the editor — so handing back the command planned every chord of the score
             // three times per transposition. The composite is exactly what that `apply` applies and reports the
             // same location. A plan that throws falls back to the command, so the refusal is raised at apply time.
+            do {
+                return try command.plan(in: score, ids: ids)
+            } catch {
+                return command
+            }
+        case let .formatRhythms(scope, policy):
+            // The PLANNED COMPOSITE, as `.deleteRange` hands back: it reports the first element actually rewritten,
+            // which the command alone cannot know, and it spares the apply a second plan of the whole score.
+            let command = FormatRhythms(scope: scope, policy: policy)
             do {
                 return try command.plan(in: score, ids: ids)
             } catch {

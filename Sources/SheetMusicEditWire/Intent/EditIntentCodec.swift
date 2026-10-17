@@ -137,6 +137,7 @@ import Wirelet
 /// 88 = transposeScore(TransposeScoreIntentWire), see EditIntentPayloads+Range.swift
 /// 89 = setTempoFont(SetTempoFontIntentWire), see EditIntentPayloads+TextFont.swift
 /// 90 = setSwing(SetSwingIntentWire), see EditIntentPayloads+Marks.swift
+/// 91 = formatRhythms(FormatRhythmsIntentWire), see EditIntentPayloads+Range.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -1154,6 +1155,8 @@ public enum EditIntentWire {
     case setTempoFont(SetTempoFontIntentWire)
     /// Appended for swing directives — index 90. Never renumber anything above it.
     case setSwing(SetSwingIntentWire)
+    /// Appended for Format Rhythms (spec 2026-10-17) — index 91. Never renumber anything above it.
+    case formatRhythms(FormatRhythmsIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1358,6 +1361,8 @@ public enum EditIntentWire {
             self = .setTempoFont(SetTempoFontIntentWire(anchor: anchor, patch: patch))
         case let .setSwing(anchor, settings, isSystemText):
             self = .setSwing(SetSwingIntentWire(anchor: anchor, settings: settings, isSystemText: isSystemText))
+        case let .formatRhythms(scope, policy):
+            self = .formatRhythms(FormatRhythmsIntentWire(scope: scope, policy: policy))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         case let .setElementColor(target, color):
@@ -1645,6 +1650,9 @@ public enum EditIntentWire {
             return .setSwing(
                 anchor: decoded.anchor, settings: decoded.settings, isSystemText: decoded.isSystemText,
             )
+        case let .formatRhythms(wire):
+            let decoded = wire.decoded()
+            return .formatRhythms(scope: decoded.scope, policy: decoded.policy)
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)
