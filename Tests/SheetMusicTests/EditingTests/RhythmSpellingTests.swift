@@ -97,6 +97,16 @@ struct RhythmSpellingTests {
         #expect(Self.spell(Self.fr(1), at: Self.fr(0), rest: true) == [.measure])
     }
 
+    /// Added with the Task 5 mutation run: dropping the rest dot cap survived every other test, because in 4/4 a rest
+    /// never lands on a double dot. In 2/2 a 7/16 rest from the top of the bar is the case that does (Python port:
+    /// `quarter, eighth.` for the rest, `quarter..` for a note).
+    @Test("a rest carries one dot at most, whatever dotLevel says")
+    func restDotCap() {
+        let dotted = NoteDuration.eighth.dotted(1)
+        #expect(Self.spell(Self.fr(7, 16), at: Self.fr(0), rest: true, meter: (2, 2)) == [.quarter, dotted])
+        #expect(Self.spell(Self.fr(7, 16), at: Self.fr(0), meter: (2, 2)) == [NoteDuration.quarter.dotted(2)])
+    }
+
     @Test("every spec 3.3 row, default knobs")
     func tableDefaultRows() {
         Self.check(Self.defaultAllowRows, Self.tableDefault)
