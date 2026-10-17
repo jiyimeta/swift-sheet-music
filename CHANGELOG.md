@@ -7,6 +7,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`EditIntent.formatRhythms(scope:policy:)` (wire 91), `FormatRhythms`, `FormatRhythmsScope`, `RhythmSpelling` and
+  `RhythmSpellingPolicy`: re-spell a score's rhythms the way the meter writes them, as one undo step.** The scope is
+  the whole score, one bar of one staff, or a range; a range takes only the spans lying entirely inside it, because
+  clipping a span at the edge would tie into territory the caller did not select. Ties that join what one note could
+  say are merged, and what a bar line or a beat would hide is split, by MuseScore's metric rules with three knobs: how
+  many augmentation dots a note may carry (`dotLevel`), whether a note may cross the middle of the bar
+  (`midBarSyncopations`), and whether a rest may cross an unstressed beat (`beatCrossingRests`). `.default` is
+  folino's own taste (two dots, syncopations split, written beat-crossing rests kept) and `.museScore` is what
+  MuseScore's own regroup produces. Markings are never dropped: a span carrying a slur end, a lyric melisma target, a
+  grace note or any other marking it could not carry over is left as written. A pickup bar is right-aligned, each bar
+  is read by its own meter, and tuplets are untouched.
+
 ## [4.13.0] - 2026-10-17
 
 ### Added
