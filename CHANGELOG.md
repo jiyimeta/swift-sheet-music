@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.14.1] - 2026-10-18
+
 ### Fixed
 
 - **The Android audio module compiles again.** 4.14.0's `ScoreElementIDWire` choice 15 (`partName`) generated Kotlin
