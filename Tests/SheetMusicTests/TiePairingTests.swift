@@ -62,16 +62,16 @@
         @Test("Tie matched across a system break (vertical wrap)")
         func tieAcrossSystemBreak() {
             guard #available(macOS 15.0, *) else { return }
-            // Two tied notes in adjacent measures. Force a wrap by making
-            // the available width too small to hold both measures so the
-            // second one is pushed to a new system. An earlier version
+            // Two tied notes in adjacent measures, a line break between
+            // them so the second one is pushed to a new system (two whole
+            // notes fit even a narrow line). An earlier version
             // discriminated ties by absolute staff-midline Y, which
             // differs across systems and silently dropped these pairs.
             let a = Note(pitch: 60, tpc: 14, tieForward: 1)
             let b = Note(pitch: 60, tpc: 14, tieBack: 1)
             let m1 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [a])),
-            ])])
+            ])], lineBreak: true)
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [b])),
             ])])
@@ -107,7 +107,7 @@
             let b = Note(pitch: 60, tpc: 14, tieBack: 1)
             let m1 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [a])),
-            ])])
+            ])], lineBreak: true)
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [b])),
             ])])

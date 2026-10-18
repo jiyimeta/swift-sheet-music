@@ -241,7 +241,11 @@
         /// Two measures: a `ppp` and a crescendo on the last beat of the
         /// first, and the `f` the wedge is heading for on the downbeat
         /// of the second — the shape a roll under a swell takes, and the
-        /// one that breaks if the wedge has to stop at the bar line.
+        /// one that breaks if the wedge has to stop at the bar line. A
+        /// bare third measure follows on the next line, so the two are
+        /// justified across theirs: the short last line of a piece keeps
+        /// its natural width, where the wedge on one beat is crowded and
+        /// takes the one-spatium minimum instead.
         private static func acrossBarline() -> Score {
             let note = Note(pitch: 60, tpc: 14)
             var first: [VoiceElement] = []
@@ -270,7 +274,8 @@
                 instrument: Instrument(id: "x"),
                 staves: [Staff(measures: [
                     Measure(voices: [Voice(elements: first)]),
-                    Measure(voices: [Voice(elements: second)]),
+                    Measure(voices: [Voice(elements: second)], lineBreak: true),
+                    Measure(voices: [Voice(elements: [.chord(Chord(duration: .whole, notes: [note]))])]),
                 ])],
             )])
         }

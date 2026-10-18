@@ -81,8 +81,8 @@ extension LayoutEngine {
         // is applied only to the value this closure RETURNS.
         //
         // Each measure's aggregate is kept alongside (the cache is optional,
-        // so it cannot be the only holder): its collision floors decide how
-        // much of the width is stretchable — see `naturalWidthRatio`.
+        // so it cannot be the only holder): its gaps are what stretches — see
+        // `naturalWidth`.
         var aggregates = [TickAggregate?](repeating: nil, count: measureCount)
         let cachedMinWidths: [CGFloat] = (0 ..< measureCount).map { i in
             let measuresAt = staves.map { staff in
@@ -161,32 +161,31 @@ extension LayoutEngine {
             return max(sp * 4, joined.minimumContentWidth) - max(sp * 4, alone.minimumContentWidth)
         }
 
-        // A measure's natural width at the host's stretch, divided back by
-        // that stretch so it can stand in for `width` in the natural-stretch
-        // test (`… > contentAvail / naturalStretch`). The weights stretch;
-        // a collision floor adds only what stretching them has not already
-        // cleared — at the default stretch, much less than at the minimum.
-        // Exactly `width` for a measure no floor binds in. `joined`: as
-        // spaced with a measure after it on the line.
+        // A measure's natural width: `width`, its minimum, with only its gaps
+        // at the host's stretch — what `justifiedWidths` gives it on a line
+        // justified to exactly that stretch. The header, the room around the
+        // content and anything else outside the gaps count once, as MuseScore
+        // counts a line's natural width (`computeSpacingForFullSystem`), and a
+        // floor adds only what stretching the weights has not already cleared.
+        // A collapsed multi-measure rest, or a bar with nothing timed in it,
+        // has no gaps and scales as a whole. `joined`: as spaced with a
+        // measure after it on the line.
         let naturalStretch = context.options.spacing.systemStretch
-        func naturalWidthRatio(_ i: Int, _ width: CGFloat, joined: Bool = false) -> CGFloat {
+        func naturalWidth(_ i: Int, _ width: CGFloat, joined: Bool = false) -> CGFloat {
             guard let agg = (joined ? joinedAggregates[i] : nil) ?? aggregates[i],
                   plan.runLength(startingAt: i) == nil,
-                  !plan.isInteriorOfRun(i)
-            else { return width }
-            let atMinimum = agg.collisionGrowth(
-                atStretch: 1, contentFloor: sp * 4,
-            )
-            let atStretch = agg.collisionGrowth(
-                atStretch: naturalStretch, contentFloor: sp * 4,
-            )
-            return width - atMinimum + atStretch / naturalStretch
+                  !plan.isInteriorOfRun(i),
+                  agg.totalWeight > 0
+            else { return width * naturalStretch }
+            let minimum = max(sp * 4, agg.minimumContentWidth)
+            let content = max(sp * 4, agg.contentWidth(atStretch: naturalStretch))
+            return width + max(0, content - minimum - sp)
         }
-        /// What measure `i` adds to the natural-stretch sum once a measure
-        /// follows it on the line: its join growth in `naturalWidthRatio` units.
+        /// What measure `i` adds to the line's natural width once a measure
+        /// follows it on the line: its join growth, at the natural stretch.
         func naturalJoinGrowth(_ i: Int) -> CGFloat {
             guard joinedAggregates[i] != nil else { return 0 }
-            return naturalWidthRatio(i, joinGrowths[i], joined: true) - naturalWidthRatio(i, 0)
+            return naturalWidth(i, joinGrowths[i], joined: true) - naturalWidth(i, 0)
         }
 
         // What each possible system boundary would announce at its
@@ -255,8 +254,7 @@ extension LayoutEngine {
             // fit within availableWidth − labelW.
             let contentAvail = context.availableWidth - labelW
             var widthSoFar: CGFloat = 0
-            // The same sum in `naturalWidthRatio` units, for the
-            // natural-stretch test.
+            // The same measures at their natural width (`naturalWidth`), for the natural-stretch test.
             var naturalSoFar: CGFloat = 0
             let systemStart = cursor
             // Engraving convention redraws the active clef + key
@@ -276,43 +274,18 @@ extension LayoutEngine {
                     measureIdx: systemStart, staves: staves, plan: plan,
                 ),
             )
-            // Targeted measures-per-system across the next forced
-            // line-break boundary (or score end). MuseScore's
-            // system layout balances measures evenly between
-            // breaks rather than greedily filling the first system
-            // — see
-            // `engraving/rendering/score/systemlayout.cpp` and
-            // `Sid::lastSystemFillLimit`. Without this lookahead,
-            // a span of 8 measures with sparse content packs as
-            // 6 + 2 instead of MuseScore's 4 + 4.
-            let balancedTarget = context.options.wrapToViewWidth
-                ? balancedMeasuresPerSystem(
-                    fromIndex: systemStart,
-                    measureCount: measureCount,
-                    minWidths: minWidths,
-                    firstHeaderBoost: firstHeaderBoost,
-                    contentAvail: contentAvail,
-                    staves: staves,
-                    policy: context.options.breakPolicy,
-                    frameBreaks: context.frameBreaks,
-                    horizontalGaps: horizontalGaps,
-                    joinGrowths: joinGrowths,
-                )
-                : Int.max
-            // MuseScore-style natural-stretch target. Systems
-            // whose minimum-width content fills less than
-            // `1 / naturalStretch` of the available width are
-            // packed further; once a candidate would stretch
-            // less than that ratio we close the system. Without
-            // this knob, sparse content (whole rests, half notes)
-            // packs 8-9 measures per system at a 1.0x ratio,
-            // producing dense pages MuseScore would have split
-            // into 4-measure systems for visual breathing. 1.5
-            // is the ratio at which MuseScore's mostly-4-measure
-            // wraps emerge on dense lyric content; loosening
-            // further re-introduces 5-6 measure systems. The host can now
-            // override this ratio through its engraving spacing options.
-            let naturalAvail = contentAvail / naturalStretch
+            // MuseScore fills a line greedily: it adds measures while the
+            // line's natural width still fits the page and closes it at the
+            // first that does not (`SystemLayout::collectSystem`). The
+            // natural width is each measure's gaps at `naturalStretch` with
+            // everything else counted once (`naturalWidth`); at the default
+            // stretch it reproduces MuseScore's line breaks across a corpus of
+            // real scores better than any other value tried (2026-10-18). A
+            // line used to be closed against `contentAvail / naturalStretch`
+            // with every measure's whole width stretched — the header and the
+            // room around the content too — and short spans between breaks
+            // were split evenly; both packed fewer measures to a line than
+            // MuseScore, which splits nothing evenly.
             while cursor < measureCount {
                 // Multi-measure-rest interior indices contribute width 0 and emit
                 // nothing; the run-start at `cursor.lowerBound` already accounted
@@ -342,9 +315,9 @@ extension LayoutEngine {
                 let w = cursor == systemStart
                     ? baseW + firstHeaderBoost
                     : baseW + joinW
-                // An HBox's room does not stretch: against the line it costs its width once, which in these
-                // `÷ naturalStretch` units is `room / naturalStretch` (MS adds a box 1:1 to `curSysWidth`).
-                let naturalW = naturalWidthRatio(cursor, w - room - joinW) + room / naturalStretch
+                // An HBox's room does not stretch: against the line it costs its width once (MS adds a box 1:1
+                // to `curSysWidth`).
+                let naturalW = naturalWidth(cursor, w - room - joinW) + room
                     + (cursor > systemStart ? naturalJoinGrowth(cursor - 1) : 0)
                 // Hard ceiling — never let a system overflow the
                 // page horizontally.
@@ -362,12 +335,7 @@ extension LayoutEngine {
                 // get a system to themselves).
                 if context.options.wrapToViewWidth
                     && cursor > systemStart
-                    && naturalSoFar + naturalW > naturalAvail
-                {
-                    break
-                }
-                if context.options.wrapToViewWidth
-                    && cursor - systemStart >= balancedTarget
+                    && naturalSoFar + naturalW > contentAvail
                 {
                     break
                 }
@@ -451,7 +419,8 @@ extension LayoutEngine {
             {
                 widthsSlice[last] += courtesy.width
             }
-            // Each measure at its natural width: its minimum at `naturalStretch`.
+            // Each measure at its natural width (`naturalWidth`): only its gaps stretched, so the system head's
+            // header is no wider than a header in the middle of a line.
             //
             // Never below the minimum, though: a stretch under 1
             // (a host packing music densely) would otherwise draw
@@ -460,11 +429,7 @@ extension LayoutEngine {
             // Below 1 the measure simply stays at its minimum,
             // as a wrapped system's hard ceiling already makes it.
             let naturalWidths = widthsSlice.indices.map { j in
-                max(
-                    widthsSlice[j],
-                    naturalStretch
-                        * naturalWidthRatio(systemStart + j, widthsSlice[j], joined: lineAggregates[j] != nil),
-                )
+                max(widthsSlice[j], naturalWidth(systemStart + j, widthsSlice[j], joined: lineAggregates[j] != nil))
             }
             let stretched: [CGFloat]
             if context.options.wrapToViewWidth,
@@ -492,11 +457,10 @@ extension LayoutEngine {
             } else {
                 // Horizontal (no-wrap) mode: there's no viewport
                 // width to stretch into, so without a fixed scale
-                // measures collapse to their minimums. The
-                // minimum widths are tuned for the wrapped layout
-                // where the viewport stretches them ~1.5×; apply
-                // the same `naturalStretch` here so horizontal
-                // mode has matching breathing room. A wrapped line
+                // measures collapse to their minimums. Each takes its
+                // natural width instead — the width the wrapped
+                // layout packs lines by — as MuseScore's continuous
+                // view lays measures out at theirs. A wrapped line
                 // that is not justified keeps the same widths.
                 stretched = naturalWidths
             }

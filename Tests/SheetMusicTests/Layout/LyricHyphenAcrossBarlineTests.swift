@@ -22,8 +22,9 @@ struct LyricHyphenAcrossBarlineTests {
     /// within-measure pair therefore live in one score, so a test can tell the two emitters apart.
     ///
     /// `openingSyllabic` is the control knob: `.begin` continues the word into bar 2, `.single` ends it
-    /// there, and every assertion below is stated as the difference between the two runs.
-    private static func score(openingSyllabic: Syllabic = .begin) -> Score {
+    /// there, and every assertion below is stated as the difference between the two runs. `breaksLine` puts a
+    /// line break after bar 1.
+    private static func score(openingSyllabic: Syllabic = .begin, breaksLine: Bool = false) -> Score {
         func chord(_ pitch: Int, _ lyric: Lyric?) -> VoiceElement {
             .chord(Chord(
                 duration: .quarter,
@@ -34,7 +35,7 @@ struct LyricHyphenAcrossBarlineTests {
         let measure1 = Measure(voices: [Voice(elements: [
             chord(60, nil), chord(62, nil), chord(64, nil),
             chord(65, Lyric(text: "glo", syllabic: openingSyllabic)),
-        ])])
+        ])], lineBreak: breaksLine)
         let measure2 = Measure(voices: [Voice(elements: [
             chord(67, Lyric(text: "ri", syllabic: .middle)),
             chord(65, nil), chord(64, nil),
@@ -163,9 +164,9 @@ struct LyricHyphenAcrossBarlineTests {
     /// system and again at the start of the next.
     @Test("A word broken over a system break is hyphenated on both systems")
     func aSystemBreakGetsBothHalves() throws {
-        // Narrow enough that the two measures wrap onto separate systems.
-        let connected = Self.layout(Self.score(openingSyllabic: .begin), width: 260)
-        let broken = Self.layout(Self.score(openingSyllabic: .single), width: 260)
+        // A line break puts the two measures on separate systems.
+        let connected = Self.layout(Self.score(openingSyllabic: .begin, breaksLine: true), width: 260)
+        let broken = Self.layout(Self.score(openingSyllabic: .single, breaksLine: true), width: 260)
         #expect(connected.systems.count == 2, "the fixture must wrap for this test to mean anything")
 
         let glo = try #require(Self.syllables(in: connected).first { $0.text == "glo" })

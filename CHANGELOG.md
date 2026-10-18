@@ -7,6 +7,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Lines break the way MuseScore 4 breaks them, and a measure's natural width stretches only its gaps.** A wrapped
+  system used to close once its measures' whole widths — header, room around the content and all — stretched by
+  `systemStretch` overran the line, and a span of up to twelve measures between breaks was split evenly; together they
+  set about a fifth more lines than MuseScore on a corpus of real scores. A line now takes measures while their natural
+  width — the minimum with only the gaps stretched, everything else counted once — still fits, and closes at the first
+  that does not, as `SystemLayout::collectSystem` fills one; nothing is split evenly. `EngravingSpacing.systemStretch`
+  defaults to **1.25** (was 1.5), the value that reproduces MuseScore's breaks best on that corpus (against MuseScore
+  4.7.4's own: 0.46 → 0.57 Jaccard over line starts, 6 → 14 of 47 scores exact, +255 → −39 lines of 1083). A
+  horizontal layout and a short last line take the same natural widths, so the first measure is no longer the widest
+  one for its header. A host that set `systemStretch` itself keeps its value; one that tracked the default moves with
+  it.
+
 ### Fixed
 
 - **The last syllable of a bar and the first of the next no longer run into each other.** A syllable's room to the

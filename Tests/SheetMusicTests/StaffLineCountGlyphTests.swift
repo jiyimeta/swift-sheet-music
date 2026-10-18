@@ -388,13 +388,15 @@
         /// three-line staff it lands on the top line itself and its own
         /// ink becomes the north skyline.
         ///
-        /// The tempo goes on the SECOND measure for the same reason.
+        /// The tempo goes on the THIRD measure for the same reason.
         /// Every system head carries a measure number under any
         /// `MeasureNumberPolicy` (`drawsLabel` returns true for
         /// `isSystemStart` unconditionally), that number is autoplaced
         /// too, and it would stand between the staff rect and the tempo
         /// — leaving the tempo to clear the number rather than the band
-        /// under test.
+        /// under test. The second measure was far enough while measures
+        /// were stretched with their header; at their natural width a
+        /// tempo there reaches back over the number.
         @available(macOS 15.0, *)
         private static func tempoDy(lineCount: Int) throws -> CGFloat {
             let measure = Measure(voices: [Voice(elements: [
@@ -409,10 +411,11 @@
                     instrument: Instrument(id: "perc"),
                     staves: [Staff(
                         lineCount: lineCount,
-                        measures: [measure, measure],
+                        measures: [measure, measure, measure],
                     )],
                 )],
                 systemMeasures: [
+                    SystemMeasure(),
                     SystemMeasure(),
                     SystemMeasure(elements: [
                         PositionedSystemElement(
@@ -422,9 +425,12 @@
                     ]),
                 ],
             )
+            // Stretched well past natural width, so the tempo stands inside
+            // its measure: crossing a barline, it would clear the barline
+            // instead, which on a one-line staff reaches 2 sp above it.
             let doc = LayoutEngine.layout(
                 score: ScoreEditor(score: score).score,
-                options: .init(wrapToViewWidth: false),
+                options: .init(wrapToViewWidth: false, spacing: EngravingSpacing(systemStretch: 3)),
                 availableWidth: 900,
             )
             let system = try #require(doc.systems.first)

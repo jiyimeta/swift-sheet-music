@@ -274,7 +274,7 @@ private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         func systemDoesNotOverflowTheCourtesy() {
             // No explicit break: the width alone decides where the system
             // ends, so the packer has to reserve the announcement itself.
-            let width: CGFloat = 420
+            let width: CGFloat = 300
             let doc = layout(
                 Self.score(breakAfterM1: false), width: width,
             )

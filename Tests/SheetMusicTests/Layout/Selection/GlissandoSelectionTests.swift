@@ -54,7 +54,8 @@ struct GlissandoSelectionTests {
         return Score(division: 480, parts: [Part(
             id: "1", instrument: Instrument(id: "x"),
             staves: [Staff(measures: [
-                Measure(voices: [Voice(elements: [.chord(Chord(duration: .whole, notes: [a]))])]),
+                // A line break splits the glissando: two whole notes fit even a narrow line.
+                Measure(voices: [Voice(elements: [.chord(Chord(duration: .whole, notes: [a]))])], lineBreak: true),
                 Measure(voices: [Voice(elements: [.chord(Chord(duration: .whole, notes: [b]))])]),
             ])],
         )])

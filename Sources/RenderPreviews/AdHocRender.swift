@@ -23,7 +23,7 @@
     ///   SM_MEASURE_NUMBERS — measure-number interval; omitted or `0`
     ///             engraves one label per system head (the default
     ///             policy), `1` labels every measure, `N` every N-th
-    ///   SM_STRETCH — `EngravingSpacing.systemStretch` (default 1.5); a
+    ///   SM_STRETCH — `EngravingSpacing.systemStretch` (default 1.25); a
     ///             host's note-spacing control scales this value
     ///
     /// The title block, its pictures and the boxes between systems are drawn too (`renderDocumentBoxes`). Boxes

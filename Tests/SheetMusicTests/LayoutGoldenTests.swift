@@ -338,8 +338,18 @@
         /// appears, 2.80 pt (0.4 sp) long. Rendered and read: every hyphenated word shows its dashes, none touching a
         /// syllable. (The bar-end grace floor fixed in the same change moves nothing here: no fixture has trailing
         /// graces at a bar's end on a line close to its minimum.)
+        ///
+        /// **Re-recorded 2026-10-18 when a measure's natural width began to stretch only its gaps, the default
+        /// stretch moved 1.5 → 1.25 and short spans stopped being split evenly, after reading the diff** against
+        /// the digest above (`19487551…`). 50 blocks of 68 moved. Every `wrap=false` block narrows — the header and
+        /// the room around the content no longer stretch, and the gaps stretch less (`harmony-basic` 679.49 → 513.42,
+        /// `testSingleNoteDynamics` 4283.62 → 3037.76). Wrapped, one block changes its lines: `testMeasureRepeats`
+        /// goes from 7 + 4 to all 11 on one line. Seven one-line `wrap=true` blocks whose natural width now fills
+        /// less than 30% of the line are left at it rather than stretched (`grace_after` 914 → 269.22), reading as
+        /// their `wrap=false` twins; the others keep their lines and move their columns. Rendered and read:
+        /// `testMeasureRepeats` wrapped and `harmony-basic` horizontal.
         private static let expectedDigestSHA256 =
-            "1948755161b1348ef03f11c20e23c4c8e232e6b853c9c488f094084668817140"
+            "c2564d9f479ea42aeb50026e26177abdffad473b2e7df6cd916d5ef66ba47ca3"
 
         @Test("write digest")
         func writeDigest() throws {

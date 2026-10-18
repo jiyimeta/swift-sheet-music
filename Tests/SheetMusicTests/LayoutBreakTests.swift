@@ -234,17 +234,18 @@
         }
 
         /// Between two forced breaks (or between start-of-score and the
-        /// first break), measures should split evenly across systems
-        /// rather than greedily packing the first system. Mirrors
-        /// MuseScore's "balanced wrap" preference: when an 8-measure
-        /// span needs 2 systems to fit, prefer 4+4 over 6+2 or 7+1.
-        @Test func balancedWrapBetweenBreaks() {
+        /// first break), the first line takes as many measures as fit
+        /// and the rest go to the next: MuseScore fills a line greedily
+        /// and splits nothing evenly (`SystemLayout::collectSystem`).
+        /// This used to assert 4+4 for eight measures that need two
+        /// lines; MuseScore's own breaks on real scores agree better
+        /// with no even split (2026-10-18).
+        @Test func greedyWrapBetweenBreaks() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
-            // Construct measures wide enough that 8 of them force a
-            // 2-system split, but with each measure narrow enough that
-            // a greedy packer could pack 6 in the first system. We use
-            // a quarter-note chord per measure so the duration-driven
-            // width is meaningful.
+            // Measures wide enough that 8 of them force a 2-system
+            // split, each narrow enough that the first line holds more
+            // than half of them. A quarter-note chord per beat so the
+            // duration-driven width is meaningful.
             let chord = Chord(
                 duration: .quarter,
                 notes: [Note(pitch: 60, tpc: 14)],
@@ -269,30 +270,20 @@
                 staves: [staff],
             )
             let score = Score(division: 480, parts: [part])
-            // Width chosen so greedy packing would land 5+3 but
-            // balanced wrap collapses that to 4+4. Each measure's
-            // `crossStaffMinimumMeasureWidth` is ~48.65 pt at
-            // staffSize=14 (contentStartX 5.5 sp + 4 quarters at
-            // 1.6 sp/quarter + trailingGap 1 sp + leading sp).
-            // Part labels here floor to sp*4 = 14 pt (first system)
-            // / sp*2 = 7 pt (after) since `nil → ""` track names.
-            // With contentAvail = 386 first / 393 after:
-            //   * greedy + 1.5x natural stretch fits 5 in system 1
-            //     (5×48.65 + 7 = 250.25 ≤ 386/1.5 ≈ 257);
-            //   * balanced wrap rejects chunk=8 (8×48.65 + 7 =
-            //     396.2 > 386) and returns chunk=4 (201.6 ≤ 386),
-            //     so the system packer caps at 4 — collapsing
-            //     greedy 5+3 to 4+4.
+            // Each measure's `crossStaffMinimumMeasureWidth` is
+            // ~48.65 pt at staffSize=14, so the eight need more than
+            // the 386 pt the first line's content has; at their
+            // natural width (`naturalWidth`) seven of them fit.
             let opts = ScoreViewOptions(
                 staffSize: 14, systemGap: 16, wrapToViewWidth: true,
             )
             let doc = LayoutEngine.layout(
                 score: score, options: opts, availableWidth: 400,
             )
-            // Two systems, 4 measures each — not 5+3 / 6+2 / 7+1.
-            #expect(doc.systems.count == 2)
-            #expect(doc.systems[0].measures.count == 4)
-            #expect(doc.systems[1].measures.count == 4)
+            let counts = doc.systems.map(\.measures.count)
+            #expect(counts.count == 2)
+            #expect(counts.reduce(0, +) == 8)
+            #expect((counts.first ?? 0) > 4, "the first line must take as many as fit, not half: \(counts)")
         }
 
         /// Horizontal mode (`wrapToViewWidth = false`) must ignore
