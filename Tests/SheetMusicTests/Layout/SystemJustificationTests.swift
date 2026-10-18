@@ -90,6 +90,29 @@ struct SystemJustificationTests {
         #expect(held > (others.max() ?? 0) + 1, "the held gap \(held) must stay wider than the rest")
     }
 
+    /// A collapsed multi-measure rest has no gaps, so it has no spring: `justifiedWidths` scales it as a whole by the
+    /// line's one stretch `k` while every other measure grows by its gaps alone. Pinned on the function with a
+    /// hand-built spring so the two branches can be checked against each other: the `k` the rest reveals must be the
+    /// one the spring measure was widened by.
+    @Test("a measure without a spring scales by the line's stretch as a whole")
+    func springlessMeasureScalesByTheLineStretch() throws {
+        let sp: CGFloat = 7
+        let spring = LayoutEngine.TickAggregate(
+            sortedTicks: [0, 480], gapWeights: [20, 20], gapFloors: [0, 0], totalWeight: 40, measureEnd: 960,
+        )
+        let widths: [CGFloat] = [42, 70]
+        let justified = LayoutEngine.justifiedWidths(
+            widths: widths, springs: [nil, spring], availableWidth: 300, sp: sp,
+        )
+        try #require(justified.count == 2)
+        #expect(abs(justified.reduce(0, +) - 300) < 0.001)
+        let k = justified[0] / widths[0]
+        #expect(k > 1)
+        let content = max(sp * 4, k * spring.totalWeight)
+        let minimum = max(sp * 4, spring.minimumContentWidth)
+        #expect(abs(justified[1] - (widths[1] + max(0, content - minimum - sp))) < 0.01, "\(justified), k \(k)")
+    }
+
     // MARK: - The last system
 
     /// Every measure's width, system by system.
