@@ -224,6 +224,9 @@ public final class LayoutCache: @unchecked Sendable {
         /// measure draws before the barline (`LayoutEngine.followingClefs`) —
         /// the same blind spot `trailingCourtesy` covers for signatures.
         let followingClefs: [LayoutEngine.FollowingClef?]
+        /// The aggregates `buildSystem` places measures by in place of their own, where the next measure on the line
+        /// moves their floors (`LayoutEngine.lyricJoinedAggregates`).
+        var lineAggregates: [LayoutEngine.TickAggregate?] = []
     }
 
     /// All inputs to `placeMeasureElements` for one (measure, staff).

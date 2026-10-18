@@ -366,6 +366,7 @@ extension LayoutEngine {
         let cancellations = cancellationNaturalWidths(
             staves: staves, metrics: metrics,
         )
+        var aggregates: [TickAggregate?] = []
         for i in 0 ..< measureCount {
             let baseHeader = computeHeaderSchedule(
                 measureIdx: i,
@@ -375,7 +376,7 @@ extension LayoutEngine {
                 synthesizeKeySigForAllStaves: false,
                 leadingClefDrawnBefore: leadingClefDrawnBefore(measureIdx: i, staves: staves, plan: nil),
             )
-            let w = crossStaffMinimumMeasureWidth(
+            let measured = crossStaffMinimumMeasureWidthWithAggregate(
                 staves: staves,
                 measureIdx: i,
                 metrics: metrics,
@@ -385,7 +386,14 @@ extension LayoutEngine {
                 graceNoteMag: options.graceNoteMag,
                 chordSymbolCase: score.style.chordSymbolCase,
             )
-            total += w + (i < cancellations.count ? cancellations[i] : 0)
+            aggregates.append(measured.aggregate)
+            total += measured.width + (i < cancellations.count ? cancellations[i] : 0)
+        }
+        // One line, so every measure but the last has the next after it (`packSystems`' join growth).
+        let joined = lyricJoinedAggregates(aggregates, staves: staves, metrics: metrics)
+        for (alone, joined) in zip(aggregates, joined) {
+            guard let alone, let joined else { continue }
+            total += max(metrics.sp * 4, joined.minimumContentWidth) - max(metrics.sp * 4, alone.minimumContentWidth)
         }
         return total
     }
@@ -398,7 +406,7 @@ extension LayoutEngine {
         let gapWeights: [CGFloat]
         /// Least width of each gap in `gapWeights`, whatever the stretch — what keeps an accidental off the previous
         /// note (`LayoutEngine+ColumnCollision.swift`). `0` where nothing collides, which is most gaps.
-        let gapFloors: [CGFloat]
+        var gapFloors: [CGFloat]
         let totalWeight: CGFloat
         let measureEnd: Int
         /// The room a clef written after the measure's last chord or rest takes before its barline, on whichever
@@ -410,6 +418,37 @@ extension LayoutEngine {
         /// How far left of the FIRST column its leading grace notes reach, on whichever staff they reach furthest
         /// (`ColumnInk.graceReach`); `0` when it has none.
         var leadingGraceReach: CGFloat = 0
+        /// The first and the last syllable of every voice that carries one, which the syllables of the neighboring
+        /// bars have to clear across the barline (`LayoutEngine.lyricJoinDemands`).
+        var voiceSyllables: [VoiceSyllables] = []
+
+        /// One voice's first and last syllable in a bar: their columns' ticks, their widths (`chordLyricMaxWidth`),
+        /// and whether the last is followed by a dash, which wants the wider room (`lyricsPairWidth`).
+        struct VoiceSyllables: Equatable {
+            let staff: Int
+            let voice: Int
+            let firstTick: Int
+            let firstWidth: CGFloat
+            let lastTick: Int
+            let lastWidth: CGFloat
+            let lastDashed: Bool
+        }
+
+        /// The least width of the gaps from the first column to the one at `tick`: what stands between the two
+        /// however the measure is stretched.
+        func minimumWidth(ofGapsBefore tick: Int) -> CGFloat {
+            sortedTicks.indices.reduce(0) { $0 + (sortedTicks[$1] < tick ? max(gapFloors[$1], gapWeights[$1]) : 0) }
+        }
+
+        /// This aggregate with its floors raised so each of `demands` has its room over its tick span
+        /// (`LayoutEngine.applySpanFloors`).
+        func raisingFloors(to demands: [(startTick: Int, endTick: Int, width: CGFloat)]) -> TickAggregate {
+            var raised = self
+            LayoutEngine.applySpanFloors(
+                demands, sortedTicks: sortedTicks, gapWeights: gapWeights, to: &raised.gapFloors,
+            )
+            return raised
+        }
 
         /// The slack between the last column's gap and the measure's right edge: 1 sp — which also gives a flagged
         /// note room for its flag before the barline — plus any bar-end clef.
@@ -738,6 +777,7 @@ extension LayoutEngine {
         // Per staff, tick → what its chords and rests there hang off the
         // column's sides, for `collisionFloors`.
         var inks: [[Int: ColumnInk]] = []
+        var voiceSyllables: [TickAggregate.VoiceSyllables] = []
         // Trailing graces with nothing after them in the bar, which stand
         // before its barline: their chord's tick, the reach of that chord's
         // column, and how far left of the barline the group reaches.
@@ -746,7 +786,7 @@ extension LayoutEngine {
         for (staffIndex, staff) in staves.enumerated() where measureIdx < staff.measures.count {
             var staffInks: [Int: ColumnInk] = [:]
             defer { inks.append(staffInks) }
-            for voice in staff.measures[measureIdx].voices {
+            for (voiceIndex, voice) in staff.measures[measureIdx].voices.enumerated() {
                 var elements: [TimedElement] = []
                 var tick = 0
                 // Width demand contributed by any `.harmony` not yet
@@ -786,10 +826,20 @@ extension LayoutEngine {
                 // only once the walk gets there: the demands wait on that chord's index, its tick is recorded here.
                 var lyricDemands: [(startTick: Int, nextIndex: Int, width: CGFloat)] = []
                 var chordTicks: [Int: Int] = [:]
+                // The voice's first and latest syllable so far, for the bars either side (`lyricJoinDemands`).
+                var firstSyllable: (tick: Int, width: CGFloat)?
+                var lastSyllable: (tick: Int, width: CGFloat, dashed: Bool)?
                 defer {
                     for demand in lyricDemands {
                         guard let endTick = chordTicks[demand.nextIndex] else { continue }
                         spanDemands.append((demand.startTick, endTick, demand.width))
+                    }
+                    if let firstSyllable, let lastSyllable {
+                        voiceSyllables.append(TickAggregate.VoiceSyllables(
+                            staff: staffIndex, voice: voiceIndex,
+                            firstTick: firstSyllable.tick, firstWidth: firstSyllable.width,
+                            lastTick: lastSyllable.tick, lastWidth: lastSyllable.width, lastDashed: lastSyllable.dashed,
+                        ))
                     }
                 }
                 for (idx, el) in voice.elements.enumerated() {
@@ -830,6 +880,11 @@ extension LayoutEngine {
                         if pendingHarmonyWidth > 0 {
                             spanDemands.append((tick, end, pendingHarmonyWidth))
                             pendingHarmonyWidth = 0
+                        }
+                        let syllableWidth = lyricSpacing.width(at: idx, lyrics: c.lyrics)
+                        if syllableWidth > 0 {
+                            firstSyllable = firstSyllable ?? (tick, syllableWidth)
+                            lastSyllable = (tick, syllableWidth, lyricsCarryDash(c.lyrics))
                         }
                         if let demand = lyricSpacing.demand(at: idx, lyrics: c.lyrics) {
                             lyricDemands.append((tick, demand.nextIndex, demand.width))
@@ -1015,6 +1070,7 @@ extension LayoutEngine {
             totalWeight: totalWeight, measureEnd: measureEnd,
             trailingClefWidth: trailingClefWidth,
             leadingGraceReach: inks.compactMap { $0[firstTick]?.graceReach }.max() ?? 0,
+            voiceSyllables: voiceSyllables,
         )
     }
 
@@ -1358,15 +1414,30 @@ extension LayoutEngine {
     static func lyricsPairWidth(
         currentLyrics: [Lyric], currentWidth: CGFloat, nextWidth: CGFloat, metrics: StaffMetrics,
     ) -> CGFloat {
+        lyricsPairWidth(
+            currentWidth: currentWidth, nextWidth: nextWidth, dashed: lyricsCarryDash(currentLyrics), metrics: metrics,
+        )
+    }
+
+    /// `lyricsPairWidth(currentLyrics:currentWidth:nextWidth:metrics:)` with the current syllable's dash already read
+    /// (`lyricsCarryDash`) — what a pair across a barline has from the bars' aggregates (`lyricJoinDemands`).
+    static func lyricsPairWidth(
+        currentWidth: CGFloat, nextWidth: CGFloat, dashed: Bool, metrics: StaffMetrics,
+    ) -> CGFloat {
         guard currentWidth > 0, nextWidth > 0 else { return 0 }
-        let dashForce = currentLyrics.contains { lyric in
-            lyricHasContent(lyric)
-                && (lyric.syllabic == .begin || lyric.syllabic == .middle)
-        }
-        let inter: CGFloat = dashForce
+        let inter: CGFloat = dashed
             ? metrics.sp * 0.5
             : metrics.sp * 0.25
         return currentWidth / 2 + inter + nextWidth / 2
+    }
+
+    /// Whether a printed syllable among `lyrics` is followed by a dash (`.begin` / `.middle`), which wants the wider
+    /// room between it and the next syllable (`lyricsPairWidth`).
+    static func lyricsCarryDash(_ lyrics: [Lyric]) -> Bool {
+        lyrics.contains { lyric in
+            lyricHasContent(lyric)
+                && (lyric.syllabic == .begin || lyric.syllabic == .middle)
+        }
     }
 
     /// Widest rendered lyric in a chord (verse-aware: takes the max
@@ -1428,15 +1499,20 @@ struct VoiceLyricSpacing {
         self.metrics = metrics
     }
 
+    /// The widest syllable under the notes-bearing chord at `index` (`lyrics`), `0` when none prints: carried from
+    /// the pair before when that one measured it, and carried on to this chord's own pair.
+    mutating func width(at index: Int, lyrics: [Lyric]) -> CGFloat {
+        if let carried, carried.index == index { return carried.width }
+        let width = LayoutEngine.chordLyricMaxWidth(lyrics, metrics: metrics)
+        carried = (index, width)
+        return width
+    }
+
     /// The distance the syllables under the notes-bearing chord at `index` (`lyrics`) need between its column and
     /// the column of the next chord that carries one, at `nextIndex` in `elements`; `nil` when this chord carries no
     /// syllable or none follows it in the voice.
     mutating func demand(at index: Int, lyrics: [Lyric]) -> (width: CGFloat, nextIndex: Int)? {
-        let current = if let carried, carried.index == index {
-            carried.width
-        } else {
-            LayoutEngine.chordLyricMaxWidth(lyrics, metrics: metrics)
-        }
+        let current = width(at: index, lyrics: lyrics)
         guard current > 0,
               let next = LayoutEngine.nextLyricBearingChord(in: elements, after: index)
         else { return nil }

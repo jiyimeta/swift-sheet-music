@@ -7,6 +7,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **The last syllable of a bar and the first of the next no longer run into each other.** A syllable's room to the
+  next one was measured only up to the end of its own bar, so a long syllable on a bar's last note and another on the
+  next bar's first note could overlap across the barline wherever the line was packed tight — always at natural width
+  in a horizontal layout. The pair now gets the same room as two syllables in one bar whenever the second bar follows
+  the first on the same line: a floor on the first bar's gaps from its last syllable to the barline, as MuseScore
+  shares the push over the gaps after the earlier syllable and justifies the line with it as their springs'
+  pre-tension. A syllable may still run across the barline, and a bar that ends a line makes no room for the next
+  line's first syllable.
+
 ## [4.14.1] - 2026-10-18
 
 ### Fixed

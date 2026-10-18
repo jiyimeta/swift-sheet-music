@@ -45,6 +45,7 @@ extension LayoutEngine {
         systemOriginY: CGFloat,
         isFirstSystem: Bool,
         trailingCourtesy: TrailingCourtesy? = nil,
+        lineAggregates: [TickAggregate?] = [],
         activeClefs: inout [NotatedClef],
         activeKeys: inout [Int],
         context: RenderContext,
@@ -226,7 +227,10 @@ extension LayoutEngine {
             if cachedAggregate != nil {
                 context.cache?.tickAggregateHits += 1
             }
-            let aggregate = cachedAggregate ?? aggregatedTickWeights(
+            // As spaced with the next measure after it on this line, where that moves its floors
+            // (`LayoutEngine+LyricJoin`) — the aggregate its width was justified by.
+            let lineAggregate = lineAggregates.indices.contains(j) ? lineAggregates[j] : nil
+            let aggregate = lineAggregate ?? cachedAggregate ?? aggregatedTickWeights(
                 staves: staves,
                 measureIdx: measureIdx,
                 metrics: metrics,

@@ -149,15 +149,28 @@ extension LayoutEngine {
             return cachedMinWidths[i] + cancellation + restoredClefColumn(i)
         }
 
+        // Each measure's aggregate as it is spaced when the next measure
+        // follows it on the same line, where the syllables either side of
+        // the barline must keep clear of each other (`LayoutEngine+LyricJoin`),
+        // and what that adds to its minimum width. Kept out of the cached
+        // width, which is the measure's alone: a system pays it for every
+        // measure but its last.
+        let joinedAggregates = lyricJoinedAggregates(aggregates, staves: staves, metrics: context.metrics)
+        let joinGrowths: [CGFloat] = aggregates.indices.map { i in
+            guard let joined = joinedAggregates[i], let alone = aggregates[i] else { return 0 }
+            return max(sp * 4, joined.minimumContentWidth) - max(sp * 4, alone.minimumContentWidth)
+        }
+
         // A measure's natural width at the host's stretch, divided back by
         // that stretch so it can stand in for `width` in the natural-stretch
         // test (`… > contentAvail / naturalStretch`). The weights stretch;
         // a collision floor adds only what stretching them has not already
         // cleared — at the default stretch, much less than at the minimum.
-        // Exactly `width` for a measure no floor binds in.
+        // Exactly `width` for a measure no floor binds in. `joined`: as
+        // spaced with a measure after it on the line.
         let naturalStretch = context.options.spacing.systemStretch
-        func naturalWidthRatio(_ i: Int, _ width: CGFloat) -> CGFloat {
-            guard let agg = aggregates[i],
+        func naturalWidthRatio(_ i: Int, _ width: CGFloat, joined: Bool = false) -> CGFloat {
+            guard let agg = (joined ? joinedAggregates[i] : nil) ?? aggregates[i],
                   plan.runLength(startingAt: i) == nil,
                   !plan.isInteriorOfRun(i)
             else { return width }
@@ -168,6 +181,12 @@ extension LayoutEngine {
                 atStretch: naturalStretch, contentFloor: sp * 4,
             )
             return width - atMinimum + atStretch / naturalStretch
+        }
+        /// What measure `i` adds to the natural-stretch sum once a measure
+        /// follows it on the line: its join growth in `naturalWidthRatio` units.
+        func naturalJoinGrowth(_ i: Int) -> CGFloat {
+            guard joinedAggregates[i] != nil else { return 0 }
+            return naturalWidthRatio(i, joinGrowths[i], joined: true) - naturalWidthRatio(i, 0)
         }
 
         // What each possible system boundary would announce at its
@@ -277,6 +296,7 @@ extension LayoutEngine {
                     policy: context.options.breakPolicy,
                     frameBreaks: context.frameBreaks,
                     horizontalGaps: horizontalGaps,
+                    joinGrowths: joinGrowths,
                 )
                 : Int.max
             // MuseScore-style natural-stretch target. Systems
@@ -316,12 +336,16 @@ extension LayoutEngine {
                 }
                 let room = roomBefore(cursor, systemStart: systemStart, in: horizontalGaps)
                 let baseW = minWidths[cursor] + room
+                // Joining the line, this measure gives the one before it a
+                // measure after it on the line, and that one its join growth.
+                let joinW = cursor > systemStart ? joinGrowths[cursor - 1] : 0
                 let w = cursor == systemStart
                     ? baseW + firstHeaderBoost
-                    : baseW
+                    : baseW + joinW
                 // An HBox's room does not stretch: against the line it costs its width once, which in these
                 // `÷ naturalStretch` units is `room / naturalStretch` (MS adds a box 1:1 to `curSysWidth`).
-                let naturalW = naturalWidthRatio(cursor, w - room) + room / naturalStretch
+                let naturalW = naturalWidthRatio(cursor, w - room - joinW) + room / naturalStretch
+                    + (cursor > systemStart ? naturalJoinGrowth(cursor - 1) : 0)
                 // Hard ceiling — never let a system overflow the
                 // page horizontally.
                 if context.options.wrapToViewWidth
@@ -397,6 +421,7 @@ extension LayoutEngine {
                     guard candidate > systemStart else { break }
                     for idx in candidate ..< cursor {
                         widthSoFar -= minWidths[idx] + roomBefore(idx, systemStart: systemStart, in: horizontalGaps)
+                            + joinGrowths[idx - 1]
                     }
                     cursor = candidate
                 }
@@ -407,6 +432,13 @@ extension LayoutEngine {
             var widthsSlice = Array(minWidths[systemStart ..< cursor])
             if !widthsSlice.isEmpty {
                 widthsSlice[0] += firstHeaderBoost
+            }
+            // Every measure but the last has the next one after it on the line, and is spaced and placed as joined.
+            let lineAggregates: [TickAggregate?] = widthsSlice.indices.map { j in
+                j < widthsSlice.count - 1 ? joinedAggregates[systemStart + j] : nil
+            }
+            for j in widthsSlice.indices.dropLast() {
+                widthsSlice[j] += joinGrowths[systemStart + j]
             }
             // Reserve the announcement on the last measure that actually
             // draws — a multi-measure-rest run's interior indices carry
@@ -425,7 +457,7 @@ extension LayoutEngine {
                 let springs = widthsSlice.indices.map { j -> TickAggregate? in
                     let i = systemStart + j
                     guard plan.runLength(startingAt: i) == nil, !plan.isInteriorOfRun(i),
-                          let aggregate = aggregates[i], aggregate.totalWeight > 0
+                          let aggregate = lineAggregates[j] ?? aggregates[i], aggregate.totalWeight > 0
                     else { return nil }
                     return aggregate
                 }
@@ -454,7 +486,7 @@ extension LayoutEngine {
                     max(
                         widthsSlice[j],
                         naturalStretch
-                            * naturalWidthRatio(systemStart + j, widthsSlice[j]),
+                            * naturalWidthRatio(systemStart + j, widthsSlice[j], joined: lineAggregates[j] != nil),
                     )
                 }
             }
@@ -473,6 +505,7 @@ extension LayoutEngine {
                 activeClefsIn: activeClefsIn,
                 activeKeysIn: activeKeysIn,
                 trailingCourtesy: trailingCourtesy,
+                lineAggregates: lineAggregates,
                 context: context,
             )
             let system: LayoutSystem
@@ -495,6 +528,7 @@ extension LayoutEngine {
                     systemOriginY: 0,
                     isFirstSystem: isFirstSystem,
                     trailingCourtesy: trailingCourtesy,
+                    lineAggregates: lineAggregates,
                     activeClefs: &activeClefs,
                     activeKeys: &activeKeys,
                     context: context,
@@ -588,6 +622,7 @@ extension LayoutEngine {
         activeClefsIn: [NotatedClef],
         activeKeysIn: [Int],
         trailingCourtesy: TrailingCourtesy?,
+        lineAggregates: [TickAggregate?] = [],
         context: RenderContext,
     ) -> LayoutCache.SystemInputs {
         let allStaves = context.score.allStaves
@@ -654,6 +689,7 @@ extension LayoutEngine {
             chordSymbolCase: context.score.style.chordSymbolCase,
             trailingCourtesy: trailingCourtesy,
             followingClefs: followingClefs(after: lastMeasure, staves: staves, plan: context.multiMeasureRestPlan),
+            lineAggregates: lineAggregates,
         )
     }
 

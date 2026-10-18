@@ -163,6 +163,7 @@ extension LayoutEngine {
         policy: LayoutBreakPolicy,
         frameBreaks: Set<Int> = [],
         horizontalGaps: [Int: CGFloat] = [:],
+        joinGrowths: [CGFloat] = [],
     ) -> Int {
         // Find the END of the current break-bounded span.
         var endIdx = measureCount
@@ -187,13 +188,16 @@ extension LayoutEngine {
             let chunk = (span + numSystems - 1) / numSystems
             // Worst-case chunk width = sum of `chunk` consecutive
             // measures within the span, plus the synthesised
-            // header for the first measure of the chunk.
+            // header for the first measure of the chunk, plus what
+            // every measure but the chunk's last takes for the one
+            // after it (`joinGrowths`, `LayoutEngine+LyricJoin`).
             var maxChunkWidth: CGFloat = 0
             var i = startIdx
             while i < endIdx {
                 let upper = min(i + chunk, endIdx)
                 let slice = minWidths[i ..< upper]
                 var w: CGFloat = slice.reduce(0, +)
+                w += (i ..< upper - 1).reduce(0) { $0 + (joinGrowths.indices.contains($1) ? joinGrowths[$1] : 0) }
                 if i == startIdx { w += firstHeaderBoost }
                 w += roomInside(i ..< upper, gaps: horizontalGaps)
                 maxChunkWidth = max(maxChunkWidth, w)
