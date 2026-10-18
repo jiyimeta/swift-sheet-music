@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.15.0] - 2026-10-19
+
 ### Changed
 
 - **Lines break the way MuseScore 4 breaks them, and a measure's natural width stretches only its gaps.** A wrapped
