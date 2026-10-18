@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A melisma in a MuseScore 4 file is read, and a saved melisma is read by MuseScore 4.6.** MuseScore 4 writes a
+  syllable's melisma only as `<ticks_f>`, a fraction of a whole note; the decoder read the integer `<ticks>` MuseScore
+  3 wrote beside it and nothing else, so every melisma of a score saved by MuseScore 4 was dropped and its syllables
+  drew no extender line. `<ticks_f>` is now read at the file's division (`<ticks>` still wins where a file has both).
+  The v4 encoder writes `<ticks_f>` too: MuseScore 4.6 and later skip a `<ticks>` on a lyric, so a melisma saved as
+  one was lost when the file was opened there. v3 output keeps `<ticks>`.
+
 ## [4.14.1] - 2026-10-18
 
 ### Fixed

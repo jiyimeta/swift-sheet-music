@@ -246,7 +246,7 @@ extension Chord {
     /// Decode the `<Lyrics>` children of a `<Chord>` node — one per
     /// verse line. Verse number comes from `<no>` (0-indexed); absent =
     /// verse 0. `<syllabic>` places the syllable in a hyphenated word;
-    /// `<ticks>` sizes melismas.
+    /// `<ticks_f>` / `<ticks>` size melismas (`melismaTicks(_:)`).
     ///
     /// Gaps in the verse numbering are padded with empty placeholders so
     /// the returned array is indexable by verse; the encoder skips those
@@ -264,9 +264,8 @@ extension Chord {
             let text = textNode.map(StaffText.plainText(of:)) ?? ""
             let syllabic = (lyricsNode.first("syllabic")?.text)
                 .flatMap(Syllabic.init(mscxValue:)) ?? .single
-            let ticks = Int(lyricsNode.first("ticks")?.text ?? "0") ?? 0
             var lyric = Lyric(
-                text: text, syllabic: syllabic, ticks: ticks,
+                text: text, syllabic: syllabic, ticks: melismaTicks(lyricsNode),
                 verse: verse,
                 properties: TextProperties.decode(lyricsNode),
                 preservedMarkup: lyricsNode.preservedMarkup(
@@ -284,12 +283,27 @@ extension Chord {
         }
     }
 
+    /// A melisma's length in ticks at the file's division. MuseScore 4 writes it only as `<ticks_f>`, a fraction of a
+    /// whole note (`TWrite::write(const Lyrics*)`), and 4.6's reader accepts nothing else; MuseScore 3.6 wrote the
+    /// integer `<ticks>` beside it. `<ticks>` wins where both are present: MuseScore 3.6 writes the same length twice,
+    /// and the only other writer of both is folino up to ssm 4.14.1, which kept an unread `<ticks_f>` as preserved
+    /// markup and saved it back next to the `<ticks>` of a melisma edited after import.
+    private static func melismaTicks(_ lyricsNode: XMLTreeNode) -> Int {
+        if let ticks = lyricsNode.first("ticks").flatMap({ Int($0.text) }) {
+            return ticks
+        }
+        guard let length = lyricsNode.first("ticks_f").flatMap({ Fraction(mscxString: $0.text) }) else {
+            return 0
+        }
+        return length.ticks(division: MSCXParserContext.division ?? 480)
+    }
+
     /// Every direct `<Lyrics>` child read by `decodeLyrics`,
     /// `TextProperties.decode`, or `ElementProperties`.
     private static let consumedLyricsChildren: Set = [
         "bold", "color", "face", "framePadding", "frameType", "italic",
-        "no", "offset", "autoplace", "placement", "size", "strike", "syllabic", "text", "ticks", "underline",
-        "visible",
+        "no", "offset", "autoplace", "placement", "size", "strike", "syllabic", "text", "ticks", "ticks_f",
+        "underline", "visible",
     ]
 
     /// Decode the `<Note>` children of a `<Chord>` node, propagating
