@@ -69,12 +69,14 @@ extension Score {
         let revision = MSCXParserContext.formatRevision(versionAttribute: root.attributes["version"])
         return try MSCXParserContext.$version.withValue(version) {
             try MSCXParserContext.$formatRevision.withValue(revision) {
-                try decodeBody(
-                    scoreNode: scoreNode,
-                    division: division,
-                    version: version,
-                    styleFileStyle: styleFileStyle,
-                )
+                try MSCXParserContext.$division.withValue(division) {
+                    try decodeBody(
+                        scoreNode: scoreNode,
+                        division: division,
+                        version: version,
+                        styleFileStyle: styleFileStyle,
+                    )
+                }
             }
         }
     }

@@ -27,6 +27,11 @@ enum MSCXParserContext {
     /// type at 4.60 (`MarkerTypeDecoding`).
     @TaskLocal static var formatRevision: Int?
 
+    /// The `<Division>` of the file being decoded — ticks per quarter note — bound beside `version` for the rest of
+    /// `Score.decode(_:)`; nil outside it, where decoders assume MuseScore's own 480. MuseScore 4 writes a lyric's
+    /// melisma as a fraction of a whole note (`<ticks_f>`), and the model counts it in ticks at this division.
+    @TaskLocal static var division: Int?
+
     /// MuseScore's reading of `version`: major × 100 + minor, so "4.60" is 460 and "3.01" is 301
     /// (`MscLoader::readMasterScore`, `rw/mscloader.cpp:240-242`).
     static func formatRevision(versionAttribute version: String?) -> Int? {

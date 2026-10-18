@@ -74,6 +74,10 @@ enum ScoreSemanticComparison {
         /// marks, swings, instrument changes, markers, jumps, dynamics, Expressions and Stickings, and the
         /// `<direction>` children of dynamics and Expressions. Off by default, which strips them with the rest.
         var keepsTextMarkup = false
+        /// If true, set every syllable's melisma length (`Lyric.ticks`) to 0 on both sides. The MusicXML decoder does
+        /// not read `<extend>` yet, while MuseScore's import turns it into the `<ticks_f>` its refs carry — a known
+        /// gap, which went unseen while the MSCX decoder dropped `<ticks_f>` too.
+        var ignoresLyricMelismas = false
     }
 
     /// The `metaTag` keys MuseScore's app (not its importer) writes when `mscore` saves outside test mode:
@@ -324,7 +328,36 @@ enum ScoreSemanticComparison {
         if options.stripsStaffText { s = removingStaffText(s) }
         if options.sortsAnnotationRuns { s = sortingAnnotationRuns(s) }
         if options.ignoresLineGeometry { s = ignoringLineGeometry(s) }
+        if options.ignoresLyricMelismas { s = clearingLyricMelismas(s) }
         return applyingWriterAllowances(s, options: options, isReference: isReference)
+    }
+
+    private static func clearingLyricMelismas(_ score: Score) -> Score {
+        var s = score
+        s.parts.mapValues { part in
+            var pt = part
+            pt.staves.mapValues { staff in
+                var st = staff
+                st.measures = st.measures.map { measure in
+                    var m = measure
+                    m.voices = m.voices.map { voice in
+                        Voice(elements: voice.elements.map { element in
+                            guard case var .chord(chord) = element else { return element }
+                            chord.lyrics = chord.lyrics.map { lyric in
+                                var cleared = lyric
+                                cleared.ticks = 0
+                                return cleared
+                            }
+                            return .chord(chord)
+                        })
+                    }
+                    return m
+                }
+                return st
+            }
+            return pt
+        }
+        return s
     }
 
     private static func canonicalizeDurations(_ element: VoiceElement) -> VoiceElement {
