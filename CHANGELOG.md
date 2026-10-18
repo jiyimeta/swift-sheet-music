@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.14.2] - 2026-10-18
+
 ### Fixed
 
 - **A melisma in a MuseScore 4 file is read, and a saved melisma is read by MuseScore 4.6.** MuseScore 4 writes a
