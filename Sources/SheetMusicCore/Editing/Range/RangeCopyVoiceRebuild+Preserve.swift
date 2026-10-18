@@ -291,8 +291,8 @@ extension RangeCopyVoiceRebuild {
     /// trim stay, because those pieces really are one note.
     static func leadingTrim(of entry: Entry, upTo spanStart: Int, in context: Context) -> [VoiceSlot] {
         guard case let .chord(chord) = entry.element else { return [] }
-        let durations = DurationChangeAlgorithm.alignedDurations(
-            forTicks: spanStart - entry.start, rtickStart: entry.start, division: context.division,
+        let durations = context.bar.durations(
+            forTicks: spanStart - entry.start, at: entry.start, isRest: chord.notes.isEmpty,
         )
         guard let first = durations.first else { return [] }
         var head = chord
@@ -316,9 +316,7 @@ extension RangeCopyVoiceRebuild {
     /// leading trim carries no `tieForward` — the copy in front of it is not this note's beginning.
     static func trailingTrim(of entry: Entry, from spanEnd: Int, in context: Context) -> [VoiceSlot] {
         guard case let .chord(chord) = entry.element else { return [] }
-        let durations = DurationChangeAlgorithm.alignedDurations(
-            forTicks: entry.end - spanEnd, rtickStart: spanEnd, division: context.division,
-        )
+        let durations = context.bar.durations(forTicks: entry.end - spanEnd, at: spanEnd, isRest: chord.notes.isEmpty)
         guard !durations.isEmpty else { return [] }
         var pieces: [VoiceElement] = chord.notes.isEmpty
             ? durations.map { .rest(duration: $0) }
@@ -338,7 +336,9 @@ extension RangeCopyVoiceRebuild {
         var pieces = DurationChangeAlgorithm.makeChordChain(
             from: chord, durations: durations, onsetOwnership: .allContinuation,
         )
-        if let first = pieces.indices.first { pieces[first] = settingTie(pieces[first], back: .set(1)) }
+        if let first = pieces.indices.first {
+            pieces[first] = DurationChangeAlgorithm.clearingAccidentals(settingTie(pieces[first], back: .set(1)))
+        }
         if let last = pieces.indices.last { pieces[last] = settingTie(pieces[last], forward: .clear) }
         return pieces
     }

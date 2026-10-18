@@ -11,6 +11,9 @@ extension RebarPlanner {
         let run: Range<Int>
         let division: Int
         let newTicks: Int
+        /// One column of the new barring: the meter being set (or inherited, on a removal), a full nominal bar, never
+        /// a pickup — irregular bars are carried verbatim and never reach a column.
+        let meter: BarMeter
         let columnCount: Int
         let totalTicks: Int
         /// Run-relative start tick of each old bar, indexed by offset within `run`.
@@ -216,10 +219,9 @@ extension RebarPlanner {
         mutating func pad() {
             guard voiceIndex == 0 else { return }
             for column in elements.indices where cursors[column] < geometry.columnEnd(column) {
-                elements[column].append(contentsOf: DurationChangeAlgorithm.alignedRests(
+                elements[column].append(contentsOf: geometry.meter.rests(
                     forTicks: geometry.columnEnd(column) - cursors[column],
-                    rtickStart: cursors[column] - geometry.columnStart(column),
-                    division: geometry.division,
+                    at: cursors[column] - geometry.columnStart(column),
                 ).map { VoiceSlot(identity: .fresh, element: $0) })
                 cursors[column] = geometry.columnEnd(column)
                 present[column] = true
@@ -244,11 +246,10 @@ extension RebarPlanner {
                 _ = append(item.elements, at: item.tick, ticks: item.ticks, in: first.column)
                 return
             }
+            let isRest = if case let .chord(chord) = item.elements[0].element { chord.notes.isEmpty } else { true }
             let perSegment = segments.map { segment in
-                DurationChangeAlgorithm.alignedDurations(
-                    forTicks: segment.ticks,
-                    rtickStart: segment.tick - geometry.columnStart(segment.column),
-                    division: geometry.division,
+                geometry.meter.durations(
+                    forTicks: segment.ticks, at: segment.tick - geometry.columnStart(segment.column), isRest: isRest,
                 )
             }
             // ONE chain over every piece, not one per column: the ties at the interior joints are the
@@ -322,10 +323,8 @@ extension RebarPlanner {
             let cursor = cursors[column]
             guard tick != cursor else { return }
             if tick > cursor, voiceIndex == 0 {
-                elements[column].append(contentsOf: DurationChangeAlgorithm.alignedRests(
-                    forTicks: tick - cursor,
-                    rtickStart: cursor - geometry.columnStart(column),
-                    division: geometry.division,
+                elements[column].append(contentsOf: geometry.meter.rests(
+                    forTicks: tick - cursor, at: cursor - geometry.columnStart(column),
                 ).map { VoiceSlot(identity: .fresh, element: $0) })
             } else {
                 elements[column].append(VoiceSlot(

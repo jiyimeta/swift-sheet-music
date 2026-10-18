@@ -16,6 +16,7 @@ public enum DurationChangeAlgorithm {
     /// - `srcTicks` / `dstTicks`: old / new duration in ticks.
     /// - `targetRtick`: tick offset of `idx` within the measure.
     /// - `division`: score PPQ (`Score.division`).
+    /// - `bar`: the bar the voice is in; the leftover and the overshoot are spelled against its meter.
     /// - returns: the recomputed elements and surviving identified tuplets.
     /// - throws: `SheetMusicError.invalidEdit` when the change would
     ///   cross a measure boundary, consume past a non-timed element,
@@ -28,6 +29,7 @@ public enum DurationChangeAlgorithm {
         dstTicks: Int,
         targetRtick: Int,
         division: Int,
+        bar: BarMeter,
         baseLocation: VoiceElementID,
         operation: String,
         targetEID: EID, ids: inout EIDAllocator,
@@ -40,11 +42,7 @@ public enum DurationChangeAlgorithm {
         var consumedEndIdx = idx
         if dstTicks < srcTicks {
             let leftover = srcTicks - dstTicks
-            let rests = alignedRests(
-                forTicks: leftover,
-                rtickStart: targetRtick + dstTicks,
-                division: division,
-            )
+            let rests = bar.rests(forTicks: leftover, at: targetRtick + dstTicks)
             newElements.insert(contentsOf: rests.map { (ids.next(), $0) }, at: idx + 1)
         } else if dstTicks > srcTicks {
             let needed = dstTicks - srcTicks
@@ -134,11 +132,12 @@ public enum DurationChangeAlgorithm {
             let lastEl = newElements[lastConsumedIdx]
             newElements.removeSubrange((idx + 1) ..< (lastConsumedIdx + 1))
             if partial > 0 {
-                let durations = alignedDurations(
-                    forTicks: partial,
-                    rtickStart: targetRtick + dstTicks,
-                    division: division,
-                )
+                // A chord's overshoot keeps sounding as a tied chain, so it is spelled as a note; a rest's, or a
+                // torn-down tuplet's, as rests.
+                let isNote = if !lastConsumedWasTuplet, case let .chord(chord) = lastEl { !chord.notes.isEmpty } else {
+                    false
+                }
+                let durations = bar.durations(forTicks: partial, at: targetRtick + dstTicks, isRest: !isNote)
                 let pieces: [VoiceElement]
                 if lastConsumedWasTuplet {
                     pieces = durations.map {
@@ -278,6 +277,7 @@ public enum DurationChangeAlgorithm {
                 notes[ni].tieForward = isLast
                     ? src.notes[ni].tieForward
                     : 1
+                if !isFirst { clearAccidental(&notes[ni]) }
             }
             let chordNotes = if isFirst, onsetOwnership == .headIsOnset {
                 ChordNotes(Array(zip(src.notes.indices.map(src.notes.eid(at:)), notes)))
@@ -293,6 +293,24 @@ public enum DurationChangeAlgorithm {
             )))
         }
         return pieces
+    }
+
+    /// A tied continuation prints no accidental: the tie carries the alteration of the note it continues, across a
+    /// barline too, as MuseScore writes it. A copied sign would be drawn again when it is USER-role (a courtesy, a
+    /// bracketed one), and renotation never revisits a tied-back note to take it off. The pitch and `tpc` stay.
+    static func clearAccidental(_ note: inout Note) {
+        note.accidental = nil
+        note.accidentalBracket = .none
+        note.accidentalRole = .auto
+    }
+
+    /// `element` with `clearAccidental` applied to every note of its chord; anything else unchanged.
+    static func clearingAccidentals(_ element: VoiceElement) -> VoiceElement {
+        guard case var .chord(chord) = element else { return element }
+        for index in chord.notes.indices {
+            chord.notes.updateNote(at: index, clearAccidental)
+        }
+        return .chord(chord)
     }
 
     /// Find the voice at the given location, returning nil when the

@@ -87,6 +87,7 @@ public struct PasteVoiceElements: EditCommand {
             targetRtick: targetRtick,
             division: division,
             measureDuration: measureDuration,
+            bar: BarMeter(score: score, staff: location.staff, measureIndex: location.measureIndex),
             baseLocation: location, ids: &ids,
         )
         let replace = ReplaceVoiceElements(
@@ -127,6 +128,7 @@ public struct PasteVoiceElements: EditCommand {
         targetRtick: Int,
         division: Int,
         measureDuration: Fraction,
+        bar: BarMeter,
         baseLocation: VoiceElementID, ids: inout EIDAllocator,
     ) throws -> (elements: IdentifiedArray<VoiceElement>, tuplets: IdentifiedArray<Tuplet>) {
         var newElements = voice.elements
@@ -146,11 +148,7 @@ public struct PasteVoiceElements: EditCommand {
 
         if payloadTicks < targetTicks {
             let leftover = targetTicks - payloadTicks
-            let rests = DurationChangeAlgorithm.alignedRests(
-                forTicks: leftover,
-                rtickStart: targetRtick + payloadTicks,
-                division: division,
-            )
+            let rests = bar.rests(forTicks: leftover, at: targetRtick + payloadTicks)
             newElements.insert(
                 contentsOf: rests.map { (ids.next(), $0) }, at: payloadEndIdx + 1,
             )
@@ -206,11 +204,8 @@ public struct PasteVoiceElements: EditCommand {
                 (payloadEndIdx + 1) ..< (lastConsumedIdx + 1),
             )
             if partial > 0, let lastEl = lastConsumedEl {
-                let durations = DurationChangeAlgorithm.alignedDurations(
-                    forTicks: partial,
-                    rtickStart: targetRtick + payloadTicks,
-                    division: division,
-                )
+                let isNote = if case let .chord(c) = lastEl { !c.notes.isEmpty } else { false }
+                let durations = bar.durations(forTicks: partial, at: targetRtick + payloadTicks, isRest: !isNote)
                 let pieces: [VoiceElement]
                 switch lastEl {
                 case let .chord(c) where !c.notes.isEmpty:

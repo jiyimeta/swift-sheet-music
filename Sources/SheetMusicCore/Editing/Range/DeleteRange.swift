@@ -3,11 +3,12 @@ import SheetMusicFoundation
 /// Turns everything the range covers into rests, and touches nothing outside it.
 ///
 /// The unit of work is one `(staff, measure, voice)` at a time: the slots the range covers there are replaced by the
-/// rests that spell their COMBINED length on the metric grid (`DurationChangeAlgorithm.alignedDurations`), so two
-/// dotted eighths deleted together come back as a quarter rest plus an eighth rest rather than two dotted eighth
-/// rests. Slots the range does not cover — notes and rests alike — are carried over untouched, which is the whole
-/// point: a bar holding a half note and a half rest gives back two half rests when only the note is deleted, not the
-/// measure rest the collapse used to produce by swallowing a rest nobody had selected.
+/// rests that spell their COMBINED length against the bar's meter (`BarMeter`, the spelling `FormatRhythms` writes),
+/// so two dotted eighths deleted together from the downbeat of 4/4 come back as a quarter rest plus an eighth rest
+/// rather than two dotted eighth rests, and three eighths deleted from the downbeat of 6/8 as one dotted-quarter rest.
+/// Slots the range does not cover — notes and rests alike — are carried over untouched, which is the whole point: a
+/// bar holding a half note and a half rest gives back two half rests when only the note is deleted, not the measure
+/// rest the collapse used to produce by swallowing a rest nobody had selected.
 ///
 /// The one exception is total coverage: when the range covers every timed slot of a bar-voice, the bar is silent and
 /// is spelled the way MuseScore spells a silent bar — one `.measure` rest, tuplets dissolved
@@ -187,7 +188,9 @@ public struct DeleteRange: EditCommand {
         let measureDuration = score.effectiveMeasureDuration(at: ref.staff, measureIndex: ref.measureIndex)
         let spans = voice.tupletSpans
 
-        var builder = RestFillBuilder(division: division)
+        var builder = RestFillBuilder(
+            division: division, bar: BarMeter(score: score, staff: ref.staff, measureIndex: ref.measureIndex),
+        )
         var rtick = 0
         for (index, element) in voice.elements.enumerated() {
             let kept = SlotIdentity.keep(voice.elements.eid(at: index))
@@ -241,13 +244,14 @@ public struct DeleteRange: EditCommand {
 }
 
 /// Builds one bar-voice's replacement element list for `DeleteRange`: slots the range did not cover pass through,
-/// slots it did cover accumulate into runs that are re-spelled as metric-aligned rests.
+/// slots it did cover accumulate into runs that are re-spelled as rests against the bar's meter (`BarMeter`).
 ///
 /// A run ends wherever something that is not an absorbed slot intervenes — a surviving chord, a clef, a tuplet
 /// member — so a clef inside the deleted span keeps its exact tick instead of being pushed to the next rest
 /// boundary by a fill that spanned it.
 private struct RestFillBuilder {
     let division: Int
+    let bar: BarMeter
     private(set) var slots: [VoiceSlot] = []
     /// Where each carried-over or cleared-in-place element landed, so a tuplet's endpoints can be re-pointed.
     private(set) var newIndexForOldIndex: [Int: Int] = [:]
@@ -258,8 +262,9 @@ private struct RestFillBuilder {
     private var runTicks = 0
     private var run: [(ticks: Int, duration: NoteDuration, identity: SlotIdentity, wasRest: Bool)] = []
 
-    init(division: Int) {
+    init(division: Int, bar: BarMeter) {
         self.division = division
+        self.bar = bar
     }
 
     mutating func carryOver(at index: Int, identity: SlotIdentity, element: VoiceElement) {
@@ -289,14 +294,15 @@ private struct RestFillBuilder {
     mutating func flush() {
         guard !run.isEmpty else { return }
         defer { run = []; runTicks = 0 }
-        let durations = DurationChangeAlgorithm.alignedDurations(
-            forTicks: runTicks, rtickStart: runStart, division: division,
-        )
+        let durations = bar.durations(forTicks: runTicks, at: runStart, isRest: true)
         // A fill that lands on the very lengths it replaced is not a re-spelling at all — every slot keeps the
         // spelling it had (so a `.measure` rest is not rewritten as the `.whole` that totals the same ticks) and
         // every rest keeps its identifier. Only a chord's slot has to mint one, because its content changed.
         let unchanged = durations.count == run.count
-            && zip(durations, run).allSatisfy { $0.ticks(division: division) == $1.ticks }
+            && zip(durations, run).allSatisfy { duration, slot in
+                let ticks = if case .measure = duration { bar.barTicks } else { duration.ticks(division: division) }
+                return ticks == slot.ticks
+            }
         guard unchanged else {
             for duration in durations {
                 appendRest(.rest(duration: duration), identity: .fresh)

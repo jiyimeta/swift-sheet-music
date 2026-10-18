@@ -71,10 +71,11 @@ struct EditReplayDeterminismTests {
 
         #expect(session.apply(change))
 
-        // Four sixteenths do not fit the three-sixteenth bar they now open, so the quarter comes back as an eighth
-        // plus a sixteenth filling the new measure 1, tied on into a sixteenth opening measure 2.
+        // Four sixteenths do not fit the three-sixteenth bar they now open, so the quarter comes back as a dotted
+        // eighth filling the new measure 1 (the bar's own meter spells it as one value), tied on into a sixteenth
+        // opening measure 2.
         let head = firstNotedChord(inMeasure: 1)
-        #expect(head?.duration == .eighth)
+        #expect(head?.duration == NoteDuration.eighth.dotted(1))
         #expect(head?.notes.isEmpty == false)
         #expect(head?.notes[0].tieForward != nil)
         let carried = firstNotedChord(inMeasure: 2)

@@ -82,6 +82,7 @@ public struct SetRestDuration: EditCommand {
                 dstTicks: dstTicks,
                 targetRtick: targetRtick,
                 division: division,
+                bar: BarMeter(score: score, staff: location.staff, measureIndex: location.measureIndex),
                 baseLocation: location,
                 operation: "SetRestDuration",
                 targetEID: voice.elements.eid(at: location.elementIndex), ids: &ids,

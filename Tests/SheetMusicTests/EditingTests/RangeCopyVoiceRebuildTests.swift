@@ -139,15 +139,16 @@ struct RangeCopyVoiceRebuildTests {
     @Test("a multi-piece leading trim stays tied inside itself and stops at the copy")
     func multiPieceTrimTiesOnlyInsideItself() throws {
         var score = Self.identifiedFixture()
-        // [720, 1200) cuts the FIRST half note of measure 2, whose remainder needs a quarter plus an eighth.
-        // That source note carries `tieForward = 1` into its partner — which the copy now overwrites.
+        // [600, 1080) cuts the FIRST half note of measure 2, whose 5/16 remainder no single value spells: a quarter
+        // tied to a sixteenth. That source note carries `tieForward = 1` into its partner — which the copy now
+        // overwrites.
         let command = try RangeCopyVoiceRebuild.command(
-            for: Self.piece(measure: 2, start: 720, elements: [Self.quarter(60)]),
+            for: Self.piece(measure: 2, start: 600, elements: [Self.quarter(60)]),
             staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score, 2).elements
-        #expect(elements.count == 5)
+        try #require(elements.count == 4)
         guard case let .chord(head) = elements[0], case let .chord(continuation) = elements[1],
               case let .chord(tail) = elements[3]
         else {
@@ -155,13 +156,16 @@ struct RangeCopyVoiceRebuildTests {
             return
         }
         #expect(head.duration == .quarter)
-        #expect(continuation.duration == .eighth)
+        #expect(continuation.duration == .sixteenth)
         // The trim's own two pieces are one note, so they stay tied to each other.
         #expect(head.notes[0].tieForward == 1)
         #expect(continuation.notes[0].tieBack == 1)
         // The tie that would cross into the copy is gone, even though the source note carried one.
         #expect(continuation.notes[0].tieForward == nil)
         #expect(elements[2] == Self.quarter(60))
+        // What the copy leaves of the second half note, [1080, 1920), is 7/16 from the sixteenth after beat 3: the
+        // meter keeps it as one double-dotted quarter.
+        #expect(tail.duration == NoteDuration.quarter.dotted(2))
         #expect(tail.notes[0].tieBack == nil)
     }
 

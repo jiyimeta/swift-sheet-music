@@ -164,9 +164,15 @@ public enum CrossBarInputPlanner {
         {
             return [.measure]
         }
-        return DurationChangeAlgorithm.alignedDurations(
-            forTicks: ticks, rtickStart: rtickStart, division: room.division,
-        )
+        let isRest = if case .rest = content { true } else { false }
+        return bar(measureIndex, room: room).durations(forTicks: ticks, at: rtickStart, isRest: isRest)
+    }
+
+    /// Bar `measureIndex` of the room's staff, read against its meter.
+    private static func bar(_ measureIndex: Int, room: Room) -> BarMeter {
+        let barTicks = room.measureDurations.indices.contains(measureIndex)
+            ? room.measureDurations[measureIndex].ticks(division: room.division) : 0
+        return BarMeter(staff: room.staff, measureIndex: measureIndex, barTicks: barTicks, division: room.division)
     }
 
     /// The first piece keeps the target EID for rest-to-rest edits or unchanged chord content.
@@ -209,6 +215,7 @@ public enum CrossBarInputPlanner {
                 into: voice,
                 over: segment,
                 measureDuration: room.measureDurations[segment.measureIndex],
+                bar: bar(segment.measureIndex, room: room),
                 division: room.division,
             ) else { return nil }
             commands.append(ReplaceVoiceElements(
@@ -250,6 +257,7 @@ public enum CrossBarInputPlanner {
         into voice: Voice,
         over segment: Segment,
         measureDuration: Fraction,
+        bar: BarMeter,
         division: Int,
     ) -> (elements: [VoiceSlot], tuplets: IdentifiedArray<Tuplet>)? {
         let elements = voice.elements
@@ -273,7 +281,7 @@ public enum CrossBarInputPlanner {
                     of: elements[index],
                     ticks: consumed + ticks - segment.ticks,
                     rtickStart: segment.startRtick + segment.ticks,
-                    division: division,
+                    bar: bar,
                 ).map { VoiceSlot(identity: .fresh, element: $0) }
                 consumed = segment.ticks
             }
@@ -299,11 +307,10 @@ public enum CrossBarInputPlanner {
         of element: VoiceElement,
         ticks: Int,
         rtickStart: Int,
-        division: Int,
+        bar: BarMeter,
     ) -> [VoiceElement] {
-        let durations = DurationChangeAlgorithm.alignedDurations(
-            forTicks: ticks, rtickStart: rtickStart, division: division,
-        )
+        let isNote = if case let .chord(chord) = element { !chord.notes.isEmpty } else { false }
+        let durations = bar.durations(forTicks: ticks, at: rtickStart, isRest: !isNote)
         guard case let .chord(chord) = element, !chord.notes.isEmpty else {
             return durations.map { .rest(duration: $0) }
         }
@@ -328,6 +335,7 @@ public enum CrossBarInputPlanner {
         for index in notes.indices {
             notes[index].tieBack = isFirst ? source.notes[index].tieBack : 1
             notes[index].tieForward = isLast ? source.notes[index].tieForward : 1
+            if !isFirst { DurationChangeAlgorithm.clearAccidental(&notes[index]) }
         }
         guard isFirst else {
             return .chord(Chord(

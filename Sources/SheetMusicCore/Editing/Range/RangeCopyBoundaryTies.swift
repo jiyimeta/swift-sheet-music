@@ -80,6 +80,7 @@ extension RangeCopyVoiceRebuild {
         let context = Context(
             division: score.division, measureDuration: durations[piece.measureIndex], ref: ref,
             geometry: RangeCopyGeometry(staff: staff, in: score), operation: operation,
+            bar: BarMeter(score: score, staff: staff, measureIndex: piece.measureIndex),
         )
         let spanStart = piece.startTickInMeasure
         let spanEnd = spanStart + piece.elements.reduce(0) { $0 + context.advance(of: $1) }

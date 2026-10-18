@@ -7,6 +7,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Edits spell the durations they invent against the bar's meter.** The rests a shortened note leaves, the tied
+  pieces of a note crossing a barline, the rests a range delete leaves, a time-signature change's cut notes and
+  padding, a pasted slot's leftover and overshoot, `SplitRest`, and range copy's re-spelled and trimmed elements are
+  now spelled the way `FormatRhythms` writes a span under `RhythmSpellingPolicy.default` — the meter in force,
+  dotted values, beats shown in rests, a pickup right-aligned — instead of by `DurationChangeAlgorithm
+  .alignedDurations`, which knew no meter and never wrote a dot. So a 3/4 re-bar writes a dotted half rather than a
+  half tied to a quarter, three eighth rests from the downbeat of 6/8 are one dotted-quarter rest, and formatting
+  right after an edit finds nothing to do in what the edit wrote. A span the speller cannot cover to the tick falls
+  back to `alignedDurations`; durations inside a tuplet are still spelled in the tuplet's written time.
+  `alignedDurations` / `alignedRests` remain public.
+- **Every tied continuation an edit writes carries no accidental** (`DurationChangeAlgorithm.makeChordChain`, cross-bar
+  input, range copy), as MuseScore writes them; the head, and a first piece with no tie into it, keep theirs.
+
 ### Fixed
 
 - **`FormatRhythms` no longer repeats an accidental on the tied pieces it writes.** A chord split into a tied chain

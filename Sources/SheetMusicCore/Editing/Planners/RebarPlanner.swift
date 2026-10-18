@@ -49,7 +49,10 @@ enum RebarPlanner {
             case let .irregular(measureIndex):
                 columns.append(verbatimColumn(at: measureIndex, of: score, ids: &ids))
             case let .regular(range):
-                var produced = try rebar(run: range, of: score, newTicks: newTicks, ids: &ids)
+                var produced = try rebar(
+                    run: range, of: score, newTicks: newTicks, numerator: numerator, denominator: denominator,
+                    ids: &ids,
+                )
                 if let signature = pendingSignature, !produced.isEmpty {
                     declare(signature, in: &produced[0], source: score, measureIndex: range.lowerBound, ids: &ids)
                     pendingSignature = nil
@@ -146,9 +149,15 @@ enum RebarPlanner {
     // MARK: - One regular run
 
     private static func rebar(
-        run: Range<Int>, of score: Score, newTicks: Int, ids: inout EIDAllocator,
+        run: Range<Int>, of score: Score, newTicks: Int, numerator: Int, denominator: Int, ids: inout EIDAllocator,
     ) throws -> [MeasureSlice] {
-        let geometry = geometry(run: run, score: score, newTicks: newTicks)
+        let geometry = geometry(
+            run: run, score: score, newTicks: newTicks,
+            meter: BarMeter(
+                numerator: numerator, denominator: denominator, barTicks: newTicks, isPickup: false,
+                division: score.division,
+            ),
+        )
         assertStavesAgree(on: geometry, in: score)
         var staffColumns: [[[Measure]]] = []
         for part in score.parts {
@@ -173,7 +182,7 @@ enum RebarPlanner {
     ///
     /// Read from part 0 / staff 0: a time signature is score-wide in this model and a run carries no
     /// `actualLength`, so every staff measures the same run the same way. `assertStavesAgree` states that.
-    private static func geometry(run: Range<Int>, score: Score, newTicks: Int) -> Geometry {
+    private static func geometry(run: Range<Int>, score: Score, newTicks: Int, meter: BarMeter) -> Geometry {
         let durations = score.effectiveMeasureDurations()
         var starts: [Int] = []
         var fractions: [Fraction] = []
@@ -192,6 +201,7 @@ enum RebarPlanner {
             run: run,
             division: score.division,
             newTicks: newTicks,
+            meter: meter,
             columnCount: max(1, (total + newTicks - 1) / newTicks),
             totalTicks: total,
             measureStarts: starts,

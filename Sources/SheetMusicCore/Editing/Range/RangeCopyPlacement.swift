@@ -3,11 +3,11 @@ import SheetMusicFoundation
 /// Where a copied stream lands: the same material, measured from a new absolute tick, cut at every measure
 /// boundary it crosses.
 ///
-/// A chord cut by a boundary becomes a tied chain (`DurationChangeAlgorithm.alignedDurations` on each side, tied
-/// through), a rest becomes beat-aligned rests. A tuplet survives only when every one of its members lands inside
-/// one piece — a bracket cannot span a barline, and the members still sound right without it because their stored
-/// durations are sounding ticks. A non-timed element the stream carries (`lengthTicks == 0`) is placed at its own
-/// offset, joining the piece that owns that tick without consuming any of the bar's budget.
+/// A chord cut by a boundary becomes a tied chain (each side spelled against its bar's meter by `BarMeter`, tied
+/// through), a rest becomes rests spelled the same way. A tuplet survives only when every one of its members lands
+/// inside one piece — a bracket cannot span a barline, and the members still sound right without it because their
+/// stored durations are sounding ticks. A non-timed element the stream carries (`lengthTicks == 0`) is placed at its
+/// own offset, joining the piece that owns that tick without consuming any of the bar's budget.
 enum RangeCopyPlacement {
     struct Piece {
         let measureIndex: Int
@@ -65,10 +65,20 @@ enum RangeCopyPlacement {
     /// Places every element of `stream` at `destinationTick + (its absoluteTick - sourceStartTick)`, cutting
     /// only what overhangs a destination barline.
     /// Returns `nil` when the destination runs past `geometry.totalTicks` — the caller appends bars and retries.
+    ///
+    /// Whatever has to be re-spelled is spelled against the destination bar's meter, read from `staff` (the
+    /// destination staff, appended bars included); without one every bar reads as 4/4.
     static func pieces(
         of stream: RangeCopySource.Stream, at destinationTick: Int, sourceStartTick: Int,
-        geometry: RangeCopyGeometry, division: Int,
+        geometry: RangeCopyGeometry, division: Int, staff: Staff? = nil,
     ) -> [Piece]? {
+        func bar(_ measure: Int) -> BarMeter {
+            let barTicks = geometry.measureLength(measure)
+            guard let staff else {
+                return BarMeter(numerator: 4, denominator: 4, barTicks: barTicks, isPickup: false, division: division)
+            }
+            return BarMeter(staff: staff, measureIndex: measure, barTicks: barTicks, division: division)
+        }
         var accumulator = Accumulator()
         // Where each source tuplet's members ended up, keyed by its index into `stream.tuplets`.
         var tupletMembers: [Int: [TupletMember]] = [:]
@@ -97,10 +107,11 @@ enum RangeCopyPlacement {
                 if isFirstPart, isLastPart {
                     accumulator.append(contentsOf: destinationSpelling(
                         of: chord, at: position, length: partTicks, geometry: geometry, division: division,
+                        bar: bar(position.measure),
                     ))
                 } else {
                     accumulator.append(contentsOf: cutPieces(
-                        of: chord, ticks: partTicks, rtickStart: position.tick, division: division,
+                        of: chord, ticks: partTicks, rtickStart: position.tick, bar: bar(position.measure),
                         isHead: isFirstPart, endsElement: isLastPart,
                     ))
                 }
@@ -148,9 +159,10 @@ enum RangeCopyPlacement {
     ///
     /// It goes back to `.measure` only where the destination agrees — a rest starting at tick 0 and exactly
     /// filling the bar — which is the spelling `DeleteRange`'s collapse produces and the MSCX encoder expects,
-    /// and the one case `alignedDurations` would get wrong (a half plus a quarter in 3/4).
+    /// whatever the meter. Anything else is spelled against the destination bar's meter (`BarMeter`).
     private static func destinationSpelling(
         of chord: Chord, at position: ScoreTickPosition, length: Int, geometry: RangeCopyGeometry, division: Int,
+        bar: BarMeter,
     ) -> [VoiceElement] {
         let fillsBar = position.tick == 0 && length == geometry.measureLength(position.measure)
         if chord.notes.isEmpty, fillsBar { return [.rest(duration: .measure)] }
@@ -166,15 +178,11 @@ enum RangeCopyPlacement {
         guard chord.notes.isEmpty else {
             return DurationChangeAlgorithm.makeChordChain(
                 from: chord,
-                durations: DurationChangeAlgorithm.alignedDurations(
-                    forTicks: length, rtickStart: position.tick, division: division,
-                ),
+                durations: bar.durations(forTicks: length, at: position.tick, isRest: false),
                 onsetOwnership: .headIsOnset,
             )
         }
-        return DurationChangeAlgorithm.alignedRests(
-            forTicks: length, rtickStart: position.tick, division: division,
-        )
+        return bar.rests(forTicks: length, at: position.tick)
     }
 
     /// The overhang path: `chord` is being cut into `ticks` worth of material starting at `rtickStart` within the
@@ -184,14 +192,12 @@ enum RangeCopyPlacement {
     /// more material — `isHead` and `endsElement` are never both true, since a fully-fitting element never
     /// reaches this helper.
     private static func cutPieces(
-        of chord: Chord, ticks: Int, rtickStart: Int, division: Int, isHead: Bool, endsElement: Bool,
+        of chord: Chord, ticks: Int, rtickStart: Int, bar: BarMeter, isHead: Bool, endsElement: Bool,
     ) -> [VoiceElement] {
         guard !chord.notes.isEmpty else {
-            return DurationChangeAlgorithm.alignedRests(forTicks: ticks, rtickStart: rtickStart, division: division)
+            return bar.rests(forTicks: ticks, at: rtickStart)
         }
-        let durations = DurationChangeAlgorithm.alignedDurations(
-            forTicks: ticks, rtickStart: rtickStart, division: division,
-        )
+        let durations = bar.durations(forTicks: ticks, at: rtickStart, isRest: false)
         guard !durations.isEmpty else { return [] }
 
         var pieces: [VoiceElement]
@@ -215,7 +221,9 @@ enum RangeCopyPlacement {
         // before it — `makeChordChain` only knows about ITS OWN slice and clears `tieBack` on its own first piece.
         let firstContinuationIndex = isHead ? 1 : 0
         if pieces.indices.contains(firstContinuationIndex) {
-            pieces[firstContinuationIndex] = settingTie(pieces[firstContinuationIndex], back: 1)
+            pieces[firstContinuationIndex] = DurationChangeAlgorithm.clearingAccidentals(
+                settingTie(pieces[firstContinuationIndex], back: 1),
+            )
         }
         // The last piece produced here ties forward to more material unless this call reaches the true end.
         if !endsElement, let lastIndex = pieces.indices.last {

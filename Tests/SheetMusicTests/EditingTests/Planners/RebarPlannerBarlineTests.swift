@@ -264,16 +264,17 @@ struct RebarPlannerBarlineTests {
         // 720 per column is three columns, cut at 720 and again at 1440 — two new barlines, not one.
         let plan = try RebarPlanner.rebar(region: 1 ..< 2, in: score, numerator: 3, denominator: 8, ids: &ids)
         #expect(plan.columns.count == 3)
-        #expect(Self.durations(Self.content(plan, 0)) == Self.aligned(720, from: 0))
-        #expect(Self.durations(Self.content(plan, 1)) == Self.aligned(720, from: 0))
+        // A full 3/8 column is one dotted quarter.
+        #expect(Self.durations(Self.content(plan, 0)) == [NoteDuration.quarter.dotted(1)])
+        #expect(Self.durations(Self.content(plan, 1)) == [NoteDuration.quarter.dotted(1)])
         // The last column runs to 2160 and the chain stops at 1920, so its remainder is padded with rests.
         #expect(Self.durations(Self.content(plan, 2))
             == Self.aligned(480, from: 0) + Self.aligned(240, from: 480))
         #expect(Array(Self.content(plan, 2).dropFirst()) == Self.alignedRests(240, from: 480))
 
         let chain = (0 ..< 3).flatMap { Self.soundingChords(Self.content(plan, $0)) }
-        #expect(chain.count == 5)
-        guard let head = chain.first, let tail = chain.last, chain.count == 5 else { return }
+        #expect(chain.count == 3)
+        guard let head = chain.first, let tail = chain.last, chain.count == 3 else { return }
 
         // ONE chain over every piece, not one per column: the head keeps what the source was tied to, and
         // only the last piece decides where the chain stops.

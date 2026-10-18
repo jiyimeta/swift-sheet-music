@@ -5,9 +5,9 @@ import SheetMusicFoundation
 /// The column caret (drum note entry's §5.4) lands on a TICK, not on an element, so a caret sitting inside a
 /// half rest has nothing to write into: every write command in this package targets a slot. This makes the slot.
 ///
-/// Both halves are spelled the way MuseScore spells a gap — `DurationChangeAlgorithm.alignedRests`, largest
-/// power-of-two duration that both fits and lands on its own boundary — so splitting an eighth into a half rest
-/// produces `eighth + eighth + quarter`, not `eighth + dotted quarter`.
+/// Both halves are spelled against the bar's meter (`BarMeter`, the spelling `FormatRhythms` writes under
+/// `.default`): a rest is split at the beats it crosses and takes at most one dot, so splitting an eighth into a half
+/// rest on beat 1 of 4/4 produces `eighth + eighth + quarter`, not `eighth + dotted quarter`.
 ///
 /// `.measure` is resolved against the bar before the arithmetic: a full-measure rest is "however long this bar
 /// is", and asking it for ticks without resolving traps.
@@ -54,13 +54,9 @@ public struct SplitRest: EditCommand {
         let rtickStart = DurationChangeAlgorithm.tickOffset(
             in: voice, ofElementAt: location.elementIndex, division: score.division,
         )
-        let head = DurationChangeAlgorithm.alignedRests(
-            forTicks: tickOffset, rtickStart: rtickStart, division: score.division,
-        )
-        let tail = DurationChangeAlgorithm.alignedRests(
-            forTicks: totalTicks - tickOffset, rtickStart: rtickStart + tickOffset,
-            division: score.division,
-        )
+        let bar = BarMeter(score: score, staff: location.staff, measureIndex: location.measureIndex)
+        let head = bar.rests(forTicks: tickOffset, at: rtickStart)
+        let tail = bar.rests(forTicks: totalTicks - tickOffset, at: rtickStart + tickOffset)
 
         var elements = voice.elements
         let pieces = (head + tail).enumerated().map { index, element in

@@ -102,12 +102,12 @@ struct SetTimeSignatureTests {
                 #expect(declarations.count == 1)
 
                 // Bar 1's whole note is cut at 1440, bar 2's at 2880, bar 3's at 4320 — one chain each, tied.
-                #expect(Self.durations(Self.content(score, partIndex, staffIndex, 0)) == Self.aligned(1440, from: 0))
-                #expect(Self.durations(Self.content(score, partIndex, staffIndex, 1))
-                    == Self.aligned(480, from: 0) + Self.aligned(960, from: 480))
+                // Spelled against 3/4: three beats are one dotted half, a half from beat 2 stays whole.
+                #expect(Self.durations(Self.content(score, partIndex, staffIndex, 0)) == [NoteDuration.half.dotted(1)])
+                #expect(Self.durations(Self.content(score, partIndex, staffIndex, 1)) == [.quarter, .half])
                 #expect(Self.durations(Self.content(score, partIndex, staffIndex, 2))
                     == Self.aligned(960, from: 0) + Self.aligned(480, from: 960))
-                #expect(Self.durations(Self.content(score, partIndex, staffIndex, 3)) == Self.aligned(1440, from: 0))
+                #expect(Self.durations(Self.content(score, partIndex, staffIndex, 3)) == [NoteDuration.half.dotted(1)])
             }
         }
         // The cut is a tie, not two loose notes.

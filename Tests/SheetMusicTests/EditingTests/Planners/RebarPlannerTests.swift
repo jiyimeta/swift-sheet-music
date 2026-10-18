@@ -21,9 +21,10 @@ struct RebarPlannerTests {
 
         // Bar 1's whole note (0..<1920) is cut at 1440; bar 2's (1920..<3840) at 2880. The last column runs
         // to 4320 and is padded.
-        #expect(Self.durations(Self.content(plan, 0)) == Self.aligned(1440, from: 0))
-        #expect(Self.durations(Self.content(plan, 1))
-            == Self.aligned(480, from: 0) + Self.aligned(960, from: 480))
+        // Spelled against the NEW meter: three beats of 3/4 are one dotted half, and the half that starts on beat 2
+        // stays whole (it ends on the barline).
+        #expect(Self.durations(Self.content(plan, 0)) == [NoteDuration.half.dotted(1)])
+        #expect(Self.durations(Self.content(plan, 1)) == [.quarter, .half])
         #expect(Self.durations(Self.content(plan, 2))
             == Self.aligned(960, from: 0) + Self.aligned(480, from: 960))
 

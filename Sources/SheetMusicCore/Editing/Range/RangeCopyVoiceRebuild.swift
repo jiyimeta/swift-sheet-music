@@ -33,6 +33,7 @@ enum RangeCopyVoiceRebuild {
         let context = Context(
             division: score.division, measureDuration: measureDurations[piece.measureIndex], ref: ref,
             geometry: RangeCopyGeometry(staff: staff, in: score), operation: operation,
+            bar: BarMeter(score: score, staff: staff, measureIndex: piece.measureIndex),
         )
         let spanStart = piece.startTickInMeasure
         let spanEnd = spanStart + piece.elements.reduce(0) { $0 + context.advance(of: $1) }
@@ -81,6 +82,8 @@ extension RangeCopyVoiceRebuild {
         /// refusal raised in here reaches the host stamped with the operation the user actually performed.
         /// This pass is shared, and a hardcoded name would report every ⌘V as an `R`.
         let operation: String
+        /// The rebuilt bar read against its meter: the refill rests and the trims are spelled through it.
+        let bar: BarMeter
 
         /// The absolute tick this rebuild's own measure starts at; `nil` for a measure the staff does not have.
         var measureStart: Int? {
@@ -174,12 +177,8 @@ extension RangeCopyVoiceRebuild {
             rebuilt.slots += leadingTrim(of: leading, upTo: gap.lowerBound, in: context)
         }
 
-        let head = DurationChangeAlgorithm.alignedRests(
-            forTicks: spanStart - gap.lowerBound, rtickStart: gap.lowerBound, division: context.division,
-        )
-        let tail = DurationChangeAlgorithm.alignedRests(
-            forTicks: gap.upperBound - spanEnd, rtickStart: spanEnd, division: context.division,
-        )
+        let head = context.bar.rests(forTicks: spanStart - gap.lowerBound, at: gap.lowerBound)
+        let tail = context.bar.rests(forTicks: gap.upperBound - spanEnd, at: spanEnd)
         // MuseScore's paste REPLACES the destination's element of the same kind at the same tick rather than
         // adding beside it — `undoChangeElement` for clef and breath (`read460.cpp:704-715`, `717-728`), and the
         // same condition on a chord symbol (`656-661`, `cmd.cpp:1502`). Every kept kind the copy does not carry

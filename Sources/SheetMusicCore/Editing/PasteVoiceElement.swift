@@ -95,8 +95,8 @@ public struct PasteVoiceElement: EditCommand {
                 dstTicks: src,
                 targetRtick: targetRtick,
                 division: score.division,
-                baseLocation: location,
-                operation: "PasteVoiceElement",
+                bar: BarMeter(score: score, staff: location.staff, measureIndex: location.measureIndex),
+                baseLocation: location, operation: "PasteVoiceElement",
                 targetEID: pastedEID, ids: &ids,
             )
         let replace = ReplaceVoiceElements(

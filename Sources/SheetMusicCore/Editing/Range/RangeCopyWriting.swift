@@ -171,7 +171,7 @@ extension RangeCopyWriting {
         let geometry = RangeCopyGeometry(staff: stream.staff, in: scratch)
         guard let pieces = RangeCopyPlacement.pieces(
             of: stream, at: destinationTick, sourceStartTick: sourceStartTick,
-            geometry: geometry, division: scratch.division,
+            geometry: geometry, division: scratch.division, staff: scratch[stream.staff],
         ) else {
             // The measures were appended before any stream was placed, so running out of staff here means the
             // copy needs more room than the range's own staff measured — a staff in shorter bars than the first.

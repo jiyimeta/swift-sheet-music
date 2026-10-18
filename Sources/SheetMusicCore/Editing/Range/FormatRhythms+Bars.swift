@@ -20,13 +20,9 @@ struct FormatRhythmsBars {
         self.meters = meters
         barTicks = lengths
         isPickup = staff.measures.indices.map { index in
-            guard RhythmMeter.isReadable(
-                numerator: meters[index].numerator, denominator: meters[index].denominator, division: division,
-            ) else { return false }
-            let nominal = Fraction(numerator: meters[index].numerator, denominator: meters[index].denominator)
-                .ticks(division: division)
-            guard lengths[index] < nominal else { return false }
-            return index == 0 || staff.measures[index].irregular || staff.measures[index - 1].sectionBreak
+            BarMeter.isPickupBar(
+                staff: staff, measureIndex: index, meter: meters[index], barTicks: lengths[index], division: division,
+            )
         }
     }
 
