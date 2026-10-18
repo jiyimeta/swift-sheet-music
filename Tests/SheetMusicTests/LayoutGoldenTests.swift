@@ -330,8 +330,16 @@
         /// `testMidiPort`. Each system shrinks from the 900 pt line to its natural width (`midi01` 900 → 253.65), and
         /// the block now reads exactly as its `wrap=false` twin. Rendered and read: `slur_ms4_glissando_legato`'s
         /// slurs and glissandi follow their notes in.
+        ///
+        /// **Re-recorded 2026-10-18 when a hyphen's ends moved to MuseScore's `lyricsDashPad` and a dash too short to
+        /// draw began to be widened to `lyricsDashMinLength` rather than dropped, after reading the diff** against the
+        /// digest above (`0dabfba9…`). Three lines of one block moved, `lyrics_verses_melisma` `wrap=false`: one
+        /// dash lengthens 1.79 → 4.20 pt about the same center (37.30), and one dash that had not been drawn at all
+        /// appears, 2.80 pt (0.4 sp) long. Rendered and read: every hyphenated word shows its dashes, none touching a
+        /// syllable. (The bar-end grace floor fixed in the same change moves nothing here: no fixture has trailing
+        /// graces at a bar's end on a line close to its minimum.)
         private static let expectedDigestSHA256 =
-            "0dabfba9be88725881c565cbbc684a80ea975d0a00408f48caa4e9cf203ca307"
+            "1948755161b1348ef03f11c20e23c4c8e232e6b853c9c488f094084668817140"
 
         @Test("write digest")
         func writeDigest() throws {

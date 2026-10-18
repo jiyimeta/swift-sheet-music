@@ -1127,9 +1127,9 @@ extension LayoutEngine {
                         {
                             let prevRight = prev.centerX
                                 + prev.textWidth / 2
-                                + metrics.sp * 0.3
+                                + metrics.sp * lyricsDashPadSp
                             let currLeft = origin.x - textWidth / 2
-                                - metrics.sp * 0.3
+                                - metrics.sp * lyricsDashPadSp
                             emitLyricHyphens(
                                 fromX: prevRight,
                                 toX: currLeft,

@@ -1049,18 +1049,23 @@ extension LayoutEngine {
             inks: inks, sortedTicks: sortedTicks, gapWeights: gapWeights,
         )
         applySpanFloors(spanDemands, sortedTicks: sortedTicks, gapWeights: gapWeights, to: &gapFloors)
-        // Trailing graces before the barline: the barline stands
-        // `sp / 2 + trailingClefWidth` past the last gap (`trailingGap`,
-        // less the half staff space the barline is drawn inside of), so
-        // what the group needs beyond that, and beyond the gaps between its
-        // chord and the last column, is the last gap's floor.
+        // Trailing graces before the barline. The last gap runs to the
+        // measure's right edge less any bar-end clef — `tickColumns` hands the
+        // trailing gap's sp to the content (`justifiedWidths` relies on it) —
+        // and the barline is drawn `sp / 2` inside that edge, so it stands
+        // `trailingClefWidth - sp / 2` past the last gap. What the group needs
+        // beyond that, and beyond the gaps between its chord and the last
+        // column, is the last gap's floor. This used to take the barline as
+        // `sp / 2` PAST the last gap, a whole sp short, which only a line
+        // stretched well past its minimum hid: at natural width the graces
+        // ran into their own chord.
         if let last = gapWeights.indices.last {
             for grace in barEndGraces {
                 guard let from = sortedTicks.firstIndex(of: grace.tick) else { continue }
                 let spanned = gapWeights[from ..< last].reduce(0, +)
                 gapFloors[last] = max(
                     gapFloors[last],
-                    grace.columnReach + grace.reach - metrics.sp / 2 - trailingClefWidth - spanned,
+                    grace.columnReach + grace.reach + metrics.sp / 2 - trailingClefWidth - spanned,
                 )
             }
         }

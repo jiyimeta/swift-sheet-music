@@ -23,6 +23,14 @@ and this project adheres to
   (`Sid::lastSystemFillLimit`, `SystemLayout::shouldBeJustified`). A one-bar score was spread over the whole line, its
   quarters a quarter of the page apart. A short line with music after it is still justified.
 
+- **A hyphen no longer disappears between two syllables set close together.** Its span stood 0.3 sp off each syllable,
+  more than the 0.5 sp spacing reserves for a dash, so wherever that floor held the pair apart nothing was drawn. The
+  ends now stand MuseScore's `lyricsDashPad` (0.05 sp) off the syllables and a span shorter than `lyricsDashMinLength`
+  (0.4 sp) is widened about its center, as MuseScore draws every connected pair's dash.
+
+- **Grace notes after a bar's last chord no longer run into it on a tightly spaced line.** Their room before the
+  barline was computed a whole staff space short, which only a line stretched well past its minimum hid.
+
 ## [4.14.1] - 2026-10-18
 
 ### Fixed
