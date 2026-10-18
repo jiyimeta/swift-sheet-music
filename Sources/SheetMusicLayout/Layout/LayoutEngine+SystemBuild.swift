@@ -607,12 +607,17 @@ extension LayoutEngine {
                 // system's right edge is pulled back inside before the
                 // vertical pass measures anything, so the stack it
                 // computes reflects the X the renderer will actually
-                // draw at.
+                // draw at. A wrapped system's edge is the width it was
+                // wrapped to, not its last barline: a short last line
+                // stops short of it (`shouldJustify`), and a mark there
+                // may run on into the empty room past that barline, as
+                // it does in MuseScore.
                 HorizontalClampPass.run(
                     measures: &perStaff,
                     xOffsets: xOffsets,
                     systemLeftX: xOffsets.first ?? 0,
-                    systemRightX: contentWidth,
+                    systemRightX: context.options.wrapToViewWidth
+                        ? max(contentWidth, context.availableWidth) : contentWidth,
                     metrics: metrics,
                 )
                 SkylineAutoplacePass.run(

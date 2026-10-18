@@ -179,8 +179,13 @@ public enum LayoutEngine {
             metrics: metrics,
         )
         // Margins live outside the music width and deliberately do not
-        // participate in system wrapping.
-        let docWidth = leadingMargin + totalWidth
+        // participate in system wrapping. A wrapped document is the
+        // width it was wrapped to, as a MuseScore page is: a short last
+        // line left unjustified (`shouldJustify`) must not narrow it,
+        // and the marks `HorizontalClampPass` lets run on past that
+        // line's last barline are still inside it.
+        let musicWidth = options.wrapToViewWidth ? titleDocWidth : totalWidth
+        let docWidth = leadingMargin + musicWidth
             + metrics.sp * margins.trailing
         let firstPass = LayoutDocument(
             size: CGSize(width: docWidth, height: totalHeight),

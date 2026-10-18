@@ -37,9 +37,11 @@ enum HorizontalClampPass {
     ///     X. Must have the same count as `measures`.
     ///   - systemLeftX: left edge of the first measure — i.e. the right
     ///     edge of the instrument-name gutter, not x = 0.
-    ///   - systemRightX: right edge of the last measure. Every system,
-    ///     the last one included, is stretched to the available content
-    ///     width, so this is the page's content right edge.
+    ///   - systemRightX: the right edge a mark must stay inside. For a
+    ///     wrapped system it is the width the line was wrapped to — the
+    ///     page's content right edge — even when a short last line was
+    ///     left unjustified and its last barline stops well before it;
+    ///     for a horizontal strip it is the last measure's right edge.
     static func run(
         measures: inout [[LayoutElement]],
         xOffsets: [CGFloat],

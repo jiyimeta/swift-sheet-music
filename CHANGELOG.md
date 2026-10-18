@@ -35,7 +35,10 @@ and this project adheres to
 - **A short last line is no longer stretched across the page.** The line a piece ends on — or a section, at a section
   break — is left at its natural width when that fills less than 30% of the line, as MuseScore leaves it
   (`Sid::lastSystemFillLimit`, `SystemLayout::shouldBeJustified`). A one-bar score was spread over the whole line, its
-  quarters a quarter of the page apart. A short line with music after it is still justified.
+  quarters a quarter of the page apart. A short line with music after it is still justified. The wrapped document
+  stays as wide as the line it was wrapped to, and a staff text, system text, tempo or rehearsal mark near the end of
+  such a line stays on its column and runs on into the room past the last barline instead of being pulled back inside
+  it — the horizontal clamp's edge is the line's width, not where the line stops.
 
 - **A hyphen no longer disappears between two syllables set close together.** Its span stood 0.3 sp off each syllable,
   more than the 0.5 sp spacing reserves for a dash, so wherever that floor held the pair apart nothing was drawn. The

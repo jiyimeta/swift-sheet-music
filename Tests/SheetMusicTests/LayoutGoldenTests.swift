@@ -348,8 +348,16 @@
         /// less than 30% of the line are left at it rather than stretched (`grace_after` 914 → 269.22), reading as
         /// their `wrap=false` twins; the others keep their lines and move their columns. Rendered and read:
         /// `testMeasureRepeats` wrapped and `harmony-basic` horizontal.
+        ///
+        /// **Re-recorded 2026-10-19 when a wrapped document stayed as wide as the line it was wrapped to and the
+        /// horizontal clamp took that width as a wrapped system's edge, after reading the diff** against the digest
+        /// above (`c2564d9f…`). 14 lines in 13 blocks moved, every one `wrap=true` and one of the one-line pieces the
+        /// short-last-line change left at their natural width: 13 `size` lines go back to the 914 pt they read before
+        /// it (`grace_after` 269.22 → 914), and one element moves — `slur_ms4_glissando_legato`'s tempo mark, which
+        /// had been pulled 2.05 pt back inside the last barline, sits on its own column again (63.47 → 65.52), running
+        /// on into the empty room past the line. No system, column or other element moved.
         private static let expectedDigestSHA256 =
-            "c2564d9f479ea42aeb50026e26177abdffad473b2e7df6cd916d5ef66ba47ca3"
+            "342bd0804ee2ffa0287ebc97aaa4eeeedec74295a64ffbfa14f49cf961af86a3"
 
         @Test("write digest")
         func writeDigest() throws {
