@@ -572,4 +572,26 @@ extension FormatRhythmsBarPlannerTests {
         #expect(tail.beamVisible == false)
         #expect(tail.stemVisible == false)
     }
+
+    @Test("a split chord's tied tail prints no accidental; the head keeps its own")
+    func splitTailDropsTheAccidental() throws {
+        let sharp = Chord(duration: Self.duration(3, 8), notes: [
+            Note(pitch: 61, tpc: 21, accidental: .sharp, accidentalBracket: .parenthesis, accidentalRole: .user),
+        ])
+        let voice = Self.voice([
+            Self.note(1, 4), Self.note(1, 8, pitch: 62), .chord(sharp), Self.note(1, 4, pitch: 65),
+        ])
+        let result = try #require(Self.respell(voice))
+        #expect(Self.tokens(result.slots) == ["C:1/4", "C:1/8", "C:1/8~", "C:1/4", "C:1/4"])
+        let head = try #require(Self.chord(at: 2, in: result.slots))
+        #expect(head.notes[0].accidental == .sharp)
+        #expect(head.notes[0].accidentalBracket == .parenthesis)
+        #expect(head.notes[0].accidentalRole == .user)
+        let tail = try #require(Self.chord(at: 3, in: result.slots))
+        #expect(tail.notes[0].pitch == 61)
+        #expect(tail.notes[0].tpc == 21)
+        #expect(tail.notes[0].accidental == nil)
+        #expect(tail.notes[0].accidentalBracket == AccidentalBracket.none)
+        #expect(tail.notes[0].accidentalRole == .auto)
+    }
 }

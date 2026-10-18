@@ -7,6 +7,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **`FormatRhythms` no longer repeats an accidental on the tied pieces it writes.** A chord split into a tied chain
+  copied its notes' accidental onto every continuation; an AUTO one was hidden as redundant, but a USER-role one (a
+  courtesy, a bracketed sign) was drawn again on each piece. Continuations now carry no accidental, as MuseScore
+  writes them; the head keeps its own.
+- **`RhythmSpelling.durations` answers `[]` instead of trapping on a meter it cannot read** — a numerator or
+  denominator that is not positive, or a denominator that does not divide a whole note into whole ticks (3/7) — and
+  on an empty or negative span. `FormatRhythms` skips such a bar.
+
 ## [4.14.1] - 2026-10-18
 
 ### Fixed

@@ -31,6 +31,26 @@ struct RhythmSpellingTests {
         #expect(Self.spell(Self.fr(1, 7), at: Self.fr(0), rest: true).isEmpty)
     }
 
+    @Test("a meter no splitter can read, or an empty span, spells nothing instead of trapping")
+    func unreadableMetersAnswerEmpty() {
+        func spell(_ numerator: Int, _ denominator: Int, length: Int = 480, start: Int = 0) -> [NoteDuration] {
+            RhythmSpelling.durations(
+                forTicks: length, startingAt: start, isRest: false,
+                meterNumerator: numerator, meterDenominator: denominator, barTicks: 1920, isPickup: false,
+                policy: .default, division: Self.division,
+            )
+        }
+        #expect(spell(4, 0).isEmpty)
+        #expect(spell(4, -4).isEmpty)
+        #expect(spell(0, 4).isEmpty)
+        // 4 × 480 ticks do not divide into sevenths: the dUnit would round and every beat would drift.
+        #expect(spell(3, 7).isEmpty)
+        #expect(spell(4, 4, length: 0).isEmpty)
+        #expect(spell(4, 4, start: -1).isEmpty)
+        // Control: the same quarter in 4/4 spells.
+        #expect(spell(4, 4) == [.quarter])
+    }
+
     struct Row {
         let numerator: Int
         let denominator: Int

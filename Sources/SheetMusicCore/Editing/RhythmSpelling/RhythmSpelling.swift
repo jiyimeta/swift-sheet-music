@@ -11,6 +11,9 @@ public enum RhythmSpelling {
     /// bar and is not a pickup answers `[.measure]`; `isPickup` only disables that answer.
     ///
     /// Answers `[]` when the spelled values do not add up to `length` exactly; the caller keeps the span as written.
+    /// Also `[]` for a meter no splitter can read — a numerator or denominator that is not positive, or a denominator
+    /// that does not divide a whole note into whole ticks — and for an empty or negative span: those come from
+    /// whatever a file said, so they are carried, never trapped on.
     ///
     /// A span that starts or ends on a position the dUnit cannot halve evenly down to (a third of a dUnit, say) is
     /// not judged against the meter at all and is spelled greedily, longest value first.
@@ -19,6 +22,9 @@ public enum RhythmSpelling {
         meterNumerator: Int, meterDenominator: Int, barTicks: Int, isPickup: Bool,
         policy: RhythmSpellingPolicy, division: Int,
     ) -> [NoteDuration] {
+        guard RhythmMeter.isReadable(numerator: meterNumerator, denominator: meterDenominator, division: division),
+              length > 0, start >= 0
+        else { return [] }
         if isRest, length == barTicks, start == 0, !isPickup { return [.measure] }
         var splitter = RhythmSplitter(
             meter: RhythmMeter(numerator: meterNumerator, denominator: meterDenominator, division: division),

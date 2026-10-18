@@ -20,6 +20,9 @@ struct FormatRhythmsBars {
         self.meters = meters
         barTicks = lengths
         isPickup = staff.measures.indices.map { index in
+            guard RhythmMeter.isReadable(
+                numerator: meters[index].numerator, denominator: meters[index].denominator, division: division,
+            ) else { return false }
             let nominal = Fraction(numerator: meters[index].numerator, denominator: meters[index].denominator)
                 .ticks(division: division)
             guard lengths[index] < nominal else { return false }
@@ -27,9 +30,14 @@ struct FormatRhythmsBars {
         }
     }
 
-    /// `nil` when the bar has no usable length or an empty window (nothing to format).
+    /// `nil` when the bar has no usable length, a meter no splitter can read (a file's 4/0 or 3/7), or an empty
+    /// window (nothing to format).
     func facts(at index: Int, window: Range<Int>?, protectedOnsets: Set<Int>) -> FormatRhythmsBarFacts? {
-        guard barTicks.indices.contains(index), barTicks[index] > 0, !(window?.isEmpty ?? false) else {
+        guard barTicks.indices.contains(index), barTicks[index] > 0, !(window?.isEmpty ?? false),
+              RhythmMeter.isReadable(
+                  numerator: meters[index].numerator, denominator: meters[index].denominator, division: division,
+              )
+        else {
             return nil
         }
         return FormatRhythmsBarFacts(

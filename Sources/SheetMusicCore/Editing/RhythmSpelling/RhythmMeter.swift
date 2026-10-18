@@ -15,9 +15,20 @@ struct RhythmMeter {
     /// Ticks of one denominator unit (the "dUnit"): an eighth in x/8, a quarter in x/4.
     let dUnitTicks: Int
 
+    /// Callers check `isReadable` first; a meter that fails it would divide by zero or round the dUnit.
     init(numerator: Int, denominator: Int, division: Int) {
+        precondition(
+            Self.isReadable(numerator: numerator, denominator: denominator, division: division),
+            "unreadable meter \(numerator)/\(denominator) at division \(division)",
+        )
         self.numerator = numerator
         dUnitTicks = (4 * division) / denominator
+    }
+
+    /// The meter has beats to read: a positive numerator, and a denominator that splits a whole note into a whole
+    /// number of ticks.
+    static func isReadable(numerator: Int, denominator: Int, division: Int) -> Bool {
+        numerator > 0 && denominator > 0 && division > 0 && (4 * division) % denominator == 0
     }
 
     /// Numerator above three and divisible by three: 6/8, 9/8, 12/8. 3/8 is simple.

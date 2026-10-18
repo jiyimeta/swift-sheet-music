@@ -216,9 +216,12 @@ struct FormatRhythmsInvariantTests {
         Issue.record(
             Comment(rawValue: "gate coverage: \(counts)"), severity: .warning,
         )
-        #expect(counts.scores > 0)
-        #expect(counts.barVoices > 0)
-        #expect(counts.changedBarVoices > 0, "no fixture was changed by any policy: the gate saw nothing to format")
+        // Floors a little under what the gate saw when they were set (2026-10-18: 101 scores, 0 skipped, 38 changed
+        // bar-voices over 606 runs). `> 0` would stay green if a decoder change or a too-eager wall emptied the gate
+        // down to one score or one edit; these turn red instead, and are lowered only with a reason.
+        #expect(counts.scores >= 95, "fixtures parsed and rendered: \(counts.scores)")
+        #expect(counts.skipped == 0, "fixtures skipped: \(counts.skipped)")
+        #expect(counts.changedBarVoices >= 30, "bar-voices the gate saw change: \(counts.changedBarVoices)")
     }
 
     /// The gap `withFullGate` steps around, pinned so it turns red (and the workaround can go) when the formatter

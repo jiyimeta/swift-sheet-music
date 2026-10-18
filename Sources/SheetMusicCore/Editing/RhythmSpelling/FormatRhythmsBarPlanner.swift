@@ -200,6 +200,12 @@ private struct FormatRhythmsBarWriter {
                 note.fingerings = []
                 note.symbols = []
                 note.preservedMarkup = []
+                // A tied continuation prints no accidental: the tie carries the head's alteration. Copying it would
+                // leave a USER-role sign (a courtesy, a bracketed one) drawn again on every piece, and renotation
+                // never revisits a tied-back note to take it off.
+                note.accidental = nil
+                note.accidentalBracket = .none
+                note.accidentalRole = .auto
                 note.tieBack = 1
                 note.tieForward = outgoingTie(noteIndex, piece: piece)
                 notes.append(note)
