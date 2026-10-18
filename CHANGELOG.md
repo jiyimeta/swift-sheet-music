@@ -19,6 +19,14 @@ and this project adheres to
   right after an edit finds nothing to do in what the edit wrote. A span the speller cannot cover to the tick falls
   back to `alignedDurations`; durations inside a tuplet are still spelled in the tuplet's written time.
   `alignedDurations` / `alignedRests` remain public.
+- **`MidiRenderer` gates a tie chain as a whole.** An instrument's gate time (the share of a note that sounds) was
+  applied to the LAST link of a chain only, so a dotted half released at 95% of three beats but a half tied to a
+  quarter at two beats plus 95% of one. Every link is now gated and the links add up, as MuseScore's
+  `CompatMidiRender` does, so a held note releases at the same tick however it is spelled. This moves the release
+  of tied notes on any instrument whose default gate is below 100.
+- **`FormatRhythms` merges a tie chain through a preserved `<Beam>` marker** — the node MuseScore writes for a
+  hand-set beam, before the chord its beam starts on. The marker goes with that chord: beams regroup from the new
+  durations. A marker that hides its beam still stops the merge.
 - **Every tied continuation an edit writes carries no accidental** (`DurationChangeAlgorithm.makeChordChain`, cross-bar
   input, range copy), as MuseScore writes them; the head, and a first piece with no tie into it, keep theirs.
 

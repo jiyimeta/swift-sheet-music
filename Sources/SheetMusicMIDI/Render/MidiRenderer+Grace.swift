@@ -90,6 +90,7 @@ extension MidiRenderer {
         legacyBendSpans: [Int: Int] = [:],
         currentKey: Int,
         events: inout [TimedMidiEvent],
+        tieGateDebt: inout [Int: Int],
         playedTicksOverride: Int? = nil,
         pitchShift: Int = 0,
     ) {
@@ -210,6 +211,7 @@ extension MidiRenderer {
                 : Array((0 ..< chord.notes.count).reversed())
             for (i, noteIndex) in order.enumerated() {
                 let note = chord.notes[noteIndex]
+                tieGateDebt[note.pitch] = nil
                 let onTick = mainOnset + pairs[i].onOffset
                 let offTick = mainOnset + pairs[i].offOffset
                 emitNoteEventsForGrace(
@@ -226,6 +228,11 @@ extension MidiRenderer {
                 ? nil
                 : bendChainNote(in: chord.notes)?.pitch
             for note in chord.notes {
+                // A bent, slid or legacy-bent note releases on its own curve, outside the gate account.
+                let isShaped = (parentSlot != nil && note.pitch == chainPitch)
+                    || (note.glissando != nil && shiftedGlissandoEnd != nil)
+                    || (note.legacyBend != nil && shiftedLegacySpans[note.pitch] != nil)
+                if isShaped { tieGateDebt[note.pitch] = nil }
                 if let slot = parentSlot, note.pitch == chainPitch {
                     renderBendChainNote(
                         note: note, slot: slot,
@@ -258,7 +265,11 @@ extension MidiRenderer {
                 } else {
                     emitNoteEventsForGrace(
                         note: note, channel: channel, velocity: mainVelocity,
-                        onTick: mainOnset, offTick: mainOff, events: &events,
+                        onTick: mainOnset,
+                        offTick: tieGatedOff(
+                            of: note, mainOff: mainOff, droppedByGate: playedTicks - gatedTicks, debt: &tieGateDebt,
+                        ),
+                        events: &events,
                     )
                 }
             }
@@ -388,6 +399,24 @@ extension MidiRenderer {
             }
         }
         return map
+    }
+
+    /// Where a note's release lands once its whole tie chain is gated, not just its last link.
+    ///
+    /// MuseScore shortens EVERY link of a tie chain by its gate and adds the links up (`CompatMidiRender`'s
+    /// `calculateTieLength`), so a chain sounds gate% of its whole length however it is spelled: a dotted half and a
+    /// half tied to a quarter release at the same tick. Only the last link emits a note-off here, gated by its own
+    /// length, so each earlier link records in `debt` (per sounding pitch, for the voice walk's open chains) the ticks
+    /// its gate dropped, and the last one takes the sum off its own release. A note with no tie in starts a fresh
+    /// account.
+    static func tieGatedOff(of note: Note, mainOff: Int, droppedByGate: Int, debt: inout [Int: Int]) -> Int {
+        let carried = note.tieBack == nil ? 0 : debt[note.pitch] ?? 0
+        guard note.tieForward == nil else {
+            debt[note.pitch] = carried + max(0, droppedByGate)
+            return mainOff
+        }
+        debt[note.pitch] = nil
+        return max(0, mainOff - carried)
     }
 
     /// Emit note-on/off for a single note, respecting tie flags. For a

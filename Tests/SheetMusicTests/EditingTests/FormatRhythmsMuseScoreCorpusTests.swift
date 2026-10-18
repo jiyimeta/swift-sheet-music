@@ -32,14 +32,11 @@ struct FormatRhythmsMuseScoreCorpusTests {
         var mismatched = 0
         var report: [String] = []
         for name in Self.names {
-            // Two deliberate walls in folino's formatter, neither a splitter fault (design §4.1, §4.2): a preserved
-            // `<Beam>` marker between two chords stops a tie merge, and a chord carrying an articulation is left as
-            // written. MuseScore's fixtures carry both, so the gate strips them from its input (the articulations in
-            // `groupShortenNotes` only, where they are the point of the fixture) and measures the splitter and the
-            // span rules; the unstripped result is recorded in the task report.
-            var input = try FormatRhythmsGate.withoutBeamMarkers(
-                MSCXParser.parse(contentsOf: directory.appendingPathComponent("\(name).mscx")),
-            )
+            // One deliberate wall in folino's formatter, not a splitter fault (design §4.1): a chord carrying an
+            // articulation is left as written. `groupShortenNotes` is about exactly that, so the gate strips its
+            // articulations and fermatas and measures the splitter and the span rules. The fixtures' preserved
+            // `<Beam>` markers are read as they are: a merge folds through them (design §9.5).
+            var input = try MSCXParser.parse(contentsOf: directory.appendingPathComponent("\(name).mscx"))
             if name == "groupShortenNotes" { input = FormatRhythmsGate.withoutArticulationsAndFermatas(input) }
             let reference = try MSCXParser.parse(contentsOf: directory.appendingPathComponent("\(name)-ref.mscx"))
             let formatted = try FormatRhythmsGate.applied(input, policy: .museScore).score

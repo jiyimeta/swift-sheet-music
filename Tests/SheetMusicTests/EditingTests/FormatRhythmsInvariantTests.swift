@@ -11,9 +11,6 @@ struct FormatRhythmsGateCounts {
     var barVoices = 0
     var changedBarVoices = 0
     var runs = 0
-    /// Scores whose instrument default gate time was below 100 and was raised to 100 for the sound comparison (see
-    /// `FormatRhythmsGate.withFullGate`).
-    var gateNeutralized = 0
 }
 
 /// Shared by the invariant and corpus gates: tokenizing a voice the way the Python reference checker does, applying a
@@ -31,38 +28,6 @@ enum FormatRhythmsGate {
         }
         _ = try plan.apply(to: &formatted, ids: &ids)
         return try (formatted, plan.commands.count, command.plan(in: formatted, ids: ids))
-    }
-
-    /// `score` with every instrument's default articulation at gate time 100.
-    ///
-    /// `MidiRenderer` applies an instrument's gate time (a percentage of the note that sounds) to the LAST link of a
-    /// tie chain only, so on an instrument whose default gate is below 100 the release of a note depends on how it is
-    /// spelled: a dotted half is released at 95% of its length, the same note as half ~ quarter at the head's full
-    /// length plus 95% of the tail's. `FormatRhythms` re-spells durations, so on such a score the render moves by
-    /// that gate remainder. The comparison here removes that one renderer input and holds everything else exact;
-    /// `gateTimeBreaksSoundOnShortenedInstruments` pins the gap itself.
-    static func withFullGate(_ score: Score) -> Score {
-        var result = score
-        result.parts.mapValues { part in
-            var part = part
-            for index in part.instrument.articulations.indices where part.instrument.articulations[index].name == nil {
-                part.instrument.articulations[index].gateTime = 100
-            }
-            return part
-        }
-        return result
-    }
-
-    /// `score` without the preserved `<Beam>` markers MuseScore writes for a hand-set beam mode. Every stream element
-    /// is a wall to a tie merge (design §4.2), a preserved beam marker included, so a fixture carrying them keeps its
-    /// tied chains as written; MuseScore's own regroup ignores them. The corpus gate strips them from its INPUT so it
-    /// measures the splitter and the span rules rather than that wall.
-    static func withoutBeamMarkers(_ score: Score) -> Score {
-        editingVoices(score) { voice in
-            voice.elements.removeAll {
-                if case let .preserved(xml) = $0 { xml.name == "Beam" } else { false }
-            }
-        }
     }
 
     /// `score` with every chord's articulations cleared and every fermata removed. A chord carrying an articulation,
@@ -187,12 +152,10 @@ struct FormatRhythmsInvariantTests {
     func invariants() throws {
         var counts = FormatRhythmsGateCounts()
         for url in Self.topLevelFixtures() {
-            guard let parsed = try? MSCXParser.parse(contentsOf: url) else {
+            guard let score = try? MSCXParser.parse(contentsOf: url) else {
                 counts.skipped += 1
                 continue
             }
-            let score = FormatRhythmsGate.withFullGate(parsed)
-            if score != parsed { counts.gateNeutralized += 1 }
             guard let before = try? MidiRenderer.render(score: score) else {
                 counts.skipped += 1
                 continue
@@ -224,10 +187,11 @@ struct FormatRhythmsInvariantTests {
         #expect(counts.changedBarVoices >= 30, "bar-voices the gate saw change: \(counts.changedBarVoices)")
     }
 
-    /// The gap `withFullGate` steps around, pinned so it turns red (and the workaround can go) when the formatter
-    /// learns to leave such spans alone or the renderer gates a chain as a whole.
-    @Test("a split changes the release on an instrument whose default gate time is below 100")
-    func gateTimeBreaksSoundOnShortenedInstruments() throws {
+    /// The renderer gates a tie chain as a whole, as MuseScore does, so re-spelling a note on an instrument whose
+    /// default gate time is below 100 leaves its release where it was. (Before ssm 4.15 only the chain's last link was
+    /// gated, and this was a known issue the sound gate had to step around.)
+    @Test("a split keeps the release on an instrument whose default gate time is below 100")
+    func gateTimeKeepsSoundOnShortenedInstruments() throws {
         let url = try #require(TestResources.url(forResource: "testMutedUnison", withExtension: "mscx"))
         let score = try MSCXParser.parse(contentsOf: url)
         let before = try MidiRenderer.render(score: score)
@@ -235,7 +199,7 @@ struct FormatRhythmsInvariantTests {
         let result = try FormatRhythmsGate.applied(score, policy: noDots)
         #expect(result.changedBarVoices > 0)
         let after = try MidiRenderer.render(score: result.score)
-        withKnownIssue("renderer gates the last tie link only") { #expect(after == before) }
+        #expect(after == before)
     }
 
     @Test(

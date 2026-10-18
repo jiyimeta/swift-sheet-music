@@ -105,6 +105,9 @@ extension MidiRenderer {
         // or per plan entry) because a tie chain routinely spans a
         // bar line.
         var sustainedChannel: Int?
+        // What each open tie chain's gate has dropped so far, by sounding pitch (`tieGatedOff`). Voice-wide for the
+        // same reason as the channel.
+        var tieGateDebt: [Int: Int] = [:]
         // The capo an open tie chain's head sounded through (`.some(nil)` for none), for the same reason.
         var sustainedCapo: CapoPoint??
 
@@ -334,6 +337,7 @@ extension MidiRenderer {
                     ottavaRanges: ottavaRanges,
                     capo: capo,
                     originalTickDelta: nominalDelta,
+                    tieGateDebt: &tieGateDebt,
                 )
                 if case .breath = element { pauseTicksInMeasure += localTick - tickBeforeElement }
             }
@@ -386,6 +390,7 @@ extension MidiRenderer {
         ottavaRanges: [OttavaRange],
         capo: CapoPoint?,
         originalTickDelta: Int,
+        tieGateDebt: inout [Int: Int],
     ) {
         switch element {
         case let .keySignature(key):
@@ -506,6 +511,7 @@ extension MidiRenderer {
                 legacyBendSpans: legacyBendSpans,
                 currentKey: currentKey,
                 events: &events,
+                tieGateDebt: &tieGateDebt,
                 playedTicksOverride: adjust == .none
                     ? nil
                     : max(1, chordTicks + adjust.lengthDelta),

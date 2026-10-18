@@ -161,8 +161,9 @@ private struct FormatRhythmsBarWriter {
             carry(range)
             return
         }
-        let unchanged = durations.count == range.count
-            && zip(durations, range).allSatisfy { context.ticks(of: $0) == context.lengths[$1] }
+        let chordIndices = context.chordIndices(range)
+        let unchanged = durations.count == chordIndices.count
+            && zip(durations, chordIndices).allSatisfy { context.ticks(of: $0) == context.lengths[$1] }
         guard !unchanged else {
             carry(range)
             return

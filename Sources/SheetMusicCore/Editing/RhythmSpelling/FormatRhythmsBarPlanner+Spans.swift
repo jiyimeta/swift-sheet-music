@@ -161,13 +161,37 @@ struct FormatRhythmsBarContext {
 
     // MARK: Absorbing a tie continuation (§4.2)
 
-    /// How far the note span starting at `start` reaches.
+    /// How far the note span starting at `start` reaches. A preserved `<Beam>` marker between two chords does not
+    /// end it (`isTransparentBeamMarker`); the span then includes the marker, which is dropped if the span is
+    /// rewritten.
     func noteSpanEnd(from start: Int) -> Int {
         var end = start
-        while end + 1 < elements.count, canAbsorb(next: end + 1, into: end) {
-            end += 1
+        var next = start + 1
+        while next < elements.count {
+            if isTransparentBeamMarker(next) {
+                next += 1
+                continue
+            }
+            guard canAbsorb(next: next, into: end) else { break }
+            end = next
+            next += 1
         }
         return end
+    }
+
+    /// A `<Beam>` node MuseScore writes for a hand-set beam, kept verbatim in the stream before the chord its beam
+    /// starts on (it carries that beam's stem positions). Folding that chord into a tied chain removes the chord, so
+    /// the beam it started no longer exists: beams regroup from the new durations, and the marker goes with the chord
+    /// rather than being handed to a piece it never described. One that hides its beam (`<visible>0</visible>`) still
+    /// stops the merge — the hidden beam is a visible choice the chain would lose.
+    func isTransparentBeamMarker(_ index: Int) -> Bool {
+        guard case let .preserved(xml) = elements[index], xml.name == "Beam" else { return false }
+        return xml.children.first(where: { $0.name == "visible" })?.text != "0"
+    }
+
+    /// The chord indices of `range`, in order — a note span can hold a transparent beam marker between its chords.
+    func chordIndices(_ range: ClosedRange<Int>) -> [Int] {
+        range.filter { chord(at: $0) != nil }
     }
 
     private func canAbsorb(next: Int, into previous: Int) -> Bool {
