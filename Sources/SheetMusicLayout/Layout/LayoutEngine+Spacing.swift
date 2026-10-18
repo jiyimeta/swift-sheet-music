@@ -450,8 +450,13 @@ extension LayoutEngine {
             return raised
         }
 
-        /// The slack between the last column's gap and the measure's right edge: 1 sp — which also gives a flagged
-        /// note room for its flag before the barline — plus any bar-end clef.
+        /// What a measure's width counts after its content (`crossStaffMinimumMeasureWidthWithAggregate`): 1 sp plus
+        /// any bar-end clef. Placement does not leave the sp empty: `tickColumns` hands it to the content (its
+        /// `leadingGap - sp` term), so a measure at its minimum width spreads one sp more over its gaps — which
+        /// `justifiedWidths` counts on — and its last gap runs to the measure's right edge less the bar-end clef,
+        /// one gap from its last column as every column stands one gap from the next. The barline is drawn `sp / 2`
+        /// inside that edge; a floor that needs room before the barline measures from there (the bar-end graces in
+        /// `aggregatedTickWeights`, a whole sp short while this said otherwise).
         func trailingGap(sp: CGFloat) -> CGFloat {
             sp + trailingClefWidth
         }
@@ -522,9 +527,10 @@ extension LayoutEngine {
     ) -> [Int: CGFloat] {
         guard !agg.sortedTicks.isEmpty else { return [:] }
 
-        // Trailing slack between the last note's tick and the right
-        // barline — the same `trailingGap` the measure's width was
-        // given (`crossStaffMinimumMeasureWidthWithAggregate`).
+        // The same `trailingGap` the measure's width was given
+        // (`crossStaffMinimumMeasureWidthWithAggregate`). Its sp comes back
+        // to the content through `leadingGap - sp` below, so the content runs
+        // to the right edge less the bar-end clef (`TickAggregate.trailingGap`).
         let trailingGap = agg.trailingGap(sp: metrics.sp)
         // Floor `contentWidth` at `minimumContentWidth`: even when callers
         // hand us a `width` smaller than the cross-staff aggregated
