@@ -451,8 +451,30 @@ extension LayoutEngine {
             {
                 widthsSlice[last] += courtesy.width
             }
+            // Each measure at its natural width: its minimum at `naturalStretch`.
+            //
+            // Never below the minimum, though: a stretch under 1
+            // (a host packing music densely) would otherwise draw
+            // each measure narrower than its own content — every
+            // column past the barline and into the next measure.
+            // Below 1 the measure simply stays at its minimum,
+            // as a wrapped system's hard ceiling already makes it.
+            let naturalWidths = widthsSlice.indices.map { j in
+                max(
+                    widthsSlice[j],
+                    naturalStretch
+                        * naturalWidthRatio(systemStart + j, widthsSlice[j], joined: lineAggregates[j] != nil),
+                )
+            }
             let stretched: [CGFloat]
-            if context.options.wrapToViewWidth {
+            if context.options.wrapToViewWidth,
+               shouldJustify(
+                   naturalWidth: labelW + naturalWidths.reduce(0, +)
+                       + roomInside(systemStart ..< cursor, gaps: horizontalGaps),
+                   availableWidth: context.availableWidth,
+                   endsMusic: cursor == measureCount || staves.first?.measures[cursor - 1].sectionBreak == true,
+               )
+            {
                 // A collapsed multi-measure rest, or a bar with nothing timed in it, has no gaps to stretch.
                 let springs = widthsSlice.indices.map { j -> TickAggregate? in
                     let i = systemStart + j
@@ -474,21 +496,9 @@ extension LayoutEngine {
                 // minimum widths are tuned for the wrapped layout
                 // where the viewport stretches them ~1.5×; apply
                 // the same `naturalStretch` here so horizontal
-                // mode has matching breathing room.
-                //
-                // Never below the minimum, though: a stretch under 1
-                // (a host packing music densely) would otherwise draw
-                // each measure narrower than its own content — every
-                // column past the barline and into the next measure.
-                // Below 1 the measure simply stays at its minimum,
-                // as a wrapped system's hard ceiling already makes it.
-                stretched = widthsSlice.indices.map { j in
-                    max(
-                        widthsSlice[j],
-                        naturalStretch
-                            * naturalWidthRatio(systemStart + j, widthsSlice[j], joined: lineAggregates[j] != nil),
-                    )
-                }
+                // mode has matching breathing room. A wrapped line
+                // that is not justified keeps the same widths.
+                stretched = naturalWidths
             }
             // HBox room joins its measure's slot only now, so no stretch scales it; `buildSystem` takes it back out.
             let slots = slotsWithRoom(stretched, systemStart: systemStart, gaps: horizontalGaps)
@@ -703,6 +713,19 @@ extension LayoutEngine {
                 ? (part.instrument.longName ?? part.trackName ?? "")
                 : (part.instrument.shortName ?? "")
         }
+    }
+
+    /// MuseScore's `Sid::lastSystemFillLimit` default: a line the music ends on is justified only when its natural
+    /// width fills at least this much of the page.
+    static let lastSystemFillLimit: CGFloat = 0.3
+
+    /// Whether a wrapped system is stretched across the line (`justifiedWidths`) or left at its natural width — the
+    /// latter only for the line a piece or a section ends on (`endsMusic`) whose natural width, part labels and HBox
+    /// room included, fills less than `lastSystemFillLimit` of `availableWidth`, as `SystemLayout::shouldBeJustified`
+    /// decides. Stretching one bar of four quarters across a whole line set them a quarter of the page apart.
+    static func shouldJustify(naturalWidth: CGFloat, availableWidth: CGFloat, endsMusic: Bool) -> Bool {
+        guard endsMusic, availableWidth > 0 else { return true }
+        return naturalWidth / availableWidth >= lastSystemFillLimit
     }
 
     /// The widths a wrapped system's measures take when the system is justified to `availableWidth`; `widths` itself

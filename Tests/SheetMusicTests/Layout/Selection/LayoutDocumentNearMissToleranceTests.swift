@@ -15,14 +15,17 @@
         private let _installApple = TestSupport.installApple
 
         /// One voice of three quarter chords, nothing else in the bar. No rest between them, so the only things a
-        /// probe can resolve to are the chords themselves.
+        /// probe can resolve to are the chords themselves. A second bar follows on the next line, so the first is
+        /// stretched across its line — the short last line a piece ends on would keep its natural width
+        /// (`LayoutEngine.shouldJustify`) and leave no open space between the chords.
         private func threeChordSample() -> Score {
             let chord = { (p: Int) -> VoiceElement in
                 .chord(Chord(duration: .quarter, notes: [Note(pitch: p, tpc: 14)]))
             }
             let measure = Measure(voices: [
                 Voice(elements: [.clef(Clef(concertClefType: "G")), chord(60), chord(64), chord(65)]),
-            ])
+            ], lineBreak: true)
+            let next = Measure(voices: [Voice(elements: [chord(60)])])
             return Score(
                 division: 480,
                 parts: [Part(
@@ -32,7 +35,7 @@
                         staffType: "stdNormal",
                         group: "pitched",
                         defaultClefType: "G",
-                        measures: [measure],
+                        measures: [measure, next],
                     )],
                 )],
             )

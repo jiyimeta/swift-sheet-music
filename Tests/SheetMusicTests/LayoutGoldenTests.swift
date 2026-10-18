@@ -321,8 +321,17 @@
         /// every one of the 387 `label` lines gains an `elementID: Optional(…partName(partIndex:form:))` field, and
         /// nothing else changes — with that field stripped from the label lines, the digest hashes to `e4928f1b…`
         /// exactly. No origin moved. (The same change measured alone against `f386db1d…` gave `10666dba…`.)
+        ///
+        /// **Re-recorded 2026-10-18 when the line a piece ends on stopped being justified below 30% fill
+        /// (`LayoutEngine.shouldJustify`, MuseScore's `lastSystemFillLimit`), after reading the diff** against the
+        /// digest above (`f346efca…`, which the cross-barline syllable pairs left unchanged). 8 blocks of 68 moved,
+        /// every one `wrap=true` and a single system of one bar — `midi01`–`03`, `multiPartMixedStaves`,
+        /// `single_note_multi_appoggiatura_post`, `slur_ms4_glissando_legato`, `spanner_offsets_score_end`,
+        /// `testMidiPort`. Each system shrinks from the 900 pt line to its natural width (`midi01` 900 → 253.65), and
+        /// the block now reads exactly as its `wrap=false` twin. Rendered and read: `slur_ms4_glissando_legato`'s
+        /// slurs and glissandi follow their notes in.
         private static let expectedDigestSHA256 =
-            "f346efcae7605cf96e15f46eb8d5327eacea9414e353297c02f80c4f022536f1"
+            "0dabfba9be88725881c565cbbc684a80ea975d0a00408f48caa4e9cf203ca307"
 
         @Test("write digest")
         func writeDigest() throws {

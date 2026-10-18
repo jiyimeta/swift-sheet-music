@@ -18,6 +18,11 @@ and this project adheres to
   pre-tension. A syllable may still run across the barline, and a bar that ends a line makes no room for the next
   line's first syllable.
 
+- **A short last line is no longer stretched across the page.** The line a piece ends on — or a section, at a section
+  break — is left at its natural width when that fills less than 30% of the line, as MuseScore leaves it
+  (`Sid::lastSystemFillLimit`, `SystemLayout::shouldBeJustified`). A one-bar score was spread over the whole line, its
+  quarters a quarter of the page apart. A short line with music after it is still justified.
+
 ## [4.14.1] - 2026-10-18
 
 ### Fixed

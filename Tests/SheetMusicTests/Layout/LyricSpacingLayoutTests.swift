@@ -52,7 +52,11 @@ struct LyricSpacingLayoutTests {
 
     /// The x of every chord, left to right.
     private static func chordXs(_ document: LayoutDocument) -> [CGFloat] {
-        document.systems.flatMap(\.measures).flatMap { measure in
+        chordXs(document.systems.flatMap(\.measures))
+    }
+
+    private static func chordXs(_ measures: [LayoutMeasure]) -> [CGFloat] {
+        measures.flatMap { measure in
             measure.elements.compactMap { element -> CGFloat? in
                 guard case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = element else { return nil }
                 return notes.first.map { measure.origin.x + $0.origin.x }
@@ -98,11 +102,15 @@ struct LyricSpacingLayoutTests {
     }
 
     /// **The report.** Stretched across the line there is room to spare for every pair of syllables, so the bar
-    /// stays as even as its durations.
+    /// stays as even as its durations. A bar follows on the next line, so this one is not the short last line a piece
+    /// ends on, which is left at its natural width (`LayoutEngine.shouldJustify`).
     @Test("syllables of different widths leave a stretched bar of equal notes evenly spaced")
     func stretchedBarStaysEven() throws {
-        let document = Self.layout(Self.score([nil, "ん", "じゅ", "じゃ", "な", "い", "の", "よ"]), wrap: true)
-        let xs = Self.chordXs(document)
+        let syllables: [String?] = [nil, "ん", "じゅ", "じゃ", "な", "い", "の", "よ"]
+        let score = Self.score(bars: [syllables, Self.bareBar], duration: .eighth, breaksAfter: [0])
+        let document = Self.layout(score, wrap: true)
+        try #require(document.systems.count == 2)
+        let xs = Self.chordXs(document.systems[0].measures)
         try #require(xs.count == 8)
         let gaps = Self.gaps(xs)
         let spread = (gaps.max() ?? 0) - (gaps.min() ?? 0)
