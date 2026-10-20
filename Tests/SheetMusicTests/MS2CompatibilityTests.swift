@@ -98,7 +98,51 @@ struct MS2CompatibilityTests {
             guard case let .chord(c) = element, let n = c.notes.first else { return nil }
             return n.headType
         }
-        #expect(heads == ["cross", "diamond", "triangle-up", "normal"])
+        // C++: `Read206::convertHeadGroup` reads 3 as HEAD_TRIANGLE_DOWN.
+        #expect(heads == ["cross", "diamond", "triangle-down", "normal"])
+    }
+
+    @Test func wordAccidentalSubtypesMapToSMuFLAccidentals() throws {
+        // C++: `Read206::readAccidental206`. MuseScore 2 writes `sharp`, `double flat`, … where MuseScore 3 and 4
+        // write the SMuFL SymId. Read as SymIds only, every accidental of a MuseScore 2 score was dropped — the
+        // shipped `mscx.accidental.unsupportedSubtype 'natural'` diagnostic, on ~290 users' files.
+        let xml = """
+        <voice>
+          <Chord><durationType>quarter</durationType>
+            <Note><pitch>61</pitch><tpc>21</tpc><Accidental><subtype>sharp</subtype></Accidental></Note>
+          </Chord>
+          <Chord><durationType>quarter</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc><Accidental><subtype>natural</subtype></Accidental></Note>
+          </Chord>
+          <Chord><durationType>quarter</durationType>
+            <Note><pitch>60</pitch><tpc>0</tpc><Accidental><subtype>double flat</subtype></Accidental></Note>
+          </Chord>
+          <Chord><durationType>quarter</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc><Accidental><subtype>none</subtype></Accidental></Note>
+          </Chord>
+        </voice>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let collector = MSCXDiagnosticCollector()
+        let voice = try MSCXParserContext.$collector.withValue(collector) { try Voice.decode(node) }
+        let accidentals = voice.elements.compactMap { element -> Accidental?? in
+            guard case let .chord(c) = element, let n = c.notes.first else { return nil }
+            return n.accidental
+        }
+        #expect(accidentals == [.sharp, .natural, .doubleFlat, nil])
+        #expect(collector.entries.isEmpty)
+    }
+
+    @Test func integerBreathSubtypesReadAsMuseScoreReadsThem() throws {
+        // C++: `TRead::read(Breath*)` — 0 and 1 a comma, 2 a curved caesura, 3 a caesura.
+        func kind(_ subtype: String) throws -> Breath.Kind {
+            let node = try XMLTreeParser.parse(Data("<Breath><subtype>\(subtype)</subtype></Breath>".utf8))
+            return Breath.decodeMSCX(node).kind
+        }
+        #expect(try kind("0") == .breathMark(.comma))
+        #expect(try kind("1") == .breathMark(.comma))
+        #expect(try kind("2") == .caesura(.curved))
+        #expect(try kind("3") == .caesura(.normal))
     }
 
     @Test func ms3StringNoteHeadPassesThrough() throws {

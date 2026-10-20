@@ -18,6 +18,11 @@ extension Breath.Kind {
         case "caesuraCurved": return .caesura(.curved)
         case "chantCaesura": return .caesura(.chant)
         case "caesuraSingleStroke": return .caesura(.singleStroke)
+        // Files from before the SymId names write the old integer subtype, which MuseScore still reads
+        // (`TRead::read(Breath*)`, `rw/read400/tread.cpp`): 0 and 1 a comma, 2 a curved caesura, 3 a caesura.
+        case "0", "1": return .breathMark(.comma)
+        case "2": return .caesura(.curved)
+        case "3": return .caesura(.normal)
         default: return nil
         }
     }

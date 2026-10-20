@@ -15,6 +15,13 @@ and this project adheres to
   process on the backwards delta. The SwiftySynth backend and the Android bridge write that track on every play, with the
   metronome on or off. A click is now released at the next click when that comes first, and `MidiWriter.write` throws
   `SheetMusicError.malformedScore` (code `midi.track.eventsOutOfOrder`) for a track out of tick order instead of trapping.
+- **A MuseScore 2 score keeps its accidentals.** MuseScore 2 names an accidental in words (`sharp`, `natural`, `double
+  flat`, …) where MuseScore 3 and 4 write the SMuFL name, and the reader knew only the latter: every accidental of a
+  MuseScore 2 file was dropped with an `mscx.accidental.unsupportedSubtype` warning, and the score was drawn without
+  them. The words now map as MuseScore's own `Read206` table maps them.
+- **Two more MuseScore 2 values read as MuseScore reads them**: `<head>3</head>` is a triangle-down notehead (was
+  triangle-up), and a breath's integer `<subtype>` 2 / 3 is a curved caesura / a caesura (both were a comma, with a
+  warning).
 
 ## [4.15.0] - 2026-10-19
 
