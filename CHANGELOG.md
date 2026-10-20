@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.15.1] - 2026-10-21
+
 ### Fixed
 
 - **Pressing Play no longer crashes on a score with beats closer than a sixteenth.** The metronome track released each
