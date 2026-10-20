@@ -22,6 +22,9 @@ and this project adheres to
 - **Two more MuseScore 2 values read as MuseScore reads them**: `<head>3</head>` is a triangle-down notehead (was
   triangle-up), and a breath's integer `<subtype>` 2 / 3 is a curved caesura / a caesura (both were a comma, with a
   warning).
+- **A MuseScore 2 measure keeps its voice numbers.** Voices 0 and 2 with nothing in voice 1 were read as voices 0 and 1,
+  so the third voice drew as the second and its ties to a measure where it kept its number were dropped. An empty voice
+  now holds its place, as MuseScore 3 and 4's `<voice/>` placeholder does.
 
 ## [4.15.0] - 2026-10-19
 

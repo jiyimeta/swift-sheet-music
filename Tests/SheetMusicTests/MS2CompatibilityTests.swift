@@ -199,6 +199,33 @@ struct MS2CompatibilityTests {
         }
     }
 
+    @Test func flatMeasureKeepsAVoiceIndexPastAnEmptyVoice() throws {
+        // Voices 0 and 2 with nothing in voice 1: the third voice stays the third, behind an empty second — what
+        // MuseScore 3 and 4 spell with a `<voice/>` placeholder. Compacted, it became the second voice, so it drew
+        // as one and its ties found no partner in a measure where it kept its index.
+        let xml = """
+        <Measure number="1">
+          <Chord><durationType>half</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+          </Chord>
+          <tick>0</tick>
+          <Chord>
+            <track>2</track>
+            <durationType>half</durationType>
+            <Note><track>2</track><pitch>48</pitch><tpc>14</tpc></Note>
+          </Chord>
+        </Measure>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let measure = try Measure.decode(node)
+        #expect(measure.voices.count == 3)
+        #expect(measure.voices[1].elements.isEmpty)
+        guard case let .chord(v2) = measure.voices[2].elements.first, v2.notes.first?.pitch == 48 else {
+            Issue.record("voice 2 should hold the half-note pitch 48 chord, got \(measure.voices)")
+            return
+        }
+    }
+
     @Test func ms2StaffTextSwingPromotedToSystem() throws {
         // C++: MuseScore 2 wrote swing inside <StaffText> even for a
         // score-wide directive (no UI distinction in 2.x). Without

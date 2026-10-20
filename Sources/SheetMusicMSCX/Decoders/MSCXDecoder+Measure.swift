@@ -232,8 +232,11 @@ extension Measure {
             }()
             buckets[voiceIndex, default: []].append(child)
         }
-        let sortedIndices = buckets.keys.sorted()
-        return try sortedIndices.map { idx in
+        // A voice keeps its index even when one below it is empty — voices 0 and 2 stay 0 and 2, with an empty 1, as
+        // the `<voice/>` placeholders MuseScore 3 and 4 write keep them. Compacted to 0 and 1, the third voice drew as
+        // the second, and a tie between it and a measure where it kept its index found no partner and was dropped.
+        guard let highestIndex = buckets.keys.max() else { return [] }
+        return try (0 ... highestIndex).map { idx in
             let synthetic = XMLTreeNode(
                 name: "voice",
                 children: buckets[idx] ?? [],
