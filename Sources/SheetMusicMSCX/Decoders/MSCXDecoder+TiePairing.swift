@@ -56,14 +56,29 @@ enum MSCXTiePairing {
     }
 
     /// Clear every `tieForward` / `tieBack` whose partner is missing.
+    ///
+    /// A tie MuseScore made into another voice (`CrossVoiceTies`) has its partner there; its two ends are taken out
+    /// of their voices' own pairing first, so they neither count as unmatched nor take the place of a tie that does
+    /// stay in the voice.
     static func pruningUnpairedTies(in measures: [Measure]) -> [Measure] {
         var measures = measures
+        let links = CrossVoiceTies.links(in: measures)
+        let crossVoice = CrossVoiceEnds(
+            forward: Set(links.map(\.from)), back: Set(links.map(\.to)),
+        )
         let voiceCount = measures.map(\.voices.count).max() ?? 0
         for voiceIndex in 0 ..< voiceCount {
-            let groups = collectGroups(in: measures, voiceIndex: voiceIndex)
+            let groups = collectGroups(in: measures, voiceIndex: voiceIndex, crossVoice: crossVoice)
             apply(unpaired(in: groups), to: &measures)
         }
         return measures
+    }
+
+    /// The notes whose tie leaves or reaches another voice — each side by itself, since one note can end a tie from
+    /// another voice and start one in its own.
+    private struct CrossVoiceEnds {
+        var forward: Set<CrossVoiceTies.End>
+        var back: Set<CrossVoiceTies.End>
     }
 
     /// Walk one voice across the whole staff, collecting the note runs a tie
@@ -76,7 +91,7 @@ enum MSCXTiePairing {
     /// previous chord reaches the main notes *through* untied graces, so an
     /// unconditional group would sever it.
     private static func collectGroups(
-        in measures: [Measure], voiceIndex: Int,
+        in measures: [Measure], voiceIndex: Int, crossVoice: CrossVoiceEnds,
     ) -> [Group] {
         var groups: [Group] = []
         var severed = true
@@ -84,8 +99,15 @@ enum MSCXTiePairing {
             measure: Int, element: Int, grace: GraceSlot?, notes: ChordNotes,
             skippableWhenUntied: Bool,
         ) {
-            let forward = notes.indices.filter { notes[$0].tieForward != nil }
-            let back = notes.indices.filter { notes[$0].tieBack != nil }
+            func end(_ note: Int) -> CrossVoiceTies.End {
+                CrossVoiceTies.End(measure: measure, voice: voiceIndex, element: element, note: note)
+            }
+            let forward = notes.indices.filter {
+                notes[$0].tieForward != nil && (grace != nil || !crossVoice.forward.contains(end($0)))
+            }
+            let back = notes.indices.filter {
+                notes[$0].tieBack != nil && (grace != nil || !crossVoice.back.contains(end($0)))
+            }
             if skippableWhenUntied, forward.isEmpty, back.isEmpty { return }
             groups.append(Group(
                 measure: measure, voice: voiceIndex, element: element,

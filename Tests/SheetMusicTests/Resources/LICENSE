@@ -17,6 +17,8 @@ fixtures taken from the upstream MuseScore repository:
   - single_note_multi_appoggiatura_post.mscx:
       src/engraving/tests/playback/playbackeventsrenderer_data/
       single_note_multi_appoggiatura_post/
+  - tie_cross_voice_split184061.mscx (upstream split184061-keep-tie.mscx):
+      src/engraving/tests/split_data/
   - tempomap/gradual_tempo_change_{rallentando,accelerando,
     doesnt_overwrite_other_tempo}.mscx:
       src/engraving/tests/tempomap_data/<same name>/

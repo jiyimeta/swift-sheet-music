@@ -357,7 +357,7 @@
         /// had been pulled 2.05 pt back inside the last barline, sits on its own column again (63.47 → 65.52), running
         /// on into the empty room past the line. No system, column or other element moved.
         private static let expectedDigestSHA256 =
-            "342bd0804ee2ffa0287ebc97aaa4eeeedec74295a64ffbfa14f49cf961af86a3"
+            "1e67ec4a2f5053b677ea6fb905fd819577a9f814d474f4f9a04b00d42a859d70"
 
         @Test("write digest")
         func writeDigest() throws {

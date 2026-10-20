@@ -22,6 +22,15 @@ and this project adheres to
 - **Two more MuseScore 2 values read as MuseScore reads them**: `<head>3</head>` is a triangle-down notehead (was
   triangle-up), and a breath's integer `<subtype>` 2 / 3 is a curved caesura / a caesura (both were a comma, with a
   warning).
+- **A tie MuseScore made into another voice is kept, drawn and played as one held note.** MuseScore ties a note to the
+  note of the same pitch where the chord ends in whichever voice of the staff holds one (`searchTieNote`), so where
+  voices part or merge the tie crosses voices. Everything that paired a tie's two ends walked one voice, so the reader
+  dropped both halves (`mscx.tie.unpairedSide`, about one in ten folino 2.1 users' files) and the note was struck again.
+  The ends are now found by MuseScore's rule (`CrossVoiceTies`) in the reader's pairing, the layout's tie pass,
+  playback's tied-pitch walk and `TiePlanner` — which also keeps the dangling-tie pass from removing them after an
+  edit nearby. The layout's tie pass now also keeps two voices that hold the same pitch tied at once apart. Not yet
+  covered: the MSCX writer still names the tie's own voice in `<location>`, so MuseScore drops such a tie from a file
+  this package wrote (this package's reader pairs it again).
 - **A MuseScore 2 measure keeps its voice numbers.** Voices 0 and 2 with nothing in voice 1 were read as voices 0 and 1,
   so the third voice drew as the second and its ties to a measure where it kept its number were dropped. An empty voice
   now holds its place, as MuseScore 3 and 4's `<voice/>` placeholder does.
