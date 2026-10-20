@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pressing Play no longer crashes on a score with beats closer than a sixteenth.** The metronome track released each
+  click a sixteenth after it sounded, so where the next beat came sooner — a pickup shorter than a sixteenth, a 32nd-note
+  meter, a measure that ends just past a beat — the note-off landed after the next note-on, and `MidiWriter` stopped the
+  process on the backwards delta. The SwiftySynth backend and the Android bridge write that track on every play, with the
+  metronome on or off. A click is now released at the next click when that comes first, and `MidiWriter.write` throws
+  `SheetMusicError.malformedScore` (code `midi.track.eventsOutOfOrder`) for a track out of tick order instead of trapping.
+
 ## [4.15.0] - 2026-10-19
 
 ### Changed
