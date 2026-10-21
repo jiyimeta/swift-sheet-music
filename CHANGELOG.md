@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.16.0] - 2026-10-21
+
 ### Added
 
 - **`NoteDuration.breve` and `.long`** — two and four whole notes, MuseScore's `V_BREVE` / `V_LONG`. A MuseScore file
