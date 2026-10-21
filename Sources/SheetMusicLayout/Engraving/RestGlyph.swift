@@ -13,6 +13,11 @@ public enum RestGlyph {
         duration: NoteDuration, hasLegerLine: Bool = false,
     ) -> UInt32 {
         switch duration {
+        case .long: SMuFLCodepoint.restLonga
+        case .breve:
+            hasLegerLine
+                ? SMuFLCodepoint.restDoubleWholeLegerLine
+                : SMuFLCodepoint.restDoubleWhole
         case .whole, .measure:
             hasLegerLine
                 ? SMuFLCodepoint.restWholeLegerLine

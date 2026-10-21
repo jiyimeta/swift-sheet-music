@@ -58,6 +58,8 @@ extension PDFImporter {
     /// self-contained.
     static func halveDuration(_ d: NoteDuration) -> NoteDuration {
         switch d {
+        case .long: .breve
+        case .breve: .whole
         case .whole: .half
         case .half: .quarter
         case .quarter: .eighth

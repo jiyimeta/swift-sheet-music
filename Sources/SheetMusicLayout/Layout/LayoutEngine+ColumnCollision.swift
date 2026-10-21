@@ -59,7 +59,9 @@ extension LayoutEngine {
     /// is part of the column's left ink.
     static func columnInk(of chord: Chord, graceNoteMag: CGFloat, metrics: StaffMetrics) -> ColumnInk {
         let sp = metrics.sp
-        let (base, dots) = DurationInterpretation.split(chord.duration)
+        let (base, dots) = chord.notes.isEmpty
+            ? DurationInterpretation.split(chord.duration)
+            : DurationInterpretation.splitNote(chord.duration)
         guard !chord.notes.isEmpty else {
             let glyph = RestGlyph.codepoint(duration: chord.duration)
             let halfWidth = bravuraAdvance(glyph, metrics: metrics) / 2
@@ -69,7 +71,7 @@ extension LayoutEngine {
         let halfHead = StemGeometry.attachDx(sp: sp)
         let left = accidentalReach(of: Array(chord.notes), headEdge: halfHead + displaced, metrics: metrics)
         // A whole note's head is wider than the black one `attachDx` halves (Bravura `noteheadWhole` 1.688 sp).
-        let headRight = base == .whole ? sp * 1.688 / 2 : halfHead
+        let headRight = wideHeadHalfWidth(base, metrics: metrics) ?? halfHead
         let right = max(headRight, dotsRight(dots, sp: sp)) + displaced
         let graceReach = beforeGraceReach(of: chord, mag: graceNoteMag, metrics: metrics)
         return ColumnInk(left: max(left, graceReach), reach: right + sp * 0.35, graceReach: graceReach)
@@ -246,6 +248,16 @@ extension LayoutEngine {
     /// that run before the clef is known compare, are the same under every clef.
     static func trebleStep(of note: Note) -> CGFloat {
         CGFloat(PitchStaffPosition.step(midiPitch: note.pitch, tpc: note.tpc, clef: trebleClef).step)
+    }
+
+    /// Half the width of a head wider than the black one `StemGeometry.attachDx` halves — a whole note's (Bravura
+    /// `noteheadWhole`, 1.688 sp), or the breve head a breve and a long share — or `nil` for every narrower head.
+    static func wideHeadHalfWidth(_ base: NoteDuration, metrics: StaffMetrics) -> CGFloat? {
+        switch base {
+        case .whole: metrics.sp * 1.688 / 2
+        case .breve, .long: bravuraAdvance(SMuFLCodepoint.noteheadDoubleWhole, metrics: metrics) / 2
+        default: nil
+        }
     }
 
     /// A glyph's advance, measured the way the renderers measure it (`AccidentalPlacement.leftEdgeX` takes the

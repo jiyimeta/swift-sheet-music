@@ -9,6 +9,8 @@ extension NoteDuration {
     /// `decomposed()` first.
     var mscxName: String? {
         switch self {
+        case .long: "long"
+        case .breve: "breve"
         case .whole: "whole"
         case .half: "half"
         case .quarter: "quarter"
@@ -30,7 +32,7 @@ extension NoteDuration {
     func decomposed() -> (name: String, dots: Int)? {
         let target = asFraction
         let bases: [NoteDuration] = [
-            .whole, .half, .quarter, .eighth, .sixteenth,
+            .long, .breve, .whole, .half, .quarter, .eighth, .sixteenth,
             .thirtySecond, .sixtyFourth, .oneTwentyEighth, .twoFiftySixth,
         ]
         for base in bases {

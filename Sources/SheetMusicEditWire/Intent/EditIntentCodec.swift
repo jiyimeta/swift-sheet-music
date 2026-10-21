@@ -225,7 +225,7 @@ import Wirelet
 /// with a non-zero payload, so `numerator` / `denominator` are `0` for every other case:
 /// ```
 /// tag 1: kind        u8, varint — 1=whole 2=half 3=quarter 4=eighth 5=sixteenth 6=thirtySecond 7=sixtyFourth
-///                    8=oneTwentyEighth 9=twoFiftySixth 10=measure 11=fraction
+///                    8=oneTwentyEighth 9=twoFiftySixth 10=measure 11=fraction 12=breve 13=long (appended in 4.16)
 /// tag 2: numerator    i32, zig-zag varint — only meaningful when kind == 11
 /// tag 3: denominator  i32, zig-zag varint — only meaningful when kind == 11
 /// ```
@@ -911,10 +911,18 @@ public struct NoteDurationWire {
             kind = 11
             numerator = Int32(f.numerator)
             denominator = Int32(f.denominator)
+        case .breve:
+            kind = 12
+            numerator = 0
+            denominator = 0
+        case .long:
+            kind = 13
+            numerator = 0
+            denominator = 0
         }
     }
 
-    /// Throws `WireFormatError.unknownChoiceDiscriminator` for a `kind` outside `1...11` — a duration that a
+    /// Throws `WireFormatError.unknownChoiceDiscriminator` for a `kind` outside `1...13` — a duration that a
     /// newer writer understands and an older reader does not must not silently decode as some other duration.
     ///
     /// Also throws that same error for a non-positive `denominator` on a `kind == 11` payload. `Fraction.init`
@@ -938,6 +946,8 @@ public struct NoteDurationWire {
                 throw WireFormatError.unknownChoiceDiscriminator(UInt32(bitPattern: denominator))
             }
             return .fraction(Fraction(numerator: Int(numerator), denominator: Int(denominator)))
+        case 12: return .breve
+        case 13: return .long
         default: throw WireFormatError.unknownChoiceDiscriminator(UInt32(kind))
         }
     }

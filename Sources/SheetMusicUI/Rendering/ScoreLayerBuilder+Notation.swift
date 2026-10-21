@@ -242,6 +242,11 @@ extension ScoreLayerBuilder {
         let (baseDur, dots) = DurationInterpretation.split(duration)
         let glyph: Character
         switch baseDur {
+        case .long: glyph = SMuFLGlyph.restLonga
+        case .breve:
+            glyph = hasLegerLine
+                ? SMuFLGlyph.restDoubleWholeLegerLine
+                : SMuFLGlyph.restDoubleWhole
         case .whole:
             glyph = hasLegerLine
                 ? SMuFLGlyph.restWholeLegerLine

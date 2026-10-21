@@ -20,7 +20,7 @@ public enum DurationInterpretation {
         _ dur: NoteDuration,
     ) -> (base: NoteDuration, dots: Int) {
         switch dur {
-        case .whole, .half, .quarter, .eighth, .sixteenth,
+        case .long, .breve, .whole, .half, .quarter, .eighth, .sixteenth,
              .thirtySecond, .sixtyFourth,
              .oneTwentyEighth, .twoFiftySixth:
             return (dur, 0)
@@ -82,6 +82,20 @@ public enum DurationInterpretation {
             }
             return (dur, 0)
         }
+    }
+
+    /// `split` for a CHORD: a dotted long or breve (`breve.dotted(1)` is `3/1`) too, which `split` reads as a plain
+    /// whole. A rest of the same length stays `split`'s: a multi-measure rest's body spans whole bars (`12/4`), and is
+    /// drawn as one whole rest, never as a dotted breve rest.
+    public static func splitNote(
+        _ dur: NoteDuration,
+    ) -> (base: NoteDuration, dots: Int) {
+        if case let .fraction(f) = dur, f.numerator > f.denominator, let longer = dur.baseAndDots(),
+           longer.base == .long || longer.base == .breve
+        {
+            return longer
+        }
+        return split(dur)
     }
 
     /// Attempt to read `numerator/denominator` as a dotted base

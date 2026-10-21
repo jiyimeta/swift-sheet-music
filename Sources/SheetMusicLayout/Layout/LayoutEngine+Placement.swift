@@ -696,11 +696,13 @@ extension LayoutEngine {
                     let staffTopLocal = metrics.sp * 2
                     let staffBottomLocal = metrics.sp * 2
                         + metrics.staffHeight
-                    let isWholeOrHalf = restBase == .whole
+                    // The breve rest has its leger-line variant too (`Rest::getSymbol`).
+                    let hasLegerVariant = restBase == .breve
+                        || restBase == .whole
                         || restBase == .half
                     let isOutsideStaff = restY < staffTopLocal
                         || restY > staffBottomLocal
-                    let needsLeger = isWholeOrHalf && isOutsideStaff
+                    let needsLeger = hasLegerVariant && isOutsideStaff
                     let restElement = LayoutElement.rest(
                         duration: r.duration,
                         origin: CGPoint(x: restX, y: restY),
@@ -958,7 +960,7 @@ extension LayoutEngine {
                         for: chord.chordLines,
                         chordNotes: chordNotes,
                         chordX: chordX,
-                        dots: DurationInterpretation.split(chord.duration).dots,
+                        dots: DurationInterpretation.splitNote(chord.duration).dots,
                         stem: stem,
                         staffMidY: staffMidY,
                         // The chord's own magnification — C++:

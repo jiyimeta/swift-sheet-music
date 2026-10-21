@@ -61,6 +61,9 @@ enum SMuFLGlyph {
 
     // MARK: - Rests
 
+    static let restLonga: Character = scalar(SMuFLCodepoint.restLonga)
+    static let restDoubleWhole: Character = scalar(SMuFLCodepoint.restDoubleWhole)
+    static let restDoubleWholeLegerLine: Character = scalar(SMuFLCodepoint.restDoubleWholeLegerLine)
     static let restWhole: Character = scalar(SMuFLCodepoint.restWhole)
     static let restHalf: Character = scalar(SMuFLCodepoint.restHalf)
     static let restWholeLegerLine: Character = scalar(SMuFLCodepoint.restWholeLegerLine)

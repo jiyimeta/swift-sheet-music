@@ -17,6 +17,8 @@ export interface NoteRef extends ElementRef {
  * on the bridge match NoteDurationWire's table, and stay hidden here.
  */
 export type NoteDurationSpec =
+  | "long"
+  | "breve"
   | "whole"
   | "half"
   | "quarter"
@@ -99,6 +101,9 @@ const durationKinds: Record<Exclude<NoteDurationSpec, object>, number> = {
   oneTwentyEighth: 8,
   twoFiftySixth: 9,
   measure: 10,
+  // 11 is the fraction form below; the breve and the long were appended after it.
+  breve: 12,
+  long: 13,
 };
 
 function durationWire(duration: NoteDurationSpec | undefined): DurationWire {

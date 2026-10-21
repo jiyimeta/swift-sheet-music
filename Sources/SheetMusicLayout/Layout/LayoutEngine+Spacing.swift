@@ -1336,6 +1336,8 @@ extension LayoutEngine {
         // very short notes (32nd, 64th) don't collapse to zero space.
         let quarters: Double
         switch dur {
+        case .long: quarters = 16
+        case .breve: quarters = 8
         case .whole: quarters = 4
         case .half: quarters = 2
         case .quarter: quarters = 1

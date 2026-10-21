@@ -217,6 +217,9 @@ enum PDFImporterCanonicalOrder {
         case .twoFiftySixth: [8, 0, 0]
         case let .fraction(f): [9, Double(f.numerator), Double(f.denominator)]
         case .measure: [10, 0, 0]
+        // Appended after the existing ranks so no shipped ordering moves.
+        case .breve: [11, 0, 0]
+        case .long: [12, 0, 0]
         }
     }
 

@@ -1,6 +1,7 @@
 import SheetMusicFoundation
 
 /// Standard note duration. C++: `mu::engraving::TDuration` (subset).
+/// `.long` and `.breve` are four and two whole notes — MuseScore's `V_LONG` / `V_BREVE`, MusicXML's `long` / `breve`.
 /// `.fraction` covers irregular durations encoded as raw fractions
 /// (e.g. tuplet-scaled members written `<duration>1/12</duration>`).
 /// `.measure` is a marker for "this rest fills the containing
@@ -9,6 +10,8 @@ import SheetMusicFoundation
 /// asking for ticks or a Fraction. Mirrors MuseScore's
 /// `DurationType::V_MEASURE` and MusicXML's `<rest measure="yes"/>`.
 public enum NoteDuration: Sendable, Equatable, Hashable {
+    case long
+    case breve
     case whole
     case half
     case quarter
@@ -25,6 +28,8 @@ public enum NoteDuration: Sendable, Equatable, Hashable {
     /// Traps on `.measure` — call `resolved(in:)` first.
     public func ticks(division: Int) -> Int {
         switch self {
+        case .long: return 16 * division
+        case .breve: return 8 * division
         case .whole: return 4 * division
         case .half: return 2 * division
         case .quarter: return division
@@ -48,6 +53,8 @@ public enum NoteDuration: Sendable, Equatable, Hashable {
     /// to decide between `.measure` and a typed rest.
     public init?(mscxName: String) {
         switch mscxName {
+        case "long": self = .long
+        case "breve": self = .breve
         case "whole": self = .whole
         case "half": self = .half
         case "quarter": self = .quarter
@@ -65,6 +72,8 @@ public enum NoteDuration: Sendable, Equatable, Hashable {
     /// on `.measure` — call `resolved(in:)` first.
     public var asFraction: Fraction {
         switch self {
+        case .long: return Fraction(numerator: 4, denominator: 1)
+        case .breve: return Fraction(numerator: 2, denominator: 1)
         case .whole: return Fraction(numerator: 1, denominator: 1)
         case .half: return Fraction(numerator: 1, denominator: 2)
         case .quarter: return Fraction(numerator: 1, denominator: 4)
@@ -119,7 +128,7 @@ public enum NoteDuration: Sendable, Equatable, Hashable {
     public func baseAndDots() -> (base: NoteDuration, dots: Int)? {
         if case .measure = self { return nil }
         let bases: [NoteDuration] = [
-            .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
+            .long, .breve, .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
             .oneTwentyEighth, .twoFiftySixth,
         ]
         if let plain = bases.first(where: { $0 == self }) {

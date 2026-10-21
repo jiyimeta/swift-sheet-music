@@ -28,7 +28,7 @@ extension ScoreLayerBuilder {
         context: inout BuildContext,
         into parent: CALayer,
     ) {
-        let (baseDur, dots) = DurationInterpretation.split(duration)
+        let (baseDur, dots) = DurationInterpretation.splitNote(duration)
         // `moved(to:)` keeps a grace head's `graceNoteID`, which the selection registration below keys by.
         let shifted = notes.map { n -> LayoutChordNote in
             n.moved(to: CGPoint(x: base.x + n.origin.x, y: base.y + n.origin.y))
@@ -360,7 +360,8 @@ extension ScoreLayerBuilder {
         into parent: CALayer,
     ) {
         guard !notes.isEmpty else { return }
-        if case .whole = duration { return }
+        // Whole notes and breves are stemless (a long has one, `TDuration::hasStem`).
+        if duration == .whole || duration == .breve { return }
         let xs = notes.map(\.origin.x)
         let ys = notes.map(\.origin.y)
         // Mirrors MuseScore's `TLayout::layoutStem`:

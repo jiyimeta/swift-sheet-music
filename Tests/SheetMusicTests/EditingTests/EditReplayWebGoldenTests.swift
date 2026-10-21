@@ -314,6 +314,8 @@
 
         init(_ duration: NoteDuration) {
             switch duration {
+            case .long: value = "long"
+            case .breve: value = "breve"
             case .whole: value = "whole"
             case .half: value = "half"
             case .quarter: value = "quarter"

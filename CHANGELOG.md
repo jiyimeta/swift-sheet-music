@@ -7,6 +7,24 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`NoteDuration.breve` and `.long`** — two and four whole notes, MuseScore's `V_BREVE` / `V_LONG`. A MuseScore file
+  holding either did not import at all (`mscx.chord.invalidDurationType` / `mscx.rest.unknownDurationType`), and
+  MusicXML read `<type>breve</type>` / `<type>long</type>` as a whole note, half or a quarter of its length. Both now
+  read, play, write back as `<durationType>breve|long</durationType>`, and draw as MuseScore draws them: the breve
+  head (`noteheadDoubleWhole`) for both, a stem on the long only, and the breve / longa rests. A dotted breve is
+  engraved as one. `NoteDurationWire` and `Score.stableFingerprint` give them the kinds after `.fraction`'s — 12 and 13
+  — so no kind a shipped reader knows changes meaning; a reader older than this one refuses them rather than guessing.
+  This adds cases to a public enum, so an exhaustive `switch` over `NoteDuration` outside the package needs the two
+  new arms.
+
+### Fixed
+
+- **The MSCX writer names the partner voice of a tie into another voice** (`<voices>` in `<location>`), as MuseScore
+  writes it. 4.15.1 read such ties but wrote them pointing into the tie's own voice, so MuseScore dropped them from a
+  file this package wrote.
+
 ## [4.15.1] - 2026-10-21
 
 ### Fixed

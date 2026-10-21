@@ -20,7 +20,7 @@ enum MusicXMLDuration {
         let dotCount = note.all("dot").count
 
         if let typeText,
-           let base = NoteDuration(mscxName: canonicalise(typeText))
+           let base = NoteDuration(mscxName: typeText)
         {
             let dotted = base.dotted(dotCount)
             if let mod = note.first("time-modification") {
@@ -33,20 +33,6 @@ enum MusicXMLDuration {
             return .fraction(divisions.fractionOfWhole(durationInt))
         }
         return nil
-    }
-
-    /// MuseScore's `mscxName` decoder uses `"16th"`, `"32nd"`, `"128th"`, etc.
-    /// MusicXML uses the same `"16th"`, `"32nd"` spellings for the 16th..256th
-    /// range, but its smaller values differ (`"1024th"`, etc., which we don't
-    /// support). The names `"whole"`, `"half"`, `"quarter"`, `"eighth"` match.
-    private static func canonicalise(_ musicXMLType: String) -> String {
-        switch musicXMLType {
-        case "long", "breve":
-            return "whole" // lossy fallback: MuseScore long/breve map to .fraction(2/1)
-        // and larger; if a fixture relies on it we'll special-case.
-        default:
-            return musicXMLType
-        }
     }
 
     private static func applyTupletModification(

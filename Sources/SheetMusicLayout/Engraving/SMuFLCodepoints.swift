@@ -42,8 +42,12 @@ public enum SMuFLCodepoint {
 
     // MARK: - Rests
 
+    public static let restLonga: UInt32 = 0xE4E1
+    public static let restDoubleWhole: UInt32 = 0xE4E2
     public static let restWhole: UInt32 = 0xE4E3
     public static let restHalf: UInt32 = 0xE4E4
+    /// Breve-rest variant with a baked-in leger line, as `restWholeLegerLine` is for the whole rest.
+    public static let restDoubleWholeLegerLine: UInt32 = 0xE4F3
     /// Whole-rest variant with a baked-in leger line — used when the
     /// rest is hung above or below the staff. MuseScore swaps to this
     /// via `Rest::getSymbol` when `line` is outside the staff range.

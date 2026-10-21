@@ -134,7 +134,7 @@ extension LayoutEngine {
 
         let topLine = 2 * sp
         let hasStem = switch duration {
-        case .whole, .measure: false
+        case .breve, .whole, .measure: false
         default: true
         }
         let facts = FingeringChord(
