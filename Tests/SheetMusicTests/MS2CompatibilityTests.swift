@@ -98,7 +98,51 @@ struct MS2CompatibilityTests {
             guard case let .chord(c) = element, let n = c.notes.first else { return nil }
             return n.headType
         }
-        #expect(heads == ["cross", "diamond", "triangle-up", "normal"])
+        // C++: `Read206::convertHeadGroup` reads 3 as HEAD_TRIANGLE_DOWN.
+        #expect(heads == ["cross", "diamond", "triangle-down", "normal"])
+    }
+
+    @Test func wordAccidentalSubtypesMapToSMuFLAccidentals() throws {
+        // C++: `Read206::readAccidental206`. MuseScore 2 writes `sharp`, `double flat`, … where MuseScore 3 and 4
+        // write the SMuFL SymId. Read as SymIds only, every accidental of a MuseScore 2 score was dropped — the
+        // shipped `mscx.accidental.unsupportedSubtype 'natural'` diagnostic, on ~290 users' files.
+        let xml = """
+        <voice>
+          <Chord><durationType>quarter</durationType>
+            <Note><pitch>61</pitch><tpc>21</tpc><Accidental><subtype>sharp</subtype></Accidental></Note>
+          </Chord>
+          <Chord><durationType>quarter</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc><Accidental><subtype>natural</subtype></Accidental></Note>
+          </Chord>
+          <Chord><durationType>quarter</durationType>
+            <Note><pitch>60</pitch><tpc>0</tpc><Accidental><subtype>double flat</subtype></Accidental></Note>
+          </Chord>
+          <Chord><durationType>quarter</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc><Accidental><subtype>none</subtype></Accidental></Note>
+          </Chord>
+        </voice>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let collector = MSCXDiagnosticCollector()
+        let voice = try MSCXParserContext.$collector.withValue(collector) { try Voice.decode(node) }
+        let accidentals = voice.elements.compactMap { element -> Accidental?? in
+            guard case let .chord(c) = element, let n = c.notes.first else { return nil }
+            return n.accidental
+        }
+        #expect(accidentals == [.sharp, .natural, .doubleFlat, nil])
+        #expect(collector.entries.isEmpty)
+    }
+
+    @Test func integerBreathSubtypesReadAsMuseScoreReadsThem() throws {
+        // C++: `TRead::read(Breath*)` — 0 and 1 a comma, 2 a curved caesura, 3 a caesura.
+        func kind(_ subtype: String) throws -> Breath.Kind {
+            let node = try XMLTreeParser.parse(Data("<Breath><subtype>\(subtype)</subtype></Breath>".utf8))
+            return Breath.decodeMSCX(node).kind
+        }
+        #expect(try kind("0") == .breathMark(.comma))
+        #expect(try kind("1") == .breathMark(.comma))
+        #expect(try kind("2") == .caesura(.curved))
+        #expect(try kind("3") == .caesura(.normal))
     }
 
     @Test func ms3StringNoteHeadPassesThrough() throws {
@@ -151,6 +195,33 @@ struct MS2CompatibilityTests {
               v1.notes.first?.pitch == 48
         else {
             Issue.record("voice 1 should hold the half-note pitch 48 chord")
+            return
+        }
+    }
+
+    @Test func flatMeasureKeepsAVoiceIndexPastAnEmptyVoice() throws {
+        // Voices 0 and 2 with nothing in voice 1: the third voice stays the third, behind an empty second — what
+        // MuseScore 3 and 4 spell with a `<voice/>` placeholder. Compacted, it became the second voice, so it drew
+        // as one and its ties found no partner in a measure where it kept its index.
+        let xml = """
+        <Measure number="1">
+          <Chord><durationType>half</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+          </Chord>
+          <tick>0</tick>
+          <Chord>
+            <track>2</track>
+            <durationType>half</durationType>
+            <Note><track>2</track><pitch>48</pitch><tpc>14</tpc></Note>
+          </Chord>
+        </Measure>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let measure = try Measure.decode(node)
+        #expect(measure.voices.count == 3)
+        #expect(measure.voices[1].elements.isEmpty)
+        guard case let .chord(v2) = measure.voices[2].elements.first, v2.notes.first?.pitch == 48 else {
+            Issue.record("voice 2 should hold the half-note pitch 48 chord, got \(measure.voices)")
             return
         }
     }

@@ -24,7 +24,12 @@
     struct AnnotationTextClampTests {
         private let _installApple = TestSupport.installApple
         private let staffSize: CGFloat = 28 // sp = 7
-        private let availableWidth: CGFloat = 800
+        /// Narrow enough that the two-bar fixture fills over 30% of the
+        /// line and is justified to it, so its system's right edge IS
+        /// the page's. At 800 it would be a short last line left at its
+        /// natural width, which is the case
+        /// `textOnAnUnjustifiedLastLineRunsOnPastItsBarline` asks about.
+        private let availableWidth: CGFloat = 400
 
         // MARK: - Fixtures
 
@@ -81,11 +86,11 @@
         }
 
         @available(macOS 15.0, iOS 16.0, *)
-        private func layout(_ score: Score) -> LayoutDocument {
+        private func layout(_ score: Score, availableWidth: CGFloat? = nil) -> LayoutDocument {
             LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(staffSize: staffSize),
-                availableWidth: availableWidth,
+                availableWidth: availableWidth ?? self.availableWidth,
             )
         }
 
@@ -133,6 +138,10 @@
             ))
             let placed = try #require(staffTextBox(in: doc))
             #expect(
+                placed.systemRightX > availableWidth * 0.9,
+                "the fixture must be justified, so its last barline is the page's edge",
+            )
+            #expect(
                 placed.box.maxX <= placed.systemRightX + 0.01,
                 "text \(placed.box.maxX) vs system \(placed.systemRightX)",
             )
@@ -164,6 +173,50 @@
             ))))
             #expect(abs(twoLine.box.minX - widestLine.box.minX) < 0.01)
             #expect(abs(twoLine.box.minX - concatenated.box.minX) > 1)
+        }
+
+        /// A short last line keeps its natural width (`shouldJustify`),
+        /// so its last barline stops well short of the page. The clamp's
+        /// edge there is the page, not that barline: a mark on the last
+        /// beat stays on its tick column and runs on into the empty room,
+        /// as it does in MuseScore, and the document stays as wide as the
+        /// line was wrapped to, so that room is inside it.
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test func textOnAnUnjustifiedLastLineRunsOnPastItsBarline() throws {
+            let lastBeat = MeasurePosition(numerator: 3, denominator: 4)
+            let score = Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "voice"),
+                    staves: [Staff(measures: [fourQuarterMeasure(withHeader: true)])],
+                )],
+                systemMeasures: [SystemMeasure(elements: [PositionedSystemElement(
+                    position: lastBeat,
+                    element: .staffText(StaffText(text: "crescendo poco a poco")),
+                )])],
+            )
+            let pageWidth: CGFloat = 800
+            let doc = layout(score, availableWidth: pageWidth)
+            let placed = try #require(staffTextBox(in: doc))
+            #expect(
+                placed.systemRightX < pageWidth * 0.3,
+                "the fixture's one bar must be a short, unjustified line",
+            )
+            #expect(
+                placed.box.maxX > placed.systemRightX + 1,
+                "text \(placed.box.maxX) was pulled inside barline \(placed.systemRightX)",
+            )
+            #expect(placed.box.maxX <= pageWidth + 0.01)
+            let measure = try #require(doc.systems.first?.measures.first)
+            let column = try #require(measure.tickColumns[3 * 480])
+            let origins = measure.elements.compactMap { element -> CGPoint? in
+                guard case let .staffText(_, origin, _, _, _, _, _, _, _) = element else { return nil }
+                return origin
+            }
+            #expect(origins.count == 1)
+            #expect(abs((origins.first?.x ?? -1) - column) < 0.01)
+            #expect(doc.size.width >= pageWidth)
         }
 
         /// An annotation that already fits is left exactly where

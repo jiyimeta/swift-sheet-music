@@ -32,7 +32,14 @@ public enum MidiWriter {
 
         for timed in track.events {
             let delta = timed.tick - lastTick
-            precondition(delta >= 0, "Track events must be sorted by tick")
+            // An SMF delta cannot be negative. Unsorted input is a bug in whoever built the track, but it used to
+            // be a `precondition` here, and the metronome track that hit it took the whole app down on Play.
+            guard delta >= 0 else {
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "midi.track.eventsOutOfOrder",
+                    message: "track event at tick \(timed.tick) follows one at tick \(lastTick)",
+                ))
+            }
             encoder.append(VariableLengthQuantity.encode(delta))
             try encodeEvent(timed.event, into: &encoder)
             if case .endOfTrack = timed.event { sawEndOfTrack = true }

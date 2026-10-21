@@ -616,9 +616,11 @@ extension LayoutEngine {
                     }
                 case let .chord(r) where r.notes.isEmpty:
                     inHeader = false
-                    let (restBase, _) = DurationInterpretation.split(
-                        r.duration,
-                    )
+                    // A full-measure rest takes the breve rest in a bar of two whole notes or more
+                    // (`measureRestBase(in:)`); the renderers learn that from `LayoutMeasure.measureRestsAreBreves`.
+                    let (restBase, _) = r.duration == .measure
+                        ? (Self.measureRestBase(in: measureDuration), 0)
+                        : DurationInterpretation.split(r.duration)
                     // Rests sit on the staff's NATURAL line
                     // (`restNaturalY`): the middle line of a five-line
                     // staff, the single line of a one-line one. In
@@ -644,6 +646,11 @@ extension LayoutEngine {
                         restY = restNaturalY
                             + CGFloat(move) * metrics.sp
                             + restVoiceOffset
+                    case .breve:
+                        // MuseScore moves a breve rest one line down on a one-line staff only
+                        // (`RestLayout::computeWholeOrBreveRestOffset`).
+                        let move: CGFloat = lineGeometry.lineCount == 1 ? 1 : 0
+                        restY = restNaturalY + move * metrics.sp + restVoiceOffset
                     default:
                         restY = restNaturalY + restVoiceOffset
                     }
@@ -696,11 +703,13 @@ extension LayoutEngine {
                     let staffTopLocal = metrics.sp * 2
                     let staffBottomLocal = metrics.sp * 2
                         + metrics.staffHeight
-                    let isWholeOrHalf = restBase == .whole
+                    // The breve rest has its leger-line variant too (`Rest::getSymbol`).
+                    let hasLegerVariant = restBase == .breve
+                        || restBase == .whole
                         || restBase == .half
                     let isOutsideStaff = restY < staffTopLocal
                         || restY > staffBottomLocal
-                    let needsLeger = isWholeOrHalf && isOutsideStaff
+                    let needsLeger = hasLegerVariant && isOutsideStaff
                     let restElement = LayoutElement.rest(
                         duration: r.duration,
                         origin: CGPoint(x: restX, y: restY),
@@ -958,7 +967,7 @@ extension LayoutEngine {
                         for: chord.chordLines,
                         chordNotes: chordNotes,
                         chordX: chordX,
-                        dots: DurationInterpretation.split(chord.duration).dots,
+                        dots: DurationInterpretation.splitNote(chord.duration).dots,
                         stem: stem,
                         staffMidY: staffMidY,
                         // The chord's own magnification — C++:
@@ -1127,9 +1136,9 @@ extension LayoutEngine {
                         {
                             let prevRight = prev.centerX
                                 + prev.textWidth / 2
-                                + metrics.sp * 0.3
+                                + metrics.sp * lyricsDashPadSp
                             let currLeft = origin.x - textWidth / 2
-                                - metrics.sp * 0.3
+                                - metrics.sp * lyricsDashPadSp
                             emitLyricHyphens(
                                 fromX: prevRight,
                                 toX: currLeft,

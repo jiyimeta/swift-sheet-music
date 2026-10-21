@@ -278,11 +278,11 @@ extension LayoutEngine {
     /// Where a dash trail leaving a syllable starts: its right ink edge plus the same 0.3 sp pad
     /// `placeMeasureElements` uses, so a cross-measure hyphen is spaced like a within-measure one.
     private static func rightEdge(of syllable: HyphenSyllable, sp: CGFloat) -> CGFloat {
-        syllable.centerX + syllable.width / 2 + sp * 0.3
+        syllable.centerX + syllable.width / 2 + sp * lyricsDashPadSp
     }
 
     private static func leftEdge(of syllable: HyphenSyllable, sp: CGFloat) -> CGFloat {
-        syllable.centerX - syllable.width / 2 - sp * 0.3
+        syllable.centerX - syllable.width / 2 - sp * lyricsDashPadSp
     }
 
     /// Where a dash arriving from the previous system starts, in system coordinates.
@@ -323,7 +323,7 @@ extension LayoutEngine {
         fromX: CGFloat, toX: CGFloat, y: CGFloat, placement: TextPlacementMetadata, metrics: StaffMetrics,
         into dashes: inout [LayoutElement],
     ) {
-        let minLength = metrics.sp * 0.4
+        let minLength = metrics.sp * lyricsDashMinLengthSp
         let start = min(fromX, toX - minLength)
         guard toX > start else { return }
         var emitted: [LayoutElement] = []

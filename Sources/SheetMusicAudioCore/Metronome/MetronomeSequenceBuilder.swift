@@ -16,21 +16,26 @@ import SheetMusicMIDI
 /// (`src/engraving/playback/playbackeventsrenderer.cpp`).
 public enum MetronomeSequenceBuilder {
     /// A one-track click patch: each beat emits a NoteOn / NoteOff pair on MIDI channel 9 (the GM percussion
-    /// convention). The note-off lands a half-beat later so back-to-back ticks at fast tempi don't choke each
-    /// other on samplers that respect note-off.
+    /// convention). The note-off lands a sixteenth later so back-to-back ticks at fast tempi don't choke each
+    /// other on samplers that respect note-off — or at the next click, when that comes sooner.
     public static func clickTrack(beats: [MetronomeBeat], division: Int) -> MidiTrack {
         var events: [TimedMidiEvent] = []
         events.reserveCapacity(beats.count * 2 + 1)
-        let halfBeat = max(1, division / 4)
-        for beat in beats {
+        let release = max(1, division / 4)
+        let beats = beats.sorted { $0.tick < $1.tick }
+        for (index, beat) in beats.enumerated() {
             let pitch = beat.isDownbeat ? 76 : 77
             let velocity = beat.isDownbeat ? 100 : 80
+            // A beat closer than a sixteenth to the next one — a 32nd-note meter, a pickup shorter than a
+            // sixteenth, a measure that ends just past a beat — must not hold its click past that next click:
+            // the note-off would land after the next note-on, and an SMF track cannot go back in time.
+            let nextTick = index + 1 < beats.count ? beats[index + 1].tick : Int.max
             events.append(TimedMidiEvent(
                 tick: beat.tick,
                 event: .noteOn(channel: 9, pitch: pitch, velocity: velocity),
             ))
             events.append(TimedMidiEvent(
-                tick: beat.tick + halfBeat,
+                tick: min(beat.tick + release, nextTick),
                 event: .noteOff(channel: 9, pitch: pitch, velocity: 0),
             ))
         }

@@ -249,17 +249,21 @@ import Testing
             }
         }
 
-        /// A stretch at or above 1 still widens the strip exactly as before — the floor only ever holds a
-        /// measure up, it does not change a measure no accidental is squeezed in.
-        @Test("a horizontal strip without accidentals is spaced as before")
-        func horizontalStripWithoutAccidentals() {
+        /// A stretch at or above 1 widens a strip with no accidental squeezed in by its gaps alone: the header and
+        /// the room before the first note stay as they are, as MuseScore stretches a line's note segments and not its
+        /// header. The strip used to scale each measure's whole width, header included.
+        @Test("a horizontal strip without accidentals stretches its gaps, not its header")
+        func horizontalStripWithoutAccidentals() throws {
             let plain = Self.part("P0", [[Self.c4, Self.d4, Self.e4, Self.f4].map { Self.chord(.quarter, [$0]) }])
             let score = Score(division: 480, parts: [plain])
             let tight = Self.layout(score, stretch: 1, wrap: false, width: 240)
             let loose = Self.layout(score, stretch: 1.5, wrap: false, width: 240)
-            let tightWidth = tight.systems[0].measures[0].width
-            let looseWidth = loose.systems[0].measures[0].width
-            #expect(abs(looseWidth - tightWidth * 1.5) < 0.001)
+            let tightMeasure = tight.systems[0].measures[0]
+            let looseMeasure = loose.systems[0].measures[0]
+            let tightFirst = try #require(tightMeasure.tickColumns.values.min())
+            let looseFirst = try #require(looseMeasure.tickColumns.values.min())
+            #expect(abs(looseFirst - tightFirst) < 0.001, "the first note moved: \(tightFirst) → \(looseFirst)")
+            #expect(looseMeasure.width > tightMeasure.width + loose.metrics.sp)
         }
     }
 

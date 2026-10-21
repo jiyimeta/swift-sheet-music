@@ -41,11 +41,13 @@
             )
         }
 
+        /// Stretched past natural width so a beat is wider than the box's least width (a pad each side), which
+        /// would otherwise decide the right edge in place of the onset these tests pin.
         @available(macOS 15.0, *)
         private static func document() -> LayoutDocument {
             LayoutEngine.layout(
                 score: score(),
-                options: .init(wrapToViewWidth: false),
+                options: .init(wrapToViewWidth: false, spacing: EngravingSpacing(systemStretch: 3)),
                 availableWidth: 900,
             )
         }

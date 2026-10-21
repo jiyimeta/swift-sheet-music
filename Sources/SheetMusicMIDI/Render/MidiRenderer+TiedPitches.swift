@@ -42,6 +42,10 @@ extension MidiRenderer {
     }
 
     private static func resolveTiedPitches(in staff: inout Staff) {
+        // A tie into another voice (`CrossVoiceTies`) lands on a note of its own pitch there, so it has no pitch to
+        // carry — and left in its voice's queue it would hand its head to whichever tie into that voice came next.
+        let links = CrossVoiceTies.links(in: staff.measures)
+        let crossVoice = (forward: Set(links.map(\.from)), back: Set(links.map(\.to)))
         let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
         for voiceIndex in 0 ..< voiceCount {
             // Sounding head pitches flowing out of the previous note-chord,
@@ -64,6 +68,7 @@ extension MidiRenderer {
                         measureIndex: measureIndex,
                         staff: &staff,
                         incoming: incoming,
+                        crossVoice: crossVoice,
                     )
                 }
             }
@@ -78,6 +83,7 @@ extension MidiRenderer {
         measureIndex: Int,
         staff: inout Staff,
         incoming: [Int],
+        crossVoice: (forward: Set<CrossVoiceTies.End>, back: Set<CrossVoiceTies.End>),
     ) -> [Int] {
         let element = staff.measures[measureIndex]
             .voices[voiceIndex].elements[elementIndex]
@@ -93,8 +99,11 @@ extension MidiRenderer {
         var outgoing: [Int] = []
         var newChord = chord
         for noteIndex in newChord.notes.indices {
+            let end = CrossVoiceTies.End(
+                measure: measureIndex, voice: voiceIndex, element: elementIndex, note: noteIndex,
+            )
             var head = newChord.notes[noteIndex].pitch
-            if newChord.notes[noteIndex].tieBack != nil, !queue.isEmpty {
+            if newChord.notes[noteIndex].tieBack != nil, !crossVoice.back.contains(end), !queue.isEmpty {
                 head = queue.removeFirst()
                 if head != newChord.notes[noteIndex].pitch {
                     // `updateNote` no-ops on a pitch collision; the chain
@@ -103,7 +112,7 @@ extension MidiRenderer {
                     newChord.notes.updateNote(at: noteIndex) { $0.pitch = head }
                 }
             }
-            if newChord.notes[noteIndex].tieForward != nil {
+            if newChord.notes[noteIndex].tieForward != nil, !crossVoice.forward.contains(end) {
                 outgoing.append(head)
             }
         }

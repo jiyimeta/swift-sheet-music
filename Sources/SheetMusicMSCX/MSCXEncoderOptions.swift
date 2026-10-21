@@ -44,6 +44,12 @@ public struct MSCXEncoderOptions: Sendable {
     /// external caller set would be discarded before it reached an element encoder.
     package var writtenFifthsOffset = 0
 
+    /// The score's `<Division>` — ticks per quarter note — for the element encoders that turn a tick count of the
+    /// model into the fraction of a whole note MuseScore 4 writes (a lyric's melisma, `<ticks_f>`). MuseScore's own
+    /// 480 outside a Score encode. `package` for the same reason as `writtenFifthsOffset`: the Score encoder
+    /// overwrites it with the score's own.
+    package var division = 480
+
     public init(targetVersion: MSCXVersion = .v4) {
         self.targetVersion = targetVersion == .v2 ? .v3 : targetVersion
     }

@@ -45,6 +45,7 @@ extension Measure {
         voice0SystemElements: [(eid: EID, element: PositionedSystemElement)] = [],
         effectiveDuration: Fraction = Fraction(numerator: 4, denominator: 4),
         nextMeasureFirstChordNotes: [ChordNotes?] = [],
+        crossVoiceTieEndpoints: MSCXCrossVoiceTieEndpoints.MeasureEnds = [:],
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
         // `<eid>` is the first child MuseScore itself writes — only
@@ -81,6 +82,7 @@ extension Measure {
                 nextMeasureFirstChordNotes: index < nextMeasureFirstChordNotes.count
                     ? nextMeasureFirstChordNotes[index]
                     : nil,
+                crossVoiceTieEndpoints: crossVoiceTieEndpoints[index] ?? [:],
             )
             children.append(result.node)
             carryOut[index] = result.carryOut

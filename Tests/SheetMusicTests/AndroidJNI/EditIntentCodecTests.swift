@@ -16,6 +16,8 @@ struct EditIntentCodecTests {
         .inputNote(at: rest, pitch: 62, tpc: 16, duration: .fraction(Fraction(numerator: 3, denominator: 8))),
         .setRestDuration(at: slot, duration: .measure),
         .setChordDuration(at: slot, duration: .whole),
+        .setChordDuration(at: slot, duration: .breve),
+        .setRestDuration(at: slot, duration: .long),
         .delete(at: slot),
         .composite([.delete(at: slot), .setRestDuration(at: slot, duration: .quarter)]),
     ]
@@ -39,6 +41,17 @@ struct EditIntentCodecTests {
         _ = direct.apply(intent)
         _ = try viaWire.apply(EditIntentCodec.decode(EditIntentCodec.encode(intent)))
         #expect(direct.score.stableFingerprint == viaWire.score.stableFingerprint)
+    }
+
+    /// The kinds are append-only and shared with `Score.stableFingerprint`'s duration walk: a breve and a long took
+    /// the next two numbers, after `.fraction`'s 11, so no kind a shipped reader knows changed meaning.
+    @Test("a breve and a long take the kinds after every shipped one")
+    func breveAndLongAreAppendedKinds() {
+        #expect(NoteDurationWire(from: .fraction(Fraction(numerator: 3, denominator: 8))).kind == 11)
+        #expect(NoteDurationWire(from: .breve).kind == 12)
+        #expect(NoteDurationWire(from: .long).kind == 13)
+        #expect(NoteDurationWire(from: .fiveHundredTwelfth).kind == 14)
+        #expect(NoteDurationWire(from: .oneThousandTwentyFourth).kind == 15)
     }
 
     @Test("garbage bytes throw rather than decoding to something plausible")

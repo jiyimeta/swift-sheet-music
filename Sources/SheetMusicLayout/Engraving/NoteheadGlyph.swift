@@ -12,6 +12,8 @@ public enum NoteheadGlyph {
     ) -> UInt32 {
         let kind: NoteHeadKind
         switch duration {
+        // MuseScore heads a long with the breve's head, and gives it a stem (`TDuration::headType` / `hasStem`).
+        case .long, .breve: kind = .doubleWhole
         case .whole: kind = .whole
         case .half: kind = .half
         default: kind = .quarter
@@ -22,6 +24,7 @@ public enum NoteheadGlyph {
         }
         // Fallback: standard notehead family.
         switch kind {
+        case .doubleWhole: return SMuFLCodepoint.noteheadDoubleWhole
         case .whole: return SMuFLCodepoint.noteheadWhole
         case .half: return SMuFLCodepoint.noteheadHalf
         default: return SMuFLCodepoint.noteheadBlack

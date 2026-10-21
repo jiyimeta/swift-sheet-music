@@ -5,6 +5,8 @@ import SheetMusicXMLTools
 extension Score {
     /// Build the `<museScore><Score>…</Score></museScore>` root.
     func encode(options: MSCXEncoderOptions = .init()) throws -> XMLTreeNode {
+        var options = options
+        options.division = division
         var scoreChildren: [XMLTreeNode] = Self.layerHeader(options: options)
         scoreChildren.append(XMLTreeNode(
             name: "Division", text: String(division),

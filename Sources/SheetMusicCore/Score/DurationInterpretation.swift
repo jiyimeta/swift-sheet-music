@@ -20,9 +20,9 @@ public enum DurationInterpretation {
         _ dur: NoteDuration,
     ) -> (base: NoteDuration, dots: Int) {
         switch dur {
-        case .whole, .half, .quarter, .eighth, .sixteenth,
+        case .long, .breve, .whole, .half, .quarter, .eighth, .sixteenth,
              .thirtySecond, .sixtyFourth,
-             .oneTwentyEighth, .twoFiftySixth:
+             .oneTwentyEighth, .twoFiftySixth, .fiveHundredTwelfth, .oneThousandTwentyFourth:
             return (dur, 0)
         case .measure:
             // A `.measure` rest renders as a single whole-rest glyph
@@ -56,21 +56,6 @@ public enum DurationInterpretation {
             {
                 return (.whole, 0)
             }
-            // Common tuplet ratios (actual:normal). A triplet has 3
-            // notes in the time of 2, so each note is scaled by 2/3 —
-            // we reverse that by multiplying by 3/2. More exotic
-            // ratios are tried in decreasing order of commonness.
-            let tupletScales: [(num: Int, den: Int)] = [
-                (3, 2), // triplet — 3 in 2
-                (5, 4), // quintuplet — 5 in 4
-                (6, 4), // sextuplet — 6 in 4
-                (7, 4), // septuplet — 7 in 4
-                (7, 8), // septuplet — 7 in 8
-                (9, 8), // nonuplet
-                (5, 2), // 5 in 2
-                (11, 8), // 11 in 8
-                (13, 8), // 13 in 8
-            ]
             for scale in tupletScales {
                 let num = f.numerator * scale.num
                 let den = f.denominator * scale.den
@@ -82,6 +67,40 @@ public enum DurationInterpretation {
             }
             return (dur, 0)
         }
+    }
+
+    /// Common tuplet ratios (actual:normal). A triplet has 3 notes in the time of 2, so each note is scaled by 2/3 —
+    /// `split` reverses that by multiplying by 3/2. More exotic ratios are tried in decreasing order of commonness.
+    private static let tupletScales: [(num: Int, den: Int)] = [
+        (3, 2), // triplet — 3 in 2
+        (5, 4), // quintuplet — 5 in 4
+        (6, 4), // sextuplet — 6 in 4
+        (7, 4), // septuplet — 7 in 4
+        (7, 8), // septuplet — 7 in 8
+        (9, 8), // nonuplet
+        (5, 2), // 5 in 2
+        (11, 8), // 11 in 8
+        (13, 8), // 13 in 8
+    ]
+
+    /// `split` for a CHORD: a long or a breve dotted (`breve.dotted(1)` is `3/1`) or in a tuplet (a triplet breve is
+    /// `4/3`) too, which `split` reads as a plain whole or not at all. A rest of the same length stays `split`'s: a
+    /// multi-measure rest's body spans whole bars (`12/4`), and is drawn as one whole rest, never as a dotted breve
+    /// rest.
+    public static func splitNote(
+        _ dur: NoteDuration,
+    ) -> (base: NoteDuration, dots: Int) {
+        guard case let .fraction(f) = dur else { return split(dur) }
+        let candidates = [(num: 1, den: 1)] + tupletScales
+        for scale in candidates {
+            let unscaled = Fraction(numerator: f.numerator * scale.num, denominator: f.denominator * scale.den)
+            for base in [NoteDuration.long, .breve] {
+                for dots in 0 ... 3 where base.dotted(dots).asFraction == unscaled {
+                    return (base, dots)
+                }
+            }
+        }
+        return split(dur)
     }
 
     /// Attempt to read `numerator/denominator` as a dotted base
@@ -116,6 +135,8 @@ public enum DurationInterpretation {
         case 64: base = .sixtyFourth
         case 128: base = .oneTwentyEighth
         case 256: base = .twoFiftySixth
+        case 512: base = .fiveHundredTwelfth
+        case 1024: base = .oneThousandTwentyFourth
         default: return nil
         }
         return (base, dots)

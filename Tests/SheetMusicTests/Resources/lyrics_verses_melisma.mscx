@@ -64,7 +64,7 @@
           </Chord>
           <Chord>
             <durationType>quarter</durationType>
-            <Lyrics><syllabic>end</syllabic><ticks>480</ticks><text>dy</text></Lyrics>
+            <Lyrics><syllabic>end</syllabic><ticks_f>1/4</ticks_f><text>dy</text></Lyrics>
             <Note><pitch>67</pitch><tpc>15</tpc></Note>
           </Chord>
           <Chord>
@@ -77,7 +77,7 @@
         <voice>
           <Chord>
             <durationType>half</durationType>
-            <Lyrics><ticks>1440</ticks><text>Ah</text></Lyrics>
+            <Lyrics><ticks_f>3/4</ticks_f><text>Ah</text></Lyrics>
             <Note><pitch>64</pitch><tpc>18</tpc></Note>
           </Chord>
           <Chord>
@@ -107,8 +107,8 @@
           </Chord>
           <Chord>
             <durationType>half</durationType>
-            <Lyrics><syllabic>end</syllabic><ticks>960</ticks><text>a</text></Lyrics>
-            <Lyrics><no>1</no><ticks>960</ticks><text>loud</text></Lyrics>
+            <Lyrics><syllabic>end</syllabic><ticks_f>1/2</ticks_f><text>a</text></Lyrics>
+            <Lyrics><no>1</no><ticks_f>1/2</ticks_f><text>loud</text></Lyrics>
             <Note><pitch>67</pitch><tpc>15</tpc></Note>
           </Chord>
         </voice>

@@ -55,10 +55,15 @@ public struct EngravingSpacing: Sendable, Equatable {
     /// MuseScore's `Sid::measureSpacing`; increasing it widens rhythm-driven
     /// measure spacing before system stretch.
     public var spacePerQuarter: CGFloat = 1.6
-    /// Natural system stretch as a unitless ratio. There is no direct
+    /// Natural system stretch as a unitless ratio: how far a measure's gaps
+    /// stretch past their minimum at its natural width. There is no direct
     /// MuseScore `Sid::` counterpart; it controls how readily wrapped systems
-    /// close and the breathing room applied to horizontal no-wrap layouts.
-    public var systemStretch: CGFloat = 1.5
+    /// close, the breathing room applied to horizontal no-wrap layouts, and
+    /// the width of a short last line left unjustified. 1.25 reproduces
+    /// MuseScore 4's line breaks on a corpus of real scores best (2026-10-18;
+    /// 1.5, the value before the header stopped stretching with the gaps,
+    /// set about a fifth more lines than MuseScore).
+    public var systemStretch: CGFloat = 1.25
     /// Outer document margins, in sp. See `EngravingMargins` for the related
     /// MuseScore `Sid::` values and their visible effects.
     public var margins: EngravingMargins = .init()
@@ -88,7 +93,7 @@ public struct EngravingSpacing: Sendable, Equatable {
     public init(
         minNoteDistance: CGFloat = 0,
         spacePerQuarter: CGFloat = 1.6,
-        systemStretch: CGFloat = 1.5,
+        systemStretch: CGFloat = 1.25,
         margins: EngravingMargins = .init(),
         firstSystemIndent: CGFloat = 4,
         continuationSystemIndent: CGFloat = 2,

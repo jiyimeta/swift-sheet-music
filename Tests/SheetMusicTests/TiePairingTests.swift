@@ -62,16 +62,16 @@
         @Test("Tie matched across a system break (vertical wrap)")
         func tieAcrossSystemBreak() {
             guard #available(macOS 15.0, *) else { return }
-            // Two tied notes in adjacent measures. Force a wrap by making
-            // the available width too small to hold both measures so the
-            // second one is pushed to a new system. An earlier version
+            // Two tied notes in adjacent measures, a line break between
+            // them so the second one is pushed to a new system (two whole
+            // notes fit even a narrow line). An earlier version
             // discriminated ties by absolute staff-midline Y, which
             // differs across systems and silently dropped these pairs.
             let a = Note(pitch: 60, tpc: 14, tieForward: 1)
             let b = Note(pitch: 60, tpc: 14, tieBack: 1)
             let m1 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [a])),
-            ])])
+            ])], lineBreak: true)
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [b])),
             ])])
@@ -107,7 +107,7 @@
             let b = Note(pitch: 60, tpc: 14, tieBack: 1)
             let m1 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [a])),
-            ])])
+            ])], lineBreak: true)
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [b])),
             ])])
@@ -145,6 +145,72 @@
             if let arc = arcs1.first {
                 #expect(arc.from.x > 0)
             }
+        }
+
+        private static func pairs(for measures: [Measure]) -> [LayoutEngine.TiePair] {
+            let score = ScoreEditor(score: Score(
+                division: 480,
+                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: measures)])],
+            )).score
+            let doc = LayoutEngine.layout(score: score, options: .init(), availableWidth: 1200)
+            return LayoutEngine.resolveTies(for: doc, score: score)
+        }
+
+        private static func note(_ measure: Int, _ voice: Int, _ element: Int) -> NoteID {
+            NoteID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: measure, voiceIndex: voice,
+                elementIndex: element, noteIndexInChord: 0,
+            )
+        }
+
+        @Test("A tie MuseScore made into another voice is drawn between its two notes")
+        func tieIntoAnotherVoiceIsDrawn() {
+            guard #available(macOS 15.0, *) else { return }
+            // MuseScore's split184061: a whole C5 in voice 2, carried on by voice 1 in the next bar.
+            let pairs = Self.pairs(for: [
+                Measure(voices: [
+                    Voice(elements: [.chord(Chord(duration: .whole, notes: [Note(pitch: 84, tpc: 14)]))]),
+                    Voice(elements: [
+                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14, tieForward: 1)])),
+                    ]),
+                ]),
+                Measure(voices: [
+                    Voice(elements: [.chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14, tieBack: 1)]))]),
+                ]),
+            ])
+            #expect(pairs.map(\.identity) == [.tie(start: Self.note(0, 1, 0), end: Self.note(1, 0, 0))])
+        }
+
+        @Test("A tie back into an earlier-listed voice inside one bar is drawn")
+        func tieIntoAnEarlierVoiceInsideOneBarIsDrawn() {
+            guard #available(macOS 15.0, *) else { return }
+            // Voice 1's element list comes first, but its C4 is where voice 2's C4 ends: read one voice after the
+            // other, the tie's end came before its start.
+            let pairs = Self.pairs(for: [Measure(voices: [
+                Voice(elements: [
+                    .chord(Chord(duration: .half, notes: [])),
+                    .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14, tieBack: 1)])),
+                ]),
+                Voice(elements: [
+                    .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14, tieForward: 1)])),
+                    .chord(Chord(duration: .half, notes: [])),
+                ]),
+            ])])
+            #expect(pairs.map(\.identity) == [.tie(start: Self.note(0, 1, 0), end: Self.note(0, 0, 1))])
+        }
+
+        @Test("Two voices holding the same pitch tied at once keep their own ties")
+        func unisonTiesInTwoVoicesStayInTheirVoices() {
+            guard #available(macOS 15.0, *) else { return }
+            let voice = Voice(elements: [
+                .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14, tieForward: 1)])),
+                .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14, tieBack: 1)])),
+            ])
+            let pairs = Self.pairs(for: [Measure(voices: [voice, voice])])
+            #expect(Set(pairs.compactMap(\.identity)) == [
+                .tie(start: Self.note(0, 0, 0), end: Self.note(0, 0, 1)),
+                .tie(start: Self.note(0, 1, 0), end: Self.note(0, 1, 1)),
+            ])
         }
 
         @Test("A same-system tie preserves exact source and destination note IDs")

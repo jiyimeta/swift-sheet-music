@@ -65,6 +65,28 @@
             #expect(noteOffs.first?.pitch == 76)
         }
 
+        @Test func aClickIsReleasedNoLaterThanTheNextClick() {
+            // Beats a 32nd apart (a x/32 meter, or a pickup that short) are closer than the sixteenth a click is
+            // held for. Releasing each a sixteenth later put the note-off after the next note-on, and
+            // `MidiWriter` trapped on the backwards delta — Crashlytics 9107751a / ce40fa5e, on every Play.
+            let track = MetronomeSequenceBuilder.clickTrack(
+                beats: [
+                    MetronomeBeat(tick: 0, isDownbeat: true),
+                    MetronomeBeat(tick: 60, isDownbeat: false),
+                    MetronomeBeat(tick: 120, isDownbeat: false),
+                ],
+                division: Self.division,
+            )
+
+            let ticks = track.events.map(\.tick)
+            #expect(ticks == ticks.sorted())
+            let noteOffTicks = track.events.compactMap { event -> Int? in
+                guard case .noteOff = event.event else { return nil }
+                return event.tick
+            }
+            #expect(noteOffTicks == [60, 120, 120 + Self.division / 4])
+        }
+
         @Test func emptyBeatsStillProduceAClosedTrack() {
             let track = MetronomeSequenceBuilder.clickTrack(beats: [], division: Self.division)
             #expect(track.events.count == 1)
@@ -95,6 +117,41 @@
             // reading the same seconds clock while both are advanced by identical frame counts.
             #expect(!tempoTicks(sequence.tracks).isEmpty)
             #expect(tempoTicks(sequence.tracks) == tempoTicks(rendered.tracks).sorted())
+        }
+
+        @Test func aPickupShorterThanASixteenthStillWritesAPlayableSMF() throws {
+            // The pickup's one click at tick 0 and the next bar's downbeat at tick 60 are a 32nd apart. This is
+            // the shape the shipped crash took: the SwiftySynth backend writes this sequence on every Play,
+            // whether the metronome is on or not.
+            let note = Note(pitch: 60, tpc: 14)
+            let pickup = Measure(
+                voices: [Voice(elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .chord(Chord(duration: .thirtySecond, notes: [note])),
+                ])],
+                actualLength: Fraction(numerator: 1, denominator: 32),
+                irregular: true,
+            )
+            let bar = Measure(voices: [Voice(elements: [.chord(Chord(duration: .whole, notes: [note]))])])
+            let part = Part(
+                id: "P0",
+                instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
+                staves: [Staff(measures: [pickup, bar])],
+            )
+            let score = Score(division: Self.division, parts: [part])
+            let sequence = try MetronomeSequenceBuilder.metronomeOnlySequence(
+                rendered: MidiRenderer.render(score: score),
+                metronomeBeats: PlaybackTimeline.unrolledMetronomeBeats(score: score),
+            )
+
+            let parsed = try MidiReader.read(MidiWriter.write(sequence))
+            let clickTicks = parsed.tracks.flatMap { track in
+                track.events.compactMap { event -> Int? in
+                    guard case let .noteOn(channel, _, _) = event.event, channel == 9 else { return nil }
+                    return event.tick
+                }
+            }
+            #expect(clickTicks == [0, 60, 540, 1020, 1500])
         }
 
         @Test func metronomeOnlySequenceCarriesNoScoreNotes() throws {

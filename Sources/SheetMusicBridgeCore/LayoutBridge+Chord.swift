@@ -48,7 +48,7 @@ extension LayoutBridge {
         let glyphSize = ctx.glyphSize * mag
         // Split base duration + dot count for both notehead glyph and
         // augmentation-dot emit.
-        let (baseDur, dotCount) = DurationInterpretation.split(duration)
+        let (baseDur, dotCount) = DurationInterpretation.splitNote(duration)
         // ── Noteheads / accidentals / dots, partitioned by visibility ──
         // Invisible noteheads are dropped when the toggle is off and grayed
         // when on — mirrors Apple's ScoreCanvas per-note dispatch. A chord
@@ -76,8 +76,8 @@ extension LayoutBridge {
             )
             out.append(.setColor(argb: ambientArgb))
         }
-        // Whole notes (and lower-resolution rests) are stemless.
-        if case .whole = baseDur { return }
+        // Whole notes and breves (and lower-resolution rests) are stemless; a long has a stem.
+        if baseDur == .whole || baseDur == .breve { return }
         // ── Stem ─────────────────────────────────────────────────────
         let noteOrigins = notes.map { CGPoint(
             x: CGFloat(mox + Double($0.origin.x)),

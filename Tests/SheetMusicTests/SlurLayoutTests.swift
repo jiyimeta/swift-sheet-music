@@ -190,14 +190,14 @@
         func crossSystemSlurSplits() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let score = Self.twoMeasureScore(
-                slur: Self.slur(measures: 1, fractions: nil),
+                slur: Self.slur(measures: 1, fractions: nil), breaksLine: true,
             )
             let doc = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(wrapToViewWidth: true),
                 availableWidth: 200,
             )
-            // Sanity: the narrow width really did break the system, so the
+            // Sanity: the line break really did break the system, so the
             // two-segment assertions below mean what they say.
             #expect(doc.systems.count == 2)
             guard doc.systems.count == 2 else { return }
@@ -287,13 +287,13 @@
 
         /// Two whole-note measures; the slur runs from the first to the
         /// second.
-        private static func twoMeasureScore(slur: Spanner) -> Score {
+        private static func twoMeasureScore(slur: Spanner, breaksLine: Bool = false) -> Score {
             let first = Measure(voices: [Voice(elements: [
                 .chord(Chord(
                     duration: .whole, notes: [Note(pitch: 79, tpc: 15)],
                     spanners: [slur],
                 )),
-            ])])
+            ])], lineBreak: breaksLine)
             let second = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [Note(pitch: 77, tpc: 13)])),
             ])])

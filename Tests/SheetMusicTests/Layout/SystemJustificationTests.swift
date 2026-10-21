@@ -20,15 +20,21 @@ import Testing
 struct SystemJustificationTests {
     private let _installFontMetrics = TestSupport.installFontMetrics
 
-    /// One bar of quarters per entry of `bars`, `bars[m][i]` the syllable under chord `i` of bar `m` (`nil` = none).
-    private static func score(_ bars: [[String?]]) -> Score {
-        let measures = bars.map { syllables in
-            Measure(voices: [Voice(elements: syllables.enumerated().map { index, syllable in
+    /// One bar of quarters per entry of `bars`, `bars[m][i]` the syllable under chord `i` of bar `m` (`nil` = none);
+    /// a line break after each bar in `lineBreaks`, a section break after each in `sectionBreaks`.
+    private static func score(
+        _ bars: [[String?]], lineBreaks: Set<Int> = [], sectionBreaks: Set<Int> = [],
+    ) -> Score {
+        let measures = bars.enumerated().map { barIndex, syllables in
+            var measure = Measure(voices: [Voice(elements: syllables.enumerated().map { index, syllable in
                 VoiceElement.chord(Chord(
                     duration: .quarter, notes: ChordNotes([Note(pitch: 60 + index, tpc: 14)]),
                     lyrics: syllable.map { [Lyric(text: $0)] } ?? [],
                 ))
             })])
+            measure.lineBreak = lineBreaks.contains(barIndex)
+            measure.sectionBreak = sectionBreaks.contains(barIndex)
+            return measure
         }
         return Score(
             division: 480,
@@ -82,5 +88,77 @@ struct SystemJustificationTests {
         let spread = (others.max() ?? 0) - (others.min() ?? 0)
         #expect(spread < 0.5, "the other quarter gaps \(perMeasure)")
         #expect(held > (others.max() ?? 0) + 1, "the held gap \(held) must stay wider than the rest")
+    }
+
+    /// A collapsed multi-measure rest has no gaps, so it has no spring: `justifiedWidths` scales it as a whole by the
+    /// line's one stretch `k` while every other measure grows by its gaps alone. Pinned on the function with a
+    /// hand-built spring so the two branches can be checked against each other: the `k` the rest reveals must be the
+    /// one the spring measure was widened by.
+    @Test("a measure without a spring scales by the line's stretch as a whole")
+    func springlessMeasureScalesByTheLineStretch() throws {
+        let sp: CGFloat = 7
+        let spring = LayoutEngine.TickAggregate(
+            sortedTicks: [0, 480], gapWeights: [20, 20], gapFloors: [0, 0], totalWeight: 40, measureEnd: 960,
+        )
+        let widths: [CGFloat] = [42, 70]
+        let justified = LayoutEngine.justifiedWidths(
+            widths: widths, springs: [nil, spring], availableWidth: 300, sp: sp,
+        )
+        try #require(justified.count == 2)
+        #expect(abs(justified.reduce(0, +) - 300) < 0.001)
+        let k = justified[0] / widths[0]
+        #expect(k > 1)
+        let content = max(sp * 4, k * spring.totalWeight)
+        let minimum = max(sp * 4, spring.minimumContentWidth)
+        #expect(abs(justified[1] - (widths[1] + max(0, content - minimum - sp))) < 0.01, "\(justified), k \(k)")
+    }
+
+    // MARK: - The last system
+
+    /// Every measure's width, system by system.
+    private static func widthsPerSystem(_ document: LayoutDocument) -> [[CGFloat]] {
+        document.systems.map { $0.measures.map(\.width) }
+    }
+
+    /// A last system that fills less than `lastSystemFillLimit` (0.3) of the line at its natural width is left at
+    /// that width rather than stretched across the page, as MuseScore leaves it (`SystemLayout::shouldBeJustified`).
+    /// Stretching one bar of four quarters over a whole line spread them a quarter of the page apart.
+    @Test("a last system that fills under 30% of the line keeps its natural width")
+    func shortLastSystemKeepsNaturalWidth() throws {
+        let score = Self.score([Self.plain])
+        let wrapped = Self.layout(score)
+        let options = ScoreViewOptions(staffSize: 28, wrapToViewWidth: false)
+        let natural = LayoutEngine.layout(
+            score: score, options: options,
+            availableWidth: LayoutEngine.naturalContentWidth(score: score, options: options),
+        )
+        let wrappedWidths = Self.widthsPerSystem(wrapped)
+        let naturalWidths = Self.widthsPerSystem(natural)
+        try #require(wrappedWidths.map(\.count) == [1])
+        try #require(naturalWidths.map(\.count) == [1])
+        #expect(abs(wrappedWidths[0][0] - naturalWidths[0][0]) < 0.001, "\(wrappedWidths) vs \(naturalWidths)")
+        #expect(wrappedWidths[0][0] < 900 * 0.3, "\(wrappedWidths)")
+    }
+
+    /// The same short system is justified when bars follow it: only the line a piece or section ends on is left
+    /// short.
+    @Test("a short system with bars after it is still justified")
+    func shortSystemWithBarsAfterIsJustified() throws {
+        let score = Self.score([Self.plain, Self.plain], lineBreaks: [0])
+        let widths = Self.widthsPerSystem(Self.layout(score))
+        try #require(widths.map(\.count) == [1, 1])
+        #expect(widths[0][0] > 900 * 0.6, "the first line \(widths)")
+        #expect(widths[1][0] < 900 * 0.3, "the last line \(widths)")
+    }
+
+    /// A section break ends a stretch of music as the score's end does: the short line before it is not stretched.
+    @Test("a short system that ends a section keeps its natural width")
+    func shortSystemEndingASectionKeepsNaturalWidth() throws {
+        let score = Self.score(
+            [Self.plain, Self.plain, Self.plain, Self.plain, Self.plain], lineBreaks: [0], sectionBreaks: [0],
+        )
+        let widths = Self.widthsPerSystem(Self.layout(score))
+        try #require(widths.first?.count == 1)
+        #expect(widths[0][0] < 900 * 0.3, "the section's last line \(widths)")
     }
 }

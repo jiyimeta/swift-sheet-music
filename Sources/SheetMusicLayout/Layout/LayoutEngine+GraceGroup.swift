@@ -189,12 +189,12 @@ extension LayoutEngine {
     /// front of them. A head pushed across the stem by a second is assumed to go left, as `columnInk` assumes.
     private static func mainChordLeft(of chord: Chord, metrics: StaffMetrics) -> (heads: CGFloat, ink: CGFloat) {
         let sp = metrics.sp
-        let (base, _) = DurationInterpretation.split(chord.duration)
+        let (base, _) = DurationInterpretation.splitNote(chord.duration)
         let displaced = holdsSecond(Array(chord.notes)) ? sp * secondDisplacementSp : 0
         let attach = StemGeometry.attachDx(sp: sp)
         // A whole note's head is wider than the black one `attachDx` halves (Bravura `noteheadWhole` 1.688 sp); its
         // accidental is still placed from `attachDx`, as every renderer places it (`AccidentalPlacement.leftEdgeX`).
-        let heads = (base == .whole ? sp * 1.688 / 2 : attach) + displaced
+        let heads = (wideHeadHalfWidth(base, metrics: metrics) ?? attach) + displaced
         let accidentals = accidentalReach(of: Array(chord.notes), headEdge: attach + displaced, metrics: metrics)
         return (heads, max(heads, accidentals))
     }

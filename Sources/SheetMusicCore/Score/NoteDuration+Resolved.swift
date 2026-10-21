@@ -24,8 +24,8 @@ extension NoteDuration {
     /// `.fraction` otherwise — a dotted value, a tuplet-scaled one, a 5/4 bar.
     public static func canonical(_ length: Fraction) -> NoteDuration {
         let named: [NoteDuration] = [
-            .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
-            .oneTwentyEighth, .twoFiftySixth,
+            .long, .breve, .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
+            .oneTwentyEighth, .twoFiftySixth, .fiveHundredTwelfth, .oneThousandTwentyFourth,
         ]
         return named.first { $0.asFraction == length } ?? .fraction(length)
     }

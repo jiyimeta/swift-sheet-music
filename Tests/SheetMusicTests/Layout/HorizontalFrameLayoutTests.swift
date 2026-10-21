@@ -75,10 +75,11 @@ import Testing
     /// No blocks at all, then `inertBlocks`: every score that leaves no room between two measures.
     private static let roomlessBlocks: [[PositionedScoreBlock]] = [[]] + inertBlocks
 
-    /// `score` laid out at `width` — wrapped unless `options` says otherwise, and wide enough that four bars are one
-    /// system unless a bar breaks it.
+    /// `score` laid out at `width` — wrapped unless `options` says otherwise, wide enough that four bars are one
+    /// system unless a bar breaks it, and narrow enough that they fill the line past `lastSystemFillLimit`, so the
+    /// line is justified rather than left at its natural width (`LayoutEngine.shouldJustify`).
     private func laidOut(
-        _ score: Score, width: CGFloat = 2000, cache: LayoutCache? = nil,
+        _ score: Score, width: CGFloat = 1000, cache: LayoutCache? = nil,
         options: ScoreViewOptions = ScoreViewOptions(),
     ) -> LayoutDocument {
         LayoutEngine.layout(score: score, options: options, availableWidth: width, cache: cache)
@@ -156,7 +157,7 @@ import Testing
     func gapIsNotStretched() throws {
         let blocks = [Self.hbox(6, before: 2)]
         let narrow = laidOut(Self.score(blocks: blocks))
-        let wide = laidOut(Self.score(blocks: blocks), width: 2200)
+        let wide = laidOut(Self.score(blocks: blocks), width: 1200)
         try #require(narrow.systems.count == 1)
         try #require(wide.systems.count == 1)
         let sp = wide.metrics.sp
@@ -263,9 +264,9 @@ import Testing
 
     /// At the narrowest width that still holds the four bars on one line, a 6 sp box between them no longer fits. At
     /// the default stretch the natural-stretch test closes the line first. At a stretch of 1 that test and the hard
-    /// ceiling both allow every bar a 2 sp box leaves room for, so the balanced packer decides: it counts the room too
-    /// and splits 2 + 2, where one blind to it would allow all four and leave the greedy packer to make it 3 + 1. That
-    /// needs the box wider than the bisection's 1 pt slack and narrower than bar 3, which the `#require` checks.
+    /// ceiling are one test, and a 2 sp box is enough to push bar 3 to the next line: the line is filled greedily, as
+    /// MuseScore fills it, so the first takes the three bars that still fit. That needs the box wider than the
+    /// bisection's 1 pt slack and narrower than bar 3, which the `#require` checks.
     @Test("an HBox's room counts when the line is filled, so it can push a measure onto the next system")
     func gapCanMoveTheWrap() throws {
         let width = try narrowestOneSystemWidth(Self.score())
@@ -277,8 +278,8 @@ import Testing
         let bare = laidOut(Self.score(), width: tightWidth, options: tight)
         let lastBar = try measure(3, in: bare)
         try #require(lastBar.width > 2 * bare.metrics.sp + 1)
-        let balanced = laidOut(Self.score(blocks: [Self.hbox(2, before: 2)]), width: tightWidth, options: tight)
-        #expect(balanced.systems.map { $0.measures.map(\.measureIndex) } == [[0, 1], [2, 3]])
+        let pushed = laidOut(Self.score(blocks: [Self.hbox(2, before: 2)]), width: tightWidth, options: tight)
+        #expect(pushed.systems.map { $0.measures.map(\.measureIndex) } == [[0, 1, 2], [3]])
     }
 
     /// MuseScore adds a box's width once to the line's natural width (`horizontalspacing.cpp:120-123`) and compares
@@ -298,12 +299,12 @@ import Testing
     @Test("an HBox inside a collapsed multi-measure rest takes no room, and one at the run's start sits before the run")
     func hboxInsideACollapsedRunTakesNoRoom() throws {
         let options = ScoreViewOptions(multiMeasureRest: .collapse(minimumMeasures: 2))
-        let bare = laidOut(Self.restRunScore(blocks: []), options: options)
+        let bare = laidOut(Self.restRunScore(blocks: []), width: 600, options: options)
         try #require(bare.systems.flatMap(\.measures).compactMap(\.multiMeasureRest) == [4])
         try #require(bare.systems.count == 1)
-        let inside = laidOut(Self.restRunScore(blocks: [Self.hbox(6, before: 3)]), options: options)
+        let inside = laidOut(Self.restRunScore(blocks: [Self.hbox(6, before: 3)]), width: 600, options: options)
         #expect(inside == bare)
-        let atStart = laidOut(Self.restRunScore(blocks: [Self.hbox(6, before: 1)]), options: options)
+        let atStart = laidOut(Self.restRunScore(blocks: [Self.hbox(6, before: 1)]), width: 600, options: options)
         try #require(atStart.systems.count == 1)
         let room = try roomBefore(1, in: atStart)
         #expect(closeEnough(room, 6 * atStart.metrics.sp))

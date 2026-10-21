@@ -35,7 +35,9 @@ struct RichTextLyricLayoutTests {
         )
     }
 
-    /// One bar of quarter chords, `lyrics[i]` on chord `i`, laid out with the installed provider.
+    /// One bar of quarter chords, `lyrics[i]` on chord `i`, laid out with the installed provider. A bare bar follows
+    /// on the next line, so the first is stretched across its line rather than left at its natural width as the short
+    /// last line of a piece (`LayoutEngine.shouldJustify`).
     private static func document(_ lyrics: [Lyric?]) -> LayoutDocument {
         let chords = lyrics.enumerated().map { index, lyric in
             VoiceElement.chord(Chord(
@@ -43,7 +45,8 @@ struct RichTextLyricLayoutTests {
                 lyrics: lyric.map { [$0] } ?? [],
             ))
         }
-        let staff = Staff(measures: [Measure(voices: [Voice(elements: chords)])])
+        let next = Measure(voices: [Voice(elements: [.chord(Chord(duration: .whole, notes: ChordNotes([])))])])
+        let staff = Staff(measures: [Measure(voices: [Voice(elements: chords)], lineBreak: true), next])
         let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "voice"), staves: [staff])])
         return LayoutEngine.layout(score: score, options: ScoreViewOptions(staffSize: 28), availableWidth: 900)
     }
@@ -135,7 +138,7 @@ struct RichTextLyricLayoutTests {
 
     /// The hyphen after an elided syllable starts past the RUNS' right edge. "gloria" with the elision glyph is wider
     /// than its plain text (the first expectation guards that, or the test could not tell the two widths apart); the
-    /// connecting dash is emitted from `centerX + width / 2 + 0.3 sp`, and a dash never starts left of that.
+    /// connecting dash is emitted from `centerX + width / 2 + lyricsDashPad`, and a dash never starts left of that.
     @Test("the hyphen after an elided syllable starts past its rich width")
     func hyphenStartsAfterRichWidth() throws {
         let begin = Self.lyric("gloria", markup: Self.wideElided, syllabic: .begin)
@@ -151,8 +154,9 @@ struct RichTextLyricLayoutTests {
             return min(from.x, to.x)
         }
         let dashStart = try #require(dashes.min())
-        let richRight = mark.x + rich.size.width / 2 + document.metrics.sp * 0.3
-        let plainRight = mark.x + plainWidth / 2 + document.metrics.sp * 0.3
+        let pad = document.metrics.sp * LayoutEngine.lyricsDashPadSp
+        let richRight = mark.x + rich.size.width / 2 + pad
+        let plainRight = mark.x + plainWidth / 2 + pad
         #expect(dashStart >= richRight - 1e-6, "dash at \(dashStart), rich right edge \(richRight)")
         #expect(richRight > plainRight)
     }

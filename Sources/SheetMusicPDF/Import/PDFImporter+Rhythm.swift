@@ -736,6 +736,8 @@ extension PDFImporter {
 
     private static func halve(_ d: NoteDuration) -> NoteDuration {
         switch d {
+        case .long: .breve
+        case .breve: .whole
         case .whole: .half
         case .half: .quarter
         case .quarter: .eighth
@@ -744,7 +746,9 @@ extension PDFImporter {
         case .thirtySecond: .sixtyFourth
         case .sixtyFourth: .oneTwentyEighth
         case .oneTwentyEighth: .twoFiftySixth
-        case .twoFiftySixth: .twoFiftySixth
+        case .twoFiftySixth: .fiveHundredTwelfth
+        case .fiveHundredTwelfth: .oneThousandTwentyFourth
+        case .oneThousandTwentyFourth: .oneThousandTwentyFourth
         case .measure: .measure
         case let .fraction(f):
             .fraction(Fraction(

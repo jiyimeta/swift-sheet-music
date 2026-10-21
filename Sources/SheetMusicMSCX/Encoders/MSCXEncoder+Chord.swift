@@ -35,6 +35,7 @@ extension Chord {
         bendNeighbourBackward: TieLocation? = nil,
         previousChordTrailingBendGrace: Int? = nil,
         slurEndMarkers: [XMLTreeNode] = [],
+        crossVoiceTieEndpoints: [Int: MSCXCrossVoiceTieEndpoints.Ends] = [:],
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -109,13 +110,16 @@ extension Chord {
         for (noteIndex, note) in notes.enumerated() {
             children.append(note.encode(
                 eid: notes.eid(at: noteIndex),
-                tieForwardEndpoint: graceTieForwardOverrides[noteIndex]
+                // A tie into another voice names its partner there (`MSCXCrossVoiceTieEndpoints`), not in this voice.
+                tieForwardEndpoint: crossVoiceTieEndpoints[noteIndex]?.forward
+                    ?? graceTieForwardOverrides[noteIndex]
                     ?? tieForwardLocation.map {
                         TieEndpoint($0, notesDelta: notesDelta(
                             forPitch: note.pitch, partner: tieForwardPartnerNotes,
                         ))
                     },
-                tieBackEndpoint: graceTieBackOverrides[noteIndex]
+                tieBackEndpoint: crossVoiceTieEndpoints[noteIndex]?.back
+                    ?? graceTieBackOverrides[noteIndex]
                     ?? tieBackLocation.map {
                         TieEndpoint($0, notesDelta: notesDelta(
                             forPitch: note.pitch, partner: tieBackPartnerNotes,

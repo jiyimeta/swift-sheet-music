@@ -19,6 +19,8 @@ extension ScoreLayerBuilder {
         base: CGPoint,
         metrics: StaffMetrics,
         height: CGFloat,
+        // The enclosing measure's `LayoutMeasure.measureRestsAreBreves`; only a full-measure rest consults it.
+        measureRestsAreBreves: Bool = false,
         context: inout BuildContext,
         into parent: CALayer,
     ) {
@@ -72,7 +74,7 @@ extension ScoreLayerBuilder {
             ))
         case let .rest(d, p, _, rid, hll):
             if let layer = drawRest(
-                duration: d, origin: shift(p),
+                duration: d == .measure && measureRestsAreBreves ? .breve : d, origin: shift(p),
                 hasLegerLine: hll,
                 metrics: metrics, height: height, into: parent,
             ) {

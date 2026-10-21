@@ -17,8 +17,8 @@ enum StemRenderer {
         color: Color = .primary,
         metrics: StaffMetrics,
     ) {
-        // Whole notes are stemless.
-        if case .whole = duration { return }
+        // Whole notes and breves are stemless (a long has one).
+        if duration == .whole || duration == .breve { return }
         guard let geometry = StemGeometry.compute(
             noteOrigins: notes.map(\.origin),
             direction: direction,

@@ -45,6 +45,7 @@ extension LayoutEngine {
         systemOriginY: CGFloat,
         isFirstSystem: Bool,
         trailingCourtesy: TrailingCourtesy? = nil,
+        lineAggregates: [TickAggregate?] = [],
         activeClefs: inout [NotatedClef],
         activeKeys: inout [Int],
         context: RenderContext,
@@ -226,7 +227,10 @@ extension LayoutEngine {
             if cachedAggregate != nil {
                 context.cache?.tickAggregateHits += 1
             }
-            let aggregate = cachedAggregate ?? aggregatedTickWeights(
+            // As spaced with the next measure after it on this line, where that moves its floors
+            // (`LayoutEngine+LyricJoin`) — the aggregate its width was justified by.
+            let lineAggregate = lineAggregates.indices.contains(j) ? lineAggregates[j] : nil
+            let aggregate = lineAggregate ?? cachedAggregate ?? aggregatedTickWeights(
                 staves: staves,
                 measureIdx: measureIdx,
                 metrics: metrics,
@@ -603,12 +607,17 @@ extension LayoutEngine {
                 // system's right edge is pulled back inside before the
                 // vertical pass measures anything, so the stack it
                 // computes reflects the X the renderer will actually
-                // draw at.
+                // draw at. A wrapped system's edge is the width it was
+                // wrapped to, not its last barline: a short last line
+                // stops short of it (`shouldJustify`), and a mark there
+                // may run on into the empty room past that barline, as
+                // it does in MuseScore.
                 HorizontalClampPass.run(
                     measures: &perStaff,
                     xOffsets: xOffsets,
                     systemLeftX: xOffsets.first ?? 0,
-                    systemRightX: contentWidth,
+                    systemRightX: context.options.wrapToViewWidth
+                        ? max(contentWidth, context.availableWidth) : contentWidth,
                     metrics: metrics,
                 )
                 SkylineAutoplacePass.run(
@@ -1121,6 +1130,8 @@ extension LayoutEngine {
                     sp: metrics.sp,
                 ),
                 dynamicExtents: dynamicExtents,
+                measureRestsAreBreves: sharedMeasureDurations.indices.contains(measureIdx)
+                    && Self.measureRestBase(in: sharedMeasureDurations[measureIdx]) == .breve,
             ))
             xCursor += w
         }

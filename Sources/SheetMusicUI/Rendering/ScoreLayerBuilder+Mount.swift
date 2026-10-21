@@ -99,7 +99,10 @@ extension ScoreLayerBuilder {
         for measure in system.measures where measures.contains(measure.measureIndex) {
             let base = CGPoint(x: measure.origin.x, y: measure.origin.y)
             for element in measure.invisibleElements {
-                drawElement(element, base: base, metrics: metrics, height: height, context: &ctx, into: group)
+                drawElement(
+                    element, base: base, metrics: metrics, height: height,
+                    measureRestsAreBreves: measure.measureRestsAreBreves, context: &ctx, into: group,
+                )
             }
         }
         for index in membership.spanners {

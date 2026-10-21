@@ -108,14 +108,16 @@ extension Voice {
         systemElements: [(eid: EID, element: PositionedSystemElement)] = [],
         effectiveDuration: Fraction = Fraction(numerator: 4, denominator: 4),
         nextMeasureFirstChordNotes: ChordNotes? = nil,
+        crossVoiceTieEndpoints: [Int: [Int: MSCXCrossVoiceTieEndpoints.Ends]] = [:],
     ) throws -> (node: XMLTreeNode, carryOut: VoiceTieCarry) {
         try Self.validateProperlyNested(tupletSpans)
-        let plan = makeIterationPlan(
+        var plan = makeIterationPlan(
             isStaffHead: isStaffHead,
             effectiveDuration: effectiveDuration,
             nextMeasureFirstChordNotes: nextMeasureFirstChordNotes,
             writtenFifthsOffset: options.writtenFifthsOffset,
         )
+        plan.crossVoiceTieEndpoints = crossVoiceTieEndpoints
         var state = EncodeState(carryIn: carryIn)
         let sortedSys = Self.sortedSystemElements(systemElements)
         var sysIdx = Self.emitSystemElementsAtCursor(

@@ -41,7 +41,7 @@ extension ScoreCanvasDrawing {
         func shift(_ p: CGPoint) -> CGPoint {
             CGPoint(x: base.x + p.x, y: base.y + p.y)
         }
-        let (baseDur, dots) = DurationInterpretation.split(duration)
+        let (baseDur, dots) = DurationInterpretation.splitNote(duration)
         let shiftedNotes = notes.map { $0.moved(to: shift($0.origin)) }
         // Stem / flag draw in ink, never a notehead's color — see
         // `ScoreLayerBuilder+Chord.swift`'s `stemColor`. The dots in

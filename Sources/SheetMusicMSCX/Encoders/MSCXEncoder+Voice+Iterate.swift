@@ -21,6 +21,9 @@ extension Voice {
         /// partner is unknown (no following chord anywhere), in which
         /// case the delta stays `0`.
         let forwardTiePartnerNotes: [Int: ChordNotes]
+        /// For each element index, the `<location>`s of its notes' ties into another voice, which take the place of
+        /// the ones worked out from this voice's neighbours (`MSCXCrossVoiceTieEndpoints`).
+        var crossVoiceTieEndpoints: [Int: [Int: MSCXCrossVoiceTieEndpoints.Ends]] = [:]
     }
 
     /// One iteration of the main encode loop: open any tuplets that

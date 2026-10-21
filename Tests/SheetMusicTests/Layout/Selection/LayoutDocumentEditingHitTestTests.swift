@@ -9,7 +9,9 @@
         private let _installApple = TestSupport.installApple
 
         /// One voice: a G clef, three quarter chords, and a quarter rest — enough surface for notehead, stem,
-        /// margin, and clef cases without a second voice muddying the geometry.
+        /// margin, and clef cases without a second voice muddying the geometry. A second bar follows on the next
+        /// line, so the first is stretched across its line rather than left at its natural width as a piece's short
+        /// last line (`LayoutEngine.shouldJustify`), where the rest stands inside the stem's slop.
         private func singleVoiceSample() -> Score {
             let chord = { (p: Int) -> VoiceElement in
                 .chord(Chord(duration: .quarter, notes: [Note(pitch: p, tpc: 14)]))
@@ -20,7 +22,8 @@
                     chord(60), .rest(duration: .quarter),
                     chord(64), chord(65),
                 ]),
-            ])
+            ], lineBreak: true)
+            let next = Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
             return Score(
                 division: 480,
                 parts: [Part(
@@ -30,7 +33,7 @@
                         staffType: "stdNormal",
                         group: "pitched",
                         defaultClefType: "G",
-                        measures: [measure],
+                        measures: [measure, next],
                     )],
                 )],
             )

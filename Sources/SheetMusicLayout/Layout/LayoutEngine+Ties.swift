@@ -24,11 +24,11 @@ extension LayoutEngine {
         for document: LayoutDocument,
         score: Score,
     ) -> [TiePair] {
-        var pairs: [TiePair] = []
+        var pairs: [(order: (Int, Int, Int, Int), pair: TiePair)] = []
         // For open ties: retain the source note ID alongside origin and direction, so identity and side are
         // consistent between the start note and the end note.
-        // Keyed by (tieNumber, pitch, staffIndex) — all three are
-        // needed to prevent cross-staff / cross-voice mis-matching:
+        // Keyed by (tieNumber, pitch, staffIndex, voiceIndex) — all
+        // are needed to prevent cross-staff / cross-voice mis-matching:
         //
         // - tieNumber alone collides across ALL staves.
         // - (number, pitch) collides when two staves share the same
@@ -41,6 +41,10 @@ extension LayoutEngine {
         //   vertical / page mode (different `system.origin.y`),
         //   so a tie crossing a system break failed to match and
         //   was silently dropped.
+        // - `voiceIndex` keeps two voices that hold the same pitch tied
+        //   at once apart, now that the walk follows time rather than
+        //   one voice after another. A tie into another voice is paired
+        //   by its two note IDs instead (`CrossVoiceTieEnds`).
         //
         // `pitch` (not staff step) is the discriminator so a tie whose
         // ends are spelled enharmonically differently after a transpose
@@ -49,6 +53,7 @@ extension LayoutEngine {
             let number: Int
             let pitch: Int
             let staffIndex: Int
+            let voiceIndex: Int
         }
         /// Pair ties by SOUNDING pitch, not staff step. Transpose can spell the
         /// two ends of a tie enharmonically differently across a key change
@@ -70,21 +75,32 @@ extension LayoutEngine {
         // Using the drawn height here would put the candidate on the
         // single line and mis-assign every tie on such a staff.
         let staffMidOffset = document.metrics.staffHeight / 2
-        for system in document.systems {
+        let crossVoice = CrossVoiceTieEnds(score: score)
+        var openCrossVoice: [NoteID: (origin: CGPoint, above: Bool, noteID: NoteID)] = [:]
+        for (systemIndex, system) in document.systems.enumerated() {
             // Per-system staff midlines (system-local). Used to pick
             // the staff INDEX a note belongs to so the discriminator
             // is identical for the same staff in any other system.
             let staffMidYsLocal = system.staffOrigins.map {
                 $0.y + staffMidOffset
             }
-            for measure in system.measures {
-                for el in measure.elements {
+            for (measureIndex, measure) in system.measures.enumerated() {
+                // In time order, not element order: a measure lists its voices one after another, and a tie MuseScore
+                // made into another voice (`CrossVoiceTies`) may end in an earlier-listed voice than it starts in —
+                // read in list order, its end came before its start and the tie was never drawn.
+                let chords = measure.elements.enumerated().compactMap { index, el -> (x: CGFloat, index: Int)? in
+                    guard case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = el,
+                          let x = notes.map(\.origin.x).min()
+                    else { return nil }
+                    return (x, index)
+                }.sorted { $0.x != $1.x ? $0.x < $1.x : $0.index < $1.index }
+                for (_, elementIndex) in chords {
                     guard case let .chord(notes, _, stem, _, _, _, _, _, _, _, _)
-                        = el else { continue }
+                        = measure.elements[elementIndex] else { continue }
                     let noteSteps = notes.map(\.step)
                     let maxStep = noteSteps.max() ?? 0
                     let minStep = noteSteps.min() ?? 0
-                    for n in notes {
+                    for (noteOrder, n) in notes.enumerated() {
                         // Anchor ties on the visual notehead — for
                         // mirrored notes (in seconds), the tie has to
                         // start from the side the head was pushed to,
@@ -127,33 +143,73 @@ extension LayoutEngine {
                         )
 
                         if let back = n.tieBack {
-                            let key = TieKey(
-                                number: back, pitch: tieDiscriminator(n),
-                                staffIndex: staffIndex,
-                            )
-                            if let openTie = open[key] {
-                                pairs.append(TiePair(
-                                    staff: staffIndex,
-                                    fromOrigin: openTie.origin,
-                                    toOrigin: absolute,
-                                    above: openTie.above,
-                                    identity: .tie(start: openTie.noteID, end: n.noteID),
+                            let openTie: (origin: CGPoint, above: Bool, noteID: NoteID)?
+                            if let from = crossVoice.fromByTo[n.noteID] {
+                                openTie = openCrossVoice.removeValue(forKey: from)
+                            } else {
+                                let key = TieKey(
+                                    number: back, pitch: tieDiscriminator(n),
+                                    staffIndex: staffIndex, voiceIndex: n.noteID.voiceIndex,
+                                )
+                                openTie = open.removeValue(forKey: key)
+                            }
+                            if let openTie {
+                                pairs.append((
+                                    order: (systemIndex, measureIndex, elementIndex, noteOrder),
+                                    pair: TiePair(
+                                        staff: staffIndex,
+                                        fromOrigin: openTie.origin,
+                                        toOrigin: absolute,
+                                        above: openTie.above,
+                                        identity: .tie(start: openTie.noteID, end: n.noteID),
+                                    ),
                                 ))
-                                open[key] = nil
                             }
                         }
                         if let fwd = n.tieForward {
-                            let key = TieKey(
-                                number: fwd, pitch: tieDiscriminator(n),
-                                staffIndex: staffIndex,
-                            )
-                            open[key] = (absolute, above, n.noteID)
+                            if crossVoice.froms.contains(n.noteID) {
+                                openCrossVoice[n.noteID] = (absolute, above, n.noteID)
+                            } else {
+                                let key = TieKey(
+                                    number: fwd, pitch: tieDiscriminator(n),
+                                    staffIndex: staffIndex, voiceIndex: n.noteID.voiceIndex,
+                                )
+                                open[key] = (absolute, above, n.noteID)
+                            }
                         }
                     }
                 }
             }
         }
-        return pairs
+        // Back in element order — the order the pairs came out in before the walk followed time — so the arcs a
+        // system carries keep their order.
+        return pairs.sorted { lhs, rhs in
+            lhs.order.0 != rhs.order.0 ? lhs.order.0 < rhs.order.0
+                : lhs.order.1 != rhs.order.1 ? lhs.order.1 < rhs.order.1
+                : lhs.order.2 != rhs.order.2 ? lhs.order.2 < rhs.order.2
+                : lhs.order.3 < rhs.order.3
+        }.map(\.pair)
+    }
+
+    /// The ties of `score` that MuseScore made into another voice of their staff (`CrossVoiceTies`), as note IDs.
+    /// Pairing these by their two ends rather than by the shared key keeps them from taking the place of a tie held
+    /// in another voice at the same pitch.
+    private struct CrossVoiceTieEnds {
+        var froms: Set<NoteID> = []
+        var fromByTo: [NoteID: NoteID] = [:]
+
+        init(score: Score) {
+            for (partIndex, part) in score.parts.enumerated() {
+                for (staffIndex, staff) in part.staves.enumerated() {
+                    let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+                    for link in CrossVoiceTies.links(in: staff.measures) {
+                        let from = NoteID(link.from, staff: address)
+                        froms.insert(from)
+                        fromByTo[NoteID(link.to, staff: address)] = from
+                    }
+                }
+            }
+        }
     }
 
     /// Tie-named entry point for `attachArcs`, kept because the pipeline

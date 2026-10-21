@@ -154,7 +154,7 @@ struct GlissandoLayoutEmissionTests {
         // notes sit at clearly different heights — the BEGIN and END
         // stubs must land at different y's), forced onto separate
         // systems the same way `TiePairingTests.tieAcrossSystemBreak`
-        // forces the wrap: too-narrow `availableWidth` + `wrapToViewWidth`.
+        // forces the wrap: a line break after the first.
         let a = Note(
             pitch: 60, tpc: 14,
             glissando: Glissando(visualType: .straight),
@@ -162,7 +162,7 @@ struct GlissandoLayoutEmissionTests {
         let b = Note(pitch: 84, tpc: 14) // two octaves up: a large leap
         let m1 = Measure(voices: [Voice(elements: [
             .chord(Chord(duration: .whole, notes: [a])),
-        ])])
+        ])], lineBreak: true)
         let m2 = Measure(voices: [Voice(elements: [
             .chord(Chord(duration: .whole, notes: [b])),
         ])])

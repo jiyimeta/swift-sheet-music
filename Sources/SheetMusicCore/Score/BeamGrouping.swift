@@ -190,6 +190,8 @@ package enum BeamGrouping {
         case .sixtyFourth: return 4
         case .oneTwentyEighth: return 5
         case .twoFiftySixth: return 6
+        case .fiveHundredTwelfth: return 7
+        case .oneThousandTwentyFourth: return 8
         default: return 0
         }
     }

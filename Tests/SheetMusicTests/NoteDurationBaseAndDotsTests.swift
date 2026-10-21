@@ -6,8 +6,8 @@ import Testing
 @Suite("NoteDuration.baseAndDots()")
 struct NoteDurationBaseAndDotsTests {
     @Test("every base with every dot count round-trips through dotted(_:)", arguments: [
-        NoteDuration.whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
-        .oneTwentyEighth, .twoFiftySixth,
+        NoteDuration.long, .breve, .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
+        .oneTwentyEighth, .twoFiftySixth, .fiveHundredTwelfth, .oneThousandTwentyFourth,
     ], [0, 1, 2, 3])
     func roundTrip(base: NoteDuration, dots: Int) throws {
         let decomposed = try #require(base.dotted(dots).baseAndDots())

@@ -52,6 +52,16 @@ struct MidiWriterTests {
         #expect(trackBytes[8] == 0x00)
     }
 
+    @Test func aTrackOutOfTickOrderThrowsInsteadOfTrapping() {
+        let file = MidiFile(division: 480, format: 1, tracks: [
+            MidiTrack(events: [
+                TimedMidiEvent(tick: 120, event: .noteOff(channel: 9, pitch: 77, velocity: 0)),
+                TimedMidiEvent(tick: 60, event: .noteOn(channel: 9, pitch: 76, velocity: 100)),
+            ]),
+        ])
+        #expect(throws: SheetMusicError.self) { try MidiWriter.write(file) }
+    }
+
     @Test func writesMetaLyric() throws {
         let file = MidiFile(division: 480, format: 1, tracks: [
             MidiTrack(events: [

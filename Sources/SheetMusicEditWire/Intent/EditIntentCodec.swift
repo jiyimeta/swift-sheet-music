@@ -226,6 +226,7 @@ import Wirelet
 /// ```
 /// tag 1: kind        u8, varint — 1=whole 2=half 3=quarter 4=eighth 5=sixteenth 6=thirtySecond 7=sixtyFourth
 ///                    8=oneTwentyEighth 9=twoFiftySixth 10=measure 11=fraction
+///                    12=breve 13=long 14=fiveHundredTwelfth 15=oneThousandTwentyFourth (12...15 appended in 4.16)
 /// tag 2: numerator    i32, zig-zag varint — only meaningful when kind == 11
 /// tag 3: denominator  i32, zig-zag varint — only meaningful when kind == 11
 /// ```
@@ -866,55 +867,32 @@ public struct NoteDurationWire {
     public var denominator: Int32
 
     public init(from value: NoteDuration) {
+        // Only `.fraction` carries a payload; every named case leaves both fields zero.
+        numerator = 0
+        denominator = 0
         switch value {
-        case .whole:
-            kind = 1
-            numerator = 0
-            denominator = 0
-        case .half:
-            kind = 2
-            numerator = 0
-            denominator = 0
-        case .quarter:
-            kind = 3
-            numerator = 0
-            denominator = 0
-        case .eighth:
-            kind = 4
-            numerator = 0
-            denominator = 0
-        case .sixteenth:
-            kind = 5
-            numerator = 0
-            denominator = 0
-        case .thirtySecond:
-            kind = 6
-            numerator = 0
-            denominator = 0
-        case .sixtyFourth:
-            kind = 7
-            numerator = 0
-            denominator = 0
-        case .oneTwentyEighth:
-            kind = 8
-            numerator = 0
-            denominator = 0
-        case .twoFiftySixth:
-            kind = 9
-            numerator = 0
-            denominator = 0
-        case .measure:
-            kind = 10
-            numerator = 0
-            denominator = 0
+        case .whole: kind = 1
+        case .half: kind = 2
+        case .quarter: kind = 3
+        case .eighth: kind = 4
+        case .sixteenth: kind = 5
+        case .thirtySecond: kind = 6
+        case .sixtyFourth: kind = 7
+        case .oneTwentyEighth: kind = 8
+        case .twoFiftySixth: kind = 9
+        case .measure: kind = 10
         case let .fraction(f):
             kind = 11
             numerator = Int32(f.numerator)
             denominator = Int32(f.denominator)
+        case .breve: kind = 12
+        case .long: kind = 13
+        case .fiveHundredTwelfth: kind = 14
+        case .oneThousandTwentyFourth: kind = 15
         }
     }
 
-    /// Throws `WireFormatError.unknownChoiceDiscriminator` for a `kind` outside `1...11` — a duration that a
+    /// Throws `WireFormatError.unknownChoiceDiscriminator` for a `kind` outside `1...15` — a duration that a
     /// newer writer understands and an older reader does not must not silently decode as some other duration.
     ///
     /// Also throws that same error for a non-positive `denominator` on a `kind == 11` payload. `Fraction.init`
@@ -938,6 +916,10 @@ public struct NoteDurationWire {
                 throw WireFormatError.unknownChoiceDiscriminator(UInt32(bitPattern: denominator))
             }
             return .fraction(Fraction(numerator: Int(numerator), denominator: Int(denominator)))
+        case 12: return .breve
+        case 13: return .long
+        case 14: return .fiveHundredTwelfth
+        case 15: return .oneThousandTwentyFourth
         default: throw WireFormatError.unknownChoiceDiscriminator(UInt32(kind))
         }
     }

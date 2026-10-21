@@ -19,6 +19,12 @@ extension LayoutEngine {
         return prevContinues && currContinues
     }
 
+    /// MuseScore's `Sid::lyricsDashPad`, in sp: the least room left between a syllable and the dash beside it.
+    static let lyricsDashPadSp: CGFloat = 0.05
+
+    /// MuseScore's `Sid::lyricsDashMinLength`, in sp: the shortest dash drawn.
+    static let lyricsDashMinLengthSp: CGFloat = 0.4
+
     /// Drop one or more hyphen segments between `fromX` and `toX`
     /// at lyric-text Y. Implements the dash-count + dash-distance
     /// algorithm from MuseScore's
@@ -32,8 +38,13 @@ extension LayoutEngine {
     ///     are half-width so the dash row reads as evenly spaced
     ///     between the syllables it connects.
     ///
-    /// `lyricsDashForce` is also true by default, so any positive
-    /// gap below `dashMinLength` still gets one dash.
+    /// `lyricsDashForce` is also true by default, so every connected
+    /// pair gets at least one dash, however close they stand.
+    ///
+    /// `fromX` / `toX` are the two syllables' facing edges held off by `lyricsDashPad`. Where they leave less than
+    /// `lyricsDashMinLength` — the room spacing reserves for a dash is exactly that plus the two pads, so a pair the
+    /// spacing floor holds apart lands here — the span is widened about its center to one dash's length, as
+    /// `LyricsLayout::layoutDashes` widens it, rather than the dash dropped.
     static func emitLyricHyphens(
         fromX: CGFloat,
         toX: CGFloat,
@@ -42,8 +53,13 @@ extension LayoutEngine {
         metrics: StaffMetrics,
         out: inout [LayoutElement],
     ) {
-        let curLength = toX - fromX
-        guard curLength > 0 else { return }
+        var fromX = fromX
+        var curLength = toX - fromX
+        let minLength = metrics.sp * lyricsDashMinLengthSp
+        if curLength < minLength {
+            fromX -= (minLength - curLength) / 2
+            curLength = minLength
+        }
         let maxDashDistance = metrics.sp * 16
         let dashMaxLength = metrics.sp * 0.6
         // First and last gaps are half-width (matches MuseScore's

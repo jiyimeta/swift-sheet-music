@@ -39,6 +39,11 @@ public struct LayoutMeasure: Sendable, Equatable {
     /// trailing barline; no chord/rest elements are emitted. Nil for
     /// every normal measure.
     public let multiMeasureRest: Int?
+    /// Whether a full-measure rest (`NoteDuration.measure`) in this bar draws as the breve rest: MuseScore draws it so
+    /// once the bar holds two whole notes or more (`Rest::isBreveRest`, `Rest::getSymbol`), and as the whole rest
+    /// below that. The element keeps `.measure` — the cursor and the range box read it as the bar-filling rest — so
+    /// a renderer asks this instead. `LayoutEngine.measureRestBase(in:)` is the rule.
+    public let measureRestsAreBreves: Bool
     /// Elements whose source is hidden (`visible == false`) but emitted
     /// anyway because `showsInvisibleElements` is on. Renderers draw these
     /// at 50 % opacity (MuseScore `#808080` on white). Empty in print
@@ -97,7 +102,9 @@ public struct LayoutMeasure: Sendable, Equatable {
         invisibleElements: [LayoutElement] = [],
         chordNorthByTick: [Int: CGFloat] = [:],
         dynamicExtents: [DynamicExtent] = [],
+        measureRestsAreBreves: Bool = false,
     ) {
+        self.measureRestsAreBreves = measureRestsAreBreves
         self.measureIndex = measureIndex
         self.origin = origin
         self.width = width

@@ -11,7 +11,7 @@ extension LayoutElementShape {
         for element: LayoutElement, id: Int, xOffset: CGFloat, metrics: StaffMetrics,
     ) -> LayoutShape? {
         guard case let .chord(notes, duration, direction, beamOrigin, _, _, beamed, _, extra, hidden, mag) = element,
-              !hidden, duration != .whole,
+              !hidden, duration != .whole, duration != .breve,
               let top = notes.map(\.origin.y).min(), let bottom = notes.map(\.origin.y).max(),
               let minX = notes.map(\.origin.x).min(), let maxX = notes.map(\.origin.x).max()
         else { return nil }

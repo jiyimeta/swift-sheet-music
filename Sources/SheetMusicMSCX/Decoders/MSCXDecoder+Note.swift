@@ -241,6 +241,8 @@ extension Note {
         if let subtype = accNode.first("subtype")?.text {
             if let decoded = Accidental(mscxSubtype: subtype) {
                 accidental = decoded
+            } else if let decoded = ms2AccidentalSubtypes[subtype] {
+                accidental = decoded
             } else {
                 mscxDecoderWarn(
                     code: "mscx.accidental.unsupportedSubtype",
@@ -258,6 +260,35 @@ extension Note {
             ? .user : .auto
         return (accidental, bracket, role)
     }
+
+    /// MuseScore 2 names an accidental in words, not by the SMuFL SymId that MuseScore 3 and 4 write — the table of
+    /// MuseScore's `Read206::readAccidental206` (`rw/read206/read206.cpp`), whose `AccidentalType`s the cases here are
+    /// named after. Without it every sharp, flat and natural of a MuseScore 2 file was dropped, and the score was
+    /// drawn without accidentals. `none` reads as no accidental, as it does there.
+    private static let ms2AccidentalSubtypes: [String: Accidental?] = [
+        "none": Accidental?.none,
+        "sharp": .sharp,
+        "flat": .flat,
+        "natural": .natural,
+        "double sharp": .doubleSharp,
+        "double flat": .doubleFlat,
+        "flat-slash": .flatSlash,
+        "flat-slash2": .flatSlash2,
+        "mirrored-flat": .mirroredFlat,
+        "mirrored-flat2": .mirroredFlat2,
+        "sharp-slash": .sharpSlash,
+        "sharp-slash2": .sharpSlash2,
+        "sharp-slash3": .sharpSlash3,
+        "sharp-slash4": .sharpSlash4,
+        "sharp arrow up": .sharpArrowUp,
+        "sharp arrow down": .sharpArrowDown,
+        "flat arrow up": .flatArrowUp,
+        "flat arrow down": .flatArrowDown,
+        "natural arrow up": .naturalArrowUp,
+        "natural arrow down": .naturalArrowDown,
+        "sori": .sori,
+        "koron": .koron,
+    ]
 
     /// Decode a notehead parenthesis from a `<Note>` element across the two
     /// note-level MuseScore representations. Chord-level rep3
@@ -314,7 +345,7 @@ extension Note {
             case 0: return "normal"
             case 1: return "cross"
             case 2: return "diamond"
-            case 3: return "triangle-up"
+            case 3: return "triangle-down" // `Read206::convertHeadGroup`: HEAD_TRIANGLE_DOWN
             case 4: return "mi"
             case 5: return "slash"
             case 6: return "xcircle"

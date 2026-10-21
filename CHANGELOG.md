@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.17.0] - 2026-10-21
+
 ### Changed
 
 - **Edits spell the durations they invent against the bar's meter.** The rests a shortened note leaves, the tied
@@ -39,6 +41,118 @@ and this project adheres to
 - **`RhythmSpelling.durations` answers `[]` instead of trapping on a meter it cannot read** — a numerator or
   denominator that is not positive, or a denominator that does not divide a whole note into whole ticks (3/7) — and
   on an empty or negative span. `FormatRhythms` skips such a bar.
+
+## [4.16.0] - 2026-10-21
+
+### Added
+
+- **`NoteDuration.breve` and `.long`** — two and four whole notes, MuseScore's `V_BREVE` / `V_LONG`. A MuseScore file
+  holding either did not import at all (`mscx.chord.invalidDurationType` / `mscx.rest.unknownDurationType`), and
+  MusicXML read `<type>breve</type>` / `<type>long</type>` as a whole note, half or a quarter of its length. Both now
+  read, play, write back as `<durationType>breve|long</durationType>`, and draw as MuseScore draws them: the breve
+  head (`noteheadDoubleWhole`) for both, a stem on the long only, and the breve / longa rests. A dotted breve is
+  engraved as one, and so is a breve in a tuplet (`DurationInterpretation.splitNote`). `NoteDurationWire` and
+  `Score.stableFingerprint` give them the kinds after `.fraction`'s — 12 and 13 — so no kind a shipped reader knows
+  changes meaning; a reader older than this one refuses them rather than guessing.
+- **`NoteDuration.fiveHundredTwelfth` and `.oneThousandTwentyFourth`** — MuseScore's `V_512TH` / `V_1024TH`, which
+  likewise made a file fail to import. They read, write back, beam with seven and eight beams, and take kinds 14 and 15.
+  Their tick lengths truncate at the score's division as the 128th's and 256th's already do (480 ticks a quarter: 3 and
+  1 ticks), and their rests draw as the 64th rest, as those do.
+- **A full-measure rest in a bar of two whole notes or more draws as the breve rest**, as MuseScore draws it
+  (`Rest::isBreveRest`): `LayoutMeasure.measureRestsAreBreves` tells a renderer so, and the rest element keeps `.measure`
+  for the cursor and the range box. `RestGlyph.codepoint(duration:hasLegerLine:measureRestsAreBreves:)` applies it.
+- These add cases to a public enum, so an exhaustive `switch` over `NoteDuration` outside the package needs four new
+  arms.
+
+### Fixed
+
+- **The MSCX writer names the partner voice of a tie into another voice** (`<voices>` in `<location>`), as MuseScore
+  writes it. 4.15.1 read such ties but wrote them pointing into the tie's own voice, so MuseScore dropped them from a
+  file this package wrote.
+
+## [4.15.1] - 2026-10-21
+
+### Fixed
+
+- **Pressing Play no longer crashes on a score with beats closer than a sixteenth.** The metronome track released each
+  click a sixteenth after it sounded, so where the next beat came sooner — a pickup shorter than a sixteenth, a 32nd-note
+  meter, a measure that ends just past a beat — the note-off landed after the next note-on, and `MidiWriter` stopped the
+  process on the backwards delta. The SwiftySynth backend and the Android bridge write that track on every play, with the
+  metronome on or off. A click is now released at the next click when that comes first, and `MidiWriter.write` throws
+  `SheetMusicError.malformedScore` (code `midi.track.eventsOutOfOrder`) for a track out of tick order instead of trapping.
+- **A MuseScore 2 score keeps its accidentals.** MuseScore 2 names an accidental in words (`sharp`, `natural`, `double
+  flat`, …) where MuseScore 3 and 4 write the SMuFL name, and the reader knew only the latter: every accidental of a
+  MuseScore 2 file was dropped with an `mscx.accidental.unsupportedSubtype` warning, and the score was drawn without
+  them. The words now map as MuseScore's own `Read206` table maps them.
+- **Two more MuseScore 2 values read as MuseScore reads them**: `<head>3</head>` is a triangle-down notehead (was
+  triangle-up), and a breath's integer `<subtype>` 2 / 3 is a curved caesura / a caesura (both were a comma, with a
+  warning).
+- **A tie MuseScore made into another voice is kept, drawn and played as one held note.** MuseScore ties a note to the
+  note of the same pitch where the chord ends in whichever voice of the staff holds one (`searchTieNote`), so where
+  voices part or merge the tie crosses voices. Everything that paired a tie's two ends walked one voice, so the reader
+  dropped both halves (`mscx.tie.unpairedSide`, about one in ten folino 2.1 users' files) and the note was struck again.
+  The ends are now found by MuseScore's rule (`CrossVoiceTies`) in the reader's pairing, the layout's tie pass,
+  playback's tied-pitch walk and `TiePlanner` — which also keeps the dangling-tie pass from removing them after an
+  edit nearby. The layout's tie pass now also keeps two voices that hold the same pitch tied at once apart. Not yet
+  covered: the MSCX writer still names the tie's own voice in `<location>`, so MuseScore drops such a tie from a file
+  this package wrote (this package's reader pairs it again).
+- **A MuseScore 2 measure keeps its voice numbers.** Voices 0 and 2 with nothing in voice 1 were read as voices 0 and 1,
+  so the third voice drew as the second and its ties to a measure where it kept its number were dropped. An empty voice
+  now holds its place, as MuseScore 3 and 4's `<voice/>` placeholder does.
+
+## [4.15.0] - 2026-10-19
+
+### Changed
+
+- **Lines break the way MuseScore 4 breaks them, and a measure's natural width stretches only its gaps.** A wrapped
+  system used to close once its measures' whole widths — header, room around the content and all — stretched by
+  `systemStretch` overran the line, and a span of up to twelve measures between breaks was split evenly; together they
+  set about a fifth more lines than MuseScore on a corpus of real scores. A line now takes measures while their natural
+  width — the minimum with only the gaps stretched, everything else counted once — still fits, and closes at the first
+  that does not, as `SystemLayout::collectSystem` fills one; nothing is split evenly. `EngravingSpacing.systemStretch`
+  defaults to **1.25** (was 1.5), the value that reproduces MuseScore's breaks best on that corpus (against MuseScore
+  4.7.4's own: 0.46 → 0.57 Jaccard over line starts, 6 → 14 of 47 scores exact, +255 → −39 lines of 1083). A
+  horizontal layout and a short last line take the same natural widths, so the first measure is no longer the widest
+  one for its header. A host that set `systemStretch` itself keeps its value; one that tracked the default moves with
+  it.
+
+### Fixed
+
+- **The last syllable of a bar and the first of the next no longer run into each other.** A syllable's room to the
+  next one was measured only up to the end of its own bar, so a long syllable on a bar's last note and another on the
+  next bar's first note could overlap across the barline wherever the line was packed tight — always at natural width
+  in a horizontal layout. The pair now gets the same room as two syllables in one bar whenever the second bar follows
+  the first on the same line: a floor on the first bar's gaps from its last syllable to the barline, as MuseScore
+  shares the push over the gaps after the earlier syllable and justifies the line with it as their springs'
+  pre-tension. A syllable may still run across the barline, and a bar that ends a line makes no room for the next
+  line's first syllable.
+
+- **A short last line is no longer stretched across the page.** The line a piece ends on — or a section, at a section
+  break — is left at its natural width when that fills less than 30% of the line, as MuseScore leaves it
+  (`Sid::lastSystemFillLimit`, `SystemLayout::shouldBeJustified`). A one-bar score was spread over the whole line, its
+  quarters a quarter of the page apart. A short line with music after it is still justified. The wrapped document
+  stays as wide as the line it was wrapped to, and a staff text, system text, tempo or rehearsal mark near the end of
+  such a line stays on its column and runs on into the room past the last barline instead of being pulled back inside
+  it — the horizontal clamp's edge is the line's width, not where the line stops.
+
+- **A hyphen no longer disappears between two syllables set close together.** Its span stood 0.3 sp off each syllable,
+  more than the 0.5 sp spacing reserves for a dash, so wherever that floor held the pair apart nothing was drawn. The
+  ends now stand MuseScore's `lyricsDashPad` (0.05 sp) off the syllables and a span shorter than `lyricsDashMinLength`
+  (0.4 sp) is widened about its center, as MuseScore draws every connected pair's dash.
+
+- **Grace notes after a bar's last chord no longer run into it on a tightly spaced line.** Their room before the
+  barline was computed a whole staff space short, which only a line stretched well past its minimum hid.
+
+## [4.14.2] - 2026-10-18
+
+### Fixed
+
+- **A melisma in a MuseScore 4 file is read, and a saved melisma is read by MuseScore 4.6.** MuseScore 4 writes a
+  syllable's melisma only as `<ticks_f>`, a fraction of a whole note; the decoder read the integer `<ticks>` MuseScore
+  3 wrote beside it and nothing else, so every melisma of a score saved by MuseScore 4 was dropped and its syllables
+  drew no extender line. `<ticks_f>` is now read at the file's division (`<ticks>` still wins where a file has both).
+  The v4 encoder writes `<ticks_f>` too: MuseScore 4.6 and later skip a `<ticks>` on a lyric, so a melisma saved as
+  one was lost when the file was opened there. v3 output keeps `<ticks>`.
 
 ## [4.14.1] - 2026-10-18
 

@@ -321,8 +321,43 @@
         /// every one of the 387 `label` lines gains an `elementID: Optional(…partName(partIndex:form:))` field, and
         /// nothing else changes — with that field stripped from the label lines, the digest hashes to `e4928f1b…`
         /// exactly. No origin moved. (The same change measured alone against `f386db1d…` gave `10666dba…`.)
+        ///
+        /// **Re-recorded 2026-10-18 when the line a piece ends on stopped being justified below 30% fill
+        /// (`LayoutEngine.shouldJustify`, MuseScore's `lastSystemFillLimit`), after reading the diff** against the
+        /// digest above (`f346efca…`, which the cross-barline syllable pairs left unchanged). 8 blocks of 68 moved,
+        /// every one `wrap=true` and a single system of one bar — `midi01`–`03`, `multiPartMixedStaves`,
+        /// `single_note_multi_appoggiatura_post`, `slur_ms4_glissando_legato`, `spanner_offsets_score_end`,
+        /// `testMidiPort`. Each system shrinks from the 900 pt line to its natural width (`midi01` 900 → 253.65), and
+        /// the block now reads exactly as its `wrap=false` twin. Rendered and read: `slur_ms4_glissando_legato`'s
+        /// slurs and glissandi follow their notes in.
+        ///
+        /// **Re-recorded 2026-10-18 when a hyphen's ends moved to MuseScore's `lyricsDashPad` and a dash too short to
+        /// draw began to be widened to `lyricsDashMinLength` rather than dropped, after reading the diff** against the
+        /// digest above (`0dabfba9…`). Three lines of one block moved, `lyrics_verses_melisma` `wrap=false`: one
+        /// dash lengthens 1.79 → 4.20 pt about the same center (37.30), and one dash that had not been drawn at all
+        /// appears, 2.80 pt (0.4 sp) long. Rendered and read: every hyphenated word shows its dashes, none touching a
+        /// syllable. (The bar-end grace floor fixed in the same change moves nothing here: no fixture has trailing
+        /// graces at a bar's end on a line close to its minimum.)
+        ///
+        /// **Re-recorded 2026-10-18 when a measure's natural width began to stretch only its gaps, the default
+        /// stretch moved 1.5 → 1.25 and short spans stopped being split evenly, after reading the diff** against
+        /// the digest above (`19487551…`). 50 blocks of 68 moved. Every `wrap=false` block narrows — the header and
+        /// the room around the content no longer stretch, and the gaps stretch less (`harmony-basic` 679.49 → 513.42,
+        /// `testSingleNoteDynamics` 4283.62 → 3037.76). Wrapped, one block changes its lines: `testMeasureRepeats`
+        /// goes from 7 + 4 to all 11 on one line. Seven one-line `wrap=true` blocks whose natural width now fills
+        /// less than 30% of the line are left at it rather than stretched (`grace_after` 914 → 269.22), reading as
+        /// their `wrap=false` twins; the others keep their lines and move their columns. Rendered and read:
+        /// `testMeasureRepeats` wrapped and `harmony-basic` horizontal.
+        ///
+        /// **Re-recorded 2026-10-19 when a wrapped document stayed as wide as the line it was wrapped to and the
+        /// horizontal clamp took that width as a wrapped system's edge, after reading the diff** against the digest
+        /// above (`c2564d9f…`). 14 lines in 13 blocks moved, every one `wrap=true` and one of the one-line pieces the
+        /// short-last-line change left at their natural width: 13 `size` lines go back to the 914 pt they read before
+        /// it (`grace_after` 269.22 → 914), and one element moves — `slur_ms4_glissando_legato`'s tempo mark, which
+        /// had been pulled 2.05 pt back inside the last barline, sits on its own column again (63.47 → 65.52), running
+        /// on into the empty room past the line. No system, column or other element moved.
         private static let expectedDigestSHA256 =
-            "f346efcae7605cf96e15f46eb8d5327eacea9414e353297c02f80c4f022536f1"
+            "1e67ec4a2f5053b677ea6fb905fd819577a9f814d474f4f9a04b00d42a859d70"
 
         @Test("write digest")
         func writeDigest() throws {
