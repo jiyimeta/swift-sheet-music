@@ -317,6 +317,7 @@ extension LayoutEngine {
             // Dynamic extents are horizontal only — a vertical shift
             // leaves them valid as-is.
             dynamicExtents: measure.dynamicExtents,
+            measureRestsAreBreves: measure.measureRestsAreBreves,
         )
     }
 }

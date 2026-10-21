@@ -526,7 +526,7 @@ public struct ScoreHitTester: Sendable {
         let (base, _) = DurationInterpretation.split(dur)
         switch base {
         case .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
-             .oneTwentyEighth, .twoFiftySixth:
+             .oneTwentyEighth, .twoFiftySixth, .fiveHundredTwelfth, .oneThousandTwentyFourth:
             return true
         default:
             return false

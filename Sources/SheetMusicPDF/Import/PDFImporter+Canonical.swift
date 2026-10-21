@@ -220,6 +220,8 @@ enum PDFImporterCanonicalOrder {
         // Appended after the existing ranks so no shipped ordering moves.
         case .breve: [11, 0, 0]
         case .long: [12, 0, 0]
+        case .fiveHundredTwelfth: [13, 0, 0]
+        case .oneThousandTwentyFourth: [14, 0, 0]
         }
     }
 

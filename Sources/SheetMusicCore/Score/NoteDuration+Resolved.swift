@@ -25,7 +25,7 @@ extension NoteDuration {
     public static func canonical(_ length: Fraction) -> NoteDuration {
         let named: [NoteDuration] = [
             .long, .breve, .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
-            .oneTwentyEighth, .twoFiftySixth,
+            .oneTwentyEighth, .twoFiftySixth, .fiveHundredTwelfth, .oneThousandTwentyFourth,
         ]
         return named.first { $0.asFraction == length } ?? .fraction(length)
     }

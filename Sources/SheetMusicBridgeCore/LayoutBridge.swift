@@ -196,6 +196,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                         metrics: context,
                         showsInvisible: showsInvisible,
                         tint: tint,
+                        measureRestsAreBreves: measure.measureRestsAreBreves,
                         into: &out,
                     )
                 }
@@ -305,6 +306,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     showsInvisible: true,
                     tint: tint,
                     ambientArgb: invisibleARGB,
+                    measureRestsAreBreves: measure.measureRestsAreBreves,
                     into: &out,
                 )
             }
@@ -360,6 +362,8 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // The color in force around this element, restored after a selected mark's tint: black, or the invisible
         // pass's gray so a tinted invisible mark does not turn the rest of that pass black.
         ambientArgb: UInt32 = LayoutBridge.blackARGB,
+        // The enclosing measure's `LayoutMeasure.measureRestsAreBreves`; only a full-measure rest consults it.
+        measureRestsAreBreves: Bool = false,
         into out: inout [DrawCommand],
     ) {
         let sp = ctx.sp
@@ -455,7 +459,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             if let restArgb { out.append(.setColor(argb: restArgb)) }
             emitCenterAnchoredGlyph(
                 codepoint: RestGlyph.codepoint(
-                    duration: baseDur, hasLegerLine: hasLegerLine,
+                    duration: baseDur, hasLegerLine: hasLegerLine, measureRestsAreBreves: measureRestsAreBreves,
                 ),
                 cxPt: mox + Double(origin.x),
                 cyPt: moy + Double(origin.y),

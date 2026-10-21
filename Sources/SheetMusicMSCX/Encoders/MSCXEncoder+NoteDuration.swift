@@ -20,6 +20,8 @@ extension NoteDuration {
         case .sixtyFourth: "64th"
         case .oneTwentyEighth: "128th"
         case .twoFiftySixth: "256th"
+        case .fiveHundredTwelfth: "512th"
+        case .oneThousandTwentyFourth: "1024th"
         case .fraction: nil
         case .measure: nil
         }
@@ -33,7 +35,8 @@ extension NoteDuration {
         let target = asFraction
         let bases: [NoteDuration] = [
             .long, .breve, .whole, .half, .quarter, .eighth, .sixteenth,
-            .thirtySecond, .sixtyFourth, .oneTwentyEighth, .twoFiftySixth,
+            .thirtySecond, .sixtyFourth, .oneTwentyEighth, .twoFiftySixth, .fiveHundredTwelfth,
+            .oneThousandTwentyFourth,
         ]
         for base in bases {
             // mscxName is non-nil for every element of `bases`.

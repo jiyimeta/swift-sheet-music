@@ -40,6 +40,7 @@ extension ScoreLayerBuilder {
         for element in measure.elements {
             drawElement(
                 element, base: base, metrics: metrics, height: height,
+                measureRestsAreBreves: measure.measureRestsAreBreves,
                 context: &ctx, into: container,
             )
         }

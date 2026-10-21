@@ -50,6 +50,8 @@ struct EditIntentCodecTests {
         #expect(NoteDurationWire(from: .fraction(Fraction(numerator: 3, denominator: 8))).kind == 11)
         #expect(NoteDurationWire(from: .breve).kind == 12)
         #expect(NoteDurationWire(from: .long).kind == 13)
+        #expect(NoteDurationWire(from: .fiveHundredTwelfth).kind == 14)
+        #expect(NoteDurationWire(from: .oneThousandTwentyFourth).kind == 15)
     }
 
     @Test("garbage bytes throw rather than decoding to something plausible")

@@ -21,6 +21,8 @@ public enum NoteDuration: Sendable, Equatable, Hashable {
     case sixtyFourth
     case oneTwentyEighth
     case twoFiftySixth
+    case fiveHundredTwelfth
+    case oneThousandTwentyFourth
     case fraction(Fraction)
     case measure
 
@@ -39,6 +41,8 @@ public enum NoteDuration: Sendable, Equatable, Hashable {
         case .sixtyFourth: return division / 16
         case .oneTwentyEighth: return division / 32
         case .twoFiftySixth: return division / 64
+        case .fiveHundredTwelfth: return division / 128
+        case .oneThousandTwentyFourth: return division / 256
         case let .fraction(f): return f.ticks(division: division)
         case .measure:
             preconditionFailure(
@@ -64,6 +68,8 @@ public enum NoteDuration: Sendable, Equatable, Hashable {
         case "64th": self = .sixtyFourth
         case "128th": self = .oneTwentyEighth
         case "256th": self = .twoFiftySixth
+        case "512th": self = .fiveHundredTwelfth
+        case "1024th": self = .oneThousandTwentyFourth
         default: return nil
         }
     }
@@ -83,6 +89,8 @@ public enum NoteDuration: Sendable, Equatable, Hashable {
         case .sixtyFourth: return Fraction(numerator: 1, denominator: 64)
         case .oneTwentyEighth: return Fraction(numerator: 1, denominator: 128)
         case .twoFiftySixth: return Fraction(numerator: 1, denominator: 256)
+        case .fiveHundredTwelfth: return Fraction(numerator: 1, denominator: 512)
+        case .oneThousandTwentyFourth: return Fraction(numerator: 1, denominator: 1024)
         case let .fraction(f): return f
         case .measure:
             preconditionFailure(
@@ -129,7 +137,7 @@ public enum NoteDuration: Sendable, Equatable, Hashable {
         if case .measure = self { return nil }
         let bases: [NoteDuration] = [
             .long, .breve, .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
-            .oneTwentyEighth, .twoFiftySixth,
+            .oneTwentyEighth, .twoFiftySixth, .fiveHundredTwelfth, .oneThousandTwentyFourth,
         ]
         if let plain = bases.first(where: { $0 == self }) {
             return (base: plain, dots: 0)

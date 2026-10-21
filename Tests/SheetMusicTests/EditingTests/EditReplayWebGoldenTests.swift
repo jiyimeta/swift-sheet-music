@@ -325,6 +325,8 @@
             case .sixtyFourth: value = "sixtyFourth"
             case .oneTwentyEighth: value = "oneTwentyEighth"
             case .twoFiftySixth: value = "twoFiftySixth"
+            case .fiveHundredTwelfth: value = "fiveHundredTwelfth"
+            case .oneThousandTwentyFourth: value = "oneThousandTwentyFourth"
             case .measure: value = "measure"
             case let .fraction(fraction):
                 numerator = fraction.numerator

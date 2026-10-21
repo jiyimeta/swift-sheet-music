@@ -99,6 +99,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     base: base,
                     metrics: metrics,
                     showsInvisibleElements: showsInvisible,
+                    measureRestsAreBreves: measure.measureRestsAreBreves,
                     into: &context,
                 )
             }
@@ -117,6 +118,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         // showsInvisible so per-note dispatch grays
                         // rather than skips them.
                         showsInvisibleElements: true,
+                        measureRestsAreBreves: measure.measureRestsAreBreves,
                         into: &gray,
                     )
                 }
@@ -172,6 +174,8 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         base: CGPoint,
         metrics: StaffMetrics,
         showsInvisibleElements: Bool = false,
+        // The enclosing measure's `LayoutMeasure.measureRestsAreBreves`; only a full-measure rest consults it.
+        measureRestsAreBreves: Bool = false,
         into context: inout GraphicsContext,
     ) {
         func shift(_ p: CGPoint) -> CGPoint {
@@ -206,7 +210,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             p.addLine(to: shift(to))
             context.stroke(p, with: .color(.primary), lineWidth: thickness)
         case let .rest(d, p, _, _, hll):
-            let (baseDur, dots) = DurationInterpretation.split(d)
+            let (baseDur, dots) = DurationInterpretation.split(d == .measure && measureRestsAreBreves ? .breve : d)
             RestRenderer.draw(
                 context: &context, duration: baseDur,
                 hasLegerLine: hll,

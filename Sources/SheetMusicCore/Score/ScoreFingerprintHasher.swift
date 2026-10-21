@@ -103,6 +103,8 @@ struct FNV1a {
         // Appended in 4.16: the numbering is shared with `NoteDurationWire`'s kind, and neither may renumber.
         case .breve: combine(12)
         case .long: combine(13)
+        case .fiveHundredTwelfth: combine(14)
+        case .oneThousandTwentyFourth: combine(15)
         }
     }
 

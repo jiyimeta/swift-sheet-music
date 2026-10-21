@@ -616,9 +616,11 @@ extension LayoutEngine {
                     }
                 case let .chord(r) where r.notes.isEmpty:
                     inHeader = false
-                    let (restBase, _) = DurationInterpretation.split(
-                        r.duration,
-                    )
+                    // A full-measure rest takes the breve rest in a bar of two whole notes or more
+                    // (`measureRestBase(in:)`); the renderers learn that from `LayoutMeasure.measureRestsAreBreves`.
+                    let (restBase, _) = r.duration == .measure
+                        ? (Self.measureRestBase(in: measureDuration), 0)
+                        : DurationInterpretation.split(r.duration)
                     // Rests sit on the staff's NATURAL line
                     // (`restNaturalY`): the middle line of a five-line
                     // staff, the single line of a one-line one. In
@@ -644,6 +646,11 @@ extension LayoutEngine {
                         restY = restNaturalY
                             + CGFloat(move) * metrics.sp
                             + restVoiceOffset
+                    case .breve:
+                        // MuseScore moves a breve rest one line down on a one-line staff only
+                        // (`RestLayout::computeWholeOrBreveRestOffset`).
+                        let move: CGFloat = lineGeometry.lineCount == 1 ? 1 : 0
+                        restY = restNaturalY + move * metrics.sp + restVoiceOffset
                     default:
                         restY = restNaturalY + restVoiceOffset
                     }

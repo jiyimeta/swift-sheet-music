@@ -1130,6 +1130,8 @@ extension LayoutEngine {
                     sp: metrics.sp,
                 ),
                 dynamicExtents: dynamicExtents,
+                measureRestsAreBreves: sharedMeasureDurations.indices.contains(measureIdx)
+                    && Self.measureRestBase(in: sharedMeasureDurations[measureIdx]) == .breve,
             ))
             xCursor += w
         }

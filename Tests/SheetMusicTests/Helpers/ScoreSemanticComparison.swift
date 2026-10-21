@@ -378,6 +378,8 @@ enum ScoreSemanticComparison {
         case .sixtyFourth: return .fraction(Fraction(numerator: 1, denominator: 64))
         case .oneTwentyEighth: return .fraction(Fraction(numerator: 1, denominator: 128))
         case .twoFiftySixth: return .fraction(Fraction(numerator: 1, denominator: 256))
+        case .fiveHundredTwelfth: return .fraction(Fraction(numerator: 1, denominator: 512))
+        case .oneThousandTwentyFourth: return .fraction(Fraction(numerator: 1, denominator: 1024))
         case .breve: return .fraction(Fraction(numerator: 2, denominator: 1))
         case .long: return .fraction(Fraction(numerator: 4, denominator: 1))
         case .fraction: return d

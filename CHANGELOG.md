@@ -14,10 +14,18 @@ and this project adheres to
   MusicXML read `<type>breve</type>` / `<type>long</type>` as a whole note, half or a quarter of its length. Both now
   read, play, write back as `<durationType>breve|long</durationType>`, and draw as MuseScore draws them: the breve
   head (`noteheadDoubleWhole`) for both, a stem on the long only, and the breve / longa rests. A dotted breve is
-  engraved as one. `NoteDurationWire` and `Score.stableFingerprint` give them the kinds after `.fraction`'s — 12 and 13
-  — so no kind a shipped reader knows changes meaning; a reader older than this one refuses them rather than guessing.
-  This adds cases to a public enum, so an exhaustive `switch` over `NoteDuration` outside the package needs the two
-  new arms.
+  engraved as one, and so is a breve in a tuplet (`DurationInterpretation.splitNote`). `NoteDurationWire` and
+  `Score.stableFingerprint` give them the kinds after `.fraction`'s — 12 and 13 — so no kind a shipped reader knows
+  changes meaning; a reader older than this one refuses them rather than guessing.
+- **`NoteDuration.fiveHundredTwelfth` and `.oneThousandTwentyFourth`** — MuseScore's `V_512TH` / `V_1024TH`, which
+  likewise made a file fail to import. They read, write back, beam with seven and eight beams, and take kinds 14 and 15.
+  Their tick lengths truncate at the score's division as the 128th's and 256th's already do (480 ticks a quarter: 3 and
+  1 ticks), and their rests draw as the 64th rest, as those do.
+- **A full-measure rest in a bar of two whole notes or more draws as the breve rest**, as MuseScore draws it
+  (`Rest::isBreveRest`): `LayoutMeasure.measureRestsAreBreves` tells a renderer so, and the rest element keeps `.measure`
+  for the cursor and the range box. `RestGlyph.codepoint(duration:hasLegerLine:measureRestsAreBreves:)` applies it.
+- These add cases to a public enum, so an exhaustive `switch` over `NoteDuration` outside the package needs four new
+  arms.
 
 ### Fixed
 

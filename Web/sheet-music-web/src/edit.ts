@@ -28,6 +28,8 @@ export type NoteDurationSpec =
   | "sixtyFourth"
   | "oneTwentyEighth"
   | "twoFiftySixth"
+  | "fiveHundredTwelfth"
+  | "oneThousandTwentyFourth"
   | "measure"
   | { readonly numerator: number; readonly denominator: number };
 
@@ -104,6 +106,8 @@ const durationKinds: Record<Exclude<NoteDurationSpec, object>, number> = {
   // 11 is the fraction form below; the breve and the long were appended after it.
   breve: 12,
   long: 13,
+  fiveHundredTwelfth: 14,
+  oneThousandTwentyFourth: 15,
 };
 
 function durationWire(duration: NoteDurationSpec | undefined): DurationWire {

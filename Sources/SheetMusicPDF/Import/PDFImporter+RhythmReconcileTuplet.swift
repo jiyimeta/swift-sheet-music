@@ -231,7 +231,7 @@ extension PDFImporter {
         switch d {
         case .whole, .half, .quarter, .eighth,
              .sixteenth, .thirtySecond, .sixtyFourth,
-             .oneTwentyEighth, .twoFiftySixth:
+             .oneTwentyEighth, .twoFiftySixth, .fiveHundredTwelfth, .oneThousandTwentyFourth:
             return true
         default:
             return false

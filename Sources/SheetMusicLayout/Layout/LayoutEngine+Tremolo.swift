@@ -85,7 +85,7 @@ extension LayoutEngine {
     static func isFlaggedDuration(_ dur: NoteDuration) -> Bool {
         switch dur {
         case .eighth, .sixteenth, .thirtySecond,
-             .sixtyFourth, .oneTwentyEighth, .twoFiftySixth:
+             .sixtyFourth, .oneTwentyEighth, .twoFiftySixth, .fiveHundredTwelfth, .oneThousandTwentyFourth:
             true
         default:
             false

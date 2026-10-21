@@ -1347,6 +1347,8 @@ extension LayoutEngine {
         case .sixtyFourth: quarters = 0.0625
         case .oneTwentyEighth: quarters = 1.0 / 32
         case .twoFiftySixth: quarters = 1.0 / 64
+        case .fiveHundredTwelfth: quarters = 1.0 / 128
+        case .oneThousandTwentyFourth: quarters = 1.0 / 256
         case .measure:
             // Renders as a whole-rest glyph; allocate whole-rest width.
             quarters = 4
