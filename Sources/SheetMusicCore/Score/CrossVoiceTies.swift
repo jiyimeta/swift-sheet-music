@@ -34,6 +34,9 @@ package enum CrossVoiceTies {
     package struct Link: Hashable, Sendable {
         package var from: End
         package var to: End
+        /// Where the chord of each end starts within its own measure — what a writer needs to name the other end.
+        package var fromOffset: Fraction
+        package var toOffset: Fraction
     }
 
     /// Every cross-voice tie in one staff's `measures` whose forward end lies in `sourceMeasures` (all of them when
@@ -63,6 +66,7 @@ package enum CrossVoiceTies {
                 for (elementIndex, element) in voice.elements.enumerated() {
                     guard case let .chord(chord) = element,
                           chord.notes.contains(where: { $0.tieForward != nil }),
+                          let start = timeline.start(measure: measureIndex, voice: voiceIndex, element: elementIndex),
                           let target = timeline.endPosition(
                               measure: measureIndex, voice: voiceIndex, element: elementIndex,
                           )
@@ -79,7 +83,7 @@ package enum CrossVoiceTies {
                             pitch: pitch, at: target, from: voiceIndex, timeline: timeline, claimed: claimed,
                         ) {
                             claimed.insert(to)
-                            links.append(Link(from: from, to: to))
+                            links.append(Link(from: from, to: to, fromOffset: start, toOffset: target.offset))
                         }
                     }
                 }
@@ -127,7 +131,7 @@ package enum CrossVoiceTies {
         /// Per measure and voice: chords with notes, keyed by where they start and where they end.
         private var starting: [[[Fraction: Located]]] = []
         private var ending: [[[Fraction: Located]]] = []
-        private var ends: [[[Int: Fraction]]] = []
+        private var spans: [[[Int: (start: Fraction, end: Fraction)]]] = []
 
         init(measures: [Measure], window: ClosedRange<Int>) {
             self.measures = measures
@@ -135,35 +139,35 @@ package enum CrossVoiceTies {
             for (measureIndex, measure) in measures.enumerated() {
                 var startingByVoice: [[Fraction: Located]] = []
                 var endingByVoice: [[Fraction: Located]] = []
-                var endsByVoice: [[Int: Fraction]] = []
+                var spansByVoice: [[Int: (start: Fraction, end: Fraction)]] = []
                 for voice in measure.voices {
                     guard window.contains(measureIndex) else {
                         startingByVoice.append([:])
                         endingByVoice.append([:])
-                        endsByVoice.append([:])
+                        spansByVoice.append([:])
                         continue
                     }
                     var offset = Fraction(numerator: 0, denominator: 1)
                     var startingHere: [Fraction: Located] = [:]
                     var endingHere: [Fraction: Located] = [:]
-                    var endsHere: [Int: Fraction] = [:]
+                    var spansHere: [Int: (start: Fraction, end: Fraction)] = [:]
                     for (elementIndex, element) in voice.elements.enumerated() {
                         guard case let .chord(chord) = element else { continue }
                         let end = offset + chord.duration.resolved(in: durations[measureIndex]).asFraction
                         if !chord.notes.isEmpty {
                             startingHere[offset] = Located(element: elementIndex, chord: chord)
                             endingHere[end] = Located(element: elementIndex, chord: chord)
-                            endsHere[elementIndex] = end
+                            spansHere[elementIndex] = (offset, end)
                         }
                         offset = end
                     }
                     startingByVoice.append(startingHere)
                     endingByVoice.append(endingHere)
-                    endsByVoice.append(endsHere)
+                    spansByVoice.append(spansHere)
                 }
                 starting.append(startingByVoice)
                 ending.append(endingByVoice)
-                ends.append(endsByVoice)
+                spans.append(spansByVoice)
             }
         }
 
@@ -171,9 +175,14 @@ package enum CrossVoiceTies {
             measures.indices.contains(measure) ? measures[measure].voices.indices : 0 ..< 0
         }
 
+        /// Where a chord starts within its measure.
+        func start(measure: Int, voice: Int, element: Int) -> Fraction? {
+            spans[measure][voice][element]?.start
+        }
+
         /// The position a chord's last tick ends at — the next bar's start when it fills its own.
         func endPosition(measure: Int, voice: Int, element: Int) -> Position? {
-            guard let end = ends[measure][voice][element] else { return nil }
+            guard let end = spans[measure][voice][element]?.end else { return nil }
             let length = durations[measure]
             if end.numerator * length.denominator >= length.numerator * end.denominator {
                 return Position(measure: measure + 1, offset: end - length)

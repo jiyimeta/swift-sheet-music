@@ -135,6 +135,30 @@ struct CrossVoiceTieTests {
         }
     }
 
+    @Test func theWriterNamesThePartnerVoiceAsMuseScoreDoes() throws {
+        // MuseScore wrote split184061 with `<voices>-1</voices><measures>1</measures>` on the `<next>` side and
+        // `<voices>1</voices><measures>-1</measures>` on the `<prev>` side. Without `<voices>` the location named a
+        // chord in the tie's own voice, and MuseScore dropped the tie from a file this package wrote.
+        let xml = try #require(try String(data: MSCXEncoder.encode(Self.museScoreFixture().score), encoding: .utf8))
+        let squeezed = xml.filter { !$0.isWhitespace }
+        #expect(squeezed.contains("<next><location><voices>-1</voices><measures>1</measures></location></next>"))
+        #expect(squeezed.contains("<prev><location><voices>1</voices><measures>-1</measures></location></prev>"))
+
+        let reread = try MSCXParser.parseWithDiagnostics(Data(xml.utf8))
+        #expect(!reread.diagnostics.contains { $0.code == "mscx.tie.unpairedSide" })
+        #expect(CrossVoiceTies.links(in: reread.score.parts[0].staves[0].measures).count == 1)
+    }
+
+    @Test func aMixedChordWritesOnlyItsCrossVoiceTieWithVoices() throws {
+        let score = try MSCXParser.parse(Data(Self.mixedChord.utf8))
+        let xml = try #require(try String(data: MSCXEncoder.encode(score), encoding: .utf8))
+        let squeezed = xml.filter { !$0.isWhitespace }
+        // C (into voice 2) and E (into voice 1) leave the same chord; only C's location names another voice.
+        #expect(squeezed.components(separatedBy: "<voices>").count - 1 == 2)
+        #expect(squeezed.contains("<next><location><voices>1</voices><measures>1</measures></location></next>"))
+        #expect(squeezed.contains("<prev><location><voices>-1</voices><measures>-1</measures></location></prev>"))
+    }
+
     @Test func theTiePlannerFindsThePartnerInTheOtherVoice() throws {
         let score = try Self.museScoreFixture().score
         let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)

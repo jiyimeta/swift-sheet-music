@@ -98,6 +98,8 @@ extension Staff {
         // offsets — the same-`<fractions>`-only encoding makes
         // MuseScore match the wrong destination chord).
         var carry: [Voice.VoiceTieCarry] = []
+        // A tie into another voice names its partner across voices, which the voice-at-a-time walk cannot see.
+        let crossVoiceTies = MSCXCrossVoiceTieEndpoints(measures: measures)
         for (measureIndex, measure) in measures.enumerated() {
             children.append(contentsOf: blocks.lazy
                 .filter { $0.beforeMeasureIndex == measureIndex }
@@ -131,6 +133,7 @@ extension Staff {
                 voice0SystemElements: injection,
                 effectiveDuration: measureDuration,
                 nextMeasureFirstChordNotes: nextFirstChordNotes,
+                crossVoiceTieEndpoints: crossVoiceTies.forMeasure(measureIndex),
             )
             children.append(result.node)
             carry = result.carryOutVoiceTieCarries

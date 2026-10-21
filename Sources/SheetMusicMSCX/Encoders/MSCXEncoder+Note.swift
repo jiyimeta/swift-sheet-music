@@ -268,6 +268,11 @@ extension Note {
         // writes the same order for the same reason; the two stay separate
         // only because this one also emits `<grace>` / `<notes>`.
         var children: [XMLTreeNode] = []
+        // `<voices>` comes first, before `<measures>` — the same writer writes `staves`, `voices`, `measures`,
+        // `fractions`, `grace`, `notes` in that order, eliding each at its default of `0`.
+        if endpoint.voicesDelta != 0 {
+            children.append(XMLTreeNode(name: "voices", text: String(endpoint.voicesDelta)))
+        }
         switch endpoint.location {
         case let .sameMeasure(fractions):
             // MuseScore elides `<fractions>` when the value is the
