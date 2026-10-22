@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.18.0] - 2026-10-22
+
 ### Added
 
 - **`PDFIncrementalAnnotator.pageBoxes(of:)`** reads each page's media box, its displayed crop box (clipped to the
