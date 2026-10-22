@@ -64,6 +64,14 @@ and this project adheres to
   reach, as MuseScore hits an element by its shape. It used a rest's box, which spans the whole staff, so a click above
   or below the sign selected the sign instead of the bar. The event columns the near-miss rescue reads use the same box.
 
+### Fixed
+
+- **A MusicXML `<notehead>` keeps its shape.** Its value was read for the `parentheses` attribute only, so every shaped
+  head a file named — an open hi-hat's `circle-x`, a cymbal's `x`, a `diamond`, the shape notes — came in as a plain
+  head. It now sets `Note.headType` to MuseScore's head group for it (`convertNotehead` in `importmusicxmlpass2.cpp`):
+  `circle-x` → `xcircle`, `x` → `cross`, `cross` → `plus`, `triangle` → `triangle-up`, and so on; a value MuseScore has
+  no group for keeps the normal head, as there.
+
 ## [4.19.0] - 2026-10-22
 
 Two additive changes ship together: the tempo marking's copy and paste, and Windows' clipped fill.

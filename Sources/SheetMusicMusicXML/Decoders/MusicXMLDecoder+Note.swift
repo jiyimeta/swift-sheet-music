@@ -92,6 +92,7 @@ enum MusicXMLNoteDecoder {
             accidental: accidental,
             tieForward: tieForward,
             tieBack: tieBack,
+            headType: headType(noteheadValue: node.first("notehead")?.text),
             parentheses: parentheses,
             userVelocity: decodeUserVelocity(node),
         )
@@ -286,6 +287,33 @@ enum MusicXMLNoteDecoder {
         guard let notehead = node.first("notehead") else { return .none }
         return notehead.attributes["parentheses"] == "yes" ? .both : .none
     }
+
+    /// The MuseScore head group a `<notehead>` value names, as the `Note.headType` token MSCX writes for it.
+    /// MuseScore's `convertNotehead` (`importmusicxmlpass2.cpp`), entry for entry. `normal`, a value it has no group
+    /// for (`square`, `circle dot`, …) and an absent element all leave the default head, which is nil here.
+    private static func headType(noteheadValue: String?) -> String? {
+        noteheadValue.flatMap { museScoreHeadGroups[$0] }
+    }
+
+    private static let museScoreHeadGroups: [String: String] = [
+        "slash": "slash",
+        "triangle": "triangle-up",
+        "diamond": "diamond",
+        "cross": "plus",
+        "x": "cross",
+        "circle-x": "xcircle",
+        "inverted triangle": "triangle-down",
+        "slashed": "slashed1",
+        "back slashed": "slashed2",
+        "do": "do",
+        "re": "re",
+        "mi": "mi",
+        "fa": "fa",
+        "fa up": "fa",
+        "so": "sol",
+        "la": "la",
+        "ti": "ti",
+    ]
 
     /// MusicXML encodes arpeggios under `<notations><arpeggiate>`. The optional
     /// `direction` attribute selects MuseScore's subtype.
