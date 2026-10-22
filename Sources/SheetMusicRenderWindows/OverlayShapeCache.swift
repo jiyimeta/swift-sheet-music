@@ -18,12 +18,28 @@ struct OverlayShapeCache {
         let pointCount: Int
         let first: PagePointMM?
         let last: PagePointMM?
+        /// The clip's own signature, so the same strokes under a new mask are rebuilt.
+        let clip: ClipSignature?
 
-        init(_ figures: [[PagePointMM]]) {
+        struct ClipSignature: Equatable {
+            let figureCount: Int
+            let pointCount: Int
+            let first: PagePointMM?
+            let last: PagePointMM?
+            let evenOdd: Bool
+        }
+
+        init(_ figures: [[PagePointMM]], clip: ScoreSurface.OverlayClip? = nil) {
             figureCount = figures.count
             pointCount = figures.reduce(0) { $0 + $1.count }
             first = figures.first?.first
             last = figures.last?.last
+            self.clip = clip.map { clip in
+                ClipSignature(
+                    figureCount: clip.figures.count, pointCount: clip.figures.reduce(0) { $0 + $1.count },
+                    first: clip.figures.first?.first, last: clip.figures.last?.last, evenOdd: clip.evenOdd,
+                )
+            }
         }
     }
 
@@ -40,10 +56,12 @@ struct OverlayShapeCache {
         entries.count
     }
 
-    /// The shape for `id`, built on `canvas` when there is none for these figures; `nil` when the figures fill nothing
-    /// or Direct2D could not build it.
-    mutating func shape(id: Int, figures: [[PagePointMM]], canvas: OpaquePointer) -> OpaquePointer? {
-        let signature = Signature(figures)
+    /// The shape for `id`, built on `canvas` when there is none for these figures (inside `clip`, when there is one);
+    /// `nil` when the figures fill nothing or Direct2D could not build it.
+    mutating func shape(
+        id: Int, figures: [[PagePointMM]], clip: ScoreSurface.OverlayClip? = nil, canvas: OpaquePointer,
+    ) -> OpaquePointer? {
+        let signature = Signature(figures, clip: clip)
         if var entry = entries[id], entry.signature == signature {
             entry.lastFrame = frame
             entries[id] = entry
@@ -52,7 +70,7 @@ struct OverlayShapeCache {
         if let stale = entries.removeValue(forKey: id) {
             cd2d_shape_release(stale.shape)
         }
-        guard let shape = Self.build(figures, on: canvas) else { return nil }
+        guard let shape = Self.build(figures, clip: clip, on: canvas) else { return nil }
         entries[id] = Entry(shape: shape, signature: signature, lastFrame: frame)
         return shape
     }
@@ -74,25 +92,57 @@ struct OverlayShapeCache {
         entries.removeAll()
     }
 
-    /// One shape from `figures` (millimetres), or `nil` when no figure has three points or Direct2D fails.
-    static func build(_ figures: [[PagePointMM]], on canvas: OpaquePointer) -> OpaquePointer? {
-        let drawn = figures.filter { $0.count >= 3 }
-        guard !drawn.isEmpty else { return nil }
-        var xy: [Float] = []
-        xy.reserveCapacity(drawn.reduce(0) { $0 + $1.count } * 2)
-        for figure in drawn {
-            for point in figure {
-                xy.append(Float(point.x))
-                xy.append(Float(point.y))
-            }
-        }
-        let counts = drawn.map { UInt32($0.count) }
+    /// One shape from `figures` (millimetres), kept only inside `clip` when there is one; `nil` when no figure has
+    /// three points, a clip has none either (nothing lies inside an empty clip), or Direct2D fails.
+    static func build(
+        _ figures: [[PagePointMM]], clip: ScoreSurface.OverlayClip? = nil, on canvas: OpaquePointer,
+    ) -> OpaquePointer? {
+        guard let shape = Flat(figures) else { return nil }
         var created: OpaquePointer?
-        let result = xy.withUnsafeBufferPointer { points in
-            counts.withUnsafeBufferPointer { sizes in
-                cd2d_shape_create(canvas, points.baseAddress, sizes.baseAddress, UInt32(sizes.count), &created)
+        let result: Int32
+        if let clip {
+            guard let region = Flat(clip.figures) else { return nil }
+            result = shape.xy.withUnsafeBufferPointer { points in
+                shape.counts.withUnsafeBufferPointer { sizes in
+                    region.xy.withUnsafeBufferPointer { clipPoints in
+                        region.counts.withUnsafeBufferPointer { clipSizes in
+                            cd2d_shape_create_clipped(
+                                canvas, points.baseAddress, sizes.baseAddress, UInt32(sizes.count),
+                                clipPoints.baseAddress, clipSizes.baseAddress, UInt32(clipSizes.count),
+                                clip.evenOdd ? 1 : 0, &created,
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            result = shape.xy.withUnsafeBufferPointer { points in
+                shape.counts.withUnsafeBufferPointer { sizes in
+                    cd2d_shape_create(canvas, points.baseAddress, sizes.baseAddress, UInt32(sizes.count), &created)
+                }
             }
         }
         return result == 0 ? created : nil
+    }
+
+    /// Figures of three points or more, flattened for the shim: every point x then y, and each figure's count.
+    private struct Flat {
+        let xy: [Float]
+        let counts: [UInt32]
+
+        init?(_ figures: [[PagePointMM]]) {
+            let drawn = figures.filter { $0.count >= 3 }
+            guard !drawn.isEmpty else { return nil }
+            var xy: [Float] = []
+            xy.reserveCapacity(drawn.reduce(0) { $0 + $1.count } * 2)
+            for figure in drawn {
+                for point in figure {
+                    xy.append(Float(point.x))
+                    xy.append(Float(point.y))
+                }
+            }
+            self.xy = xy
+            counts = drawn.map { UInt32($0.count) }
+        }
     }
 }
