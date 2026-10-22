@@ -363,8 +363,16 @@
         /// each identical to before once that field is set aside; and `testMeasureRepeats` draws 10 rests fewer —
         /// the first voice's rests in the bars of a group, which stand under the group's sign and which MuseScore
         /// never draws (most of them in a 2- or 4-bar group's bars around the sign MuseScore anchors in a middle bar).
+        ///
+        /// **Re-recorded 2026-10-22 when a 2- or 4-bar measure repeat took its own glyph and count, after reading the
+        /// diff** against the digest above (`2b063143…`). Only `testMeasureRepeats` changed, 66 lines in each wrap
+        /// mode. Its six 2- and 4-bar signs carry their count and stand on their bar's trailing barline (x =
+        /// width − sp/2) instead of the 1-bar symbol in the bar's middle. Every other changed line is the staves moving
+        /// down by one shift each — 1.32 pt for the upper staff, 22.46 pt for the lower — to make room for the count
+        /// above the lower staff's signs, which the sign's shape now holds as MuseScore's does
+        /// (`ChordLayout::fillShape(MeasureRepeat)` adds `numberRect`). Checked line by line; nothing else moved.
         private static let expectedDigestSHA256 =
-            "2b063143a561473f6e972d9ba50b7205f68477216e580e637023069aabf5d461"
+            "b74058a01832fcfb8d1f5fa60ad601e4370ee766d8fdc32e10347becd522188a"
 
         @Test("write digest")
         func writeDigest() throws {
