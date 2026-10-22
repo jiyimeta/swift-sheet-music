@@ -5,6 +5,13 @@
 @testable import SheetMusicLayout
 import Testing
 
+#if !canImport(CoreGraphics)
+    /// On Android and WebAssembly, SheetMusicCore and SheetMusicLayout both export portable
+    /// `CGFloat` / `CGPoint` shims, so anchor explicitly to SheetMusicLayout's definitions.
+    private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+#endif
+
 /// The `%` sign carries its slot, which selection names as the bar's rest (`LayoutElement.restSlot`): a click on it
 /// selects that rest, and a later bar of a group draws no rest of its own under the sign.
 @Suite("Measure repeat layout as a slot")

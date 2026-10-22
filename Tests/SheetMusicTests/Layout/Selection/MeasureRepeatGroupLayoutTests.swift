@@ -5,6 +5,13 @@
 @testable import SheetMusicLayout
 import Testing
 
+#if !canImport(CoreGraphics)
+    /// On Android and WebAssembly, SheetMusicCore and SheetMusicLayout both export portable
+    /// `CGFloat` / `CGPoint` shims, so anchor explicitly to SheetMusicLayout's definitions.
+    private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+#endif
+
 /// A 2- or 4-bar measure repeat as MuseScore engraves it: the sign in the group's anchor bar, drawn on that bar's
 /// trailing barline — the group's middle — with the bar count above it; a click selects it only on its ink; a group
 /// bar the sign does not stand in still draws a selection; and the group never splits across systems.
