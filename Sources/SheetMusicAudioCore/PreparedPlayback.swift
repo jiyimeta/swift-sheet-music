@@ -181,6 +181,9 @@ package struct PlaybackChannelLayout: Sendable, Equatable {
                 partName: labels.partName,
                 instrumentName: labels.instrumentName,
                 volume: Float(max(0, min(127, strip.instrument.channel.volume))) / 127,
+                // The score's own mute / solo is where playback starts; a host's listener-side state goes on top.
+                isMuted: strip.instrument.channel.isMuted,
+                isSoloed: strip.instrument.channel.isSoloed,
                 program: UInt8(clamping: strip.instrument.channel.program),
                 isDrums: strip.instrument.useDrumset,
             )
