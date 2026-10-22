@@ -7,6 +7,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **A tempo marking can be copied and pasted as it stands.** `SetTempo.tempo(at:in:)` is public — the whole stored
+  `Tempo`, where `current(at:in:)` reads a marking as it plays (an "a tempo" as the tempo it reinstates, without its
+  words or type). `SetTempo.marking(copying:)` turns it into the marking that writes it back: stored number and beat,
+  words (or a derived text), `<play>`, and the new `Marking.textType` / `Marking.followText`, which a write states
+  over whatever the text edit makes of them (`nil`, the default, leaves them). The markup, offsets, font, color and
+  visibility are not carried. The planner's no-op test compares a marking that states either with the stored tempo
+  rather than with `current`. `SetTempoIntentWire` carries the two as optional tags 10 and 11, absent unless set, so
+  existing intents' bytes are unchanged. **Mixed-version collaboration:** an older client skips the two tags and
+  applies the rest — a pasted "a tempo" arrives there as an ordinary marking with the words "a tempo".
+
 ## [4.18.0] - 2026-10-22
 
 ### Added

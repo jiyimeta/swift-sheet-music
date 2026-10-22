@@ -3,8 +3,9 @@ import SheetMusicEditWire
 import Testing
 import Wirelet
 
-/// `SetTempoIntentWire`'s text and play tags (6–8) are optional: a number-only marking writes none of them, so its
-/// bytes are what they always were and older bytes still decode, and every text edit and play flag round-trips.
+/// `SetTempoIntentWire`'s text, play, type and follow tags (6–11) are optional: a number-only marking writes none of
+/// them, so its bytes are what they always were and older bytes still decode, and every text edit and play flag
+/// round-trips.
 @Suite("EditIntentCodec — tempo marking text and play")
 struct EditIntentCodecTempoMarkingTests {
     private static let slot = VoiceElementID(
@@ -13,9 +14,11 @@ struct EditIntentCodecTempoMarkingTests {
 
     private static func intent(
         _ text: SetTempo.Marking.TextEdit = .keep, playsBack: Bool? = nil, numberEdit: Bool? = nil,
+        textType: TempoTextType? = nil, followText: Bool? = nil,
     ) -> EditIntent {
         .setTempo(anchor: slot, marking: SetTempo.Marking(
-            beatsPerSecond: 2.4, text: text, playsBack: playsBack, numberEdit: numberEdit,
+            beatsPerSecond: 2.4, text: text, playsBack: playsBack, numberEdit: numberEdit, textType: textType,
+            followText: followText,
         ))
     }
 
@@ -23,6 +26,9 @@ struct EditIntentCodecTempoMarkingTests {
         intent(numberEdit: true), intent(playsBack: false, numberEdit: false),
         intent(), intent(.derive), intent(.set("Allegro molto")), intent(.set("")),
         intent(playsBack: false), intent(playsBack: true), intent(.set("a tempo"), playsBack: false),
+        intent(textType: .normal), intent(textType: .aTempo), intent(textType: .tempoPrimo),
+        intent(followText: false), intent(followText: true),
+        intent(.set("a tempo"), playsBack: true, numberEdit: true, textType: .aTempo, followText: true),
     ]
 
     @Test("every text edit and play flag survives a round trip", arguments: cases)
@@ -51,6 +57,9 @@ struct EditIntentCodecTempoMarkingTests {
         var missingText = SetTempoIntentWire(anchor: Self.slot, marking: SetTempo.Marking(beatsPerSecond: 2))
         missingText.textMode = 2
         #expect(throws: WireFormatError.unknownTag(tag: 7, wireType: .lengthDelimited)) { try missingText.decoded() }
+        var unknownType = SetTempoIntentWire(anchor: Self.slot, marking: SetTempo.Marking(beatsPerSecond: 2))
+        unknownType.textType = 3
+        #expect(throws: WireFormatError.unknownChoiceDiscriminator(3)) { try unknownType.decoded() }
     }
 
     @Test("a number-only marking writes no optional tag; each one costs exactly its own bytes")
@@ -60,5 +69,7 @@ struct EditIntentCodecTempoMarkingTests {
         #expect(EditIntentCodec.encode(Self.intent(.set("x"))).count == plain + 5)
         #expect(EditIntentCodec.encode(Self.intent(playsBack: false)).count == plain + 2)
         #expect(EditIntentCodec.encode(Self.intent(numberEdit: true)).count == plain + 2)
+        #expect(EditIntentCodec.encode(Self.intent(textType: .aTempo)).count == plain + 2)
+        #expect(EditIntentCodec.encode(Self.intent(followText: false)).count == plain + 2)
     }
 }
