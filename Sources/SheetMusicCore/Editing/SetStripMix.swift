@@ -31,9 +31,10 @@ public struct StripMix: Sendable, Equatable, Hashable {
 ///
 /// - An instrument point (the part's own instrument, or a mid-score instrument change) writes its instrument's
 ///   primary `<Channel>` — the one a live mixer keys the strip on — and the volume, mute and solo of its other
-///   channels, so a technique added later (`pizzicato` on a muted violin) sounds the way the instrument was left.
-/// - A play-technique point that sounds through one of its instrument's own channels writes that channel, over the
-///   instrument's fan-out.
+///   channels that no technique sounds through yet, so a technique added later (`pizzicato` on a muted violin)
+///   sounds the way the instrument was left. A channel a technique already sounds through is that technique's strip,
+///   left alone unless that strip is saved too.
+/// - A play-technique point that sounds through one of its instrument's own channels writes that channel.
 /// - A technique point with no channel of its own (a General MIDI sound chosen for the technique) has nothing in the
 ///   score to write to, and is skipped; `canWrite(_:in:)` tells a host so.
 ///
@@ -130,9 +131,9 @@ public struct SetStripMix: EditCommand {
         var fullMix: Bool
     }
 
-    /// Each channel the mixes reach, in order. An instrument point reaches its primary channel and, as a fan-out,
-    /// its other channels; a technique point that sounds through one of its instrument's own channels reaches that
-    /// channel; a technique point with no channel of its own reaches nothing.
+    /// Each channel the mixes reach, in order. An instrument point reaches its primary channel and, as a fan-out, its
+    /// other channels that no technique in the score sounds through yet; a technique point that sounds through one of
+    /// its instrument's own channels reaches that channel; a technique point with no channel of its own reaches none.
     private static func resolve(_ mixes: [StripMix], in score: Score) throws -> [Target] {
         var targets: [Target] = []
         for mix in mixes {
@@ -144,6 +145,12 @@ public struct SetStripMix: EditCommand {
             for (index, point) in timeline.enumerated() where point.basePoint == nil {
                 instrumentOrdinal[index] = instrumentOrdinal.count
             }
+            // The channels a technique sounds through have strips of their own, saved or not: no fan-out reaches them.
+            var flavoursInUse: [Int: Set<Int>] = [:]
+            for point in timeline {
+                guard let source = point.flavourSource, let ordinal = instrumentOrdinal[source.point] else { continue }
+                flavoursInUse[ordinal, default: []].insert(source.flavour)
+            }
             for index in mix.points {
                 guard timeline.indices.contains(index) else { throw UnknownPoint() }
                 let point = timeline[index]
@@ -152,7 +159,7 @@ public struct SetStripMix: EditCommand {
                     let base = instrumentSlots[ordinal]
                     targets.append(Target(slot: base.withChannel(0), mix: mix, fullMix: true))
                     let count = instrument(at: base, in: score)?.channels.count ?? 0
-                    for flavour in 1 ..< max(count, 1) {
+                    for flavour in 1 ..< max(count, 1) where !(flavoursInUse[ordinal]?.contains(flavour) ?? false) {
                         targets.append(Target(slot: base.withChannel(flavour), mix: mix, fullMix: false))
                     }
                 } else if let source = point.flavourSource, let ordinal = instrumentOrdinal[source.point],

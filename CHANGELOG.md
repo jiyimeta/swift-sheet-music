@@ -17,10 +17,10 @@ and this project adheres to
 - **`EditIntent.setStripMix([StripMix])` (wire index 93).** Writes mixer strips' volume, program, mute and solo into
   the score as one undo step — a host's "save this mix to the score". A strip is addressed by the sound-timeline
   points that play on it; `LiveChannelPlan.timelineIndices(partIndex:ordinal:)` maps a live strip to them. An
-  instrument point writes its instrument's primary channel, and the volume, mute and solo of its other channels (so a
-  technique added later sounds the way the instrument was left); a play technique sounding through one of the
-  instrument's own channels writes that channel, over the fan-out; a technique with no channel of its own is skipped,
-  and `SetStripMix.canWrite(_:in:)` tells a host which strips the score has nowhere to keep.
+  instrument point writes its instrument's primary channel, and the volume, mute and solo of its other channels no
+  technique sounds through yet (so a technique added later sounds the way the instrument was left); a play technique
+  sounding through one of the instrument's own channels writes that channel; a technique with no channel of its own is
+  skipped, and `SetStripMix.canWrite(_:in:)` tells a host which strips the score has nowhere to keep.
 
 ## [4.19.0] - 2026-10-22
 

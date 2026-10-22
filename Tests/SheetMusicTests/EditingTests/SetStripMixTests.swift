@@ -145,6 +145,10 @@ struct SetStripMixTests {
             #expect(!channels[1].isMuted)
             #expect(channels[0].volume == 90 && channels[0].isMuted)
         }
+        // Saving the instrument's strip alone leaves the technique's strip as the score had it.
+        var score = original
+        try SetStripMix([arco]).apply(to: &score)
+        #expect(score.parts[0].instrument.channels[1] == original.parts[0].instrument.channels[1])
     }
 
     @Test("a strip made only of a technique with no channel of its own cannot be written")
