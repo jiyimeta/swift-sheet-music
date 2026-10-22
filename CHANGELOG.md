@@ -10,7 +10,8 @@ and this project adheres to
 ### Added
 
 - **A measure repeat is a slot, as MuseScore's `MeasureRepeat` is a `Rest` of its bar's length.** The `%` sign now
-  advances its voice's cursor by the bar it stands for, so `Score.voiceElements(in:)` takes it into a range, the
+  advances its voice's cursor by the bar it stands for, so `Score.voiceElements(in:)` takes it into a range,
+  `Score.items(inRangeFrom:to:)` names it as the bar's rest (so a range selection over its bar is lit and boxed), the
   `ElementNavigator` walk stops on it, and the layout names it as the bar's rest: `LayoutElement.measureRepeat` carries
   a `restID`, a click on the sign hit-tests as `.rest`, and `LayoutElement.restSlot` answers for a rest and a sign
   alike. A rest the first voice of a group's bar holds under the sign is never drawn and the walk passes it

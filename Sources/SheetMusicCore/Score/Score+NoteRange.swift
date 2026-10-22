@@ -1,8 +1,9 @@
 import SheetMusicFoundation
 
 extension Score {
-    /// Returns every `ScoreItemID` (note or rest) inside the
-    /// rectangular selection bounded by `anchor` and `target`.
+    /// Returns every `ScoreItemID` (note or rest — a measure repeat
+    /// counting as its bar's rest) inside the rectangular selection
+    /// bounded by `anchor` and `target`.
     ///
     /// The region is `min(staff)...max(staff)` × `min(time)...max(time)`,
     /// where `time` is the element's tick position within the score
@@ -68,8 +69,9 @@ extension Score {
                                     )))
                                 }
                             }
-                        case .chord:
-                            // Empty chord — selectable as a rest.
+                        case .chord, .measureRepeat:
+                            // Empty chord — selectable as a rest; so is a measure repeat (`isRangeSlot`), or a range
+                            // over its bar names nothing and the bar draws no selection.
                             if inRange {
                                 result.append(.rest(RestID(
                                     staff: addr,

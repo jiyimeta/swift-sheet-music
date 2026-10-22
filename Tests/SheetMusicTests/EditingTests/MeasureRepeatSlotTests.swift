@@ -51,6 +51,16 @@ struct MeasureRepeatSlotTests {
         #expect(covered.contains(sign))
     }
 
+    /// What a range selection lights (`SelectionExpansion`): a click in the sign's bar selects the sign as a range of
+    /// one, and that range has to name it, or the bar shows no selection at all.
+    @Test("a selection range names the sign as its bar's rest")
+    func selectionRangeNamesTheSign() throws {
+        let score = try Self.signed()
+        let index = try #require(Self.signIndex(score, 1))
+        let sign = ScoreItemID.rest(RestID(staff: Self.cello, measureIndex: 1, voiceIndex: 0, elementIndex: index))
+        #expect(score.items(inRangeFrom: sign, to: sign) == [sign])
+    }
+
     @Test("the voice-order walk stops on the sign, forward and back")
     func walkStopsOnTheSign() throws {
         let score = try Self.signed()
