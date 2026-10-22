@@ -1,4 +1,4 @@
-@testable import SheetMusicRenderWindows
+@_spi(Testing) @testable import SheetMusicRenderWindows
 import Testing
 
 /// The `clippedFillPath` overlay: `fillPath`'s shape kept only inside its clip, intersected once and filled like any
