@@ -1,6 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
+import Foundation
 @testable import SheetMusicCore
 @testable import SheetMusicLayout
 import Testing
@@ -22,8 +23,10 @@ import Testing
 
     /// An HBox before measure `index`, `widthSp` wide (`nil` = MuseScore's default), with its left and right gaps
     /// (`topGapSp` / `bottomGapSp`).
+    /// Sizes in the model's `CGFloat` (Foundation's), which off Apple is not SheetMusicLayout's.
     private static func hbox(
-        _ widthSp: CGFloat?, before index: Int, leftGapSp: CGFloat? = nil, rightGapSp: CGFloat? = nil,
+        _ widthSp: Foundation.CGFloat?, before index: Int, leftGapSp: Foundation.CGFloat? = nil,
+        rightGapSp: Foundation.CGFloat? = nil,
     ) -> PositionedScoreBlock {
         let frame = HorizontalFrame(widthSp: widthSp, topGapSp: leftGapSp, bottomGapSp: rightGapSp)
         return PositionedScoreBlock(beforeMeasureIndex: index, block: .horizontalFrame(frame))

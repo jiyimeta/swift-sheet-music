@@ -35,7 +35,7 @@ struct ClippedFillPathOverlayTests {
         ])
         #expect(Self.pixel(pixels, mmX: 14, mmY: 14) != Self.white, "inside both: not painted")
         #expect(Self.pixel(pixels, mmX: 7, mmY: 7) == Self.white, "inside the stroke, outside the clip: painted")
-        #expect(Self.pixel(pixels, mmX: 30, mmY: 30) == Self.white)
+        #expect(Self.pixel(pixels, mmX: 28, mmY: 28) == Self.white, "outside the stroke: painted")
     }
 
     /// A ring — a 16 mm square around a 6 mm one, wound the same way — keeps its hole only under even-odd.
