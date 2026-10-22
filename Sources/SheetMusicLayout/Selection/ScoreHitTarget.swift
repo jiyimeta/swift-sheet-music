@@ -17,7 +17,10 @@ import SheetMusicCore
 ///
 /// `ScoreHitTester.hitTest(at:)` tries, in order:
 ///
-/// **notehead → rest → beam → flag → stem → tuplet → clef → text → engraved element → part name.**
+/// **notehead → rest → beam → flag → tremolo → stem → tuplet → clef → text → engraved element → part name.**
+///
+/// The tremolo rung reports a tremolo's bars, which cross its stem — ahead of the stem for the reason the beam and
+/// flag are; every other engraved element waits for the late rung.
 ///
 /// The notehead rung covers grace noteheads too (`.graceNote`). Within it an ordinary head keeps first-match order,
 /// and a grace head wins only when the point is inside the grace head's own reach — the notehead radius scaled by
@@ -142,6 +145,12 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// Reported last of all — the label sits in the system's left margin, clear of every other rung's ink — and only
     /// where a name is drawn: an empty one has no ink to click.
     case partName(partIndex: Int, form: PartNameForm)
+    /// A chord's arpeggio, addressed by `SetArpeggio`; see `ScoreElementID.arpeggio`.
+    case arpeggio(anchor: VoiceElementID)
+    /// A chord's chord line, addressed by `SetChordLine`; see `ScoreElementID.chordLine`.
+    case chordLine(anchor: VoiceElementID)
+    /// A chord's tremolo, addressed by `SetTremolo`; see `ScoreElementID.tremolo`.
+    case tremolo(anchor: VoiceElementID)
 }
 
 extension ScoreHitTarget {
@@ -178,7 +187,7 @@ extension ScoreHitTarget {
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote:
             return nil
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando, .swing, .partName:
+             .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
             return nil
         }
     }
@@ -202,7 +211,7 @@ extension ScoreHitTarget {
         case .lyric, .staffText, .harmony, .rehearsalMark:
             return textID.map(ScoreItemID.text)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando, .swing, .partName:
+             .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
             return elementID.map(ScoreItemID.element)
         }
     }
@@ -237,6 +246,9 @@ extension ScoreHitTarget {
         case let .glissando(start): self = .glissando(start: start)
         case let .swing(anchor): self = .swing(anchor: anchor)
         case let .partName(partIndex, form): self = .partName(partIndex: partIndex, form: form)
+        case let .arpeggio(anchor): self = .arpeggio(anchor: anchor)
+        case let .chordLine(anchor): self = .chordLine(anchor: anchor)
+        case let .tremolo(anchor): self = .tremolo(anchor: anchor)
         }
     }
 
@@ -270,6 +282,9 @@ extension ScoreHitTarget {
         case let .glissando(start): return .glissando(start: start)
         case let .swing(anchor): return .swing(anchor: anchor)
         case let .partName(partIndex, form): return .partName(partIndex: partIndex, form: form)
+        case let .arpeggio(anchor): return .arpeggio(anchor: anchor)
+        case let .chordLine(anchor): return .chordLine(anchor: anchor)
+        case let .tremolo(anchor): return .tremolo(anchor: anchor)
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
              .lyric, .staffText, .harmony, .rehearsalMark:
             return nil

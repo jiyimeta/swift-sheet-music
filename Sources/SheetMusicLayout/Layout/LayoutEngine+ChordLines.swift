@@ -20,6 +20,8 @@ extension LayoutEngine {
     /// Returns visible and invisible elements separately so the caller
     /// can route hidden lines into the `showsInvisibleElements`
     /// overlay, matching the arpeggio pass.
+    ///
+    /// `anchor` is the chord's own slot, which every line it carries names (`ScoreElementID.chordLine`).
     static func chordLineElements(
         for chordLines: [ChordLine],
         chordNotes: [LayoutChordNote],
@@ -29,6 +31,7 @@ extension LayoutEngine {
         staffMidY: CGFloat,
         mag: CGFloat,
         metrics: StaffMetrics,
+        anchor: VoiceElementID? = nil,
     ) -> (visible: [LayoutElement], invisible: [LayoutElement]) {
         guard !chordLines.isEmpty else { return ([], []) }
         var visible: [LayoutElement] = []
@@ -43,6 +46,7 @@ extension LayoutEngine {
                 staffMidY: staffMidY,
                 mag: mag,
                 metrics: metrics,
+                anchor: anchor,
             )
             if line.visible {
                 visible.append(element)
@@ -62,6 +66,7 @@ extension LayoutEngine {
         staffMidY: CGFloat,
         mag: CGFloat,
         metrics: StaffMetrics,
+        anchor: VoiceElementID?,
     ) -> LayoutElement {
         let sp = metrics.sp
         // Anchor note: the one the line was bound to, else the chord's
@@ -89,6 +94,7 @@ extension LayoutEngine {
                 shape: .path(segments),
                 origin: origin,
                 thickness: ChordLineGeometry.thickness(sp: sp, mag: mag),
+                anchor: anchor,
             )
         }
 
@@ -109,6 +115,7 @@ extension LayoutEngine {
                 baselineOrigin: origin, codepoint: codepoint, sp: sp,
             ),
             thickness: ChordLineGeometry.thickness(sp: sp, mag: mag),
+            anchor: anchor,
         )
     }
 

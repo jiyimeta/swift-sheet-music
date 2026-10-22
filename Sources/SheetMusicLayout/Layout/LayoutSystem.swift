@@ -218,7 +218,9 @@ public struct LayoutSystem: Sendable, Equatable {
                         centerY: (minY + maxY) / 2,
                         bbox: bbox,
                     ))
-                case let .rest(_, origin, voiceIndex, restID, _):
+                case .rest, .measureRepeat:
+                    // A measure repeat stands in its bar's rest column (`LayoutElement.restSlot`).
+                    guard let (restID, origin, voiceIndex, _) = el.restSlot else { continue }
                     let cx = mx + origin.x
                     let cy = my + origin.y
                     // Matches `ScoreHitTester.hitRest`'s half-extents.

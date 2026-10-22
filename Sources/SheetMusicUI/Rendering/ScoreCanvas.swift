@@ -299,12 +299,12 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 isAbove: isAbove, origin: shift(p),
                 metrics: metrics,
             )
-        case let .measureRepeat(c, p):
+        case let .measureRepeat(c, p, _):
             MeasureRepeatRenderer.draw(
                 context: &context, count: c,
                 origin: shift(p), metrics: metrics,
             )
-        case let .arpeggioWiggle(top, bot, sub):
+        case let .arpeggioWiggle(top, bot, sub, _):
             ArpeggioRenderer.draw(
                 context: &context, top: shift(top),
                 bottom: shift(bot), subtype: sub,
@@ -350,7 +350,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 shape: shape.translated(by: base),
                 metrics: metrics,
             )
-        case let .chordLine(shape, origin, thickness):
+        case let .chordLine(shape, origin, thickness, _):
             ChordLineRenderer.draw(
                 context: &context,
                 shape: shape, origin: shift(origin),
@@ -451,7 +451,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             MultiMeasureRestRenderer.draw(
                 context: &context, count: count, origin: shift(p), metrics: metrics,
             )
-        case let .tremoloBars(anchor, barCount):
+        case let .tremoloBars(anchor, barCount, _):
             let shiftedAnchor: TremoloAnchor
             switch anchor {
             case let .single(c):

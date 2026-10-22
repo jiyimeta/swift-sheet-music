@@ -336,7 +336,10 @@ public enum LayoutElement: Sendable, Equatable {
         kind: LayoutFigure.Kind, figure: LayoutFigure, color: ScoreColor? = nil,
         placement: TextPlacementMetadata? = nil,
     )
-    case measureRepeat(count: Int, origin: CGPoint)
+    /// The `%` sign. `restID` names its slot, which selection treats as the bar's rest — MuseScore's `MeasureRepeat`
+    /// is a `Rest` — so a click selects it, a range takes it in and the arrow keys stop on it (`restSlot`); `nil` for
+    /// a sign drawn with no slot to name.
+    case measureRepeat(count: Int, origin: CGPoint, restID: RestID? = nil)
     /// Multi-measure rest H-bar with a count printed above. Replaces
     /// the `count` consecutive rest measures starting at this layout
     /// measure's `measureIndex`. Origin is the SMuFL anchor at the
@@ -440,27 +443,33 @@ public enum LayoutElement: Sendable, Equatable {
     /// curve has as many legs as the bend has points, so the geometry is
     /// resolved once at layout time and the pieces travel together.
     case legacyBend(shape: LegacyBendShape)
+    /// `anchor` names the chord accepted by `SetArpeggio`, or explicitly has no command address.
     case arpeggioWiggle(
         top: CGPoint,
         bottom: CGPoint,
         subtype: String?,
+        anchor: VoiceElementID?,
     )
     /// Jazz/brass inflection line hanging off a chord — fall, doit,
     /// plop, or scoop (plus their "slide" and "rough" palette
     /// variants). `origin` is the attachment point next to the
     /// notehead in measure-local coords; the `shape` payload is
     /// expressed relative to it. See `ChordLineGeometry`.
+    /// `anchor` names the chord accepted by `SetChordLine`, or explicitly has no command address.
     case chordLine(
         shape: ChordLineShape,
         origin: CGPoint,
         thickness: CGFloat,
+        anchor: VoiceElementID?,
     )
     /// Beamed-stem tremolo bars. Bar count comes from
     /// `Tremolo.Subtype.rawValue` (1, 2, 3, or 4). Slant is fixed at +12°
     /// for v1 (a flat slant matches the MuseScore default sufficiently
     /// for visual review). Drawn as slanted rectangles using
     /// `metrics.beamThickness` and `metrics.beamSpacing`.
-    case tremoloBars(anchor: TremoloAnchor, barCount: Int)
+    /// `owner` names the chord accepted by `SetTremolo` — a two-chord tremolo's first — or explicitly has no command
+    /// address. (`anchor` is the drawing anchor here, hence the different name.)
+    case tremoloBars(anchor: TremoloAnchor, barCount: Int, owner: VoiceElementID?)
     /// Tuplet marking — bracket (when `hasBracket` is true) with a
     /// number in the middle, or number alone (when beamed). `fromOrigin`
     /// and `toOrigin` define the horizontal span of the first and last

@@ -176,13 +176,13 @@ enum RangeCopyPayload {
         return trimmed
     }
 
-    /// One voice at the boundary: drops the chords, rests and `.spanner`s whose own tick falls outside
-    /// `low ..< high`, and the `.locationShift`/`.measureRepeat` kinds outright.
+    /// One voice at the boundary: drops the chords, rests, measure-repeat signs and `.spanner`s whose own tick falls
+    /// outside `low ..< high`, and the `.locationShift` kind outright.
     ///
-    /// Those two are the kinds a cut boundary genuinely invalidates, and neither can be restated from what
-    /// survives: a jog moves the voice's ONE cursor past ticks this trim may have just cut away, so it would
-    /// re-date everything after it in the bar, and a measure repeat stands for a whole bar's content while a
-    /// boundary measure is precisely the bar the trim can partially remove.
+    /// A sign is a rest of its bar's length, so it is kept or dropped by its tick exactly as a rest is — which keeps
+    /// it whenever the range reaches its bar at all, since it opens the bar. A jog is the one kind a cut boundary
+    /// genuinely invalidates, and it cannot be restated from what survives: it moves the voice's ONE cursor past
+    /// ticks this trim may have just cut away, so it would re-date everything after it in the bar.
     ///
     /// A `.spanner` is not one of them. Its hazard is positional and it is the hazard the chords already have:
     /// the trim slides the survivors to the front of the boundary measure, so a spanner anchored AHEAD of the
@@ -215,10 +215,10 @@ enum RangeCopyPayload {
             let element = voice.elements[index]
             defer { tick += element.cursorAdvance(division: division, in: measureDuration) }
             switch element {
-            case .chord, .spanner:
+            case .chord, .measureRepeat, .spanner:
                 let position = ScoreTickPosition(measure: measureIndex, tick: tick)
                 if !(position >= low && position < high) { removed.insert(index) }
-            case .locationShift, .measureRepeat:
+            case .locationShift:
                 removed.insert(index)
             default:
                 break

@@ -97,11 +97,22 @@ public enum ScoreElementID: Hashable, Sendable {
     /// picks the drawn place the reader clicked out of `ScoreHitTester.elementHitRects(for:)`.
     case partName(partIndex: Int, form: PartNameForm)
 
+    /// The arpeggio on the chord at `anchor` — `SetArpeggio`'s own address; a `nil` subtype removes it. A chord
+    /// carries at most one, so the chord names it.
+    case arpeggio(anchor: VoiceElementID)
+    /// The chord line (fall, doit, plop, scoop …) on the chord at `anchor` — `SetChordLine`'s own address; a `nil`
+    /// kind removes it. A chord carries at most one.
+    case chordLine(anchor: VoiceElementID)
+    /// The tremolo on the chord at `anchor` — `SetTremolo`'s own address; a `nil` tremolo removes it. A two-chord
+    /// tremolo is stored on, and named by, its first chord.
+    case tremolo(anchor: VoiceElementID)
+
     /// The voice-element owner anchor, or `nil` for bar and staff-owned navigation lists and for a part name.
     public var anchor: VoiceElementID? {
         switch self {
         case let .dynamic(anchor), let .fermata(anchor), let .breath(anchor), let .tempo(anchor),
-             let .spanner(anchor, _), let .articulation(anchor, _), let .swing(anchor): return anchor
+             let .spanner(anchor, _), let .articulation(anchor, _), let .swing(anchor), let .arpeggio(anchor),
+             let .chordLine(anchor), let .tremolo(anchor): return anchor
         case let .tie(start, _), let .glissando(start): return VoiceElementID(start)
         case let .slur(id): return id.anchor
         case .keySignature, .timeSignature, .barLine, .jump, .marker, .partName: return nil
@@ -113,7 +124,7 @@ public enum ScoreElementID: Hashable, Sendable {
         switch self {
         case let .keySignature(index, _), let .timeSignature(index, _), let .barLine(index, _): return index
         case .dynamic, .fermata, .breath, .tempo, .spanner, .articulation, .tie, .slur, .jump, .marker,
-             .glissando, .swing, .partName:
+             .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
             return nil
         }
     }
@@ -126,7 +137,8 @@ public enum ScoreElementID: Hashable, Sendable {
         case let .keySignature(_, staff), let .timeSignature(_, staff),
              let .jump(staff, _, _), let .marker(staff, _, _): return staff
         case let .partName(partIndex, _): return StaffAddress(partIndex: partIndex, staffIndexInPart: 0)
-        case .dynamic, .fermata, .breath, .tempo, .spanner, .barLine, .articulation, .tie, .slur, .glissando, .swing:
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .barLine, .articulation, .tie, .slur, .glissando, .swing,
+             .arpeggio, .chordLine, .tremolo:
             return nil
         }
     }

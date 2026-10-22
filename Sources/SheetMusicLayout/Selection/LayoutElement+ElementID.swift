@@ -1,3 +1,6 @@
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
 /// The shared answer to which editable engraved element this geometry names.
@@ -28,6 +31,12 @@ extension LayoutElement {
             return anchor.map { .breath(anchor: $0) }
         case let .articulation(kind, _, _, anchor):
             return anchor.map { .articulation(anchor: $0, kind: kind.modelKind) }
+        case let .arpeggioWiggle(_, _, _, anchor):
+            return anchor.map { .arpeggio(anchor: $0) }
+        case let .chordLine(_, _, _, anchor):
+            return anchor.map { .chordLine(anchor: $0) }
+        case let .tremoloBars(_, _, owner):
+            return owner.map { .tremolo(anchor: $0) }
         case let .spannerSegment(kind, _, _, _, _, _, anchor, _, _):
             guard let anchor else { return nil }
             switch kind {
@@ -36,7 +45,15 @@ extension LayoutElement {
             case .ottava: return .spanner(anchor: anchor, kind: .ottava)
             case .volta: return .spanner(anchor: anchor, kind: .volta)
             case .slur: return .slur(.voice(anchor))
-            case .vibrato, .trill, .textLine, .palmMute, .letRing, .gradualTempoChange, .chordTextLine: return nil
+            case .vibrato: return .spanner(anchor: anchor, kind: .vibrato)
+            case .trill: return .spanner(anchor: anchor, kind: .trill)
+            // Only a real text line reaches here with an anchor: a glissando or unrecognized `.spanner` draws as a
+            // text line too, but `SpannerAnchor.selectionAnchor` gives it none.
+            case .textLine: return .spanner(anchor: anchor, kind: .textLine)
+            case .palmMute: return .spanner(anchor: anchor, kind: .palmMute)
+            case .letRing: return .spanner(anchor: anchor, kind: .letRing)
+            case .gradualTempoChange: return .spanner(anchor: anchor, kind: .gradualTempoChange)
+            case .chordTextLine: return .spanner(anchor: anchor, kind: .chordTextLine)
             }
         default:
             return nil
@@ -46,6 +63,20 @@ extension LayoutElement {
     /// The same identity wrapped for selection and renderer registration.
     public var elementItemID: ScoreItemID? {
         elementID.map(ScoreItemID.element)
+    }
+
+    /// A slot selection names as a rest: a rest, or a measure repeat with its slot — MuseScore's `MeasureRepeat` is a
+    /// `Rest` of the bar's length, so a click, a range and a cursor treat the sign as the bar's rest. Its identity,
+    /// where it sits, its voice and its length. `nil` for anything else, and for a sign drawn with no slot.
+    public var restSlot: (restID: RestID, origin: CGPoint, voiceIndex: Int, duration: NoteDuration)? {
+        switch self {
+        case let .rest(duration, origin, voiceIndex, restID, _):
+            (restID, origin, voiceIndex, duration)
+        case let .measureRepeat(_, origin, restID?):
+            (restID, origin, restID.voiceIndex, .measure)
+        default:
+            nil
+        }
     }
 }
 

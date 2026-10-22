@@ -93,6 +93,16 @@ extension VoiceElement {
         .chord(Chord(duration: duration, notes: []))
     }
 
+    /// A slot a range, a caret and a voice-order walk stand on: a chord or rest — or a measure repeat, which MuseScore
+    /// models as a rest of the bar's length (`class MeasureRepeat : public Rest`), so a click, the arrow keys and a
+    /// range treat it as one. Its length is the bar's (`cursorAdvance(division:in:)`).
+    public var isRangeSlot: Bool {
+        switch self {
+        case .chord, .measureRepeat: true
+        default: false
+        }
+    }
+
     /// True when this element behaves as a rest — i.e. it is a
     /// chord whose `notes` array is empty.
     public var isRest: Bool {

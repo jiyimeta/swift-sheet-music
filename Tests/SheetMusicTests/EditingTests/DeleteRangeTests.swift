@@ -237,6 +237,32 @@ struct DeleteRangeTests {
         #expect(voice.tupletSpans.map(\.endIndex) == [2])
     }
 
+    /// A range covering every member of a tuplet takes the tuplet with it and fills its span with metric rests —
+    /// MuseScore's `deleteRange` deletes a tuplet it covers whole (`cmdDeleteTuplet`).
+    @Test("a wholly covered triplet goes, bracket and all, and its span comes back as metric rests")
+    func whollyCoveredTupletGoes() throws {
+        let tripletEighth = NoteDuration.fraction(Fraction(numerator: 1, denominator: 12))
+        var score = TupletIdentityFixtures.score(
+            [
+                VoiceIdentityFixtures.time,
+                VoiceIdentityFixtures.chord(tripletEighth), VoiceIdentityFixtures.chord(tripletEighth),
+                VoiceIdentityFixtures.chord(tripletEighth),
+                VoiceIdentityFixtures.chord(.quarter), VoiceIdentityFixtures.chord(.half),
+            ],
+            tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)],
+        )
+        let range = VoiceElementRange(
+            start: VoiceIdentityFixtures.location(1), end: VoiceIdentityFixtures.location(3),
+        )
+        _ = try DeleteRange(over: range).apply(to: &score)
+        let voice = TupletIdentityFixtures.voice(score)
+        #expect(voice.elements.values == [
+            VoiceIdentityFixtures.time, .rest(duration: .quarter),
+            VoiceIdentityFixtures.chord(.quarter), VoiceIdentityFixtures.chord(.half),
+        ])
+        #expect(voice.tuplets.isEmpty)
+    }
+
     /// What a host collapses its range selection onto after ⌫. `DeleteRange.affectedLocation` can only report
     /// `range.start`, which is the anchor of a backward-drawn range and, after a collapse, an index that no longer
     /// exists — so the session plans `.deleteRange` to its composite and reports the planner's own answer.

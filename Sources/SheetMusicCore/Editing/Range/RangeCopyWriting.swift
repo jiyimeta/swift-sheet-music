@@ -49,6 +49,10 @@ extension RangeCopyWriting {
             reaching: limit, staves: source.staves,
             in: &scratch, ids: &allocator, commands: &commands,
         )
+        try dissolveMeasureRepeats(
+            across: source.staves, from: destinationTick, upTo: limit,
+            in: &scratch, ids: &allocator, commands: &commands,
+        )
         var restarts: [RangeCopySpanners.Restart] = []
         for stream in source.streams {
             // Before the material, so a destination spanner reaching into the span is already gone — and its
@@ -83,6 +87,9 @@ extension RangeCopyWriting {
             _ = try command.apply(to: &scratch, ids: &allocator)
             commands.append(command)
         }
+        restoreMeasureRepeats(
+            of: source, at: destinationTick, in: &scratch, ids: &allocator, commands: &commands,
+        )
         return commands
     }
 

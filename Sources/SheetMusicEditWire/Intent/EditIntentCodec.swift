@@ -139,6 +139,7 @@ import Wirelet
 /// 90 = setSwing(SetSwingIntentWire), see EditIntentPayloads+Marks.swift
 /// 91 = formatRhythms(FormatRhythmsIntentWire), see EditIntentPayloads+Range.swift
 /// 92 = retimeRun(RetimeRunIntentWire), see EditIntentPayloads+Range.swift
+/// 93 = removeSlur(SlurIDWire) — the slur identity's own wire form, no wrapper struct
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -1152,6 +1153,8 @@ public enum EditIntentWire {
     case formatRhythms(FormatRhythmsIntentWire)
     /// Appended for folino's pattern edit (spec 2026-10-17) — index 92. Never renumber anything above it.
     case retimeRun(RetimeRunIntentWire)
+    /// Appended for removing a selected slur — index 93. Never renumber anything above it.
+    case removeSlur(SlurIDWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1360,6 +1363,8 @@ public enum EditIntentWire {
             self = .formatRhythms(FormatRhythmsIntentWire(scope: scope, policy: policy))
         case let .retimeRun(location, durations):
             self = .retimeRun(RetimeRunIntentWire(location: location, durations: durations))
+        case let .removeSlur(id):
+            self = .removeSlur(SlurIDWire(from: id))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         case let .setElementColor(target, color):
@@ -1653,6 +1658,8 @@ public enum EditIntentWire {
         case let .retimeRun(wire):
             let decoded = try wire.decoded()
             return .retimeRun(at: decoded.location, durations: decoded.durations)
+        case let .removeSlur(wire):
+            return .removeSlur(wire.decoded())
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)

@@ -25,6 +25,8 @@ extension ScoreEditSession {
         case let .setPalmMute(range): SetPalmMute(over: range)
         case let .setLetRing(range): SetLetRing(over: range)
         case let .removeSpanner(location, kind): RemoveSpanner(at: location, kind: kind)
+        // Passes through for `removeSpanner`'s reason: "nothing is there" is the command's refusal.
+        case let .removeSlur(id): RemoveSlur(id)
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.

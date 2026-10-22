@@ -73,21 +73,22 @@ extension ScoreLayerBuilder {
 
     // MARK: - Measure repeat
 
+    @discardableResult
     static func drawMeasureRepeat(
         count: Int, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
-    ) {
+    ) -> CAShapeLayer? {
         let codepoint = MeasureRepeatGlyph.codepoint(forCount: count)
         // swiftlint:disable:next force_unwrapping
         let glyph = Character(UnicodeScalar(codepoint)!)
-        if let layer = glyphLayer(
+        guard let layer = glyphLayer(
             glyph, at: origin,
             size: metrics.glyphFontSize,
             height: height,
-        ) {
-            parent.addSublayer(layer)
-        }
+        ) else { return nil }
+        parent.addSublayer(layer)
+        return layer
     }
 
     // MARK: - Multi-measure rest

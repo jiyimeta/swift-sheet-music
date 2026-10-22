@@ -76,6 +76,21 @@ struct RemoveSlurTests {
         #expect(score.stableFingerprint == before.stableFingerprint)
     }
 
+    @Test("the removeSlur intent takes off the one slur it names, as one undo step")
+    func intentRemovesOne() {
+        let first = Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 1)
+        let second = Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 2)
+        let score = Self.fixture(Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)], spanners: [first, second])),
+        ]))
+        let session = ScoreEditSession(score: score)
+        #expect(session.apply(.removeSlur(.chord(anchor: Self.slot(0), ordinal: 0))))
+        guard case let .chord(chord) = session.score[Self.slot(0)] else { Issue.record("expected chord"); return }
+        #expect(chord.spanners == [second])
+        #expect(session.undo())
+        #expect(session.score == score)
+    }
+
     @Test("standalone removal remaps tuplets and shifts slots without changing time offsets")
     func standaloneIndices() throws {
         let chord = Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])

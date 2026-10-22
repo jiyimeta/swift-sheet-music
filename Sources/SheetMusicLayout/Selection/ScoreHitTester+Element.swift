@@ -81,6 +81,20 @@ extension ScoreHitTester {
     /// How far past its two ends, in spatia, a line-like element can be hit. See `hitElement(at:)`.
     static let elementLineReach: CGFloat = 8
 
+    /// The tremolo rung, ahead of the stem's (`hitTestMeasure`): a tremolo's bars cross its chord's stem, and
+    /// MuseScore stacks the tremolo above that stem, so a click on the bars means the tremolo — as a click on a beam
+    /// means the beam. Ink only, without the reach engraved elements get: the stem the bars cross keeps every click
+    /// that misses them.
+    func hitTremolo(measure: LayoutMeasure, base: CGPoint, point: CGPoint) -> ScoreHitTarget? {
+        for element in measure.drawnElements {
+            guard case .tremoloBars = element, let id = element.elementID else { continue }
+            if elementRects(element).contains(where: { $0.offsetBy(dx: base.x, dy: base.y).contains(point) }) {
+                return ScoreHitTarget(elementID: id)
+            }
+        }
+        return nil
+    }
+
     /// First matching ink wins in emission order. Navigation marks currently share origins;
     /// overlapping ink therefore selects the first mark until engraving separates those marks.
     ///

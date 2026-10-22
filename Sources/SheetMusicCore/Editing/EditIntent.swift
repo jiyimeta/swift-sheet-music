@@ -553,4 +553,12 @@ public enum EditIntent: Sendable, Equatable {
     /// tuplet, and `.insufficientRoom` when the new total differs from the old or a length is not positive; resolves
     /// to nothing to apply when every member already has its length. See `RetimeRun`.
     case retimeRun(at: VoiceElementID, durations: [NoteDuration])
+
+    // Appended for removing a selected slur — index 93.
+
+    /// Take off the one slur `id` names — a chord's entry by its ordinal, or a standalone `.spanner` slot — and only
+    /// it, unlike `removeSpanner(kind: .slur)`, which drops every slur a chord carries. The address a slur selection
+    /// already holds (`ScoreElementID.slur`). Refused as `.noSpannerAtLocation` when nothing is there. See
+    /// `RemoveSlur`.
+    case removeSlur(SlurID)
 }

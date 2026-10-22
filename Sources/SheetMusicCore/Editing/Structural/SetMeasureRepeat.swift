@@ -41,6 +41,22 @@ public struct SetMeasureRepeat: EditCommand {
         VoiceElementID(staff: staff, measureIndex: measure.measureIndex, voiceIndex: 0, elementIndex: 0)
     }
 
+    /// What deleting the sign at `location` does: dissolve its whole group back into measure rests, from the group's
+    /// first bar — the way MuseScore's `Score::deleteItem` takes one (`MEASURE_REPEAT`: remove the sign, put back
+    /// measure rests, clear `measureRepeatCount` across the group). `measureRepeatCount` numbers a group's bars 1…n,
+    /// so the sign's bar says how far back the group starts. A sign standing in no group, which no edit here writes,
+    /// is replaced by a measure rest. What `.delete` and a range delete covering a sign both run.
+    static func deleting(signAt location: VoiceElementID, in score: Score) -> any EditCommand {
+        let bar = MeasureRef(measureIndex: location.measureIndex)
+        guard let position = score[measure: bar, staff: location.staff]?.measureRepeatCount else {
+            return ReplaceVoiceElement(at: location, with: .rest(duration: .measure), identity: .fresh)
+        }
+        return SetMeasureRepeat(
+            at: MeasureRef(measureIndex: location.measureIndex - (position - 1)), staff: location.staff,
+            numMeasures: nil,
+        )
+    }
+
     @discardableResult
     public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score[staff] != nil else { throw Self.refused(.staffNotFound(staff)) }

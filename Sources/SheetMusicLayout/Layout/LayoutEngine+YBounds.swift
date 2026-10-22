@@ -73,7 +73,7 @@ extension LayoutEngine {
              let .fermata(_, p, _),
              let .breath(_, p, _),
              let .articulation(_, p, _, _),
-             let .measureRepeat(_, p),
+             let .measureRepeat(_, p, _),
              let .multiMeasureRest(_, p),
              let .measureNumber(_, p),
              let .staffName(_, p),
@@ -114,11 +114,11 @@ extension LayoutEngine {
             return [from.y, vertex.y, to.y]
         case let .legacyBend(shape):
             return legacyBendYPoints(shape: shape, sp: sp)
-        case let .arpeggioWiggle(top, bot, _):
+        case let .arpeggioWiggle(top, bot, _, _):
             return [top.y, bot.y]
-        case let .chordLine(shape, origin, _):
+        case let .chordLine(shape, origin, _, _):
             return chordLineYPoints(shape: shape, origin: origin)
-        case let .tremoloBars(anchor, _):
+        case let .tremoloBars(anchor, _, _):
             switch anchor {
             case let .single(c): return [c.y]
             case let .between(left, right): return [left.y, right.y]

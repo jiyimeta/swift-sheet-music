@@ -748,7 +748,10 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 if argb != nil { out.append(.setColor(argb: ambientArgb)) }
             }
 
-        case let .measureRepeat(count, origin):
+        case let .measureRepeat(count, origin, restID):
+            // Tinted with its slot, which selection names as a rest — as Apple's `+Element.swift` attaches it.
+            let signArgb = restID.flatMap { LayoutBridge.tintColor(for: .rest($0), tint: tint) }
+            if let signArgb { out.append(.setColor(argb: signArgb)) }
             emitCenterAnchoredGlyph(
                 codepoint: MeasureRepeatGlyph.codepoint(forCount: count),
                 cxPt: mox + Double(origin.x),
@@ -756,6 +759,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sizePt: glyphSize,
                 into: &out,
             )
+            if signArgb != nil { out.append(.setColor(argb: ambientArgb)) }
 
         case let .multiMeasureRest(count, origin):
             emitMultiMeasureRest(
@@ -796,7 +800,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .chordLine(shape, origin, thickness):
+        case let .chordLine(shape, origin, thickness, _):
             encodeChordLine(
                 shape: shape,
                 originXPt: mox + Double(origin.x),
@@ -870,7 +874,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .tremoloBars(anchor, barCount):
+        case let .tremoloBars(anchor, barCount, _):
             let shiftedAnchor: TremoloAnchor
             switch anchor {
             case let .single(c):
@@ -971,7 +975,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // `ArpeggioRenderer.drawRotated` / MuseScore's `painter->rotate(-90)`).
         // The `.setRotation` state opcode rotates the canvas about the
         // glyph anchor; emit the glyph, then clear the rotation.
-        case let .arpeggioWiggle(top, bottom, subtype):
+        case let .arpeggioWiggle(top, bottom, subtype, _):
             let segments = ArpeggioGeometry.segments(
                 top: CGPoint(x: mox + Double(top.x), y: moy + Double(top.y)),
                 bottom: CGPoint(

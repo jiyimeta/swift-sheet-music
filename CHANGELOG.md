@@ -7,6 +7,34 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **A measure repeat is a slot, as MuseScore's `MeasureRepeat` is a `Rest` of its bar's length.** The `%` sign now
+  advances its voice's cursor by the bar it stands for, so `Score.voiceElements(in:)` takes it into a range, the
+  `ElementNavigator` walk stops on it, and the layout names it as the bar's rest: `LayoutElement.measureRepeat` carries
+  a `restID`, a click on the sign hit-tests as `.rest`, and `LayoutElement.restSlot` answers for a rest and a sign
+  alike. A rest the first voice of a group's bar holds under the sign is never drawn and the walk passes it
+  (MuseScore's `skipMeasureRepeatRests`) — in every bar of the group, since MuseScore anchors a 2- or 4-bar group's
+  sign in a middle bar, and in a bar holding the sign beside a stray rest.
+- **Deleting a sign dissolves its group** — `.delete` on it, and a range delete covering it — back into measure rests,
+  from the group's first bar (`Score::deleteItem`).
+- **A measure repeat travels through ⌘C / ⌘V and `R`.** A group the range covers whole is carried beside the copied
+  material and formed again where it lands on a barline over bars as long as its own; misaligned, it lands as rests.
+  A destination group the paste or duplicate writes into is dissolved first. `Score.clipboardDocument(for:)` keeps a
+  sign by its tick, as it keeps a rest.
+- **Line spanners are selectable**: a trill, a vibrato, a text line, a palm mute, a let ring, a gradual tempo change
+  and a guitar chord-text line now name their slot (`ScoreElementID.spanner`), which `RemoveSpanner` takes.
+- **An arpeggio, a chord line and a tremolo are selectable** — `ScoreElementID.arpeggio`, `.chordLine` and `.tremolo`
+  (wire choices 16–18), the matching `ScoreHitTarget` cases, and removal through `SetArpeggio` / `SetChordLine` /
+  `SetTremolo` with nothing to write. A tremolo's bars are hit ahead of the stem they cross, as a beam's are.
+- **`EditIntent.removeSlur(SlurID)`** (wire index 93) — the one slur a selection names, where `removeSpanner(kind:
+  .slur)` takes every slur of a chord.
+
+### Changed
+
+- **A range delete that covers every member of a tuplet removes the tuplet** and fills its span with rests, as
+  MuseScore's `cmdDeleteTuplet` does; a tuplet only partly covered keeps its bracket as before.
+
 ## [4.17.0] - 2026-10-21
 
 ### Changed

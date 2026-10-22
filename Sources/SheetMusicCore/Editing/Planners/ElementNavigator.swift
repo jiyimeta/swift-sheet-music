@@ -15,7 +15,7 @@ public enum ElementNavigator {
             guard voices.indices.contains(location.voiceIndex) else { return nil }
             let elements = voices[location.voiceIndex].elements
             while elements.indices.contains(elementIndex) {
-                if isTimedSlot(elements[elementIndex]) {
+                if isStop(elements[elementIndex], in: staff.measures[measureIndex], voiceIndex: location.voiceIndex) {
                     return VoiceElementID(
                         staff: location.staff,
                         measureIndex: measureIndex,
@@ -43,7 +43,7 @@ public enum ElementNavigator {
             guard voices.indices.contains(location.voiceIndex) else { return nil }
             let elements = voices[location.voiceIndex].elements
             while elementIndex >= 0, elements.indices.contains(elementIndex) {
-                if isTimedSlot(elements[elementIndex]) {
+                if isStop(elements[elementIndex], in: staff.measures[measureIndex], voiceIndex: location.voiceIndex) {
                     return VoiceElementID(
                         staff: location.staff,
                         measureIndex: measureIndex,
@@ -63,14 +63,20 @@ public enum ElementNavigator {
         return nil
     }
 
-    /// A chord or rest slot — the only elements a voice-order walk should stop on. Deliberately NOT
-    /// `VoiceElement.tickCount(division:) != nil`: `NoteDuration.ticks(division:)` traps on `.measure`
-    /// until `resolved(in:)` runs against the containing measure's duration, and an unresolved
-    /// measure-filling rest (`.chord(Chord(duration: .measure, notes: []))`) is exactly the kind of slot
-    /// a voice-order walk must stop on. Pattern-matching `.chord` — which per `VoiceElement`'s type doc
-    /// covers both notes and rests (an empty-note chord) — is the crash-free equivalent.
+    /// A chord or rest slot, or a measure repeat — the only elements a voice-order walk should stop on. Deliberately
+    /// NOT `VoiceElement.tickCount(division:) != nil`: `NoteDuration.ticks(division:)` traps on `.measure` until
+    /// `resolved(in:)` runs against the containing measure's duration, and an unresolved measure-filling rest
+    /// (`.chord(Chord(duration: .measure, notes: []))`) is exactly the kind of slot a voice-order walk must stop on.
+    /// Pattern-matching (`VoiceElement.isRangeSlot`) is the crash-free equivalent.
     private static func isTimedSlot(_ element: VoiceElement) -> Bool {
-        if case .chord = element { return true }
-        return false
+        element.isRangeSlot
+    }
+
+    /// `isTimedSlot`, less a rest a measure-repeat group's bar holds under the group's sign: it is never shown, so
+    /// the walk passes it as MuseScore's does (`skipMeasureRepeatRests`, "these rests are not shown"). Any bar of
+    /// the group — MuseScore anchors a 2- or 4-bar group's sign in a middle bar, so bar 1 holds such a rest too.
+    private static func isStop(_ element: VoiceElement, in measure: Measure, voiceIndex: Int) -> Bool {
+        guard isTimedSlot(element) else { return false }
+        return !(voiceIndex == 0 && element.isRest && measure.measureRepeatCount != nil)
     }
 }

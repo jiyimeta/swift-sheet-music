@@ -81,8 +81,8 @@ extension LayoutEngine {
                 isAbove: isAbove,
                 anchor: anchor,
             )
-        case let .measureRepeat(c, p):
-            return .measureRepeat(count: c, origin: shift(p))
+        case let .measureRepeat(c, p, rid):
+            return .measureRepeat(count: c, origin: shift(p), restID: rid)
         case let .multiMeasureRest(c, p):
             // Multi-measure rest contributes no special translation logic;
             // shift the anchor origin for correct staff stacking.
@@ -118,19 +118,20 @@ extension LayoutEngine {
             return .legacyBend(
                 shape: shape.translated(by: CGPoint(x: 0, y: dy)),
             )
-        case let .arpeggioWiggle(top, bot, subtype):
+        case let .arpeggioWiggle(top, bot, subtype, anchor):
             return .arpeggioWiggle(
                 top: shift(top),
                 bottom: shift(bot),
                 subtype: subtype,
+                anchor: anchor,
             )
-        case let .chordLine(shape, origin, thickness):
+        case let .chordLine(shape, origin, thickness, anchor):
             // The shape payload is origin-relative, so only the origin
             // moves.
             return .chordLine(
-                shape: shape, origin: shift(origin), thickness: thickness,
+                shape: shape, origin: shift(origin), thickness: thickness, anchor: anchor,
             )
-        case let .tremoloBars(anchor, barCount):
+        case let .tremoloBars(anchor, barCount, owner):
             let shifted: TremoloAnchor
             switch anchor {
             case let .single(c):
@@ -141,7 +142,7 @@ extension LayoutEngine {
                     rightStemMid: shift(right),
                 )
             }
-            return .tremoloBars(anchor: shifted, barCount: barCount)
+            return .tremoloBars(anchor: shifted, barCount: barCount, owner: owner)
         case let .tupletLabel(
             from,
             to,

@@ -189,6 +189,11 @@ public enum ScoreElementIDWire {
     case swing(anchor: VoiceElementIDWire)
     /// Appended for part names (choice 15). Never renumber anything above it.
     case partName(partIndex: Int32, form: PartNameFormWire)
+    /// Appended for a chord's arpeggio (choice 16), chord line (17) and tremolo (18), each addressed by its chord.
+    /// Never renumber anything above them.
+    case arpeggio(anchor: VoiceElementIDWire)
+    case chordLine(anchor: VoiceElementIDWire)
+    case tremolo(anchor: VoiceElementIDWire)
 
     public init(from value: ScoreElementID) {
         switch value {
@@ -217,6 +222,9 @@ public enum ScoreElementIDWire {
         case let .swing(anchor): self = .swing(anchor: VoiceElementIDWire(from: anchor))
         case let .partName(partIndex, form):
             self = .partName(partIndex: Int32(partIndex), form: PartNameFormWire(from: form))
+        case let .arpeggio(anchor): self = .arpeggio(anchor: VoiceElementIDWire(from: anchor))
+        case let .chordLine(anchor): self = .chordLine(anchor: VoiceElementIDWire(from: anchor))
+        case let .tremolo(anchor): self = .tremolo(anchor: VoiceElementIDWire(from: anchor))
         }
     }
 
@@ -244,6 +252,9 @@ public enum ScoreElementIDWire {
         case let .glissando(start): return .glissando(start: start.decoded())
         case let .swing(anchor): return .swing(anchor: anchor.decoded())
         case let .partName(partIndex, form): return .partName(partIndex: Int(partIndex), form: form.decoded())
+        case let .arpeggio(anchor): return .arpeggio(anchor: anchor.decoded())
+        case let .chordLine(anchor): return .chordLine(anchor: anchor.decoded())
+        case let .tremolo(anchor): return .tremolo(anchor: anchor.decoded())
         }
     }
 }

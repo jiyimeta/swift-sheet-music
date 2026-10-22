@@ -722,7 +722,16 @@ extension LayoutEngine {
                     // rests are routed by `chord.visible`; the slot is
                     // preserved by the unconditional `tickCursor`
                     // advance below.
-                    if r.visible {
+                    //
+                    // A rest in the first voice of a measure-repeat group's bar stands under the group's sign and is
+                    // never shown — MuseScore's own "these rests are not shown" (`navigate.cpp`,
+                    // `skipMeasureRepeatRests`) — so it is not drawn even with invisible elements showing. Every bar
+                    // of the group, not only the later ones: MuseScore anchors a 2- or 4-bar group's sign in a middle
+                    // bar, leaving the rest in bar 1, and a bar holding the sign next to a stray rest has to show the
+                    // sign alone.
+                    if voiceIdx == 0, measure.measureRepeatCount != nil {
+                        // Not drawn; the tick still advances below.
+                    } else if r.visible {
                         voiceRestOutIndex[voiceElemIdx] = out.count
                         out.append(restElement)
                     } else if options.showsInvisibleElements {
@@ -975,6 +984,7 @@ extension LayoutEngine {
                         // the enclosing grace-note scale (0.6).
                         mag: chordMag,
                         metrics: metrics,
+                        anchor: elementAddress,
                     )
                     out.append(contentsOf: chordLineParts.visible)
                     invisibleOut.append(contentsOf: chordLineParts.invisible)
@@ -988,6 +998,7 @@ extension LayoutEngine {
                             top: CGPoint(x: chordX, y: top),
                             bottom: CGPoint(x: chordX, y: bot),
                             subtype: arpeggioSubtype(arp),
+                            anchor: elementAddress,
                         )
                         if arp.visible {
                             out.append(wiggle)
@@ -998,6 +1009,7 @@ extension LayoutEngine {
                     if let trem = chord.tremolo {
                         if let bars = makeTremoloBarsElement(
                             tremolo: trem,
+                            owner: elementAddress,
                             duration: chord.duration,
                             chordX: chordX,
                             chordNotes: chordNotes,
@@ -1356,6 +1368,10 @@ extension LayoutEngine {
                     out.append(.measureRepeat(
                         count: 1,
                         origin: CGPoint(x: width / 2, y: staffMidY),
+                        restID: RestID(
+                            staff: staffAddress, measureIndex: measureIndex,
+                            voiceIndex: voiceIdx, elementIndex: voiceElemIdx,
+                        ),
                     ))
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
