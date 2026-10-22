@@ -7,6 +7,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`PDFIncrementalAnnotator.pageBoxes(of:)`** reads each page's media box, its displayed crop box (clipped to the
+  media box) and its `/Rotate` as a quarter turn, inherited through the page tree — the inputs `pageSizes(of:)`
+  derives the displayed space from. A host that relates `append`'s displayed space to a viewer showing the page by
+  its media box (folino's reader places page ink that way) needs both boxes and the turn, not just the displayed
+  size. New public types `PDFPageBoxes` and `PDFUserBox`.
+
 ## [4.17.0] - 2026-10-21
 
 ### Changed

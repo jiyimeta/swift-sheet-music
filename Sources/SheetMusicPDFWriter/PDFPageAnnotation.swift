@@ -39,6 +39,39 @@ public struct PDFPageSize: Equatable, Sendable {
     }
 }
 
+/// A box in a page's default user space: y up, in the file's own units (before `/UserUnit`).
+public struct PDFUserBox: Equatable, Sendable {
+    public var left: Double
+    public var bottom: Double
+    public var right: Double
+    public var top: Double
+
+    public init(left: Double, bottom: Double, right: Double, top: Double) {
+        self.left = left
+        self.bottom = bottom
+        self.right = right
+        self.top = top
+    }
+}
+
+/// A page's boxes and turn as its file states them (inherited through the page tree) — what a host needs to relate
+/// the displayed space `PDFPagePoint` uses to a viewer that shows the page by its media box instead.
+public struct PDFPageBoxes: Equatable, Sendable {
+    public var mediaBox: PDFUserBox
+    /// The crop box clipped to the media box — the displayed area; the media box when the file states none.
+    public var cropBox: PDFUserBox
+    /// `/Rotate` as a clockwise quarter turn in 0 ..< 360; a value that is not a quarter turn reads as 0.
+    public var rotation: Int
+    public var userUnit: Double
+
+    public init(mediaBox: PDFUserBox, cropBox: PDFUserBox, rotation: Int, userUnit: Double = 1) {
+        self.mediaBox = mediaBox
+        self.cropBox = cropBox
+        self.rotation = rotation
+        self.userUnit = userUnit
+    }
+}
+
 /// An sRGB color, each component in 0…1.
 public struct PDFRGB: Equatable, Sendable {
     public var red: Double

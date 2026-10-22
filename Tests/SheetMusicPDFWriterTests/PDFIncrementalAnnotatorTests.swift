@@ -47,6 +47,31 @@ struct PDFIncrementalAnnotatorTests {
         #expect((String(bytes: appended, encoding: .isoLatin1) ?? "").contains("/InkList [[40 40 40 50]]"))
     }
 
+    @Test func `page boxes report the media box, the crop box clipped to it, and the turn`() throws {
+        let original = PDFFixtures.make([
+            .init(mediaBox: "[100 -50 700 750]", extra: " /Rotate -90 /CropBox [50 0 400 900]"),
+            .init(),
+            .init(extra: " /Rotate 450 /UserUnit 2"),
+        ])
+        #expect(try PDFIncrementalAnnotator.pageBoxes(of: original) == [
+            PDFPageBoxes(
+                mediaBox: PDFUserBox(left: 100, bottom: -50, right: 700, top: 750),
+                cropBox: PDFUserBox(left: 100, bottom: 0, right: 400, top: 750),
+                rotation: 270,
+            ),
+            PDFPageBoxes(
+                mediaBox: PDFUserBox(left: 0, bottom: 0, right: 612, top: 792),
+                cropBox: PDFUserBox(left: 0, bottom: 0, right: 612, top: 792),
+                rotation: 0,
+            ),
+            PDFPageBoxes(
+                mediaBox: PDFUserBox(left: 0, bottom: 0, right: 612, top: 792),
+                cropBox: PDFUserBox(left: 0, bottom: 0, right: 612, top: 792),
+                rotation: 90, userUnit: 2,
+            ),
+        ])
+    }
+
     @Test func `nothing visible to add leaves the source untouched`() throws {
         let original = PDFFixtures.make([.init()])
         let empty = PDFPageAnnotationTests.ink(clip: PDFClipPath(elements: [], evenOdd: false))
