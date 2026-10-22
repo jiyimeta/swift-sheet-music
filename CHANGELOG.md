@@ -7,6 +7,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.19.0] - 2026-10-22
+
+Two additive changes ship together: the tempo marking's copy and paste, and Windows' clipped fill.
+
 ### Added
 
 - **A tempo marking can be copied and pasted as it stands.** `SetTempo.tempo(at:in:)` is public — the whole stored
