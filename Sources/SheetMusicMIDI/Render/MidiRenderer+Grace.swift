@@ -338,13 +338,9 @@ extension MidiRenderer {
                 )
                 continue
             }
-            events.append(TimedMidiEvent(
-                tick: onset,
-                event: .noteOn(
-                    channel: channel,
-                    pitch: note.pitch,
-                    velocity: note.customizedVelocity(velocity),
-                ),
+            events.append(.noteOn(
+                tick: onset, channel: channel, pitch: note.pitch,
+                velocity: note.customizedVelocity(velocity), cents: note.playbackCents,
             ))
             events.append(TimedMidiEvent(
                 tick: max(0, onset + durationTicks - 1),
@@ -440,9 +436,8 @@ extension MidiRenderer {
         guard note.play else { return }
         let velocity = note.customizedVelocity(velocity)
         if note.tieBack == nil {
-            events.append(TimedMidiEvent(
-                tick: onTick,
-                event: .noteOn(channel: channel, pitch: note.pitch, velocity: velocity),
+            events.append(.noteOn(
+                tick: onTick, channel: channel, pitch: note.pitch, velocity: velocity, cents: note.playbackCents,
             ))
         }
         if note.tieForward == nil {

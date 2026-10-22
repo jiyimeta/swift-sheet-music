@@ -258,7 +258,11 @@ extension MidiRenderer {
             }
             if let bend, bend.type != .slightBend {
                 guard let follower, follower.guitarBendBack else { return nil }
+                // The wheel already carries the struck note's own microtonal offset (`MicrotonalPitchWheel`), so a
+                // bend reaches a microtonal destination by the difference — MuseScore's `GuitarBend` amount, which
+                // adds `round(centOffset / 50)` of the end note and takes off the start note's.
                 let target = (follower.pitch - basePitch) * 2
+                    + quarterTones(of: follower) - quarterTones(of: first)
                 chain.append((index, BendChainSlot(
                     basePitch: basePitch,
                     startOffsetQuarterTones: offsetQuarterTones,
@@ -290,6 +294,12 @@ extension MidiRenderer {
             index = followerIndex
             note = follower
         }
+    }
+
+    /// A note's microtonal offset in whole quarter tones, the unit a bend counts in. C++: `GuitarBend`'s
+    /// `round(note->centOffset() / 50)` (`dom/guitarbend.cpp`).
+    private static func quarterTones(of note: Note) -> Int {
+        Int((note.playbackCents / 50).rounded())
     }
 
     /// Where the chain that bends at `index` is actually STRUCK: walking back

@@ -47,9 +47,39 @@ struct AccidentalDecodeTests {
         #expect(Accidental.doubleSharp.semitoneOffset == 2)
         #expect(Accidental.sharpSharp.semitoneOffset == 2)
         #expect(Accidental.tripleSharp.semitoneOffset == 3)
-        // Microtonal → integer part (0)
+        // A microtonal glyph stores the natural letter (MuseScore's `AccidentalVal::NATURAL`) — the three-quarter-tone
+        // flat included — and puts the whole alteration in `centOffset`.
         #expect(Accidental.mirroredFlat.semitoneOffset == 0)
+        #expect(Accidental.flatArrowDown.semitoneOffset == 0)
         #expect(Accidental.sori.semitoneOffset == 0)
+        // Wyschnegradsky's six twelfths is the one microtonal glyph that IS a semitone.
+        #expect(Accidental.sixTwelfthFlat.semitoneOffset == -1)
+        #expect(Accidental.sixTwelfthSharp.semitoneOffset == 1)
+    }
+
+    @Test func `cent offsets are MuseScore's`() {
+        for standard: Accidental in [
+            .flat, .natural, .sharp, .doubleSharp, .doubleFlat, .tripleSharp, .tripleFlat,
+            .naturalFlat, .naturalSharp, .sharpSharp,
+        ] {
+            #expect(standard.centOffset == 0, "\(standard)")
+        }
+        #expect(Accidental.flatArrowUp.centOffset == -50) // a flat raised a quarter tone: B♮ − 50
+        #expect(Accidental.flatArrowDown.centOffset == -150) // three-quarter-tone flat
+        #expect(Accidental.sharpArrowUp.centOffset == 150)
+        #expect(Accidental.mirroredFlat.centOffset == -50)
+        #expect(Accidental.sharpSlash4.centOffset == 150)
+        #expect(Accidental.flatSlash2.centOffset == -89)
+        #expect(Accidental.koron.centOffset == -67)
+        #expect(Accidental.elevenTwelfthSharp.centOffset == 183)
+        #expect(Accidental.sixTwelfthFlat.centOffset == 0)
+        #expect(Accidental.sagittalFlat.centOffset == -100)
+        #expect(Accidental.fiveCommaSharp.centOffset == 111.1)
+        #expect(Accidental.flat53.centOffset == -10.9)
+        // MuseScore's zeros: it plays these glyphs at the stored pitch.
+        #expect(Accidental.flatOneArrowDown.centOffset == 0)
+        #expect(Accidental.quarterFlatEqualTempered.centOffset == 0)
+        #expect(Accidental.enharmonicTilde.centOffset == 0)
     }
 
     @Test func brackets() {

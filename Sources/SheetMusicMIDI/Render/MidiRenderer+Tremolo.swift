@@ -209,6 +209,14 @@ extension MidiRenderer {
         let tiedForwardPitches = Set(
             tieForwardSource.filter { $0.tieForward != nil }.map(\.pitch),
         )
+        // Each stroke sounds the microtonal offset of the note whose pitch it strikes — the start chord's or, in a
+        // two-chord tremolo, the follower's. Pitch-keyed for the same reason the velocities are.
+        var centsByPitch: [Int: Double] = [:]
+        for note in Array(chord.notes) + (followerChord.map { Array($0.notes) } ?? [])
+            where centsByPitch[note.pitch] == nil
+        {
+            centsByPitch[note.pitch] = note.playbackCents
+        }
         var firstSegIndex: [Int: Int] = [:]
         var lastSegIndex: [Int: Int] = [:]
         for (i, seg) in segments.enumerated() {
@@ -233,12 +241,10 @@ extension MidiRenderer {
                 let suppressOff = tiedForwardPitches.contains(pitch)
                     && lastSegIndex[pitch] == segIndex
                 if !suppressOn {
-                    events.append(TimedMidiEvent(
-                        tick: cursor,
-                        event: .noteOn(
-                            channel: channel, pitch: shifted,
-                            velocity: velocityByPitch[pitch] ?? followerFallback,
-                        ),
+                    events.append(.noteOn(
+                        tick: cursor, channel: channel, pitch: shifted,
+                        velocity: velocityByPitch[pitch] ?? followerFallback,
+                        cents: centsByPitch[pitch] ?? 0,
                     ))
                 }
                 if !suppressOff {

@@ -40,6 +40,31 @@ struct SetAccidentalTests {
         #expect(n.accidental == .flat)
     }
 
+    @Test("a microtonal glyph stores the natural letter, the cents riding in the glyph")
+    func threeQuarterFlatOnDFlat() throws {
+        var score = EditingFixtures.fourQuarterRests()
+        score[Self.chordVE] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 61, tpc: 9, accidental: .flat)]))
+        _ = try SetAccidental(at: Self.noteID, accidental: .flatArrowDown).apply(to: &score)
+        guard case let .chord(c) = score[Self.chordVE] else {
+            Issue.record("not chord"); return
+        }
+        // MuseScore's `AccidentalVal::NATURAL`: D♮, which `centOffset` plays 150 cents low.
+        #expect(c.notes[0].pitch == 62)
+        #expect(c.notes[0].tpc == 16)
+        #expect(c.notes[0].accidental == .flatArrowDown)
+    }
+
+    @Test("Wyschnegradsky's six twelfths flat is a semitone")
+    func sixTwelfthsFlatOnC() throws {
+        var score = EditingFixtures.chordAtIndex1() // C4 (60, tpc 14)
+        _ = try SetAccidental(at: Self.noteID, accidental: .sixTwelfthFlat).apply(to: &score)
+        guard case let .chord(c) = score[Self.chordVE] else {
+            Issue.record("not chord"); return
+        }
+        #expect(c.notes[0].pitch == 59)
+        #expect(c.notes[0].tpc == 7) // C♭
+    }
+
     @Test("preserves the diatonic letter when retoning a flat")
     func sharpOnDFlat() throws {
         var score = EditingFixtures.fourQuarterRests()

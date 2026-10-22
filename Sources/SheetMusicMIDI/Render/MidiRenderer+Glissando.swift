@@ -36,7 +36,7 @@ extension MidiRenderer {
         case .portamento:
             renderPortamento(
                 glissando: glissando,
-                startPitch: note.pitch, endPitch: endPitch,
+                startPitch: note.pitch, endPitch: endPitch, startCents: note.playbackCents,
                 startTick: startTick, durationTicks: durationTicks,
                 velocity: velocity, channel: channel,
                 suppressStartOn: suppressStartOn,
@@ -46,7 +46,7 @@ extension MidiRenderer {
         case .chromatic, .diatonic, .whiteKeys, .blackKeys:
             renderDiscreteGlissando(
                 glissando: glissando,
-                startPitch: note.pitch, endPitch: endPitch,
+                startPitch: note.pitch, endPitch: endPitch, startCents: note.playbackCents,
                 startTick: startTick, durationTicks: durationTicks,
                 velocity: velocity, channel: channel,
                 keySignature: currentKey,
@@ -77,6 +77,7 @@ extension MidiRenderer {
         glissando: Glissando,
         startPitch: Int,
         endPitch: Int,
+        startCents: Double = 0,
         startTick: Int,
         durationTicks: Int,
         velocity: Int,
@@ -100,9 +101,8 @@ extension MidiRenderer {
         // cases; normal scores have durationTicks ≫ stepsCount.
         guard durationTicks >= stepsCount else {
             if !suppressStartOn {
-                events.append(TimedMidiEvent(
-                    tick: startTick,
-                    event: .noteOn(channel: channel, pitch: startPitch, velocity: velocity),
+                events.append(.noteOn(
+                    tick: startTick, channel: channel, pitch: startPitch, velocity: velocity, cents: startCents,
                 ))
             }
             if !suppressFinalOff {
@@ -131,10 +131,11 @@ extension MidiRenderer {
             // note-off so the held pitch is released cleanly before the sweep
             // takes over (steps at i>0 are different pitch numbers, so no MIDI
             // key collision). Later steps always emit.
+            // Step 0 is the start note itself and sounds its microtonal offset; the steps the sweep passes
+            // through are plain keys.
             if !(i == 0 && suppressStartOn) {
-                events.append(TimedMidiEvent(
-                    tick: onTick,
-                    event: .noteOn(channel: channel, pitch: pitch, velocity: velocity),
+                events.append(.noteOn(
+                    tick: onTick, channel: channel, pitch: pitch, velocity: velocity, cents: i == 0 ? startCents : 0,
                 ))
             }
             // Suppress the very last step's note-off only when the note ties
@@ -168,6 +169,7 @@ extension MidiRenderer {
         glissando: Glissando,
         startPitch: Int,
         endPitch: Int,
+        startCents: Double = 0,
         startTick: Int,
         durationTicks: Int,
         velocity: Int,
@@ -183,9 +185,8 @@ extension MidiRenderer {
         // Strike the start pitch (unless tied from a still-sounding predecessor);
         // pitch-bend starts at center.
         if !suppressStartOn {
-            events.append(TimedMidiEvent(
-                tick: startTick,
-                event: .noteOn(channel: channel, pitch: startPitch, velocity: velocity),
+            events.append(.noteOn(
+                tick: startTick, channel: channel, pitch: startPitch, velocity: velocity, cents: startCents,
             ))
         }
         events.append(TimedMidiEvent(

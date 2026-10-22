@@ -124,13 +124,9 @@ extension MidiRenderer {
         let curveEnd = tiedOnward
             ? startTick + totalTicks - 1
             : max(startTick, min(startTick + totalTicks - 1, offTick - 1))
-        events.append(TimedMidiEvent(
-            tick: startTick,
-            event: .noteOn(
-                channel: channel,
-                pitch: note.pitch,
-                velocity: note.customizedVelocity(velocity),
-            ),
+        events.append(.noteOn(
+            tick: startTick, channel: channel, pitch: note.pitch,
+            velocity: note.customizedVelocity(velocity), cents: note.playbackCents,
         ))
         appendLegacyBendCurve(
             bend: bend, startTick: startTick, totalTicks: totalTicks,

@@ -56,9 +56,9 @@ extension MidiRenderer {
         let offTick = startTick + durationTicks - 1
         let lastSampleTick = max(startTick, offTick - 1)
         if slot.isChainStart {
-            events.append(TimedMidiEvent(
-                tick: startTick,
-                event: .noteOn(channel: channel, pitch: slot.basePitch, velocity: velocity),
+            events.append(.noteOn(
+                tick: startTick, channel: channel, pitch: slot.basePitch, velocity: velocity,
+                cents: note.playbackCents,
             ))
         }
         events.append(TimedMidiEvent(

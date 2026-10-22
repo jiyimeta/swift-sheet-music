@@ -17,6 +17,8 @@ extension MidiRenderer {
             var channel: Int
             var pitch: Int
             var velocity: Int
+            /// The struck note's microtonal offset, handed on to `MicrotonalPitchWheel`.
+            var cents: Double
         }
 
         var intervals: [Interval] = []
@@ -31,7 +33,7 @@ extension MidiRenderer {
             case let .noteOn(ch, pitch, vel) where vel > 0:
                 let interval = Interval(
                     onTick: ev.tick, offTick: ev.tick,
-                    channel: ch, pitch: pitch, velocity: vel,
+                    channel: ch, pitch: pitch, velocity: vel, cents: ev.tuningCents,
                 )
                 intervals.append(interval)
                 pendingOns[key(ch, pitch), default: []].append(intervals.count - 1)
@@ -68,9 +70,10 @@ extension MidiRenderer {
 
         var output: [TimedMidiEvent] = passthrough
         for iv in intervals {
-            let on = MidiEvent.noteOn(channel: iv.channel, pitch: iv.pitch, velocity: iv.velocity)
             let off = MidiEvent.noteOff(channel: iv.channel, pitch: iv.pitch, velocity: 0)
-            output.append(TimedMidiEvent(tick: iv.onTick, event: on))
+            output.append(.noteOn(
+                tick: iv.onTick, channel: iv.channel, pitch: iv.pitch, velocity: iv.velocity, cents: iv.cents,
+            ))
             output.append(TimedMidiEvent(tick: iv.offTick, event: off))
         }
         return output

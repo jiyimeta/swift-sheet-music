@@ -58,6 +58,13 @@ and this project adheres to
   existing behavior, and is the one iOS needs: a running graph is "audio active" to Control Center. One difference
   under every policy: a host's `pause()` of a transport that was not playing no longer cuts short a software-synth
   preview's release tail that is still being waited out — the park waits for the tail, as the preview's own drain does.
+- **Microtonal accidentals sound.** A note under a quarter-tone flat, a Sagittal arrow or any other glyph with a cent
+  offset now plays that far from its key: the renderer puts the offset on the channel's pitch wheel while the note
+  sounds (`CompatMidiRender`'s `playNote`), in live playback, audio export and the exported MIDI alike. A bend or slide
+  on such a note rides on the offset, and a bend onto a microtonal note stops where MuseScore's does. The wheel is the
+  channel's, so notes of different offsets that overlap on one channel share the last one struck — as in MuseScore's
+  own MIDI. `Accidental.centOffset` gives each glyph's offset, MuseScore's verbatim — including its zeros for the
+  Extended Helmholtz-Ellis, equal-tempered and enharmonic glyphs, which still play their stored pitch.
 
 ### Changed
 
@@ -74,6 +81,9 @@ and this project adheres to
 - **A click selects a measure repeat by its ink** — its glyph, and a 2- or 4-bar sign's number — with half a space of
   reach, as MuseScore hits an element by its shape. It used a rest's box, which spans the whole staff, so a click above
   or below the sign selected the sign instead of the bar. The event columns the near-miss rescue reads use the same box.
+- **`Accidental.semitoneOffset` is MuseScore's `AccidentalVal` for Wyschnegradsky's six twelfths**, a semitone (it was
+  zero), so `SetAccidental` with `.sixTwelfthFlat` / `.sixTwelfthSharp` moves the note a semitone as MuseScore does.
+  Every other microtonal glyph still stores the natural letter, its alteration riding in `centOffset`.
 
 ### Fixed
 

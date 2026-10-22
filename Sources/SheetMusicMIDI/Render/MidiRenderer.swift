@@ -350,18 +350,28 @@ public enum MidiRenderer {
         let lastEventTick = events.map(\.tick).max() ?? 0
         events.append(TimedMidiEvent(tick: lastEventTick + 1, event: .endOfTrack))
 
-        // Stable sort by tick — preserves header insertion order at tick 0
-        // and keeps voice-0 events ahead of voice-1 events at the same tick.
-        // Negative ticks are clamped to 0 as a safety net: the decoder is the
-        // source of truth for positions, but a malformed `<location>` could
-        // still drive an event before the bar start, and a negative tick trips
-        // `MidiWriter`'s sorted-by-tick precondition (a hard crash). Clamping a
-        // sorted prefix of negatives to 0 keeps the sequence non-decreasing.
-        let sorted = events.enumerated()
-            .sorted { ($0.element.tick, $0.offset) < ($1.element.tick, $1.offset) }
-            .map { TimedMidiEvent(tick: max(0, $0.element.tick), event: $0.element.event) }
+        // Last, once every note-on is in its place: the microtonal offsets the emit annotated become wheel traffic.
+        return MidiTrack(events: MicrotonalPitchWheel.apply(
+            sortedByTick(events), releaseTicks: division / 2, exemptChannels: [drumChannel],
+        ))
+    }
 
-        return MidiTrack(events: sorted)
+    /// Stable sort by tick — preserves header insertion order at tick 0
+    /// and keeps voice-0 events ahead of voice-1 events at the same tick.
+    /// Negative ticks are clamped to 0 as a safety net: the decoder is the
+    /// source of truth for positions, but a malformed `<location>` could
+    /// still drive an event before the bar start, and a negative tick trips
+    /// `MidiWriter`'s sorted-by-tick precondition (a hard crash). Clamping a
+    /// sorted prefix of negatives to 0 keeps the sequence non-decreasing.
+    /// The events are moved, not rebuilt, so a note-on keeps its microtonal annotation.
+    private static func sortedByTick(_ events: [TimedMidiEvent]) -> [TimedMidiEvent] {
+        events.enumerated()
+            .sorted { ($0.element.tick, $0.offset) < ($1.element.tick, $1.offset) }
+            .map { indexed in
+                var event = indexed.element
+                event.tick = max(0, event.tick)
+                return event
+            }
     }
 
     /// Pack chord lyrics into standard SMF Lyric (0x05) meta events.
