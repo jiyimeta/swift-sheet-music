@@ -58,9 +58,21 @@ public struct SetTempoIntentWire {
     public var playsBack: UInt8?
     /// Tag 9: whether the number and beat were edited — absent infers it at the receiver (older senders), 0 no, 1 yes.
     public var numberEdit: UInt8?
+    /// Tag 10: `<type>` to write — absent leaves it, 0 normal, 1 "a tempo", 2 "tempo primo".
+    public var textType: UInt8?
+    /// Tag 11: `<followText>` to write — absent leaves it, 0 no, 1 yes.
+    public var followText: UInt8?
 
     public init(anchor: VoiceElementID, marking: SetTempo.Marking?) {
         numberEdit = marking?.numberEdit.map { $0 ? 1 : 0 }
+        textType = marking?.textType.map { type -> UInt8 in
+            switch type {
+            case .normal: 0
+            case .aTempo: 1
+            case .tempoPrimo: 2
+            }
+        }
+        followText = marking?.followText.map { $0 ? 1 : 0 }
         self.anchor = VoiceElementIDWire(from: anchor)
         hasTempo = marking == nil ? 0 : 1
         beatsPerSecond = marking?.beatsPerSecond ?? 0
@@ -96,11 +108,20 @@ public struct SetTempoIntentWire {
         case let mode?:
             throw WireFormatError.unknownChoiceDiscriminator(UInt32(mode))
         }
+        let type: TempoTextType?
+        switch textType {
+        case nil: type = nil
+        case 0?: type = .normal
+        case 1?: type = .aTempo
+        case 2?: type = .tempoPrimo
+        case let other?: throw WireFormatError.unknownChoiceDiscriminator(UInt32(other))
+        }
         return try (
             anchor: anchor.decoded(),
             marking: SetTempo.Marking(
                 beatsPerSecond: beatsPerSecond, beatNote: beatNote.decoded(), beatDots: Int(beatDots),
                 text: textEdit, playsBack: playsBack.map { $0 != 0 }, numberEdit: numberEdit.map { $0 != 0 },
+                textType: type, followText: followText.map { $0 != 0 },
             ),
         )
     }

@@ -1,6 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
+import Foundation
 @testable import SheetMusicCore
 @testable import SheetMusicLayout
 import Testing
@@ -8,6 +9,14 @@ import Testing
 #if !canImport(CoreGraphics)
     /// See `TitleBlockAlignTests`: anchor to SheetMusicLayout's own `CGFloat` off Apple.
     private typealias CGFloat = SheetMusicLayout.CGFloat
+#endif
+
+// The model's `CGFloat`, which off Apple is not SheetMusicLayout's: Foundation's on Windows and Linux, SheetMusicCore's
+// own on WASI (`CGCompat+WASI`).
+#if os(WASI)
+    private typealias ModelCGFloat = SheetMusicCore.CGFloat
+#else
+    private typealias ModelCGFloat = Foundation.CGFloat
 #endif
 
 /// An `<HBox>` between two measures is horizontal room inside the system: `(widthSp ?? 5) + (topGapSp ?? 0) +
@@ -23,7 +32,7 @@ import Testing
     /// An HBox before measure `index`, `widthSp` wide (`nil` = MuseScore's default), with its left and right gaps
     /// (`topGapSp` / `bottomGapSp`).
     private static func hbox(
-        _ widthSp: CGFloat?, before index: Int, leftGapSp: CGFloat? = nil, rightGapSp: CGFloat? = nil,
+        _ widthSp: ModelCGFloat?, before index: Int, leftGapSp: ModelCGFloat? = nil, rightGapSp: ModelCGFloat? = nil,
     ) -> PositionedScoreBlock {
         let frame = HorizontalFrame(widthSp: widthSp, topGapSp: leftGapSp, bottomGapSp: rightGapSp)
         return PositionedScoreBlock(beforeMeasureIndex: index, block: .horizontalFrame(frame))
