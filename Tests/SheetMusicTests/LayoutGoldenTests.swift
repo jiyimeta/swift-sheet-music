@@ -356,8 +356,15 @@
         /// it (`grace_after` 269.22 → 914), and one element moves — `slur_ms4_glissando_legato`'s tempo mark, which
         /// had been pulled 2.05 pt back inside the last barline, sits on its own column again (63.47 → 65.52), running
         /// on into the empty room past the line. No system, column or other element moved.
+        ///
+        /// **Re-recorded 2026-10-22 when a measure repeat became a slot and an arpeggio named its chord, after reading
+        /// the diff** against the digest above (`1e67ec4a…`). 58 lines in two blocks changed and nothing moved: the 14
+        /// `measureRepeat` lines carry their slot's `restID` and the 10 `arpeggioWiggle` lines their chord's `anchor`,
+        /// each identical to before once that field is set aside; and `testMeasureRepeats` draws 10 rests fewer —
+        /// the first voice's rests in the bars of a group, which stand under the group's sign and which MuseScore
+        /// never draws (most of them in a 2- or 4-bar group's bars around the sign MuseScore anchors in a middle bar).
         private static let expectedDigestSHA256 =
-            "1e67ec4a2f5053b677ea6fb905fd819577a9f814d474f4f9a04b00d42a859d70"
+            "2b063143a561473f6e972d9ba50b7205f68477216e580e637023069aabf5d461"
 
         @Test("write digest")
         func writeDigest() throws {
