@@ -18,4 +18,7 @@ sealed class ScoreElementID {
     data class Glissando(val start: NoteID) : ScoreElementID()
     data class Swing(val anchor: VoiceElementID) : ScoreElementID()
     data class PartName(val partIndex: Int, val form: PartNameForm) : ScoreElementID()
+    data class Arpeggio(val anchor: VoiceElementID) : ScoreElementID()
+    data class ChordLine(val anchor: VoiceElementID) : ScoreElementID()
+    data class Tremolo(val anchor: VoiceElementID) : ScoreElementID()
 }

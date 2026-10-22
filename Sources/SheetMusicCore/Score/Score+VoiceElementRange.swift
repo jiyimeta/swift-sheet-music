@@ -61,7 +61,7 @@ extension Score {
                         // The cursor walks EVERY element, so a `.locationShift` jogs it exactly as `onset(of:)`
                         // — the two must agree or a shifted voice's chords fall outside their own range.
                         defer { tick += element.cursorAdvance(division: division, in: durations[measureIndex]) }
-                        guard case .chord = element else { continue }
+                        guard element.isRangeSlot else { continue }
                         let position = ScoreTickPosition(measure: measureIndex, tick: tick)
                         if position >= posLo, position < posHi {
                             result.append(VoiceElementID(

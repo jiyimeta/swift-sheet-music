@@ -51,7 +51,10 @@ struct LayoutSpannerIdentityTests {
 
     @Test(
         "Every clipped segment names the source slot accepted by RemoveSpanner",
-        arguments: [Spanner.Kind.hairpin, .pedal, .ottava, .volta],
+        arguments: [
+            Spanner.Kind.hairpin, .pedal, .ottava, .volta, .vibrato, .trill, .textLine, .palmMute, .letRing,
+            .gradualTempoChange, .chordTextLine,
+        ],
     )
     func commandAddress(kind: Spanner.Kind) throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
@@ -268,19 +271,16 @@ extension LayoutSpannerIdentityTests {
         }
     }
 
-    @Test("Other unsupported spanner kinds remain unaddressed", arguments: [
-        Spanner.Kind.vibrato, .trill, .textLine, .palmMute, .letRing,
+    /// Both draw as a text line, so an address would name a kind their slot does not hold.
+    @Test("A glissando spanner and an unrecognized kind remain unaddressed", arguments: [
+        Spanner.Kind.glissando, .other,
     ])
     func unsupportedSpannersRemainUnaddressed(_ kind: Spanner.Kind) throws {
         let score = Self.score(kind: kind)
         let anchor = try #require(LayoutEngine.collectSpanners(score: score).first)
         #expect(anchor.selectionAnchor == nil)
-        let segment = LayoutElement.spannerSegment(
-            kind: LayoutEngine.layoutKind(anchor: anchor), fromOrigin: .zero, toOrigin: .zero,
-            continuesLeft: false, continuesRight: false, text: "", anchor: Self.anchor,
-        )
-        #expect(segment.elementID == nil)
-        #expect(segment.elementItemID == nil)
+        let doc = LayoutEngine.layout(score: score, options: .init(), availableWidth: 1000)
+        #expect(doc.systems.flatMap(\.spanners).compactMap(\.elementID).isEmpty)
     }
 
     @Test("A standalone slur without an anchor remains unselectable")

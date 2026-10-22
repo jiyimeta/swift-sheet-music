@@ -13,8 +13,12 @@ struct ScoreTickPosition: Comparable, Hashable {
 }
 
 extension VoiceElement {
-    /// How far this element moves a voice's running tick: a chord or rest by its resolved duration, a
+    /// How far this element moves a voice's running tick: a chord or rest by its resolved duration, a measure repeat
+    /// by its own (the bar it stands for — MuseScore's `MeasureRepeat` is a rest of the measure's length), a
     /// `.locationShift` by the jog's delta, everything else not at all.
+    ///
+    /// A measure repeat used to advance nothing, so a voice holding only the sign read as EMPTY to every walker that
+    /// sums its length, and a range or a caret could not stand on it.
     ///
     /// The `.locationShift` case is what makes every walker in the package agree. MuseScore's reader keeps ONE
     /// tick per voice and `<location>` moves it (`ReadContext::setLocation`), so the MSCX encoder's write cursor
@@ -25,6 +29,8 @@ extension VoiceElement {
         switch self {
         case let .chord(chord):
             chord.duration.resolved(in: measureDuration).ticks(division: division)
+        case let .measureRepeat(sign):
+            sign.duration.resolved(in: measureDuration).ticks(division: division)
         case let .locationShift(delta):
             delta.ticks(division: division)
         default:

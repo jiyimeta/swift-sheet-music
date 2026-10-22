@@ -1132,6 +1132,9 @@ extension LayoutEngine {
                 dynamicExtents: dynamicExtents,
                 measureRestsAreBreves: sharedMeasureDurations.indices.contains(measureIdx)
                     && Self.measureRestBase(in: sharedMeasureDurations[measureIdx]) == .breve,
+                measureRepeatRests: Self.measureRepeatRests(
+                    at: measureIdx, staves: staves, addresses: allStaves.map(\.address),
+                ),
             ))
             xCursor += w
         }

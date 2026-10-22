@@ -253,7 +253,7 @@ public struct RetimeRunIntentWire {
     }
 }
 
-// Appended for folino's "save the mix to the score" (spec 2026-10-22) — intent 93. Not a range payload; it sits here
+// Appended for folino's "save the mix to the score" (spec 2026-10-22) — intent 94. Not a range payload; it sits here
 // only because this is the file the newest appended intents live in.
 
 /// One strip of `setStripMix`: its part, the sound-timeline points that play on it, and the four values to write.

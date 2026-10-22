@@ -53,8 +53,10 @@ extension ScoreItemID {
             case let .breath(anchor): return transform(anchor).map { .element(.breath(anchor: $0)) }
             case let .tempo(anchor): return transform(anchor).map { .element(.tempo(anchor: $0)) }
             case let .swing(anchor): return transform(anchor).map { .element(.swing(anchor: $0)) }
-            case let .spanner(anchor, kind):
-                return transform(anchor).map { .element(.spanner(anchor: $0, kind: kind)) }
+            case let .arpeggio(anchor): return transform(anchor).map { .element(.arpeggio(anchor: $0)) }
+            case let .chordLine(anchor): return transform(anchor).map { .element(.chordLine(anchor: $0)) }
+            case let .tremolo(anchor): return transform(anchor).map { .element(.tremolo(anchor: $0)) }
+            case let .spanner(anchor, kind): return transform(anchor).map { .element(.spanner(anchor: $0, kind: kind)) }
             case let .articulation(anchor, kind):
                 return transform(anchor).map { .element(.articulation(anchor: $0, kind: kind)) }
             case let .tie(start, end):

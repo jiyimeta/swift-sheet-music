@@ -30,6 +30,20 @@ extension LayoutEngine {
         }
     }
 
+    /// The first bar of the measure-repeat group a system closing before bar `cursor` would split, on whichever staff
+    /// reaches furthest back — or `nil` when bar `cursor` opens no group's later bar on any staff. MuseScore keeps a
+    /// group on one system: `Score::makeMeasureRepeatGroup` marks every bar of it but the last `noBreak`, and
+    /// `SystemLayout::collectSystem` takes measures back off a line that would end on one. `measureRepeatCount`
+    /// numbers a group's bars 1…n, so a bar numbered past 1 says how far back its group starts.
+    static func measureRepeatGroupStart(splitAt cursor: Int, staves: [Staff]) -> Int? {
+        staves.compactMap { staff -> Int? in
+            guard staff.measures.indices.contains(cursor),
+                  let position = staff.measures[cursor].measureRepeatCount, position > 1
+            else { return nil }
+            return cursor - (position - 1)
+        }.min()
+    }
+
     /// Dynamic part-label width = max(measured label widths) +
     /// padding. `useLong` selects long instrument names (first
     /// system) vs short names (continuation systems). Mirrors

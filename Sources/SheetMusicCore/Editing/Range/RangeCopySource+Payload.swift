@@ -75,14 +75,15 @@ extension RangeCopySource {
             .map(\.0)
     }
 
-    /// Every chord or rest in `score`, staff by staff in display order, measure/voice/element order within each.
+    /// Every chord or rest in `score` — a measure repeat's sign among them, the slot of a rest — staff by staff in
+    /// display order, measure/voice/element order within each.
     private static func chordSlots(in score: Score) -> [VoiceElementID] {
         var result: [VoiceElementID] = []
         for (address, staff) in score.allStaves {
             for (measureIndex, measure) in staff.measures.enumerated() {
                 for (voiceIndex, voice) in measure.voices.enumerated() {
                     for (elementIndex, element) in voice.elements.enumerated() {
-                        guard case .chord = element else { continue }
+                        guard element.isRangeSlot else { continue }
                         result.append(VoiceElementID(
                             staff: address, measureIndex: measureIndex,
                             voiceIndex: voiceIndex, elementIndex: elementIndex,
@@ -130,7 +131,7 @@ extension RangeCopySource {
             guard let destination = mapped(stream.staff) else { return nil }
             movedStreams.append(Stream(
                 staff: destination, voiceIndex: stream.voiceIndex, elements: stream.elements,
-                tuplets: stream.tuplets, spanners: stream.spanners,
+                tuplets: stream.tuplets, spanners: stream.spanners, measureRepeats: stream.measureRepeats,
             ))
         }
         var movedStaves: [StaffAddress] = []

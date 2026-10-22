@@ -32,39 +32,13 @@ extension Score {
         case let .text(textID):
             return .item(.text(textID.withStaff(full)))
         case let .element(elementID):
-            switch elementID {
-            case let .dynamic(anchor): return .item(.element(.dynamic(anchor: anchor.withStaff(full))))
-            case let .fermata(anchor): return .item(.element(.fermata(anchor: anchor.withStaff(full))))
-            case let .breath(anchor): return .item(.element(.breath(anchor: anchor.withStaff(full))))
-            case let .tempo(anchor): return .item(.element(.tempo(anchor: anchor.withStaff(full))))
-            case let .swing(anchor): return .item(.element(.swing(anchor: anchor.withStaff(full))))
-            case let .spanner(anchor, kind):
-                return .item(.element(.spanner(anchor: anchor.withStaff(full), kind: kind)))
-            case let .articulation(anchor, kind):
-                return .item(.element(.articulation(anchor: anchor.withStaff(full), kind: kind)))
-            case let .tie(start, end):
+            // A tie's end is re-addressed on its own staff, which may be another one.
+            if case let .tie(start, end) = elementID {
                 guard let endStaff = unfilterStaffAddress(end.staff, hidingStaves: hidden) else { return cursor }
                 return .item(.element(.tie(start: start.withStaff(full), end: end.withStaff(endStaff))))
-            case let .slur(.chord(anchor, ordinal)):
-                return .item(.element(.slur(.chord(anchor: anchor.withStaff(full), ordinal: ordinal))))
-            case let .slur(.voice(anchor)):
-                return .item(.element(.slur(.voice(anchor.withStaff(full)))))
-            case let .jump(_, measureIndex, index):
-                return .item(.element(.jump(staff: full, measureIndex: measureIndex, index: index)))
-            case let .marker(_, measureIndex, index):
-                return .item(.element(.marker(staff: full, measureIndex: measureIndex, index: index)))
-            case let .glissando(start):
-                return .item(.element(.glissando(start: start.withStaff(full))))
-            case let .keySignature(measureIndex, _):
-                return .item(.element(.keySignature(measureIndex: measureIndex, staff: full)))
-            case let .timeSignature(measureIndex, _):
-                return .item(.element(.timeSignature(measureIndex: measureIndex, staff: full)))
-            case let .partName(_, form):
-                return .item(.element(.partName(partIndex: full.partIndex, form: form)))
-            case .barLine:
-                // A barline's bar address has no staff field to re-stamp; this is not a deferred remapping.
-                return cursor
             }
+            // A barline's bar address has no staff field to re-stamp; this is not a deferred remapping.
+            return Self.elementCursor(elementID, onStaff: full) ?? cursor
         case let .clef(anchor):
             return .item(.clef(anchor.withStaff(full)))
         case let .graceNote(graceID):
@@ -196,6 +170,9 @@ extension Score {
         case let .breath(anchor): return .item(.element(.breath(anchor: anchor.withStaff(staff))))
         case let .tempo(anchor): return .item(.element(.tempo(anchor: anchor.withStaff(staff))))
         case let .swing(anchor): return .item(.element(.swing(anchor: anchor.withStaff(staff))))
+        case let .arpeggio(anchor): return .item(.element(.arpeggio(anchor: anchor.withStaff(staff))))
+        case let .chordLine(anchor): return .item(.element(.chordLine(anchor: anchor.withStaff(staff))))
+        case let .tremolo(anchor): return .item(.element(.tremolo(anchor: anchor.withStaff(staff))))
         case let .spanner(anchor, kind):
             return .item(.element(.spanner(anchor: anchor.withStaff(staff), kind: kind)))
         case let .articulation(anchor, kind):

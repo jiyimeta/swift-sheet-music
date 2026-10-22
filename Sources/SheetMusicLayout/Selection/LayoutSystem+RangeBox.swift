@@ -74,7 +74,11 @@ extension LayoutSystem {
                         maxEndX = max(maxEndX, Self.nextOnsetX(after: note.origin.x, in: measure))
                         staves.insert(note.noteID.staff)
                     }
-                case let .rest(duration, origin, _, restID, _) where selectedIDs.contains(.rest(restID)):
+                case .rest, .measureRepeat:
+                    // A measure repeat spans its bar as a measure rest does (`LayoutElement.restSlot`).
+                    guard let (restID, origin, _, duration) = element.restSlot,
+                          selectedIDs.contains(.rest(restID))
+                    else { break }
                     let x = measure.origin.x + origin.x
                     let isMeasureRest = duration == .measure
                     minX = min(minX, isMeasureRest ? Self.firstBeatX(of: measure) ?? x : x)
@@ -89,6 +93,15 @@ extension LayoutSystem {
                 default:
                     break
                 }
+            }
+            // A measure-repeat group's bar the sign does not stand in draws nothing for its rest; selected, it spans
+            // the bar as a measure rest does (`LayoutMeasure.measureRepeatRests`).
+            for rest in measure.measureRepeatRests where selectedIDs.contains(.rest(rest)) {
+                let x = Self.firstBeatX(of: measure) ?? measure.origin.x
+                minX = min(minX, x)
+                maxX = max(maxX, x)
+                maxEndX = max(maxEndX, Self.trailingBarLineX(of: measure))
+                staves.insert(rest.staff)
             }
         }
         return (minX, maxX, maxEndX, staves)

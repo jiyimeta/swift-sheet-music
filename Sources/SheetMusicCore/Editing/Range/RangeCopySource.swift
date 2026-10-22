@@ -42,6 +42,9 @@ struct RangeCopySource {
         /// `elements` rather than inside them — see `RangeCopySpanners` for why nothing rides through the
         /// placement — and are re-anchored at the destination by `RangeCopySpanners.recreate(_:at:…)`.
         let spanners: [RangeCopySpanners.Copied]
+        /// The measure-repeat groups this stream covers whole. Their signs ride in `elements` as measure rests; see
+        /// `RangeCopyMeasureRepeats.swift`.
+        var measureRepeats: [CopiedMeasureRepeat] = []
     }
 
     let streams: [Stream]
@@ -160,16 +163,26 @@ extension RangeCopySource {
         var elementLocations: [MeasureElementLocation] = []
         var infoByLocation: [MeasureElementLocation: (tick: Int, length: Int)] = [:]
         var spanners: [RangeCopySpanners.Copied] = []
+        var measureRepeats: [CopiedMeasureRepeat] = []
         let tupletMembers = tupletMemberLocations(
             for: ids, staff: key.staff, voiceIndex: key.voiceIndex, score: score,
         )
         for id in ids {
             guard let onset = score.onset(of: id), let absolute = geometry.absolute(onset),
-                  var element = score[id], sourceDurations.indices.contains(id.measureIndex),
-                  // `tickCount(division:in:)` resolves a `.measure` duration against its own bar's effective
-                  // duration; `NoteDuration.ticks(division:)` traps on one, so a whole-bar rest must never reach
-                  // it here.
-                  let storedLength = element.tickCount(division: score.division, in: sourceDurations[id.measureIndex])
+                  var element = score[id], sourceDurations.indices.contains(id.measureIndex)
+            else { continue }
+            if case let .measureRepeat(sign) = element {
+                // The sign rides as the rest it stands for; its group travels beside the elements.
+                element = .rest(duration: sign.duration)
+                if let group = copiedMeasureRepeat(
+                    signAt: id, sign: sign, geometry: geometry, score: score, range: rangeStart ..< rangeEnd,
+                ) {
+                    measureRepeats.append(group)
+                }
+            }
+            // `tickCount(division:in:)` resolves a `.measure` duration against its own bar's effective duration;
+            // `NoteDuration.ticks(division:)` traps on one, so a whole-bar rest must never reach it here.
+            guard let storedLength = element.tickCount(division: score.division, in: sourceDurations[id.measureIndex])
             else { continue }
             let location = MeasureElementLocation(measureIndex: id.measureIndex, elementIndex: id.elementIndex)
             // MuseScore's paste opens a gap of exactly the selection's length and shortens the trailing
@@ -221,7 +234,7 @@ extension RangeCopySource {
         return Stream(
             staff: key.staff, voiceIndex: key.voiceIndex,
             elements: merged(timed: elements, at: elementLocations, untimed: untimed), tuplets: tuplets,
-            spanners: spanners,
+            spanners: spanners, measureRepeats: measureRepeats,
         )
     }
 
@@ -274,8 +287,9 @@ extension RangeCopySource {
     /// Everything else is false, and for four different reasons. Key signature, time signature and barline are
     /// in the payload but the paste drops them on the floor (`739-744`). An ambitus is in the payload too and
     /// has no branch of its own at all: it falls into the same catch-all, which logs "element %s not handled"
-    /// and skips it. `.measureRepeat` stands for a whole bar's content and `.locationShift` moves the voice's
-    /// one cursor for the rest of the bar, so neither means the same thing anywhere else. `.spanner` needs its
+    /// and skips it. `.measureRepeat` is a slot rather than an annotation, so the timed pass carries it
+    /// (`RangeCopyMeasureRepeats.swift`). `.locationShift` moves the voice's one cursor for the rest of the bar,
+    /// so it means nothing anywhere else. `.spanner` needs its
     /// partner re-anchored against the destination's own barring, so it travels beside the elements rather than
     /// among them — `RangeCopySpanners.lineSpanners(for:…)` collects it and `RangeCopySpanners.recreate(_:at:…)`
     /// writes it back. `.preserved` is markup this library does not model, so there is no knowing whether

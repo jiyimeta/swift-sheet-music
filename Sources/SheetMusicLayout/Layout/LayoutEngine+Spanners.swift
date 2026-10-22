@@ -13,16 +13,19 @@ extension LayoutEngine {
         let voiceIndex: Int
         let elementIndex: Int
 
-        /// A selectable spanner names its current voice slot, never its clipped system segment.
-        /// Other spanners have no selection address in this phase.
+        /// A selectable spanner names its current voice slot, never its clipped system segment — which is what
+        /// `RemoveSpanner` takes, for every line kind alike.
+        /// A glissando stored as a `.spanner` and an unrecognized kind have none: both draw as a text line
+        /// (`layoutKind(anchor:)`), so an address would name a kind the slot does not hold.
         var selectionAnchor: VoiceElementID? {
             switch kind {
-            case .hairpin, .pedal, .ottava, .volta, .slur:
+            case .hairpin, .pedal, .ottava, .volta, .slur, .vibrato, .trill, .textLine, .palmMute, .letRing,
+                 .gradualTempoChange, .chordTextLine:
                 VoiceElementID(
                     staff: staffAddress, measureIndex: startMeasure,
                     voiceIndex: voiceIndex, elementIndex: elementIndex,
                 )
-            default: nil
+            case .glissando, .other: nil
             }
         }
 

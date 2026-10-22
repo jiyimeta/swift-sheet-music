@@ -123,8 +123,9 @@ private func chooseEvent(
             if best.map({ dx < $0.dx }) ?? true {
                 best = (.item(.note(first.noteID)), dx)
             }
-        case let .rest(_, origin, _, restID, _):
-            guard restID.staff == staff else { continue }
+        case .rest, .measureRepeat:
+            // A measure repeat stands as its bar's rest (`LayoutElement.restSlot`).
+            guard let (restID, origin, _, _) = element.restSlot, restID.staff == staff else { continue }
             let anchorX = baseX + origin.x
             let dx = abs(anchorX - point.x)
             if best.map({ dx < $0.dx }) ?? true {

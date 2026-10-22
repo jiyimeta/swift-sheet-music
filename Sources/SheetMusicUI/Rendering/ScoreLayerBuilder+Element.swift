@@ -208,12 +208,18 @@ extension ScoreLayerBuilder {
                 origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .measureRepeat(c, p):
-            drawMeasureRepeat(
+        case let .measureRepeat(c, p, rid):
+            // Tinted with its slot, which selection names as a rest (`LayoutElement.restSlot`).
+            let layers = drawMeasureRepeat(
                 count: c, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .arpeggioWiggle(top, bot, sub):
+            if let rid {
+                for layer in layers {
+                    context.attach(layer, to: .rest(rid))
+                }
+            }
+        case let .arpeggioWiggle(top, bot, sub, _):
             drawArpeggio(
                 top: shift(top), bottom: shift(bot), subtype: sub,
                 metrics: metrics, height: height, into: parent,
@@ -250,7 +256,7 @@ extension ScoreLayerBuilder {
                 shape: shape.translated(by: base),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .chordLine(shape, origin, thickness):
+        case let .chordLine(shape, origin, thickness, _):
             drawChordLine(
                 shape: shape, origin: shift(origin),
                 thickness: thickness,
@@ -447,7 +453,7 @@ extension ScoreLayerBuilder {
                 count: c, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .tremoloBars(anchor, barCount):
+        case let .tremoloBars(anchor, barCount, _):
             let shiftedAnchor: TremoloAnchor
             switch anchor {
             case let .single(c):

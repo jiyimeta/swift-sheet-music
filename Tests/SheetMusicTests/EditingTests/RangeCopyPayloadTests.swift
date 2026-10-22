@@ -270,11 +270,13 @@ struct RangeCopyPayloadTests {
         var source = EditingFixtures.parityFixture()
         source.parts.updateValue(at: 0) { part in
             part.staves.updateValue(at: 0) { staff in
+                // The sign advances the cursor by its own length, as a rest does, so the hairpin sits after it —
+                // at the first chord's tick, which the range opens on.
                 staff.measures[0].voices[0] = Voice(elements: [
                     .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
                     .locationShift(delta: Fraction(numerator: 0, denominator: 4)),
-                    Self.hairpin(),
                     .measureRepeat(MeasureRepeat(numMeasures: 1, duration: .quarter)),
+                    Self.hairpin(),
                     .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
                     .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
                     .rest(duration: .quarter), .rest(duration: .quarter),

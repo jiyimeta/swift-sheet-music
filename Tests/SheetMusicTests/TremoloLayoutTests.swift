@@ -65,7 +65,7 @@ struct TremoloLayoutTests {
         )
         let doc = Self.laidOut(Self.score([.chord(chord)]))
         let bars = Self.measureElements(doc).compactMap { el -> Int? in
-            if case let .tremoloBars(anchor, n) = el,
+            if case let .tremoloBars(anchor, n, _) = el,
                case .single = anchor
             {
                 return n
@@ -91,7 +91,7 @@ struct TremoloLayoutTests {
             .chord(start), .chord(follower),
         ]))
         let bars = Self.measureElements(doc).compactMap { el -> Int? in
-            if case let .tremoloBars(anchor, n) = el,
+            if case let .tremoloBars(anchor, n, _) = el,
                case .between = anchor
             {
                 return n
@@ -121,7 +121,7 @@ struct TremoloLayoutTests {
             if case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = el {
                 noteX = notes.first?.origin.x
             }
-            if case let .tremoloBars(anchor, _) = el,
+            if case let .tremoloBars(anchor, _, _) = el,
                case let .single(c) = anchor
             {
                 anchorX = c.x

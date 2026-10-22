@@ -57,7 +57,7 @@ struct ChordLineLayoutTests {
     ) -> [(shape: ChordLineShape, origin: CGPoint, thickness: CGFloat)] {
         document.systems.flatMap(\.measures).flatMap(\.elements)
             .compactMap { element in
-                guard case let .chordLine(shape, origin, thickness) = element
+                guard case let .chordLine(shape, origin, thickness, _) = element
                 else { return nil }
                 return (shape, origin, thickness)
             }

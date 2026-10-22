@@ -289,7 +289,10 @@ struct EditIntentCodecTests {
             .retimeRun(at: slot, durations: [
                 .eighth, NoteDuration.eighth.dotted(1), .fraction(Fraction(numerator: 1, denominator: 12)),
             ]),
-            // Appended for folino's "save the mix to the score" — index 93. Two strips with different flags and a
+            // Appended for removing a selected slur — index 93. Both storage forms, and an ordinal past the first.
+            .removeSlur(.chord(anchor: slot, ordinal: 1)),
+            .removeSlur(.voice(slot)),
+            // Appended for folino's "save the mix to the score" — index 94. Two strips with different flags and a
             // multi-point strip, so a dropped repeated field or a swapped flag cannot round-trip.
             .setStripMix([
                 StripMix(partIndex: 1, points: [0, 2], volume: 90, program: 19, isMuted: true, isSoloed: false),
@@ -448,8 +451,16 @@ struct EditIntentCodecTests {
         #expect(EditIntentCodec.encode(.retimeRun(at: slot, durations: [.eighth, .eighth]))[1] == 92)
     }
 
-    @Test func `strip mix keeps wire index 93`() {
-        #expect(EditIntentCodec.encode(.setStripMix([]))[1] == 93)
+    /// Appended for removing a selected slur, after the pattern edit. A slur identity is a slot and an ordinal, so
+    /// `bytes[1]` still reads the index.
+    @Test func `remove slur keeps wire index 93`() {
+        let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let slot = VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
+        #expect(EditIntentCodec.encode(.removeSlur(.chord(anchor: slot, ordinal: 0)))[1] == 93)
+    }
+
+    @Test func `strip mix keeps wire index 94`() {
+        #expect(EditIntentCodec.encode(.setStripMix([]))[1] == 94)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field

@@ -61,10 +61,9 @@ extension LayoutDocument {
     private func measureFillRest(_ restID: RestID, inMeasureIndex index: Int?) -> Bool? {
         for system in systems {
             for measure in system.measures where index == nil || measure.measureIndex == index {
+                // A measure repeat is centered in its bar as a measure rest is (`LayoutElement.restSlot`).
                 for element in measure.elements {
-                    if case let .rest(duration, _, _, rid, _) = element,
-                       rid == restID
-                    {
+                    if let (rid, _, _, duration) = element.restSlot, rid == restID {
                         return duration == .measure
                     }
                 }
@@ -346,9 +345,7 @@ extension LayoutDocument {
             }
         case let .rest(target):
             for el in measure.elements {
-                if case let .rest(_, p, _, rid, _) = el,
-                   rid == target
-                {
+                if let (rid, p, _, _) = el.restSlot, rid == target {
                     return p.x
                 }
             }

@@ -25,10 +25,13 @@ import SheetMusicFoundation
 /// replaced keeps each rest's identifier and its original spelling — so a `.measure` rest the range covered stays a
 /// `.measure` rest instead of being rewritten as the literal `.whole` that totals the same ticks.
 ///
-/// Tuplet members are the other thing the fill leaves alone: a covered member becomes a rest of its OWN length and
-/// the bracket survives, because folding a tuplet's slots into a plain metric fill would be dissolving the tuplet,
-/// which is not what deleting its notes means. (A range covering the whole bar-voice still collapses, tuplet and
-/// all — that path is the measure rest above.)
+/// A tuplet goes by how much of it the range covers, as in MuseScore's `deleteRange`. Covered whole, it goes with its
+/// notes: its members fold into the fill like any other covered slot and the bracket is dropped, so a deleted triplet
+/// comes back as the metric rests of its span. Covered in part, a covered member becomes a rest of its OWN length and
+/// the bracket survives — the rest of the tuplet is still there to bracket. (A range covering the whole bar-voice still
+/// collapses, tuplet and all — that path is the measure rest above.)
+///
+/// A measure repeat the range covers dissolves first, its whole group, as `.delete` takes one.
 ///
 /// A tie running into a deleted chord is left dangling exactly as `.delete` leaves it — no chain repair here, so the
 /// two paths produce the same score.
@@ -65,15 +68,29 @@ public struct DeleteRange: EditCommand {
     /// The complete post-delete scratch state and the commands that reproduce it — one `ReplaceVoiceElements` per
     /// bar-voice the range touched, in the order the range reached them.
     func detailedPlan(in score: Score, ids: EIDAllocator) throws -> RangeEditPlanner.Plan? {
-        let targets = score.voiceElements(in: range)
+        var targets = score.voiceElements(in: range)
         guard !targets.isEmpty else { throw Self.refused(.targetNotFound(range.start)) }
 
         var commands: [any EditCommand] = []
         var working = score
         var scratch = ids
         var location: VoiceElementID?
+        // A measure repeat the range takes in goes the way `.delete` takes one — its whole group dissolves back into
+        // measure rests (`SetMeasureRepeat.deleting(signAt:in:)`), as MuseScore's range delete removes a measure repeat
+        // it covers — and the delete then runs over what that left. A dissolve keeps the sign's slot (the measure rest
+        // stands where the sign stood) and the sign's bar holds no other voice, so the range's two ends still resolve.
+        let signs = targets.filter { if case .measureRepeat? = score[$0] { true } else { false } }
+        for sign in signs {
+            let dissolve = SetMeasureRepeat.deleting(signAt: sign, in: working)
+            _ = try dissolve.apply(to: &working, ids: &scratch)
+            commands.append(dissolve)
+            location = location ?? sign
+        }
+        if !signs.isEmpty {
+            targets = working.voiceElements(in: range)
+        }
         let groups = Self.grouped(targets)
-        let removedFrom = Self.removableUpperVoices(of: groups, in: score)
+        let removedFrom = Self.removableUpperVoices(of: groups, in: working)
         for (ref, covered) in groups {
             let bar = BarKey(ref)
             // An emptied bar's removable upper voices are dropped by its voice-1 pass below, not rewritten.
@@ -186,7 +203,15 @@ public struct DeleteRange: EditCommand {
         guard let voice = score[voice: ref] else { return nil }
         let division = score.division
         let measureDuration = score.effectiveMeasureDuration(at: ref.staff, measureIndex: ref.measureIndex)
-        let spans = voice.tupletSpans
+        // A tuplet the range covers ENTIRELY goes with its notes: its members fold into the fill like any covered
+        // slot, and with its endpoints folded the bracket is dropped (`surviving`) — MuseScore's `deleteRange` deletes
+        // a tuplet it covers whole (`cmdDeleteTuplet`) and fills its ticks with rests. A tuplet the range only partly
+        // covers keeps its bracket, and so does every tuplet its members sit in.
+        let keptSpans = voice.tupletSpans.filter { span in
+            !(span.startIndex ... span.endIndex).allSatisfy { index in
+                covered.contains(index) || !voice.elements.values[index].isRangeSlot
+            }
+        }
 
         var builder = RestFillBuilder(
             division: division, bar: BarMeter(score: score, staff: ref.staff, measureIndex: ref.measureIndex),
@@ -199,7 +224,7 @@ public struct DeleteRange: EditCommand {
                 builder.carryOver(at: index, identity: kept, element: element)
                 continue
             }
-            if spans.contains(where: { $0.startIndex <= index && index <= $0.endIndex }) {
+            if keptSpans.contains(where: { $0.startIndex <= index && index <= $0.endIndex }) {
                 // Inside a tuplet the bracket's arithmetic is what fixes the spelling: the member keeps its own
                 // length and only loses its notes.
                 builder.clearInPlace(at: index, identity: kept, chord: chord)
@@ -212,7 +237,7 @@ public struct DeleteRange: EditCommand {
         }
         builder.flush()
 
-        let tupletSlots = surviving(spans, of: voice, under: builder.newIndexForOldIndex)
+        let tupletSlots = surviving(voice.tupletSpans, of: voice, under: builder.newIndexForOldIndex)
         guard builder.slots.map(\.element) != voice.elements.values
             || tupletSlots.count != voice.tuplets.count,
             let restElementIndex = builder.firstRestIndex
@@ -227,8 +252,7 @@ public struct DeleteRange: EditCommand {
     }
 
     /// The voice's tuplets with their endpoints re-pointed at the rewritten element list. A tuplet whose endpoints
-    /// were folded into a fill has no members left to bracket and is dropped — which the fill never does, since
-    /// tuplet members are cleared in place.
+    /// were folded into a fill — one the range covered whole — has no members left to bracket and is dropped.
     private static func surviving(
         _ spans: [TupletSpan], of voice: Voice, under newIndex: [Int: Int],
     ) -> [TupletSlot] {

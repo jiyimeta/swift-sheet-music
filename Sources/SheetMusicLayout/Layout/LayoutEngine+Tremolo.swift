@@ -130,7 +130,7 @@ extension LayoutEngine {
             switch out[j] {
             case .chord, .note, .rest:
                 return // belongs to a different chord
-            case let .tremoloBars(.single(prevCenter), barCount):
+            case let .tremoloBars(.single(prevCenter), barCount, owner):
                 let beamH = beamStackHeight(
                     beamLevel: beamLevel, metrics: metrics,
                 )
@@ -145,6 +145,7 @@ extension LayoutEngine {
                         center: CGPoint(x: prevCenter.x, y: centerY),
                     ),
                     barCount: barCount,
+                    owner: owner,
                 )
                 return
             default:
@@ -164,8 +165,11 @@ extension LayoutEngine {
     /// far note is the lowest; for stem-down the far note is the
     /// highest. The bars themselves are placed at the stem midpoint
     /// in v1 — the renderer (Task 1.8) is responsible for the slant.
+    ///
+    /// `owner` is the chord's own slot — for a two-chord tremolo, the first chord's, where it is stored.
     static func makeTremoloBarsElement( // swiftlint:disable:this function_parameter_count
         tremolo: Tremolo,
+        owner: VoiceElementID? = nil,
         duration: NoteDuration,
         chordX: CGFloat,
         chordNotes: [LayoutChordNote],
@@ -197,7 +201,7 @@ extension LayoutEngine {
             )
             return .tremoloBars(
                 anchor: .single(center: center),
-                barCount: barCount,
+                barCount: barCount, owner: owner,
             )
         case .between:
             guard let followerCtx = followerChordContext(
@@ -242,7 +246,7 @@ extension LayoutEngine {
                 anchor: .between(
                     leftStemMid: leftMid, rightStemMid: rightMid,
                 ),
-                barCount: barCount,
+                barCount: barCount, owner: owner,
             )
         }
     }

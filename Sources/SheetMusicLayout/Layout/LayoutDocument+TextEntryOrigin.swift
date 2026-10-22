@@ -61,8 +61,7 @@ extension LayoutDocument {
                 where measure.measureIndex == anchor.measureIndex
             {
                 for element in measure.elements {
-                    guard case let .rest(_, origin, _, candidate, _) = element,
-                          candidate == restID
+                    guard let (candidate, origin, _, _) = element.restSlot, candidate == restID
                     else { continue }
                     return absolute(
                         origin, in: system, measure: measure,

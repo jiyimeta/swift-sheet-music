@@ -65,6 +65,10 @@ extension LayoutEngine {
             // staff text's baseline-side origin does — the top would reserve a line of height the text never fills.
             guard let rich else { return [p.y] }
             return [p.y + rich.firstBaseline, p.y + (rich.lineBaselines.last ?? 0)]
+        case let .measureRepeat(count, p, _):
+            // A 2- or 4-bar sign's number stands above the staff, past the `glyphPad` the sign itself is given.
+            guard let sp, let number = MeasureRepeatGlyph.numberRect(forCount: count, sp: sp) else { return [p.y] }
+            return [p.y, p.y + number.minY]
         case let .clef(_, p, _, _),
              let .keySignature(_, _, _, _, p, _),
              let .timeSignature(_, _, _, p, _),
@@ -73,7 +77,6 @@ extension LayoutEngine {
              let .fermata(_, p, _),
              let .breath(_, p, _),
              let .articulation(_, p, _, _),
-             let .measureRepeat(_, p),
              let .multiMeasureRest(_, p),
              let .measureNumber(_, p),
              let .staffName(_, p),
@@ -114,11 +117,11 @@ extension LayoutEngine {
             return [from.y, vertex.y, to.y]
         case let .legacyBend(shape):
             return legacyBendYPoints(shape: shape, sp: sp)
-        case let .arpeggioWiggle(top, bot, _):
+        case let .arpeggioWiggle(top, bot, _, _):
             return [top.y, bot.y]
-        case let .chordLine(shape, origin, _):
+        case let .chordLine(shape, origin, _, _):
             return chordLineYPoints(shape: shape, origin: origin)
-        case let .tremoloBars(anchor, _):
+        case let .tremoloBars(anchor, _, _):
             switch anchor {
             case let .single(c): return [c.y]
             case let .between(left, right): return [left.y, right.y]
@@ -318,6 +321,7 @@ extension LayoutEngine {
             // leaves them valid as-is.
             dynamicExtents: measure.dynamicExtents,
             measureRestsAreBreves: measure.measureRestsAreBreves,
+            measureRepeatRests: measure.measureRepeatRests,
         )
     }
 }

@@ -356,8 +356,23 @@
         /// it (`grace_after` 269.22 → 914), and one element moves — `slur_ms4_glissando_legato`'s tempo mark, which
         /// had been pulled 2.05 pt back inside the last barline, sits on its own column again (63.47 → 65.52), running
         /// on into the empty room past the line. No system, column or other element moved.
+        ///
+        /// **Re-recorded 2026-10-22 when a measure repeat became a slot and an arpeggio named its chord, after reading
+        /// the diff** against the digest above (`1e67ec4a…`). 58 lines in two blocks changed and nothing moved: the 14
+        /// `measureRepeat` lines carry their slot's `restID` and the 10 `arpeggioWiggle` lines their chord's `anchor`,
+        /// each identical to before once that field is set aside; and `testMeasureRepeats` draws 10 rests fewer —
+        /// the first voice's rests in the bars of a group, which stand under the group's sign and which MuseScore
+        /// never draws (most of them in a 2- or 4-bar group's bars around the sign MuseScore anchors in a middle bar).
+        ///
+        /// **Re-recorded 2026-10-22 when a 2- or 4-bar measure repeat took its own glyph and count, after reading the
+        /// diff** against the digest above (`2b063143…`). Only `testMeasureRepeats` changed, 66 lines in each wrap
+        /// mode. Its six 2- and 4-bar signs carry their count and stand on their bar's trailing barline (x =
+        /// width − sp/2) instead of the 1-bar symbol in the bar's middle. Every other changed line is the staves moving
+        /// down by one shift each — 1.32 pt for the upper staff, 22.46 pt for the lower — to make room for the count
+        /// above the lower staff's signs, which the sign's shape now holds as MuseScore's does
+        /// (`ChordLayout::fillShape(MeasureRepeat)` adds `numberRect`). Checked line by line; nothing else moved.
         private static let expectedDigestSHA256 =
-            "1e67ec4a2f5053b677ea6fb905fd819577a9f814d474f4f9a04b00d42a859d70"
+            "b74058a01832fcfb8d1f5fa60ad601e4370ee766d8fdc32e10347becd522188a"
 
         @Test("write digest")
         func writeDigest() throws {

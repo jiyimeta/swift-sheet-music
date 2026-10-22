@@ -57,6 +57,7 @@ extension ScoreEditSession {
             }
             return SetChordDuration(at: location, duration: duration)
         case let .delete(location):
+            if case .measureRepeat? = score[location] { return SetMeasureRepeat.deleting(signAt: location, in: score) }
             // Deleting the voice's ONLY timed slot leaves ONE measure rest, not a whole rest that merely totals the
             // same ticks — the same rule the write side spells as `.measure`. It is the single-slot reading of the
             // range rule: a bar-voice whose every timed slot is being cleared reads as "silent bar". Anything left
@@ -117,8 +118,7 @@ extension ScoreEditSession {
             // shape-changing intents: that fold is a chain of `if case`s ending in `return nil`, where a case
             // nobody added would resolve to "nothing to apply" instead of failing to build.
             return setTimeSignatureCommand(
-                at: measureIndex, numerator: numerator, denominator: denominator,
-                symbol: symbol, in: score,
+                at: measureIndex, numerator: numerator, denominator: denominator, symbol: symbol, in: score,
             )
         case let .removeTimeSignature(measureIndex):
             return removeTimeSignatureCommand(at: measureIndex, in: score)
@@ -166,7 +166,7 @@ extension ScoreEditSession {
             }
             return SetLyricVerse(text, toVerse: destination)
         case .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
-             .setPalmMute, .setLetRing, .removeSpanner:
+             .setPalmMute, .setLetRing, .removeSpanner, .removeSlur:
             return spannerCommand(for: intent, in: score)
         }
     }

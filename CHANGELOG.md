@@ -9,18 +9,60 @@ and this project adheres to
 
 ### Added
 
+- **A measure repeat is a slot, as MuseScore's `MeasureRepeat` is a `Rest` of its bar's length.** The `%` sign now
+  advances its voice's cursor by the bar it stands for, so `Score.voiceElements(in:)` takes it into a range,
+  `Score.items(inRangeFrom:to:)` names it as the bar's rest (so a range selection over its bar is lit and boxed), the
+  `ElementNavigator` walk stops on it, and the layout names it as the bar's rest: `LayoutElement.measureRepeat` carries
+  a `restID`, a click on the sign hit-tests as `.rest`, and `LayoutElement.restSlot` answers for a rest and a sign
+  alike. A rest the first voice of a group's bar holds under the sign is never drawn and the walk passes it
+  (MuseScore's `skipMeasureRepeatRests`) — in every bar of the group, since MuseScore anchors a 2- or 4-bar group's
+  sign in a middle bar, and in a bar holding the sign beside a stray rest.
+- **Deleting a sign dissolves its group** — `.delete` on it, and a range delete covering it — back into measure rests,
+  from the group's first bar (`Score::deleteItem`).
+- **A measure repeat travels through ⌘C / ⌘V and `R`.** A group the range covers whole is carried beside the copied
+  material and formed again where it lands on a barline over bars as long as its own; misaligned, it lands as rests.
+  A destination group the paste or duplicate writes into is dissolved first. `Score.clipboardDocument(for:)` keeps a
+  sign by its tick, as it keeps a rest.
+- **Line spanners are selectable**: a trill, a vibrato, a text line, a palm mute, a let ring, a gradual tempo change
+  and a guitar chord-text line now name their slot (`ScoreElementID.spanner`), which `RemoveSpanner` takes.
+- **An arpeggio, a chord line and a tremolo are selectable** — `ScoreElementID.arpeggio`, `.chordLine` and `.tremolo`
+  (wire choices 16–18), the matching `ScoreHitTarget` cases, and removal through `SetArpeggio` / `SetChordLine` /
+  `SetTremolo` with nothing to write. A tremolo's bars are hit ahead of the stem they cross, as a beam's are.
+- **`EditIntent.removeSlur(SlurID)`** (wire index 93) — the one slur a selection names, where `removeSpanner(kind:
+  .slur)` takes every slur of a chord.
+- **`LayoutMeasure.measureRepeatRests`** — the rests a measure-repeat group's bar holds under its sign, which nothing
+  draws. A range on one (what a click in a group bar the sign does not stand in selects) now draws its box across the
+  bar, as a measure rest's does; it drew nothing.
+- **`MeasureRepeatGlyph.inkRect` / `numberRect` / `numberCenter` / `drawnRect` / `numberCodepoint`** — where a sign's
+  ink and its bar count sit around its layout origin (Bravura's `glyphBBoxes`).
 - **A channel's mute and solo.** `InstrumentChannel.isMuted` / `.isSoloed`, read and written as MuseScore 3's
   `<Channel><mute>` / `<solo>` (written only when set; MuseScore 4 still reads them as a compatibility setting when
   the file has no `audiosettings.json`). The live mixer (`PlaybackChannelLayout.mixerChannels`) starts from them, so a
   score that solos a part plays that part alone until a host changes it. They are not part of `LiveChannelPlan`'s
   dedup key: a muted instance of an instrument still shares its strip.
-- **`EditIntent.setStripMix([StripMix])` (wire index 93).** Writes mixer strips' volume, program, mute and solo into
+- **`EditIntent.setStripMix([StripMix])` (wire index 94).** Writes mixer strips' volume, program, mute and solo into
   the score as one undo step — a host's "save this mix to the score". A strip is addressed by the sound-timeline
   points that play on it; `LiveChannelPlan.timelineIndices(partIndex:ordinal:)` maps a live strip to them. An
   instrument point writes its instrument's primary channel, and the volume, mute and solo of its other channels no
   technique sounds through yet (so a technique added later sounds the way the instrument was left); a play technique
   sounding through one of the instrument's own channels writes that channel; a technique with no channel of its own is
   skipped, and `SetStripMix.canWrite(_:in:)` tells a host which strips the score has nowhere to keep.
+
+### Changed
+
+- **A range delete that covers every member of a tuplet removes the tuplet** and fills its span with rests, as
+  MuseScore's `cmdDeleteTuplet` does; a tuplet only partly covered keeps its bracket as before.
+- **A 2- or 4-bar measure repeat is engraved as MuseScore engraves it**: its own glyph (`repeat2Bars` /
+  `repeat4Bars`) centered on the group's middle barline, with the bar count above the staff
+  (`TLayout::layoutMeasureRepeat`). Every sign used to draw as the 1-bar symbol in the middle of its bar.
+  `LayoutElement.measureRepeat` now carries the sign's count, and its skyline shape includes the number.
+- **`SetMeasureRepeat` writes the sign in MuseScore's anchor bar**: the last bar of an even group's first half, so the
+  second bar of a 4-bar group (`Score::cmdAddMeasureRepeat`). It wrote every sign in the group's first bar.
+- **A system never ends inside a measure-repeat group**: a line that would split one closes before the group instead,
+  as MuseScore's `noBreak` on a group's bars makes it — unless the group opens the line, or an authored break splits it.
+- **A click selects a measure repeat by its ink** — its glyph, and a 2- or 4-bar sign's number — with half a space of
+  reach, as MuseScore hits an element by its shape. It used a rest's box, which spans the whole staff, so a click above
+  or below the sign selected the sign instead of the bar. The event columns the near-miss rescue reads use the same box.
 
 ## [4.19.0] - 2026-10-22
 

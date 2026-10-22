@@ -15,6 +15,7 @@ struct ScoreElementSelectionIdentityTests {
         .dynamic(anchor: anchor), .fermata(anchor: anchor), .breath(anchor: anchor),
         .tempo(anchor: anchor), .spanner(anchor: anchor, kind: .hairpin),
         .articulation(anchor: anchor, kind: .accent),
+        .arpeggio(anchor: anchor), .chordLine(anchor: anchor), .tremolo(anchor: anchor),
     ]
 
     private static let barAddressed: [ScoreElementID] = [
@@ -79,6 +80,7 @@ struct ScoreElementSelectionIdentityTests {
             .dynamic(anchor: Self.anchor), .fermata(anchor: Self.anchor), .breath(anchor: Self.anchor),
             .tempo(anchor: Self.anchor), .spanner(anchor: Self.anchor, kind: .hairpin),
             .articulation(anchor: Self.anchor, kind: .accent),
+            .arpeggio(anchor: Self.anchor), .chordLine(anchor: Self.anchor), .tremolo(anchor: Self.anchor),
             .keySignature(measureIndex: 13, staff: Self.anchor.staff),
             .timeSignature(measureIndex: 13, staff: Self.anchor.staff),
             .barLine(measureIndex: 13, role: .explicit),

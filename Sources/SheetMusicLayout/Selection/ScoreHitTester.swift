@@ -101,7 +101,7 @@ public struct ScoreHitTester: Sendable {
         case let .clef(anchor): return .clef(anchor)
         case let .graceNote(id): return .graceNote(id)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando, .swing, .partName:
+             .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
             return target.elementID.map(ScoreItemID.element)
         case .stem, .flag, .beam, .lyric, .staffText, .harmony, .rehearsalMark:
             return nil
@@ -132,6 +132,10 @@ public struct ScoreHitTester: Sendable {
         }
         // 4. Flag — before stem so the flag tip resolves to flag.
         if let target = hitFlag(measure: measure, base: base, point: point, sp: sp) {
+            return target
+        }
+        // 4a. Tremolo bars — before stem, which they cross; see `hitTremolo`.
+        if let target = hitTremolo(measure: measure, base: base, point: point) {
             return target
         }
         // 5. Stem
@@ -266,16 +270,15 @@ public struct ScoreHitTester: Sendable {
         measure: LayoutMeasure,
         base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
-        let halfWidth = sp * 1.8
-        let halfHeight = sp * 2.5
+        // A measure repeat answers as its bar's rest (`LayoutElement.restSlot`), from its own ink
+        // (`restSlotHitRect`).
         for el in measure.drawnElements {
-            guard case let .rest(_, origin, _, rid, _) = el
+            guard let (rid, origin, _, _) = el.restSlot,
+                  let box = el.restSlotHitRect(sp: sp)
             else { continue }
-            let ax = base.x + origin.x
-            let ay = base.y + origin.y
-            if abs(point.x - ax) <= halfWidth,
-               abs(point.y - ay) <= halfHeight
-            {
+            // Inclusive on every edge, unlike `CGRect.contains`.
+            let hit = box.offsetBy(dx: base.x + origin.x, dy: base.y + origin.y)
+            if (hit.minX ... hit.maxX).contains(point.x), (hit.minY ... hit.maxY).contains(point.y) {
                 return .rest(rid)
             }
         }
