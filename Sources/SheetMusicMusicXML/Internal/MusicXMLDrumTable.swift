@@ -21,6 +21,8 @@ import SheetMusicXMLTools
 struct MusicXMLDrumTable: Equatable {
     /// `instrumentId` (e.g. "P6-I36") → MIDI pitch (0-127).
     private(set) var pitchByInstrumentId: [String: Int] = [:]
+    /// `instrumentId` → `<score-instrument><instrument-name>`, the name its drum takes in the kit.
+    private(set) var nameByInstrumentId: [String: String] = [:]
     /// True if any `<midi-unpitched>` was present, OR if any `<midi-channel>`
     /// equals 10. Either signals that the part is a drum kit and should be
     /// routed to the GM percussion channel.
@@ -29,6 +31,11 @@ struct MusicXMLDrumTable: Equatable {
     /// Build the table for one `<score-part>` element.
     static func build(scorePart: XMLTreeNode) -> MusicXMLDrumTable {
         var table = MusicXMLDrumTable()
+        for scoreInstr in scorePart.all("score-instrument") {
+            if let id = scoreInstr.attributes["id"], let name = scoreInstr.first("instrument-name")?.text {
+                table.nameByInstrumentId[id] = name
+            }
+        }
         for midiInstr in scorePart.all("midi-instrument") {
             let id = midiInstr.attributes["id"] ?? ""
             if let unpitchedText = midiInstr.first("midi-unpitched")?.text,

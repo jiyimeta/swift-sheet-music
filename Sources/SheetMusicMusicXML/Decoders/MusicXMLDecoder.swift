@@ -279,15 +279,20 @@ extension Score {
             staffCount: walker.staffCount,
         )
         let listIndex = scoreParts.firstIndex { $0.attributes["id"] == id } ?? index
+        var instrument = partTemplate.instrument
+        if instrument.useDrumset {
+            instrument.drumset = walker.drumKit.drumset(table: prelimDrumTable)
+        }
         let populatedStaves = staves(
             of: walker, braceColumn: partGroups.impliedBraceColumn(
                 partIndex: listIndex, staffCount: walker.measuresByStaff.count,
             ),
+            isDrumset: instrument.useDrumset,
         )
         let part = Part(
             id: partTemplate.id,
             trackName: partTemplate.trackName,
-            instrument: partTemplate.instrument,
+            instrument: instrument,
             staves: IdentifiedArray(populatedStaves),
         )
         var staffElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])] = []
@@ -316,13 +321,20 @@ extension Score {
     /// The part's staves, replacing the placeholder empty-measure ones. This is the ONLY place `lineCount` is decided
     /// for a MusicXML part: `partTemplate.staves` is discarded wholesale, so the walker's per-staff table is read here
     /// and nowhere else. A multi-staff part's first staff carries MuseScore's implicit brace (`MusicXMLPartGroups`).
-    private static func staves(of walker: MusicXMLMeasureWalker.PartResult, braceColumn: Int?) -> [Staff] {
+    /// A drum part's five-line staves are percussion staves, as `setStaffTypePercussion` makes them: a saved drum staff
+    /// left `stdNormal` makes MuseScore ignore the kit's lines.
+    private static func staves(
+        of walker: MusicXMLMeasureWalker.PartResult, braceColumn: Int?, isDrumset: Bool,
+    ) -> [Staff] {
         var staves = walker.measuresByStaff
             .enumerated()
             .map { staffIndex, staffMeasures in
-                Staff(
-                    staffType: "stdNormal", group: "pitched",
-                    lineCount: walker.lineCountByStaff[staffIndex] ?? 5,
+                let lineCount = walker.lineCountByStaff[staffIndex] ?? 5
+                let isPercussion = isDrumset && lineCount == 5
+                return Staff(
+                    staffType: isPercussion ? GMPercussion.staffTypeName : "stdNormal",
+                    group: isPercussion ? GMPercussion.staffGroup : "pitched",
+                    lineCount: lineCount,
                     defaultClefType: nil, measures: staffMeasures,
                 )
             }

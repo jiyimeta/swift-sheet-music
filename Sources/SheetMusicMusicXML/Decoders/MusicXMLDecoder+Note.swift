@@ -291,7 +291,7 @@ enum MusicXMLNoteDecoder {
     /// The MuseScore head group a `<notehead>` value names, as the `Note.headType` token MSCX writes for it.
     /// MuseScore's `convertNotehead` (`importmusicxmlpass2.cpp`), entry for entry. `normal`, a value it has no group
     /// for (`square`, `circle dot`, …) and an absent element all leave the default head, which is nil here.
-    private static func headType(noteheadValue: String?) -> String? {
+    static func headType(noteheadValue: String?) -> String? {
         noteheadValue.flatMap { museScoreHeadGroups[$0] }
     }
 

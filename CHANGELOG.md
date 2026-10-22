@@ -71,6 +71,13 @@ and this project adheres to
   head. It now sets `Note.headType` to MuseScore's head group for it (`convertNotehead` in `importmusicxmlpass2.cpp`):
   `circle-x` → `xcircle`, `x` → `cross`, `cross` → `plus`, `triangle` → `triangle-up`, and so on; a value MuseScore has
   no group for keeps the normal head, as there.
+- **A MusicXML drum part is engraved on its staff.** Its notes take their General MIDI pitch from `<instrument>`, but
+  the part was given no kit, so the layout had no line for that pitch and placed each note as a pitched one — a bass
+  drum's 36 as C2, octaves below the staff. The part's kit is now built as MuseScore builds it (`setDrumset` /
+  `initDrumset`): a drum for every instrument with a `<midi-unpitched>`, named by its `<instrument-name>`, taking the
+  line, head and stem its notes were written with — the last note deciding — and the General MIDI kit's for a drum no
+  note plays. Its five-line staves become percussion staves (`setStaffTypePercussion`), so a saved part also reads as
+  a drum kit in MuseScore.
 
 ## [4.19.0] - 2026-10-22
 

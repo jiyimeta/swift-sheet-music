@@ -32,6 +32,8 @@ enum MusicXMLMeasureWalker {
         /// `tempoElementsByMeasure[measureIndex]` — the part's tempo markings, which belong to the score's top staff
         /// whatever part wrote them.
         let tempoElementsByMeasure: [[PositionedSystemElement]]
+        /// The lines, heads and stems the part's drum notes were written with, which the part's kit is built from.
+        let drumKit: MusicXMLDrumKit
     }
 
     static func decode(
@@ -66,6 +68,7 @@ enum MusicXMLMeasureWalker {
         var partTick = Fraction.zeroTick
         var repeats = MusicXMLRepeatLog()
         var delayedOttavas = MusicXMLDelayedOttavaLog()
+        var drumKit = MusicXMLDrumKit()
         // The octave shifts are read before the notes, as MuseScore's pass 1 reads them (`P2:7264`).
         let octaveShifts = MusicXMLOctaveShiftScan.scan(partNode: partNode)
         for (index, measureNode) in partNode.all("measure").enumerated() {
@@ -84,7 +87,7 @@ enum MusicXMLMeasureWalker {
             let built = try decodeOne(
                 measureNode: measureNode, state: &state, divisions: &divisions, previousAttributes: &previousAttributes,
                 isFirstMeasure: index == 0, drumTable: drumTable, glideTracker: &glideTracker,
-                directionEvents: &directionEvents,
+                directionEvents: &directionEvents, drumKit: &drumKit,
             )
             tempoElements.append(state.tempoElements)
             let length = measureLength(state, attributes: previousAttributes)
@@ -115,7 +118,7 @@ enum MusicXMLMeasureWalker {
             measuresByStaff: dropped,
             systemElementsByStaffMeasure: perStaffSystemElements,
             lineCountByStaff: previousAttributes.lineCountByStaff,
-            tempoElementsByMeasure: tempoElements,
+            tempoElementsByMeasure: tempoElements, drumKit: drumKit,
         )
     }
 
@@ -196,6 +199,7 @@ enum MusicXMLMeasureWalker {
         drumTable: MusicXMLDrumTable,
         glideTracker: inout MusicXMLGlideTracker,
         directionEvents: inout [MusicXMLDirectionEvent],
+        drumKit: inout MusicXMLDrumKit,
     ) throws -> [StaffMeasureBuilder.Built] {
         let staffCount = state.staffCount
         state.eventBase = directionEvents.count
@@ -224,6 +228,11 @@ enum MusicXMLMeasureWalker {
                 moveDelayedOttavaStop(state: &state)
                 try decodeNoteChild(
                     child, state: &state, divisions: divisions, drumTable: drumTable, glideTracker: &glideTracker,
+                )
+                let staffIndex = noteStaffIndex(child, staffCount: staffCount)
+                drumKit.record(
+                    child, clef: NotatedClef(rawType: previousAttributes.clefByStaff[staffIndex] ?? "G"),
+                    lineCount: previousAttributes.lineCountByStaff[staffIndex] ?? 5, table: drumTable,
                 )
 
             case "direction":
