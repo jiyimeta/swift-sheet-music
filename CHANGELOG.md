@@ -18,6 +18,12 @@ and this project adheres to
   rather than with `current`. `SetTempoIntentWire` carries the two as optional tags 10 and 11, absent unless set, so
   existing intents' bytes are unchanged. **Mixed-version collaboration:** an older client skips the two tags and
   applies the rest — a pasted "a tempo" arrives there as an ordinary marking with the words "a tempo".
+- **Windows: a fill clipped to a region** — `ScoreSurface.Overlay.clippedFillPath(page:id:figures:argb:clip:)` fills
+  `fillPath`'s figures only inside `ScoreSurface.OverlayClip` (polygons, even-odd or nonzero), intersected once by
+  Direct2D (`CombineWithGeometry`, `cd2d_shape_create_clipped`) and cached like any overlay shape; a new clip on the
+  same id rebuilds it. folino draws iOS's pixel-erased ink with it (a stroke whose mask hides part of it).
+  `ScoreSurface.rasterizeOverlays(_:widthPx:heightPx:pxPerMM:)` is `@_spi(Testing)`: the surface's own painting of
+  overlays into BGRA pixels, for a host's pixel tests. Windows-only code; Apple, Android and wasm are unchanged.
 
 ## [4.18.0] - 2026-10-22
 
