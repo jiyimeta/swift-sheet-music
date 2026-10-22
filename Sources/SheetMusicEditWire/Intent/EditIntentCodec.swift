@@ -548,6 +548,8 @@ import Wirelet
 /// tag 7: text            string, OPTIONAL — present only with textMode 2
 /// tag 8: playsBack       u8, varint, OPTIONAL — absent = leave `<play>`, 0 = mute, 1 = play
 /// tag 9: numberEdit      u8, varint, OPTIONAL — absent = the receiver infers it, 0 = number and beat kept, 1 = edited
+/// tag 10: textType       u8, varint, OPTIONAL — absent = leave `<type>`, 0 = normal, 1 = aTempo, 2 = tempoPrimo
+/// tag 11: followText     u8, varint, OPTIONAL — absent = leave `<followText>`, 0 = no, 1 = yes
 /// ```
 ///
 /// `SetStaffTextIntentWire` (`setStaffText`'s payload):

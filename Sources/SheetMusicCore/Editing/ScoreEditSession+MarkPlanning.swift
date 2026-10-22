@@ -24,11 +24,7 @@ extension ScoreEditSession {
         case let .removeClef(location):
             return RemoveClef(at: location)
         case let .setTempo(anchor, marking):
-            // The sender's `numberEdit` stamp says how to apply a write, not whether it changes anything.
-            var unstamped = marking
-            unstamped?.numberEdit = nil
-            let unchanged = SetTempo.current(at: anchor, in: score) == unstamped
-            return unchanged ? nil : SetTempo(anchor: anchor, marking: marking)
+            return tempoRestates(marking, at: anchor, in: score) ? nil : SetTempo(anchor: anchor, marking: marking)
         case let .setStaffText(anchor, text, isSystemText):
             // Compared as given, because it is stored as given (`SetStaffText`): "pizz." and "pizz.\n" are two texts,
             // the second reserving an empty last line. A whitespace-only text never equals a mark that exists, so it
@@ -92,5 +88,20 @@ extension ScoreEditSession {
             // the `default` exists because that narrowing is a `case` list, not a type.
             return nil
         }
+    }
+
+    /// Whether `.setTempo(anchor, marking)` would change nothing. The sender's `numberEdit` stamp says how to apply a
+    /// write, not whether it changes anything, so it is left out. A marking that states its type or follow flag (a
+    /// pasted copy) is compared with the stored tempo, since `current` reads a marking as it plays and carries
+    /// neither.
+    private static func tempoRestates(
+        _ marking: SetTempo.Marking?, at anchor: VoiceElementID, in score: Score,
+    ) -> Bool {
+        var unstamped = marking
+        unstamped?.numberEdit = nil
+        if let unstamped, unstamped.textType != nil || unstamped.followText != nil {
+            return SetTempo.tempo(at: anchor, in: score)?.isRestated(by: unstamped) ?? false
+        }
+        return SetTempo.current(at: anchor, in: score) == unstamped
     }
 }

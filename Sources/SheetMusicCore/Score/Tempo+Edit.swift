@@ -36,6 +36,28 @@ extension Tempo {
                 applyNumberEdit()
             }
         }
+        // Last, so a stated type and follow flag win over what the text edit just made of them.
+        if let textType = marking.textType {
+            self.textType = textType
+        }
+        if let followText = marking.followText {
+            self.followText = followText
+        }
+    }
+
+    /// Whether writing `marking` here would change nothing — the planner's no-op test for a marking that states
+    /// `textType` or `followText`, which `SetTempo.current` (a marking as it plays) cannot answer. Each `nil` field
+    /// leaves what is stored; a `.set` text matches only plain words, since the write drops any markup.
+    func isRestated(by marking: SetTempo.Marking) -> Bool {
+        let sameText = switch marking.text {
+        case .keep: true
+        case .derive: text == nil && followText == (marking.followText ?? true)
+            && textType == (marking.textType ?? .normal)
+        case let .set(newText): text == newText && preservedTextMarkup == nil
+        }
+        return sameText && beatsPerSecond == marking.beatsPerSecond && beatNote == marking.beatNote
+            && beatDots == marking.beatDots && playsBack == (marking.playsBack ?? playsBack)
+            && textType == (marking.textType ?? textType) && followText == (marking.followText ?? followText)
     }
 
     /// What a new number or beat does to the words (spec 2026-10-14 §5.6, the owner's decision b): only the equation
