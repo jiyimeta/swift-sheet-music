@@ -123,11 +123,18 @@ public enum Direct2DPageRenderer {
         defer { cache.releaseAll() }
         for _ in 0 ..< 2 {
             for overlay in overlays {
-                guard case let .fillPath(_, id, figures, argb) = overlay,
-                      let shape = cache.shape(id: id, figures: figures, canvas: canvas)
-                else { continue }
+                let built: (shape: OpaquePointer?, argb: UInt32)
+                switch overlay {
+                case let .fillPath(_, id, figures, argb):
+                    built = (cache.shape(id: id, figures: figures, canvas: canvas), argb)
+                case let .clippedFillPath(_, id, figures, argb, clip):
+                    built = (cache.shape(id: id, figures: figures, clip: clip, canvas: canvas), argb)
+                case .fillRect, .strokeRect:
+                    continue
+                }
+                guard let shape = built.shape else { continue }
                 var walker = DrawCommandWalker(canvas: canvas, pxPerMM: pxPerMM, offset: (0, 0))
-                walker.fill(shape: shape, argb: argb)
+                walker.fill(shape: shape, argb: built.argb)
             }
             cache.endFrame()
         }

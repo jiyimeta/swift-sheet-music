@@ -33,6 +33,7 @@ extension PDFSourceDocument {
                 generation: generation,
                 dictionary: dictionary,
                 space: space(attributes, userUnit: dictionary["UserUnit"]),
+                mediaBox: mediaBox(attributes),
             ))
             return
         }
@@ -52,7 +53,7 @@ extension PDFSourceDocument {
             }
             scale = value
         } else { scale = 1 }
-        let media = try box(attributes["MediaBox"]) ?? [0, 0, 612, 792]
+        let media = try mediaBox(attributes)
         let crop = try box(attributes["CropBox"]) ?? media
         let left = max(media[0], crop[0]), bottom = max(media[1], crop[1])
         let right = max(left, min(media[2], crop[2])), top = max(bottom, min(media[3], crop[3]))
@@ -67,6 +68,11 @@ extension PDFSourceDocument {
             rotation: attributes["Rotate"]?.integerValue ?? 0,
             userUnit: scale,
         )
+    }
+
+    /// US Letter when no page in the chain states one, as viewers assume.
+    private func mediaBox(_ attributes: [String: PDFObject]) throws -> [Double] {
+        try box(attributes["MediaBox"]) ?? [0, 0, 612, 792]
     }
 
     private func box(_ value: PDFObject?) throws -> [Double]? {

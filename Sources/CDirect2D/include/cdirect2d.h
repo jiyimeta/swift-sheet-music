@@ -64,6 +64,12 @@ typedef struct cd2d_shape cd2d_shape;
 /// figures. A figure of fewer than three points is skipped. Release the result with `cd2d_shape_release`.
 int32_t cd2d_shape_create(
     cd2d_canvas *canvas, const float *xy, const uint32_t *counts, uint32_t figure_count, cd2d_shape **out);
+/// `cd2d_shape_create`'s shape, kept only where it lies inside the clip — `clip_xy` / `clip_counts`, the same layout,
+/// filled even-odd when `clip_even_odd` is nonzero and nonzero-winding otherwise. The intersection is computed here,
+/// once, so filling the result costs what filling any shape does. Pixel-erased ink.
+int32_t cd2d_shape_create_clipped(
+    cd2d_canvas *canvas, const float *xy, const uint32_t *counts, uint32_t figure_count, const float *clip_xy,
+    const uint32_t *clip_counts, uint32_t clip_figure_count, int32_t clip_even_odd, cd2d_shape **out);
 /// Fills `shape` in the current color, its millimetres scaled by `scale` (pixels per millimetre) under the canvas
 /// transform — where `cd2d_move_to` and friends take points already in pixels.
 void cd2d_fill_shape(cd2d_canvas *canvas, cd2d_shape *shape, float scale);

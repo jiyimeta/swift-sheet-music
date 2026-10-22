@@ -30,7 +30,6 @@ and this project adheres to
   `SetTremolo` with nothing to write. A tremolo's bars are hit ahead of the stem they cross, as a beam's are.
 - **`EditIntent.removeSlur(SlurID)`** (wire index 93) — the one slur a selection names, where `removeSpanner(kind:
   .slur)` takes every slur of a chord.
-
 - **`LayoutMeasure.measureRepeatRests`** — the rests a measure-repeat group's bar holds under its sign, which nothing
   draws. A range on one (what a click in a group bar the sign does not stand in selects) now draws its box across the
   bar, as a measure rest's does; it drew nothing.
@@ -52,6 +51,38 @@ and this project adheres to
 - **A click selects a measure repeat by its ink** — its glyph, and a 2- or 4-bar sign's number — with half a space of
   reach, as MuseScore hits an element by its shape. It used a rest's box, which spans the whole staff, so a click above
   or below the sign selected the sign instead of the bar. The event columns the near-miss rescue reads use the same box.
+
+## [4.19.0] - 2026-10-22
+
+Two additive changes ship together: the tempo marking's copy and paste, and Windows' clipped fill.
+
+### Added
+
+- **A tempo marking can be copied and pasted as it stands.** `SetTempo.tempo(at:in:)` is public — the whole stored
+  `Tempo`, where `current(at:in:)` reads a marking as it plays (an "a tempo" as the tempo it reinstates, without its
+  words or type). `SetTempo.marking(copying:)` turns it into the marking that writes it back: stored number and beat,
+  words (or a derived text), `<play>`, and the new `Marking.textType` / `Marking.followText`, which a write states
+  over whatever the text edit makes of them (`nil`, the default, leaves them). The markup, offsets, font, color and
+  visibility are not carried. The planner's no-op test compares a marking that states either with the stored tempo
+  rather than with `current`. `SetTempoIntentWire` carries the two as optional tags 10 and 11, absent unless set, so
+  existing intents' bytes are unchanged. **Mixed-version collaboration:** an older client skips the two tags and
+  applies the rest — a pasted "a tempo" arrives there as an ordinary marking with the words "a tempo".
+- **Windows: a fill clipped to a region** — `ScoreSurface.Overlay.clippedFillPath(page:id:figures:argb:clip:)` fills
+  `fillPath`'s figures only inside `ScoreSurface.OverlayClip` (polygons, even-odd or nonzero), intersected once by
+  Direct2D (`CombineWithGeometry`, `cd2d_shape_create_clipped`) and cached like any overlay shape; a new clip on the
+  same id rebuilds it. folino draws iOS's pixel-erased ink with it (a stroke whose mask hides part of it).
+  `ScoreSurface.rasterizeOverlays(_:widthPx:heightPx:pxPerMM:)` is `@_spi(Testing)`: the surface's own painting of
+  overlays into BGRA pixels, for a host's pixel tests. Windows-only code; Apple, Android and wasm are unchanged.
+
+## [4.18.0] - 2026-10-22
+
+### Added
+
+- **`PDFIncrementalAnnotator.pageBoxes(of:)`** reads each page's media box, its displayed crop box (clipped to the
+  media box) and its `/Rotate` as a quarter turn, inherited through the page tree — the inputs `pageSizes(of:)`
+  derives the displayed space from. A host that relates `append`'s displayed space to a viewer showing the page by
+  its media box (folino's reader places page ink that way) needs both boxes and the turn, not just the displayed
+  size. New public types `PDFPageBoxes` and `PDFUserBox`.
 
 ## [4.17.0] - 2026-10-21
 

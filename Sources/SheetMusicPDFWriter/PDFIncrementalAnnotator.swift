@@ -9,6 +9,21 @@ public enum PDFIncrementalAnnotator {
         try PDFSourceDocument(original).pages().map(\.space.displayedSize)
     }
 
+    /// Each page's media box, displayed crop box and turn, in page order — what `pageSizes` is derived from.
+    public static func pageBoxes(of original: Data) throws -> [PDFPageBoxes] {
+        try PDFSourceDocument(original).pages().map { page in
+            let space = page.space
+            return PDFPageBoxes(
+                mediaBox: PDFUserBox(
+                    left: page.mediaBox[0], bottom: page.mediaBox[1], right: page.mediaBox[2], top: page.mediaBox[3],
+                ),
+                cropBox: PDFUserBox(left: space.left, bottom: space.bottom, right: space.right, top: space.top),
+                rotation: space.rotation,
+                userUnit: space.userUnit,
+            )
+        }
+    }
+
     /// Adds annotations by zero-based page index, after each page's existing annotations. Geometry is in the
     /// displayed space reported by `pageSizes`. Nothing drawable to add returns the original bytes unchanged.
     /// Encrypted or unreadable files and indices outside the page tree throw `PDFAppendError`.

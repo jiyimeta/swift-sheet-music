@@ -29,6 +29,13 @@ public struct SetTempo: EditCommand {
         /// inference differs between replicas when an earlier tempo changed before a replay, so a host stamps the
         /// sender's intent with `SetTempo.stamped(_:at:in:)`; `nil` is what an older sender's intent carries.
         public var numberEdit: Bool?
+        /// MuseScore `<type>` to write, or `nil` to leave it (a `.derive` text still makes it `.normal`, and a number
+        /// edit under `.keep` still does as `Tempo.applyNumberEdit()` says). Set, it wins over both: a host pasting a
+        /// copied "a tempo" writes the marking it copied, not an ordinary one that happens to say "a tempo".
+        public var textType: TempoTextType?
+        /// MuseScore `<followText>` to write, or `nil` to leave it — set, it wins over a `.derive` text as `textType`
+        /// does.
+        public var followText: Bool?
 
         /// What a write does to the marking's text.
         public enum TextEdit: Hashable, Sendable {
@@ -44,8 +51,11 @@ public struct SetTempo: EditCommand {
         public init(
             beatsPerSecond: Double, beatNote: NoteDuration = .quarter, beatDots: Int = 0,
             text: TextEdit = .keep, playsBack: Bool? = nil, numberEdit: Bool? = nil,
+            textType: TempoTextType? = nil, followText: Bool? = nil,
         ) {
             self.numberEdit = numberEdit
+            self.textType = textType
+            self.followText = followText
             self.beatsPerSecond = beatsPerSecond
             self.beatNote = beatNote
             self.beatDots = beatDots
@@ -148,6 +158,17 @@ public struct SetTempo: EditCommand {
         return stamped
     }
 
+    /// The marking that writes `tempo` as it stands — its stored number and beat (not the tempo an "a tempo"
+    /// reinstates), its words, `<type>`, `<followText>` and `<play>` — so a paste writes the marking that was copied.
+    /// The text's markup, offsets, font, color and visibility are not part of a marking and are not carried.
+    public static func marking(copying tempo: Tempo) -> Marking {
+        Marking(
+            beatsPerSecond: tempo.beatsPerSecond, beatNote: tempo.beatNote, beatDots: tempo.beatDots,
+            text: tempo.text.map(Marking.TextEdit.set) ?? .derive, playsBack: tempo.playsBack, numberEdit: true,
+            textType: tempo.textType, followText: tempo.followText,
+        )
+    }
+
     /// What plays at the anchor's beat, as a marking a host can show and write — the tempo map's point in force there
     /// (`Score.resolvedTempoMap()`), its number and beat; `nil` before the first point or when the anchor does not
     /// resolve. A caret on a beat with no marking shows this.
@@ -162,7 +183,11 @@ public struct SetTempo: EditCommand {
 
     /// The whole tempo at the anchor's beat — the one `current` reads the marking from, and the one the
     /// color and font writes (`SetElementColor.Target.tempo`, `SetTempoFont`) address.
-    static func tempo(at anchor: VoiceElementID, in score: Score) -> Tempo? {
+    ///
+    /// Public because `current` reads a marking AS IT PLAYS, which is not what a copy needs: an "a tempo" reads as
+    /// the tempo it reinstates, and the words, `<type>` and `<followText>` are not in it. folino's ⌘C reads this and
+    /// pastes it through `marking(copying:)`.
+    public static func tempo(at anchor: VoiceElementID, in score: Score) -> Tempo? {
         guard let slot = slot(at: anchor, in: score),
               case let .tempo(tempo) = score.systemMeasures[slot.measureIndex].elements[slot.elementIndex].element
         else { return nil }

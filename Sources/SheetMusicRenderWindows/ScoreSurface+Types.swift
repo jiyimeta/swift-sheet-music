@@ -50,11 +50,27 @@ extension ScoreSurface {
         /// across frames, and the same id must mean the same figures — which is what lets a later release keep the
         /// built geometry between frames without changing this case.
         case fillPath(page: Int, id: Int, figures: [[PagePointMM]], argb: UInt32)
+        /// `fillPath` drawn only where it lies inside `clip` — ink a pixel eraser has cut. The intersection is built
+        /// once per `id`, as `fillPath`'s shape is, and the same id must mean the same figures and the same clip.
+        case clippedFillPath(page: Int, id: Int, figures: [[PagePointMM]], argb: UInt32, clip: OverlayClip)
 
         var page: Int {
             switch self {
-            case let .fillRect(page, _, _), let .strokeRect(page, _, _, _), let .fillPath(page, _, _, _): page
+            case let .fillRect(page, _, _), let .strokeRect(page, _, _, _), let .fillPath(page, _, _, _),
+                 let .clippedFillPath(page, _, _, _, _): page
             }
+        }
+    }
+
+    /// The region a `clippedFillPath` is drawn inside: closed figures in the page's millimetres, filled even-odd when
+    /// `evenOdd` is true and nonzero-winding otherwise. A figure needs three points; fewer add nothing.
+    public struct OverlayClip: Sendable, Equatable {
+        public var figures: [[PagePointMM]]
+        public var evenOdd: Bool
+
+        public init(figures: [[PagePointMM]], evenOdd: Bool) {
+            self.figures = figures
+            self.evenOdd = evenOdd
         }
     }
 

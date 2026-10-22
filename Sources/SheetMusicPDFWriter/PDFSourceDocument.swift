@@ -187,4 +187,6 @@ struct PDFSourcePage: Equatable {
     let generation: Int
     let dictionary: [String: PDFObject]
     let space: PDFPageSpace
+    /// The page's media box as stated (or inherited), in default user space: left, bottom, right, top.
+    let mediaBox: [Double]
 }

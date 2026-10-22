@@ -434,16 +434,16 @@ struct cd2d_shape {
     ComPtr<ID2D1PathGeometry> geometry;
 };
 
-extern "C" int32_t cd2d_shape_create(
-    cd2d_canvas *canvas, const float *xy, const uint32_t *counts, uint32_t figure_count, cd2d_shape **out) {
-    *out = nullptr;
-    ComPtr<ID2D1PathGeometry> geometry;
-    HRESULT hr = canvas->resources->d2d->CreatePathGeometry(&geometry);
+/// Closed polygon figures (`xy` / `counts`, as `cd2d_shape_create` takes them) as a path geometry filled by `mode`.
+static HRESULT polygonGeometry(
+    ID2D1Factory *factory, const float *xy, const uint32_t *counts, uint32_t figure_count, D2D1_FILL_MODE mode,
+    ComPtr<ID2D1PathGeometry> &geometry) {
+    HRESULT hr = factory->CreatePathGeometry(&geometry);
     if (FAILED(hr)) return hr;
     ComPtr<ID2D1GeometrySink> sink;
     hr = geometry->Open(&sink);
     if (FAILED(hr)) return hr;
-    sink->SetFillMode(D2D1_FILL_MODE_WINDING);
+    sink->SetFillMode(mode);
     size_t first = 0;
     for (uint32_t figure = 0; figure < figure_count; ++figure) {
         const uint32_t count = counts[figure];
@@ -456,6 +456,44 @@ extern "C" int32_t cd2d_shape_create(
         }
         first += count;
     }
+    return sink->Close();
+}
+
+extern "C" int32_t cd2d_shape_create(
+    cd2d_canvas *canvas, const float *xy, const uint32_t *counts, uint32_t figure_count, cd2d_shape **out) {
+    *out = nullptr;
+    ComPtr<ID2D1PathGeometry> geometry;
+    HRESULT hr = polygonGeometry(
+        canvas->resources->d2d.Get(), xy, counts, figure_count, D2D1_FILL_MODE_WINDING, geometry);
+    if (FAILED(hr)) return hr;
+    *out = new cd2d_shape{geometry};
+    return S_OK;
+}
+
+extern "C" int32_t cd2d_shape_create_clipped(
+    cd2d_canvas *canvas, const float *xy, const uint32_t *counts, uint32_t figure_count, const float *clip_xy,
+    const uint32_t *clip_counts, uint32_t clip_figure_count, int32_t clip_even_odd, cd2d_shape **out) {
+    *out = nullptr;
+    ID2D1Factory *factory = canvas->resources->d2d.Get();
+    ComPtr<ID2D1PathGeometry> subject;
+    HRESULT hr = polygonGeometry(factory, xy, counts, figure_count, D2D1_FILL_MODE_WINDING, subject);
+    if (FAILED(hr)) return hr;
+    ComPtr<ID2D1PathGeometry> clip;
+    hr = polygonGeometry(
+        factory, clip_xy, clip_counts, clip_figure_count,
+        clip_even_odd ? D2D1_FILL_MODE_ALTERNATE : D2D1_FILL_MODE_WINDING, clip);
+    if (FAILED(hr)) return hr;
+    // The intersection, once: the result is an ordinary path geometry, cached and filled every frame like any shape.
+    ComPtr<ID2D1PathGeometry> geometry;
+    hr = factory->CreatePathGeometry(&geometry);
+    if (FAILED(hr)) return hr;
+    ComPtr<ID2D1GeometrySink> sink;
+    hr = geometry->Open(&sink);
+    if (FAILED(hr)) return hr;
+    // Millimetres: the default tolerance (0.25, meant for DIPs) would be a quarter millimetre. Both inputs are
+    // polygons, so this only bounds the intersection's own arithmetic.
+    hr = subject->CombineWithGeometry(clip.Get(), D2D1_COMBINE_MODE_INTERSECT, nullptr, 0.005f, sink.Get());
+    if (FAILED(hr)) return hr;
     hr = sink->Close();
     if (FAILED(hr)) return hr;
     *out = new cd2d_shape{geometry};

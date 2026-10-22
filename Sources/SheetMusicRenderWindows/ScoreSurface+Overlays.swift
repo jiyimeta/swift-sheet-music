@@ -7,13 +7,29 @@ extension ScoreSurface {
         var walker = DrawCommandWalker(
             canvas: canvas, pxPerMM: frame.pxPerMM, offset: Self.pageOffsetPx(overlay.page, frame),
         )
-        if case let .fillPath(_, id, figures, argb) = overlay {
+        switch overlay {
+        case let .fillPath(_, id, figures, argb):
             if let shape = shapes.shape(id: id, figures: figures, canvas: canvas) {
                 walker.fill(shape: shape, argb: argb)
             }
-            return
+        case let .clippedFillPath(_, id, figures, argb, clip):
+            if let shape = shapes.shape(id: id, figures: figures, clip: clip, canvas: canvas) {
+                walker.fill(shape: shape, argb: argb)
+            }
+        case .fillRect, .strokeRect:
+            Self.paint(overlay, with: &walker)
         }
-        Self.paint(overlay, with: &walker)
+    }
+
+    /// `overlays` painted as the surface paints them, on a white canvas `widthPx` × `heightPx` at `pxPerMM` with page
+    /// 0's top-left at the origin, as BGRA premultiplied pixels, top-down — for a host's tests to compare what its
+    /// overlays draw (folino checks pixel-erased ink against iOS's render). **Not supported API:** it may change or go
+    /// in any release, which is why it is behind `@_spi(Testing)`.
+    @_spi(Testing)
+    public static func rasterizeOverlays(
+        _ overlays: [Overlay], widthPx: Int, heightPx: Int, pxPerMM: Double,
+    ) throws -> [UInt8] {
+        try Direct2DPageRenderer.renderOverlayPixels(overlays, widthPx: widthPx, heightPx: heightPx, pxPerMM: pxPerMM)
     }
 
     /// One overlay through `walker`, already placed at its page, every `fillPath` built afresh. Shared with
@@ -30,6 +46,11 @@ extension ScoreSurface {
             ][...])
         case let .fillPath(_, _, figures, argb):
             walker.fill(figures: figures, argb: argb)
+        case let .clippedFillPath(_, _, figures, argb, clip):
+            // The intersection has no per-vertex form to stream: build it, fill it, let it go.
+            guard let shape = OverlayShapeCache.build(figures, clip: clip, on: walker.canvas) else { return }
+            walker.fill(shape: shape, argb: argb)
+            cd2d_shape_release(shape)
         }
     }
 }
