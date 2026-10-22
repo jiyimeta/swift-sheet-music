@@ -246,7 +246,7 @@
                 self.init(op: "removeTuplet")
                 self.at = ElementPath(at)
             case .composite, .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart, .setPartNames,
-                 .setKeySignature, .removeKeySignature, .setTimeSignature, .removeTimeSignature,
+                 .setStripMix, .setKeySignature, .removeKeySignature, .setTimeSignature, .removeTimeSignature,
                  .setRehearsalMark, .removeRehearsalMark,
                  .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry,
                  .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice,

@@ -289,6 +289,13 @@ struct EditIntentCodecTests {
             .retimeRun(at: slot, durations: [
                 .eighth, NoteDuration.eighth.dotted(1), .fraction(Fraction(numerator: 1, denominator: 12)),
             ]),
+            // Appended for folino's "save the mix to the score" — index 93. Two strips with different flags and a
+            // multi-point strip, so a dropped repeated field or a swapped flag cannot round-trip.
+            .setStripMix([
+                StripMix(partIndex: 1, points: [0, 2], volume: 90, program: 19, isMuted: true, isSoloed: false),
+                StripMix(partIndex: 0, points: [0], volume: 0, program: 127, isMuted: false, isSoloed: true),
+            ]),
+            .setStripMix([]),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -439,6 +446,10 @@ struct EditIntentCodecTests {
         let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let slot = VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
         #expect(EditIntentCodec.encode(.retimeRun(at: slot, durations: [.eighth, .eighth]))[1] == 92)
+    }
+
+    @Test func `strip mix keeps wire index 93`() {
+        #expect(EditIntentCodec.encode(.setStripMix([]))[1] == 93)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field

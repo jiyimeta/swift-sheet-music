@@ -37,6 +37,11 @@ extension ScoreEditSession {
             let unchanged = instrument.map { $0.longName == longName && $0.shortName == shortName } ?? false
             return unchanged ? nil : SetPartNames(partIndex: index, longName: longName, shortName: shortName)
         }
+        if case let .setStripMix(mixes) = intent {
+            // A save that changes no channel restores the score to itself — nothing to apply, as for a rename.
+            let command = SetStripMix(mixes)
+            return command.changesNothing(in: score) ? nil : command
+        }
         if case let .setKeySignature(measureIndex, concertKey) = intent {
             return try setKeySignatureCommand(at: measureIndex, concertKey: concertKey, in: score, ids: ids)
         }

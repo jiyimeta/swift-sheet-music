@@ -105,7 +105,7 @@ extension ScoreEditSession {
             return try writeNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
         case let .writeRest(location, duration):
             return writeRestCommand(at: location, duration: duration, in: score)
-        case .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart, .setPartNames,
+        case .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart, .setPartNames, .setStripMix,
              .setKeySignature, .removeKeySignature, .setRehearsalMark, .removeRehearsalMark:
             // The intents that change the score's SHAPE rather than its notes — measure columns, parts, what a bar
             // declares, and the rehearsal mark it carries. Factored into `structuralCommand` for the same reason the

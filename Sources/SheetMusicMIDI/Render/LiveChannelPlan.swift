@@ -101,6 +101,13 @@ public struct LiveChannelPlan: Sendable, Equatable {
         return ordinalByTimelineIndex[partIndex][timelineIndex]
     }
 
+    /// Every point of the part's sound timeline that plays on strip `ordinal` — the inverse of
+    /// `dedupedOrdinal(partIndex:timelineIndex:)`, and how a host addresses a strip in `EditIntent.setStripMix`.
+    public func timelineIndices(partIndex: Int, ordinal: Int) -> [Int] {
+        guard ordinalByTimelineIndex.indices.contains(partIndex) else { return [] }
+        return ordinalByTimelineIndex[partIndex].indices.filter { ordinalByTimelineIndex[partIndex][$0] == ordinal }
+    }
+
     public static func build(score: Score) -> LiveChannelPlan {
         var builder = Builder(score: score)
         for partIndex in score.parts.indices {

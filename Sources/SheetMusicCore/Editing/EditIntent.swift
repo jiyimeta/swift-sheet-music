@@ -102,6 +102,12 @@ public enum EditIntent: Sendable, Equatable {
     /// out-of-range `index` is refused as `.targetNotFound` by `SetPartNames.apply`, so one place states the range.
     case setPartNames(at: Int, longName: String?, shortName: String?)
 
+    /// Write mixer strips' volume, program, mute and solo into the score's channels, as one undo step — what a host's
+    /// "save this mix to the score" does. See `SetStripMix` for which channel each strip point writes. Resolves to
+    /// nothing to apply when every channel already reads that way; a part or point that does not exist is refused as
+    /// `.targetNotFound`.
+    case setStripMix([StripMix])
+
     /// Set the concert key in force from `measureIndex` to the next explicit key change (or the end of the
     /// score): writes/replaces the `.keySignature` on every non-percussion staff at that measure and
     /// re-spells accidental glyphs over the affected span, as one undo step.

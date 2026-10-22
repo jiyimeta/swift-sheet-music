@@ -252,3 +252,46 @@ public struct RetimeRunIntentWire {
         try (location: location.decoded(), durations: durations.map { try $0.decoded() })
     }
 }
+
+// Appended for folino's "save the mix to the score" (spec 2026-10-22) — intent 93. Not a range payload; it sits here
+// only because this is the file the newest appended intents live in.
+
+/// One strip of `setStripMix`: its part, the sound-timeline points that play on it, and the four values to write.
+@WireFormat
+public struct StripMixWire {
+    public var partIndex: Int32
+    public var points: [Int32]
+    public var volume: Int32
+    public var program: Int32
+    public var isMuted: UInt8
+    public var isSoloed: UInt8
+
+    public init(from mix: StripMix) {
+        partIndex = Int32(mix.partIndex)
+        points = mix.points.map(Int32.init)
+        volume = Int32(mix.volume)
+        program = Int32(mix.program)
+        isMuted = mix.isMuted ? 1 : 0
+        isSoloed = mix.isSoloed ? 1 : 0
+    }
+
+    public func decoded() -> StripMix {
+        StripMix(
+            partIndex: Int(partIndex), points: points.map(Int.init), volume: Int(volume), program: Int(program),
+            isMuted: isMuted != 0, isSoloed: isSoloed != 0,
+        )
+    }
+}
+
+@WireFormat
+public struct SetStripMixIntentWire {
+    public var mixes: [StripMixWire]
+
+    public init(mixes: [StripMix]) {
+        self.mixes = mixes.map(StripMixWire.init(from:))
+    }
+
+    public func decoded() -> [StripMix] {
+        mixes.map { $0.decoded() }
+    }
+}

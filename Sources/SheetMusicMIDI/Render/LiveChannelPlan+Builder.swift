@@ -93,6 +93,10 @@ extension LiveChannelPlan {
             flavour.name = nil
             flavour.midiChannel = nil
             flavour.midiPort = nil
+            // The score's mute / solo say whether a strip is heard, not what it sounds like: a muted instance of an
+            // instrument still shares its strip, so saving a mute never splits one strip into two.
+            flavour.isMuted = false
+            flavour.isSoloed = false
             return flavour
         }
 

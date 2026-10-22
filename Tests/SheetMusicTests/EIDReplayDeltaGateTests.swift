@@ -77,7 +77,7 @@ import Testing
                 .preserved
             // Text and part-level value writes.
             case .setTextVisible, .setTextFont, .setTempoFont, .setLyricSyllables, .setLyricVerse,
-                 .setPartNames, .setDrumsetEntry:
+                 .setPartNames, .setStripMix, .setDrumsetEntry:
                 .preserved
             // The two rows P3 added to the table.
             case .addNoteToChord: .exactly(created: 1, deleted: 0)

@@ -7,6 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **A channel's mute and solo.** `InstrumentChannel.isMuted` / `.isSoloed`, read and written as MuseScore 3's
+  `<Channel><mute>` / `<solo>` (written only when set; MuseScore 4 still reads them as a compatibility setting when
+  the file has no `audiosettings.json`). The live mixer (`PlaybackChannelLayout.mixerChannels`) starts from them, so a
+  score that solos a part plays that part alone until a host changes it. They are not part of `LiveChannelPlan`'s
+  dedup key: a muted instance of an instrument still shares its strip.
+- **`EditIntent.setStripMix([StripMix])` (wire index 93).** Writes mixer strips' volume, program, mute and solo into
+  the score as one undo step — a host's "save this mix to the score". A strip is addressed by the sound-timeline
+  points that play on it; `LiveChannelPlan.timelineIndices(partIndex:ordinal:)` maps a live strip to them. An
+  instrument point writes its instrument's primary channel; a play technique sounding through one of the
+  instrument's own channels writes that channel; a technique with no channel of its own is skipped.
+
 ## [4.17.0] - 2026-10-21
 
 ### Changed
