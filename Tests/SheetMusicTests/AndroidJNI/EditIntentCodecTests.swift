@@ -102,18 +102,22 @@ struct EditIntentCodecTests {
         return intent
     }
 
-    /// Decodes `bytes` on a thread with a main thread's 8 MiB stack — `nil` when the decode throws. Swift Testing
-    /// runs a test on a 512 KiB cooperative thread, and in a Debug build one level of this parse takes about 55 KiB
-    /// (`EditIntentWire.init(decodingPayload:)`'s frame alone is 54,560 B, measured 2026-10-15): the nine levels the
-    /// depth tests reach left no room for the backtrace Swift Testing captures at the throw, and the whole run died
-    /// with SIGBUS. These tests pin the bound, not the host's stack size. WebAssembly has no threads to spare and does
-    /// not need one — a level costs 8-10 KiB of its 128 KiB there — so it decodes in place.
-    private static func decodedOnFullStack(_ bytes: Data) async -> EditIntent? {
+    /// Encodes `intent` and decodes the bytes again on a thread with a main thread's 8 MiB stack — `nil` when the
+    /// decode throws. Swift Testing runs a test on a 512 KiB cooperative thread, and in a Debug build one level of this
+    /// parse takes about 55 KiB (`EditIntentWire.init(decodingPayload:)`'s frame alone is 54,560 B, measured
+    /// 2026-10-15): the nine levels the depth tests reach left no room for the backtrace Swift Testing captures at the
+    /// throw, and the whole run died with SIGBUS. The encode goes on the same thread: `EditIntentWire.init(from:)`'s
+    /// frame grows with every intent appended, and at 95 the twenty levels below overflowed it too (2026-10-22). These
+    /// tests pin the bound, not the host's stack size. WebAssembly has no threads to spare and does not need one — a
+    /// level costs 8-10 KiB of its 128 KiB there — so it runs in place.
+    private static func roundTripOnFullStack(_ intent: EditIntent) async -> EditIntent? {
         #if os(WASI)
-            return try? EditIntentCodec.decode(bytes)
+            return try? EditIntentCodec.decode(EditIntentCodec.encode(intent))
         #else
             return await withCheckedContinuation { continuation in
-                let thread = Thread { continuation.resume(returning: try? EditIntentCodec.decode(bytes)) }
+                let thread = Thread {
+                    continuation.resume(returning: try? EditIntentCodec.decode(EditIntentCodec.encode(intent)))
+                }
                 thread.stackSize = 8 << 20
                 thread.start()
             }
@@ -130,8 +134,7 @@ struct EditIntentCodecTests {
     /// happened, and it only passes while the bound sits on the parse.
     @Test("a composite nested past the depth limit throws instead of overflowing the stack")
     func deeplyNestedCompositeThrows() async {
-        let bytes = EditIntentCodec.encode(Self.nestedComposite(levels: 20))
-        #expect(await Self.decodedOnFullStack(bytes) == nil)
+        #expect(await Self.roundTripOnFullStack(Self.nestedComposite(levels: 20)) == nil)
     }
 
     /// Pins the limit itself. Without this, moving the bound onto the parse could quietly refuse one level too
@@ -139,10 +142,8 @@ struct EditIntentCodecTests {
     @Test("the depth limit admits exactly eight levels and refuses the ninth")
     func compositeDepthBoundaryIsEightLevels() async {
         let atLimit = Self.nestedComposite(levels: 8)
-        #expect(await Self.decodedOnFullStack(EditIntentCodec.encode(atLimit)) == atLimit)
-
-        let pastLimit = EditIntentCodec.encode(Self.nestedComposite(levels: 9))
-        #expect(await Self.decodedOnFullStack(pastLimit) == nil)
+        #expect(await Self.roundTripOnFullStack(atLimit) == atLimit)
+        #expect(await Self.roundTripOnFullStack(Self.nestedComposite(levels: 9)) == nil)
     }
 
     // swiftlint:disable:next function_body_length
