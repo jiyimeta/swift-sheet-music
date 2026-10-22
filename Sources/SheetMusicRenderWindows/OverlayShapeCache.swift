@@ -7,9 +7,15 @@ import CDirect2D
 /// A shape is a path geometry of the surface's factory, in millimetres and scaled at fill time, so zoom does not
 /// rebuild it and a device loss does not invalidate it.
 ///
-/// The overlay's contract is that one id means one set of figures. A cheap signature (figure and point counts, the
-/// first and last points) still guards it: a host that reuses an id for different figures gets them rebuilt rather
-/// than the old shape drawn. A shape no frame has used for `idleFrames` frames is released.
+/// The overlay's contract is that one id means one set of figures — and, for `clippedFillPath`, one clip. A cheap
+/// signature (figure and point counts, the first and last points, and the clip's same four plus its fill rule) still
+/// guards it: a host that reuses an id for different figures gets them rebuilt rather than the old shape drawn.
+///
+/// **The signature is not a hash.** Two sets of figures that agree on those counts and end points but differ in
+/// between pass for the same, and the old shape is drawn. So a host must give an overlay a new id whenever its figures
+/// or its clip may have changed in between — folino folds its ink layer's revision into every overlay id, so an edited
+/// stroke or a narrowed mask always arrives under an id this cache has not seen. A shape no frame has used for
+/// `idleFrames` frames is released.
 struct OverlayShapeCache {
     static let idleFrames = 600
 
