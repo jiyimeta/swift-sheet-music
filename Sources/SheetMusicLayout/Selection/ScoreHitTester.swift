@@ -270,17 +270,15 @@ public struct ScoreHitTester: Sendable {
         measure: LayoutMeasure,
         base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
-        let halfWidth = sp * 1.8
-        let halfHeight = sp * 2.5
-        // A measure repeat answers as its bar's rest (`LayoutElement.restSlot`).
+        // A measure repeat answers as its bar's rest (`LayoutElement.restSlot`), from its own ink
+        // (`restSlotHitRect`).
         for el in measure.drawnElements {
-            guard let (rid, origin, _, _) = el.restSlot
+            guard let (rid, origin, _, _) = el.restSlot,
+                  let box = el.restSlotHitRect(sp: sp)
             else { continue }
-            let ax = base.x + origin.x
-            let ay = base.y + origin.y
-            if abs(point.x - ax) <= halfWidth,
-               abs(point.y - ay) <= halfHeight
-            {
+            // Inclusive on every edge, unlike `CGRect.contains`.
+            let hit = box.offsetBy(dx: base.x + origin.x, dy: base.y + origin.y)
+            if (hit.minX ... hit.maxX).contains(point.x), (hit.minY ... hit.maxY).contains(point.y) {
                 return .rest(rid)
             }
         }

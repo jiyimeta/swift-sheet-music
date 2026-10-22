@@ -78,6 +78,22 @@ extension LayoutElement {
             nil
         }
     }
+
+    /// Where a click selects `restSlot`, around its origin: a rest's generous box, `sp * 1.8` either side and
+    /// `sp * 2.5` above and below; a measure repeat's ink — its glyph and a 2- or 4-bar one's number — with the
+    /// half-space reach every engraved element gets, as MuseScore hits the sign by its shape. The rest's box spans
+    /// the whole staff, which on a sign left no room above or below it to click the bar. `nil` with no slot.
+    func restSlotHitRect(sp: CGFloat) -> CGRect? {
+        switch self {
+        case .rest:
+            CGRect(x: -sp * 1.8, y: -sp * 2.5, width: sp * 3.6, height: sp * 5)
+        case let .measureRepeat(count, _, _?):
+            // `ScoreHitTester.elementHitTolerance`, which is not reachable from here below macOS 15.
+            MeasureRepeatGlyph.drawnRect(forCount: count, sp: sp).insetBy(dx: -sp * 0.5, dy: -sp * 0.5)
+        default:
+            nil
+        }
+    }
 }
 
 extension LayoutElement.ArticulationKind {

@@ -1,6 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
+import SheetMusicCore
 
 public struct LayoutMeasure: Sendable, Equatable {
     /// 0-based score-wide measure index. Identifies which measure of
@@ -68,6 +69,11 @@ public struct LayoutMeasure: Sendable, Equatable {
     /// (MuseScore `TLayout::manageHairpinSnapping`). Empty when the
     /// measure has no dynamics.
     public let dynamicExtents: [DynamicExtent]
+    /// The rests the first voice of a measure-repeat group's bar holds under the group's sign, on every staff of the
+    /// system — never drawn (MuseScore's `skipMeasureRepeatRests`), so nothing in `elements` names them. A click in a
+    /// group bar the sign does not stand in selects one as a range of one (the bar's only slot), and the range box
+    /// reads this to draw it across the bar, as it draws a measure rest. Empty outside a group.
+    public let measureRepeatRests: [RestID]
 
     /// One dynamic's horizontal ink span, in measure-local X.
     public struct DynamicExtent: Sendable, Equatable {
@@ -103,8 +109,10 @@ public struct LayoutMeasure: Sendable, Equatable {
         chordNorthByTick: [Int: CGFloat] = [:],
         dynamicExtents: [DynamicExtent] = [],
         measureRestsAreBreves: Bool = false,
+        measureRepeatRests: [RestID] = [],
     ) {
         self.measureRestsAreBreves = measureRestsAreBreves
+        self.measureRepeatRests = measureRepeatRests
         self.measureIndex = measureIndex
         self.origin = origin
         self.width = width

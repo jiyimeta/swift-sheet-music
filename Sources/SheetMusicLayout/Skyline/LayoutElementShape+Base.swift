@@ -311,10 +311,14 @@ extension LayoutElementShape {
         // five-line approximation.
         var barLineHalfHeight: CGFloat?
         switch element {
+        case let .measureRepeat(count, origin, _):
+            // The glyph's own box, and the number a 2- or 4-bar sign stands above the staff.
+            let rects = [MeasureRepeatGlyph.inkRect(forCount: count, sp: sp)]
+                + [MeasureRepeatGlyph.numberRect(forCount: count, sp: sp)].compactMap(\.self)
+            return rects.map { $0.offsetBy(dx: origin.x, dy: origin.y) }
         case let .clef(_, origin, _, _),
              let .keySignature(_, _, _, _, origin, _),
              let .timeSignature(_, _, _, origin, _),
-             let .measureRepeat(_, origin, _),
              let .multiMeasureRest(_, origin):
             p = origin
         case let .barLine(_, origin, half, _, _):

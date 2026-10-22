@@ -364,6 +364,22 @@ extension LayoutEngine {
                     break
                 }
             }
+            // A measure-repeat group stays on one system (`measureRepeatGroupStart`): a line the width closed inside
+            // one ends before the group instead — unless the group opens the line, which then has to hold what fits,
+            // and unless an authored break chose the split.
+            if context.options.wrapToViewWidth, cursor < measureCount,
+               !measureForcesLineBreak(
+                   at: cursor - 1, staves: staves, policy: context.options.breakPolicy,
+                   frameBreaks: context.frameBreaks,
+               ),
+               let groupStart = measureRepeatGroupStart(splitAt: cursor, staves: staves), groupStart > systemStart
+            {
+                for idx in groupStart ..< cursor {
+                    widthSoFar -= minWidths[idx] + roomBefore(idx, systemStart: systemStart, in: horizontalGaps)
+                        + joinGrowths[idx - 1]
+                }
+                cursor = groupStart
+            }
             // The system's trailing edge announces the next system's
             // opening signature change. The inner loop above filled the
             // system without knowing that, so give the announcement back

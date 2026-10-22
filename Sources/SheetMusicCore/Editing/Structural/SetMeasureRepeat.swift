@@ -1,7 +1,8 @@
 import SheetMusicFoundation
 
-/// Turns `numMeasures` consecutive bars of one staff into a measure-repeat group — the `%` sign in the first bar,
-/// `measureRepeatCount = 1…n` across the group — or, with `nil`, dissolves the group that starts at `measure` back
+/// Turns `numMeasures` consecutive bars of one staff into a measure-repeat group — the `%` sign in the group's anchor
+/// bar (`signOffset(numMeasures:)`, MuseScore's), `measureRepeatCount = 1…n` across the group — or, with `nil`,
+/// dissolves the group that starts at `measure` back
 /// into measure rests. Per staff, because that is what a measure repeat is (`Measure.measureRepeatCount` is not part
 /// of `Measure.Flags`).
 ///
@@ -72,7 +73,8 @@ public struct SetMeasureRepeat: EditCommand {
         return try clearGroup(in: &score, ids: &ids)
     }
 
-    /// Writes the `%` sign into the first bar of the span and the group's continuation marks across the rest.
+    /// Writes the `%` sign into the group's anchor bar (`signOffset(numMeasures:)`) and measure rests across the rest,
+    /// numbering the group's bars 1…n.
     private func writeGroup(
         of numMeasures: Int, in score: inout Score, ids: inout EIDAllocator,
     ) throws -> any EditCommand {
@@ -83,9 +85,10 @@ public struct SetMeasureRepeat: EditCommand {
         if let offset = previous.firstIndex(where: { !Self.canTakeSign($0) }) {
             throw Self.refused(.measureRepeatSpanNotEmpty(measureIndex: measure.measureIndex + offset))
         }
+        let signOffset = Self.signOffset(numMeasures: numMeasures)
         let rewritten = previous.enumerated().map { offset, bar -> Measure in
             var next = bar
-            let body: VoiceElement = offset == 0
+            let body: VoiceElement = offset == signOffset
                 ? .measureRepeat(MeasureRepeat(numMeasures: numMeasures, duration: .measure))
                 : .rest(duration: .measure)
             next.voices = [Self.rebuiltVoice(bar.voices[0], body: body, ids: &ids)]
@@ -117,10 +120,17 @@ public struct SetMeasureRepeat: EditCommand {
         return SetMeasureRepeat(restoring: previous, at: measure, staff: staff)
     }
 
+    /// Which bar of a group of `numMeasures` holds the sign, 0-based: the center bar of an odd group, the last bar of
+    /// an even group's first half — bar 1 of a 1- or 2-bar group, bar 2 of a 4-bar one — as MuseScore's
+    /// `Score::cmdAddMeasureRepeat` anchors it. The layout draws an even group's sign on that bar's trailing barline,
+    /// the group's middle.
+    static func signOffset(numMeasures: Int) -> Int {
+        numMeasures.isMultiple(of: 2) ? numMeasures / 2 - 1 : numMeasures / 2
+    }
+
     /// The `%` sign of the group starting at `measure`, searched across EVERY bar of the group rather than only
-    /// its first: MuseScore anchors the sign in the middle of the group — bar 2 of a 4-bar one
-    /// (`src/engraving/dom/measurerepeat.cpp`) — so a MuseScore-authored group has nothing in bar 1 to find.
-    /// Writing still anchors in bar 1, which this reads back just as well. Bounded by the contiguous
+    /// its first: the sign stands in the group's anchor bar (`signOffset(numMeasures:)`), bar 2 of a 4-bar group, and
+    /// a group written before the anchor moved there carries it in bar 1. Bounded by the contiguous
     /// `measureRepeatCount = 1…n` run, so it can never walk out of the group.
     private func groupSign(in score: Score) -> MeasureRepeat? {
         var offset = 0

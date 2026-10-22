@@ -759,6 +759,18 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sizePt: glyphSize,
                 into: &out,
             )
+            // A 2- or 4-bar sign's number, above it — as Apple's `drawMeasureRepeat` draws it.
+            if let digit = MeasureRepeatGlyph.numberCodepoint(forCount: count),
+               let center = MeasureRepeatGlyph.numberCenter(forCount: count, sp: CGFloat(sp))
+            {
+                emitCenterAnchoredGlyph(
+                    codepoint: digit,
+                    cxPt: mox + Double(origin.x + center.x),
+                    cyPt: moy + Double(origin.y + center.y),
+                    sizePt: glyphSize,
+                    into: &out,
+                )
+            }
             if signArgb != nil { out.append(.setColor(argb: ambientArgb)) }
 
         case let .multiMeasureRest(count, origin):

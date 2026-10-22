@@ -73,22 +73,27 @@ extension ScoreLayerBuilder {
 
     // MARK: - Measure repeat
 
+    /// The sign, and above a 2- or 4-bar one its number (`MeasureRepeatGlyph.numberCenter`) — every layer drawn, so
+    /// the caller can tint them together.
     @discardableResult
     static func drawMeasureRepeat(
         count: Int, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
-    ) -> CAShapeLayer? {
-        let codepoint = MeasureRepeatGlyph.codepoint(forCount: count)
-        // swiftlint:disable:next force_unwrapping
-        let glyph = Character(UnicodeScalar(codepoint)!)
-        guard let layer = glyphLayer(
-            glyph, at: origin,
-            size: metrics.glyphFontSize,
-            height: height,
-        ) else { return nil }
-        parent.addSublayer(layer)
-        return layer
+    ) -> [CAShapeLayer] {
+        var glyphs = [(MeasureRepeatGlyph.codepoint(forCount: count), origin)]
+        if let digit = MeasureRepeatGlyph.numberCodepoint(forCount: count),
+           let center = MeasureRepeatGlyph.numberCenter(forCount: count, sp: metrics.sp)
+        {
+            glyphs.append((digit, CGPoint(x: origin.x + center.x, y: origin.y + center.y)))
+        }
+        return glyphs.compactMap { codepoint, at in
+            // swiftlint:disable:next force_unwrapping
+            let glyph = Character(UnicodeScalar(codepoint)!)
+            guard let layer = glyphLayer(glyph, at: at, size: metrics.glyphFontSize, height: height) else { return nil }
+            parent.addSublayer(layer)
+            return layer
+        }
     }
 
     // MARK: - Multi-measure rest

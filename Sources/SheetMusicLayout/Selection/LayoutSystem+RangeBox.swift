@@ -94,6 +94,15 @@ extension LayoutSystem {
                     break
                 }
             }
+            // A measure-repeat group's bar the sign does not stand in draws nothing for its rest; selected, it spans
+            // the bar as a measure rest does (`LayoutMeasure.measureRepeatRests`).
+            for rest in measure.measureRepeatRests where selectedIDs.contains(.rest(rest)) {
+                let x = Self.firstBeatX(of: measure) ?? measure.origin.x
+                minX = min(minX, x)
+                maxX = max(maxX, x)
+                maxEndX = max(maxEndX, Self.trailingBarLineX(of: measure))
+                staves.insert(rest.staff)
+            }
         }
         return (minX, maxX, maxEndX, staves)
     }

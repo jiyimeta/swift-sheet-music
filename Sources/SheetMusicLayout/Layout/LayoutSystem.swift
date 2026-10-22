@@ -220,16 +220,13 @@ public struct LayoutSystem: Sendable, Equatable {
                     ))
                 case .rest, .measureRepeat:
                     // A measure repeat stands in its bar's rest column (`LayoutElement.restSlot`).
-                    guard let (restID, origin, voiceIndex, _) = el.restSlot else { continue }
+                    guard let (restID, origin, voiceIndex, _) = el.restSlot,
+                          let box = el.restSlotHitRect(sp: sp)
+                    else { continue }
                     let cx = mx + origin.x
                     let cy = my + origin.y
-                    // Matches `ScoreHitTester.hitRest`'s half-extents.
-                    let halfW: CGFloat = sp * 1.8
-                    let halfH: CGFloat = sp * 2.5
-                    let bbox = CGRect(
-                        x: cx - halfW, y: cy - halfH,
-                        width: halfW * 2, height: halfH * 2,
-                    )
+                    // `ScoreHitTester.hitRest`'s own box.
+                    let bbox = box.offsetBy(dx: cx, dy: cy)
                     result.append(EventColumn(
                         id: .rest(restID),
                         voiceIndex: voiceIndex,

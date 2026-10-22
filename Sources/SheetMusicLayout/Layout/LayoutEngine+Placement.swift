@@ -1364,10 +1364,14 @@ extension LayoutEngine {
                     } else {
                         invisibleOut.append(fermataElement)
                     }
-                case .measureRepeat:
+                case let .measureRepeat(sign):
+                    // A 1-bar sign is centered in its bar; a 2- or 4-bar one on the bar's trailing barline, which is
+                    // the group's middle — the sign stands in the last bar of the group's first half
+                    // (`Score::cmdAddMeasureRepeat`, `MeasureLayout::layoutMeasureElements`).
+                    let count = sign.numMeasures
                     out.append(.measureRepeat(
-                        count: 1,
-                        origin: CGPoint(x: width / 2, y: staffMidY),
+                        count: count,
+                        origin: CGPoint(x: [2, 4].contains(count) ? width - metrics.sp / 2 : width / 2, y: staffMidY),
                         restID: RestID(
                             staff: staffAddress, measureIndex: measureIndex,
                             voiceIndex: voiceIdx, elementIndex: voiceElemIdx,

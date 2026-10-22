@@ -31,10 +31,27 @@ and this project adheres to
 - **`EditIntent.removeSlur(SlurID)`** (wire index 93) — the one slur a selection names, where `removeSpanner(kind:
   .slur)` takes every slur of a chord.
 
+- **`LayoutMeasure.measureRepeatRests`** — the rests a measure-repeat group's bar holds under its sign, which nothing
+  draws. A range on one (what a click in a group bar the sign does not stand in selects) now draws its box across the
+  bar, as a measure rest's does; it drew nothing.
+- **`MeasureRepeatGlyph.inkRect` / `numberRect` / `numberCenter` / `drawnRect` / `numberCodepoint`** — where a sign's
+  ink and its bar count sit around its layout origin (Bravura's `glyphBBoxes`).
+
 ### Changed
 
 - **A range delete that covers every member of a tuplet removes the tuplet** and fills its span with rests, as
   MuseScore's `cmdDeleteTuplet` does; a tuplet only partly covered keeps its bracket as before.
+- **A 2- or 4-bar measure repeat is engraved as MuseScore engraves it**: its own glyph (`repeat2Bars` /
+  `repeat4Bars`) centered on the group's middle barline, with the bar count above the staff
+  (`TLayout::layoutMeasureRepeat`). Every sign used to draw as the 1-bar symbol in the middle of its bar.
+  `LayoutElement.measureRepeat` now carries the sign's count, and its skyline shape includes the number.
+- **`SetMeasureRepeat` writes the sign in MuseScore's anchor bar**: the last bar of an even group's first half, so the
+  second bar of a 4-bar group (`Score::cmdAddMeasureRepeat`). It wrote every sign in the group's first bar.
+- **A system never ends inside a measure-repeat group**: a line that would split one closes before the group instead,
+  as MuseScore's `noBreak` on a group's bars makes it — unless the group opens the line, or an authored break splits it.
+- **A click selects a measure repeat by its ink** — its glyph, and a 2- or 4-bar sign's number — with half a space of
+  reach, as MuseScore hits an element by its shape. It used a rest's box, which spans the whole staff, so a click above
+  or below the sign selected the sign instead of the bar. The event columns the near-miss rescue reads use the same box.
 
 ## [4.17.0] - 2026-10-21
 

@@ -210,11 +210,14 @@ extension ScoreLayerBuilder {
             )
         case let .measureRepeat(c, p, rid):
             // Tinted with its slot, which selection names as a rest (`LayoutElement.restSlot`).
-            if let layer = drawMeasureRepeat(
+            let layers = drawMeasureRepeat(
                 count: c, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
-            ), let rid {
-                context.attach(layer, to: .rest(rid))
+            )
+            if let rid {
+                for layer in layers {
+                    context.attach(layer, to: .rest(rid))
+                }
             }
         case let .arpeggioWiggle(top, bot, sub, _):
             drawArpeggio(
