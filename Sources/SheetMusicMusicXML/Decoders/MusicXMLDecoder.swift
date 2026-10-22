@@ -303,10 +303,8 @@ extension Score {
         // Mid-score instrument changes have no per-staff home in
         // MusicXML (they're a part-wide playback concept) — lift them
         // onto staff 0.
-        let instrumentChangesByMeasure = MusicXMLInstrumentChangeDecoder.decode(
-            partNode: partNode,
-            instrumentByID: instrumentByID,
-            seedInstrumentID: scorePart.first("score-instrument")?.attributes["id"],
+        let instrumentChangesByMeasure = instrumentChanges(
+            partNode: partNode, scorePart: scorePart, drumTable: prelimDrumTable, instrumentByID: instrumentByID,
         )
         staffElements.append((
             StaffAddress(partIndex: partIndex, staffIndexInPart: 0),
@@ -316,6 +314,20 @@ extension Score {
         // be in track 0").
         staffElements.append((StaffAddress(partIndex: 0, staffIndexInPart: 0), walker.tempoElementsByMeasure))
         return (part, staffElements)
+    }
+
+    /// The part's instrument changes, per measure. A drum part has none: its `<instrument>` names a drum of the kit,
+    /// not an instrument it switches to, and MuseScore makes no instrument change in one (`setPartInstruments`).
+    private static func instrumentChanges(
+        partNode: XMLTreeNode, scorePart: XMLTreeNode, drumTable: MusicXMLDrumTable,
+        instrumentByID: [String: Instrument],
+    ) -> [[PositionedSystemElement]] {
+        guard drumTable.pitchByInstrumentId.isEmpty else { return [] }
+        return MusicXMLInstrumentChangeDecoder.decode(
+            partNode: partNode,
+            instrumentByID: instrumentByID,
+            seedInstrumentID: scorePart.first("score-instrument")?.attributes["id"],
+        )
     }
 
     /// The part's staves, replacing the placeholder empty-measure ones. This is the ONLY place `lineCount` is decided

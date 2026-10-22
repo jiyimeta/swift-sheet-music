@@ -78,6 +78,10 @@ and this project adheres to
   line, head and stem its notes were written with — the last note deciding — and the General MIDI kit's for a drum no
   note plays. Its five-line staves become percussion staves (`setStaffTypePercussion`), so a saved part also reads as
   a drum kit in MuseScore.
+- **A MusicXML drum part makes no instrument changes.** Its `<instrument>` names a drum of the kit, but the import
+  read it as the part switching instruments, so every bar whose last drum differed from the bar before's drew that
+  drum's name above the staff and switched the part's sound to an instrument with no kit. MuseScore makes no instrument
+  change in a drum part (`setPartInstruments`), and neither does this import now.
 - **A drum in MuseScore's custom notehead group draws its own glyphs, and keeps them through a save.** MuseScore
   writes such a drum — the stock Drumset's China cymbal, drawn `noteheadHeavyXHat` — as `<head>normal</head>` plus
   `<noteheads>` with a SMuFL glyph per duration, and its notes as `<head>custom</head>`, which it resolves through the

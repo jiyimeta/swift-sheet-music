@@ -82,6 +82,26 @@ struct MusicXMLDrumKitTests {
         #expect(reread.parts.first?.staves.first?.group == GMPercussion.staffGroup)
     }
 
+    /// A drum part's `<instrument>` names a drum of its kit, not an instrument the part switches to: MuseScore makes no
+    /// instrument change in one (`setPartInstruments`). Every bar whose last drum differed from the bar before's used
+    /// to draw that drum's name as an instrument change, and switch the part's sound to it.
+    @Test func aDrumPartChangesNoInstrument() throws {
+        let score = try parse(Self.drum(notes: """
+        \(Self.note(step: "C", octave: 5, instrument: "P1-I39"))
+        </measure>
+        <measure number="2">
+        \(Self.note(step: "G", octave: 5, instrument: "P1-I43", notehead: "x"))
+        </measure>
+        <measure number="3">
+        \(Self.note(step: "G", octave: 5, instrument: "P1-I47", notehead: "circle-x"))
+        """))
+        let changes = score.systemMeasures.flatMap(\.elements).filter {
+            if case .instrumentChange = $0.element { true } else { false }
+        }
+        #expect(score.systemMeasures.count == 3)
+        #expect(changes.isEmpty)
+    }
+
     /// A pitched part is left as it was.
     @Test func aPitchedPartHasNoKit() throws {
         let part = try #require(parse(Data("""
