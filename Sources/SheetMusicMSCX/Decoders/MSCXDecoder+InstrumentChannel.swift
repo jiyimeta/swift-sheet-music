@@ -6,7 +6,7 @@ extension InstrumentChannel {
     /// Every `<Channel>` child this decoder reads. Anything else
     /// becomes preserved markup — see `PreservedXML`.
     private static let consumedChannelChildren: Set = [
-        "controller", "midiChannel", "midiPort", "program",
+        "controller", "midiChannel", "midiPort", "program", "mute", "solo",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> InstrumentChannel {
@@ -20,6 +20,14 @@ extension InstrumentChannel {
         }
         if let text = node.first("midiPort")?.text, let value = Int(text) {
             channel.midiPort = value
+        }
+        // MuseScore 3's channel mute / solo (`TRead::read(InstrChannel*)` reads them as integers; MuseScore 4 still
+        // honours them as a compatibility setting when the file carries no `audiosettings.json`).
+        if let text = node.first("mute")?.text, let value = Int(text) {
+            channel.isMuted = value != 0
+        }
+        if let text = node.first("solo")?.text, let value = Int(text) {
+            channel.isSoloed = value != 0
         }
         // <controller ctrl="N" value="V"/> entries on a Channel.
         // MuseScore writes initial CC values here — at minimum CC7

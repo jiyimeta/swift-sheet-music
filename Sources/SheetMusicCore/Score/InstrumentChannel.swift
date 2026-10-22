@@ -15,6 +15,11 @@ public struct InstrumentChannel: Sendable, Equatable, Hashable {
     public var midiChannel: Int?
     /// Explicit MIDI port from `<midiPort>`. nil means port 0.
     public var midiPort: Int?
+    /// The score's own mute for this channel — MuseScore 3's `<mute>`. What a playback engine starts from; a host's
+    /// listener-side mute is its own state on top of this.
+    public var isMuted: Bool
+    /// The score's own solo for this channel — MuseScore 3's `<solo>`. Same standing as `isMuted`.
+    public var isSoloed: Bool
     /// Source markup under this element that the model does not
     /// represent, kept so that read → write does not delete it.
     public var preservedMarkup: [PreservedXML] = []
@@ -29,6 +34,8 @@ public struct InstrumentChannel: Sendable, Equatable, Hashable {
         chorus: Int = 0,
         midiChannel: Int? = nil,
         midiPort: Int? = nil,
+        isMuted: Bool = false,
+        isSoloed: Bool = false,
         preservedMarkup: [PreservedXML] = [],
     ) {
         self.name = name
@@ -40,6 +47,8 @@ public struct InstrumentChannel: Sendable, Equatable, Hashable {
         self.chorus = chorus
         self.midiChannel = midiChannel
         self.midiPort = midiPort
+        self.isMuted = isMuted
+        self.isSoloed = isSoloed
         self.preservedMarkup = preservedMarkup
     }
 
@@ -56,5 +65,7 @@ public struct InstrumentChannel: Sendable, Equatable, Hashable {
         hasher.combine(chorus)
         hasher.combine(midiChannel)
         hasher.combine(midiPort)
+        hasher.combine(isMuted)
+        hasher.combine(isSoloed)
     }
 }

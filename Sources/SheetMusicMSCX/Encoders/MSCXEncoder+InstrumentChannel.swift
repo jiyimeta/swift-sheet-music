@@ -17,6 +17,9 @@ extension InstrumentChannel {
         case .v2, .v3: v3Children()
         case .v4: v4Children()
         }
+        // MuseScore 3's channel mute / solo, written only when set — absent reads back as off.
+        if isMuted { children.append(XMLTreeNode(name: "mute", text: "1")) }
+        if isSoloed { children.append(XMLTreeNode(name: "solo", text: "1")) }
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         var attrs: [String: String] = [:]
         if let name { attrs["name"] = name }
