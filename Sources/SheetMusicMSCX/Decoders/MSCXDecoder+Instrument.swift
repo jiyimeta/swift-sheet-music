@@ -34,6 +34,12 @@ extension Instrument {
         "transposeDiatonic", "useDrumset",
     ]
 
+    /// Every `<Drum>` child this decoder reads. The rest — MuseScore 4.5+'s `<variants>`, `<panelRow>` and
+    /// `<panelColumn>` — becomes the entry's preserved markup.
+    private static let consumedDrumChildren: Set = [
+        "head", "line", "name", "noteheads", "shortcut", "stem", "voice",
+    ]
+
     static func decode(_ node: XMLTreeNode) throws -> Instrument {
         // Both `<Instrument id="...">` and `<Instrument><instrumentId>...` forms exist;
         // some scores omit both — fall back to "" rather than failing.
@@ -67,13 +73,19 @@ extension Instrument {
                   let lineStr = drum.first("line")?.text,
                   let line = Int(lineStr) else { continue }
             let fallback = GMDrumset.entry(forPitch: pitch, line: line)
+            // `<noteheads>` makes the drum MuseScore's custom group whatever `<head>` says: MuseScore writes that
+            // group as a normal head plus its glyphs, so a 2.x reader still draws the drum (`Drumset::save`,
+            // `readDrumProperties`).
+            let noteheads = drum.first("noteheads").map(DrumsetNoteheads.decode)
             drumset[pitch] = DrumsetEntry(
                 name: drum.first("name")?.text ?? fallback.name,
-                head: drum.first("head")?.text ?? fallback.head,
+                head: noteheads == nil ? drum.first("head")?.text ?? fallback.head : "custom",
                 line: line,
                 voiceIndex: (drum.first("voice")?.text).flatMap { Int($0) } ?? fallback.voiceIndex,
                 stem: (drum.first("stem")?.text).flatMap { Int($0) } ?? fallback.stem,
                 shortcut: drum.first("shortcut")?.text,
+                noteheads: noteheads,
+                preservedMarkup: drum.preservedMarkup(consuming: consumedDrumChildren),
             )
         }
         return Instrument(
@@ -96,5 +108,23 @@ extension Instrument {
             transposeChromatic: node.first("transposeChromatic").flatMap { Int($0.text) } ?? 0,
             preservedMarkup: preservedMarkup,
         )
+    }
+}
+
+extension DrumsetNoteheads {
+    /// `<noteheads>`: a SMuFL glyph name under each duration's `NoteHeadType` tag (`readDrumProperties`). A duration
+    /// it does not name keeps MuseScore's default glyph.
+    static func decode(_ node: XMLTreeNode) -> DrumsetNoteheads {
+        var noteheads = DrumsetNoteheads()
+        for child in node.children {
+            switch child.name {
+            case "whole": noteheads.whole = child.text
+            case "half": noteheads.half = child.text
+            case "quarter": noteheads.quarter = child.text
+            case "breve": noteheads.breve = child.text
+            default: continue
+            }
+        }
+        return noteheads
     }
 }

@@ -14,14 +14,46 @@ public struct DrumsetEntry: Sendable, Equatable {
     /// MuseScore's `<shortcut>` — the key that selects this drum in its own note-input palette. Carried so a
     /// decoded kit re-encodes to the bytes it came from; nothing in this package reads it.
     public var shortcut: String?
+    /// The drum's own glyphs when `head` is MuseScore's custom group (`"custom"`): the `<noteheads>` a kit spells
+    /// such a drum with, and what a note of it with `<head>custom</head>` draws. `nil` for every other head.
+    public var noteheads: DrumsetNoteheads?
+    /// `<Drum>` children this model does not represent — MuseScore 4.5+'s `<variants>` and its percussion panel's
+    /// `<panelRow>` / `<panelColumn>` — kept so that read → write does not delete them.
+    public var preservedMarkup: [PreservedXML]
 
-    public init(name: String, head: String, line: Int, voiceIndex: Int, stem: Int, shortcut: String? = nil) {
+    public init(
+        name: String, head: String, line: Int, voiceIndex: Int, stem: Int, shortcut: String? = nil,
+        noteheads: DrumsetNoteheads? = nil, preservedMarkup: [PreservedXML] = [],
+    ) {
         self.name = name
         self.head = head
         self.line = line
         self.voiceIndex = voiceIndex
         self.stem = stem
         self.shortcut = shortcut
+        self.noteheads = noteheads
+        self.preservedMarkup = preservedMarkup
+    }
+}
+
+/// A drum's own noteheads, one SMuFL glyph name per duration — MuseScore's custom notehead group
+/// (`DrumInstrument::noteheads`), which a kit holds as `<noteheads>` and its notes name as `<head>custom</head>`.
+/// The stock Drumset's China cymbal is one, drawn as `noteheadHeavyXHat` at every duration. A duration the file does
+/// not name keeps MuseScore's default for it.
+public struct DrumsetNoteheads: Sendable, Equatable {
+    public var whole: String
+    public var half: String
+    public var quarter: String
+    public var breve: String
+
+    public init(
+        whole: String = "noteheadWhole", half: String = "noteheadHalf", quarter: String = "noteheadBlack",
+        breve: String = "noteheadDoubleWhole",
+    ) {
+        self.whole = whole
+        self.half = half
+        self.quarter = quarter
+        self.breve = breve
     }
 }
 

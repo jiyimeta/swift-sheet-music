@@ -371,8 +371,12 @@
         /// down by one shift each — 1.32 pt for the upper staff, 22.46 pt for the lower — to make room for the count
         /// above the lower staff's signs, which the sign's shape now holds as MuseScore's does
         /// (`ChordLayout::fillShape(MeasureRepeat)` adds `numberRect`). Checked line by line; nothing else moved.
+        ///
+        /// **Re-recorded 2026-10-22 when a chord note carried its kit's custom-head glyphs (`kitNoteheads`).** No
+        /// fixture has a custom head, so the field reads `nil` on all 588 lines it appears on; with
+        /// `, kitNoteheads: nil` stripped, the digest is the one above (`b74058a0…`) byte for byte.
         private static let expectedDigestSHA256 =
-            "b74058a01832fcfb8d1f5fa60ad601e4370ee766d8fdc32e10347becd522188a"
+            "da049f897775d04eea4feec3878bf651709351c1a31ebe73950dd4a903682989"
 
         @Test("write digest")
         func writeDigest() throws {

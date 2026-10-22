@@ -644,11 +644,8 @@ extension LayoutEngine {
                 return context.melismaContinuations[staffIdx][abs]
             }
         }
-        let drumLineMaps: [[Int: Int]?] = allStaves.map { entry in
-            let part = context.score.parts[entry.address.partIndex]
-            return part.instrument.useDrumset
-                ? part.instrument.drumLineMap : nil
-        }
+        let instruments = allStaves.map { context.score.parts[$0.address.partIndex].instrument }
+        let drumLineMaps: [[Int: Int]?] = instruments.map { $0.useDrumset ? $0.drumLineMap : nil }
         // Anchors that reach into `[measureStart, lastMeasure]` from
         // anywhere, including from before it.
         let lastMeasure = measureStart + measureCount - 1
@@ -670,6 +667,7 @@ extension LayoutEngine {
             systemMeasuresForRange: systemMeasuresForRange,
             melismaContinuationsForRange: melismaForRange,
             drumLineMaps: drumLineMaps,
+            drumNoteheads: instruments.map(\.drumNoteheads),
             percussionGroups: staves.map { $0.group == "percussion" },
             partLabels: partLabels(of: context.score, isFirstSystem: isFirstSystem),
             totalMeasures: staves.first?.measures.count ?? 0,

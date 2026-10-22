@@ -589,6 +589,11 @@ public struct LayoutChordNote: Sendable, Equatable {
     /// score. This is the identity a selection, a hit test and a tint registration use instead; see
     /// `selectionItem`. Anything that rebuilds a `LayoutChordNote` must carry it across.
     public let graceNoteID: GraceNoteID?
+    /// The kit's own glyphs for a drum note whose `headType` is MuseScore's custom group — what `Note::noteHead`
+    /// draws through the staff's drumset. `nil` for every other head, and for a custom head with no kit to read,
+    /// which draws normal. Renderers hand it to `NoteheadGlyph.codepoint`. Anything that rebuilds a
+    /// `LayoutChordNote` must carry it across.
+    public let kitNoteheads: DrumsetNoteheads?
 
     public init(
         noteID: NoteID,
@@ -605,6 +610,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         accidentalBracket: AccidentalBracket = .none,
         parentheses: NoteParentheses = .none,
         graceNoteID: GraceNoteID? = nil,
+        kitNoteheads: DrumsetNoteheads? = nil,
     ) {
         self.noteID = noteID
         self.step = step
@@ -620,6 +626,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.accidentalBracket = accidentalBracket
         self.parentheses = parentheses
         self.graceNoteID = graceNoteID
+        self.kitNoteheads = kitNoteheads
     }
 
     /// The selectable item this head stands for: `.graceNote` for a grace head, `.note(noteID)` otherwise. The one
@@ -637,6 +644,7 @@ public struct LayoutChordNote: Sendable, Equatable {
             tieForward: tieForward, tieBack: tieBack, hasGlissando: hasGlissando, headType: headType,
             mirror: mirror, isInvisible: isInvisible, color: color,
             accidentalBracket: accidentalBracket, parentheses: parentheses, graceNoteID: graceNoteID,
+            kitNoteheads: kitNoteheads,
         )
     }
 

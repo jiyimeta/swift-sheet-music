@@ -272,6 +272,7 @@ extension LayoutEngine {
                     part.instrument.useDrumset
                         ? part.instrument.drumLineMap
                         : nil
+                let drumNoteheads = part.instrument.drumNoteheads
                 let totalMeasures = staves.first?.measures.count ?? 0
                 let lastMeasure = measureIdx == totalMeasures - 1
                 let incomingMelismas = context.melismaContinuations
@@ -310,6 +311,7 @@ extension LayoutEngine {
                     tickColumns: tickCols,
                     division: context.score.division,
                     drumLineMap: drumMap,
+                    drumNoteheads: drumNoteheads,
                     isLastMeasure: lastMeasure,
                     endsRepeat: endsRepeat,
                     isFirstSystem: isFirstSystem,
@@ -361,6 +363,7 @@ extension LayoutEngine {
                         division: context.score.division,
                         measureDuration: measDuration,
                         drumLineMap: drumMap,
+                        drumNoteheads: drumNoteheads,
                         isLastMeasure: lastMeasure,
                         endsRepeat: endsRepeat,
                         isFirstSystem: isFirstSystem,

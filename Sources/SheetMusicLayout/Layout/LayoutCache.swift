@@ -178,6 +178,8 @@ public final class LayoutCache: @unchecked Sendable {
         /// Drum maps per staff. Static for the score; included so a
         /// part-instrument change invalidates affected systems.
         let drumLineMaps: [[Int: Int]?]
+        /// The kits' custom-head glyphs per staff, for the same reason.
+        let drumNoteheads: [[Int: DrumsetNoteheads]]
         /// Key declaration eligibility must invalidate a system even when its geometry is unchanged.
         /// The instrument's drum-set eligibility is already captured by `drumLineMaps`.
         let percussionGroups: [Bool]
@@ -256,6 +258,9 @@ public final class LayoutCache: @unchecked Sendable {
         let tickColumns: [Int: CGFloat]
         let division: Int
         let drumLineMap: [Int: Int]?
+        /// The kit's custom-head glyphs, which live on the part's instrument like the lines: an edit to them changes
+        /// nothing in `measure`.
+        let drumNoteheads: [Int: DrumsetNoteheads]
         let isLastMeasure: Bool
         /// Whether the canonical staff's measure carries `endRepeatCount`.
         /// Read from a staff this snapshot's `measure` may not be — a

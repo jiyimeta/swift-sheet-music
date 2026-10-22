@@ -128,6 +128,7 @@ extension ScoreCanvasDrawing {
             context: &context, at: visualOrigin,
             duration: baseDur, headType: note.headType,
             stemUp: stem == .up,
+            kitNoteheads: note.kitNoteheads,
             color: color,
             metrics: metrics,
         )

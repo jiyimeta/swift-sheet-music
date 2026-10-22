@@ -295,7 +295,7 @@ extension LayoutBridge {
     ) {
         emitCenterAnchoredGlyph(
             codepoint: NoteheadGlyph.codepoint(
-                duration: baseDur, headType: note.headType, stemUp: stem == .up,
+                duration: baseDur, headType: note.headType, stemUp: stem == .up, kitNoteheads: note.kitNoteheads,
             ),
             cxPt: mox + Double(note.origin.x),
             cyPt: moy + Double(note.origin.y),

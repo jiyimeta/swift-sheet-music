@@ -11,9 +11,10 @@ enum NoteheadRenderer {
         for duration: NoteDuration,
         headType: String? = nil,
         stemUp: Bool,
+        kitNoteheads: DrumsetNoteheads? = nil,
     ) -> Character {
         let cp = NoteheadGlyph.codepoint(
-            duration: duration, headType: headType, stemUp: stemUp,
+            duration: duration, headType: headType, stemUp: stemUp, kitNoteheads: kitNoteheads,
         )
         // swiftlint:disable:next force_unwrapping
         return Character(UnicodeScalar(cp)!)
@@ -25,11 +26,12 @@ enum NoteheadRenderer {
         duration: NoteDuration,
         headType: String? = nil,
         stemUp: Bool,
+        kitNoteheads: DrumsetNoteheads? = nil,
         color: Color = .primary,
         metrics: StaffMetrics,
     ) {
         context.drawGlyph(
-            glyph(for: duration, headType: headType, stemUp: stemUp),
+            glyph(for: duration, headType: headType, stemUp: stemUp, kitNoteheads: kitNoteheads),
             at: origin,
             size: metrics.glyphFontSize,
             color: color,

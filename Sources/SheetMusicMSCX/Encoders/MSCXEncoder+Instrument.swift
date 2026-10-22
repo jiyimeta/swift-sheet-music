@@ -39,7 +39,7 @@ extension Instrument {
                 name: "transposeChromatic", text: String(transposeChromatic),
             ))
         }
-        appendDrumset(into: &children)
+        appendDrumset(into: &children, options: options)
         // Match MuseScore's writer: `<StringData>` follows playback properties
         // and precedes `<MidiAction>` / `<Articulation>` / `<Channel>`
         // (`rw/write/twrite.cpp:2025`). It previously rode in preserved markup
@@ -64,7 +64,7 @@ extension Instrument {
 
     /// Append the percussion-kit block: the `<instrumentId>` / `<useDrumset>` marker pair and one
     /// `<Drum>` per mapped pitch.
-    private func appendDrumset(into children: inout [XMLTreeNode]) {
+    private func appendDrumset(into children: inout [XMLTreeNode], options: MSCXEncoderOptions) {
         if useDrumset {
             // MuseScore Studio looks up the drumset template by the
             // canonical `<instrumentId>` (Sound ID) — without it,
@@ -81,12 +81,18 @@ extension Instrument {
         // `<name>` — every drum then renders on the same default line.
         // `DrumsetEntry` carries all four, filled from `GMDrumset` for
         // an authored kit and from the file for a decoded one. Element
-        // order matches MuseScore's own writer: head → line → voice →
-        // name → stem → shortcut.
+        // order matches MuseScore's own writer: head → noteheads → line →
+        // voice → name → stem → shortcut, then what the model does not read
+        // (variants, the percussion panel's row and column), in source order.
+        // A custom drum is written as MuseScore writes one: a normal head
+        // plus its glyphs, which a 2.x reader can still draw.
         for pitch in drumset.keys.sorted() {
             guard let entry = drumset[pitch] else { continue }
-            var drumChildren: [XMLTreeNode] = [
-                XMLTreeNode(name: "head", text: entry.head),
+            var drumChildren = [XMLTreeNode(name: "head", text: entry.noteheads == nil ? entry.head : "normal")]
+            if let noteheads = entry.noteheads {
+                drumChildren.append(noteheads.encode())
+            }
+            drumChildren += [
                 XMLTreeNode(name: "line", text: String(entry.line)),
                 XMLTreeNode(name: "voice", text: String(entry.voiceIndex)),
                 XMLTreeNode(name: "name", text: entry.name),
@@ -95,11 +101,24 @@ extension Instrument {
             if let shortcut = entry.shortcut {
                 drumChildren.append(XMLTreeNode(name: "shortcut", text: shortcut))
             }
+            appendPreservedMarkup(entry.preservedMarkup, to: &drumChildren, options: options)
             children.append(XMLTreeNode(
                 name: "Drum",
                 attributes: ["pitch": String(pitch)],
                 children: drumChildren,
             ))
         }
+    }
+}
+
+extension DrumsetNoteheads {
+    /// `<noteheads>` as `Drumset::save` writes it: every duration, in `NoteHeadType` order.
+    func encode() -> XMLTreeNode {
+        XMLTreeNode(name: "noteheads", children: [
+            XMLTreeNode(name: "whole", text: whole),
+            XMLTreeNode(name: "half", text: half),
+            XMLTreeNode(name: "quarter", text: quarter),
+            XMLTreeNode(name: "breve", text: breve),
+        ])
     }
 }

@@ -61,6 +61,8 @@ extension LayoutEngine {
         division: Int,
         measureDuration: Fraction,
         drumLineMap: [Int: Int]? = nil,
+        // The kit's own glyphs for its custom-headed drums, by pitch (`DrumsetEntry.noteheads`).
+        drumNoteheads: [Int: DrumsetNoteheads] = [:],
         isLastMeasure: Bool = false,
         endsRepeat: Bool = false,
         isFirstSystem: Bool = false,
@@ -796,6 +798,7 @@ extension LayoutEngine {
                             color: note.elementProperties.color,
                             accidentalBracket: note.accidentalBracket,
                             parentheses: note.parentheses,
+                            kitNoteheads: kitNoteheads(of: note, in: drumNoteheads),
                         )
                     }
                     let stem = forcedStem
@@ -862,6 +865,7 @@ extension LayoutEngine {
                             voiceElemIdx: voiceElemIdx,
                             graceIdx: gIdx, isAfter: false,
                             drumLineMap: drumLineMap,
+                            drumNoteheads: drumNoteheads,
                             showsInvisibleElements: options.showsInvisibleElements,
                         )
                         out.append(.graceChord(
@@ -957,6 +961,7 @@ extension LayoutEngine {
                             voiceElemIdx: voiceElemIdx,
                             graceIdx: gIdx, isAfter: true,
                             drumLineMap: drumLineMap,
+                            drumNoteheads: drumNoteheads,
                             showsInvisibleElements: options.showsInvisibleElements,
                         )
                         out.append(.graceChord(
@@ -2527,8 +2532,16 @@ extension LayoutEngine {
                 accidentalBracket: n.accidentalBracket,
                 parentheses: n.parentheses,
                 graceNoteID: n.graceNoteID,
+                kitNoteheads: n.kitNoteheads,
             )
         }
+    }
+
+    /// The kit's glyphs a note draws: only a note in MuseScore's custom group reads them (`Note::noteHead`).
+    fileprivate static func kitNoteheads(
+        of note: Note, in drumNoteheads: [Int: DrumsetNoteheads],
+    ) -> DrumsetNoteheads? {
+        note.headType == "custom" ? drumNoteheads[note.pitch] : nil
     }
 
     /// A grace note's staff step: its drum line on a drumset staff, else its pitch under `currentClef`.
@@ -2558,6 +2571,7 @@ extension LayoutEngine {
         graceIdx: Int,
         isAfter: Bool,
         drumLineMap: [Int: Int]?,
+        drumNoteheads: [Int: DrumsetNoteheads],
         showsInvisibleElements: Bool = false,
     ) -> [LayoutChordNote] {
         // Grace NoteIDs reuse the parent's element index but encode
@@ -2602,6 +2616,7 @@ extension LayoutEngine {
                     graceIndex: graceIdx,
                     noteIndexInGraceChord: noteIdx,
                 ),
+                kitNoteheads: kitNoteheads(of: note, in: drumNoteheads),
             )
         }
     }

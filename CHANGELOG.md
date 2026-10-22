@@ -78,6 +78,17 @@ and this project adheres to
   line, head and stem its notes were written with — the last note deciding — and the General MIDI kit's for a drum no
   note plays. Its five-line staves become percussion staves (`setStaffTypePercussion`), so a saved part also reads as
   a drum kit in MuseScore.
+- **A drum in MuseScore's custom notehead group draws its own glyphs, and keeps them through a save.** MuseScore
+  writes such a drum — the stock Drumset's China cymbal, drawn `noteheadHeavyXHat` — as `<head>normal</head>` plus
+  `<noteheads>` with a SMuFL glyph per duration, and its notes as `<head>custom</head>`, which it resolves through the
+  kit. The kit kept `normal` and dropped the glyphs, so the notes drew a plain black head and a save wrote the drum
+  back as a normal one. `DrumsetEntry.noteheads` (`DrumsetNoteheads`) now holds them, with `head` `"custom"`; the
+  layout hands a custom note its kit's glyphs (`LayoutChordNote.kitNoteheads`, `Instrument.drumNoteheads`), and
+  `NoteheadGlyph.codepoint(…, kitNoteheads:)` picks the one for its duration — on every renderer. A custom note with no
+  kit to read draws normal, as on a pitched staff in MuseScore.
+- **A drum's `<variants>` and its percussion-panel place (`<panelRow>` / `<panelColumn>`) survive a save**
+  (`DrumsetEntry.preservedMarkup`). MuseScore 4.5+ writes the panel place on every drum of its stock kits; a save
+  dropped it from all of them.
 
 ## [4.19.0] - 2026-10-22
 

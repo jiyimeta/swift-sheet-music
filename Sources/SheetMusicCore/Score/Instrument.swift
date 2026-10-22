@@ -62,6 +62,12 @@ public struct Instrument: Sendable, Equatable {
         }
     }
 
+    /// The kit's own glyphs for its custom-headed drums, by pitch — what a drum note in MuseScore's custom group
+    /// draws. Empty for a pitched instrument, whose custom notes draw normal.
+    public var drumNoteheads: [Int: DrumsetNoteheads] {
+        useDrumset ? drumset.compactMapValues(\.noteheads) : [:]
+    }
+
     /// mscx `<transposeDiatonic>` — diatonic steps from written to sounding pitch (negative = sounds lower).
     public var transposeDiatonic: Int
     /// mscx `<transposeChromatic>` — semitones from written to sounding pitch (negative = sounds lower).
