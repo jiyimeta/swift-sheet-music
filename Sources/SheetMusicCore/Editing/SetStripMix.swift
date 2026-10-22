@@ -30,12 +30,12 @@ public struct StripMix: Sendable, Equatable, Hashable {
 /// Writes each strip's volume, program, mute and solo into the channels its points sound through, as one undo step.
 ///
 /// - An instrument point (the part's own instrument, or a mid-score instrument change) writes its instrument's
-///   primary `<Channel>` — the one a live mixer keys the strip on. Its other channels are technique flavours with
-///   strips of their own.
-/// - A play-technique point that sounds through one of its instrument's own channels (`pizzicato`, …) writes that
-///   channel.
+///   primary `<Channel>` — the one a live mixer keys the strip on — and the volume, mute and solo of its other
+///   channels, so a technique added later (`pizzicato` on a muted violin) sounds the way the instrument was left.
+/// - A play-technique point that sounds through one of its instrument's own channels writes that channel, over the
+///   instrument's fan-out.
 /// - A technique point with no channel of its own (a General MIDI sound chosen for the technique) has nothing in the
-///   score to write to, and is skipped.
+///   score to write to, and is skipped; `canWrite(_:in:)` tells a host so.
 ///
 /// Changes no structure, so nothing is re-derived and nothing re-stamped. Writing the sounding fields can merge or
 /// split a live mixer's strips on the next build; a host re-reads its strips after the edit.
@@ -114,11 +114,27 @@ public struct SetStripMix: EditCommand {
 
     private struct UnknownPoint: Error {}
 
-    /// Every channel the mixes write, with how each is rewritten. A slot two strips both reach takes the later one.
-    private static func writes(
-        for mixes: [StripMix], in score: Score,
-    ) throws -> [Slot: (InstrumentChannel) -> InstrumentChannel] {
-        var writes: [Slot: (InstrumentChannel) -> InstrumentChannel] = [:]
+    /// Whether the score has anywhere to keep this strip's sound — false for a strip whose every point is a technique
+    /// with no channel of its own. Saving such a strip writes nothing, so a host keeps the listener's own setting for
+    /// it rather than treating it as saved.
+    public static func canWrite(_ mix: StripMix, in score: Score) -> Bool {
+        guard let resolved = try? resolve([mix], in: score) else { return false }
+        return !resolved.isEmpty
+    }
+
+    /// One channel a mix reaches. `fullMix` writes program too; a fan-out write (an instrument's other channels,
+    /// which sound only once a technique selects them) carries volume, mute and solo.
+    private struct Target {
+        var slot: Slot
+        var mix: StripMix
+        var fullMix: Bool
+    }
+
+    /// Each channel the mixes reach, in order. An instrument point reaches its primary channel and, as a fan-out,
+    /// its other channels; a technique point that sounds through one of its instrument's own channels reaches that
+    /// channel; a technique point with no channel of its own reaches nothing.
+    private static func resolve(_ mixes: [StripMix], in score: Score) throws -> [Target] {
+        var targets: [Target] = []
         for mix in mixes {
             guard score.parts.indices.contains(mix.partIndex) else { throw UnknownPoint() }
             let timeline = score.soundTimeline(forPart: mix.partIndex)
@@ -131,28 +147,56 @@ public struct SetStripMix: EditCommand {
             for index in mix.points {
                 guard timeline.indices.contains(index) else { throw UnknownPoint() }
                 let point = timeline[index]
-                let slot: Slot
                 if let ordinal = instrumentOrdinal[index] {
                     guard instrumentSlots.indices.contains(ordinal) else { throw UnknownPoint() }
-                    slot = instrumentSlots[ordinal].withChannel(0)
+                    let base = instrumentSlots[ordinal]
+                    targets.append(Target(slot: base.withChannel(0), mix: mix, fullMix: true))
+                    let count = instrument(at: base, in: score)?.channels.count ?? 0
+                    for flavour in 1 ..< max(count, 1) {
+                        targets.append(Target(slot: base.withChannel(flavour), mix: mix, fullMix: false))
+                    }
                 } else if let source = point.flavourSource, let ordinal = instrumentOrdinal[source.point],
                           instrumentSlots.indices.contains(ordinal)
                 {
-                    slot = instrumentSlots[ordinal].withChannel(source.flavour)
-                } else {
-                    continue
-                }
-                writes[slot] = { channel in
-                    var channel = channel
-                    channel.volume = min(max(mix.volume, 0), 127)
-                    channel.program = min(max(mix.program, 0), 127)
-                    channel.isMuted = mix.isMuted
-                    channel.isSoloed = mix.isSoloed
-                    return channel
+                    targets.append(Target(
+                        slot: instrumentSlots[ordinal].withChannel(source.flavour), mix: mix, fullMix: true,
+                    ))
                 }
             }
         }
-        return writes
+        return targets
+    }
+
+    /// Every channel the mixes write, with how each is rewritten. A channel a strip of its own writes (a technique's
+    /// flavour) keeps that strip's mix over its instrument's fan-out; otherwise a slot two strips both reach takes
+    /// the later one.
+    private static func writes(
+        for mixes: [StripMix], in score: Score,
+    ) throws -> [Slot: (InstrumentChannel) -> InstrumentChannel] {
+        var chosen: [Slot: Target] = [:]
+        for target in try resolve(mixes, in: score) {
+            if let existing = chosen[target.slot], existing.fullMix, !target.fullMix { continue }
+            chosen[target.slot] = target
+        }
+        return chosen.mapValues { target in
+            { channel in
+                var channel = channel
+                channel.volume = min(max(target.mix.volume, 0), 127)
+                if target.fullMix { channel.program = min(max(target.mix.program, 0), 127) }
+                channel.isMuted = target.mix.isMuted
+                channel.isSoloed = target.mix.isSoloed
+                return channel
+            }
+        }
+    }
+
+    private static func instrument(at slot: Slot, in score: Score) -> Instrument? {
+        switch slot {
+        case let .partInstrument(partIndex, _):
+            score.parts.indices.contains(partIndex) ? score.parts[partIndex].instrument : nil
+        case let .change(measureIndex, elementIndex, _):
+            changeInstrument(measureIndex: measureIndex, elementIndex: elementIndex, in: score)
+        }
     }
 
     /// The part's instrument timeline as places in the score: the part's own instrument, then each instrument change

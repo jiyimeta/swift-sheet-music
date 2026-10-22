@@ -100,6 +100,64 @@ struct SetStripMixTests {
             != nil)
     }
 
+    /// One part on `instrument`, optionally with a "pizz." staff text at the start (sound-timeline point 1).
+    private func techniqueFixture(_ instrument: Instrument, pizzicato: Bool) -> Score {
+        let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        var text = StaffText(text: "pizz.")
+        text.annotation = .playTechnique(.pizzicato, playsBack: true)
+        let lane = [SystemMeasure(elements: pizzicato
+                ? [PositionedSystemElement(position: .start, element: .staffText(text), originalStaff: address)]
+                : [])]
+        let measure = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .whole, notes: ChordNotes([Note(pitch: 69, tpc: 17)]))),
+        ])])
+        return Score(division: 480, parts: [Part(
+            id: "P1", instrument: instrument, staves: [Staff(lineCount: 5, measures: [measure])],
+        )], systemMeasures: IdentifiedArray(lane))
+    }
+
+    private let violin = Instrument(id: "violin", channels: [
+        InstrumentChannel(program: 40), InstrumentChannel(name: "pizzicato", program: 45),
+    ])
+
+    @Test("an instrument point carries volume, mute and solo to its other channels, but not program")
+    func instrumentPointFansOutToItsOtherChannels() throws {
+        var score = techniqueFixture(violin, pizzicato: false)
+        try SetStripMix([mix(0, [0])]).apply(to: &score)
+        let channels = score.parts[0].instrument.channels
+        #expect(channels[0].program == 5)
+        #expect(channels[1].volume == 90)
+        #expect(channels[1].isMuted && channels[1].isSoloed)
+        #expect(channels[1].program == 45)
+    }
+
+    @Test("a technique's own strip wins its channel over the instrument's fan-out, in either order")
+    func techniqueStripBeatsFanOut() throws {
+        let original = techniqueFixture(violin, pizzicato: true)
+        #expect(original.soundTimeline(forPart: 0)[1].flavourSource != nil)
+        let arco = mix(0, [0], volume: 90, program: 40)
+        let pizz = StripMix(partIndex: 0, points: [1], volume: 30, program: 45, isMuted: false, isSoloed: false)
+        for mixes in [[arco, pizz], [pizz, arco]] {
+            var score = original
+            try SetStripMix(mixes).apply(to: &score)
+            let channels = score.parts[0].instrument.channels
+            #expect(channels[1].volume == 30)
+            #expect(!channels[1].isMuted)
+            #expect(channels[0].volume == 90 && channels[0].isMuted)
+        }
+    }
+
+    @Test("a strip made only of a technique with no channel of its own cannot be written")
+    func generalMIDITechniqueCannotBeWritten() {
+        let strings = Instrument(id: "violins", channels: [InstrumentChannel(program: 48)])
+        let score = techniqueFixture(strings, pizzicato: true)
+        #expect(score.soundTimeline(forPart: 0)[1].flavourSource == nil)
+        #expect(!SetStripMix.canWrite(mix(0, [1]), in: score))
+        #expect(SetStripMix.canWrite(mix(0, [0]), in: score))
+        #expect(SetStripMix.canWrite(mix(0, [1]), in: techniqueFixture(violin, pizzicato: true)))
+        #expect(!SetStripMix.canWrite(mix(4, [0]), in: score))
+    }
+
     @Test("an unknown part or point is refused")
     func outOfRangeIsTargetNotFound() {
         var score = fixture()
