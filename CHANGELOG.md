@@ -47,6 +47,17 @@ and this project adheres to
   technique sounds through yet (so a technique added later sounds the way the instrument was left); a play technique
   sounding through one of the instrument's own channels writes that channel; a technique with no channel of its own is
   skipped, and `SetStripMix.canWrite(_:in:)` tells a host which strips the score has nowhere to keep.
+- **`PlaybackEngine.IdleParkPolicy` — keep the graph warm after the last sound.** The engine parks an idle graph with
+  `AVAudioEngine.pause()`, and on a Bluetooth output the `start()` that resumes it blocks the main thread for
+  0.2–0.55 s (AirPods Pro on macOS 27; ~30 ms on built-in speakers): a lag before every preview or play that follows
+  a pause, with the frame drawing whatever the user just entered waiting behind it. `PlaybackEngine(…, idleParkPolicy:)`
+  takes `.deferred(grace:)`, which keeps the graph running for the grace after the last sound so the next one needs no
+  restart, or `.deferredOnBluetoothOutput(grace:)`, which does so only while the output is a Bluetooth device. The
+  grace counts from the last sound — a transport that played, a preview that rang; pausing a transport that was not
+  playing, as a host does right after `prepare(score:)`, still parks at once. The default, `.immediate`, keeps the
+  existing behavior, and is the one iOS needs: a running graph is "audio active" to Control Center. One difference
+  under every policy: a host's `pause()` of a transport that was not playing no longer cuts short a software-synth
+  preview's release tail that is still being waited out — the park waits for the tail, as the preview's own drain does.
 
 ### Changed
 

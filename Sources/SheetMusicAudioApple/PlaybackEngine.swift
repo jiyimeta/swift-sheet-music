@@ -175,10 +175,19 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Deliberately not in the shared policy: a sustained hold has no duration to plan, it ends when the finger
     /// lifts, and Android has no bar press-hold to mirror. The two do interact — see `previewNoteOff`.
     private var activeSustainedPreview: (staff: Int, channel: UInt8, pitch: UInt8)?
-    /// True when a preview resumed an audio graph the host had paused.
-    /// Tells the drain to restore that paused state once previews drain
-    /// — preserving the host's "graph parked until play" behavior.
-    private var previewShouldRepauseEngineOnDrain = false
+    /// True when the graph is running only because something sounded since it was last parked — a transport that
+    /// played, or a preview that resumed a parked graph. The next idle moment owes the graph its park back, after
+    /// `idleParkPolicy`'s grace; until then the graph stays warm. `internal` for the `+IdlePark` extension.
+    var graphOwesIdlePark = false
+    /// The scheduled, not-yet-run idle park, or `nil` when none is pending. Anything that sounds cancels it.
+    /// `internal` for the `+IdlePark` extension.
+    var pendingIdlePark: Task<Void, Never>?
+
+    /// Whether a tap or a held preview is still sounding — an idle park must not cut either. `internal` for the
+    /// `+IdlePark` extension, which cannot see the preview state itself.
+    var isPreviewSounding: Bool {
+        previewPolicy.sounding != nil || activeSustainedPreview != nil
+    }
 
     /// Sequencer used for full-score playback. Lazily built the
     /// first time `play(...)` is called for a given score.
@@ -323,6 +332,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// `+AudioSession` extension can branch on it.
     let audioSessionPolicy: AudioSessionPolicy
 
+    /// How long the graph keeps running once nothing sounds. See `IdleParkPolicy`. `internal` for the `+IdlePark`
+    /// extension.
+    let idleParkPolicy: IdleParkPolicy
+
     /// `true` once a `.mixUntilPlay` engine has taken the session exclusively for a `play(...)`. Keeps a re-prepare
     /// (SoundFont hot-swap) from demoting the session back to mixing, and keeps the escalation to one write per engine
     /// lifetime. Cleared by `teardown()` and by an interruption. `internal` for the `+AudioSession` extension.
@@ -370,10 +383,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         metronomeClickProvider metronomeClickProvider0: MetronomeClickProvider? = nil,
         backend: (any SynthBackend)? = nil,
         audioSessionPolicy: AudioSessionPolicy = .exclusiveOnPrepare,
+        idleParkPolicy: IdleParkPolicy = .immediate,
     ) {
         resolver = soundfontResolver
         self.backend = backend
         self.audioSessionPolicy = audioSessionPolicy
+        self.idleParkPolicy = idleParkPolicy
         metronomeClickProvider = metronomeClickProvider0
         clickResolver = MetronomeClickResolver(
             provider: metronomeClickProvider0,
@@ -867,13 +882,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // Quiesce the render IO thread before mutating the audio graph below.
         // Freeing the sequencer, reloading the metronome's soundbank, and
         // detaching the previous score's synths all edit graph state the render
-        // thread may still be touching. `stop()` above only *pauses* the engine,
-        // so without a hard stop the detach races the in-flight render cycle and
+        // thread may still be touching. `stop()` above at most *pauses* the
+        // engine — and leaves it running outright through an idle grace (see
+        // `IdleParkPolicy`) — so without a hard stop the detach races the in-flight render cycle and
         // frees sampler voice memory out from under it — faulting on the IO
         // thread as `ProcessMono` / `SamplerNote::Render` in Crashlytics, the
         // same race `teardown()` guards against. `engine.start()` below spins it
         // back up; `stop()` is a no-op on an already-stopped engine.
         engine.stop()
+        // The `stop()` above owed the graph a park, and may have scheduled it; the graph this prepare builds is left
+        // running on purpose instead, so nothing may park it later on that earlier stop's behalf.
+        resetIdlePark()
         sequencer = nil
         sequencerScore = nil
         sequenceMap = .identity
@@ -1181,7 +1200,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             sustainedStop(sustained)
             activeSustainedPreview = nil
         }
-        previewShouldRepauseEngineOnDrain = false
+        // The park these previews owed is NOT dropped here: both callers stop the transport first, and that stop
+        // has already parked the graph or scheduled its park. `prepare(score:)` and `teardown()` reset it themselves
+        // once they have stopped the engine outright.
     }
 
     /// Silence `voice` — the fixed-duration tap preview the policy just gave up, if there was one.
@@ -1237,33 +1258,20 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         if let previous = plan.supersedes {
             backend.stopNote(channel: previous.channel, pitch: previous.pitch)
         }
-        if !engine.isRunning {
-            try? engine.start()
-            if state != .playing { previewShouldRepauseEngineOnDrain = true }
-        }
+        wakeGraphForPreview()
         backend.startNote(channel: channel, pitch: pitch, velocity: velocity)
         previewQueue.asyncAfter(deadline: .now() + plan.ringSeconds) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self, let ending = previewPolicy.end(generation: plan.generation) else { return }
                 self.backend?.stopNote(channel: ending.channel, pitch: ending.pitch)
-                // A sustained hold started after this tap owns the repause
-                // obligation now (see `previewNoteOff`) — leave the flag set
-                // and don't pause out from under the still-ringing hold.
-                guard previewShouldRepauseEngineOnDrain, activeSustainedPreview == nil else { return }
-                // Defer the park until the note-off release has rendered out. Parking
-                // the engine right after `stopNote` freezes the software synth's render
-                // thread mid-release, clicking off the tail and leaving it frozen to
-                // resume on the next preview's `engine.start()`. A newer preview makes
-                // this generation stale, cancelling this park and keeping the graph
-                // running for the next note.
-                previewQueue.asyncAfter(deadline: .now() + plan.releaseTailSeconds) { [weak self] in
-                    Task { @MainActor [weak self] in
-                        guard let self, previewPolicy.isCurrent(generation: plan.generation) else { return }
-                        guard previewShouldRepauseEngineOnDrain, activeSustainedPreview == nil else { return }
-                        previewShouldRepauseEngineOnDrain = false
-                        if state != .playing, engine.isRunning { engine.pause() }
-                    }
-                }
+                // A sustained hold started after this tap owns the park now (see `previewNoteOff`) — don't park out
+                // from under the still-ringing hold.
+                guard activeSustainedPreview == nil else { return }
+                // Never sooner than the note-off release has rendered out. Parking the engine right after
+                // `stopNote` freezes the software synth's render thread mid-release, clicking off the tail and
+                // leaving it frozen to resume on the next preview's `engine.start()`. A newer preview cancels this
+                // park and keeps the graph running for the next note.
+                requestIdlePark(minimumDelay: .seconds(plan.releaseTailSeconds))
             }
         }
     }
@@ -1333,12 +1341,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // A paused `AVAudioEngine` renders nothing, so resume the graph for the
         // preview; the drain below restores the host-parked state once the
         // preview ends with no follow-up tap.
-        if !engine.isRunning {
-            try? engine.start()
-            if state != .playing {
-                previewShouldRepauseEngineOnDrain = true
-            }
-        }
+        wakeGraphForPreview()
 
         instrument.startNote(
             pitch, withVelocity: velocity, onChannel: midiChannel,
@@ -1367,15 +1370,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                         endInstrument.stopNote(pitch, onChannel: midiChannel)
                     }
                 }
-                // A sustained hold started after this tap owns the repause
-                // obligation now (see `previewNoteOff`) — leave the flag set
-                // and don't pause out from under the still-ringing hold.
-                guard previewShouldRepauseEngineOnDrain, activeSustainedPreview == nil else { return }
-                previewShouldRepauseEngineOnDrain = false
-                // Don't pause a graph that real playback is now driving.
-                if state != .playing, engine.isRunning {
-                    engine.pause()
-                }
+                // A sustained hold started after this tap owns the park now (see `previewNoteOff`) — don't park out
+                // from under the still-ringing hold. `requestIdlePark` itself leaves alone a graph that real playback
+                // is now driving.
+                guard activeSustainedPreview == nil else { return }
+                requestIdlePark()
             }
         }
     }
@@ -1408,8 +1407,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // engine mid-hold. Invalidate it and cut its note now — with a plain
         // note-off (not CC 120) when it shares this note's channel, since CC
         // 120 immediately before a same-channel note-on is swallowed by
-        // AUMIDISynth. The repause obligation (previewShouldRepauseEngineOnDrain)
-        // transfers to our own previewNoteOff below.
+        // AUMIDISynth. The park it owed (`graphOwesIdlePark`) transfers to our
+        // own previewNoteOff below.
         cutPreviewNote(previewPolicy.silence(), nextChannel: midiChannel)
 
         // Cut any prior sustained note first — only one sustained preview is
@@ -1419,10 +1418,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
         // A paused `AVAudioEngine` renders nothing; resume it for the preview
         // and let the matching note-off restore the host-parked state.
-        if !engine.isRunning {
-            try? engine.start()
-            if state != .playing { previewShouldRepauseEngineOnDrain = true }
-        }
+        wakeGraphForPreview()
 
         if let backend {
             // Re-assert EVERY strip's program + volume first — a prior
@@ -1444,11 +1440,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         activeSustainedPreview = nil
         // Restore the host-parked graph if this preview resumed it, playback
         // isn't now driving it, AND no tap preview is still pending — a
-        // pending tap's own drain owns the repause obligation until it fires
-        // (see the `playPreview` / `backendPlayPreview` drains).
-        if previewShouldRepauseEngineOnDrain, previewPolicy.sounding == nil, state != .playing, engine.isRunning {
-            previewShouldRepauseEngineOnDrain = false
-            engine.pause()
+        // pending tap's own drain owns the park until it fires (see the
+        // `playPreview` / `backendPlayPreview` drains).
+        if previewPolicy.sounding == nil {
+            requestIdlePark()
         }
     }
 
@@ -1562,12 +1557,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 didRebuildNormal = true
             }
             guard let sequencer else { return }
-            // Resume the audio graph if a previous `pause()` paused it.
+            // Resume the audio graph if a previous `pause()` paused it, and
+            // cancel a park still waiting out its grace.
             // `AVAudioEngine.start()` is the documented resume path after
             // `pause()`; safe no-op if already running.
-            if !engine.isRunning {
-                try engine.start()
-            }
+            try wakeGraphForPlayback()
             if sequencerHasPreRoll {
                 // Start at the pre-roll origin (sequencer tick 0) and pin the
                 // cursor at the start position so it shows immediately — it
@@ -1694,7 +1688,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 )
             }
             backend.setMetronomeMuted(!metronome.isEnabled)
-            if !engine.isRunning { try engine.start() }
+            try wakeGraphForPlayback()
             if let tick = targetTick {
                 backend.seek(toTick: tick)
                 currentCursor = timeline.frame(atTick: tick)?.cursor
@@ -1777,7 +1771,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 rendered: rendered, timeline: timeline,
             )
         }
-        if !engine.isRunning { try engine.start() }
+        try wakeGraphForPlayback()
         // Park the score transport at the start position FIRST: `seek` moves both
         // transports, and the metronome's own load right after re-parks it at
         // tick 0 — the first click of the count.
@@ -2199,12 +2193,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Pause playback at the current position. `play(...)` resumes
     /// from there.
     ///
-    /// Also pauses the underlying `AVAudioEngine`. Stopping just the
-    /// sequencer leaves the engine running and rendering, which iOS
-    /// Control Center reads as "audio is still active" and uses to
-    /// override `MPNowPlayingInfoCenter.playbackState` — the visible
-    /// symptom is the CC pause button briefly flipping to play and
-    /// then snapping back to pause after a single tap.
+    /// Also parks the underlying `AVAudioEngine`, after `idleParkPolicy`'s
+    /// grace when the transport was playing. Stopping just the sequencer
+    /// leaves the engine running and rendering, which iOS Control Center
+    /// reads as "audio is still active" and uses to override
+    /// `MPNowPlayingInfoCenter.playbackState` — the visible symptom is the
+    /// CC pause button briefly flipping to play and then snapping back to
+    /// pause after a single tap. That is why `.immediate` is iOS's policy.
     public func pause() {
         guard state != .exporting else { return }
         // Abandon a play that was waiting on the SoundFont load — the user paused.
@@ -2216,10 +2211,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             silenceSoundingVoices()
         }
         stopCursorTimer()
-        if engine.isRunning {
-            engine.pause()
-        }
+        let wasPlaying = state == .playing
         state = .paused
+        requestIdleParkAfterTransportStop(wasPlaying: wasPlaying)
     }
 
     /// The AU path's half of "a transport stop leaves nothing sounding" — All Sound Off on every channel of every
@@ -2273,11 +2267,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             silenceSoundingVoices()
         }
         stopCursorTimer()
-        if engine.isRunning {
-            engine.pause()
-        }
+        let wasPlaying = state == .playing
         state = .stopped
         currentCursor = nil
+        requestIdleParkAfterTransportStop(wasPlaying: wasPlaying)
     }
 
     /// Drop the playback cursor. The host calls this when the user
@@ -2767,7 +2760,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         stop()
         clearLoop()
         // Quiesce the render thread BEFORE mutating the graph. `stop()` above
-        // only *pauses* the engine (it calls `engine.pause()`), which leaves
+        // at most *pauses* the engine (it parks it with `engine.pause()`, or
+        // leaves it running through an idle grace), which leaves
         // AURemoteIO's IO thread and the output unit's render-notify block
         // live. Freeing the `AVAudioSequencer` (its `dealloc` detaches the
         // music sequence from the engine, mutating live sequencing state) or
@@ -2786,6 +2780,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // hard stop entirely and left the graph being mutated under a live
         // render unit. `stop()` is a safe no-op on an already-stopped engine.
         engine.stop()
+        // Stopped outright, so a park the `stop()` above scheduled has nothing left to do — and must not fire on a
+        // graph a later `prepare(score:)` builds.
+        resetIdlePark()
         sequencer = nil
         sequencerScore = nil
         // The host is letting go of the score, so the engine does too. Kept, it outlived every window that showed
