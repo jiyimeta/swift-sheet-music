@@ -242,6 +242,76 @@
                 #expect(engine.engine.isRunning == false)
             }
 
+            /// A host parks the graph right after `prepare(score:)`, which leaves no cursor. A rebuild then had nothing
+            /// to re-seat and left the graph `prepare` had started running for good.
+            @Test("a rebuild of a parked graph with no cursor parks it again")
+            func rebuildWithNoCursorParks() throws {
+                let engine = makeEngine()
+                try engine.prepare(score: makeSingleNoteScore())
+                engine.pause()
+                #expect(engine.engine.isRunning == false)
+
+                engine.reloadSoundfont(resolver: NullResolver())
+                #expect(engine.graphRestartCount == 1)
+                #expect(engine.engine.isRunning == false)
+                #expect(engine.isIdleParkPending == false)
+            }
+
+            /// The re-seat plays and pauses the transport, which must not count as a sound.
+            @Test("a rebuild of a parked graph re-seating its cursor parks it again at once")
+            func rebuildOfAParkedGraphWithACursorParks() throws {
+                let engine = makeEngine()
+                let score = makeSingleNoteScore()
+                try engine.prepare(score: score)
+                engine.play(in: score)
+                engine.pause()
+                engine.firePendingIdleParkForTesting()
+                #expect(engine.engine.isRunning == false)
+
+                engine.reloadSoundfont(resolver: NullResolver())
+                #expect(engine.graphRestartCount == 1)
+                #expect(engine.state == .paused)
+                #expect(engine.engine.isRunning == false)
+                #expect(engine.isIdleParkPending == false)
+            }
+
+            @Test("a rebuild during the grace keeps the graph warm, and parks it at the end")
+            func rebuildDuringTheGraceStaysWarm() throws {
+                let engine = makeEngine()
+                let score = makeSingleNoteScore()
+                try engine.prepare(score: score)
+                engine.play(in: score)
+                engine.pause()
+                #expect(engine.isIdleParkPending == true)
+
+                engine.reloadSoundfont(resolver: NullResolver())
+                #expect(engine.graphRestartCount == 1)
+                #expect(engine.engine.isRunning == true)
+                #expect(engine.isIdleParkPending == true)
+
+                engine.firePendingIdleParkForTesting()
+                #expect(engine.engine.isRunning == false)
+            }
+
+            /// The software synth freezes mid-release when its graph is paused, and resumes the tail on the next
+            /// preview — so even the immediate policy waits the release out after a held note's note-off.
+            @Test("a held software-synth preview's note-off waits out the release tail before parking")
+            func heldPreviewNoteOffWaitsOutTheReleaseTail() throws {
+                let engine = makeEngine(policy: .immediate)
+                try engine.prepare(score: makeSingleNoteScore())
+                engine.pause()
+                #expect(engine.engine.isRunning == false)
+
+                engine.previewNoteOn(pitch: 60, onStaff: 0, atTick: 0)
+                #expect(engine.engine.isRunning == true)
+                engine.previewNoteOff(pitch: 60)
+                #expect(engine.engine.isRunning == true)
+                #expect(engine.isIdleParkPending == true)
+
+                engine.firePendingIdleParkForTesting()
+                #expect(engine.engine.isRunning == false)
+            }
+
             @Test("the immediate policy parks a paused playback synchronously, as before the policy existed")
             func immediatePolicyParksOnPause() throws {
                 let engine = makeEngine(policy: .immediate)

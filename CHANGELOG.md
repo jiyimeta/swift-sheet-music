@@ -104,6 +104,15 @@ and this project adheres to
 - **A drum's `<variants>` and its percussion-panel place (`<panelRow>` / `<panelColumn>`) survive a save**
   (`DrumsetEntry.preservedMarkup`). MuseScore 4.5+ writes the panel place on every drum of its stock kits; a save
   dropped it from all of them.
+- **A graph rebuild of a transport that is not playing parks the graph again.** After an audio configuration change
+  or `reloadSoundfont(resolver:)`, a transport with no cursor — the state a host leaves right after `prepare(score:)` —
+  had nothing to re-seat, and the graph `prepare` restarted kept running until something else sounded: holding the
+  output device, and on iOS reading as "playing" to Control Center. A transport with a cursor re-seated by playing
+  and pausing, which kept the graph warm as if it had just sounded. A rebuild now parks as the transport stood before
+  it: at once, or at the end of a grace it was already waiting out.
+- **A held software-synth preview's release rings out.** `previewNoteOff(pitch:)` parked the graph right after the
+  note-off, freezing the synth mid-release; the frozen tail resumed on the next preview. It now waits out
+  `NotePreviewPolicy.releaseTailMilliseconds` first, as a tap preview's drain does.
 
 ## [4.19.0] - 2026-10-22
 

@@ -1038,6 +1038,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // freshly built sequence map / timeline (`projectLoopOntoTransport`), so it must run AFTER `play(...)` below,
         // not before.
         let savedLoop = loopRange
+        // A graph waiting out its idle grace stays warm across the rebuild; `prepare(score:)` drops the pending park.
+        let wasWarm = isIdleParkPending
         try prepare(score: score)
         // `prepare` rebuilds the channel array at the score's defaults;
         // re-apply the user's mixer state.
@@ -1082,6 +1084,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                     pause()
                 }
             }
+        }
+        // `prepare(score:)` leaves the graph running for its host to park, and nothing parked it here: with no cursor
+        // to re-seat, a stopped rebuild left the graph running — holding the output device, and on iOS reading as
+        // "playing" to Control Center — until something else sounded. A re-seat's play-then-pause scheduled a park as
+        // if the transport had sounded. A rebuild is not a sound: park as the transport stood before it.
+        if !wasPlaying {
+            resetIdlePark()
+            requestIdleParkAfterTransportStop(wasPlaying: wasWarm)
         }
         // AFTER the transport re-seat above: `apply(loop:)` projects the score-tick loop onto the transport via
         // `projectLoopOntoTransport`, which reads `timeline` / `unrolledTimeMap` — both rebuilt by `prepare(score:)`
@@ -1442,8 +1452,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // isn't now driving it, AND no tap preview is still pending — a
         // pending tap's own drain owns the park until it fires (see the
         // `playPreview` / `backendPlayPreview` drains).
+        //
+        // The software synth's release has to render out first, as in `backendPlayPreview`'s drain: parked right
+        // after `stopNote`, it froze mid-release and resumed the tail on the next preview. An AU instrument releases
+        // cleanly through a pause, so that path parks at once.
         if previewPolicy.sounding == nil {
-            requestIdlePark()
+            let releaseTail: Duration = backend == nil
+                ? .zero : .milliseconds(NotePreviewPolicy.releaseTailMilliseconds)
+            requestIdlePark(minimumDelay: releaseTail)
         }
     }
 

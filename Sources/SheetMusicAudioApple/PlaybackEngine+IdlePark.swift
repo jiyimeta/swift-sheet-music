@@ -86,8 +86,8 @@ extension PlaybackEngine {
         }
     }
 
-    /// Forget any owed or pending park — `prepare(score:)` leaves the graph running on purpose, and `teardown()` has
-    /// just stopped it outright.
+    /// Forget any owed or pending park — `prepare(score:)` leaves the graph running on purpose, `teardown()` has just
+    /// stopped it outright, and a graph rebuild decides its park afresh.
     func resetIdlePark() {
         cancelPendingIdlePark()
         graphOwesIdlePark = false
