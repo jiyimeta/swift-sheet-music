@@ -65,6 +65,13 @@ and this project adheres to
   channel's, so notes of different offsets that overlap on one channel share the last one struck — as in MuseScore's
   own MIDI. `Accidental.centOffset` gives each glyph's offset, MuseScore's verbatim — including its zeros for the
   Extended Helmholtz-Ellis, equal-tempered and enharmonic glyphs, which still play their stored pitch.
+- **A previewed note sounds its microtonal offset too** (Apple `PlaybackEngine.playPreview`). The preview bends its
+  channel by the note's `centOffset` before striking it and recentres for the next plain note; a sustained preview
+  recentres when it ends, and a transport start recentres first. `SynthBackend.sendPitchBend(channel:value:)` carries
+  the wheel (a no-op by default); `SwiftySynthBackend` sets the channel's bend range to the ±12 semitones the wheel
+  value is scaled to (RPN 0:0, `MidiEvent.pitchBendSensitivity`) before each bend, because a channel no playback has
+  reached is still at the General MIDI ±2 and would bend a sixth as far. Windows and Android previews still sound the
+  stored semitone.
 
 ### Changed
 

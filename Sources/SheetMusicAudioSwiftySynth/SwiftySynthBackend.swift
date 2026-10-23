@@ -580,6 +580,25 @@ public final class SwiftySynthBackend: SynthBackend {
         }
     }
 
+    /// Sets the channel's bend sensitivity to the renderer's (RPN 0:0) before the wheel: `value` is scaled to it
+    /// (`MidiEvent.pitchBendValue(cents:)`), and a channel no playback has reached yet is still at the GM default of
+    /// 2 semitones, which would bend it a sixth as far.
+    public func sendPitchBend(channel: UInt8, value: UInt16) {
+        lock.withLockUnchecked {
+            guard let synthesizer = $0.synthesizer else { return }
+            let channel = Int(channel)
+            func cc(_ controller: Int, _ value: Int) {
+                synthesizer.processMidiMessage(channel: channel, command: 0xB0, data1: controller, data2: value)
+            }
+            cc(101, 0); cc(100, 0)
+            cc(6, MidiEvent.pitchBendSensitivity); cc(38, 0)
+            cc(101, 127); cc(100, 127)
+            synthesizer.processMidiMessage(
+                channel: channel, command: 0xE0, data1: Int(value & 0x7F), data2: Int((value >> 7) & 0x7F),
+            )
+        }
+    }
+
     /// A second, independent backend for an offline export render, built at the
     /// export's own `sampleRate` — SwiftySynth fixes its render rate when the
     /// `Synthesizer` is created, so this is the only place the export's rate can

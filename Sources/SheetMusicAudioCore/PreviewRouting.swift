@@ -1,5 +1,6 @@
 import SheetMusicCore
 import SheetMusicFoundation
+import SheetMusicMIDI
 
 /// Where an audition of a note sounds: the tick the note sits at, and the live channel its staff plays on there.
 ///
@@ -27,6 +28,13 @@ package enum PreviewRouting {
     /// The absolute tick `noteID` sits at, on the plain (non-breath-budgeted) measure durations `PreparedPlayback`
     /// builds the channel-switch table on, so a lookup through `channel(forStaff:atTick:openingChannels:switches:)`
     /// compares like with like. The in-measure offset alone when the measure index does not resolve.
+    /// The pitch-wheel value an audition of `noteID` sounds with: its accidental's microtonal offset
+    /// (`Accidental.centOffset`, `MidiEvent.pitchBendValue(cents:)`), the center for a plain note or one the score no
+    /// longer holds — so a quarter-tone flat is heard a quarter tone low when it is clicked, as it is in playback.
+    package static func pitchBend(of noteID: NoteID, in score: Score) -> UInt16 {
+        UInt16(MidiEvent.pitchBendValue(cents: score[noteID]?.accidental?.centOffset ?? 0))
+    }
+
     package static func tick(of noteID: NoteID, in score: Score) -> Int {
         let inMeasure = score.resolveTickInMeasure(for: .note(noteID)) ?? 0
         let durations = score.effectiveMeasureDurations()

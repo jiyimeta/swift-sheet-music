@@ -61,7 +61,7 @@ enum MicrotonalPitchWheel {
 
     /// Wheel value for `effect` (a bend's own offset from center) riding on `cents` of base.
     static func wheel(effect: Int, cents: Double) -> Int {
-        let base = MidiRenderer.bendWheelValue(semitones: cents / 100) - MidiEvent.pitchBendCenter
+        let base = MidiEvent.pitchBendValue(cents: cents) - MidiEvent.pitchBendCenter
         return max(0, min(16383, MidiEvent.pitchBendCenter + effect + base))
     }
 

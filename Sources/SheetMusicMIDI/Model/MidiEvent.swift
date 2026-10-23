@@ -20,4 +20,16 @@ extension MidiEvent {
     public static let pitchBendCenter = 8192
     /// 14-bit pitch-wheel value range.
     public static let pitchBendRange: ClosedRange<Int> = 0 ... 16383
+    /// The pitch-bend sensitivity, in semitones, this renderer's track header sets on every pitched channel (RPN 0:0).
+    /// A live channel nothing has played on is still at the GM default of 2, so whatever sends it a wheel value scaled
+    /// to this has to set it first.
+    package static let pitchBendSensitivity = 12
+
+    /// The wheel value that moves a channel `cents` from its keys, at the `pitchBendSensitivity` this renderer's
+    /// header sets — how a microtonal accidental's `centOffset` sounds, in a rendered track
+    /// (`MicrotonalPitchWheel`) and in a live audition of one note alike.
+    public static func pitchBendValue(cents: Double) -> Int {
+        let offset = (cents / 100 / Double(pitchBendSensitivity) * 8191).rounded()
+        return min(pitchBendRange.upperBound, max(pitchBendRange.lowerBound, pitchBendCenter + Int(offset)))
+    }
 }

@@ -176,6 +176,10 @@ public protocol SynthBackend: AnyObject {
     func sendVolume(channel: UInt8, cc7: UInt8)
     func startNote(channel: UInt8, pitch: UInt8, velocity: UInt8)
     func stopNote(channel: UInt8, pitch: UInt8)
+    /// Sets `channel`'s pitch wheel (`0…16383`, `8192` centered) — how an audition of a microtonal note sounds its
+    /// offset (`PreviewRouting.pitchBend(of:in:)`). Defaults to doing nothing, which leaves such an audition on its
+    /// semitone key.
+    func sendPitchBend(channel: UInt8, value: UInt16)
 
     /// Tear down synth + transport before the engine is released.
     func teardown()
@@ -225,4 +229,7 @@ extension SynthBackend {
     public var isAtEnd: Bool {
         false
     }
+
+    /// Default for a backend with no live pitch wheel: an audition plays on its semitone key.
+    public func sendPitchBend(channel _: UInt8, value _: UInt16) {}
 }

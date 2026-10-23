@@ -130,8 +130,24 @@
             volumeSends.append((channel, cc7))
         }
 
-        func startNote(channel _: UInt8, pitch _: UInt8, velocity _: UInt8) {}
+        /// Live note and pitch-wheel traffic in the order it arrived — an audition's wheel has to come before its key.
+        enum LiveEvent: Equatable {
+            case noteOn(channel: UInt8, pitch: UInt8)
+            case bend(channel: UInt8, value: UInt16)
+        }
+
+        private(set) var liveEvents: [LiveEvent] = []
+
+        func startNote(channel: UInt8, pitch: UInt8, velocity _: UInt8) {
+            liveEvents.append(.noteOn(channel: channel, pitch: pitch))
+        }
+
         func stopNote(channel _: UInt8, pitch _: UInt8) {}
+
+        func sendPitchBend(channel: UInt8, value: UInt16) {
+            liveEvents.append(.bend(channel: channel, value: value))
+        }
+
         func teardown() {
             teardownCallCount += 1
         }

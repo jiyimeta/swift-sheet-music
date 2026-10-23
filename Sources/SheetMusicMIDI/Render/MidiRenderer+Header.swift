@@ -64,7 +64,7 @@ extension MidiRenderer {
                 if channel != 9 {
                     cc(100, 0)
                     cc(101, 0)
-                    cc(6, 12)
+                    cc(6, MidiEvent.pitchBendSensitivity)
                     cc(100, 127)
                     cc(101, 127)
                 }
