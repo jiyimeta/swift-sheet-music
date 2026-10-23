@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.20.0] - 2026-10-24
+
 ### Added
 
 - **A measure repeat is a slot, as MuseScore's `MeasureRepeat` is a `Rest` of its bar's length.** The `%` sign now
