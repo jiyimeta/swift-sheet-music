@@ -3,8 +3,11 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Clef {
+    /// `isHeader` is consumed and not modeled: whether a clef is the staff's opening one follows from where it sits,
+    /// and the encoder derives the tag from that (`Voice.headerClefIndex(in:)`). Kept as preserved markup it would ride
+    /// along with the clef wherever an edit copied it, and declare a header in the middle of the score.
     private static let consumedClefChildren: Set = [
-        "color", "concertClefType", "offset", "autoplace", "placement", "transposingClefType", "visible",
+        "color", "concertClefType", "offset", "autoplace", "placement", "transposingClefType", "visible", "isHeader",
     ]
 
     /// A `<transposingClefType>` equal to the concert type says no more than an absent one, and the model keeps `nil`

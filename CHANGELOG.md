@@ -99,6 +99,12 @@ and this project adheres to
 
 ### Fixed
 
+- **A staff's opening clef is MuseScore's header clef.** Since 4.1 MuseScore files a `<Clef>` under its `HeaderClef`
+  segment on `<isHeader>1</isHeader>` alone (`read460/measureread.cpp`), and the encoder never wrote the tag — so a
+  clef the first bar opens with, one `SetClef` wrote there or one a MusicXML import brought in, opened in MuseScore as
+  the staff's default clef plus a clef change after the time signature. A 4.x save now tags the first clef in voice 0
+  of a staff's first bar ahead of its first chord or rest; the decoder consumes the tag rather than preserving it, so
+  it cannot follow a clef copied elsewhere. A 3.x save leaves it out — that reader decides by position.
 - **A MusicXML `<notehead>` keeps its shape.** Its value was read for the `parentheses` attribute only, so every shaped
   head a file named — an open hi-hat's `circle-x`, a cymbal's `x`, a `diamond`, the shape notes — came in as a plain
   head. It now sets `Note.headType` to MuseScore's head group for it (`convertNotehead` in `importmusicxmlpass2.cpp`):

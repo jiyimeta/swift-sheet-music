@@ -13,6 +13,8 @@ extension Voice {
         let voiceBarLength: Fraction
         let effectiveDuration: Fraction
         let dropInitialZeroKeySig: Bool
+        /// The element written with `<isHeader>1</isHeader>`, if any — see `Voice.headerClefIndex(in:)`.
+        let headerClefIndex: Int?
         /// For each chord-bearing element index, the note list of the
         /// chord a forward tie there would land on — the next
         /// chord-bearing element in this voice, or the next measure's

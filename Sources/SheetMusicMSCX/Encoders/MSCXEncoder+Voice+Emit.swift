@@ -117,10 +117,7 @@ extension Voice {
         }
         let voiceBarLength = plan.voiceBarLength
         let effectiveDuration = plan.effectiveDuration
-        let isLastChord: Bool = {
-            if case .chord = element { return index == plan.lastChordIndex }
-            return false
-        }()
+        let isLastChord = if case .chord = element { index == plan.lastChordIndex } else { false }
         // Consume any pending follower tremolo from the previous start
         // chord — only chord-bearing elements claim it; rests pass
         // through. If the current chord is itself a `.between` start,
@@ -170,6 +167,7 @@ extension Voice {
             previousChordTrailingBendGrace: state.previousChordTrailingBendGrace,
             slurEndMarkers: slurEndMarkers,
             crossVoiceTieEndpoints: plan.crossVoiceTieEndpoints[index] ?? [:],
+            isHeaderClef: index == plan.headerClefIndex,
             options: options,
             staffGroup: staffGroup,
             voiceIndex: voiceIndex,
@@ -243,6 +241,7 @@ extension Voice {
         previousChordTrailingBendGrace: Int? = nil,
         slurEndMarkers: [XMLTreeNode] = [],
         crossVoiceTieEndpoints: [Int: MSCXCrossVoiceTieEndpoints.Ends] = [:],
+        isHeaderClef: Bool = false,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -271,7 +270,7 @@ extension Voice {
             )
         case let .keySignature(key): return key.encode(eid: eid, options: options)
         case let .timeSignature(time): return time.encode(eid: eid, options: options)
-        case let .clef(clef): return clef.encode(eid: eid, options: options)
+        case let .clef(clef): return clef.encode(eid: eid, isHeader: isHeaderClef, options: options)
         case let .dynamic(dynamic): return dynamic.encode(eid: eid, options: options)
         case let .barLine(barLine): return barLine.encode(eid: eid, options: options)
         case let .harmony(harmony): return harmony.encode(eid: eid, options: options)

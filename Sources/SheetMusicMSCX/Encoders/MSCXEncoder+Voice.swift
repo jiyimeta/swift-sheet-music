@@ -116,6 +116,7 @@ extension Voice {
             effectiveDuration: effectiveDuration,
             nextMeasureFirstChordNotes: nextMeasureFirstChordNotes,
             writtenFifthsOffset: options.writtenFifthsOffset,
+            tagsHeaderClef: options.targetVersion == .v4,
         )
         plan.crossVoiceTieEndpoints = crossVoiceTieEndpoints
         var state = EncodeState(carryIn: carryIn)
@@ -165,6 +166,7 @@ extension Voice {
         effectiveDuration: Fraction,
         nextMeasureFirstChordNotes: ChordNotes?,
         writtenFifthsOffset: Int,
+        tagsHeaderClef: Bool,
     ) -> IterationPlan {
         // At a given startIndex, push outer tuplets (longer range)
         // before inner ones so the close-side LIFO pops innermost first.
@@ -204,6 +206,7 @@ extension Voice {
                 isStaffHead: isStaffHead,
                 writtenFifthsOffset: writtenFifthsOffset,
             ),
+            headerClefIndex: isStaffHead && tagsHeaderClef ? Self.headerClefIndex(in: elements.values) : nil,
             forwardTiePartnerNotes: Self.forwardTiePartnerNotes(
                 in: elements.values,
                 nextMeasureFirstChordNotes: nextMeasureFirstChordNotes,
@@ -296,6 +299,26 @@ extension Voice {
             return true
         }
         return false
+    }
+
+    /// Of a staff's first bar, voice 0: the clef the staff opens with — the first one before anything moves the
+    /// cursor off the bar's first tick — which MuseScore files under the `HeaderClef` segment. `nil` when the bar
+    /// declares no clef there, and the staff opens with its default clef (`Staff.defaultClefType`).
+    ///
+    /// Position is the whole rule, as it is in MuseScore, where only the first measure's tick-0 clef can be a
+    /// header (`Score::undoChangeClef` moves a change at a later bar's head to the end of the bar before). The
+    /// order among the leading elements does not matter: the editor writes the clef ahead of the key and the meter
+    /// (`SetClef`), an import may put it after them, and the reader sorts segments by type either way. A second clef
+    /// at the same tick is written without the tag.
+    static func headerClefIndex(in elements: [VoiceElement]) -> Int? {
+        for (index, element) in elements.enumerated() {
+            switch element {
+            case .clef: return index
+            case .chord, .measureRepeat, .locationShift: return nil
+            default: continue
+            }
+        }
+        return nil
     }
 
     /// Encode a lifted `SystemElement` to its MSCX node. Mirrors the
