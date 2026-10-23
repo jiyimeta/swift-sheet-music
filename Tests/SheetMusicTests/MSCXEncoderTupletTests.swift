@@ -130,4 +130,81 @@ struct MSCXEncoderTupletTests {
         #expect(tuplet.first("normalNotes")?.text == "2")
         #expect(tuplet.first("actualNotes")?.text == "3")
     }
+
+    /// MuseScore takes a tuplet's length as `baseNote × normalNotes` (`TRead::read(Tuplet*)`), not from its members,
+    /// so the base is the tuplet's unit, which its first member need not be. A sixteenth triplet written as an eighth
+    /// and a sixteenth spans one eighth; naming the eighth as the base made MuseScore 4 reckon it a quarter and reject
+    /// every such bar as incomplete ("Found: 27/24. Expected: 4/4.").
+    @Test("A sixteenth triplet that opens on an eighth writes a 16th <baseNote>")
+    func baseNoteIsTheTupletUnitNotTheFirstMember() throws {
+        let voice = Voice(
+            elements: [
+                // eighth × 2/3, then sixteenth × 2/3: one eighth in all.
+                .chord(Chord(duration: .fraction(.init(numerator: 1, denominator: 12)), notes: ChordNotes([Note(
+                    pitch: 60,
+                    tpc: 14,
+                )]))),
+                .chord(Chord(duration: .fraction(.init(numerator: 1, denominator: 24)), notes: ChordNotes([Note(
+                    pitch: 62,
+                    tpc: 16,
+                )]))),
+            ],
+            tuplets: [
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 1),
+            ],
+        )
+        let xml = try voice.encode()
+        let tuplet = try #require(xml.first("Tuplet"))
+        #expect(tuplet.first("baseNote")?.text == "16th")
+        #expect(!tuplet.children.contains { $0.name == "baseDots" })
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let decoded = try Voice.decode(#require(XMLTreeParser.parse(bytes).first("voice")))
+        #expect(decoded == voice)
+    }
+
+    /// Three dotted quarters in the time of two: the unit is a dotted quarter, and without `<baseDots>` MuseScore reads
+    /// the tuplet as two plain quarters long.
+    @Test("A dotted tuplet unit writes <baseDots>")
+    func dottedBaseWritesBaseDots() throws {
+        let scaled = NoteDuration.fraction(.init(numerator: 1, denominator: 4))
+        let voice = Voice(
+            elements: (0 ..< 3).map { i in
+                .chord(Chord(duration: scaled, notes: ChordNotes([Note(pitch: 60 + i, tpc: 14)])))
+            },
+            tuplets: [
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
+            ],
+        )
+        let xml = try voice.encode()
+        let tuplet = try #require(xml.first("Tuplet"))
+        #expect(tuplet.first("baseNote")?.text == "quarter")
+        #expect(tuplet.first("baseDots")?.text == "1")
+        let children = tuplet.children.map(\.name)
+        let baseNoteIndex = try #require(children.firstIndex(of: "baseNote"))
+        #expect(children.firstIndex(of: "baseDots") == baseNoteIndex + 1)
+    }
+
+    /// An eighth triplet holding a sixteenth triplet in its middle: each level's base is its own unit, measured in
+    /// the frame of the tuplets around it.
+    @Test("Nested tuplets each write their own unit as <baseNote>")
+    func nestedTupletsWriteTheirOwnUnits() throws {
+        let outerEighth = NoteDuration.fraction(.init(numerator: 1, denominator: 12))
+        let innerSixteenth = NoteDuration.fraction(.init(numerator: 1, denominator: 36))
+        let voice = Voice(
+            elements: [outerEighth, innerSixteenth, innerSixteenth, innerSixteenth, outerEighth].enumerated()
+                .map { i, duration in
+                    .chord(Chord(duration: duration, notes: ChordNotes([Note(pitch: 60 + i, tpc: 14)])))
+                },
+            tuplets: [
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3),
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 4),
+            ],
+        )
+        let xml = try voice.encode()
+        let bases = xml.children.filter { $0.name == "Tuplet" }.map { $0.first("baseNote")?.text }
+        #expect(bases == ["eighth", "16th"])
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let decoded = try Voice.decode(#require(XMLTreeParser.parse(bytes).first("voice")))
+        #expect(decoded == voice)
+    }
 }

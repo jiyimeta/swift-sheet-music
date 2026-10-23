@@ -113,6 +113,12 @@ and this project adheres to
 - **A held software-synth preview's release rings out.** `previewNoteOff(pitch:)` parked the graph right after the
   note-off, freezing the synth mid-release; the frozen tail resumed on the next preview. It now waits out
   `NotePreviewPolicy.releaseTailMilliseconds` first, as a tap preview's drain does.
+- **A saved tuplet names its own unit as `<baseNote>`, so MuseScore no longer rejects its bar as incomplete.**
+  MuseScore takes a tuplet's length as `baseNote × normalNotes`, but the encoder wrote the first member's written
+  duration there: a sixteenth triplet opening on an eighth (an eighth and a sixteenth) was saved as an eighth triplet,
+  twice its length, and MuseScore 4 refused the file as corrupt ("Incomplete measure … Found: 27/24. Expected: 4/4.").
+  The unit is now the members' written durations summed over `actualNotes`, falling back to the first member only for
+  a tuplet whose members do not add up to a nameable unit; a dotted unit also writes `<baseDots>`, which was dropped.
 
 ## [4.19.0] - 2026-10-22
 

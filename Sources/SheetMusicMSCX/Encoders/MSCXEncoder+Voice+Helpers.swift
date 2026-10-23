@@ -106,10 +106,14 @@ extension Voice {
         }
     }
 
-    /// Resolve the "written" duration of the tuplet's first member
-    /// for emission as `<baseNote>{name}</baseNote>`. Returns nil for
-    /// degenerate tuplets (empty range or non-chord/rest member) and
-    /// for durations that cannot be expressed as a named base.
+    /// Resolve the tuplet's unit for emission as `<baseNote>` / `<baseDots>`. MuseScore reckons a tuplet's length as
+    /// `baseNote × normalNotes` (`TRead::read(Tuplet*)`), never from its members, so the unit is the tuplet's span
+    /// over `normalNotes` — equivalently its members' written durations summed and divided by `actualNotes`. The first
+    /// member is not the unit whenever the members differ: a sixteenth triplet written as an eighth and a sixteenth.
+    /// `activeTuplets` ends with `opening` and holds every tuplet around it, which the written durations are measured
+    /// against. A tuplet whose members do not add up to a nameable unit (one MuseScore saved with members missing)
+    /// falls back to its first member's written duration. Returns nil for degenerate tuplets (empty range or
+    /// non-chord/rest member) and for durations that cannot be expressed as a named base.
     func tupletBaseDuration(
         opening: TupletSpan,
         activeTuplets: [TupletSpan],
@@ -118,7 +122,31 @@ extension Voice {
         guard case let .chord(chord) = elements[opening.startIndex] else {
             return nil
         }
+        if opening.isResolved, opening.endIndex < elements.count, var unit = tupletMemberSpan(opening) {
+            // Written durations are the stored ones times every enclosing ratio's actualNotes/normalNotes; the
+            // unit is their sum over this tuplet's actualNotes.
+            for tuplet in activeTuplets {
+                unit = Fraction(
+                    numerator: unit.numerator * tuplet.actualNotes,
+                    denominator: unit.denominator * tuplet.normalNotes,
+                )
+            }
+            unit = Fraction(numerator: unit.numerator, denominator: unit.denominator * opening.actualNotes)
+            if NoteDuration.fraction(unit).decomposed() != nil { return .fraction(unit) }
+        }
         return try? unscaledDuration(chord.duration, in: activeTuplets)
+    }
+
+    /// Sum of the stored (already-scaled) durations of the chords and rests in `tuplet`'s range, nested tuplets'
+    /// members included. Nil when a member is a `.measure` rest, which has no intrinsic duration.
+    private func tupletMemberSpan(_ tuplet: TupletSpan) -> Fraction? {
+        var span = Fraction(numerator: 0, denominator: 1)
+        for element in elements[tuplet.startIndex ... tuplet.endIndex] {
+            guard case let .chord(member) = element else { continue }
+            if case .measure = member.duration { return nil }
+            span += member.duration.asFraction
+        }
+        return span
     }
 
     /// Divide the stored (already-scaled) duration by the product
