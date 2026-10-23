@@ -72,6 +72,11 @@ and this project adheres to
   value is scaled to (RPN 0:0, `MidiEvent.pitchBendSensitivity`) before each bend, because a channel no playback has
   reached is still at the General MIDI ±2 and would bend a sixth as far. Windows and Android previews still sound the
   stored semitone.
+- **`Note.shifted(oneStepOf:up:in:)` moves a note one microtonal step** — a quarter tone (`MicrotonalStep.quarterTone`,
+  spelled in Stein-Zimmermann or Gould's arrows) or a twelfth of a tone (`.twelfthTone`, Wyschnegradsky or Spartan
+  Sagittal), the sibling of `shifted(bySemitones:in:)`. It steps from where the note sounds, keeps the note's letter
+  while the notation has a glyph for it, and spells a semitone it lands on as ↑ / ↓ would. `MicrotonalNotation(writing:)`
+  names the notation an accidental belongs to, so a caller can keep a score in the notation it is written in.
 
 ### Changed
 

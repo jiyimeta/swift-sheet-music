@@ -62,11 +62,11 @@ public enum PitchSpelling {
 
     /// TPC of each natural letter (`C, D, E, F, G, A, B`). `letter`
     /// is the diatonic letter index (0…6, C-D-E-F-G-A-B order).
-    private static let naturalTpcByLetter: [Int] =
+    static let naturalTpcByLetter: [Int] =
         [14, 16, 18, 13, 15, 17, 19]
     /// Semitone offset of each natural letter from C (`C, D, E, F,
     /// G, A, B`).
-    private static let naturalSemitoneByLetter: [Int] =
+    static let naturalSemitoneByLetter: [Int] =
         [0, 2, 4, 5, 7, 9, 11]
 
     /// Diatonic letter index (0=C … 6=B) of a TPC.
@@ -74,7 +74,7 @@ public enum PitchSpelling {
     /// `F C G D A E B`; the returned table maps to
     /// `C D E F G A B` order so callers can index `naturalTpcByLetter`
     /// and `naturalSemitoneByLetter` directly.
-    private static func letterIndex(forTpc tpc: Int) -> Int {
+    static func letterIndex(forTpc tpc: Int) -> Int {
         let table = [3, 0, 4, 1, 5, 2, 6]
         return table[((tpc + 1) % 7 + 7) % 7]
     }
