@@ -11,7 +11,7 @@ struct RangeCopyVoiceRebuildTests {
 
     private static func piece(
         measure: Int, start: Int, elements: [VoiceElement],
-        tuplets: [(range: ClosedRange<Int>, normalNotes: Int, actualNotes: Int)] = [],
+        tuplets: [(range: ClosedRange<Int>, normalNotes: Int, actualNotes: Int, appearance: TupletAppearance)] = [],
     ) -> RangeCopyPlacement.Piece {
         RangeCopyPlacement.Piece(
             measureIndex: measure, startTickInMeasure: start, elements: elements, tuplets: tuplets,
@@ -401,7 +401,7 @@ struct RangeCopyVoiceRebuildTests {
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(
                 measure: 0, start: 960, elements: [third, third, third],
-                tuplets: [(range: 0 ... 2, normalNotes: 2, actualNotes: 3)],
+                tuplets: [(range: 0 ... 2, normalNotes: 2, actualNotes: 3, appearance: TupletAppearance())],
             ),
             staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
@@ -428,7 +428,7 @@ struct RangeCopyVoiceRebuildTests {
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(
                 measure: 0, start: 960, elements: [third, third, third],
-                tuplets: [(range: 0 ... 2, normalNotes: 2, actualNotes: 3)],
+                tuplets: [(range: 0 ... 2, normalNotes: 2, actualNotes: 3, appearance: TupletAppearance())],
             ),
             staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )

@@ -30,6 +30,16 @@ struct RangeCopySource {
         let text: StaffText
     }
 
+    /// A source tuplet a copy carries, as absolute tick bounds, with its appearance so the copy draws as the source
+    /// did.
+    struct CopiedTuplet {
+        let startTick: Int
+        let endTick: Int
+        let normalNotes: Int
+        let actualNotes: Int
+        let appearance: TupletAppearance
+    }
+
     struct Stream {
         let staff: StaffAddress
         let voiceIndex: Int
@@ -37,7 +47,7 @@ struct RangeCopySource {
         /// a chord at the same tick, which is where it stands in the source voice.
         let elements: [CopiedElement]
         /// Source tuplets whose members are entirely inside this stream, as absolute tick bounds.
-        let tuplets: [(startTick: Int, endTick: Int, normalNotes: Int, actualNotes: Int)]
+        let tuplets: [CopiedTuplet]
         /// Spanners lying entirely inside the range, as absolute SOURCE tick bounds. They travel beside
         /// `elements` rather than inside them — see `RangeCopySpanners` for why nothing rides through the
         /// placement — and are re-anchored at the destination by `RangeCopySpanners.recreate(_:at:…)`.

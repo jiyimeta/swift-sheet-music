@@ -385,34 +385,11 @@ extension LayoutBridge {
             to: CGPoint(x: CGFloat(toX), y: CGFloat(toY)),
             isAbove: isAbove,
             sp: CGFloat(sp),
+            labelHalfWidth: TupletBracketGeometry.labelHalfWidth(for: text, sp: CGFloat(sp)),
         )
-        let fontSize = Double(TupletBracketGeometry.labelFontSizeSp) * sp
-        // Label — centered Edwin italic, matching Apple's tuplet digits (`drawTuplet` uses `italic: true`), emitted as
-        // a `.setTextStyle`-wrapped `.text`.
-        let labelFont = LayoutFont(
-            face: "Edwin", pointSize: CGFloat(fontSize),
-        )
-        let labelWidth = Double(FontMetrics.provider.typographicWidth(
-            text: text, font: labelFont,
-        ))
-        let ascent = Double(FontMetrics.provider.ascent(font: labelFont))
-        let descent = Double(FontMetrics.provider.descent(font: labelFont))
-        // Canvas.drawText anchors at the baseline. The bracket geometry
-        // hands back the label's visual center Y, so shift baseline
-        // down by half of (ascent − descent) to vertically center the
-        // digit on `labelCenter.y`.
-        let baselineY = Double(segments.labelCenter.y) + (ascent - descent) / 2
-        // Measured upright, drawn italic, as before v8 — measuring italic would move the label on a table provider,
-        // whose italic face has its own advances. The id and style are the measured font's, with italic on top.
-        let wire = TextFontMapping.wire(for: labelFont)
-        withTextStyle(wire.style | DrawCommand.TextStyleFlag.italic, into: &out) { out in
-            out.append(.text(
-                text: text,
-                x: (Double(segments.labelCenter.x) - labelWidth / 2) * ptToMMScale,
-                y: baselineY * ptToMMScale,
-                size: fontSize * ptToMMScale,
-                fontId: wire.fontId,
-            ))
+        // No number (empty `text`): no label, and the bracket runs unbroken.
+        if !text.isEmpty {
+            encodeTupletLabel(text, at: segments.labelCenter, sp: sp, into: &out)
         }
         guard hasBracket else { return }
         let lineWidth = Double(TupletBracketGeometry.lineThicknessSp) * sp
@@ -440,6 +417,40 @@ extension LayoutBridge {
             width: lineWidth,
             into: &out,
         )
+    }
+
+    private static func encodeTupletLabel(
+        _ text: String, at labelCenter: CGPoint, sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        let fontSize = Double(TupletBracketGeometry.labelFontSizeSp) * sp
+        // Label — centered Edwin italic, matching Apple's tuplet digits (`drawTuplet` uses `italic: true`), emitted as
+        // a `.setTextStyle`-wrapped `.text`.
+        let labelFont = LayoutFont(
+            face: "Edwin", pointSize: CGFloat(fontSize),
+        )
+        let labelWidth = Double(FontMetrics.provider.typographicWidth(
+            text: text, font: labelFont,
+        ))
+        let ascent = Double(FontMetrics.provider.ascent(font: labelFont))
+        let descent = Double(FontMetrics.provider.descent(font: labelFont))
+        // Canvas.drawText anchors at the baseline. The bracket geometry
+        // hands back the label's visual center Y, so shift baseline
+        // down by half of (ascent − descent) to vertically center the
+        // digit on `labelCenter.y`.
+        let baselineY = Double(labelCenter.y) + (ascent - descent) / 2
+        // Measured upright, drawn italic, as before v8 — measuring italic would move the label on a table provider,
+        // whose italic face has its own advances. The id and style are the measured font's, with italic on top.
+        let wire = TextFontMapping.wire(for: labelFont)
+        withTextStyle(wire.style | DrawCommand.TextStyleFlag.italic, into: &out) { out in
+            out.append(.text(
+                text: text,
+                x: (Double(labelCenter.x) - labelWidth / 2) * ptToMMScale,
+                y: baselineY * ptToMMScale,
+                size: fontSize * ptToMMScale,
+                fontId: wire.fontId,
+            ))
+        }
     }
 
     private static func emitSegment(

@@ -10,6 +10,8 @@ import SwiftUI
 /// - `hasBracket == true` draws `|‾‾‾ N ‾‾‾|` with short vertical
 ///   hooks on each end.
 /// - `hasBracket == false` draws just the number.
+/// - An empty `text` (a tuplet that shows no number) draws the bracket
+///   unbroken.
 ///
 /// The label is drawn in an italic serif, matching engraved scores.
 @available(macOS 15.0, *)
@@ -26,18 +28,21 @@ enum TupletRenderer {
     ) {
         let segments = TupletBracketGeometry.segments(
             from: from, to: to, isAbove: isAbove, sp: metrics.sp,
+            labelHalfWidth: TupletBracketGeometry.labelHalfWidth(for: text, sp: metrics.sp),
         )
         let fontSize = TupletBracketGeometry.labelFontSizeSp * metrics.sp
         // Draw the number first so we can cut a gap in the bracket
-        // around it.
-        context.drawExpressionText(
-            text,
-            at: segments.labelCenter,
-            size: fontSize,
-            italic: true,
-            color: color,
-            anchor: .center,
-        )
+        // around it. No number: the gap is closed.
+        if !text.isEmpty {
+            context.drawExpressionText(
+                text,
+                at: segments.labelCenter,
+                size: fontSize,
+                italic: true,
+                color: color,
+                anchor: .center,
+            )
+        }
         guard hasBracket else { return }
         let lineWidth = TupletBracketGeometry.lineThicknessSp * metrics.sp
         stroke(

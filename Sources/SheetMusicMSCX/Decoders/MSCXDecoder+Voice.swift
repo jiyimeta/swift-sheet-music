@@ -44,9 +44,16 @@ extension Voice {
     }
 
     private struct OpenTuplet {
-        let ratio: Fraction
+        /// Kept apart rather than as one `Fraction`, which reduces: a 6:4 sextuplet has to stay "6", not become "3".
+        let normalNotes: Int
+        let actualNotes: Int
         let firstElementIndex: Int
         let eid: EID
+        let appearance: TupletAppearance
+
+        var ratio: Fraction {
+            Fraction(numerator: normalNotes, denominator: actualNotes)
+        }
     }
 
     // swiftlint:disable:next function_body_length cyclomatic_complexity
@@ -259,11 +266,13 @@ extension Voice {
                 // on `default:` below.
                 appendVoiceElement(.preserved(PreservedXML(child)), eid: .invalid)
             case "Tuplet":
-                if let ratio = tupletRatio(from: child) {
+                if let notes = tupletNotes(from: child) {
                     tupletStack.append(OpenTuplet(
-                        ratio: ratio,
+                        normalNotes: notes.normal,
+                        actualNotes: notes.actual,
                         firstElementIndex: elements.count,
                         eid: EIDXML.decode(from: child),
+                        appearance: TupletAppearance.decodeMSCX(child),
                     ))
                 }
             case "endTuplet":
@@ -271,10 +280,11 @@ extension Voice {
                     let endIndex = elements.count - 1
                     if endIndex >= top.firstElementIndex {
                         tuplets.append((top.eid, Tuplet(
-                            normalNotes: top.ratio.numerator,
-                            actualNotes: top.ratio.denominator,
+                            normalNotes: top.normalNotes,
+                            actualNotes: top.actualNotes,
                             startIndex: top.firstElementIndex,
                             endIndex: endIndex,
+                            appearance: top.appearance,
                         )))
                     }
                 }
@@ -572,9 +582,9 @@ extension Voice {
         return result
     }
 
-    /// Parse a `<Tuplet>` element's ratio (normalNotes/actualNotes). A triplet's
-    /// 3 notes occupy the time of 2 normal notes, so the scale is 2/3.
-    private static func tupletRatio(from node: XMLTreeNode) -> Fraction? {
+    /// Parse a `<Tuplet>` element's `<normalNotes>` and `<actualNotes>`. A triplet's 3 notes occupy the time of 2
+    /// normal notes, so its members scale by 2/3.
+    private static func tupletNotes(from node: XMLTreeNode) -> (normal: Int, actual: Int)? {
         guard let normalText = node.first("normalNotes")?.text,
               let actualText = node.first("actualNotes")?.text,
               let normal = Int(normalText),
@@ -583,7 +593,7 @@ extension Voice {
         else {
             return nil
         }
-        return Fraction(numerator: normal, denominator: actual)
+        return (normal, actual)
     }
 
     private static func scaled(_ duration: NoteDuration, by tupletStack: [Fraction]) -> NoteDuration {

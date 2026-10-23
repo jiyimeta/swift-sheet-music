@@ -19,7 +19,12 @@ struct RangeCopyPlacementTests {
                 }
                 return (absoluteTick: pair.0, lengthTicks: chord.duration.ticks(division: 480), element: pair.1)
             },
-            tuplets: tuplets,
+            tuplets: tuplets.map { tuplet in
+                RangeCopySource.CopiedTuplet(
+                    startTick: tuplet.startTick, endTick: tuplet.endTick,
+                    normalNotes: tuplet.normalNotes, actualNotes: tuplet.actualNotes, appearance: TupletAppearance(),
+                )
+            },
             spanners: [],
         )
     }

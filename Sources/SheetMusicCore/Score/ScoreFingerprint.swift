@@ -57,6 +57,9 @@ import SheetMusicFoundation
 ///   differently from a client before 4.11 — a fermata's absent `<timeStretch>` and a breath's absent `<pause>`
 ///   (MuseScore's file defaults), an authored empty line text (`""`, was nil), and the chant / single-stroke
 ///   caesuras (were a comma) — and all of those are hashed, so the same file hashes differently across that boundary.
+/// - Not covered on a tuplet: `Tuplet.appearance` (4.20). No edit writes it, and a client before 4.20 dropped it.
+///   Its ratio IS covered, and the 4.20 decoder reads it differently: a client before 4.20 reduced a 6:4 sextuplet
+///   to 3:2, so a file holding one hashes differently across that boundary.
 /// - The walk's own shape: it emits a flat sequence of staff blocks with no part/staff-count delimiter, so two
 ///   scores whose staves are grouped into parts differently — but which total the same number of staves — hash
 ///   identically.

@@ -5,26 +5,31 @@
 import SheetMusicCore
 
 extension LayoutEngine {
-    /// Emit a `.tupletLabel` for one `Tuplet` span. Picks bracket vs
-    /// number-only based on whether every member sits inside the same
-    /// beam group (MuseScore's simplified auto-bracket rule).
-    static func emitTupletLabel( // swiftlint:disable:this function_body_length
+    /// The `.tupletLabel` for one `Tuplet` span, read off its members already placed in `out`, or `nil` when the
+    /// tuplet draws nothing (no number and no bracket) or has no member to anchor to.
+    ///
+    /// `tuplet.appearance` decides the side (`direction`, else the side most stems point to), the number
+    /// (`numberType`) and the bracket (`bracketType`, else MuseScore's simplified auto rule: none when one beam joins
+    /// the first and last members, no member is a rest, and the number sits on the beam's side).
+    static func tupletLabel( // swiftlint:disable:this function_body_length cyclomatic_complexity
         tuplet: TupletSpan,
         voice: Voice,
         voiceChordOutIndex: [Int: Int],
         voiceRestOutIndex: [Int: Int],
-        out: inout [LayoutElement],
+        out: [LayoutElement],
         beamGroups: [BeamGroup],
         staffMidY: CGFloat,
         metrics: StaffMetrics,
         tupletID: TupletID? = nil,
-    ) {
+    ) -> LayoutElement? {
         // Walk every member. Chord X positions also feed the
         // Y-anchor computation; rest X positions only widen the
         // bracket span so a rest at the start or end of the
         // tuplet doesn't visually exclude itself from the bracket.
         var memberSpanXs: [CGFloat] = []
         var chordAnchorYs: [CGFloat] = [] // beam-side note y (outer note)
+        // Each chord's outer notes and stem, for a marking forced to the side its stems do not point to.
+        var chordNoteExtents: [(top: CGFloat, bottom: CGFloat, stemUp: Bool)] = []
         var chordStemsUp = 0
         var chordCount = 0
         var containsRest = false
@@ -57,6 +62,11 @@ extension LayoutEngine {
                     anchorY = notes.map(\.origin.y).max() ?? so.y
                 }
                 chordAnchorYs.append(anchorY)
+                chordNoteExtents.append((
+                    top: notes.map(\.origin.y).min() ?? so.y,
+                    bottom: notes.map(\.origin.y).max() ?? so.y,
+                    stemUp: stem == .up,
+                ))
             case .chord:
                 // Empty chord = rest.
                 containsRest = true
@@ -76,21 +86,36 @@ extension LayoutEngine {
         // would have put it.
         guard let fromX = memberSpanXs.first,
               let toX = memberSpanXs.last
-        else { return }
+        else { return nil }
+
+        let appearance = tuplet.appearance
+        // The side the stems point to: above stem-up groups, below stem-down.
+        let stemSideIsAbove = chordStemsUp * 2 >= chordCount
+        let isAbove = switch appearance.direction ?? .auto {
+        case .auto: stemSideIsAbove
+        case .up: true
+        case .down: false
+        }
 
         // MuseScore's bracket rule (Tuplet::calcHasBracket): hide the
         // bracket when the first AND last tuplet members sit inside
         // the SAME beam AND no member is a rest. The beam can be
         // larger than the tuplet — what matters is that both ends
-        // share one continuous beam.
+        // share one continuous beam. A marking forced to the noteheads'
+        // side is away from the beam, so it keeps its bracket there.
         let isBeamedGroup = !containsRest
             && beamGroups.contains { bg in
                 bg.memberIndices.contains(tuplet.startIndex)
                     && bg.memberIndices.contains(tuplet.endIndex)
             }
-
-        // Place the marking above stem-up groups, below stem-down.
-        let isAbove = chordStemsUp * 2 >= chordCount
+        let sitsOnBeam = isBeamedGroup && isAbove == stemSideIsAbove
+        let hasBracket = switch appearance.bracketType ?? .auto {
+        case .auto: !sitsOnBeam
+        case .bracket: true
+        case .noBracket: false
+        }
+        let text = appearance.numberText(actualNotes: tuplet.actualNotes, normalNotes: tuplet.normalNotes)
+        guard hasBracket || !text.isEmpty else { return nil }
 
         // Horizontal span — first to last MEMBER's x (chord stem
         // for chords, rest origin for rests). Widening to include
@@ -101,10 +126,21 @@ extension LayoutEngine {
         // - Beamed: just above/below the beam (= stemOrigin.y for the
         //   first and last members, already sloped).
         // - Bracketed: clear of the outer anchor by stemLen + 2 sp.
+        // - Forced to the noteheads' side: clear of the outer notehead,
+        //   or of the stem of a member whose stem points that way.
         let labelPad = metrics.sp * 1.5
         let fromY: CGFloat
         let toY: CGFloat
-        if isBeamedGroup {
+        if isAbove != stemSideIsAbove {
+            let extremeY = if isAbove {
+                chordNoteExtents.map { $0.stemUp ? $0.top - metrics.defaultStemLength : $0.top }.min() ?? staffMidY
+            } else {
+                chordNoteExtents.map { $0.stemUp ? $0.bottom : $0.bottom + metrics.defaultStemLength }.max()
+                    ?? staffMidY
+            }
+            fromY = extremeY + (isAbove ? -labelPad : labelPad)
+            toY = fromY
+        } else if sitsOnBeam, !hasBracket {
             // Use the chord's stemOrigin.y (which IS the beam y for
             // beamed chords) as the reference line; offset outward so
             // the number sits clear of the beam.
@@ -113,7 +149,7 @@ extension LayoutEngine {
                 let lastIdx = voiceChordOutIndex[tuplet.endIndex],
                 case let .chord(_, _, _, firstSO, _, _, _, _, _, _, _) = out[firstIdx],
                 case let .chord(_, _, _, lastSO, _, _, _, _, _, _, _) = out[lastIdx]
-            else { return }
+            else { return nil }
             let outward: CGFloat = isAbove ? -labelPad : labelPad
             fromY = firstSO.y + outward
             toY = lastSO.y + outward
@@ -147,14 +183,14 @@ extension LayoutEngine {
             clampedToY = max(toY, staffBot)
         }
 
-        out.append(.tupletLabel(
+        return .tupletLabel(
             fromOrigin: CGPoint(x: fromX, y: clampedFromY),
             toOrigin: CGPoint(x: toX, y: clampedToY),
-            text: "\(tuplet.actualNotes)",
-            hasBracket: !isBeamedGroup,
+            text: text,
+            hasBracket: hasBracket,
             isAbove: isAbove,
             tupletID: tupletID,
-        ))
+        )
     }
 
     /// Emit a single beam bar for a run of consecutive members that

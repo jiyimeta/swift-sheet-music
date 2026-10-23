@@ -35,12 +35,15 @@ public struct Voice: Sendable, Equatable {
             return TupletSpan(
                 normalNotes: tuplet.normalNotes, actualNotes: tuplet.actualNotes,
                 startIndex: tuplet.first.index(in: elements), endIndex: tuplet.last.index(in: elements),
-                eid: tuplets.eid(at: index),
+                eid: tuplets.eid(at: index), appearance: tuplet.appearance,
             )
         }
     }
 
+    /// Content equality: the elements, each tuplet's ratio and range (`tupletSpans`, which leaves identifiers out),
+    /// and each tuplet's appearance, which `TupletSpan.==` leaves out.
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.elements == rhs.elements && lhs.tupletSpans == rhs.tupletSpans
+            && lhs.tuplets.values.map(\.appearance) == rhs.tuplets.values.map(\.appearance)
     }
 }

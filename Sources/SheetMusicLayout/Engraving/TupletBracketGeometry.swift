@@ -30,6 +30,18 @@ public enum TupletBracketGeometry {
     /// `0.8 sp`.
     public static let labelHalfWidthSp: CGFloat = 0.8
 
+    /// What each label character after the first adds to `labelHalfWidthSp`: half a digit, which is about one staff
+    /// space wide at `labelFontSizeSp`.
+    public static let extraCharacterHalfWidthSp: CGFloat = 0.5
+
+    /// Half the gap the bracket leaves for `text`, in points: none when the tuplet shows no number (MuseScore then
+    /// draws the bracket unbroken, `TupletLayout::layout`), `labelHalfWidthSp` for one digit, and wider for "10" or a
+    /// "3:2" ratio so the bracket does not run into them.
+    public static func labelHalfWidth(for text: String, sp: CGFloat) -> CGFloat {
+        guard !text.isEmpty else { return 0 }
+        return (labelHalfWidthSp + extraCharacterHalfWidthSp * CGFloat(text.count - 1)) * sp
+    }
+
     public struct Segments: Sendable, Equatable {
         public let leftHookFrom: CGPoint
         public let leftHookTo: CGPoint
@@ -45,17 +57,19 @@ public enum TupletBracketGeometry {
     /// Compute the four bracket segments + the label center for a
     /// tuplet whose horizontal span is `from → to`. The hook descent
     /// flips sign based on whether the bracket is drawn above or below
-    /// the staff.
+    /// the staff. `labelHalfWidth` is half the gap left for the label
+    /// (`labelHalfWidth(for:sp:)`); `nil` leaves a one-digit gap.
     public static func segments(
         from: CGPoint, to: CGPoint,
         isAbove: Bool,
         sp: CGFloat,
+        labelHalfWidth: CGFloat? = nil,
     ) -> Segments {
         let labelX = (from.x + to.x) / 2
         let labelY = (from.y + to.y) / 2
         let hookSign: CGFloat = isAbove ? 1 : -1
         let hookDy = hookHeightSp * sp * hookSign
-        let labelHalfWidth = labelHalfWidthSp * sp
+        let labelHalfWidth = labelHalfWidth ?? labelHalfWidthSp * sp
         return Segments(
             leftHookFrom: CGPoint(x: from.x, y: from.y + hookDy),
             leftHookTo: from,

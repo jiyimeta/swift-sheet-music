@@ -228,7 +228,7 @@ extension LayoutEngine {
             )] = []
             var expressionSnapAnchors: [ExpressionSnapAnchor] = []
             // Parallel mapping for rest members. Used by
-            // `emitTupletLabel` so a rest in a tuplet still
+            // `tupletLabel` so a rest in a tuplet still
             // contributes to the bracket's horizontal span.
             var voiceRestOutIndex: [Int: Int] = [:]
             // Per-verse trail used to drop hyphens between adjacent
@@ -2069,18 +2069,20 @@ extension LayoutEngine {
             // member sits inside a single beam group (in which case
             // MuseScore drops the bracket and shows just the number
             // above/below the beam). Otherwise draw a square bracket
-            // with hooks.
+            // with hooks. A hidden tuplet goes to `invisibleOut`, laid out
+            // only when invisible elements are shown.
             for tuplet in voice.tupletSpans {
                 guard tuplet.startIndex >= 0,
                       tuplet.endIndex < voice.elements.count,
-                      tuplet.startIndex <= tuplet.endIndex
+                      tuplet.startIndex <= tuplet.endIndex,
+                      tuplet.appearance.visible || options.showsInvisibleElements
                 else { continue }
-                emitTupletLabel(
+                let label = tupletLabel(
                     tuplet: tuplet,
                     voice: voice,
                     voiceChordOutIndex: voiceChordOutIndex,
                     voiceRestOutIndex: voiceRestOutIndex,
-                    out: &out,
+                    out: out,
                     beamGroups: beamGroups(
                         voice: voice,
                         timeSignature: measureTimeSig,
@@ -2096,6 +2098,8 @@ extension LayoutEngine {
                         startElementIndex: tuplet.startIndex,
                     ),
                 )
+                guard let label else { continue }
+                if tuplet.appearance.visible { out.append(label) } else { invisibleOut.append(label) }
             }
         }
 

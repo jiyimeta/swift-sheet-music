@@ -46,13 +46,13 @@ extension RangeCopySource {
         for ids: [VoiceElementID], staff: StaffAddress, voiceIndex: Int,
         lowBound: VoiceElementID, highBound: VoiceElementID,
         infoByLocation: [MeasureElementLocation: (tick: Int, length: Int)], score: Score, operation: String,
-    ) throws -> [(startTick: Int, endTick: Int, normalNotes: Int, actualNotes: Int)] {
+    ) throws -> [CopiedTuplet] {
         var measureOrder: [Int] = []
         for id in ids where !measureOrder.contains(id.measureIndex) {
             measureOrder.append(id.measureIndex)
         }
 
-        var tuplets: [(startTick: Int, endTick: Int, normalNotes: Int, actualNotes: Int)] = []
+        var tuplets: [CopiedTuplet] = []
         for measureIndex in measureOrder {
             let ref = VoiceRef(staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex)
             guard let voice = score[voice: ref] else { continue }
@@ -68,9 +68,9 @@ extension RangeCopySource {
                 let endLocation = MeasureElementLocation(measureIndex: measureIndex, elementIndex: span.endIndex)
                 guard let start = infoByLocation[startLocation], let end = infoByLocation[endLocation]
                 else { continue }
-                tuplets.append((
+                tuplets.append(CopiedTuplet(
                     startTick: start.tick, endTick: end.tick + end.length,
-                    normalNotes: span.normalNotes, actualNotes: span.actualNotes,
+                    normalNotes: span.normalNotes, actualNotes: span.actualNotes, appearance: span.appearance,
                 ))
             }
         }

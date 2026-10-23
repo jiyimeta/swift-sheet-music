@@ -77,9 +77,16 @@ and this project adheres to
   Sagittal), the sibling of `shifted(bySemitones:in:)`. It steps from where the note sounds, keeps the note's letter
   while the notation has a glyph for it, and spells a semitone it lands on as ↑ / ↓ would. `MicrotonalNotation(writing:)`
   names the notation an accidental belongs to, so a caller can keep a score in the notation it is written in.
+- **`Tuplet.appearance`** (`TupletAppearance`): a tuplet's own side (`direction`), number (`numberType` — the count,
+  the ratio, or none), bracket (`bracketType`), base element properties (`visible`, `color`, `offset`) and the
+  `<Tuplet>` children it does not model. `TupletSpan.appearance` carries it alongside, like `eid`. An unset setting
+  follows the style; layout reads it as MuseScore's default style, since the score's own `<tupletNumberType>` and
+  friends are kept but not yet read. `TupletBracketGeometry.labelHalfWidth(for:sp:)` and the `labelHalfWidth`
+  argument of `segments(from:to:isAbove:sp:labelHalfWidth:)` size the bracket's gap to the label.
 
 ### Changed
 
+- **`Voice.==` compares each tuplet's appearance**, which `TupletSpan.==` leaves out as it leaves out `eid`.
 - **A range delete that covers every member of a tuplet removes the tuplet** and fills its span with rests, as
   MuseScore's `cmdDeleteTuplet` does; a tuplet only partly covered keeps its bracket as before.
 - **A 2- or 4-bar measure repeat is engraved as MuseScore engraves it**: its own glyph (`repeat2Bars` /
@@ -147,6 +154,20 @@ and this project adheres to
   twice its length, and MuseScore 4 refused the file as corrupt ("Incomplete measure … Found: 27/24. Expected: 4/4.").
   The unit is now the members' written durations summed over `actualNotes`, falling back to the first member only for
   a tuplet whose members do not add up to a nameable unit; a dotted unit also writes `<baseDots>`, which was dropped.
+- **A tuplet's hidden number or bracket stays hidden through a save, and on the page.** The MSCX decoder kept only a
+  `<Tuplet>`'s ratio, so a tuplet the author set to show no number, a ratio, no bracket, a forced bracket, a forced
+  side, or nothing at all (`<visible>0</visible>`) came back in its default look on the next save — and was drawn that
+  way. `<direction>`, `<numberType>`, `<bracketType>` and the base element properties are now read and written back,
+  and the rest (`<p1>` / `<p2>` bracket ends, bracket width, font overrides) is kept as preserved markup. `<Number>`
+  is still not written: MuseScore makes the number on layout, and MuseScore 4's `tuplet` style name inside it is one
+  MuseScore 3 does not know. Layout follows the settings: the ratio reads "3:2", no number leaves the bracket unbroken
+  (`TupletLayout::layout`), a marking forced to the noteheads' side keeps a bracket there, and a hidden tuplet is
+  drawn only among the invisible elements. A label longer than one digit — "10", "3:2" — gets a wider gap in the
+  bracket, which used to run into it.
+- **A sextuplet reads as 6:4, not 3:2.** The decoder held a tuplet's ratio as a `Fraction`, which reduces, so a 6:4
+  sextuplet was drawn and saved with a "3" over it (still in the right time). It now keeps `<normalNotes>` and
+  `<actualNotes>` as written. `Score.stableFingerprint` hashes the ratio, so a file holding such a tuplet hashes
+  differently from a client before this version.
 
 ## [4.19.0] - 2026-10-22
 

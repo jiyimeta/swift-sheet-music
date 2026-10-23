@@ -183,7 +183,7 @@ extension ScoreLayerBuilder {
         let fontSize = metrics.sp * 2
         let labelX = (from.x + to.x) / 2
         let labelY = (from.y + to.y) / 2
-        if let layer = textLayer(
+        if !text.isEmpty, let layer = textLayer(
             text: text,
             at: CGPoint(x: labelX, y: labelY),
             size: fontSize, italic: true,
@@ -196,7 +196,8 @@ extension ScoreLayerBuilder {
             }
         }
         guard hasBracket else { return }
-        let labelHalfWidth = fontSize * 0.4
+        // No number (empty `text`) closes the gap, as `TupletRenderer` does.
+        let labelHalfWidth = TupletBracketGeometry.labelHalfWidth(for: text, sp: metrics.sp)
         let hook = metrics.sp * 0.8
         let hookSign: CGFloat = isAbove ? 1 : -1
         let hookDy = hook * hookSign

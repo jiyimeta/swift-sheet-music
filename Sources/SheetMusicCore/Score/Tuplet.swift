@@ -35,24 +35,34 @@ public struct Tuplet: Sendable, Equatable {
     public var actualNotes: Int
     public var first: TupletEndpoint
     public var last: TupletEndpoint
+    /// How the marking is drawn — side, number, bracket, visibility. See `TupletAppearance`.
+    public var appearance: TupletAppearance
 
     public init(
         normalNotes: Int,
         actualNotes: Int,
         startIndex: Int,
         endIndex: Int,
+        appearance: TupletAppearance = TupletAppearance(),
     ) {
-        self.init(normalNotes: normalNotes, actualNotes: actualNotes, first: .index(startIndex), last: .index(endIndex))
+        self.init(
+            normalNotes: normalNotes, actualNotes: actualNotes, first: .index(startIndex), last: .index(endIndex),
+            appearance: appearance,
+        )
     }
 
     public init(normalNotes: Int, actualNotes: Int, first: EID, last: EID) {
         self.init(normalNotes: normalNotes, actualNotes: actualNotes, first: .element(first), last: .element(last))
     }
 
-    public init(normalNotes: Int, actualNotes: Int, first: TupletEndpoint, last: TupletEndpoint) {
+    public init(
+        normalNotes: Int, actualNotes: Int, first: TupletEndpoint, last: TupletEndpoint,
+        appearance: TupletAppearance = TupletAppearance(),
+    ) {
         self.normalNotes = normalNotes
         self.actualNotes = actualNotes
         self.first = first
         self.last = last
+        self.appearance = appearance
     }
 }

@@ -23,12 +23,20 @@ public struct TupletSpan: Sendable, Equatable {
     /// start reporting equivalent voices unequal.
     public var eid: EID
 
-    public init(normalNotes: Int, actualNotes: Int, startIndex: Int, endIndex: Int, eid: EID = .invalid) {
+    /// The owning `Tuplet.appearance`, carried alongside for the encoder and layout the same way as `eid`, and
+    /// excluded from `==` for the same reason: a span describes a range. `Voice.==` compares appearances itself.
+    public var appearance: TupletAppearance
+
+    public init(
+        normalNotes: Int, actualNotes: Int, startIndex: Int, endIndex: Int, eid: EID = .invalid,
+        appearance: TupletAppearance = TupletAppearance(),
+    ) {
         self.normalNotes = normalNotes
         self.actualNotes = actualNotes
         self.startIndex = startIndex
         self.endIndex = endIndex
         self.eid = eid
+        self.appearance = appearance
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {

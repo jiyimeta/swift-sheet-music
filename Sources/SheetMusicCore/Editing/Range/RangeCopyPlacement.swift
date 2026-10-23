@@ -13,8 +13,8 @@ enum RangeCopyPlacement {
         let measureIndex: Int
         let startTickInMeasure: Int
         let elements: [VoiceElement]
-        /// Index ranges into `elements` that a carried tuplet covers.
-        let tuplets: [(range: ClosedRange<Int>, normalNotes: Int, actualNotes: Int)]
+        /// Index ranges into `elements` that a carried tuplet covers, with the source tuplet's ratio and appearance.
+        let tuplets: [(range: ClosedRange<Int>, normalNotes: Int, actualNotes: Int, appearance: TupletAppearance)]
     }
 
     /// Where a tuplet member landed, so a tuplet split across pieces (never carried) can be told apart from one
@@ -273,6 +273,7 @@ enum RangeCopyPlacement {
                     range: low ... high,
                     normalNotes: tuplet.normalNotes,
                     actualNotes: tuplet.actualNotes,
+                    appearance: tuplet.appearance,
                 )],
             )
         }

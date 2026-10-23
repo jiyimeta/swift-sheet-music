@@ -248,7 +248,7 @@ extension RangeCopyVoiceRebuild {
             let start = indices[carried.range.lowerBound]
             ordered.append((order: start, slot: TupletSlot(identity: .fresh, tuplet: Tuplet(
                 normalNotes: carried.normalNotes, actualNotes: carried.actualNotes,
-                startIndex: start, endIndex: indices[carried.range.upperBound],
+                startIndex: start, endIndex: indices[carried.range.upperBound], appearance: carried.appearance,
             ))))
         }
         // `sorted(by:)` is not stable, so the original position breaks ties rather than the comparison leaving
