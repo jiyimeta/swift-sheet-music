@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <programVersion>4.7.4</programVersion>
+  <programRevision>7688c00</programRevision>
+  <Score>
+    <eid>xkJh9zTaLDF_BhY0+pxu2QO</eid>
+    <Division>480</Division>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <open>1</open>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer">Klaus Rettinghaus</metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="creationDate">2026-10-24</metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="originalFormat">xml</metaTag>
+    <metaTag name="platform">Apple Macintosh</metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber">MuseScore testfile</metaTag>
+    <metaTag name="workTitle">Tuplets 9</metaTag>
+    <Part id="1">
+      <Staff>
+        <eid>Lfrlp4TGxK_BYV/Hk4Z7p</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        </Staff>
+      <trackName>Oboe</trackName>
+      <Instrument id="oboe">
+        <longName>Oboe</longName>
+        <shortName>Ob.</shortName>
+        <trackName>Oboe</trackName>
+        <minPitchP>58</minPitchP>
+        <maxPitchP>96</maxPitchP>
+        <minPitchA>58</minPitchA>
+        <maxPitchA>87</maxPitchA>
+        <instrumentId>wind.reed.oboe</instrumentId>
+        <Articulation>
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="staccatissimo">
+          <velocity>100</velocity>
+          <gateTime>33</gateTime>
+          </Articulation>
+        <Articulation name="staccato">
+          <velocity>100</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="portato">
+          <velocity>100</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="tenuto">
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="marcato">
+          <velocity>120</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="sforzato">
+          <velocity>150</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="sforzatoStaccato">
+          <velocity>150</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoStaccato">
+          <velocity>120</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoTenuto">
+          <velocity>120</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Channel>
+          <program value="68"/>
+          <controller ctrl="10" value="63"/>
+          <synti>Fluid</synti>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <eid>gAzIRMnruJF_T+89lOWsLg</eid>
+        <Text>
+          <eid>Q4MlrySuxxJ_VUPwuzS7vSE</eid>
+          <style>title</style>
+          <text>Tuplets 9</text>
+          </Text>
+        <Text>
+          <eid>T8XvKvz28AO_+KKzOt2T1U</eid>
+          <style>subtitle</style>
+          <text>MuseScore testfile</text>
+          </Text>
+        <Text>
+          <eid>ArJqq9m93JE_IdwG3a0gc3N</eid>
+          <style>composer</style>
+          <text>Klaus Rettinghaus</text>
+          </Text>
+        </VBox>
+      <Measure>
+        <eid>RsmIBVt2BTF_bClX5UIALoK</eid>
+        <voice>
+          <Clef>
+            <concertClefType>G</concertClefType>
+            <transposingClefType>G</transposingClefType>
+            <isHeader>1</isHeader>
+            <eid>OJeDkpms4ZF_uvCVAkLS4qC</eid>
+            </Clef>
+          <TimeSig>
+            <eid>6n5uQReMqyH_lOFvyubVgtL</eid>
+            <sigN>1</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <Tuplet>
+            <eid>8Q3S7UEo0HC_jmHAyIvdGJN</eid>
+            <normalNotes>2</normalNotes>
+            <actualNotes>3</actualNotes>
+            <baseNote>eighth</baseNote>
+            <Number>
+              <style>tuplet</style>
+              <text>3</text>
+              </Number>
+            </Tuplet>
+          <Chord>
+            <eid>hDfY55pnldB_VYag0S5eW4E</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>eighth</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>ghtRw32RcxM_K+BqpfC2sRN</eid>
+              <pitch>67</pitch>
+              <tpc>15</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>0B44vpKQeqI_93uhD6f9PyL</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>eighth</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>Rm8+dJZH1ID_uz7pJfMCgVL</eid>
+              <pitch>69</pitch>
+              <tpc>17</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>zCxiG8MzwgI_vBQAo17mC</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>eighth</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>TN9LgDXACu_Q5FovwND2s</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <endTuplet/>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>yZVOQgPb77L_CHIygFp0W2B</eid>
+        <voice>
+          <Tuplet>
+            <eid>VDC/Nq+h9AB_v7KCEv+fJyH</eid>
+            <normalNotes>2</normalNotes>
+            <actualNotes>3</actualNotes>
+            <baseNote>eighth</baseNote>
+            <Number>
+              <style>tuplet</style>
+              <text>3</text>
+              </Number>
+            </Tuplet>
+          <Chord>
+            <eid>j4kYiGYoHI_Z6F0MEwYG5O</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>eighth</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>EagrJqjJJc_GIzgSoGwRHF</eid>
+              <pitch>67</pitch>
+              <tpc>15</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>IzqqOZ3ZfYF_Z2sr4+NOnmL</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>eighth</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>Zdxbyju5G0I_+tnziOIFGqH</eid>
+              <pitch>69</pitch>
+              <tpc>17</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>DrvRg376wnC_B3IRvsc2IIH</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>eighth</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>mr7V2Zg6YED_f0bR+lAHfxC</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <endTuplet/>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>2UGSMDrf6fI_Fu5O4bHQDTJ</eid>
+        <voice>
+          <Tuplet>
+            <eid>NJME+J4AZiM_afgQKplLTwE</eid>
+            <normalNotes>2</normalNotes>
+            <actualNotes>3</actualNotes>
+            <baseNote>eighth</baseNote>
+            <Number>
+              <style>tuplet</style>
+              <text>3</text>
+              </Number>
+            </Tuplet>
+          <Chord>
+            <eid>wepK6mcqf2M_XDyikFmK9PF</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>eighth</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>u/RzSxx8cQO_UUcLXxbm+rI</eid>
+              <pitch>67</pitch>
+              <tpc>15</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>+uZyBw1ONBI_HBvVr9rO0CL</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>eighth</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>5sQ7aIkUi4C_WGmG3Bu4loL</eid>
+              <pitch>69</pitch>
+              <tpc>17</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>QN/QhyQ1cfC_wM4XjRwx1pI</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>eighth</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>ieBKRASqSQO_gCV3eOvKEOP</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <endTuplet/>
+          <BarLine>
+            <subtype>end</subtype>
+            <eid>Mvjm8y4TIYG_sqssV/e3t3M</eid>
+            </BarLine>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>

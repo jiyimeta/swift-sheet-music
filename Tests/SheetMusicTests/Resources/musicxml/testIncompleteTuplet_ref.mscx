@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <programVersion>4.7.4</programVersion>
+  <programRevision>7688c00</programRevision>
+  <Score>
+    <eid>ZRM7JFmn2+K_krwEdsH6tiF</eid>
+    <Division>480</Division>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <open>1</open>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer"></metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="creationDate">2026-10-24</metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="originalFormat">xml</metaTag>
+    <metaTag name="platform">Apple Macintosh</metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber"></metaTag>
+    <metaTag name="workTitle">Title</metaTag>
+    <Part id="1">
+      <Staff>
+        <eid>TEc5TBtTZN_WTcCaeZzXHG</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        <bracket type="1" span="2" col="1" visible="1"/>
+        <barLineSpan>1</barLineSpan>
+        </Staff>
+      <Staff>
+        <eid>euPKwnSEm2H_3pMlo2I0okH</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        </Staff>
+      <trackName>Harp</trackName>
+      <Instrument id="harp">
+        <longName>Harp</longName>
+        <shortName>Hrp.</shortName>
+        <trackName>Harp</trackName>
+        <minPitchP>23</minPitchP>
+        <maxPitchP>104</maxPitchP>
+        <minPitchA>23</minPitchA>
+        <maxPitchA>104</maxPitchA>
+        <instrumentId>pluck.harp</instrumentId>
+        <clef staff="2">F</clef>
+        <glissandoStyle>diatonic</glissandoStyle>
+        <Articulation>
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="staccatissimo">
+          <velocity>100</velocity>
+          <gateTime>33</gateTime>
+          </Articulation>
+        <Articulation name="staccato">
+          <velocity>100</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="portato">
+          <velocity>100</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="tenuto">
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="marcato">
+          <velocity>120</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="sforzato">
+          <velocity>150</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="sforzatoStaccato">
+          <velocity>150</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoStaccato">
+          <velocity>120</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoTenuto">
+          <velocity>120</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Channel>
+          <program value="0"/>
+          <controller ctrl="10" value="63"/>
+          <synti>Fluid</synti>
+          </Channel>
+        <Channel name="staccato">
+          <program value="45"/>
+          <synti>Fluid</synti>
+          </Channel>
+        <Channel name="flageoletti">
+          <program value="11"/>
+          <synti>Fluid</synti>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <eid>0fR66ya9MoC_7VtNSqNXqEO</eid>
+        <Text>
+          <eid>ID/ThnLTe/H_1rmj7qCAYtM</eid>
+          <style>title</style>
+          <text>Title</text>
+          </Text>
+        </VBox>
+      <Measure>
+        <eid>YfQVn2JQd/M_mQiOIA4BYMF</eid>
+        <voice>
+          <Clef>
+            <concertClefType>G</concertClefType>
+            <transposingClefType>G</transposingClefType>
+            <isHeader>1</isHeader>
+            <eid>iDr4M6h8J2I_SqOBLfzFfMO</eid>
+            </Clef>
+          <KeySig>
+            <eid>oIQEeEVD1tK_Es0LdeW/qNK</eid>
+            <concertKey>-3</concertKey>
+            <mode>major</mode>
+            </KeySig>
+          <TimeSig>
+            <eid>xPm6AvrQlFC_WlRaSu+XfbM</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <Rest>
+            <eid>rlc+B8sBF8K_1pV4Mrmk5ZK</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>GnZiJx15h3_4NbtI5koPaE</eid>
+        <endRepeat>2</endRepeat>
+        <voice>
+          <Rest>
+            <eid>d+qSd8XklOK_PJRLn1CDk4</eid>
+            <durationType>half</durationType>
+            </Rest>
+          <Tuplet>
+            <eid>iZ5I79dbrnN_p0ByFOCDrNL</eid>
+            <normalNotes>8</normalNotes>
+            <actualNotes>9</actualNotes>
+            <baseNote>16th</baseNote>
+            <Number>
+              <style>tuplet</style>
+              <text>9</text>
+              </Number>
+            </Tuplet>
+          <Beam>
+            <eid>s16Jk0CcHFK_Wuk6IGvPAOB</eid>
+            <StemDirection>down</StemDirection>
+            </Beam>
+          <Chord>
+            <eid>Z4eK7UpGlXG_t23wnRc+dLE</eid>
+            <BeamMode>begin</BeamMode>
+            <durationType>16th</durationType>
+            <Note>
+              <eid>GhbcNc5o5cF_ER0eVXhuawL</eid>
+              <pitch>67</pitch>
+              <tpc>15</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>WlWsECwjmx_im9raqb+jWC</eid>
+            <BeamMode>mid</BeamMode>
+            <durationType>16th</durationType>
+            <Note>
+              <eid>UG8yOicWxzC_Hmv4AYU5vOP</eid>
+              <Accidental>
+                <role>1</role>
+                <subtype>accidentalFlat</subtype>
+                <eid>F+0Lw6CqvgE_XKG3NTNWUhI</eid>
+                </Accidental>
+              <pitch>68</pitch>
+              <tpc>10</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>V7ZGmzlj6SM_iLm7JrypW9K</eid>
+            <BeamMode>mid</BeamMode>
+            <durationType>16th</durationType>
+            <Note>
+              <eid>DHYbuMl5dNC_dhNYQM9Ph4E</eid>
+              <Accidental>
+                <role>1</role>
+                <subtype>accidentalFlat</subtype>
+                <eid>YKfIuO2FhaF_57B7QBvaJBM</eid>
+                </Accidental>
+              <pitch>70</pitch>
+              <tpc>12</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>efY0BwOhJ1L_qpbO1s8Nd2O</eid>
+            <BeamMode>mid</BeamMode>
+            <durationType>16th</durationType>
+            <Note>
+              <eid>E2eNb3g6+8O_jdyox/BBj1G</eid>
+              <pitch>72</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>ewVvp/HS+XK_G/GL+mNBAUK</eid>
+            <BeamMode>mid</BeamMode>
+            <durationType>16th</durationType>
+            <Note>
+              <eid>QQZSIAmx6s_hiGU1y8OK/K</eid>
+              <pitch>74</pitch>
+              <tpc>16</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>0Q395yQhISK_wR7Ayf98cWJ</eid>
+            <BeamMode>mid</BeamMode>
+            <durationType>16th</durationType>
+            <Note>
+              <eid>rseFh9xQAfP_JhbjCyVPSgI</eid>
+              <Accidental>
+                <role>1</role>
+                <subtype>accidentalFlat</subtype>
+                <eid>+Uij3OGPnrM_PJDFe+lFK+L</eid>
+                </Accidental>
+              <pitch>75</pitch>
+              <tpc>11</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>HS8dH7e462H_TWClPFNPBBK</eid>
+            <BeamMode>mid</BeamMode>
+            <durationType>16th</durationType>
+            <Note>
+              <eid>CtLLlIjY/1F_r/wZzF3sNfM</eid>
+              <Accidental>
+                <role>1</role>
+                <subtype>accidentalNatural</subtype>
+                <eid>FOrudDpA5bB_u2bLRx16wpC</eid>
+                </Accidental>
+              <pitch>77</pitch>
+              <tpc>13</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>35bz/opwzZB_AwDjaWS1xZE</eid>
+            <durationType>16th</durationType>
+            <Note>
+              <eid>aiKW6n7A3UG_f57At/b4uqC</eid>
+              <pitch>79</pitch>
+              <tpc>15</tpc>
+              </Note>
+            </Chord>
+          <Rest>
+            <eid>4tuwh/AGCyE_ADHBl+c9RKB</eid>
+            <durationType>16th</durationType>
+            </Rest>
+          <endTuplet/>
+          </voice>
+        </Measure>
+      </Staff>
+    <Staff id="2">
+      <Measure>
+        <voice>
+          <Clef>
+            <concertClefType>F</concertClefType>
+            <transposingClefType>F</transposingClefType>
+            <isHeader>1</isHeader>
+            <eid>yT4B1PkHBNJ_OvtkvsB+GbK</eid>
+            </Clef>
+          <KeySig>
+            <eid>InYQ786ldrP_HtzBYhQ/GFF</eid>
+            <concertKey>-3</concertKey>
+            <mode>major</mode>
+            </KeySig>
+          <TimeSig>
+            <eid>nUKv24zRSvM_TgRjdCW5GZI</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <Rest>
+            <eid>uXuOYPbiQqO_JpUAI7Qs1KF</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <voice>
+          <Rest>
+            <eid>p/bqdKC1m4C_Jv/8A0eDHTP</eid>
+            <durationType>measure</durationType>
+            <duration>1/1</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>

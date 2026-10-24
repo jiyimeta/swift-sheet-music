@@ -30,6 +30,8 @@ struct StaffMeasureBuilder {
     /// How many of a voice's pending grace chords end in a slur or wavy line and so lean back on the previous chord
     /// (MuseScore's `gac`).
     private var pendingAfterGraceCount: [Int: Int] = [:]
+    /// Each positional voice's tuplets, grouped as its chords and rests arrive (`MusicXMLTupletTracker`).
+    private var tupletTrackers: [Int: MusicXMLTupletTracker] = [:]
 
     /// Result of `build()`: the decoded `Measure` and the system
     /// elements that should be merged into the score-level
@@ -69,9 +71,43 @@ struct StaffMeasureBuilder {
         if case .chord = element, let start, let end {
             anchors[idx].append(MusicXMLChordAnchor(elementIndex: voices[idx].count, start: start, end: end))
         }
+        voices[idx].append(takingPendingGraces(element, voice: idx))
+    }
+
+    /// Before a chord or rest with `tuplet`'s facts joins the voice at `start`: stops the voice's open tuplet if the
+    /// note cannot continue it, padding it with a rest there when it stopped short (`MusicXMLTupletTracker`). Returns
+    /// the rest's length, which the note starts after.
+    mutating func stopTuplet(
+        before tuplet: MusicXMLTupletNote, toVoice voiceId: String, at start: Fraction,
+    ) -> Fraction {
+        let idx = internVoice(voiceId)
+        let padding = tupletTrackers[idx, default: MusicXMLTupletTracker()].stop(before: tuplet)
+        appendPadding(padding, voice: idx, at: start)
+        return padding
+    }
+
+    /// After the voice's last chord or rest, which ends at `end`, was appended with `tuplet`'s facts: it joins the
+    /// voice's tuplets, and a stop mark that ends one short pads it with a rest at `end`. Returns the rest's length.
+    mutating func joinTuplet(_ tuplet: MusicXMLTupletNote, toVoice voiceId: String, end: Fraction) -> Fraction {
+        let idx = internVoice(voiceId)
+        guard let index = anchors[idx].last?.elementIndex else { return .zeroTick }
+        let padding = tupletTrackers[idx, default: MusicXMLTupletTracker()].add(tuplet, at: index)
+        appendPadding(padding, voice: idx, at: end)
+        return padding
+    }
+
+    /// A rest of `padding`, from `start`, that joins the tuplet the voice stopped last; nothing for zero.
+    private mutating func appendPadding(_ padding: Fraction, voice idx: Int, at start: Fraction) {
+        guard padding.numerator > 0 else { return }
+        anchors[idx].append(MusicXMLChordAnchor(elementIndex: voices[idx].count, start: start, end: start + padding))
+        voices[idx].append(.rest(duration: .fraction(padding)))
+        tupletTrackers[idx]?.extendLastTuplet(to: voices[idx].count - 1)
+    }
+
+    /// `element` with the voice's pending grace chords hung on it when it is a chord; anything else unchanged.
+    private mutating func takingPendingGraces(_ element: VoiceElement, voice idx: Int) -> VoiceElement {
         guard case var .chord(chord) = element, let pending = pendingGraces.removeValue(forKey: idx) else {
-            voices[idx].append(element)
-            return
+            return element
         }
         let afterCount = min(pendingAfterGraceCount.removeValue(forKey: idx) ?? 0, pending.count)
         // With no chord before it in the voice the after-graces have nowhere to lean back on; MuseScore leaves them
@@ -80,7 +116,7 @@ struct StaffMeasureBuilder {
             ? Array(pending.dropFirst(afterCount))
             : pending
         chord.graceNotesBefore = IdentifiedArray(Array(chord.graceNotesBefore) + leading)
-        voices[idx].append(.chord(chord))
+        return .chord(chord)
     }
 
     /// Queue a grace note (`<grace>`) for the next chord in its voice: it opens a grace chord of `shape`, or joins the
@@ -162,6 +198,14 @@ struct StaffMeasureBuilder {
         for (idx, pending) in pendingGraces {
             _ = settled.attachBack(pending, voice: idx)
         }
+        // A tuplet the measure leaves open stops at its end, padded after its last member (MuseScore's
+        // `resetTuplets`) — after the graces, which lean on a chord, not on the padding.
+        for idx in tupletTrackers.keys.sorted() {
+            guard var tracker = settled.tupletTrackers[idx] else { continue }
+            let padding = tracker.finish()
+            settled.tupletTrackers[idx] = tracker
+            settled.appendPadding(padding, voice: idx, at: settled.anchors[idx].last?.end ?? .zeroTick)
+        }
         var final = settled.voices
         if let trailing = trailingBarline {
             if final.isEmpty {
@@ -177,10 +221,12 @@ struct StaffMeasureBuilder {
         }
         let builtVoices = final.isEmpty
             ? [Voice(elements: [])]
-            : final.map { Voice(elements: $0) }
+            : final.indices.map { idx in
+                Voice(elements: final[idx], tuplets: settled.tupletTrackers[idx]?.tuplets ?? [])
+            }
         // Markers and jumps join the part's first staff after the walk (`MusicXMLRepeatLog`).
         let measure = Measure(voices: builtVoices, startRepeat: startRepeat, endRepeatCount: endRepeatCount)
-        return Built(measure: measure, systemElements: systemElements, anchors: anchors.first ?? [])
+        return Built(measure: measure, systemElements: systemElements, anchors: settled.anchors.first ?? [])
     }
 
     // MARK: - private helpers

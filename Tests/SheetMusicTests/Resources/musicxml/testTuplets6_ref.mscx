@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <programVersion>4.7.4</programVersion>
+  <programRevision>7688c00</programRevision>
+  <Score>
+    <eid>PGtFkNtGCbN_1j/6mQrP8nC</eid>
+    <Division>480</Division>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <open>1</open>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer">Leon Vinken</metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="creationDate">2026-10-24</metaTag>
+    <metaTag name="description">
+        Test various incomplete tuplets.
+        </metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="originalFormat">xml</metaTag>
+    <metaTag name="platform">Apple Macintosh</metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber">MuseScore testfile</metaTag>
+    <metaTag name="workTitle">Tuplets 6</metaTag>
+    <Part id="1">
+      <Staff>
+        <eid>mqslSvgEvn_9G3qnaiQ4TD</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        </Staff>
+      <trackName>Piano</trackName>
+      <Instrument id="piano">
+        <longName>Piano</longName>
+        <shortName>Pno.</shortName>
+        <trackName>Piano</trackName>
+        <minPitchP>21</minPitchP>
+        <maxPitchP>108</maxPitchP>
+        <minPitchA>21</minPitchA>
+        <maxPitchA>108</maxPitchA>
+        <instrumentId>keyboard.piano</instrumentId>
+        <clef staff="2">F</clef>
+        <Articulation>
+          <velocity>100</velocity>
+          <gateTime>95</gateTime>
+          </Articulation>
+        <Articulation name="staccatissimo">
+          <velocity>100</velocity>
+          <gateTime>33</gateTime>
+          </Articulation>
+        <Articulation name="staccato">
+          <velocity>100</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="portato">
+          <velocity>100</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="tenuto">
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="marcato">
+          <velocity>120</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="sforzato">
+          <velocity>150</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="sforzatoStaccato">
+          <velocity>150</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoStaccato">
+          <velocity>120</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoTenuto">
+          <velocity>120</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Channel>
+          <program value="0"/>
+          <controller ctrl="10" value="63"/>
+          <synti>Fluid</synti>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <eid>LspfO0p0DRO_qQhY1P2SftF</eid>
+        <Text>
+          <eid>FVGLTEpi0dO_sD41nqXritK</eid>
+          <style>title</style>
+          <text>Tuplets 6</text>
+          </Text>
+        <Text>
+          <eid>L34ygs+SCBE_+mdiNNpJbXN</eid>
+          <style>subtitle</style>
+          <text>MuseScore testfile</text>
+          </Text>
+        <Text>
+          <eid>q1qwdB2JZqC_v2cLU1MagiH</eid>
+          <style>composer</style>
+          <text>Leon Vinken</text>
+          </Text>
+        </VBox>
+      <Measure>
+        <eid>pWJYAeEc+EE_rSuv1Iup7dO</eid>
+        <voice>
+          <Clef>
+            <concertClefType>G</concertClefType>
+            <transposingClefType>G</transposingClefType>
+            <isHeader>1</isHeader>
+            <eid>z6uF3RirZeI_FAct+1jxYGD</eid>
+            </Clef>
+          <TimeSig>
+            <eid>RnQVfAATtbD_a5nfX/yqV/E</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <StaffText>
+            <eid>QlblE9d8fbC_NMsTywDQE3N</eid>
+            <text>End note missing</text>
+            </StaffText>
+          <Chord>
+            <eid>Ta2HPzZzcwB_p+JlusRjVMC</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>KIFcAz3/GlL_fn4Oyxx3T7B</eid>
+              <pitch>67</pitch>
+              <tpc>15</tpc>
+              </Note>
+            </Chord>
+          <Tuplet>
+            <eid>QlUSNdqtlzJ_jqDWDG2OV0J</eid>
+            <normalNotes>2</normalNotes>
+            <actualNotes>3</actualNotes>
+            <baseNote>quarter</baseNote>
+            <Number>
+              <style>tuplet</style>
+              <text>3</text>
+              </Number>
+            </Tuplet>
+          <Chord>
+            <eid>uuttKcSpqc_yYXLMA7VadF</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>GYEnfUQFGEI_Ibo7HnrMxMM</eid>
+              <pitch>69</pitch>
+              <tpc>17</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>W3KzKBWfSnN_G/Fc/Nclh7H</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>U80hcG45mfL_yHgN6urO8YG</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <Rest>
+            <eid>iu1Ia+RmkuB_LE3tMINUH0I</eid>
+            <durationType>quarter</durationType>
+            </Rest>
+          <endTuplet/>
+          <Chord>
+            <eid>tTjzwx38YdG_MjBvMkWvtoM</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>urQhCInoI7O_2sRd4sqRfiE</eid>
+              <pitch>74</pitch>
+              <tpc>16</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>JTp5htnzUaL_KMbrtMy4bHJ</eid>
+        <voice>
+          <StaffText>
+            <eid>5GwIehoMZTH_rUcv4UHaotJ</eid>
+            <text>Middle note missing</text>
+            </StaffText>
+          <Chord>
+            <eid>7y1iOM+RN0E_lA+6MeNacnC</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>FL//GEMZnwB_g9LjQbC4gEI</eid>
+              <pitch>67</pitch>
+              <tpc>15</tpc>
+              </Note>
+            </Chord>
+          <Tuplet>
+            <eid>9We2EeNNUDG_z9IN0zmQAtD</eid>
+            <normalNotes>2</normalNotes>
+            <actualNotes>3</actualNotes>
+            <baseNote>quarter</baseNote>
+            <Number>
+              <style>tuplet</style>
+              <text>3</text>
+              </Number>
+            </Tuplet>
+          <Chord>
+            <eid>POLKWWk6xZF_OkoVEl3jRGI</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>SiURyWaHxPB_4oHjt+wq91J</eid>
+              <pitch>69</pitch>
+              <tpc>17</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>48n/n2d1kwE_eC/rJKWLJHI</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>NfEZdVipKM_F0EPxDEnSzN</eid>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          <Rest>
+            <eid>nlO7V704VtI_D3wJwp1fS4H</eid>
+            <durationType>quarter</durationType>
+            </Rest>
+          <endTuplet/>
+          <Chord>
+            <eid>4sJ2ATIC3ON_di+nw3w1COF</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>cGb3gWkdXhK_yxloGEe8y8B</eid>
+              <pitch>74</pitch>
+              <tpc>16</tpc>
+              </Note>
+            </Chord>
+          <BarLine>
+            <eid>5VP1tSxZzGF_OPDbe7/7WEP</eid>
+            </BarLine>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>

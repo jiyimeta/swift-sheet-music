@@ -22,6 +22,9 @@ enum MusicXMLDuration {
         if let typeText,
            let base = NoteDuration(mscxName: typeText)
         {
+            if isUnmarkedTripletRest(note: note, divisions: divisions), let durationInt {
+                return .fraction(divisions.fractionOfWhole(durationInt))
+            }
             let dotted = base.dotted(dotCount)
             if let mod = note.first("time-modification") {
                 return applyTupletModification(to: dotted, mod: mod)
@@ -33,6 +36,23 @@ enum MusicXMLDuration {
             return .fraction(divisions.fractionOfWhole(durationInt))
         }
         return nil
+    }
+
+    /// A rest whose `<duration>` is two thirds of what its `<type>`, dots and `<time-modification>` make: a triplet
+    /// member Encore wrote with neither a `<tuplet>` nor a `<time-modification>`. It takes its `<duration>`, and its
+    /// time counts as modified 3:2. C++: the Encore case of `MusicXmlNoteDuration::checkTiming`.
+    static func isUnmarkedTripletRest(note: XMLTreeNode, divisions: DivisionsContext) -> Bool {
+        guard note.children.contains(where: { $0.name == "rest" }),
+              let specified = note.first("duration").flatMap({ Int($0.text) }), specified > 0,
+              let base = note.first("type").flatMap({ NoteDuration(mscxName: $0.text) })
+        else { return false }
+        var calculated = base.dotted(note.all("dot").count)
+        if let mod = note.first("time-modification") {
+            calculated = applyTupletModification(to: calculated, mod: mod)
+        }
+        let typed = calculated.asFraction
+        let given = divisions.fractionOfWhole(specified)
+        return typed.numerator * 2 * given.denominator == given.numerator * 3 * typed.denominator
     }
 
     private static func applyTupletModification(

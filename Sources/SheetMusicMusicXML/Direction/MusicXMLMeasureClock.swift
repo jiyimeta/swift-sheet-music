@@ -13,6 +13,12 @@ struct MusicXMLMeasureClock: Sendable, Equatable {
         if furthest.precedes(now) { furthest = now }
     }
 
+    /// The rest an incomplete tuplet is padded with (`P2:2848-2860`): the clock moves past it, but the measure grows
+    /// only once a later note reaches past it.
+    mutating func pad(by duration: Fraction) {
+        now += duration
+    }
+
     /// `<forward>` (`P2:2862-2870`) moves like a note.
     mutating func forward(by duration: Fraction) {
         advance(by: duration)

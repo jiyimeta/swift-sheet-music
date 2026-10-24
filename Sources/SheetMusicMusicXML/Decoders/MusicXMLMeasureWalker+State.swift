@@ -98,12 +98,21 @@ extension MusicXMLMeasureWalker {
             }
         case let .new(elements):
             let duration = positiveDuration(child, divisions: divisions) ?? .zeroTick
+            // A tuplet this note stops short is padded with a rest, which the note follows (`P2:2848-2860`).
+            let tuplet = MusicXMLTupletNote(node: child, divisions: divisions)
+            if let tuplet {
+                let now = state.clock.now
+                state.clock.pad(by: state.builders[staffIdx].stopTuplet(before: tuplet, toVoice: voice, at: now))
+            }
             let start = state.clock.now
             for element in elements {
                 state.builders[staffIdx].append(element, toVoice: voice, start: start, end: start + duration)
             }
             if !duration.isZeroTick { state.chordStart = start }
             state.clock.advance(by: duration)
+            if let tuplet {
+                state.clock.pad(by: state.builders[staffIdx].joinTuplet(tuplet, toVoice: voice, end: start + duration))
+            }
         case let .grace(note, shape, joinsChord, endsAfterGraces):
             state.builders[staffIdx].appendGrace(
                 note, shape: shape, joinsChord: joinsChord, endsAfterGraces: endsAfterGraces, toVoice: voice,

@@ -9,6 +9,19 @@ and this project adheres to
 
 ### Fixed
 
+- **A MusicXML tuplet is a tuplet.** The import shortened each member by its `<time-modification>` and made no
+  `Voice.tuplets` entry, so the page showed no bracket or number, and a MuseScore save wrote every member as a bare
+  fraction (`<durationType>measure</durationType><duration>1/12</duration>`), which MuseScore opens as whole notes.
+  Members now group into tuplets as MuseScore's import groups them (`MusicXmlTupletState`): a tuplet starts at
+  `<tuplet type="start">` or at the first modified note without one, and stops at `<tuplet type="stop">`, at a note
+  whose time is not modified, at the next start, when an unmarked one is full (by `<normal-type>`, or the smallest
+  member's value) or at the bar line. A tuplet stopped short is padded with a rest and what follows moves after it, as
+  MuseScore pads it (`missingTupletDuration`); a rest two thirds as long as its `<type>` — Encore's unmarked triplet
+  rest — keeps its `<duration>` and counts as 3:2, where it used to take its type's full length and overfill the bar.
+  The ratio is kept as written (6:4), a two-note tremolo's 2:1 makes no tuplet, and the start mark's `bracket`,
+  `show-number` and `placement` set `Tuplet.appearance`. A note whose ratio differs from the open tuplet's starts its
+  own, where MuseScore would count it into the open one. Reading the MusicXML again makes the tuplets; a score already
+  saved from an earlier import keeps its members as bare fractions.
 - **A saved tuplet keeps its `<baseNote>` when a `<Beam>` precedes its first note.** MuseScore writes a beam the user
   changed between `<Tuplet>` and the tuplet's first note, so the tuplet's range opened on that preserved `<Beam>`, and
   the encoder, looking for the unit only at the range's first element, wrote no `<baseNote>` — MuseScore 3 crashes on

@@ -12,7 +12,15 @@ enum MusicXMLDirectionSplicer {
     static func splice(
         _ queued: [MusicXMLQueuedElement], into elements: [VoiceElement], anchors: [MusicXMLChordAnchor],
     ) -> [VoiceElement] {
-        guard !queued.isEmpty else { return elements }
+        splicing(queued, into: elements, anchors: anchors).elements
+    }
+
+    /// `splice`, with where each of `elements` ended up: `positions[i]` is element `i`'s index in the result.
+    private static func splicing(
+        _ queued: [MusicXMLQueuedElement], into elements: [VoiceElement], anchors: [MusicXMLChordAnchor],
+    ) -> (elements: [VoiceElement], positions: [Int]) {
+        var positions = Array(elements.indices)
+        guard !queued.isEmpty else { return (elements, positions) }
         let ordered = queued.enumerated()
             .sorted { lhs, rhs in
                 lhs.element.tick.precedes(rhs.element.tick)
@@ -29,13 +37,19 @@ enum MusicXMLDirectionSplicer {
             let before = point < anchors.count
             let target = before ? anchors[point].elementIndex : elements.count
             let upTo = max(copied, min(target, elements.count))
+            for index in copied ..< upTo {
+                positions[index] = result.count + index - copied
+            }
             result += elements[copied ..< upTo]
             copied = upTo
             let reference = before ? anchors[point].start : (anchors.last?.end ?? .zeroTick)
             result += jogged(groups[point] ?? [], from: reference, restoring: before)
         }
+        for index in copied ..< elements.count {
+            positions[index] = result.count + index - copied
+        }
         result += elements[copied...]
-        return result
+        return (result, positions)
     }
 
     /// Index into `anchors` of the first chord starting at or after `tick`; `anchors.count` when none does.
@@ -69,8 +83,9 @@ extension MusicXMLDirectionSplicer {
         let measure: Int
     }
 
-    /// Splices every queued voice element of `events` into positional voice 0 of its staff's measure.
-    /// `anchors[staff][measure]` are that voice's chord anchors; out-of-range staves / measures are dropped.
+    /// Splices every queued voice element of `events` into positional voice 0 of its staff's measure, and moves the
+    /// voice's tuplets' ends to where their notes went. `anchors[staff][measure]` are that voice's chord anchors;
+    /// out-of-range staves / measures are dropped.
     static func apply(
         _ events: [MusicXMLDirectionEvent], anchors: [[[MusicXMLChordAnchor]]], to measures: inout [[Measure]],
     ) {
@@ -87,9 +102,22 @@ extension MusicXMLDirectionSplicer {
             let hasAnchors = anchors.indices.contains(key.staff) && anchors[key.staff].indices.contains(key.measure)
             let voiceAnchors = hasAnchors ? anchors[key.staff][key.measure] : []
             var measure = measures[key.staff][key.measure]
-            let spliced = splice(queue, into: measure.voices[0].elements.values, anchors: voiceAnchors)
-            measure.voices[0] = Voice(elements: spliced, tuplets: measure.voices[0].tuplets)
+            let voice = measure.voices[0]
+            let spliced = splicing(queue, into: voice.elements.values, anchors: voiceAnchors)
+            let tuplets = voice.tuplets.values.map { tuplet in
+                var moved = tuplet
+                moved.first = Self.moved(moved.first, to: spliced.positions)
+                moved.last = Self.moved(moved.last, to: spliced.positions)
+                return moved
+            }
+            measure.voices[0] = Voice(elements: spliced.elements, tuplets: tuplets)
             measures[key.staff][key.measure] = measure
         }
+    }
+
+    /// An index endpoint at its element's new place; the walk writes no other kind.
+    private static func moved(_ endpoint: TupletEndpoint, to positions: [Int]) -> TupletEndpoint {
+        guard case let .index(index) = endpoint, positions.indices.contains(index) else { return endpoint }
+        return .index(positions[index])
     }
 }

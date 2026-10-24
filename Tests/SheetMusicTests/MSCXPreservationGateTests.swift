@@ -176,6 +176,11 @@ enum MSCXPreservation {
             + "from Note containment and MSCXEncoder+Note.swift writes the spanner there; the "
             + "nested source tag cannot ride in the wrapper-level bag. "
             + "slur_ms4_glissando_legato.mscx pins this spelling."
+    private static let tupletNumberReason =
+        "by design: a tuplet's <Number> is the text MuseScore makes on layout from the ratio and the number type "
+            + "(TupletLayout::createNumber), both modeled; MuseScore 4's `tuplet` style name inside it is one "
+            + "MuseScore 3 does not know, so MSCXEncoder+Tuplet.swift writes no <Number>. MuseScore's own tuplet "
+            + "refs (musicxml/testTuplets*_ref.mscx) carry one per tuplet."
     private static func makeAllowedLosses() -> [String: String] {
         var result: [String: String] = [:]
         addPermanentLosses(to: &result)
@@ -359,6 +364,9 @@ enum MSCXPreservation {
         allow([
             "Chord/TremoloSingleChord", "TremoloSingleChord/subtype",
         ], because: tremoloReason, into: &result)
+        allow([
+            "Tuplet/Number", "Number/style", "Number/text",
+        ], because: tupletNumberReason, into: &result)
         // `Text/style` used to sit here too. The only fixture that lost it was
         // a `<TBox>`, whose whole subtree is now carried as preserved markup —
         // so it comes back, and the entry would be stale.
