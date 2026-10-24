@@ -162,6 +162,26 @@ struct MSCXEncoderTupletTests {
         #expect(decoded == voice)
     }
 
+    /// MuseScore writes a `<Beam>` the user changed between `<Tuplet>` and the tuplet's first note, so the tuplet's
+    /// range opens on preserved markup. The encoder named no unit for it, and a save dropped `<baseNote>` from every
+    /// such tuplet — which MuseScore cannot measure.
+    @Test("A tuplet whose range opens on a preserved <Beam> still writes its <baseNote>")
+    func baseNoteSurvivesABeamBeforeTheFirstMember() throws {
+        let note = "<Note><pitch>67</pitch><tpc>15</tpc></Note>"
+        let voice = try Voice.decode(XMLTreeParser.parse(Data("""
+        <voice>
+          <Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes><baseNote>eighth</baseNote></Tuplet>
+          <Beam><StemDirection>up</StemDirection></Beam>
+          <Chord><durationType>eighth</durationType>\(note)</Chord>
+          <Chord><durationType>eighth</durationType>\(note)</Chord>
+          <Chord><durationType>eighth</durationType>\(note)</Chord>
+          <endTuplet/>
+        </voice>
+        """.utf8)))
+        let tuplet = try #require(voice.encode().first("Tuplet"))
+        #expect(tuplet.first("baseNote")?.text == "eighth")
+    }
+
     /// Three dotted quarters in the time of two: the unit is a dotted quarter, and without `<baseDots>` MuseScore reads
     /// the tuplet as two plain quarters long.
     @Test("A dotted tuplet unit writes <baseDots>")

@@ -7,6 +7,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A saved tuplet keeps its `<baseNote>` when a `<Beam>` precedes its first note.** MuseScore writes a beam the user
+  changed between `<Tuplet>` and the tuplet's first note, so the tuplet's range opened on that preserved `<Beam>`, and
+  the encoder, looking for the unit only at the range's first element, wrote no `<baseNote>` — MuseScore 3 crashes on
+  such a tuplet and MuseScore 4 cannot measure it. The unit now comes from the first chord or rest in the range.
+
 ## [4.20.0] - 2026-10-24
 
 ### Added

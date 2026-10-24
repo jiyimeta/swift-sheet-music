@@ -112,16 +112,20 @@ extension Voice {
     /// member is not the unit whenever the members differ: a sixteenth triplet written as an eighth and a sixteenth.
     /// `activeTuplets` ends with `opening` and holds every tuplet around it, which the written durations are measured
     /// against. A tuplet whose members do not add up to a nameable unit (one MuseScore saved with members missing)
-    /// falls back to its first member's written duration. Returns nil for degenerate tuplets (empty range or
-    /// non-chord/rest member) and for durations that cannot be expressed as a named base.
+    /// falls back to its first member's written duration. The range may open on something other than a chord or rest:
+    /// MuseScore files a `<Beam>` the user changed between `<Tuplet>` and the first note, and it is kept as preserved
+    /// markup there. Returns nil for degenerate tuplets (no chord or rest in range) and for durations that cannot be
+    /// expressed as a named base.
     func tupletBaseDuration(
         opening: TupletSpan,
         activeTuplets: [TupletSpan],
     ) -> NoteDuration? {
         guard opening.startIndex < elements.count else { return nil }
-        guard case let .chord(chord) = elements[opening.startIndex] else {
-            return nil
-        }
+        let last = opening.isResolved ? min(opening.endIndex, elements.count - 1) : opening.startIndex
+        let firstMember = elements[opening.startIndex ... last].lazy.compactMap { element -> Chord? in
+            if case let .chord(chord) = element { chord } else { nil }
+        }.first
+        guard let chord = firstMember else { return nil }
         if opening.isResolved, opening.endIndex < elements.count, var unit = tupletMemberSpan(opening) {
             // Written durations are the stored ones times every enclosing ratio's actualNotes/normalNotes; the
             // unit is their sum over this tuplet's actualNotes.
