@@ -226,6 +226,63 @@ struct MeasureAccidentalsPlannerTests {
         #expect(Self.accidental(repaired, measure: 1, element: 1) == .natural)
     }
 
+    /// MuseScore takes an automatic accidental off a tied note spelled like the note it is tied from
+    /// (`Chord::cmdUpdateNotes`), across the barline too — so a stored ♯ there (an import wrote it) goes, and the
+    /// line is marked as for any tied-over note.
+    @Test func `a tied note keeps no automatic accidental of its own`() {
+        let score = Self.tiedAcrossTheBarline(
+            tieStart: Note(pitch: 66, tpc: 20, accidental: .sharp),
+            tied: Note(pitch: 66, tpc: 20, accidental: .sharp),
+            then: [Note(pitch: 66, tpc: 20)],
+        )
+        let repaired = Self.renotated(score, measures: 0 ..< 2)
+        #expect(Self.accidental(repaired, measure: 1, element: 0) == nil)
+        #expect(Self.accidental(repaired, measure: 1, element: 1) == .sharp)
+    }
+
+    /// A tie that changes the spelling (F♯ held on as G♭) is a new note to the eye: its accidental is drawn like any
+    /// other note's, and it covers the next G♭ in the bar.
+    @Test func `an enharmonic tie draws the tied note's own accidental`() {
+        let gFlat = Note(pitch: 66, tpc: 8)
+        let score = Self.tiedAcrossTheBarline(
+            tieStart: Note(pitch: 66, tpc: 20, accidental: .sharp), tied: gFlat, then: [gFlat],
+        )
+        let repaired = Self.renotated(score, measures: 0 ..< 2)
+        #expect(Self.accidental(repaired, measure: 1, element: 0) == .flat)
+        #expect(Self.accidental(repaired, measure: 1, element: 1) == nil)
+    }
+
+    /// Grace notes are read in MuseScore's order — a chord's graces before, then the chord, then its graces after —
+    /// and their glyphs are kept true like any other note's.
+    @Test func `a grace note before a chord is read before it`() {
+        var score = ScoreEditor(score: EditingFixtures.twoMeasuresOfQuarterRests(key: 0)).score
+        let grace = GraceChord(graceType: .acciaccatura, duration: .eighth, notes: [Note(pitch: 61, tpc: 21)])
+        score[VoiceElementID(EditingFixtures.restID(element: 2))] = .chord(Chord(
+            duration: .quarter, notes: [Note(pitch: 61, tpc: 21, accidental: .sharp)], graceNotesBefore: [grace],
+        ))
+        let repaired = Self.renotated(score, measures: 0 ..< 1)
+        let element = repaired.parts[0].staves[0].measures[0].voices[0].elements[2]
+        guard case let .chord(chord) = element else { Issue.record("chord"); return }
+        #expect(chord.graceNotesBefore[0].notes[0].accidental == .sharp) // the grace speaks first
+        #expect(chord.notes[0].accidental == nil) // and covers the C♯ it leads into
+    }
+
+    /// A letter key reads a grace note earlier in the bar like any other written note.
+    @Test func `a letter key reads an earlier grace note`() throws {
+        var score = ScoreEditor(score: EditingFixtures.twoMeasuresOfQuarterRests(key: 0)).score
+        let grace = GraceChord(
+            graceType: .acciaccatura, duration: .eighth, notes: [Note(pitch: 66, tpc: 20, accidental: .sharp)],
+        )
+        score[VoiceElementID(EditingFixtures.restID(element: 2))] = .chord(Chord(
+            duration: .quarter, notes: [Note(pitch: 64, tpc: 18)], graceNotesBefore: [grace],
+        ))
+        let planned = try #require(MeasureAccidentals.plannedPitch(
+            forLetter: "f", nearestTo: 64, at: VoiceElementID(EditingFixtures.restID(element: 3)), in: score,
+        ))
+        #expect(planned.pitch == 66)
+        #expect(planned.tpc == 20)
+    }
+
     /// The counterpart: a tied-over note that shows its own ♯ is what the reader saw, so the letter keeps it.
     @Test func `a letter key after a tied-over note showing its sharp keeps the sharp`() throws {
         let score = Self.tiedAcrossTheBarline(

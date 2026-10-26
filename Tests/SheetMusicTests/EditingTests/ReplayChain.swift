@@ -79,6 +79,10 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
     /// and never re-recorded. A `step-N.bin`, `goldens.txt` line or `edit-replay-parity.json` byte that changes is
     /// a wire or fingerprint regression to fix, not a golden to refresh — the same reading `EditReplayGoldenTests`
     /// gives the standard chain. A future intent family starts a third chain.
+    ///
+    /// One deliberate exception, 2026-10-26: the fingerprint after step 43 (the acciaccatura D♯4) moved when
+    /// renotation began keeping grace-note glyphs true, as MuseScore does — the grace now carries its ♯. An engine
+    /// change, not a wire one: no `step-N.bin` changed, and every other fingerprint stayed put.
     static let parity = ReplayChain(
         name: "parity",
         androidAssetDir: "editReplay-parity",

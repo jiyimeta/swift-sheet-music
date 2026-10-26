@@ -18,6 +18,19 @@ and this project adheres to
   even when the alteration is the same; the note after that is covered by the restatement as usual. A tied note that
   shows its own accidental (a user-forced one) marks nothing, and neither does a tie inside one bar. A score saved by
   MuseScore with such a restated ♯ now shows it, where the layout used to hide it.
+- **A tied note follows MuseScore's tie rule for its own accidental.** A tied note spelled like the note it is tied
+  from draws no automatic accidental — the tie carries the alteration, and MuseScore takes such a glyph off
+  (`Chord::cmdUpdateNotes`) — so an imported score that stored one on the far side of a tie no longer shows it, and
+  renotation takes it off too. A tie that changes the spelling (F♯ held on as G♭) is a new note to the eye: renotation
+  now gives the tied note its own accidental, where it used to leave every tied note's glyph alone. The note a tie
+  comes from is found the way playback pairs ties (`MeasureAccidentalWalk.tieStartTPCs`); a tied note whose start
+  is a grace note keeps the glyph it has.
+- **Grace notes take part in the bar's accidentals, in MuseScore's order.** Both passes read a chord's grace notes
+  before it, then the chord, then its grace notes after (`Chord::cmdUpdateNotes`): a grace note's accidental now
+  covers the note it leads into, a redundant one on the grace itself is suppressed, renotation keeps a grace note's
+  glyph true like any other note's, and a letter key reads the grace notes earlier in the bar. They used to be left
+  out of the state entirely, so a C♯ grace before a C♯ drew two sharps and a D♯ grace written with no glyph stayed
+  without one. The parity edit-replay golden's fingerprint after step 43 (a D♯4 acciaccatura) moves accordingly.
 - **A letter key after a tie over the barline writes the key's spelling.** `MeasureAccidentals.plannedPitch` /
   `plannedConcertPitch` read the alteration in force through a note tied into the bar, so the letter F after a
   tied-over F♯ in C major wrote F♯ with no glyph. It now skips a tied note that draws no accidental of its own, as

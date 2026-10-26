@@ -172,6 +172,52 @@ struct AccidentalVisibilityTests {
         #expect(Self.accidental(out, measure: 1, chord: 1) == nil)
     }
 
+    @Test("A tied note spelled like its start draws no automatic accidental, and the next note restates")
+    func tiedNoteDropsItsAutomaticAccidental() {
+        var start = Self.fSharp4()
+        start.tieForward = 1
+        var tied = Self.fSharp4()
+        tied.tieBack = 1
+        let s = Self.score(measures: [
+            [(start, .whole)],
+            [(tied, .quarter), (Self.fSharp4(), .quarter)],
+        ])
+        let out = s.suppressingRedundantAccidentals()
+        #expect(Self.accidental(out, measure: 1, chord: 0) == nil)
+        #expect(Self.accidental(out, measure: 1, chord: 1) == .sharp)
+    }
+
+    @Test("A tie that changes the spelling keeps the tied note's accidental")
+    func enharmonicTieKeepsAccidental() {
+        var start = Self.fSharp4()
+        start.tieForward = 1
+        let tied = Note(pitch: 66, tpc: 8, accidental: .flat, tieBack: 1) // G♭4
+        let s = Self.score(measures: [
+            [(start, .whole)],
+            [(tied, .quarter), (Note(pitch: 66, tpc: 8, accidental: .flat), .quarter)],
+        ])
+        let out = s.suppressingRedundantAccidentals()
+        #expect(Self.accidental(out, measure: 1, chord: 0) == .flat)
+        #expect(Self.accidental(out, measure: 1, chord: 1) == nil)
+    }
+
+    @Test("A grace note is read before its chord: its sharp covers the chord's, a redundant one goes")
+    func graceNotesJoinTheState() {
+        let graces = [
+            GraceChord(graceType: .acciaccatura, duration: .eighth, notes: [Self.eNatural4()]),
+            GraceChord(graceType: .acciaccatura, duration: .eighth, notes: [Self.cSharp4()]),
+        ]
+        let chord = Chord(duration: .quarter, notes: [Self.cSharp4()], graceNotesBefore: graces)
+        let staff = Staff(measures: [Measure(voices: [Voice(elements: [.chord(chord)])])])
+        let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
+        let out = Score(division: 480, parts: [part]).suppressingRedundantAccidentals()
+        guard case let .chord(result) = out.parts[0].staves[0].measures[0].voices[0].elements[0]
+        else { Issue.record("chord"); return }
+        #expect(result.graceNotesBefore[0].notes[0].accidental == nil) // E♮ in C major
+        #expect(result.graceNotesBefore[1].notes[0].accidental == .sharp)
+        #expect(result.notes[0].accidental == nil) // covered by the grace's ♯
+    }
+
     // MARK: - Regression: every accidental needed → none removed
 
     @Test("All-needed accidentals → none removed")

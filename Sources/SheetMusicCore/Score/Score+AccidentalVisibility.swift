@@ -26,14 +26,15 @@ extension Score {
     /// order. Suppression is applied per staff (each staff has its own
     /// accidental state) and reset at every measure boundary.
     ///
-    /// A note tied over the barline that draws no accidental has not shown the reader its alteration in this bar, so
-    /// its line is marked (`AccidentalLineState.tiedOver`, MuseScore's `TIE_CONTEXT`) and the next note on it keeps
-    /// its accidental even when the alteration is the same.
+    /// A tied note spelled like the note it is tied from draws no automatic accidental — the tie carries the
+    /// alteration, and MuseScore takes such a glyph off (`Chord::cmdUpdateNotes`). A note tied over the barline that
+    /// draws none has not shown the reader its alteration in this bar, so its line is marked
+    /// (`AccidentalLineState.tiedOver`, MuseScore's `TIE_CONTEXT`) and the next note on it keeps its accidental even
+    /// when the alteration is the same. A tie that changes the spelling (F♯ held on as G♭) is read like any other
+    /// note.
     ///
-    /// Note: grace notes are intentionally left untouched (their glyphs
-    /// are always kept and they don't update the state) — a conservative
-    /// choice, since a wrongly-suppressed grace accidental is worse than
-    /// a redundant one.
+    /// Grace notes are read in MuseScore's order — a chord's graces before, then the chord, then its graces after
+    /// (`MeasureAccidentalWalk`) — and suppressed like any other note.
     ///
     /// **A percussion staff draws no accidental at all** — a drumset part
     /// (`Instrument.useDrumset`) or a `"percussion"` staff, the pair
@@ -112,6 +113,9 @@ extension Score {
         // each measure's voice-0 key signatures (last one wins), mirroring
         // `Score.activeKey`'s per-measure coarsening.
         var currentKey = 0
+        // Ties are paired against the measures as given; suppression only ever takes glyphs off, never a tpc.
+        let measures = staff.measures
+        let crossVoice = CrossVoiceTies.links(in: measures)
         for measureIndex in staff.measures.indices {
             if let leading = staff.measures[measureIndex].voices.first {
                 for el in leading.elements {
@@ -128,6 +132,9 @@ extension Score {
                 key: currentKey,
                 division: division,
                 measureDuration: dur,
+                tieStarts: MeasureAccidentalWalk.tieStartTPCs(
+                    in: measures, measureIndex: measureIndex, crossVoice: crossVoice,
+                ),
             )
         }
     }
@@ -145,45 +152,12 @@ extension Score {
         key: Int,
         division: Int,
         measureDuration: Fraction,
+        tieStarts: [MeasureAccidentalWalk.MainAddress: Int],
     ) {
         // Per-letter alteration implied by the key signature. Seeds the
         // state's default for each line.
         let keyAlteration = keyAlterationByLetter(forKey: key)
-
-        // A reference to one note, with its onset tick, so the measure's
-        // notes can be processed in tick order across every voice.
-        struct NoteRef {
-            let tick: Int
-            let voice: Int
-            let element: Int
-            let note: Int
-        }
-        var refs: [NoteRef] = []
-        for (voiceIndex, voice) in measure.voices.enumerated() {
-            var tick = 0
-            for (elementIndex, element) in voice.elements.enumerated() {
-                if case let .chord(chord) = element {
-                    for noteIndex in chord.notes.indices {
-                        refs.append(NoteRef(
-                            tick: tick,
-                            voice: voiceIndex,
-                            element: elementIndex,
-                            note: noteIndex,
-                        ))
-                    }
-                }
-                tick += element.tickCount(
-                    division: division, in: measureDuration,
-                ) ?? 0
-            }
-        }
-        // Tick order; ties broken by voice then in-chord index so the
-        // result is deterministic.
-        refs.sort { lhs, rhs in
-            if lhs.tick != rhs.tick { return lhs.tick < rhs.tick }
-            if lhs.voice != rhs.voice { return lhs.voice < rhs.voice }
-            return lhs.note < rhs.note
-        }
+        let refs = MeasureAccidentalWalk.noteRefs(in: measure, division: division, measureDuration: measureDuration)
 
         // Accidental state: written line → alteration currently in force, and whether it arrived only through a tie
         // from the previous bar (`AccidentalLineState.tiedOver` — the next note on that line keeps its accidental).
@@ -192,10 +166,7 @@ extension Score {
         var state: [LineKey: AccidentalLineState] = [:]
 
         for ref in refs {
-            guard case let .chord(chord) =
-                measure.voices[ref.voice].elements[ref.element]
-            else { continue }
-            let note = chord.notes[ref.note]
+            guard let note = MeasureAccidentalWalk.note(at: ref, in: measure.voices) else { continue }
 
             guard let spelled = spelling(pitch: note.pitch, tpc: note.tpc) else {
                 // Can't reliably derive the written line / alteration —
@@ -208,16 +179,16 @@ extension Score {
             var draws = note.accidental != nil
             if let accidental = note.accidental {
                 let isRedundant = !current.needsAccidental(for: spelled.alter)
-                if isRedundant,
+                let tiedKeepingItsSpelling = note.tieBack != nil
+                    && ref.mainAddress.flatMap { tieStarts[$0] } == note.tpc
+                if isRedundant || tiedKeepingItsSpelling,
                    note.accidentalRole == .auto,
                    isStandardAccidental(accidental)
                 {
-                    var mutated = chord
-                    mutated.notes.updateNote(at: ref.note) {
+                    MeasureAccidentalWalk.updateNote(at: ref, in: &measure.voices) {
                         $0.accidental = nil
                         $0.accidentalBracket = .none
                     }
-                    measure.voices[ref.voice].elements.updateValue(at: ref.element) { $0 = .chord(mutated) }
                     draws = false
                 }
                 // Otherwise the accidental is needed, USER-forced, or

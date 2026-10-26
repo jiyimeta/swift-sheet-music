@@ -145,9 +145,9 @@ public enum MeasureAccidentals {
                           durations.indices.contains(measureIndex)
                     else { continue }
                     commands.append(contentsOf: renotate(
-                        measure,
+                        measureIndex,
+                        of: staff.measures,
                         at: address,
-                        measureIndex: measureIndex,
                         keySig: current.activeKey(staff: address, measureIndex: measureIndex),
                         division: current.division,
                         measureDuration: durations[measureIndex],
@@ -183,9 +183,9 @@ public enum MeasureAccidentals {
                 for measureIndex in measureRange.clamped(to: staff.measures.indices) {
                     guard durations.indices.contains(measureIndex) else { continue }
                     commands.append(contentsOf: renotate(
-                        staff.measures[measureIndex],
+                        measureIndex,
+                        of: staff.measures,
                         at: address,
-                        measureIndex: measureIndex,
                         keySig: score.activeKey(staff: address, measureIndex: measureIndex),
                         division: score.division,
                         measureDuration: durations[measureIndex],
@@ -196,60 +196,56 @@ public enum MeasureAccidentals {
         return commands
     }
 
-    /// One measure's voices rewritten with the glyphs its notes actually need — one `ReplaceVoiceElements` per voice
-    /// that came out different, none for the voices that didn't.
+    /// `measures[measureIndex]`'s voices rewritten with the glyphs its notes actually need — one
+    /// `ReplaceVoiceElements` per voice that came out different, none for the voices that didn't. Grace notes are
+    /// read and rewritten in MuseScore's order (`MeasureAccidentalWalk`).
     ///
-    /// Three kinds of note are read for their alteration but never rewritten, mirroring
-    /// `Score.suppressingRedundantAccidentals()`'s conservatism plus MuseScore's tie rule:
+    /// A tied note follows MuseScore's tie rule (`Chord::cmdUpdateNotes`): spelled like the note it is tied from, it
+    /// draws no glyph, since the tie carries the alteration — and it marks its line (`AccidentalLineState.tiedOver`),
+    /// so the next note there restates its accidental. Spelled otherwise (F♯ held on as G♭) it is renotated like any
+    /// other note.
+    ///
+    /// Four kinds of note are read for their alteration but never rewritten:
     ///
     /// - a note whose written `(letter, octave, alteration)` can't be derived from its `pitch` / `tpc` — nothing
     ///   reliable can be said about it, so it also doesn't update the state;
     /// - a USER-forced accidental — a courtesy the user asked for, which is theirs to remove;
-    /// - a note tied back from the previous bar — the tie already carries the alteration across the barline, and
-    ///   MuseScore prints no glyph on the far side.
-    ///
-    /// That tied note still marks its line when it draws nothing (`AccidentalLineState.tiedOver`), so the next note
-    /// on the line restates its accidental even when the alteration is the same.
+    /// - a glyph that says more than the tpc knows (microtonal, courtesy combination);
+    /// - a tied note whose start can't be found (`MeasureAccidentalWalk.tieStartTPCs`).
     private static func renotate(
-        _ measure: Measure,
+        _ measureIndex: Int,
+        of measures: [Measure],
         at staff: StaffAddress,
-        measureIndex: Int,
         keySig: Int,
         division: Int,
         measureDuration: Fraction,
     ) -> [any EditCommand] {
+        let measure = measures[measureIndex]
+        let tieStarts = MeasureAccidentalWalk.tieStartTPCs(
+            in: measures, measureIndex: measureIndex,
+            crossVoice: CrossVoiceTies.links(in: measures, sourceMeasures: max(measureIndex - 1, 0) ... measureIndex),
+        )
         var voices = measure.voices
         var state: [Line: AccidentalLineState] = [:]
-        for ref in noteRefs(in: measure, division: division, measureDuration: measureDuration) {
-            guard case let .chord(chord) = voices[ref.voiceIndex].elements[ref.elementIndex] else { continue }
-            let note = chord.notes[ref.noteIndex]
-            guard let written = spelling(pitch: note.pitch, tpc: note.tpc) else { continue }
+        for ref in MeasureAccidentalWalk.noteRefs(in: measure, division: division, measureDuration: measureDuration) {
+            guard let note = MeasureAccidentalWalk.note(at: ref, in: voices),
+                  let written = spelling(pitch: note.pitch, tpc: note.tpc)
+            else { continue }
             let line = Line(letter: written.letter, octave: written.octave)
             let inForce = state[line]
                 ?? AccidentalLineState(alteration: keyAlteration(forLetter: written.letter, keySig: keySig))
-            // Only a tied note's glyph decides whether the line is marked, and tied notes are never rewritten below —
-            // so the glyph it has now is the one the next note is read against.
-            state[line] = inForce.after(note, alteration: written.alteration, drawsAccidental: note.accidental != nil)
-            guard note.accidentalRole != .user, note.tieBack == nil else { continue }
-            // A glyph already there that says more than the tpc knows (microtonal, courtesy combination) is not ours
-            // to replace on tpc evidence alone.
-            if let existing = note.accidental, !isStandard(existing) { continue }
-            let wanted: Accidental?
-            if !inForce.needsAccidental(for: written.alteration) {
-                wanted = nil
-            } else if let needed = AccidentalLineState.glyph(forAlteration: written.alteration) {
-                wanted = needed
-            } else {
-                // An alteration no single glyph can spell. Saying nothing beats clearing the sign it has.
-                continue
+            var drawn = note.accidental
+            if let wanted = glyph(
+                for: note, alteration: written.alteration, against: inForce,
+                tiedFrom: ref.mainAddress.flatMap { tieStarts[$0] },
+            ), wanted != note.accidental {
+                MeasureAccidentalWalk.updateNote(at: ref, in: &voices) {
+                    $0.accidental = wanted
+                    $0.accidentalBracket = wanted == nil ? .none : note.accidentalBracket
+                }
+                drawn = wanted
             }
-            guard wanted != note.accidental else { continue }
-            var mutated = chord
-            mutated.notes.updateNote(at: ref.noteIndex) {
-                $0.accidental = wanted
-                $0.accidentalBracket = wanted == nil ? .none : note.accidentalBracket
-            }
-            voices[ref.voiceIndex].elements.updateValue(at: ref.elementIndex) { $0 = .chord(mutated) }
+            state[line] = inForce.after(note, alteration: written.alteration, drawsAccidental: drawn != nil)
         }
         return voices.indices.compactMap { voiceIndex in
             guard voices[voiceIndex] != measure.voices[voiceIndex] else { return nil }
@@ -272,19 +268,28 @@ public enum MeasureAccidentals {
         let octave: Int
     }
 
-    /// One note of a measure, addressed across every voice and carrying the onset tick that orders it.
-    private struct NoteRef {
-        let tick: Int
-        let voiceIndex: Int
-        let elementIndex: Int
-        let noteIndex: Int
+    /// The glyph `note` should carry against `inForce`, or nil (outer) to leave the one it has — `tiedFrom` is the
+    /// tpc of the note it is tied from, when it is tied back and that start was found.
+    private static func glyph(
+        for note: Note, alteration: Int, against inForce: AccidentalLineState, tiedFrom: Int?,
+    ) -> Accidental?? {
+        guard note.accidentalRole != .user else { return nil }
+        if let existing = note.accidental, !isStandard(existing) { return nil }
+        if note.tieBack != nil {
+            guard let tiedFrom else { return nil }
+            if tiedFrom == note.tpc { return .some(nil) }
+        }
+        guard inForce.needsAccidental(for: alteration) else { return .some(nil) }
+        // An alteration no single glyph can spell: saying nothing beats clearing the sign it has.
+        return AccidentalLineState.glyph(forAlteration: alteration).map { .some($0) }
     }
 
     /// The alteration a reader already has in force on `line` when they reach `location`: the last one written on
     /// that line earlier in the bar, or the key signature's when the bar hasn't spoken about it yet.
     ///
     /// A note tied into the bar that draws no accidental is not "written" here — the reader never saw its alteration
-    /// in this bar — so it is read past, as MuseScore's `Measure::findAccidental` reads past it.
+    /// in this bar — so it is read past, as MuseScore's `Measure::findAccidental` reads past it. Grace notes of the
+    /// earlier chords count, as they do there.
     private static func alteration(
         inForceOn line: Line, before location: VoiceElementID, in score: Score, keySig: Int,
     ) -> Int {
@@ -305,43 +310,16 @@ public enum MeasureAccidentals {
             division: division, measureDuration: measureDuration,
         )
         var alteration = fallback
-        for ref in noteRefs(in: measure, division: division, measureDuration: measureDuration) {
+        for ref in MeasureAccidentalWalk.noteRefs(in: measure, division: division, measureDuration: measureDuration) {
             guard ref.tick < cutoff else { break }
-            guard case let .chord(chord) = measure.voices[ref.voiceIndex].elements[ref.elementIndex],
-                  !AccidentalLineState.isUnwrittenTie(chord.notes[ref.noteIndex]),
-                  let written = spelling(
-                      pitch: chord.notes[ref.noteIndex].pitch, tpc: chord.notes[ref.noteIndex].tpc,
-                  ),
+            guard let note = MeasureAccidentalWalk.note(at: ref, in: measure.voices),
+                  !AccidentalLineState.isUnwrittenTie(note),
+                  let written = spelling(pitch: note.pitch, tpc: note.tpc),
                   written.letter == line.letter, written.octave == line.octave
             else { continue }
             alteration = written.alteration
         }
         return alteration
-    }
-
-    /// Every note in the measure, in tick order across all voices; ties broken by voice then in-chord index so the
-    /// walk is deterministic. Grace notes ride on `Chord.graceNotesBefore` / `After` rather than on the voice, so
-    /// they are left out — same conservative choice ssm's suppression pass makes.
-    private static func noteRefs(in measure: Measure, division: Int, measureDuration: Fraction) -> [NoteRef] {
-        var refs: [NoteRef] = []
-        for (voiceIndex, voice) in measure.voices.enumerated() {
-            var tick = 0
-            for (elementIndex, element) in voice.elements.enumerated() {
-                if case let .chord(chord) = element {
-                    for noteIndex in chord.notes.indices {
-                        refs.append(NoteRef(
-                            tick: tick, voiceIndex: voiceIndex, elementIndex: elementIndex, noteIndex: noteIndex,
-                        ))
-                    }
-                }
-                tick += element.tickCount(division: division, in: measureDuration) ?? 0
-            }
-        }
-        return refs.sorted {
-            if $0.tick != $1.tick { return $0.tick < $1.tick }
-            if $0.voiceIndex != $1.voiceIndex { return $0.voiceIndex < $1.voiceIndex }
-            return $0.noteIndex < $1.noteIndex
-        }
     }
 
     private static func tickOffset(
