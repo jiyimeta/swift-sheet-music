@@ -57,7 +57,7 @@ struct MusicXMLTupletImportTests {
     /// The parts' strings cleared: MuseScore gives a part it recognizes as a guitar (testTuplets1) its instrument
     /// template's strings, which MusicXML does not carry — template data, like the fields
     /// `ignoreInstrumentPlaybackFields` clears.
-    private static func withoutStringData(_ score: Score) -> Score {
+    static func withoutStringData(_ score: Score) -> Score {
         var cleared = score
         cleared.parts.mapValues { part in
             var stringless = part

@@ -40,7 +40,7 @@ fixtures taken from the upstream MuseScore repository:
       src/importexport/musicxml/tests/data/
   - musicxml/ notation fixtures, each a `<name>.xml` with the
     `<name>_ref.mscx` MuseScore 4.7.4 wrote from it: testAccidentals1-3,
-    testImplicitMeasure1:
+    testImplicitMeasure1, testTremolo:
       src/importexport/musicxml/tests/data/
 
 They are reproduced here to allow the swift-sheet-music test suite to

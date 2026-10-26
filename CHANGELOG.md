@@ -127,6 +127,10 @@ and this project adheres to
   4 write it on the first alone and pair it with the next chord as they read it. A MuseScore 4 save now writes
   `<TremoloSingleChord>` / `<TremoloTwoChord>`, a MuseScore 3 save `<Tremolo>`, each on the first chord only. A file
   saved before, with the copy on the second chord, still reads as one pair.
+- **Every MusicXML creator is a meta tag.** The import kept a `<creator>` only when it was the composer, lyricist or
+  arranger; MuseScore names a meta tag after any creator's type, so a `poet` or an `editor` now comes in too. A creator
+  with no type is still the composer. MuseScore's testTremolo, whose poet showed it, now compares against the `.mscx`
+  MuseScore 4.7.4 writes, its one- and two-note tremolos included.
 
 ## [4.20.0] - 2026-10-24
 

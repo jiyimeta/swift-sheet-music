@@ -109,8 +109,9 @@ enum MSCXPreservation {
     private static let tremoloReason =
         "by design: unsupported tremolo embellishments are dropped after a diagnostic under the parser policy."
     private static let tremoloTwoChordReason =
-        "genuinely lost: the encoder writes a two-note tremolo back as <TremoloTwoChord>, but the tremolo keeps no "
-            + "eid in the model, so its <eid> is dropped."
+        "genuinely lost: the encoder writes a tremolo back as <TremoloSingleChord> / <TremoloTwoChord>, but the "
+            + "model's Tremolo keeps no eid and no color (testTremolo's colored one comes from a MusicXML color), so "
+            + "its <eid> and <color> are dropped."
     private static let soundIDReason =
         "genuinely lost, and not fixable by preserving it: MuseScore's <Instrument id> attribute "
             + "(template id) and <instrumentId> element (MusicXML Sound ID) hold different values, "
@@ -368,7 +369,7 @@ enum MSCXPreservation {
             "Chord/TremoloSingleChord", "TremoloSingleChord/subtype",
         ], because: tremoloReason, into: &result)
         allow([
-            "TremoloTwoChord/eid",
+            "TremoloTwoChord/eid", "TremoloSingleChord/eid", "TremoloSingleChord/color",
         ], because: tremoloTwoChordReason, into: &result)
         allow([
             "Tuplet/Number", "Number/style", "Number/text",

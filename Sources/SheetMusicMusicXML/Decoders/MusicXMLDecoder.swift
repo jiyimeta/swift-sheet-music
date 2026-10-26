@@ -81,17 +81,13 @@ extension Score {
             tags["movementNumber"] = number
         }
         if let id = root.first("identification") {
+            // MuseScore takes a creator's type as the meta tag's name, whatever it is — `poet`, `editor` — as
+            // well as the composer, lyricist and arranger it shows (`P1:1516-1519`).
             for creator in id.all("creator") {
                 let type = creator.attributes["type"] ?? "composer"
                 let value = creator.text
                 guard !value.isEmpty else { continue }
-                switch type {
-                case "composer", "lyricist", "arranger":
-                    tags[type] = value
-                default:
-                    // Unknown creator types (e.g. "editor") are out of seed scope.
-                    continue
-                }
+                tags[type] = value
             }
             let rights = id.all("rights")
                 .map(\.text)
