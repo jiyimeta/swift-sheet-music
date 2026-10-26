@@ -85,6 +85,12 @@ extension RevoiceBarPlanner {
         guard speller.appendRests(from: cursor, to: bar.meter.barTicks, into: &slots) else {
             return .failure(.unspellable)
         }
+        // `timelinePieces` takes every chord outside the carried tuplets and `memberSlots` only the chords on member
+        // onsets; `tupletUnits` refuses a chord between members, so each chord lands exactly once.
+        assert(
+            slots.compactMap { $0.chord?.onset } == chords.map(\.onset),
+            "a chord of the voice was laid out other than once: inside a carried tuplet but off its members",
+        )
         return .success(slots)
     }
 

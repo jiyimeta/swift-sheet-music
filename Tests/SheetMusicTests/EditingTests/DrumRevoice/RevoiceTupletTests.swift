@@ -12,6 +12,25 @@ struct RevoiceTupletTests {
         RevoiceDrumStaff(staff: RevoiceFixtures.staff, voiceForPitch: map, policy: .default).preview(in: score)
     }
 
+    /// A stream element that is not a chord or rest, and the tick it stands at.
+    private struct Annotation {
+        let tick: Int
+        let element: VoiceElement
+    }
+
+    /// Every element of `voice` that is not a chord or rest, with the tick it stands at in a 4/4 bar.
+    private static func annotations(of voice: Voice?) -> [Annotation] {
+        let bar = Fraction(numerator: 1, denominator: 1)
+        var tick = 0
+        var found: [Annotation] = []
+        for element in voice?.elements.values ?? [] {
+            defer { tick += element.cursorAdvance(division: RevoiceFixtures.division, in: bar) }
+            if case .chord = element { continue }
+            found.append(Annotation(tick: tick, element: element))
+        }
+        return found
+    }
+
     @Test func `a one-voice triplet sends its kicks to voice 2 as a triplet`() throws {
         let score = RevoiceFixtures.score([["3:2[H+K/8 H/8 H+K/8] H/4 H/2"]])
         let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
@@ -65,11 +84,47 @@ struct RevoiceTupletTests {
         try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
     }
 
+    /// Seven sixteenths in the time of four are 68 4/7 ticks each at 480 per quarter, so the group reads as 476 ticks
+    /// rather than its quarter; carried member by member it would leave its voice off by the difference. Bar 1 still
+    /// converts.
+    @Test func `a septuplet that does not fill whole ticks leaves the bar as written`() throws {
+        let score = RevoiceFixtures.score([
+            ["7:4[H/16 H/16 H/16 H/16 H/16 H/16 H/16] H/4 H/2", "K/4 r/4 r/2"], ["H/4 H/4 H/4 H/4", "K/4 r/4 r/2"],
+        ])
+        #expect(Self.preview(score, to: RevoiceFixtures.oneVoice)
+            == RevoicePreview(rewrittenMeasures: [1], measuresLeftAsWritten: [0]))
+        #expect(RevoiceFixtures.barPlan(score, measure: 0, to: RevoiceFixtures.oneVoice) == .leftAsWritten(.tuplets))
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.oneVoice)
+        #expect(after.parts[0].staves[0].measures[0].voices == score.parts[0].staves[0].measures[0].voices)
+        #expect(RevoiceFixtures.voices(after, measure: 1) == ["H+K/4 H/4 H/4 H/4"])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// The crash on 1 is tied to the one on beat 2, so it lasts a quarter, but it lands on the triplet's first member,
+    /// a third of that: inside the triplet it can neither keep its length nor take the member's.
+    @Test func `a tied hit that outlasts its triplet member leaves the bar as written`() {
+        let score = RevoiceFixtures.score([["3:2[H/8 H/8 H/8] H/4 H/2", "C/4~ ~C/4 r/2"]])
+        let plan = RevoiceFixtures.barPlan(score, measure: 0, to: RevoiceFixtures.oneVoice)
+        #expect(plan == .leftAsWritten(.audibleLength))
+        #expect(Self.preview(score, to: RevoiceFixtures.oneVoice)
+            == RevoicePreview(rewrittenMeasures: [], measuresLeftAsWritten: [0]))
+    }
+
     /// The triplet holds only hi-hats, so voice 2 receives nothing from it and reads that beat as an ordinary rest.
     @Test func `a tuplet with nothing for a voice is a plain rest there`() throws {
         let score = RevoiceFixtures.score([["3:2[H/8 H/8 H/8] H+K/4 H/2"]])
         let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
         #expect(RevoiceFixtures.voices(after, measure: 0) == ["3:2[H/8 H/8 H/8] H/4 H/2", "r/4 K/4 r/2"])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// The snare on 1 lands on the triplet's first member and joins it in voice 1. The kick on the "and" of 1 falls
+    /// between members, but no hit of the triplet goes to voice 2, so there the beat is ordinary time and the kick a
+    /// plain eighth beside voice 1's triplet.
+    @Test func `a kick off the triplet's grid in the other voice stays a plain eighth`() throws {
+        let score = RevoiceFixtures.score([["3:2[H/8 H/8 H/8] H/4 H/2", "S/8 K/8 r/4 r/2"]])
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["3:2[H+S/8 H/8 H/8] H/4 H/2", "r/8 K/8 r/4 r/2"])
         try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
     }
 
@@ -94,6 +149,52 @@ struct RevoiceTupletTests {
         let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
         let appearances = after[RevoiceFixtures.staff]?.measures[0].voices.map { $0.tuplets.values.map(\.appearance) }
         #expect(appearances == [[drawn], [drawn]])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// A side a one-voice file forced would put voice 2's bracket above the staff, into voice 1, so as with stems
+    /// (D3) the voice decides; the rest of how the tuplet is drawn travels.
+    @Test func `a carried tuplet's direction is left to its voice`() throws {
+        let forced = TupletAppearance(direction: .up, numberType: .ratio)
+        var score = RevoiceFixtures.score([["3:2[H+K/8 H/8 H+K/8] H/4 H/2"]])
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0].tuplets.updateValue(at: 0) { $0.appearance = forced }
+            }
+        }
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        let appearances = after[RevoiceFixtures.staff]?.measures[0].voices.map { $0.tuplets.values.map(\.appearance) }
+        let unforced = TupletAppearance(numberType: .ratio)
+        #expect(appearances == [[unforced], [unforced]])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// A dynamic before the triplet and a sticking on its second member stay in voice 1 at their ticks. The tuplet
+    /// spans its three members and the sticking between them, not the dynamic before them.
+    @Test func `annotations beside and inside a carried tuplet keep their ticks`() throws {
+        let meter = TimeSignature(numerator: 4, denominator: 4)
+        let dynamic = Dynamic(subtype: "p", velocity: 49)
+        let sticking = Sticking(text: "R")
+        var score = RevoiceFixtures.score([["3:2[H+K/8 H/8 H+K/8] H/4 H/2"]], meter: meter)
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                // [meter, H+K, H, H+K, H/4, H/2] becomes [meter, dynamic, H+K, sticking, H, H+K, H/4, H/2].
+                var elements = staff.measures[0].voices[0].elements.values
+                elements.insert(.sticking(sticking), at: 2)
+                elements.insert(.dynamic(dynamic), at: 1)
+                let tuplets: [Tuplet] = [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 5)]
+                staff.measures[0].voices[0] = Voice(elements: elements, tuplets: tuplets)
+            }
+        }
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0)
+            == ["3:2[H/8 H/8 H/8] H/4 H/2", "3:2[K/8 r/8 K/8] r/4 r/2"])
+        let voices = after[RevoiceFixtures.staff]?.measures[0].voices ?? []
+        let annotations = Self.annotations(of: voices.first)
+        #expect(annotations.map(\.tick) == [0, 0, 160])
+        #expect(annotations.map(\.element) == [.timeSignature(meter), .dynamic(dynamic), .sticking(sticking)])
+        #expect(Self.annotations(of: voices.last).isEmpty)
+        #expect(voices.first?.tupletSpans == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 5)])
         try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
     }
 

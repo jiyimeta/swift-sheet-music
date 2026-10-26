@@ -35,12 +35,15 @@ struct RevoiceTupletUnit: Equatable {
             && actualNotes == other.actualNotes && members == other.members
     }
 
-    /// The tuplet over slots `first ... last` of a written voice. It is always new: one source tuplet can be carried
-    /// into two voices, and one identifier cannot be held by both.
+    /// The tuplet over slots `first ... last` of a written voice, drawn as its source is except for its side: as with
+    /// a chord's stems (D3), the voice it now sits in decides, since a side a one-voice file forced would put voice
+    /// 2's bracket into voice 1. It is always new: one source tuplet can be carried into two voices, and one
+    /// identifier cannot be held by both.
     func slot(first: Int, last: Int) -> TupletSlot {
-        TupletSlot(identity: .fresh, tuplet: Tuplet(
-            normalNotes: normalNotes, actualNotes: actualNotes, startIndex: first, endIndex: last,
-            appearance: appearance,
+        var drawn = appearance
+        drawn.direction = nil
+        return TupletSlot(identity: .fresh, tuplet: Tuplet(
+            normalNotes: normalNotes, actualNotes: actualNotes, startIndex: first, endIndex: last, appearance: drawn,
         ))
     }
 }
@@ -61,9 +64,10 @@ enum RevoiceTimelinePiece {
 
 extension RevoiceBarPlanner {
     /// The tuplets one target voice carries, in onset order (design §4.5). A source tuplet is carried when one of
-    /// its members sends a hit to this voice; one that sends nothing is ordinary time here. Carried tuplets that
-    /// overlap must share span, ratio and member grid, and then merge into one, drawn as the first in source order;
-    /// every chord of the voice inside a carried tuplet must start on a member. Fails with `.tuplets` otherwise.
+    /// its members sends a hit to this voice; one that sends nothing is ordinary time here. A carried tuplet's
+    /// members must fill whole ticks; carried tuplets that overlap must share span, ratio and member grid, and then
+    /// merge into one, drawn as the first in source order; every chord of the voice inside a carried tuplet must start
+    /// on a member. Fails with `.tuplets` otherwise.
     static func tupletUnits(
         of chords: [RevoiceTargetChord], in bar: RevoiceBar, sources: SourceIndex,
     ) -> Result<[RevoiceTupletUnit], RevoiceKeepReason> {
@@ -71,6 +75,7 @@ extension RevoiceBarPlanner {
         var units: [RevoiceTupletUnit] = []
         for run in carried.sorted() {
             let unit = tupletUnit(ofRun: run, in: bar)
+            guard fillsWholeTicks(unit, in: bar) else { return .failure(.tuplets) }
             guard let overlapping = units.first(where: { $0.overlaps(unit) }) else {
                 units.append(unit)
                 continue
@@ -97,6 +102,20 @@ extension RevoiceBarPlanner {
             normalNotes: source.tuplet.normalNotes, actualNotes: source.tuplet.actualNotes,
             appearance: source.tuplet.appearance, onset: source.onset, length: source.length, members: members,
         )
+    }
+
+    /// The members' ticks add up to the exact length of their values. A member's ticks are truncated, so a group
+    /// whose values do not divide into whole ticks — seven sixteenths in the time of four are 68 4/7 ticks each at
+    /// 480 per quarter — comes out short (476 for its quarter), and a voice written around it would be off by the
+    /// difference: overfull, or short of the bar.
+    private static func fillsWholeTicks(_ unit: RevoiceTupletUnit, in bar: RevoiceBar) -> Bool {
+        let measure = Fraction(ticks: bar.meter.barTicks, division: bar.meter.division)
+        let exact = unit.members.reduce(Fraction(numerator: 0, denominator: 1)) { total, member in
+            total + member.duration.resolved(in: measure).asFraction
+        }
+        let scaled = exact.numerator * 4 * bar.meter.division
+        let ticks = unit.members.reduce(0) { $0 + $1.length }
+        return scaled % exact.denominator == 0 && scaled / exact.denominator == ticks
     }
 
     /// The voice's carried tuplets and the chords outside them, in onset order. A chord inside a tuplet is laid out
