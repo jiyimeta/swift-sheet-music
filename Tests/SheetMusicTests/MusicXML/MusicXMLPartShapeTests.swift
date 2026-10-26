@@ -225,6 +225,28 @@ struct MusicXMLPartShapeTests {
         #expect(Self.lengths(score) == [Fraction(numerator: 7, denominator: 128)])
     }
 
+    @Test("a measure one part calls implicit is left out of the bar numbers in every part (setIrregular)")
+    func implicitMeasureIsIrregular() throws {
+        let measures = [F.quarter("G"), F.fourQuarters]
+        let document = try #require(String(bytes: F.data(parts: [(measures, 1), (measures, 1)]), encoding: .utf8))
+        // Only the first part's pickup says so.
+        let first = try #require(document.range(of: "<measure number=\"1\">"))
+        let marked = document.replacingCharacters(in: first, with: "<measure number=\"0\" implicit=\"yes\">")
+        let score = try MusicXMLParser.parse(Data(marked.utf8))
+        #expect(score.parts.map { $0.staves[0].measures.map(\.irregular) } == [[true, false], [true, false]])
+        #expect([0, 1].map(score.displayedMeasureNumber(at:)) == [nil, 1])
+    }
+
+    @Test("implicit=\"no\" and no implicit leave a measure regular")
+    func explicitMeasureIsRegular() throws {
+        let document = try #require(String(bytes: F.data(parts: [([F.fourQuarters], 1)]), encoding: .utf8))
+        let marked = document.replacingOccurrences(
+            of: "<measure number=\"1\">", with: "<measure number=\"1\" implicit=\"no\">",
+        )
+        let score = try MusicXMLParser.parse(Data(marked.utf8))
+        #expect(score.parts[0].staves[0].measures.map(\.irregular) == [false])
+    }
+
     @Test("an <encoding><encoder> is MuseScore's encoder meta tag (testSibOttavas)")
     func encoderMetaTag() throws {
         let xml = """

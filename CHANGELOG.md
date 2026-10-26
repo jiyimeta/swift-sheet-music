@@ -99,6 +99,10 @@ and this project adheres to
   MuseScore takes it (a triplet written 6:2 is 3:2). A score saved before keeps its pairs as they were written —
   a pair saved without a `<duration>` still lasts its written value. The parity replay's step 46, which makes a
   two-note tremolo, has a new fingerprint for it.
+- **A MusicXML pickup is left out of the bar numbers.** A `<measure implicit="yes">` was numbered like any other, so
+  every bar after a pickup carried a number one too high. A measure any part calls implicit is now `irregular`, as
+  MuseScore's import makes it (`setIrregular`). A measure number the file skips or repeats still restarts nothing:
+  the model has no per-measure number offset (MuseScore's `noOffset`).
 
 ## [4.20.0] - 2026-10-24
 
