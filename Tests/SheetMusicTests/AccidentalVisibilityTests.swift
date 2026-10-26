@@ -137,6 +137,41 @@ struct AccidentalVisibilityTests {
         #expect(Self.accidental(out, measure: 1, chord: 0) == .sharp)
     }
 
+    // MARK: - A tie across the barline
+
+    @Test("A note after a tied-over sharp keeps its restated sharp; the one after it is covered")
+    func tiedOverSharpIsRestated() {
+        var start = Self.fSharp4()
+        start.tieForward = 1
+        let tied = Note(pitch: 66, tpc: 20, tieBack: 1)
+        let s = Self.score(measures: [
+            [(start, .whole)],
+            [(tied, .quarter), (Self.fSharp4(), .quarter), (Self.fSharp4(), .quarter)],
+        ])
+        let out = s.suppressingRedundantAccidentals()
+        #expect(Self.accidental(out, measure: 0, chord: 0) == .sharp)
+        #expect(Self.accidental(out, measure: 1, chord: 0) == nil)
+        // MuseScore's TIE_CONTEXT: the tied note drew no ♯, so the next F♯ restates it…
+        #expect(Self.accidental(out, measure: 1, chord: 1) == .sharp)
+        // …and that restatement covers the note after it.
+        #expect(Self.accidental(out, measure: 1, chord: 2) == nil)
+    }
+
+    @Test("A tied-over note that shows its own sharp covers the next one")
+    func tiedOverVisibleSharpCovers() {
+        var start = Self.fSharp4()
+        start.tieForward = 1
+        var tied = Self.fSharp4(role: .user)
+        tied.tieBack = 1
+        let s = Self.score(measures: [
+            [(start, .whole)],
+            [(tied, .quarter), (Self.fSharp4(), .quarter)],
+        ])
+        let out = s.suppressingRedundantAccidentals()
+        #expect(Self.accidental(out, measure: 1, chord: 0) == .sharp)
+        #expect(Self.accidental(out, measure: 1, chord: 1) == nil)
+    }
+
     // MARK: - Regression: every accidental needed → none removed
 
     @Test("All-needed accidentals → none removed")

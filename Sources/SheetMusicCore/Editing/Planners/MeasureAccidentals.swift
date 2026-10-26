@@ -207,6 +207,9 @@ public enum MeasureAccidentals {
     /// - a USER-forced accidental — a courtesy the user asked for, which is theirs to remove;
     /// - a note tied back from the previous bar — the tie already carries the alteration across the barline, and
     ///   MuseScore prints no glyph on the far side.
+    ///
+    /// That tied note still marks its line when it draws nothing (`AccidentalLineState.tiedOver`), so the next note
+    /// on the line restates its accidental even when the alteration is the same.
     private static func renotate(
         _ measure: Measure,
         at staff: StaffAddress,
@@ -216,22 +219,25 @@ public enum MeasureAccidentals {
         measureDuration: Fraction,
     ) -> [any EditCommand] {
         var voices = measure.voices
-        var state: [Line: Int] = [:]
+        var state: [Line: AccidentalLineState] = [:]
         for ref in noteRefs(in: measure, division: division, measureDuration: measureDuration) {
             guard case let .chord(chord) = voices[ref.voiceIndex].elements[ref.elementIndex] else { continue }
             let note = chord.notes[ref.noteIndex]
             guard let written = spelling(pitch: note.pitch, tpc: note.tpc) else { continue }
             let line = Line(letter: written.letter, octave: written.octave)
-            defer { state[line] = written.alteration }
+            let inForce = state[line]
+                ?? AccidentalLineState(alteration: keyAlteration(forLetter: written.letter, keySig: keySig))
+            // Only a tied note's glyph decides whether the line is marked, and tied notes are never rewritten below —
+            // so the glyph it has now is the one the next note is read against.
+            state[line] = inForce.after(note, alteration: written.alteration, drawsAccidental: note.accidental != nil)
             guard note.accidentalRole != .user, note.tieBack == nil else { continue }
             // A glyph already there that says more than the tpc knows (microtonal, courtesy combination) is not ours
             // to replace on tpc evidence alone.
             if let existing = note.accidental, !isStandard(existing) { continue }
-            let inForce = state[line] ?? keyAlteration(forLetter: written.letter, keySig: keySig)
             let wanted: Accidental?
-            if written.alteration == inForce {
+            if !inForce.needsAccidental(for: written.alteration) {
                 wanted = nil
-            } else if let needed = glyph(forAlteration: written.alteration) {
+            } else if let needed = AccidentalLineState.glyph(forAlteration: written.alteration) {
                 wanted = needed
             } else {
                 // An alteration no single glyph can spell. Saying nothing beats clearing the sign it has.
@@ -276,6 +282,9 @@ public enum MeasureAccidentals {
 
     /// The alteration a reader already has in force on `line` when they reach `location`: the last one written on
     /// that line earlier in the bar, or the key signature's when the bar hasn't spoken about it yet.
+    ///
+    /// A note tied into the bar that draws no accidental is not "written" here — the reader never saw its alteration
+    /// in this bar — so it is read past, as MuseScore's `Measure::findAccidental` reads past it.
     private static func alteration(
         inForceOn line: Line, before location: VoiceElementID, in score: Score, keySig: Int,
     ) -> Int {
@@ -299,6 +308,7 @@ public enum MeasureAccidentals {
         for ref in noteRefs(in: measure, division: division, measureDuration: measureDuration) {
             guard ref.tick < cutoff else { break }
             guard case let .chord(chord) = measure.voices[ref.voiceIndex].elements[ref.elementIndex],
+                  !AccidentalLineState.isUnwrittenTie(chord.notes[ref.noteIndex]),
                   let written = spelling(
                       pitch: chord.notes[ref.noteIndex].pitch, tpc: chord.notes[ref.noteIndex].tpc,
                   ),
@@ -374,19 +384,6 @@ public enum MeasureAccidentals {
         let expectedPitchClass = ((naturalSemi + alteration) % 12 + 12) % 12
         guard ((pitch % 12) + 12) % 12 == expectedPitchClass else { return nil }
         return (letter, (pitch - naturalSemi - alteration) / 12 - 1, alteration)
-    }
-
-    private static func glyph(forAlteration alteration: Int) -> Accidental? {
-        switch alteration {
-        case 0: .natural
-        case 1: .sharp
-        case -1: .flat
-        case 2: .doubleSharp
-        case -2: .doubleFlat
-        case 3: .tripleSharp
-        case -3: .tripleFlat
-        default: nil
-        }
     }
 
     /// Whether an accidental's alteration is fully captured by the tpc, and so may be replaced on tpc evidence

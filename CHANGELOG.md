@@ -9,6 +9,19 @@ and this project adheres to
 
 ### Fixed
 
+- **A note after a tie over the barline restates its accidental, as MuseScore does.** A note tied into a bar carries
+  its alteration without drawing it, so the reader has not seen that alteration written in the new bar — but both the
+  layout's suppression pass (`Score.suppressingRedundantAccidentals()`) and the editor's renotation
+  (`MeasureAccidentals.renotationCommands`) counted the tied note as if it had, so an F♯ later in the bar after a
+  tied-over F♯ drew no ♯, and an F♮ after a tied-over F♮ under D major drew no ♮. A tied note that draws no accidental
+  now marks its line the way MuseScore's `TIE_CONTEXT` does, and the next note on the line restates its accidental
+  even when the alteration is the same; the note after that is covered by the restatement as usual. A tied note that
+  shows its own accidental (a user-forced one) marks nothing, and neither does a tie inside one bar. A score saved by
+  MuseScore with such a restated ♯ now shows it, where the layout used to hide it.
+- **A letter key after a tie over the barline writes the key's spelling.** `MeasureAccidentals.plannedPitch` /
+  `plannedConcertPitch` read the alteration in force through a note tied into the bar, so the letter F after a
+  tied-over F♯ in C major wrote F♯ with no glyph. It now skips a tied note that draws no accidental of its own, as
+  MuseScore's `Measure::findAccidental` does, so the letter writes F♮ and renotation gives it its ♮.
 - **A MusicXML tuplet is a tuplet.** The import shortened each member by its `<time-modification>` and made no
   `Voice.tuplets` entry, so the page showed no bracket or number, and a MuseScore save wrote every member as a bare
   fraction (`<durationType>measure</durationType><duration>1/12</duration>`), which MuseScore opens as whole notes.

@@ -26,6 +26,10 @@ extension Score {
     /// order. Suppression is applied per staff (each staff has its own
     /// accidental state) and reset at every measure boundary.
     ///
+    /// A note tied over the barline that draws no accidental has not shown the reader its alteration in this bar, so
+    /// its line is marked (`AccidentalLineState.tiedOver`, MuseScore's `TIE_CONTEXT`) and the next note on it keeps
+    /// its accidental even when the alteration is the same.
+    ///
     /// Note: grace notes are intentionally left untouched (their glyphs
     /// are always kept and they don't update the state) — a conservative
     /// choice, since a wrongly-suppressed grace accidental is worse than
@@ -181,10 +185,11 @@ extension Score {
             return lhs.note < rhs.note
         }
 
-        // Accidental state: written line → alteration currently in force.
-        // Reset (empty) at the start of each measure; an absent line
-        // defaults to the key signature's alteration for that letter.
-        var state: [LineKey: Int] = [:]
+        // Accidental state: written line → alteration currently in force, and whether it arrived only through a tie
+        // from the previous bar (`AccidentalLineState.tiedOver` — the next note on that line keeps its accidental).
+        // Reset (empty) at the start of each measure; an absent line defaults to the key signature's alteration for
+        // that letter.
+        var state: [LineKey: AccidentalLineState] = [:]
 
         for ref in refs {
             guard case let .chord(chord) =
@@ -198,10 +203,11 @@ extension Score {
                 continue
             }
             let lineKey = LineKey(letter: spelled.letter, octave: spelled.octave)
-            let current = state[lineKey] ?? keyAlteration[spelled.letter] ?? 0
+            let current = state[lineKey] ?? AccidentalLineState(alteration: keyAlteration[spelled.letter] ?? 0)
 
+            var draws = note.accidental != nil
             if let accidental = note.accidental {
-                let isRedundant = spelled.alter == current
+                let isRedundant = !current.needsAccidental(for: spelled.alter)
                 if isRedundant,
                    note.accidentalRole == .auto,
                    isStandardAccidental(accidental)
@@ -212,13 +218,14 @@ extension Score {
                         $0.accidentalBracket = .none
                     }
                     measure.voices[ref.voice].elements.updateValue(at: ref.element) { $0 = .chord(mutated) }
+                    draws = false
                 }
                 // Otherwise the accidental is needed, USER-forced, or
                 // non-standard — keep it.
             }
             // The written alteration is now in force on this line for any
             // following note, whether or not a glyph was drawn.
-            state[lineKey] = spelled.alter
+            state[lineKey] = current.after(note, alteration: spelled.alter, drawsAccidental: draws)
         }
     }
 
