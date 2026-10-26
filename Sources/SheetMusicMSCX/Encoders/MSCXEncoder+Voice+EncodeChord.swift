@@ -18,7 +18,6 @@ extension Voice {
         prevVoiceTotal: Fraction?,
         voiceBarLength: Fraction,
         effectiveDuration: Fraction,
-        injectedTremolo: Tremolo?,
         previousChordNotes: ChordNotes? = nil,
         forwardTiePartnerNotes: ChordNotes? = nil,
         previousChordTrailingBendGrace: Int? = nil,
@@ -77,7 +76,6 @@ extension Voice {
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,
-                injectedTremolo: injectedTremolo,
             )
     }
 }

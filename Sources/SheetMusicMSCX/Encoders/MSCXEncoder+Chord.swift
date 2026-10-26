@@ -39,7 +39,6 @@ extension Chord {
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
-        injectedTremolo: Tremolo? = nil,
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         // `<eid>` is the first child MuseScore itself writes.
@@ -67,14 +66,11 @@ extension Chord {
         //   StemDirection → ChordLine / Articulation / Tremolo →
         //   Lyrics → Note.
         children += notationCluster(options: options)
-        // Tremolo sits with the ChordLine / Articulation cluster — after
-        // articulations and before Lyrics / Note. For two-chord tremolo
-        // (`span == .between`) the follower carries `tremolo == nil`
-        // on the model; the voice-level encoder threads the start's
-        // tremolo through `injectedTremolo` so MuseScore can round-trip
-        // read both `<Tremolo>` blocks back to a pair.
-        if let trem = tremolo ?? injectedTremolo {
-            children.append(trem.encodeXML())
+        // Tremolo sits with the ChordLine / Articulation cluster — after articulations and before Lyrics / Note. A
+        // two-chord tremolo is written on its first chord alone, as MuseScore 3 and 4 both write it (`Chord::write`
+        // skips the second chord); the reader pairs it with the next chord (`Measure::connectTremolo`).
+        if let tremolo {
+            children.append(tremolo.encodeXML(targetVersion: options.targetVersion))
         }
         // Stem properties (`<Stem><visible>0</visible></Stem>`) sit
         // before Lyrics/Notes, matching MuseScore's `Chord::write`

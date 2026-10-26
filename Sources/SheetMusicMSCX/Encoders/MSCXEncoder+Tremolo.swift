@@ -3,13 +3,11 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Tremolo {
-    /// Build the `<Tremolo>` MSCX element. `subtype + span` map to
-    /// MuseScore's eight-token alphabet (`r8/r16/r32/r64` single,
-    /// `c8/c16/c32/c64` between); `strokeStyle` round-trips the
-    /// `<strokeStyle>` integer
-    /// when non-default. Inverse of `MSCXDecoder+Tremolo.decode`.
-    /// C++: `mu::engraving::TremoloDispatcher::write`.
-    func encodeXML() -> XMLTreeNode {
+    /// Build the tremolo's MSCX element: MuseScore 4's `<TremoloSingleChord>` / `<TremoloTwoChord>`
+    /// (`TWrite::write(const TremoloTwoChord*)`), or MuseScore 3's `<Tremolo>`. `subtype + span` map to MuseScore's
+    /// eight-token alphabet (`r8/r16/r32/r64` single, `c8/c16/c32/c64` between); `strokeStyle` round-trips the
+    /// `<strokeStyle>` integer when non-default. Inverse of `MSCXDecoder+Tremolo.decode`.
+    func encodeXML(targetVersion: MSCXVersion) -> XMLTreeNode {
         let token: String
         switch (span, subtype) {
         case (.single, .r8): token = "r8"
@@ -31,6 +29,11 @@ extension Tremolo {
         case .z:
             children.append(XMLTreeNode(name: "strokeStyle", text: "2"))
         }
-        return XMLTreeNode(name: "Tremolo", children: children)
+        let name = switch (targetVersion, span) {
+        case (.v4, .single): "TremoloSingleChord"
+        case (.v4, .between): "TremoloTwoChord"
+        default: "Tremolo"
+        }
+        return XMLTreeNode(name: name, children: children)
     }
 }

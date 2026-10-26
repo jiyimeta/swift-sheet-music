@@ -122,18 +122,6 @@ extension Voice {
         let voiceBarLength = plan.voiceBarLength
         let effectiveDuration = plan.effectiveDuration
         let isLastChord = if case .chord = element { index == plan.lastChordIndex } else { false }
-        // Consume any pending follower tremolo from the previous start
-        // chord — only chord-bearing elements claim it; rests pass
-        // through. If the current chord is itself a `.between` start,
-        // stash its tremolo for the next chord-bearing element.
-        var injectedTremolo: Tremolo?
-        if case let .chord(chord) = element, !chord.notes.isEmpty {
-            injectedTremolo = state.pendingFollowerTremolo
-            state.pendingFollowerTremolo = nil
-            if let trem = chord.tremolo, trem.span == .between {
-                state.pendingFollowerTremolo = trem
-            }
-        }
         if case let .chord(chord) = element {
             emitGraceChords(
                 of: chord,
@@ -165,7 +153,6 @@ extension Voice {
             prevVoiceTotal: carryIn.prevVoiceTotal,
             voiceBarLength: voiceBarLength,
             effectiveDuration: effectiveDuration,
-            injectedTremolo: injectedTremolo,
             previousChordNotes: state.previousChordNotes,
             forwardTiePartnerNotes: plan.forwardTiePartnerNotes[index],
             previousChordTrailingBendGrace: state.previousChordTrailingBendGrace,
@@ -239,7 +226,6 @@ extension Voice {
         prevVoiceTotal: Fraction?,
         voiceBarLength: Fraction,
         effectiveDuration: Fraction,
-        injectedTremolo: Tremolo? = nil,
         previousChordNotes: ChordNotes? = nil,
         forwardTiePartnerNotes: ChordNotes? = nil,
         previousChordTrailingBendGrace: Int? = nil,
@@ -262,7 +248,6 @@ extension Voice {
                 prevVoiceTotal: prevVoiceTotal,
                 voiceBarLength: voiceBarLength,
                 effectiveDuration: effectiveDuration,
-                injectedTremolo: injectedTremolo,
                 previousChordNotes: previousChordNotes,
                 forwardTiePartnerNotes: forwardTiePartnerNotes,
                 previousChordTrailingBendGrace: previousChordTrailingBendGrace,

@@ -122,6 +122,11 @@ and this project adheres to
   `<spanFromOffset>` / `<spanToOffset>` MuseScore gives them (`createBarline`), so a save opens in MuseScore as a tick
   or a short bar line; ssm still draws them across the whole staff. A score that ends on one of the three ends on a
   plain bar line instead, as MuseScore's import ends it.
+- **A tremolo is saved the way MuseScore saves it.** The encoder wrote every tremolo under MuseScore 3's name
+  `<Tremolo>`, a MuseScore 4 save included, and wrote a two-note tremolo on both of its chords, where MuseScore 3 and
+  4 write it on the first alone and pair it with the next chord as they read it. A MuseScore 4 save now writes
+  `<TremoloSingleChord>` / `<TremoloTwoChord>`, a MuseScore 3 save `<Tremolo>`, each on the first chord only. A file
+  saved before, with the copy on the second chord, still reads as one pair.
 
 ## [4.20.0] - 2026-10-24
 
