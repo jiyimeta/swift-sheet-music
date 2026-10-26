@@ -25,6 +25,12 @@ struct RevoiceVoiceWrite: Equatable, Sendable {
     let voiceIndex: Int
     let slots: [VoiceSlot]
     let tupletSlots: [TupletSlot]
+
+    /// The voice this write leaves, identifiers aside: what `Voice`'s content equality compares — the elements, and
+    /// each tuplet's ratio, members and appearance.
+    var voice: Voice {
+        Voice(elements: slots.map(\.element), tuplets: tupletSlots.map(\.tuplet))
+    }
 }
 
 /// The decision for one bar.
@@ -134,11 +140,12 @@ struct RevoiceTargetChord {
 }
 
 extension RevoiceBarPlanner {
-    /// A bar not in the target form, written afresh from its hits (design §4.1–§4.4). Every voice up to the highest
+    /// A bar not in the target form, written afresh from its hits (design §4.1–§4.5). Every voice up to the highest
     /// one a hit lands in is written — one that no hit reaches as rests, so the bar's voices stay contiguous — and
-    /// every voice above it is removed. A voice whose rewrite reads exactly as it does now is not written, so the
-    /// undo holds only what moved. A bar where a chord cannot keep a length that is heard, or where a merge would put
-    /// a hit into a chord that rolls differently, is left as written instead.
+    /// every voice above it is removed. A voice whose rewrite reads exactly as it does now, tuplets included, is not
+    /// written, so the undo holds only what moved. A bar where a chord cannot keep a length that is heard, where a
+    /// tuplet cannot be carried or merged member by member, or where a merge would put a hit into a chord that rolls
+    /// differently, is left as written instead.
     static func rewrite(
         _ bar: RevoiceBar, voiceForPitch: [Int: Int], policy: RhythmSpellingPolicy,
     ) -> RevoiceBarPlan {
@@ -147,23 +154,28 @@ extension RevoiceBarPlanner {
         let chordsByVoice = targetChords(of: bar, voiceForPitch: voiceForPitch)
         var writes: [RevoiceVoiceWrite] = []
         for (voiceIndex, chords) in chordsByVoice.enumerated() {
+            let units: [RevoiceTupletUnit]
+            switch tupletUnits(of: chords, in: bar, sources: sources) {
+            case let .success(carried): units = carried
+            case let .failure(reason): return .leftAsWritten(reason)
+            }
             let laidOut: [RevoiceTimedSlot]
             switch timeline(
-                of: chords, voiceIndex: voiceIndex, in: bar, sources: sources, voiceForPitch: voiceForPitch,
-                policy: policy,
+                of: chords, units: units, voiceIndex: voiceIndex, in: bar, sources: sources,
+                voiceForPitch: voiceForPitch, policy: policy,
             ) {
             case let .success(timed): laidOut = timed
             case let .failure(reason): return .leftAsWritten(reason)
             }
             guard chords.allSatisfy({ rollsAlike($0, sources: sources) }) else { return .leftAsWritten(.markings) }
-            let slots = voiceSlots(
-                laidOut, voiceIndex: voiceIndex, voiceCount: chordsByVoice.count, in: bar, sources: sources,
+            let written = voiceWrite(
+                laidOut, units: units, voiceIndex: voiceIndex, voiceCount: chordsByVoice.count, in: bar,
+                sources: sources,
             )
-            guard let written = slots else { return .leftAsWritten(.annotationPlacement) }
-            let isUnchanged = bar.voices.indices.contains(voiceIndex)
-                && written.map(\.element) == bar.voices[voiceIndex].elements.values
+            guard let write = written else { return .leftAsWritten(.annotationPlacement) }
+            let isUnchanged = bar.voices.indices.contains(voiceIndex) && write.voice == bar.voices[voiceIndex]
             guard !isUnchanged else { continue }
-            writes.append(RevoiceVoiceWrite(voiceIndex: voiceIndex, slots: written, tupletSlots: []))
+            writes.append(write)
         }
         guard !writes.isEmpty || chordsByVoice.count < bar.voices.count else { return .untouched }
         return .rewrite(writes, voiceCountAfter: chordsByVoice.count)
@@ -171,16 +183,16 @@ extension RevoiceBarPlanner {
 
     /// Why a bar not in the target form is left as written before anything is written, nil when the writer takes it
     /// on. The writer carries every note whole, its ties with it, and gives each chord its length, its roll, its
-    /// visibility and its stem and beam visibility; a bar whose chords or rests carry more — a grace, an
-    /// articulation, a lyric, a tuplet — keeps it by staying as written (§4.7). So does a bar whose meter cannot be
-    /// read, whose cursor a location shift moves, whose two-note tremolo pairs a chord with its neighbor, or whose
-    /// notes glide or bend.
+    /// visibility and its stem and beam visibility, and each tuplet its ratio and how it is drawn; a bar whose chords
+    /// or rests carry more — a grace, an articulation, a lyric — keeps it by staying as written (§4.7). So does a bar
+    /// whose meter cannot be read, whose cursor a location shift moves, whose tuplets nest, whose two-note tremolo
+    /// pairs a chord with its neighbor, or whose notes glide or bend.
     static func reasonToLeave(_ bar: RevoiceBar) -> RevoiceKeepReason? {
         guard bar.isMeterReadable else { return .unsupported }
         if bar.annotations.contains(where: movesCursor) { return .unsupported }
+        if bar.hasNestedTuplets { return .unsupported }
         if bar.hits.contains(where: { glidesOrBends($0.note) }) { return .unsupported }
         if bar.chords.contains(where: { pairsWithNeighbor($0.chord) }) { return .unsupported }
-        if bar.voices.contains(where: { !$0.tuplets.isEmpty }) { return .tuplets }
         if bar.chords.contains(where: { carriesMarkings($0.chord) }) { return .markings }
         return nil
     }
@@ -237,21 +249,30 @@ extension RevoiceBarPlanner {
 
     // MARK: Slots
 
-    /// The voice as `ReplaceVoiceElements` takes it: each timed slot as a chord or a rest, and every annotation bound
-    /// for this voice before the slot that starts at its tick — after the last slot at the bar's end — in source
-    /// order. Nil when such a tick starts no slot of the voice.
-    private static func voiceSlots(
-        _ timeline: [RevoiceTimedSlot], voiceIndex: Int, voiceCount: Int, in bar: RevoiceBar, sources: SourceIndex,
-    ) -> [VoiceSlot]? {
+    /// The voice as `ReplaceVoiceElements` takes it: each timed slot as a chord or a rest, every annotation bound for
+    /// this voice before the slot that starts at its tick — after the last slot at the bar's end — in source order,
+    /// and each carried tuplet (`units`) over the slots of its members. Nil when such a tick starts no slot of the
+    /// voice.
+    private static func voiceWrite(
+        _ timeline: [RevoiceTimedSlot], units: [RevoiceTupletUnit], voiceIndex: Int, voiceCount: Int,
+        in bar: RevoiceBar, sources: SourceIndex,
+    ) -> RevoiceVoiceWrite? {
         let annotations = bar.annotations.filter { annotationVoice(of: $0, voiceCount: voiceCount) == voiceIndex }
         let starts = Set(timeline.map(\.onset) + [bar.meter.barTicks])
         guard annotations.allSatisfy({ starts.contains($0.tick) }) else { return nil }
         var slots: [VoiceSlot] = []
+        var memberIndices = [[Int]](repeating: [], count: units.count)
         for timed in timeline {
             slots += annotationSlots(annotations, at: timed.onset, voiceIndex: voiceIndex)
+            if let unit = timed.tuplet { memberIndices[unit].append(slots.count) }
             slots.append(chordSlot(timed, voiceIndex: voiceIndex, sources: sources))
         }
-        return slots + annotationSlots(annotations, at: bar.meter.barTicks, voiceIndex: voiceIndex)
+        slots += annotationSlots(annotations, at: bar.meter.barTicks, voiceIndex: voiceIndex)
+        let tuplets = zip(units, memberIndices).compactMap { unit, members -> TupletSlot? in
+            guard let first = members.first, let last = members.last else { return nil }
+            return unit.slot(first: first, last: last)
+        }
+        return RevoiceVoiceWrite(voiceIndex: voiceIndex, slots: slots, tupletSlots: tuplets)
     }
 
     /// The voice an annotation is written into: its own while the result still has it, voice 0 otherwise (§4.5).
