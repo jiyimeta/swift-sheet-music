@@ -1,0 +1,336 @@
+@testable import SheetMusicCore
+import Testing
+
+/// Chord markings and annotations on a drum staff (design 2026-10-26, drum voice conversion, §4.5; D1, D3, D5, D6). A
+/// chord's marks follow its notes — to every part when it splits, as a union when chords merge — a grace chord rides
+/// on the chord at its onset in the voice of its own pitches, and every annotation keeps its tick, the chords of its
+/// voice cut there. A marking that cannot travel without changing what plays leaves its bar as written.
+@Suite("RevoiceDrumStaff markings")
+struct RevoiceMarkingTests {
+    private static let accent = ChordArticulation(kind: .accent)
+    private static let staccato = ChordArticulation(kind: .staccato)
+    private static let caseOne = "H+K/8 H/8 H+S/8 H/8 H+K/8 H+K/8 H+S/8 H/8"
+
+    /// A stream element that is not a chord or rest, and the tick it stands at.
+    private struct Placed: Equatable {
+        let tick: Int
+        let element: VoiceElement
+    }
+
+    private static func preview(_ score: Score, to map: [Int: Int]) -> RevoicePreview {
+        RevoiceDrumStaff(staff: RevoiceFixtures.staff, voiceForPitch: map, policy: .default).preview(in: score)
+    }
+
+    /// `score` with the chord at `element` of bar `measure`'s voice `voice` changed by `edit`. Element 0 of bar 0's
+    /// voice 0 is the time signature.
+    private static func marking(
+        _ score: Score, measure: Int = 0, voice: Int = 0, element: Int, _ edit: (inout Chord) -> Void,
+    ) -> Score {
+        RevoiceFixtures.editingChord(score, measure: measure, voice: voice, element: element, edit)
+    }
+
+    /// `score` with `element` inserted at `index` of bar `measure`'s voice `voice`, a voice that holds no tuplet.
+    private static func inserting(
+        _ element: VoiceElement, into score: Score, measure: Int = 0, voice: Int = 0, at index: Int,
+    ) -> Score {
+        var result = score
+        result.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                var elements = staff.measures[measure].voices[voice].elements.values
+                elements.insert(element, at: index)
+                staff.measures[measure].voices[voice] = Voice(elements: elements)
+            }
+        }
+        return result
+    }
+
+    /// A grace chord of `drums`, in the fixtures' letters, drawn as an eighth.
+    private static func grace(_ type: GraceType, _ drums: String) -> GraceChord {
+        guard case let .chord(chord)? = RevoiceFixtures.voice("\(drums)/8").elements.first else {
+            preconditionFailure("\(drums) is no chord")
+        }
+        return GraceChord(graceType: type, duration: .eighth, notes: chord.notes)
+    }
+
+    /// The chords and rests of bar `measure`'s voice `voice`, in order.
+    private static func chords(_ score: Score, measure: Int = 0, voice: Int) -> [Chord] {
+        guard let voices = score[RevoiceFixtures.staff]?.measures[measure].voices, voices.indices.contains(voice) else {
+            return []
+        }
+        return voices[voice].elements.compactMap { element in
+            guard case let .chord(chord) = element else { return nil }
+            return chord
+        }
+    }
+
+    /// Every element of bar 0's voice `voice` that is not a chord or rest, with the tick it stands at in a 4/4 bar.
+    private static func annotations(_ score: Score, voice: Int) -> [Placed] {
+        guard let voices = score[RevoiceFixtures.staff]?.measures[0].voices, voices.indices.contains(voice) else {
+            return []
+        }
+        let bar = Fraction(numerator: 1, denominator: 1)
+        var tick = 0
+        var found: [Placed] = []
+        for element in voices[voice].elements {
+            defer { tick += element.cursorAdvance(division: RevoiceFixtures.division, in: bar) }
+            if case .chord = element { continue }
+            found.append(Placed(tick: tick, element: element))
+        }
+        return found
+    }
+
+    // MARK: Chord marks (§4.5, D1, D3)
+
+    @Test func `an accent on a split chord goes to both parts`() throws {
+        let score = Self.marking(RevoiceFixtures.score([["H+K/4 H/4 H/4 H/4"]]), element: 1) { chord in
+            chord.articulations = [Self.accent]
+        }
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["H/4 H/4 H/4 H/4", "K/4 r/4 r/2"])
+        #expect(Self.chords(after, voice: 0).first?.articulations == [Self.accent])
+        #expect(Self.chords(after, voice: 1).first?.articulations == [Self.accent])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// D1: the kick merged with an accented snare takes the accent. In bar 1 both carry one, and the kick adds a
+    /// staccato: the union lists each kind once, the snare's first.
+    @Test func `merged chords take the union of their marks`() throws {
+        var score = RevoiceFixtures.score([
+            ["S/4 H/4 H/4 H/4", "K/4 r/4 r/2"], ["S/4 H/4 H/4 H/4", "K/4 r/4 r/2"],
+        ])
+        score = Self.marking(score, element: 1) { $0.articulations = [Self.accent] }
+        score = Self.marking(score, measure: 1, element: 0) { $0.articulations = [Self.accent] }
+        score = Self.marking(score, measure: 1, voice: 1, element: 0) { chord in
+            chord.articulations = [Self.staccato, Self.accent]
+        }
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.oneVoice)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["S+K/4 H/4 H/4 H/4"])
+        let merged = Self.chords(after, voice: 0).first
+        #expect(merged?.notes.map(\.pitch) == [36, 38])
+        #expect(merged?.articulations == [Self.accent])
+        #expect(Self.chords(after, measure: 1, voice: 0).first?.articulations == [Self.accent, Self.staccato])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    @Test func `a converted chord drops its forced stem`() throws {
+        let score = Self.marking(RevoiceFixtures.score([["H+K/4 H/4 H/4 H/4"]]), element: 1) { chord in
+            chord.stemDirection = .up
+            chord.beamStemDirection = .up
+        }
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["H/4 H/4 H/4 H/4", "K/4 r/4 r/2"])
+        let parts = [Self.chords(after, voice: 0).first, Self.chords(after, voice: 1).first]
+        #expect(parts.map { $0?.stemDirection } == [nil, nil])
+        #expect(parts.map { $0?.beamStemDirection } == [nil, nil])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// A chord-level line and the lyric stay with the part in the lowest voice; a line written on one note goes with
+    /// that note, its index naming the note in the part it lands in.
+    @Test func `chord lines and lyrics stay with the lowest part`() throws {
+        let fall = ChordLine(kind: .fall)
+        let lyric = Lyric(text: "la")
+        let score = Self.marking(RevoiceFixtures.score([["C+K/4 H/4 H/4 H/4"]]), element: 1) { chord in
+            // Notes ascend: index 0 is the kick, 1 the crash.
+            chord.chordLines = [fall, ChordLine(kind: .scoop, noteIndex: 0), ChordLine(kind: .doit, noteIndex: 1)]
+            chord.lyrics = [lyric]
+        }
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["C/4 H/4 H/4 H/4", "K/4 r/4 r/2"])
+        let crash = Self.chords(after, voice: 0).first
+        let kick = Self.chords(after, voice: 1).first
+        #expect(crash?.chordLines == [fall, ChordLine(kind: .doit, noteIndex: 0)])
+        #expect(kick?.chordLines == [ChordLine(kind: .scoop, noteIndex: 0)])
+        #expect(crash?.lyrics == [lyric])
+        #expect(kick?.lyrics == [])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    @Test func `an arpeggio on a split chord leaves the bar`() throws {
+        let score = Self.marking(
+            RevoiceFixtures.score([["H+K/4 H/4 H/4 H/4"], ["H+K/4 H/4 H/4 H/4"]]), element: 1,
+        ) { $0.arpeggio = Arpeggio(subtype: 0) }
+        #expect(Self.preview(score, to: RevoiceFixtures.handsAndFeet)
+            == RevoicePreview(rewrittenMeasures: [1], measuresLeftAsWritten: [0]))
+        #expect(RevoiceFixtures.barPlan(score, measure: 0, to: RevoiceFixtures.handsAndFeet)
+            == .leftAsWritten(.markings))
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(after.parts[0].staves[0].measures[0].voices == score.parts[0].staves[0].measures[0].voices)
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// The same regression A3 covers (`a kick merged onto a rolled snare leaves the bar as written`), kept here as the
+    /// table's tremolo row.
+    @Test func `a plain kick onto a rolled snare leaves the bar`() {
+        let score = Self.marking(RevoiceFixtures.score([["S/4 H/4 H/4 H/4", "K/4 r/4 r/2"]]), element: 1) { chord in
+            chord.tremolo = Tremolo(subtype: .r16)
+        }
+        #expect(Self.preview(score, to: RevoiceFixtures.oneVoice)
+            == RevoicePreview(rewrittenMeasures: [], measuresLeftAsWritten: [0]))
+        #expect(RevoiceFixtures.barPlan(score, measure: 0, to: RevoiceFixtures.oneVoice) == .leftAsWritten(.markings))
+    }
+
+    /// In one voice each kick merges with the snare on 1: bar 0's snare has a trill the kick lacks, bar 1's two
+    /// chords both carry a lyric, and bar 2's kick carries a slur that would change voice.
+    @Test func `marks two chords cannot share leave their bars`() {
+        let slur = Spanner(kind: .slur, rawType: "Slur", nextFractionsOffset: Fraction(numerator: 1, denominator: 4))
+        var score = RevoiceFixtures.score(Array(repeating: ["S/4 H/4 H/4 H/4", "K/4 r/4 r/2"], count: 3))
+        score = Self.marking(score, element: 1) { $0.ornaments = [ChordOrnament(kind: .trill)] }
+        score = Self.marking(score, measure: 1, element: 0) { $0.lyrics = [Lyric(text: "la")] }
+        score = Self.marking(score, measure: 1, voice: 1, element: 0) { $0.lyrics = [Lyric(text: "da")] }
+        score = Self.marking(score, measure: 2, voice: 1, element: 0) { $0.spanners = [slur] }
+        #expect(Self.preview(score, to: RevoiceFixtures.oneVoice)
+            == RevoicePreview(rewrittenMeasures: [], measuresLeftAsWritten: [0, 1, 2]))
+        for measure in 0 ..< 3 {
+            #expect(RevoiceFixtures.barPlan(score, measure: measure, to: RevoiceFixtures.oneVoice)
+                == .leftAsWritten(.markings))
+        }
+    }
+
+    // MARK: Grace chords (§4.5)
+
+    @Test func `a flam stays with the snare`() throws {
+        let flam = Self.grace(.acciaccatura, "S")
+        let score = Self.marking(RevoiceFixtures.score([["S+K/4 H/4 H/4 H/4"]]), element: 1) { chord in
+            chord.graceNotesBefore = [flam]
+        }
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["S/4 H/4 H/4 H/4", "K/4 r/4 r/2"])
+        #expect(Self.chords(after, voice: 0).first?.graceNotesBefore.values == [flam])
+        #expect(Self.chords(after, voice: 1).first?.graceNotesBefore.isEmpty == true)
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// The grace kick belongs in voice 2, which holds no chord on 1. Bar 1 still converts.
+    @Test func `a grace with no chord to land on leaves the bar`() throws {
+        let score = Self.marking(
+            RevoiceFixtures.score([["H/4 H/4 H/4 H/4"], ["H+K/4 H/4 H/4 H/4"]]), element: 1,
+        ) { $0.graceNotesBefore = [Self.grace(.acciaccatura, "K")] }
+        #expect(Self.preview(score, to: RevoiceFixtures.handsAndFeet)
+            == RevoicePreview(rewrittenMeasures: [1], measuresLeftAsWritten: [0]))
+        #expect(RevoiceFixtures.barPlan(score, measure: 0, to: RevoiceFixtures.handsAndFeet)
+            == .leftAsWritten(.markings))
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// An appoggiatura takes its time from the head of its chord, delaying every note of it; riding with the snare
+    /// alone, it would leave the kick sounding earlier than it did.
+    @Test func `a grace that delays its chord leaves the bar when the chord splits`() {
+        let score = Self.marking(RevoiceFixtures.score([["S+K/4 H/4 H/4 H/4"]]), element: 1) { chord in
+            chord.graceNotesBefore = [Self.grace(.appoggiatura, "S")]
+        }
+        #expect(RevoiceFixtures.barPlan(score, measure: 0, to: RevoiceFixtures.handsAndFeet)
+            == .leftAsWritten(.markings))
+    }
+
+    /// After-graces sound in their chord's tail. Free, the hi-hat on 1 would become a quarter and the grace would sound
+    /// an eighth later; it keeps its eighth.
+    @Test func `after-graces keep their chord's length`() throws {
+        let grace = Self.grace(.grace8after, "S")
+        let score = Self.marking(RevoiceFixtures.score([["H+K/8 r/8 H/4 H/2"]]), element: 1) { chord in
+            chord.graceNotesAfter = [grace]
+        }
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["H/8 r/8 H/4 H/2", "K/4 r/4 r/2"])
+        #expect(Self.chords(after, voice: 0).first?.graceNotesAfter.values == [grace])
+        #expect(Self.chords(after, voice: 1).first?.graceNotesAfter.isEmpty == true)
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// The kick's after-grace snare goes to voice 1 and rides on the hi-hat on 1, which takes the kick's eighth so the
+    /// grace sounds where it did. Free, the hi-hat would keep its quarter and the grace would sound an eighth later.
+    @Test func `an after-grace handed to another chord keeps its timing`() throws {
+        let grace = Self.grace(.grace8after, "S")
+        let score = Self.marking(
+            RevoiceFixtures.score([["H/4 H/4 H/4 H/4", "K/8 r/8 r/4 r/2"]]), voice: 1, element: 0,
+        ) { $0.graceNotesAfter = [grace] }
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["H/8 r/8 H/4 H/4 H/4", "K/4 r/4 r/2"])
+        #expect(Self.chords(after, voice: 0).first?.graceNotesAfter.values == [grace])
+        #expect(Self.chords(after, voice: 1).first?.graceNotesAfter.isEmpty == true)
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// The hi-hat on 1 is tied to the one on 2, so it lasts its quarter; the kick's after-grace would need it to end
+    /// after an eighth.
+    @Test func `an after-grace host that must last longer leaves the bar`() {
+        let score = Self.marking(
+            RevoiceFixtures.score([["H/4~ ~H/4 H/4 H/4", "K/8 r/8 r/4 r/2"]]), voice: 1, element: 0,
+        ) { $0.graceNotesAfter = [Self.grace(.grace8after, "S")] }
+        #expect(RevoiceFixtures.barPlan(score, measure: 0, to: RevoiceFixtures.handsAndFeet)
+            == .leftAsWritten(.markings))
+    }
+
+    // MARK: Annotations (§4.5, D5, D6)
+
+    /// Review Focus 1: the sticking on the "and" of 1 stays in voice 1 while its kick goes to voice 2, so the hi-hat on
+    /// 1 is cut there rather than reaching beat 2.
+    @Test func `a sticking keeps its tick when its kick moves away`() throws {
+        let sticking = Sticking(text: "R")
+        let score = Self.inserting(.sticking(sticking), into: RevoiceFixtures.score([["H+K/8 K/8 H/4 H/2"]]), at: 2)
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["H/8 r/8 H/4 H/2", "K/8 K/8 r/4 r/2"])
+        #expect(Self.annotations(after, voice: 0).last == Placed(tick: 240, element: .sticking(sticking)))
+        #expect(Self.annotations(after, voice: 1).isEmpty)
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// Review Focus 5: a MusicXML chart's rest-only voice 2 carries a dynamic. The voice goes, the dynamic moves to
+    /// voice 1 at its tick, and voice 1 keeps every chord as it was.
+    @Test func `a dynamic in a rest-only voice 2 moves to voice 1 at its tick`() throws {
+        let dynamic = Dynamic(subtype: "p", velocity: 49)
+        let score = Self.inserting(
+            .dynamic(dynamic), into: RevoiceFixtures.score([["H/4 H/4 H/4 H/4", "r/4 r/4 r/2"]]), voice: 1, at: 1,
+        )
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.oneVoice)
+        #expect(after.parts[0].staves[0].measures[0].voices.count == 1)
+        #expect(Self.annotations(after, voice: 0).last == Placed(tick: 480, element: .dynamic(dynamic)))
+        #expect(Self.chords(after, voice: 0) == Self.chords(score, voice: 0))
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// D6: from the bar of the first dynamic that plays in its own voice only, no bar moves a note between voices.
+    @Test func `a voice-only dynamic holds the rest of the staff`() throws {
+        let voiceOnly = Dynamic(subtype: "p", velocity: 49, voiceAssignment: .currentVoiceOnly)
+        let score = Self.inserting(
+            .dynamic(voiceOnly), into: RevoiceFixtures.score(Array(repeating: [Self.caseOne], count: 3)), measure: 1,
+            at: 0,
+        )
+        #expect(Self.preview(score, to: RevoiceFixtures.handsAndFeet)
+            == RevoicePreview(rewrittenMeasures: [0], measuresLeftAsWritten: [1, 2]))
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(after.parts[0].staves[0].measures.map(\.voices.count) == [2, 1, 1])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// The sticking on the "and" of 1 in voice 2 lands in voice 1, inside the snare's roll on 1, which keeps its
+    /// quarter: no chord can start there.
+    @Test func `an annotation inside a roll leaves the bar`() {
+        var score = RevoiceFixtures.score([["S/4 H/4 H/4 H/4", "r/8 r/8 K/4 r/2"]])
+        score = Self.marking(score, element: 1) { $0.tremolo = Tremolo(subtype: .r16) }
+        score = Self.inserting(.sticking(Sticking(text: "R")), into: score, voice: 1, at: 1)
+        #expect(RevoiceFixtures.barPlan(score, measure: 0, to: RevoiceFixtures.oneVoice)
+            == .leftAsWritten(.annotationPlacement))
+    }
+
+    /// A fermata holds the chord after it for as long as that chord lasts. Free, the crash would reach beat 2 and the
+    /// hold would double; it keeps its eighth.
+    @Test func `a fermata keeps the length of the chord it holds`() throws {
+        let fermata = Fermata(subtype: "fermataAbove", timeStretch: 2)
+        let score = Self.inserting(.fermata(fermata), into: RevoiceFixtures.score([["C+K/8 r/8 r/4 r/2"]]), at: 1)
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["C/8 r/8 r/4 r/2", "K/4 r/4 r/2"])
+        #expect(Self.annotations(after, voice: 0).last == Placed(tick: 0, element: .fermata(fermata)))
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// A caesura's pause delays every later note of its voice, so a bar whose notes would change voice around one is
+    /// left as written.
+    @Test func `a caesura inside a bar leaves it as written`() {
+        let caesura = Breath(kind: .caesura(.normal), pause: 0.5)
+        let score = Self.inserting(.breath(caesura), into: RevoiceFixtures.score([["H+K/4 H/4 H/4 H/4"]]), at: 3)
+        #expect(RevoiceFixtures.barPlan(score, measure: 0, to: RevoiceFixtures.handsAndFeet)
+            == .leftAsWritten(.unsupported))
+    }
+}
