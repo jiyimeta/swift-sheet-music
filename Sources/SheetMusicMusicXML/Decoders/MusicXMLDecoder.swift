@@ -175,7 +175,7 @@ extension Score {
         let lanes = laneElements.map { SystemMeasure(elements: laneOrdered($0)) }
         // MuseScore numbers an implicit brace's column `bracketLevels + 1`, which leaves column 0 empty; it draws an
         // empty column at no width, where ssm's gutter gives every column up to the highest one a spatium.
-        let measured = MusicXMLMeasureLengths(parts: lengths).applied(to: parts)
+        let measured = gatheringRepeats(MusicXMLMeasureLengths(parts: lengths).applied(to: parts))
         let compacted = Score.canonicalizingBracketColumns(addingFinalBarLines(measured))
         return (parts: compacted, systemMeasures: lanes)
     }

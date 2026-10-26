@@ -63,6 +63,15 @@ and this project adheres to
   hides — gone from the page and from a MuseScore save. A written sharp, flat or natural whose alteration is the
   key's on its line is now a `user` accidental, as MuseScore's import makes it (`markUserAccidentals`), unless an
   earlier note of the measure on that line took an accidental the key does not imply.
+- **MusicXML bar lines and repeats land where MuseScore puts them.** An end bar line went into whichever voice wrote
+  the measure's last note, and a bar line inside the measure at the end of that voice; both now go into the first
+  voice, the inner one at its own tick. A repeat was set on every staff of the part that wrote it and is now the
+  measure's, kept on the score's first staff as the model keeps every repeat (`SetRepeatBarLines`). Only a
+  light-heavy backward or heavy-light forward bar line — or a repeat with no style — is a repeat, as in MuseScore's
+  `determineBarLineType`: a light-heavy repeat end no longer adds an `end` bar line of its own, and another style with
+  a repeat draws that style and repeats nothing. `<repeat times>` is the end repeat's count (it was always 2),
+  `heavy-heavy` is MuseScore's `double-heavy` (it was `heavy`), a light-heavy bar line away from the end is `end`
+  (it was `final`, no MuseScore type), and a style MuseScore does not read makes no bar line.
 
 ## [4.20.0] - 2026-10-24
 

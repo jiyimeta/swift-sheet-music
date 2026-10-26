@@ -174,20 +174,15 @@ struct StaffMeasureBuilder {
         voices[idx] = elements
     }
 
+    /// A bar line at the measure's start or end; one inside it is placed by the clock (`decodeBarlineChild`). A repeat
+    /// is the measure's whichever edge the file wrote it on, as MuseScore keeps it (`setRepeatStart` / `setRepeatEnd`).
     mutating func apply(barline: MusicXMLBarlineDecoder.Decoded) {
+        if barline.startRepeat { startRepeat = true }
+        if let count = barline.endRepeatCount { endRepeatCount = count }
+        guard let line = barline.inline else { return }
         switch barline.placement {
-        case .start:
-            if barline.startRepeat { startRepeat = true }
-            if let line = barline.inline {
-                appendToDefaultVoice(.barLine(line))
-            }
-        case .middle:
-            if let line = barline.inline {
-                appendToDefaultVoice(.barLine(line))
-            }
-        case .end:
-            if let count = barline.endRepeatCount { endRepeatCount = count }
-            if let line = barline.inline { trailingBarline = line }
+        case .start, .middle: appendToDefaultVoice(.barLine(line))
+        case .end: trailingBarline = line
         }
     }
 
@@ -207,17 +202,12 @@ struct StaffMeasureBuilder {
             settled.appendPadding(padding, voice: idx, at: settled.anchors[idx].last?.end ?? .zeroTick)
         }
         var final = settled.voices
+        // The end bar line goes into the first voice, whichever voice wrote the last note (`P2:5819-5831`).
         if let trailing = trailingBarline {
             if final.isEmpty {
                 final.append([])
             }
-            let targetIdx: Int
-            if let id = defaultVoiceId, let idx = voiceIndex[id] {
-                targetIdx = idx
-            } else {
-                targetIdx = 0
-            }
-            final[targetIdx].append(.barLine(trailing))
+            final[0].append(.barLine(trailing))
         }
         let builtVoices = final.isEmpty
             ? [Voice(elements: [])]

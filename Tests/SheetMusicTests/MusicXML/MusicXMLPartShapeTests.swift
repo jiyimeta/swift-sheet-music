@@ -100,6 +100,92 @@ struct MusicXMLPartShapeTests {
         #expect(last.map { element in if case .barLine = element { true } else { false } } != true)
     }
 
+    // MARK: - Bar lines and repeats
+
+    private static func barline(
+        _ style: String?,
+        repeat direction: String? = nil,
+        location: String = "right",
+        times: String? = nil,
+    ) -> String {
+        let styleTag = style.map { "<bar-style>\($0)</bar-style>" } ?? ""
+        let repeatTag = direction.map { direction in
+            "<repeat direction=\"\(direction)\"\(times.map { " times=\"\($0)\"" } ?? "")/>"
+        } ?? ""
+        return "<barline location=\"\(location)\">\(styleTag)\(repeatTag)</barline>"
+    }
+
+    private static func barLines(in voice: Voice) -> [BarLine] {
+        voice.elements.values.compactMap { element in
+            if case let .barLine(line) = element { line } else { nil }
+        }
+    }
+
+    /// Two halves in voice 1, then two in voice 2 after a backup, `between` written after voice 2's first half.
+    private static func twoVoices(between: String = "") -> String {
+        F.half("C") + F.half("D") + "<backup><duration>1920</duration></backup>"
+            + F.half("E", octave: 3, voice: 2) + between + F.half("F", octave: 3, voice: 2)
+    }
+
+    @Test("the end bar line goes into the first voice, whichever voice wrote the last note")
+    func endBarLineInTheFirstVoice() throws {
+        let score = try F.score(measures: [Self.twoVoices() + Self.barline("light-light")])
+        let measure = score.parts[0].staves[0].measures[0]
+        #expect(Self.barLines(in: measure.voices[0]) == [BarLine(subtype: "double")])
+        #expect(Self.barLines(in: measure.voices[1]).isEmpty)
+    }
+
+    @Test("a bar line inside the measure goes into the first voice at its tick")
+    func middleBarLineAtItsTick() throws {
+        let score = try F.score(measures: [Self.twoVoices(between: Self.barline("dashed", location: "middle"))])
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
+        let kinds = voice.elements.values.map { element -> String in
+            switch element {
+            case .chord: "chord"
+            case let .barLine(line): line.subtype ?? "normal"
+            default: "other"
+            }
+        }
+        // The score's closing normal bar line follows.
+        #expect(kinds.filter { $0 != "other" } == ["chord", "dashed", "chord", "normal"])
+        #expect(Self.barLines(in: score.parts[0].staves[0].measures[0].voices[1]).isEmpty)
+    }
+
+    @Test("a light-heavy backward repeat ends the repeat and draws no bar line of its own; times is the count")
+    func endRepeatIsAFlag() throws {
+        let end = Self.barline("light-heavy", repeat: "backward", times: "3")
+        let measure = try F.score(measures: [F.fourQuarters + end]).parts[0].staves[0].measures[0]
+        #expect(measure.endRepeatCount == 3)
+        #expect(Self.barLines(in: measure.voices[0]).isEmpty)
+    }
+
+    @Test("a repeat in another style is that style's bar line and repeats nothing, as in MuseScore")
+    func otherStyleWithRepeatIsALine() throws {
+        let score = try F.score(measures: [F.fourQuarters + Self.barline("light-light", repeat: "backward")])
+        let measure = score.parts[0].staves[0].measures[0]
+        #expect(measure.endRepeatCount == nil)
+        #expect(Self.barLines(in: measure.voices[0]) == [BarLine(subtype: "double")])
+    }
+
+    @Test("a heavy-heavy bar line is MuseScore's double-heavy")
+    func heavyHeavyIsDoubleHeavy() throws {
+        let score = try F.score(measures: [F.fourQuarters + Self.barline("heavy-heavy")])
+        #expect(Self.barLines(in: score.parts[0].staves[0].measures[0].voices[0]) == [BarLine(subtype: "double-heavy")])
+    }
+
+    @Test("repeats sit on the score's first staff alone, whichever part wrote them")
+    func repeatsOnTheFirstStaff() throws {
+        let start = Self.barline("heavy-light", repeat: "forward", location: "left")
+        let end = Self.barline(nil, repeat: "backward")
+        let score = try F.score(parts: [[F.fourQuarters], [start + F.fourQuarters + end]])
+        let first = score.parts[0].staves[0].measures[0]
+        #expect(first.startRepeat)
+        #expect(first.endRepeatCount == 2)
+        let second = score.parts[1].staves[0].measures[0]
+        #expect(!second.startRepeat)
+        #expect(second.endRepeatCount == nil)
+    }
+
     // MARK: - Measure length
 
     private static let threeQuarters = ["C", "D", "E"].map { F.quarter($0) }.joined()

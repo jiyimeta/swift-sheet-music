@@ -228,11 +228,18 @@ extension MusicXMLMeasureWalker {
     }
 
     /// A `<barline>`: applied to every staff; a `<fermata>` in it ends the tempo lines inferred on the part's first
-    /// staff, at the clock (`P2:5835-5860`).
+    /// staff, at the clock (`P2:5835-5860`). A bar line inside the measure goes into each staff's first voice at the
+    /// clock (`addBarlineToMeasure`), placed among the notes as a direction is.
     static func decodeBarlineChild(_ child: XMLTreeNode, state: inout MusicXMLMeasureState) {
         let decoded = MusicXMLBarlineDecoder.decode(child)
-        for builder in state.builders.indices {
-            state.builders[builder].apply(barline: decoded)
+        for staff in state.builders.indices {
+            if decoded.placement == .middle, let line = decoded.inline {
+                state.directionEvents.append(MusicXMLDirectionEvent(
+                    measure: state.measureIndex, staff: staff, tick: state.clock.now, payload: .voice(.barLine(line)),
+                ))
+            } else {
+                state.builders[staff].apply(barline: decoded)
+            }
         }
         guard !child.all("fermata").isEmpty else { return }
         let now = state.clock.now
