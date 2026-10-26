@@ -45,6 +45,17 @@ struct RevoiceAudibleLengthTests {
         try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
     }
 
+    /// The crash on beat 2 ends the tie from beat 1, so it keeps its eighth. Were its length free, it would reach
+    /// beat 3 as a quarter and ring an eighth longer.
+    @Test func `a tie arriving in a bar keeps the tied note's length`() throws {
+        let score = RevoiceFixtures.score([["C/4~ ~C/8 r/8 r/2", "K/4 r/4 r/2"]])
+        #expect(FormatRhythmsGate.danglingTies(in: score) == 0)
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.oneVoice)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["C+K/4 ~C/8 r/8 r/2"])
+        #expect(FormatRhythmsGate.danglingTies(in: after) == 0)
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
     /// The design's own example (§4.4): in one voice the kick on the "and" of 1 would start inside the snare roll on
     /// 1, so bar 0 stays as written and bar 1 still converts.
     @Test func `a roll with a kick inside it leaves the bar as written`() throws {
