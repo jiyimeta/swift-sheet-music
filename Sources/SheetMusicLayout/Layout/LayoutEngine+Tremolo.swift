@@ -27,7 +27,7 @@ extension LayoutEngine {
         metrics: StaffMetrics,
     ) -> CGFloat {
         guard let trem = chord.tremolo,
-              isFlaggedDuration(chord.duration)
+              isFlaggedDuration(chord.drawnDuration)
         else { return 0 }
         let blockH = barBlockHeight(
             barCount: Int(trem.subtype.rawValue),

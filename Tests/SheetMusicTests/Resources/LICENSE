@@ -35,7 +35,8 @@ fixtures taken from the upstream MuseScore repository:
       src/importexport/musicxml/tests/data/
   - musicxml/ tuplet fixtures, each a `<name>.xml` with the
     `<name>_ref.mscx` MuseScore 4.7.4 wrote from it: testTuplets1-7,
-    testTuplets9, testIncompleteTuplet, testTupletTie:
+    testTuplets9, testIncompleteTuplet, testTupletTie,
+    testTwoNoteTremoloTuplet:
       src/importexport/musicxml/tests/data/
 
 They are reproduced here to allow the swift-sheet-music test suite to

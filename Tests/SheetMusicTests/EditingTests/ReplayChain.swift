@@ -83,6 +83,11 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
     /// One deliberate exception, 2026-10-26: the fingerprint after step 43 (the acciaccatura D♯4) moved when
     /// renotation began keeping grace-note glyphs true, as MuseScore does — the grace now carries its ♯. An engine
     /// change, not a wire one: no `step-N.bin` changed, and every other fingerprint stayed put.
+    ///
+    /// And a second, the same day: the fingerprint after step 46 (the `.between` tremolo) moved when making a two-note
+    /// tremolo began writing both chords twice as long as they last (`Chord.isWrittenDoubled`), as MuseScore's
+    /// `Chord::setTremoloTwoChord` does. Again an engine change: no `step-N.bin` changed, and step 47, which breaks
+    /// the pair, still lands back on step 44's fingerprint.
     static let parity = ReplayChain(
         name: "parity",
         androidAssetDir: "editReplay-parity",

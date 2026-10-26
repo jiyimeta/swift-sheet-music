@@ -17,9 +17,9 @@ struct MusicXMLTupletImportTests {
     /// sees them, and every tuplet's ratio and members. Not its look — MuseScore's import sets the `<tuplet>`'s
     /// `bracket`, `show-number` and `placement` on the tuplet but leaves them styled, so its writer drops them
     /// (`TWrite::writeProperty` skips a styled property); `appearanceFollowsTheTupletMark` covers that instead.
-    /// The refs are `mscore` saves like the direction fixtures', so they compare under the same allowances. Not
-    /// vendored: `testTwoNoteTremoloTuplet` — the import reads no two-note tremolo, so its members keep the tremolo's
-    /// 2:1 in their values where MuseScore gives them their written ones, and its 6:2 tuplet is not MuseScore's 3:2.
+    /// The refs are `mscore` saves like the direction fixtures', so they compare under the same allowances.
+    /// `testTwoNoteTremoloTuplet` holds two-note tremolos, one of them inside a triplet written 6:2 — the tremolo's 2
+    /// times the triplet's 3:2.
     static let tupletFixtures: [String] = [
         "testTuplets1",
         "testTuplets2",
@@ -31,6 +31,7 @@ struct MusicXMLTupletImportTests {
         "testTuplets9",
         "testIncompleteTuplet",
         "testTupletTie",
+        "testTwoNoteTremoloTuplet",
     ]
 
     /// The fixtures whose notes compare as well — all of them.

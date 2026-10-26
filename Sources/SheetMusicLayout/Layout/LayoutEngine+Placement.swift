@@ -828,7 +828,7 @@ extension LayoutEngine {
                         : 1.0
                     let mainElement: LayoutElement = .chord(
                         notes: chordNotes,
-                        duration: chord.duration,
+                        duration: chord.drawnDuration,
                         stem: stem,
                         stemOrigin: CGPoint(x: chordX, y: staffMidY),
                         hasArpeggio: chord.arpeggio != nil,
@@ -987,7 +987,7 @@ extension LayoutEngine {
                         for: chord.chordLines,
                         chordNotes: chordNotes,
                         chordX: chordX,
-                        dots: DurationInterpretation.splitNote(chord.duration).dots,
+                        dots: DurationInterpretation.splitNote(chord.drawnDuration).dots,
                         stem: stem,
                         staffMidY: staffMidY,
                         // The chord's own magnification — C++:
@@ -1021,7 +1021,7 @@ extension LayoutEngine {
                         if let bars = makeTremoloBarsElement(
                             tremolo: trem,
                             owner: elementAddress,
-                            duration: chord.duration,
+                            duration: chord.drawnDuration,
                             chordX: chordX,
                             chordNotes: chordNotes,
                             stem: stem,
@@ -1760,7 +1760,7 @@ extension LayoutEngine {
                     anchorSteps.append(anchorStep)
                     anchorYs.append(anchorY)
                     if case let .chord(c) = voice.elements[memberIdx] {
-                        memberLevels.append(beamLevel(c.duration))
+                        memberLevels.append(beamLevel(c.drawnDuration))
                     } else {
                         memberLevels.append(0)
                     }

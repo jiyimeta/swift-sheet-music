@@ -302,6 +302,8 @@ struct FNV1a {
         combine(chord.beamVisible)
         combineOccupied(chord.stemDirection, tag: 120)
         combineOccupied(chord.beamStemDirection, tag: 121)
+        // By occupants too: a chord written as long as it lasts — every chord but a two-note tremolo's — feeds nothing.
+        if chord.isWrittenDoubled { combine(122) }
         combineOccupied(chord.spanners, tag: 32)
         combineOccupied(chord.elementProperties, visibleTag: 29, colorTag: 30, placementTag: 68)
     }

@@ -58,7 +58,7 @@ extension Chord {
             ))
         }
         let chordCarriesSmall = appendChordLevelSmall(for: notes, to: &children)
-        duration.appendDurationXML(to: &children)
+        appendWrittenDuration(to: &children)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         // Articulations sit between durationType and the first
         // <Lyrics>/<Note>: matches MuseScore's Chord::write ordering
@@ -157,6 +157,20 @@ extension Chord {
         }
         appendChordTail(to: &children, options: options)
         return XMLTreeNode(name: "Chord", children: children)
+    }
+
+    /// `<durationType>` (and `<dots>`) for the value the chord is drawn as, then — for a chord written doubled, a
+    /// two-note tremolo's — the `<duration>` it lasts, as MuseScore writes a chord whose length is not its written
+    /// value (`TWrite::writeProperties(const ChordRest*)`). `duration` is already out of any tuplet here
+    /// (`encodeChord`), and so is the `<duration>`, as MuseScore's `ticks()` is.
+    private func appendWrittenDuration(to children: inout [XMLTreeNode]) {
+        guard isWrittenDoubled, duration != .measure, drawnDuration != duration else {
+            duration.appendDurationXML(to: &children)
+            return
+        }
+        drawnDuration.appendDurationXML(to: &children)
+        let played = duration.asFraction
+        children.append(XMLTreeNode(name: "duration", text: "\(played.numerator)/\(played.denominator)"))
     }
 
     /// Append the modeled arpeggio and chord bracket, element properties, and

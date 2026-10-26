@@ -27,7 +27,9 @@ extension Chord {
             ))
         }
         let dots = Int(node.first("dots")?.text ?? "0") ?? 0
-        let duration = baseDuration.dotted(dots)
+        let written = baseDuration.dotted(dots)
+        let played = playedDuration(written: written, node: node)
+        let duration = played ?? written
         var notes = try decodeNotes(node)
         applyNoteParenGroup(node, to: &notes)
 
@@ -84,11 +86,24 @@ extension Chord {
             stemVisible: stemVisible,
             // `auto` is MuseScore's default, which it does not write; one read anyway leaves the layout to decide.
             stemDirection: node.first("StemDirection").flatMap { StemDirectionOverride(mscxValue: $0.text) },
-            preservedMarkup: node.preservedMarkup(consuming: consumedChordChildren),
+            preservedMarkup: node.preservedMarkup(
+                consuming: played == nil ? consumedChordChildren : consumedChordChildren.union(["duration"]),
+            ),
         )
+        chord.isWrittenDoubled = played != nil
         chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         chord.spanners = decodeChordSpanners(node)
         return chord
+    }
+
+    /// How long a chord written doubled lasts — a two-note tremolo's chord, whose `<durationType>` MuseScore writes
+    /// twice its `<duration>` (`Chord::setTremoloTwoChord`) — spelled as the decoder spells a length; nil for any
+    /// other chord, a `<duration>` that is not half the written value included, which stays preserved markup.
+    private static func playedDuration(written: NoteDuration, node: XMLTreeNode) -> NoteDuration? {
+        guard written != .measure, let text = node.first("duration")?.text, let played = Fraction(mscxString: text),
+              Fraction(numerator: played.numerator * 2, denominator: played.denominator) == written.asFraction
+        else { return nil }
+        return NoteDuration.canonical(played)
     }
 
     /// `<Slur>` payload children this decoder either models or knowingly

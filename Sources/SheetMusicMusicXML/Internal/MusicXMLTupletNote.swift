@@ -31,8 +31,12 @@ struct MusicXMLTupletNote {
         let normal = modification?.first("normal-notes").flatMap { Int($0.text) } ?? 0
         if MusicXMLDuration.isUnmarkedTripletRest(note: node, divisions: divisions) {
             (actualNotes, normalNotes) = (3, 2)
+        } else if actual > 0, normal > 0 {
+            // A two-note tremolo's end carries the tremolo's 2 in its actual notes; the tuplet is what is left.
+            let tremolo = MusicXMLTremolo.isTwoNote(node) && actual.isMultiple(of: 2)
+            (actualNotes, normalNotes) = (tremolo ? actual / 2 : actual, normal)
         } else {
-            (actualNotes, normalNotes) = actual > 0 && normal > 0 ? (actual, normal) : (1, 1)
+            (actualNotes, normalNotes) = (1, 1)
         }
         normalType = modification?.first("normal-type")
             .flatMap { NoteDuration(mscxName: $0.text)?.asFraction }

@@ -51,8 +51,32 @@ struct SetTremoloTests {
         let value = Tremolo(subtype: .r16, span: .between)
         _ = try SetTremolo(at: Self.slot(0, 1), tremolo: value).apply(to: &score)
         #expect(Self.tremolo(score, Self.slot(0, 1)) == value)
-        // The follower is untouched: this model stores the pair one-sidedly.
+        // The follower carries no tremolo: this model stores the pair one-sidedly.
         #expect(Self.tremolo(score, Self.slot(0, 2)) == nil)
+    }
+
+    private static func chord(_ score: Score, _ id: VoiceElementID) -> Chord? {
+        if case let .chord(chord)? = score[id] { chord } else { nil }
+    }
+
+    @Test("making a two-note tremolo writes both chords twice as long, keeping their lengths; breaking it undoes that")
+    func betweenDoublesTheWrittenValue() throws {
+        var score = EditingFixtures.parityFixture()
+        let before = score
+        let (start, follower) = (Self.slot(0, 1), Self.slot(0, 2))
+        let lengths = [start, follower].map { Self.chord(score, $0)?.duration }
+        let inverse = try SetTremolo(at: start, tremolo: Tremolo(subtype: .r8, span: .between)).apply(to: &score)
+        #expect([start, follower].map { Self.chord(score, $0)?.isWrittenDoubled } == [true, true])
+        #expect([start, follower].map { Self.chord(score, $0)?.duration } == lengths)
+        // Another stroke count keeps the pair, so nothing doubles twice.
+        _ = try SetTremolo(at: start, tremolo: Tremolo(subtype: .r16, span: .between)).apply(to: &score)
+        #expect([start, follower].map { Self.chord(score, $0)?.isWrittenDoubled } == [true, true])
+        _ = try SetTremolo(at: start, tremolo: Tremolo(subtype: .r8, span: .between)).apply(to: &score)
+        _ = try inverse.apply(to: &score)
+        #expect(score == before)
+        _ = try SetTremolo(at: start, tremolo: Tremolo(subtype: .r8, span: .between)).apply(to: &score)
+        _ = try SetTremolo(at: start, tremolo: Tremolo(subtype: .r8, span: .single)).apply(to: &score)
+        #expect([start, follower].map { Self.chord(score, $0)?.isWrittenDoubled } == [false, false])
     }
 
     @Test("a .between tremolo is refused over a rest and at the end of a bar")

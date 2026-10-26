@@ -81,6 +81,18 @@ and this project adheres to
   computed stems, as in MuseScore. The MusicXML import puts a note's `<stem>` where MuseScore's does
   (`handleBeamAndStemDir`): on the beam when the note begins one, on the chord when no beam holds it.
   `<stem>none</stem>` is not read yet.
+- **A two-note tremolo lasts as long as it is meant to, and MusicXML tremolos are read.** MuseScore writes a two-note
+  tremolo's chords twice as long as they last — `<durationType>half</durationType><duration>1/4</duration>` — and the
+  decoder took the written half as the length, so MuseScore's own pair of halves sounded a whole and overfilled its
+  bar. `Chord.isWrittenDoubled` now says a chord is written twice its `duration`: the decoder reads such a pair with
+  its true length, the layout draws it by `Chord.drawnDuration` (heads, flags, beams, dots) and the encoder writes
+  both back. `SetTremolo` doubles and restores both chords' written value as it makes and breaks a pair, as
+  MuseScore's `Chord::setTremoloTwoChord` does, so two quarters under the tremolo draw as halves and still fill a
+  half. The MusicXML import reads `<tremolo>`, which it ignored: one on a note alone becomes its tremolo, and a
+  start and stop become a pair written doubled, the tremolo's 2 taken out of a tuplet's time modification as
+  MuseScore takes it (a triplet written 6:2 is 3:2). A score saved before keeps its pairs as they were written —
+  a pair saved without a `<duration>` still lasts its written value. The parity replay's step 46, which makes a
+  two-note tremolo, has a new fingerprint for it.
 
 ## [4.20.0] - 2026-10-24
 

@@ -34,6 +34,9 @@ struct StaffMeasureBuilder {
     private var tupletTrackers: [Int: MusicXMLTupletTracker] = [:]
     /// Each positional voice's open beam, as the element index of the chord that began it (MuseScore's `currBeams`).
     private var openBeams: [Int: Int] = [:]
+    /// Each positional voice's two-note tremolo waiting for its second note, as the element index of its first
+    /// (MuseScore's `m_tremStart`).
+    private var openTremolos: [Int: Int] = [:]
 
     /// Result of `build()`: the decoded `Measure` and the system
     /// elements that should be merged into the score-level
@@ -118,6 +121,40 @@ struct StaffMeasureBuilder {
         if openBeams[idx] == nil { chord.stemDirection = stem.direction }
         voices[idx][elementIndex] = .chord(chord)
         if stem.beamMode == .end { openBeams[idx] = nil }
+    }
+
+    /// After the voice's last chord was appended: its `<tremolo>` as MuseScore's `addTremolo` takes it
+    /// (`P2:6691-6777`). One on the note alone is the chord's. A two-note tremolo's first note waits; its second makes
+    /// the pair — the first chord carries the tremolo, with the second's marks — and both chords are written twice as
+    /// long as they last (`Chord.isWrittenDoubled`), their time already halved by the 2 in their `<time-modification>`.
+    /// A second note with no first, or a first with no second, makes none.
+    mutating func applyTremolo(_ tremolo: MusicXMLTremolo, toVoice voiceId: String) {
+        let idx = internVoice(voiceId)
+        guard let elementIndex = anchors[idx].last?.elementIndex,
+              case var .chord(chord) = voices[idx][elementIndex], !chord.notes.isEmpty
+        else { return }
+        switch tremolo {
+        case let .single(subtype):
+            chord.tremolo = Tremolo(subtype: subtype, span: .single)
+        case .start:
+            openTremolos[idx] = elementIndex
+            return
+        case let .stop(subtype):
+            guard let first = openTremolos.removeValue(forKey: idx), first != elementIndex,
+                  case var .chord(start) = voices[idx][first]
+            else { return }
+            start.tremolo = Tremolo(subtype: subtype, span: .between)
+            Self.writeDoubled(&start)
+            voices[idx][first] = .chord(start)
+            Self.writeDoubled(&chord)
+        }
+        voices[idx][elementIndex] = .chord(chord)
+    }
+
+    /// `chord` written twice as long as it lasts, its length spelled as the MSCX decoder spells one.
+    private static func writeDoubled(_ chord: inout Chord) {
+        chord.isWrittenDoubled = true
+        if chord.duration != .measure { chord.duration = NoteDuration.canonical(chord.duration.asFraction) }
     }
 
     /// Ends the voice's open beam unfinished (`removeBeam`), taking back the direction its first chord gave it.

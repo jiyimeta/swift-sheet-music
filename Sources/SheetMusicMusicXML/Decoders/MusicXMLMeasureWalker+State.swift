@@ -112,6 +112,9 @@ extension MusicXMLMeasureWalker {
                 state.builders[staffIdx].append(element, toVoice: voice, start: start, end: start + duration)
             }
             state.builders[staffIdx].applyStem(MusicXMLStemBeam(node: child), toVoice: voice)
+            if let tremolo = MusicXMLTremolo(note: child) {
+                state.builders[staffIdx].applyTremolo(tremolo, toVoice: voice)
+            }
             if !duration.isZeroTick { state.chordStart = start }
             state.clock.advance(by: duration)
             if let tuplet {

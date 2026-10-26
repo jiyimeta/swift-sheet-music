@@ -105,6 +105,11 @@ public struct Chord: Sendable, Equatable {
     /// which is why it lives here as `beamVisible` does; MusicXML's `<stem>` on the note that begins a `<beam>`. It
     /// wins over every rule for the beam's direction (`BeamLayout::layout1`).
     public var beamStemDirection: StemDirectionOverride?
+    /// The chord is written twice as long as it lasts — a two-note tremolo's chord, which MuseScore writes so: adding
+    /// the tremolo doubles each chord's written type and keeps its length (`Chord::setTremoloTwoChord`), and a file
+    /// says it with a `<durationType>` twice its `<duration>`. `duration` stays the time the chord takes; the value it
+    /// is drawn as is `drawnDuration`.
+    public var isWrittenDoubled = false
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
 

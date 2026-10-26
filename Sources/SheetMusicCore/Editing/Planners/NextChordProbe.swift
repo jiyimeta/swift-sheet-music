@@ -24,11 +24,21 @@ enum NextChordProbe {
     /// whole measure (`SetMeasureRepeat` replaces every note and rest of the bar with it), so no chord
     /// `location` can resolve to shares a voice with one for this walk to ever reach.
     static func nextTimedElement(after location: VoiceElementID, in score: Score) -> VoiceElement? {
+        nextTimedElementID(after: location, in: score).flatMap { score[$0] }
+    }
+
+    /// Where `nextTimedElement(after:in:)` finds its element.
+    static func nextTimedElementID(after location: VoiceElementID, in score: Score) -> VoiceElementID? {
         guard let voice = score[voice: VoiceRef(location)],
               voice.elements.indices.contains(location.elementIndex)
         else { return nil }
         for index in (location.elementIndex + 1) ..< voice.elements.count {
-            if case .chord = voice.elements[index] { return voice.elements[index] }
+            if case .chord = voice.elements[index] {
+                return VoiceElementID(
+                    staff: location.staff, measureIndex: location.measureIndex, voiceIndex: location.voiceIndex,
+                    elementIndex: index,
+                )
+            }
         }
         return nil
     }

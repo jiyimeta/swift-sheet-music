@@ -8,9 +8,12 @@ import SheetMusicFoundation
 /// of a bar produces a pair whose second half does not exist — the decoder drops exactly that shape on the way
 /// back in. `.single` has no such requirement.
 ///
-/// The follower is not modified. MuseScore writes the same `<Tremolo>` on both members and the decoder strips it
-/// from the second (`MSCXDecoder+Voice.resolveTremoloPairs`), so this model's one-sided storage is the canonical
-/// form and the encoder re-doubles it on the way out.
+/// The follower carries no tremolo of its own. MuseScore writes the same `<Tremolo>` on both members and the decoder
+/// strips it from the second (`MSCXDecoder+Voice.resolveTremoloPairs`), so this model's one-sided storage is the
+/// canonical form and the encoder re-doubles it on the way out. What the follower does take is the pair's look:
+/// making a two-note tremolo writes both chords twice as long as they last (`Chord.isWrittenDoubled`), and breaking one
+/// writes them as long again, as MuseScore's `Chord::setTremoloTwoChord` doubles and restores the written type — so
+/// two quarters under the tremolo draw as two halves and still fill a half.
 ///
 /// The inverse this returns can itself be refused — `.noNextChord`, if a later edit removed the follower before
 /// undo runs. `ScoreEditor.undo()` pops its stack LIFO, so whatever removed the follower was applied after this
@@ -47,15 +50,25 @@ public struct SetTremolo: EditCommand {
         guard case var .chord(chord) = element, !chord.notes.isEmpty else {
             throw Self.refused(.wrongElementKind(at: location, expected: .chord))
         }
+        let followerID = NextChordProbe.nextTimedElementID(after: location, in: score)
         if tremolo?.span == .between {
-            guard case let .chord(follower)? = NextChordProbe.nextTimedElement(after: location, in: score),
-                  !follower.notes.isEmpty
-            else {
+            guard let followerID, case let .chord(follower)? = score[followerID], !follower.notes.isEmpty else {
                 throw Self.refused(.noNextChord(at: location))
             }
         }
         let inverse = SetTremolo(at: location, tremolo: chord.tremolo)
+        // Making or breaking a two-note tremolo doubles or restores both chords' written value, as MuseScore's
+        // `Chord::setTremoloTwoChord` does; their lengths stay.
+        let pairs = tremolo?.span == .between
+        let paired = chord.tremolo?.span == .between
         chord.tremolo = tremolo
+        if pairs != paired {
+            chord.isWrittenDoubled = pairs
+            if let followerID, case var .chord(follower)? = score[followerID], !follower.notes.isEmpty {
+                follower.isWrittenDoubled = pairs
+                score[followerID] = .chord(follower)
+            }
+        }
         score[location] = .chord(chord)
         return inverse
     }

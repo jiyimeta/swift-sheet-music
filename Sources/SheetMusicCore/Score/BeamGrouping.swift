@@ -69,7 +69,7 @@ package enum BeamGrouping {
         for el in voice.elements {
             switch el {
             case let .chord(c):
-                let level = Self.level(of: c.duration)
+                let level = Self.level(of: c.drawnDuration)
                 if level > 0 && beatLen > 0 {
                     let beat = scanTick / beatLen
                     beatLevelSets[beat, default: Set()].insert(level)
@@ -110,7 +110,7 @@ package enum BeamGrouping {
                 flush()
                 tick += c.duration.resolved(in: measureDuration).ticks(division: division)
             case let .chord(c):
-                let level = Self.level(of: c.duration)
+                let level = Self.level(of: c.drawnDuration)
                 if level == 0 {
                     flush()
                     tick += c.duration.resolved(in: measureDuration).ticks(division: division)
