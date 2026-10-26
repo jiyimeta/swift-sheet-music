@@ -33,11 +33,10 @@ enum MusicXMLBarlineDecoder {
             let times = repeatNode?.attributes["times"] ?? ""
             let count = times.isEmpty ? 2 : Int(times) ?? 0
             return Decoded(placement: placement, inline: nil, startRepeat: false, endRepeatCount: count)
-        case let .line(subtype):
+        case let .line(line):
             // A plain regular bar line is added only mid-measure (`P2:5819`).
             let drawn = style != "regular" || placement == .middle
-            let inline = drawn ? BarLine(subtype: subtype) : nil
-            return Decoded(placement: placement, inline: inline, startRepeat: false, endRepeatCount: nil)
+            return Decoded(placement: placement, inline: drawn ? line : nil, startRepeat: false, endRepeatCount: nil)
         case .nothing:
             return Decoded(placement: placement, inline: nil, startRepeat: false, endRepeatCount: nil)
         }
@@ -46,29 +45,39 @@ enum MusicXMLBarlineDecoder {
     private enum Kind: Equatable {
         case startRepeat
         case endRepeat
-        /// A bar line of MuseScore's `<subtype>` (nil for a normal one).
-        case line(String?)
+        case line(BarLine)
         case nothing
     }
 
     /// MuseScore's `determineBarLineType` (`P2:5665-5714`): only a light-heavy backward or heavy-light forward bar
     /// line — or a repeat with no style — is a repeat; any other style with a repeat draws its style and repeats
-    /// nothing. `none` and the styles MuseScore does not read make no bar line here. `tick` and `short`, which
-    /// MuseScore draws as a short normal bar line, keep their names (no model for the span).
+    /// nothing. `none` is a hidden normal bar line, and `tick` and `short` are normal ones spanning part of the staff
+    /// (`createBarline`, `P2:2047-2063`), whose span the model keeps as the `<spanFromOffset>` / `<spanToOffset>`
+    /// MuseScore writes for it but does not draw. A style MuseScore does not read makes no bar line.
     private static func kind(style: String, repeat direction: String) -> Kind {
         switch (style, direction) {
         case ("light-heavy", "backward"), ("", "backward"): .endRepeat
         case ("heavy-light", "forward"), ("", "forward"): .startRepeat
-        case ("light-heavy", ""): .line("end")
-        case ("heavy-light", ""): .line("reverse-end")
-        case ("regular", _): .line(nil)
-        case ("dashed", _): .line("dashed")
-        case ("dotted", _): .line("dotted")
-        case ("light-light", _): .line("double")
-        case ("heavy-heavy", _): .line("double-heavy")
-        case ("heavy", _): .line("heavy")
-        case ("tick", _), ("short", _): .line(style)
+        case ("light-heavy", ""): .line(BarLine(subtype: "end"))
+        case ("heavy-light", ""): .line(BarLine(subtype: "reverse-end"))
+        case ("regular", _): .line(BarLine())
+        case ("dashed", _): .line(BarLine(subtype: "dashed"))
+        case ("dotted", _): .line(BarLine(subtype: "dotted"))
+        case ("light-light", _): .line(BarLine(subtype: "double"))
+        case ("heavy-heavy", _): .line(BarLine(subtype: "double-heavy"))
+        case ("heavy", _): .line(BarLine(subtype: "heavy"))
+        case ("none", _): .line(BarLine(visible: false))
+        // `BARLINE_SPAN_TICK1_FROM` / `_TO` and `BARLINE_SPAN_SHORT1_FROM` / `_TO` (`barline.h`).
+        case ("tick", _): .line(spanning(from: -1, to: -7))
+        case ("short", _): .line(spanning(from: 2, to: -2))
         default: .nothing
         }
+    }
+
+    private static func spanning(from: Int, to: Int) -> BarLine {
+        BarLine(preservedMarkup: [
+            PreservedXML(name: "spanFromOffset", text: String(from)),
+            PreservedXML(name: "spanToOffset", text: String(to)),
+        ])
     }
 }

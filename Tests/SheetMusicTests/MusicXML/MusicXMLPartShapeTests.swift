@@ -173,6 +173,36 @@ struct MusicXMLPartShapeTests {
         #expect(Self.barLines(in: score.parts[0].staves[0].measures[0].voices[0]) == [BarLine(subtype: "double-heavy")])
     }
 
+    private static func spanned(from: Int, to: Int) -> BarLine {
+        BarLine(preservedMarkup: [
+            PreservedXML(name: "spanFromOffset", text: String(from)),
+            PreservedXML(name: "spanToOffset", text: String(to)),
+        ])
+    }
+
+    @Test("none is a hidden normal bar line; tick and short are normal ones with MuseScore's span offsets")
+    func hiddenAndPartialBarLines() throws {
+        let cases: [(style: String, line: BarLine)] = [
+            ("none", BarLine(visible: false)),
+            ("tick", Self.spanned(from: -1, to: -7)),
+            ("short", Self.spanned(from: 2, to: -2)),
+        ]
+        for entry in cases {
+            let score = try F.score(measures: [F.fourQuarters + Self.barline(entry.style), F.fourQuarters])
+            #expect(Self.barLines(in: score.parts[0].staves[0].measures[0].voices[0]) == [entry.line], "\(entry.style)")
+        }
+    }
+
+    @Test("a score ending on a hidden, tick or short bar line ends on a plain one, as MuseScore's import ends it")
+    func normalFinalBarLineIsReplaced() throws {
+        for style in ["none", "tick", "short"] {
+            let score = try F.score(parts: [[F.fourQuarters + Self.barline(style)], [F.fourQuarters]])
+            for part in score.parts {
+                #expect(Self.barLines(in: part.staves[0].measures[0].voices[0]) == [BarLine()], "\(style)")
+            }
+        }
+    }
+
     @Test("repeats sit on the score's first staff alone, whichever part wrote them")
     func repeatsOnTheFirstStaff() throws {
         let start = Self.barline("heavy-light", repeat: "forward", location: "left")

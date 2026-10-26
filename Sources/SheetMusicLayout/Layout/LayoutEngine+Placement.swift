@@ -120,6 +120,8 @@ extension LayoutEngine {
         // routed away from `out` so they don't print and don't affect
         // spacing / autoplace passes. See Task 0.7's `invisibleElements`.
         var invisibleOut: [LayoutElement] = []
+        // Some voice ends the bar with a bar line of its own — shown or hidden — so none is synthesized there.
+        var voiceEndsBar = false
         var currentClef = activeClef
         var currentKey = activeKey
 
@@ -589,6 +591,7 @@ extension LayoutEngine {
                         invisibleOut.append(element)
                     }
                 case let .barLine(b):
+                    if voiceElemIdx > lastTimedIndex { voiceEndsBar = true }
                     guard b.visible || options.showsInvisibleElements
                     else { break }
                     // A trailing `<BarLine>` appears AFTER the voice's
@@ -2135,20 +2138,18 @@ extension LayoutEngine {
             }
         }
 
-        // Trailing bar line if no voice emitted one.
+        // Trailing bar line if no voice ends the bar with one.
         // The final measure of the score gets a "end" barline
         // (thin + thick) per standard engraving convention.
         //
-        // Slot-preservation note: a hidden explicit bar in the voice
-        // is routed to `invisibleOut`, so we must check BOTH lists —
-        // otherwise we'd synth an implicit (visible) bar on top of
-        // the hidden one, defeating the visibility toggle.
+        // A voice's bar line counts only after its last chord or rest: one inside the bar leaves the bar's end to
+        // the usual line. A hidden one counts whether or not it is drawn — MuseScore draws nothing at the end of a
+        // bar whose end bar line is hidden, so synthesizing a visible bar there would defeat the visibility toggle.
         //
         // The start-repeat is synthesized from the measure flag (see
         // `computeHeaderSchedule`), which already reserved the room it
         // takes ahead of `contentStartX`. It never satisfies the
-        // trailing-bar requirement, so it is excluded from the check
-        // below.
+        // trailing-bar requirement.
         if let startRepeatX = headerSchedule.startRepeatX {
             out.append(.barLine(
                 subtype: "start-repeat",
@@ -2158,15 +2159,8 @@ extension LayoutEngine {
                 role: .startRepeat,
             ))
         }
-        let hasExplicitBar = (out + invisibleOut).contains {
-            if case let .barLine(subtype, _, _, _, _) = $0 {
-                subtype != "start-repeat"
-            } else {
-                false
-            }
-        }
         let synthesizedEndBarLineIndex: Int?
-        if !hasExplicitBar {
+        if !voiceEndsBar {
             synthesizedEndBarLineIndex = out.endIndex
             out.append(.barLine(
                 subtype: endsRepeat

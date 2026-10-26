@@ -110,6 +110,18 @@ and this project adheres to
   cautionary or editorial accidental is `user`, in parentheses or brackets as MuseScore puts them unless the file
   says `parentheses="no"` or `bracket="no"`, and `parentheses="yes"` / `bracket="yes"` bracket any accidental. A
   microtonal accidental is always `user` (`markUserAccidentals`). An accidental's color and cue size are not read.
+- **A bar line inside a bar no longer takes the bar's end line away, and a hidden end bar line hides it.** The layout
+  drew the usual end line only when no voice held a bar line anywhere in the bar, so a dashed line in a bar's middle
+  — a MuseScore score's mid-measure `<BarLine>`, or a MusicXML `location="middle"` one — left that bar with no end
+  line; and it ignored a hidden bar line when deciding, so a hidden end bar line got a plain visible one drawn in its
+  place, where MuseScore draws nothing. Only a bar line after a voice's last chord or rest now ends the bar, hidden or
+  not.
+- **MusicXML `none`, `tick` and `short` bar lines are MuseScore's.** `none` made no bar line and is now a hidden
+  normal one, as MuseScore makes it; `tick` and `short` kept their names as subtypes MuseScore does not have, which a
+  MuseScore save wrote and MuseScore read as plain bar lines. They are now normal bar lines carrying the
+  `<spanFromOffset>` / `<spanToOffset>` MuseScore gives them (`createBarline`), so a save opens in MuseScore as a tick
+  or a short bar line; ssm still draws them across the whole staff. A score that ends on one of the three ends on a
+  plain bar line instead, as MuseScore's import ends it.
 
 ## [4.20.0] - 2026-10-24
 
