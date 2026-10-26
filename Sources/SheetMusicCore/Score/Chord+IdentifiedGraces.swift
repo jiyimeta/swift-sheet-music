@@ -18,6 +18,8 @@ extension Chord {
         visible: Bool = true,
         stemVisible: Bool = true,
         beamVisible: Bool = true,
+        stemDirection: StemDirectionOverride? = nil,
+        beamStemDirection: StemDirectionOverride? = nil,
         preservedMarkup: [PreservedXML] = [],
     ) {
         self.duration = duration
@@ -34,6 +36,8 @@ extension Chord {
         self.spanners = spanners
         self.stemVisible = stemVisible
         self.beamVisible = beamVisible
+        self.stemDirection = stemDirection
+        self.beamStemDirection = beamStemDirection
         self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }

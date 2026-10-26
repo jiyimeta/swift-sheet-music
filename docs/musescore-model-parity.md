@@ -1331,6 +1331,10 @@ consumed setに載っていない子は往復する。**
 
 - 手動stem direction / stem長 / no-stem —— **分かれる。**
   ~~手動stem direction~~ **`StemDirection`は`consumedChordChildren`に無いので往復する。**
+  **［2026-10-26 追記］`StemDirection`はmodel化した。** `Chord.stemDirection`（`<Chord>`の`<StemDirection>`）と
+  `Chord.beamStemDirection`（`<Beam>`の`<StemDirection>`、`beamVisible`と同じく群の先頭chordが持つ）を読み、
+  書き戻し、layoutが`ChordLayout::computeUp` / `BeamLayout::layout1`の順で従う。grace chordの分は
+  preserved markupのまま往復する。編集commandはまだ無い。
   一方**stem長は落ちる**——`Stem`はconsumed setに有り、`Chord`が持つのは`stemVisible`だけなので、
   `<Stem>`の中の`<userLen>`は要素ごとconsumeされて消える（§5.3の3分類の3つ目）
 - ~~手動`BeamMode`とbeam fragment~~ **`BeamMode`はconsumed setに無く、往復する。**

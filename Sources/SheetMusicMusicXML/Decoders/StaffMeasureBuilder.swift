@@ -32,6 +32,8 @@ struct StaffMeasureBuilder {
     private var pendingAfterGraceCount: [Int: Int] = [:]
     /// Each positional voice's tuplets, grouped as its chords and rests arrive (`MusicXMLTupletTracker`).
     private var tupletTrackers: [Int: MusicXMLTupletTracker] = [:]
+    /// Each positional voice's open beam, as the element index of the chord that began it (MuseScore's `currBeams`).
+    private var openBeams: [Int: Int] = [:]
 
     /// Result of `build()`: the decoded `Measure` and the system
     /// elements that should be merged into the score-level
@@ -94,6 +96,35 @@ struct StaffMeasureBuilder {
         let padding = tupletTrackers[idx, default: MusicXMLTupletTracker()].add(tuplet, at: index)
         appendPadding(padding, voice: idx, at: end)
         return padding
+    }
+
+    /// After the voice's last chord was appended: its `<stem>` goes where MuseScore's `handleBeamAndStemDir` puts it
+    /// (`P2:2475-2538`). A note that begins a beam gives the beam its direction (`Chord.beamStemDirection`); one no
+    /// beam holds, its own (`Chord.stemDirection`); one inside a beam, nothing. A begin while a beam is open, or a
+    /// note with no beam inside one, drops the open beam and the direction it was given. A rest leaves the beam
+    /// open, as MuseScore beams no rest here.
+    mutating func applyStem(_ stem: MusicXMLStemBeam, toVoice voiceId: String) {
+        let idx = internVoice(voiceId)
+        guard let elementIndex = anchors[idx].last?.elementIndex,
+              case var .chord(chord) = voices[idx][elementIndex], !chord.notes.isEmpty
+        else { return }
+        if stem.beamMode == .begin {
+            dropBeam(voice: idx)
+            openBeams[idx] = elementIndex
+            chord.beamStemDirection = stem.direction
+        } else if stem.beamMode == .none {
+            dropBeam(voice: idx)
+        }
+        if openBeams[idx] == nil { chord.stemDirection = stem.direction }
+        voices[idx][elementIndex] = .chord(chord)
+        if stem.beamMode == .end { openBeams[idx] = nil }
+    }
+
+    /// Ends the voice's open beam unfinished (`removeBeam`), taking back the direction its first chord gave it.
+    private mutating func dropBeam(voice idx: Int) {
+        guard let lead = openBeams.removeValue(forKey: idx), case var .chord(chord) = voices[idx][lead] else { return }
+        chord.beamStemDirection = nil
+        voices[idx][lead] = .chord(chord)
     }
 
     /// A rest of `padding`, from `start`, that joins the tuplet the voice stopped last; nothing for zero.

@@ -283,6 +283,9 @@ extension LayoutEngine {
             let forcedStem: StemDirection? = (isMultiVoice || isDrumStaff)
                 ? (voiceIdx.isMultiple(of: 2) ? .up : .down)
                 : nil
+            // A chord that sets its own stem direction wins over `forcedStem` (`stemOverride`); a beam's settles in
+            // the beaming pass below.
+            let voiceElements = voice.elements.values
             // Rest y offset when multiple voices coexist — even if the
             // second voice only carries rests, we still need to pull
             // them out of the way of voice 0's melody.
@@ -305,7 +308,7 @@ extension LayoutEngine {
             let voiceChordSouthByTick: [Int: CGFloat] = {
                 var map: [Int: CGFloat] = [:]
                 var t = 0
-                for el in voice.elements {
+                for (elementIndex, el) in voiceElements.enumerated() {
                     guard case let .chord(chord) = el else { continue }
                     let ticks = chord.duration.resolved(in: measureDuration).ticks(division: division)
                     defer { t += ticks }
@@ -323,7 +326,7 @@ extension LayoutEngine {
                     let lowestNoteY = staffMidY
                         - CGFloat(lowestStep) * metrics.sp / 2
                     var south = lowestNoteY + metrics.sp * 0.5
-                    let stemDir = forcedStem
+                    let stemDir = Self.stemOverride(ofChordAt: elementIndex, in: voiceElements) ?? forcedStem
                         ?? StemDirectionRule.direction(for: steps)
                     // Stem-down on a low chord (typical of voice 2 in
                     // a piano grand staff) extends below the lowest
@@ -353,7 +356,7 @@ extension LayoutEngine {
             let voiceChordNorthByTick: [Int: CGFloat] = {
                 var map: [Int: CGFloat] = [:]
                 var t = 0
-                for el in voice.elements {
+                for (elementIndex, el) in voiceElements.enumerated() {
                     guard case let .chord(chord) = el else { continue }
                     let ticks = chord.duration.resolved(in: measureDuration).ticks(division: division)
                     defer { t += ticks }
@@ -371,7 +374,7 @@ extension LayoutEngine {
                     let highestNoteY = staffMidY
                         - CGFloat(highestStep) * metrics.sp / 2
                     var north = highestNoteY - metrics.sp * 0.5
-                    let stemDir = forcedStem
+                    let stemDir = Self.stemOverride(ofChordAt: elementIndex, in: voiceElements) ?? forcedStem
                         ?? StemDirectionRule.direction(for: steps)
                     // Stem-up on a high chord extends above the
                     // highest notehead by `defaultStemLength`
@@ -804,7 +807,7 @@ extension LayoutEngine {
                             kitNoteheads: kitNoteheads(of: note, in: drumNoteheads),
                         )
                     }
-                    let stem = forcedStem
+                    let stem = Self.stemOverride(ofChordAt: voiceElemIdx, in: voiceElements) ?? forcedStem
                         ?? StemDirectionRule.direction(
                             for: preliminaryNotes.map(\.step),
                         )
@@ -1707,8 +1710,9 @@ extension LayoutEngine {
                     groupSteps.append(contentsOf: n.map(\.step))
                 }
                 guard groupSteps.count >= 2 else { continue }
-                let groupDirection = forcedStem
-                    ?? StemDirectionRule.direction(for: groupSteps)
+                let groupDirection = Self.beamDirection(
+                    members: group.memberIndices, in: voiceElements, forced: forcedStem,
+                ) { StemDirectionRule.direction(for: groupSteps) }
                 let stemSideDx: CGFloat = metrics.sp * 0.59
                     * (groupDirection == .up ? 1 : -1)
 

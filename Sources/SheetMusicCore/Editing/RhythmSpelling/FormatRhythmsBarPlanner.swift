@@ -209,6 +209,7 @@ private struct FormatRhythmsBarWriter {
             var chord = Chord(duration: durations[piece], notes: ChordNotes(notes))
             chord.stemVisible = head.stemVisible
             chord.beamVisible = head.beamVisible
+            chord.stemDirection = head.stemDirection
             chord.elementProperties.visible = head.elementProperties.visible
             chord.elementProperties.color = head.elementProperties.color
             result.append(VoiceSlot(identity: .fresh, element: .chord(chord)))

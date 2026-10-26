@@ -76,30 +76,34 @@ extension Voice {
         return result
     }
 
-    /// `<Beam><visible>0</visible></Beam>` is a SIBLING before the chord or rest that leads the group, the way
-    /// MuseScore writes it (`TWrite::write(const Chord*)`: graces, then `writeChordRestBeam`, then the chord)
-    /// and the way the decoder reads it back (`pendingBeamVisible` lands on the next chord / rest). Only the
-    /// hidden state is written — the default omits the tag, as `<Stem>` does.
+    /// `<Beam>` is a SIBLING before the chord or rest that leads the group, the way MuseScore writes it
+    /// (`TWrite::write(const Chord*)`: graces, then `writeChordRestBeam`, then the chord) and the way the decoder
+    /// reads it back (`takePendingBeam` lands on the next chord / rest). Only what differs from the default is
+    /// written — `<visible>0</visible>` for a hidden beam, then the beam's `<StemDirection>` (`TWrite::write(const
+    /// Beam*)`) — and nothing at all for a visible beam left to the layout, as `<Stem>` does.
     ///
     /// Skipped when a preserved `<Beam>` already sits immediately before this chord: that node came from the
-    /// source and carries its own `<visible>`, so synthesizing a second one would write the tag twice. This is
-    /// the voice-stream form of the rule that the encoder's own output wins over preserved markup of the same
-    /// name (spec §3.5.1) — here the preserved node is the one that got there first.
-    private func emitHiddenBeamIfNeeded(
+    /// source and carries its own `<visible>` and `<StemDirection>`, so synthesizing a second one would write the
+    /// tags twice. This is the voice-stream form of the rule that the encoder's own output wins over preserved
+    /// markup of the same name (spec §3.5.1) — here the preserved node is the one that got there first.
+    private func emitBeamIfNeeded(
         element: VoiceElement,
         index: Int,
         state: inout EncodeState,
         options: MSCXEncoderOptions,
     ) {
-        guard case let .chord(chord) = element, !chord.beamVisible else { return }
+        guard case let .chord(chord) = element, !chord.beamVisible || chord.beamStemDirection != nil else { return }
         if options.emitPreservedMarkup, index > elements.startIndex,
            case let .preserved(markup) = elements[index - 1], markup.name == "Beam"
         {
             return
         }
-        state.children.append(XMLTreeNode(name: "Beam", children: [
-            XMLTreeNode(name: "visible", text: "0"),
-        ]))
+        var children: [XMLTreeNode] = []
+        if !chord.beamVisible { children.append(XMLTreeNode(name: "visible", text: "0")) }
+        if let direction = chord.beamStemDirection {
+            children.append(XMLTreeNode(name: "StemDirection", text: direction.mscxValue))
+        }
+        state.children.append(XMLTreeNode(name: "Beam", children: children))
     }
 
     func emitElement(
@@ -140,7 +144,7 @@ extension Voice {
                 options: options,
             )
         }
-        emitHiddenBeamIfNeeded(
+        emitBeamIfNeeded(
             element: element, index: index, state: &state, options: options,
         )
         // The chord's own position within the measure, read before the

@@ -29,6 +29,14 @@ extension FNV1a {
         combine(placement.rawValue)
     }
 
+    /// A stem direction a file set (`Chord.stemDirection`, `.beamStemDirection`), BY OCCUPANTS: an automatic one
+    /// feeds no bytes, so every score without one keeps its committed replay fingerprint.
+    mutating func combineOccupied(_ direction: StemDirectionOverride?, tag: Int) {
+        guard let direction else { return }
+        combine(tag)
+        combine(direction.rawValue)
+    }
+
     /// Chord-anchored spanner begins (`Chord.spanners` — slurs, in practice), BY OCCUPANTS: an empty array feeds
     /// nothing, so every chord in a score without slurs hashes exactly as it did before this walk existed, which
     /// is what keeps the committed replay goldens byte-identical (`ScoreFingerprintTests

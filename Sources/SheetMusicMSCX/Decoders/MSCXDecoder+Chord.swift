@@ -8,7 +8,7 @@ extension Chord {
     /// is called. Anything else becomes preserved markup.
     private static let consumedChordChildren: Set = [
         "Arpeggio", "Articulation", "ChordBracket", "ChordLine", "Lyrics",
-        "Note", "NoteParenGroup", "Ornament", "Spanner", "Stem", "Tremolo",
+        "Note", "NoteParenGroup", "Ornament", "Spanner", "Stem", "StemDirection", "Tremolo",
         "TremoloSingleChord", "TremoloTwoChord", "acciaccatura",
         "appoggiatura", "color", "dots", "durationType", "grace16",
         "grace16after", "grace32", "grace32after", "grace4", "grace8after",
@@ -82,6 +82,8 @@ extension Chord {
             tremolo: tremolo,
             chordLines: ChordLine.decodeAll(inChord: node),
             stemVisible: stemVisible,
+            // `auto` is MuseScore's default, which it does not write; one read anyway leaves the layout to decide.
+            stemDirection: node.first("StemDirection").flatMap { StemDirectionOverride(mscxValue: $0.text) },
             preservedMarkup: node.preservedMarkup(consuming: consumedChordChildren),
         )
         chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)

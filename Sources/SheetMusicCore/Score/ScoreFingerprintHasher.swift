@@ -300,6 +300,8 @@ struct FNV1a {
         }
         combine(chord.stemVisible)
         combine(chord.beamVisible)
+        combineOccupied(chord.stemDirection, tag: 120)
+        combineOccupied(chord.beamStemDirection, tag: 121)
         combineOccupied(chord.spanners, tag: 32)
         combineOccupied(chord.elementProperties, visibleTag: 29, colorTag: 30, placementTag: 68)
     }

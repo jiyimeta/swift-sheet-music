@@ -94,9 +94,17 @@ public struct Chord: Sendable, Equatable {
     /// chords are still beamed logically, so no flag glyphs appear
     /// either. Independent of `stemVisible` and of note visibility —
     /// MuseScore never derives a beam's visibility from its chords.
-    /// The `<Beam>` element's other payloads (`<StemDirection>`, custom
-    /// beam fragments) are not modelled.
+    /// The `<Beam>` element's custom beam fragments are not modelled; its `<StemDirection>` is `beamStemDirection`.
     public var beamVisible: Bool
+    /// The direction this chord's stem is set to, nil to leave it to the layout. MuseScore `<StemDirection>` inside
+    /// `<Chord>`; MusicXML `<stem>` on a note no beam holds. It wins over every automatic rule, the voice's side
+    /// included, but not over a beam — a beamed chord's stem is its beam's (`ChordLayout::computeUp`).
+    public var stemDirection: StemDirectionOverride?
+    /// The direction set on the beam this chord leads, nil to leave it to the layout — MuseScore's
+    /// `<Beam><StemDirection>`, a sibling of the chord in the voice stream that belongs to the beam the chord starts,
+    /// which is why it lives here as `beamVisible` does; MusicXML's `<stem>` on the note that begins a `<beam>`. It
+    /// wins over every rule for the beam's direction (`BeamLayout::layout1`).
+    public var beamStemDirection: StemDirectionOverride?
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
 
@@ -116,6 +124,8 @@ public struct Chord: Sendable, Equatable {
         visible: Bool = true,
         stemVisible: Bool = true,
         beamVisible: Bool = true,
+        stemDirection: StemDirectionOverride? = nil,
+        beamStemDirection: StemDirectionOverride? = nil,
         preservedMarkup: [PreservedXML] = [],
     ) {
         self.duration = duration
@@ -132,6 +142,8 @@ public struct Chord: Sendable, Equatable {
         self.spanners = spanners
         self.stemVisible = stemVisible
         self.beamVisible = beamVisible
+        self.stemDirection = stemDirection
+        self.beamStemDirection = beamStemDirection
         self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }

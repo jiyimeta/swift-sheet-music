@@ -113,11 +113,16 @@ extension Voice {
         // it governs. MuseScore attaches the beam it just read to the
         // FIRST following ChordRest and clears the pending reference
         // (`rw/read410/measureread.cpp:263`), so we mirror that: the
-        // flag lands on the next chord/rest and resets to the default.
+        // flag and the beam's `<StemDirection>` land on the next chord/rest
+        // and reset to the default.
         var pendingBeamVisible = true
-        func takePendingBeamVisible() -> Bool {
-            defer { pendingBeamVisible = true }
-            return pendingBeamVisible
+        var pendingBeamStemDirection: StemDirectionOverride?
+        func takePendingBeam() -> (visible: Bool, stemDirection: StemDirectionOverride?) {
+            defer {
+                pendingBeamVisible = true
+                pendingBeamStemDirection = nil
+            }
+            return (pendingBeamVisible, pendingBeamStemDirection)
         }
         func tupletFractions() -> [Fraction] {
             tupletStack.map(\.ratio)
@@ -179,9 +184,12 @@ extension Voice {
                     // exactly as it did before `<ChordBracket>` was modeled.
                     // It lands after the other preserved children rather than
                     // in document order; MuseScore's reader is order-agnostic
-                    // inside `<Chord>`.
+                    // inside `<Chord>`. A grace chord's `<StemDirection>`,
+                    // which `Chord.decode` lifts into `inner.stemDirection`,
+                    // goes back the same way.
                     let graceMarkup = inner.preservedMarkup
                         + child.all("ChordBracket").map(PreservedXML.init)
+                        + child.all("StemDirection").map(PreservedXML.init)
                     pendingGraces.append((EIDXML.decode(from: child), GraceChord(
                         graceType: graceType,
                         duration: inner.duration,
@@ -213,7 +221,7 @@ extension Voice {
                     ))
                     pendingGraces.removeAll(keepingCapacity: true)
                 }
-                chord.beamVisible = takePendingBeamVisible()
+                (chord.beamVisible, chord.beamStemDirection) = takePendingBeam()
                 appendVoiceElement(.chord(chord), eid: EIDXML.decode(from: child))
                 // `.measure` chords carry no intrinsic duration; the
                 // measure-rest fills the bar by definition, so any
@@ -229,7 +237,7 @@ extension Voice {
                 rest.duration = scaled(
                     rest.duration, by: tupletFractions(),
                 )
-                rest.beamVisible = takePendingBeamVisible()
+                (rest.beamVisible, rest.beamStemDirection) = takePendingBeam()
                 appendVoiceElement(.chord(rest), eid: EIDXML.decode(from: child))
                 if case .measure = rest.duration {
                     // A measure rest's `NoteDuration` is the bare
@@ -261,6 +269,9 @@ extension Voice {
                 // immediately before that chord/rest.
                 pendingBeamVisible =
                     (child.first("visible")?.text ?? "1") != "0"
+                // So does its `<StemDirection>`, which the node keeps too.
+                pendingBeamStemDirection = child.first("StemDirection")
+                    .flatMap { StemDirectionOverride(mscxValue: $0.text) }
                 // The `<Beam>` node's own `<eid>` (if any) travels inside
                 // the preserved bag verbatim — see `.preserved`'s comment
                 // on `default:` below.

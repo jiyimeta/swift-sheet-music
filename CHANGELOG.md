@@ -72,6 +72,15 @@ and this project adheres to
   a repeat draws that style and repeats nothing. `<repeat times>` is the end repeat's count (it was always 2),
   `heavy-heavy` is MuseScore's `double-heavy` (it was `heavy`), a light-heavy bar line away from the end is `end`
   (it was `final`, no MuseScore type), and a style MuseScore does not read makes no bar line.
+- **A stem direction a file sets is drawn.** The layout chose every stem itself, so a MuseScore score's flipped
+  stems and a MusicXML `<stem>` came out the other way, and so did the beams, articulations and tuplet brackets that
+  follow them. The model now holds a chord's direction (`Chord.stemDirection`, MSCX `<Chord><StemDirection>`) and a
+  beam's (`Chord.beamStemDirection` on the chord that leads it, MSCX `<Beam><StemDirection>`), and the layout follows
+  MuseScore's order: a chord's own direction beats its voice's side unless a beam holds it; a beam's beats every
+  rule, then the voice's side, then the first member that sets its own. A two-note tremolo's chords keep their
+  computed stems, as in MuseScore. The MusicXML import puts a note's `<stem>` where MuseScore's does
+  (`handleBeamAndStemDir`): on the beam when the note begins one, on the chord when no beam holds it.
+  `<stem>none</stem>` is not read yet.
 
 ## [4.20.0] - 2026-10-24
 

@@ -375,8 +375,14 @@
         /// **Re-recorded 2026-10-22 when a chord note carried its kit's custom-head glyphs (`kitNoteheads`).** No
         /// fixture has a custom head, so the field reads `nil` on all 588 lines it appears on; with
         /// `, kitNoteheads: nil` stripped, the digest is the one above (`b74058a0…`) byte for byte.
+        ///
+        /// **Re-recorded 2026-10-26 when a chord's `<StemDirection>` was drawn, after reading the diff** against the
+        /// digest above (`da049f89…`). Only `testMeasureRepeats` changed, 5 lines in each wrap mode, and each is a
+        /// chord element whose stem flips up → down: five unbeamed quarters the file writes `<StemDirection>down`,
+        /// which MuseScore draws down (`ChordLayout::computeUp`) and the layout used to turn up by their notes'
+        /// position. No note, column or other element moved.
         private static let expectedDigestSHA256 =
-            "da049f897775d04eea4feec3878bf651709351c1a31ebe73950dd4a903682989"
+            "cce2fd4b252ef46c791493a2f8b676687d927494af2b06f6919a5feb88c8321b"
 
         @Test("write digest")
         func writeDigest() throws {

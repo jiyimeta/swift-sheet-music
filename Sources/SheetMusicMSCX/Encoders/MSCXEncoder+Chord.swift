@@ -49,11 +49,12 @@ extension Chord {
         if isPercussionV3 {
             // MuseScore 3 drum-track chords carry an explicit
             // `<StemDirection>` element ahead of `<durationType>` —
-            // voice 0 stems up, voice 1+ stems down (DrumStaff
-            // convention from MS3 `Chord::write`).
+            // the chord's own when it has one, else voice 0 stems up,
+            // voice 1+ stems down (DrumStaff convention from MS3
+            // `Chord::write`).
             children.append(XMLTreeNode(
                 name: "StemDirection",
-                text: voiceIndex == 0 ? "up" : "down",
+                text: stemDirection?.mscxValue ?? (voiceIndex == 0 ? "up" : "down"),
             ))
         }
         let chordCarriesSmall = appendChordLevelSmall(for: notes, to: &children)
@@ -84,6 +85,11 @@ extension Chord {
             children.append(XMLTreeNode(name: "Stem", children: [
                 XMLTreeNode(name: "visible", text: "0"),
             ]))
+        }
+        // `<StemDirection>` follows `<Stem>` and comes before the notes (`TWrite::write(const Chord*)`); only a set
+        // one is written, MuseScore's `auto` being its default. A MuseScore 3 drum chord wrote it up front instead.
+        if let stemDirection, !isPercussionV3 {
+            children.append(XMLTreeNode(name: "StemDirection", text: stemDirection.mscxValue))
         }
         // Lyrics sit between durationType and the first <Note>: this matches MuseScore's serializer (Chord::write) and
         // is what both MS3 and MS4 readers expect. Empty-text placeholders (verse-padding entries inserted by the
