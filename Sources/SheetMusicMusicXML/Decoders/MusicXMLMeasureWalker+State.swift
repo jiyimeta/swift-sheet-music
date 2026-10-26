@@ -43,6 +43,9 @@ struct MusicXMLMeasureState {
     var delayedOttavas = MusicXMLDelayedOttavaLog()
     /// The part is a vocal staff (`MusicXMLVocalStaff`).
     var isVocalStaff = false
+    /// The key in force where the measure starts — before its notes, a `<key>` there included — which its written
+    /// accidentals are judged against (`MusicXMLUserAccidentals`).
+    var keyFifthsAtStart = 0
 
     init(
         measureIndex: Int, staffCount: Int, options: MusicXMLImportOptions, partIndex: Int,

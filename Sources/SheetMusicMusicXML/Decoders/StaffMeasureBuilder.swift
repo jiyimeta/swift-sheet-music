@@ -37,7 +37,7 @@ struct StaffMeasureBuilder {
     /// elements that should be merged into the score-level
     /// `SystemMeasure` for this measure index.
     struct Built {
-        let measure: Measure
+        var measure: Measure
         let systemElements: [PositionedSystemElement]
         /// Where positional voice 0's chords and rests sit by the measure clock (`MusicXMLChordAnchor`).
         let anchors: [MusicXMLChordAnchor]

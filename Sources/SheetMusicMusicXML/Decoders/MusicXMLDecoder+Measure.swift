@@ -206,6 +206,7 @@ enum MusicXMLMeasureWalker {
     ) throws -> [StaffMeasureBuilder.Built] {
         let staffCount = state.staffCount
         state.eventBase = directionEvents.count
+        state.keyFifthsAtStart = previousAttributes.keyFifths ?? 0
         for child in measureNode.children {
             switch child.name {
             case "attributes":
@@ -216,6 +217,7 @@ enum MusicXMLMeasureWalker {
                     isFirstMeasure: isFirstMeasure,
                     staffCount: staffCount,
                 )
+                if state.clock.now.isZeroTick { state.keyFifthsAtStart = previousAttributes.keyFifths ?? 0 }
                 for emission in emitted {
                     if let idx = emission.staffIndex {
                         state.builders[idx].appendAttribute(emission.element)
@@ -259,7 +261,8 @@ enum MusicXMLMeasureWalker {
         // The measure's delayed directions join the score now (`P2:2984-2990`).
         state.registry.registry.endMeasure()
         directionEvents += state.directionEvents
-        return state.builders.map { $0.build() }
+        // Written accidentals the key implies stay drawn (`markUserAccidentals`, `P2:2995-2998`).
+        return MusicXMLUserAccidentals.marking(state.builders.map { $0.build() }, keyFifths: state.keyFifthsAtStart)
     }
 }
 

@@ -58,6 +58,11 @@ and this project adheres to
   not the time signature's. The measure clock now moves by a note's `<type>`, dots and `<time-modification>` rather
   than its `<duration>`, as MuseScore's `checkTiming` does, so a file whose `<duration>`s are a little off no longer
   places its directions, or measures its bars, by them.
+- **A MusicXML accidental the key already implies stays drawn.** The import read every written accidental as
+  `auto`, so a courtesy flat under a key with that flat was the redundant glyph `suppressingRedundantAccidentals`
+  hides — gone from the page and from a MuseScore save. A written sharp, flat or natural whose alteration is the
+  key's on its line is now a `user` accidental, as MuseScore's import makes it (`markUserAccidentals`), unless an
+  earlier note of the measure on that line took an accidental the key does not imply.
 
 ## [4.20.0] - 2026-10-24
 
