@@ -77,10 +77,10 @@ and this project adheres to
   follow them. The model now holds a chord's direction (`Chord.stemDirection`, MSCX `<Chord><StemDirection>`) and a
   beam's (`Chord.beamStemDirection` on the chord that leads it, MSCX `<Beam><StemDirection>`), and the layout follows
   MuseScore's order: a chord's own direction beats its voice's side unless a beam holds it; a beam's beats every
-  rule, then the voice's side, then the first member that sets its own. A two-note tremolo's chords keep their
-  computed stems, as in MuseScore. The MusicXML import puts a note's `<stem>` where MuseScore's does
-  (`handleBeamAndStemDir`): on the beam when the note begins one, on the chord when no beam holds it.
-  `<stem>none</stem>` is not read yet.
+  rule, then the voice's side, then the first member that sets its own. A two-note tremolo's chords share the
+  first one's direction, or else the second's (`TremoloLayout::calcIsUp`). The MusicXML import puts a note's
+  `<stem>` where MuseScore's does (`handleBeamAndStemDir`): on the beam when the note begins one, on the chord when no
+  beam holds it. `<stem>none</stem>` is not read yet.
 - **A two-note tremolo lasts as long as it is meant to, and MusicXML tremolos are read.** MuseScore writes a two-note
   tremolo's chords twice as long as they last — `<durationType>half</durationType><duration>1/4</duration>` — and the
   decoder took the written half as the length, so MuseScore's own pair of halves sounded a whole and overfilled its

@@ -11,18 +11,31 @@ extension StemDirection {
 
 extension LayoutEngine {
     /// The direction a chord sets for its own stem (`Chord.stemDirection`), which wins over the voice's side and the
-    /// notes' positions (`ChordLayout::computeUp`), or nil. A two-note tremolo's chords take none: MuseScore lays the
-    /// pair out together whatever either says. A beamed chord's stem is its beam's (`beamDirection`).
+    /// notes' positions (`ChordLayout::computeUp`), or nil. A two-note tremolo's chords share one: the first's, or
+    /// else the second's (`TremoloLayout::calcIsUp`), on both. A beamed chord's stem is its beam's (`beamDirection`).
     static func stemOverride(ofChordAt index: Int, in elements: [VoiceElement]) -> StemDirection? {
-        guard case let .chord(chord) = elements[index], let direction = chord.stemDirection,
-              chord.tremolo?.span != .between
-        else { return nil }
+        guard case let .chord(chord) = elements[index] else { return nil }
+        if chord.tremolo?.span == .between {
+            let follower = elements[(index + 1)...].lazy.compactMap(Self.chord).first
+            return tremoloPairOverride(start: chord, follower: follower)
+        }
         // The second chord of a two-note tremolo carries no tremolo; the chord before it does.
-        let partner = elements[..<index].reversed().lazy.compactMap { element -> Chord? in
-            if case let .chord(previous) = element { previous } else { nil }
-        }.first
-        guard partner?.tremolo?.span != .between else { return nil }
-        return StemDirection(direction)
+        if let start = elements[..<index].reversed().lazy.compactMap(Self.chord).first,
+           start.tremolo?.span == .between
+        {
+            return tremoloPairOverride(start: start, follower: chord)
+        }
+        return chord.stemDirection.map(StemDirection.init)
+    }
+
+    /// The direction a two-note tremolo's pair takes from its chords: the first's, else the second's, else none
+    /// (`TremoloLayout::calcIsUp`).
+    static func tremoloPairOverride(start: Chord, follower: Chord?) -> StemDirection? {
+        (start.stemDirection ?? follower?.stemDirection).map(StemDirection.init)
+    }
+
+    private static func chord(_ element: VoiceElement) -> Chord? {
+        if case let .chord(chord) = element { chord } else { nil }
     }
 
     /// A beam group's direction (`BeamLayout::layout1`): one set on the beam (`Chord.beamStemDirection` — on the

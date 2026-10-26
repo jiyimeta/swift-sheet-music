@@ -98,16 +98,22 @@ struct StemDirectionOverrideTests {
             .first?.prefix(2) == [.down, .down])
     }
 
-    @Test("a two-note tremolo's chords take no direction of their own")
-    func tremoloPairIgnoresItsDirection() {
+    @Test("a two-note tremolo's chords share the first's direction, or else the second's")
+    func tremoloPairSharesItsDirection() {
         var start = Self.half(60)
         start.tremolo = Tremolo(subtype: .r8, span: .between)
-        start.stemDirection = .down
         var follower = Self.half(64)
         follower.stemDirection = .down
-        let elements: [VoiceElement] = [.chord(start), .chord(follower)]
-        #expect(LayoutEngine.stemOverride(ofChordAt: 0, in: elements) == nil)
-        #expect(LayoutEngine.stemOverride(ofChordAt: 1, in: elements) == nil)
+        let setBySecond: [VoiceElement] = [.chord(start), .chord(follower)]
+        #expect(LayoutEngine.stemOverride(ofChordAt: 0, in: setBySecond) == .down)
+        #expect(LayoutEngine.stemOverride(ofChordAt: 1, in: setBySecond) == .down)
+        start.stemDirection = .up
+        let setByBoth: [VoiceElement] = [.chord(start), .chord(follower)]
+        #expect(LayoutEngine.stemOverride(ofChordAt: 0, in: setByBoth) == .up)
+        #expect(LayoutEngine.stemOverride(ofChordAt: 1, in: setByBoth) == .up)
+        start.stemDirection = nil
+        follower.stemDirection = nil
+        #expect(LayoutEngine.stemOverride(ofChordAt: 1, in: [.chord(start), .chord(follower)]) == nil)
     }
 
     // MARK: - Helpers

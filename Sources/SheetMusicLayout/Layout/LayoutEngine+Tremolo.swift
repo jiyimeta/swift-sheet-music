@@ -219,8 +219,10 @@ extension LayoutEngine {
                 metrics: metrics,
                 clef: currentClef,
             )
-            let followerStem = StemDirectionRule
-                .direction(for: followerNotes.map(\.step))
+            // The pair's direction when either chord sets one — what the start chord's override answers — as the
+            // follower's own chord element takes it.
+            let followerStem = Self.stemOverride(ofChordAt: currentVoiceElemIdx, in: currentVoiceElements)
+                ?? StemDirectionRule.direction(for: followerNotes.map(\.step))
             // For .between tremolo placement we mirror the start
             // chord's extension on the follower so the bar geometry
             // bridges two stems of equal length. The follower's own
