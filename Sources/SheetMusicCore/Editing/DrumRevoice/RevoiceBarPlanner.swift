@@ -2,11 +2,11 @@ import SheetMusicFoundation
 
 /// Why a bar is left exactly as it was (design §4.7): converting it would change what plays, lose a marking, or move
 /// one to another tick. The host reports how many bars were left and which is first; the reason is for tests and
-/// diagnostics.
-enum RevoiceKeepReason: Equatable, Sendable {
+/// diagnostics. It is the failure of a voice's layout, which is why it is an `Error`.
+enum RevoiceKeepReason: Error, Equatable {
     /// A shape the writer does not take on.
     case unsupported
-    /// A tie or tremolo whose length is audible could not keep it (§4.4).
+    /// A chord whose length is heard — a tie, a roll, after-graces — could not keep it (§4.4).
     case audibleLength
     /// Tuplets that cannot be carried or merged member by member (§4.5).
     case tuplets
@@ -113,6 +113,8 @@ struct RevoiceTargetChord {
     /// One hit per pitch, ascending. Of two hits of one pitch — two source voices sounding the same drum at once —
     /// the one from the lower source voice is kept.
     let hits: [RevoiceBar.Hit]
+    /// Every hit bound here, a dropped duplicate included, in source order.
+    let incoming: [RevoiceBar.Hit]
     /// Every source chord that sent a hit here, in source order, the one whose duplicate was dropped included: the
     /// first is the chord of the lowest-voice hit.
     let sources: [RevoiceBar.ChordRef]
@@ -120,6 +122,7 @@ struct RevoiceTargetChord {
     /// `hits` in source order, voice by voice, as `RevoiceBar.hits` lists them.
     init(onset: Int, hits: [RevoiceBar.Hit]) {
         self.onset = onset
+        incoming = hits
         var pitches = Set<Int>()
         self.hits = hits.filter { pitches.insert($0.pitch).inserted }.sorted { $0.pitch < $1.pitch }
         var sources: [RevoiceBar.ChordRef] = []
@@ -131,10 +134,11 @@ struct RevoiceTargetChord {
 }
 
 extension RevoiceBarPlanner {
-    /// A bar not in the target form, written afresh from its hits (design §4.1–§4.3). Every voice up to the highest
+    /// A bar not in the target form, written afresh from its hits (design §4.1–§4.4). Every voice up to the highest
     /// one a hit lands in is written — one that no hit reaches as rests, so the bar's voices stay contiguous — and
     /// every voice above it is removed. A voice whose rewrite reads exactly as it does now is not written, so the
-    /// undo holds only what moved.
+    /// undo holds only what moved. A bar where a chord cannot keep a length that is heard, or where a merge would put
+    /// a hit into a chord that rolls differently, is left as written instead.
     static func rewrite(
         _ bar: RevoiceBar, voiceForPitch: [Int: Int], policy: RhythmSpellingPolicy,
     ) -> RevoiceBarPlan {
@@ -143,9 +147,15 @@ extension RevoiceBarPlanner {
         let chordsByVoice = targetChords(of: bar, voiceForPitch: voiceForPitch)
         var writes: [RevoiceVoiceWrite] = []
         for (voiceIndex, chords) in chordsByVoice.enumerated() {
-            guard let laidOut = timeline(of: chords, in: bar, sources: sources, policy: policy) else {
-                return .leftAsWritten(.unspellable)
+            let laidOut: [RevoiceTimedSlot]
+            switch timeline(
+                of: chords, voiceIndex: voiceIndex, in: bar, sources: sources, voiceForPitch: voiceForPitch,
+                policy: policy,
+            ) {
+            case let .success(timed): laidOut = timed
+            case let .failure(reason): return .leftAsWritten(reason)
             }
+            guard chords.allSatisfy({ rollsAlike($0, sources: sources) }) else { return .leftAsWritten(.markings) }
             let slots = voiceSlots(
                 laidOut, voiceIndex: voiceIndex, voiceCount: chordsByVoice.count, in: bar, sources: sources,
             )
@@ -160,17 +170,17 @@ extension RevoiceBarPlanner {
     }
 
     /// Why a bar not in the target form is left as written before anything is written, nil when the writer takes it
-    /// on. The writer carries every note whole and gives each chord its length, visibility and stem and beam
-    /// visibility; a bar whose chords or rests carry more — a tie, a roll, a grace, an articulation, a lyric, a
-    /// tuplet — keeps it by staying as written (§4.7). So does a bar whose meter cannot be read, whose cursor a
-    /// location shift moves, whose two-note tremolo pairs a chord with its neighbor, or whose notes glide or bend.
+    /// on. The writer carries every note whole, its ties with it, and gives each chord its length, its roll, its
+    /// visibility and its stem and beam visibility; a bar whose chords or rests carry more — a grace, an
+    /// articulation, a lyric, a tuplet — keeps it by staying as written (§4.7). So does a bar whose meter cannot be
+    /// read, whose cursor a location shift moves, whose two-note tremolo pairs a chord with its neighbor, or whose
+    /// notes glide or bend.
     static func reasonToLeave(_ bar: RevoiceBar) -> RevoiceKeepReason? {
         guard bar.isMeterReadable else { return .unsupported }
         if bar.annotations.contains(where: movesCursor) { return .unsupported }
         if bar.hits.contains(where: { glidesOrBends($0.note) }) { return .unsupported }
         if bar.chords.contains(where: { pairsWithNeighbor($0.chord) }) { return .unsupported }
         if bar.voices.contains(where: { !$0.tuplets.isEmpty }) { return .tuplets }
-        if bar.chords.contains(where: { hasAudibleLength($0.chord) }) { return .audibleLength }
         if bar.chords.contains(where: { carriesMarkings($0.chord) }) { return .markings }
         return nil
     }
@@ -189,14 +199,8 @@ extension RevoiceBarPlanner {
         chord.tremolo?.span == .between || chord.isWrittenDoubled
     }
 
-    /// Its length is heard (§4.4): a note tied either way, a roll, or after-graces that play in its tail.
-    private static func hasAudibleLength(_ chord: Chord) -> Bool {
-        chord.tremolo?.span == .single || !chord.graceNotesAfter.isEmpty
-            || chord.notes.contains { $0.tieForward != nil || $0.tieBack != nil }
-    }
-
-    /// The chord carries anything beyond what the writer gives a chord: its notes, its length, its visibility and its
-    /// stems.
+    /// The chord carries anything beyond what the writer gives a chord: its notes, its length, its roll, its
+    /// visibility and its stems. A rest's roll counts — no hit carries it along.
     private static func carriesMarkings(_ chord: Chord) -> Bool {
         var bare = Chord(duration: chord.duration, notes: chord.notes)
         bare.elementProperties = chord.elementProperties
@@ -204,7 +208,15 @@ extension RevoiceBarPlanner {
         bare.beamVisible = chord.beamVisible
         bare.stemDirection = chord.stemDirection
         bare.beamStemDirection = chord.beamStemDirection
+        if !chord.notes.isEmpty { bare.tremolo = chord.tremolo }
         return chord != bare
+    }
+
+    /// Every source chord of `chord` rolls alike, or none rolls. A split carries the roll to every part, so every
+    /// note keeps rolling; a merge that would put a hit into a chord that rolls differently — a plain kick onto a
+    /// rolled snare — would change what plays (§4.5).
+    private static func rollsAlike(_ chord: RevoiceTargetChord, sources: SourceIndex) -> Bool {
+        Set(chord.sources.map { sources[$0]?.chord.tremolo }).count <= 1
     }
 
     /// The bar's hits gathered into the chords each target voice is written with: one list per voice up to the highest
@@ -258,15 +270,16 @@ extension RevoiceBarPlanner {
     }
 
     /// A timed slot as a voice element. A chord's notes keep every note-level property and their identifiers; its
-    /// visibility and its stem and beam visibility come from the source chord of its lowest-voice hit. Its stem and
-    /// beam directions are left to the voice it now sits in: a direction a one-voice file forced would otherwise
-    /// fight voice 2.
+    /// roll, its visibility and its stem and beam visibility come from the source chord of its lowest-voice hit — the
+    /// roll is every source chord's (`rollsAlike`). Its stem and beam directions are left to the voice it now sits
+    /// in: a direction a one-voice file forced would otherwise fight voice 2.
     private static func chordSlot(_ timed: RevoiceTimedSlot, voiceIndex: Int, sources: SourceIndex) -> VoiceSlot {
         guard let target = timed.chord else {
             return VoiceSlot(identity: .fresh, element: .rest(duration: timed.duration))
         }
         var chord = Chord(duration: timed.duration, notes: ChordNotes(target.hits.map { ($0.noteEID, $0.note) }))
         if let lowest = target.sources.first.flatMap({ sources[$0] }) {
+            chord.tremolo = lowest.chord.tremolo
             chord.elementProperties = lowest.chord.elementProperties
             chord.stemVisible = lowest.chord.stemVisible
             chord.beamVisible = lowest.chord.beamVisible
