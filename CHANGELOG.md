@@ -103,6 +103,13 @@ and this project adheres to
   every bar after a pickup carried a number one too high. A measure any part calls implicit is now `irregular`, as
   MuseScore's import makes it (`setIrregular`). A measure number the file skips or repeats still restarts nothing:
   the model has no per-measure number offset (MuseScore's `noOffset`).
+- **MusicXML accidentals read as MuseScore reads them.** The import knew five names and dropped every other
+  `<accidental>`, and ignored its attributes. It now takes MuseScore's whole table (`musicXmlString2accidentalType`):
+  quarter tones, arrows, slashes, commas, triple sharps and flats, `sori` and `koron`, and `other` with a `smufl`
+  glyph from the sets MuseScore reads; `natural-sharp` and `natural-flat` are the plain sharp and flat, as there. A
+  cautionary or editorial accidental is `user`, in parentheses or brackets as MuseScore puts them unless the file
+  says `parentheses="no"` or `bracket="no"`, and `parentheses="yes"` / `bracket="yes"` bracket any accidental. A
+  microtonal accidental is always `user` (`markUserAccidentals`). An accidental's color and cue size are not read.
 
 ## [4.20.0] - 2026-10-24
 

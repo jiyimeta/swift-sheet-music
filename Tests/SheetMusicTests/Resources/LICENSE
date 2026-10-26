@@ -38,6 +38,10 @@ fixtures taken from the upstream MuseScore repository:
     testTuplets9, testIncompleteTuplet, testTupletTie,
     testTwoNoteTremoloTuplet:
       src/importexport/musicxml/tests/data/
+  - musicxml/ notation fixtures, each a `<name>.xml` with the
+    `<name>_ref.mscx` MuseScore 4.7.4 wrote from it: testAccidentals1-3,
+    testImplicitMeasure1:
+      src/importexport/musicxml/tests/data/
 
 They are reproduced here to allow the swift-sheet-music test suite to
 verify equivalence of its MIDI export against MuseScore's own exporter

@@ -57,14 +57,72 @@ struct MusicXMLUserAccidentalTests {
         #expect(Self.roles(reread) == [[.user]])
     }
 
+    @Test("a microtonal accidental is user, and a note back in the key after it is still taken as implied")
+    func microtonalIsUserAndNeedsNothing() throws {
+        let score = try Self.score(fifths: -1, [[
+            Self.note("B", accidental: "quarter-flat"),
+            Self.note("B", alter: -1, accidental: "flat"),
+        ]])
+        #expect(Self.accidentals(score) == [[.mirroredFlat, .flat]])
+        #expect(Self.roles(score) == [[.user, .user]])
+    }
+
+    @Test("the accidental names read as MuseScore's table reads them, natural-sharp as a plain sharp")
+    func namesFollowMuseScore() {
+        let expected: [String: Accidental] = [
+            "natural-sharp": .sharp, "natural-flat": .flat, "sharp-sharp": .doubleSharp, "flat-flat": .doubleFlat,
+            "quarter-flat": .mirroredFlat, "three-quarters-sharp": .sharpSlash4, "flat-flat-up": .flat2ArrowUp,
+            "triple-sharp": .tripleSharp, "slash-quarter-sharp": .sharpSlash3, "sharp-5": .fiveCommaSharp,
+            "flat-4": .fourCommaFlat, "sori": .sori, "koron": .koron,
+        ]
+        for (name, accidental) in expected {
+            #expect(MusicXMLAccidental.symbol(name, smufl: nil) == accidental, "\(name)")
+        }
+        #expect(MusicXMLAccidental.symbol("double-flat", smufl: nil) == nil)
+        #expect(MusicXMLAccidental.symbol("other", smufl: nil) == nil)
+    }
+
+    @Test("other names a glyph by its smufl attribute, from the sets MuseScore reads")
+    func otherReadsTheSmuflGlyph() {
+        #expect(MusicXMLAccidental.symbol("other", smufl: "accidentalFlatOneArrowUp") == .flatOneArrowUp)
+        #expect(MusicXMLAccidental.symbol("other", smufl: "accidentalQuarterSharpEqualTempered")
+            == .quarterSharpEqualTempered)
+        #expect(MusicXMLAccidental.symbol("other", smufl: "accSagittalFlat") == nil)
+        // 30 arrow accidentals, 8 Helmholtz-Ellis commas and 7 equal-tempered ones, as in `smuflAccidentalTypes`.
+        #expect(MusicXMLAccidental.byGlyph.count == 45)
+    }
+
+    @Test("cautionary and editorial accidentals are user, in parentheses and brackets unless told otherwise")
+    func cautionaryAndEditorial() throws {
+        let cases: [(attributes: String, role: AccidentalRole, bracket: AccidentalBracket)] = [
+            ("cautionary=\"yes\"", .user, .parenthesis),
+            ("editorial=\"yes\"", .user, .bracket),
+            ("cautionary=\"yes\" bracket=\"yes\"", .user, .parenthesis),
+            ("editorial=\"yes\" parentheses=\"yes\"", .user, .parenthesis),
+            ("cautionary=\"yes\" parentheses=\"no\"", .user, .none),
+            ("parentheses=\"yes\"", .auto, .parenthesis),
+            ("bracket=\"yes\"", .auto, .bracket),
+        ]
+        for entry in cases {
+            let note = Self.note("B", alter: -1, accidental: "flat", attributes: entry.attributes)
+            let score = try Self.score(fifths: 0, [[note]])
+            let read = try #require(Self.notes(score).first?.first)
+            #expect(read.accidentalRole == entry.role, "\(entry.attributes)")
+            #expect(read.accidentalBracket == entry.bracket, "\(entry.attributes)")
+        }
+    }
+
     // MARK: - Helpers
 
     /// A quarter note at 480 divisions to the quarter.
-    private static func note(_ step: String, alter: Int = 0, octave: Int = 4, accidental: String) -> String {
+    private static func note(
+        _ step: String, alter: Int = 0, octave: Int = 4, accidental: String, attributes: String = "",
+    ) -> String {
         let alterTag = alter == 0 ? "" : "<alter>\(alter)</alter>"
+        let open = attributes.isEmpty ? "<accidental>" : "<accidental \(attributes)>"
         return "<note><pitch><step>\(step)</step>\(alterTag)<octave>\(octave)</octave></pitch>"
             + "<duration>480</duration><voice>1</voice><type>quarter</type>"
-            + "<accidental>\(accidental)</accidental></note>"
+            + "\(open)\(accidental)</accidental></note>"
     }
 
     /// One part, a measure per entry of `measures` — each as long as its quarters — under a key of `fifths`.

@@ -83,13 +83,15 @@ enum MusicXMLNoteDecoder {
         } else {
             throw missingNoteBody()
         }
-        let accidental = decodeAccidental(node)
+        let written = MusicXMLAccidental(note: node)
         let (tieForward, tieBack) = decodeTies(node)
         let parentheses = decodeNoteheadParentheses(node)
         let note = Note(
             pitch: midi,
             tpc: tpc,
-            accidental: accidental,
+            accidental: written?.accidental,
+            accidentalBracket: written?.bracket ?? .none,
+            accidentalRole: written?.role ?? .auto,
             tieForward: tieForward,
             tieBack: tieBack,
             headType: headType(noteheadValue: node.first("notehead")?.text),
@@ -262,22 +264,6 @@ enum MusicXMLNoteDecoder {
             }
         }
         return (forward, back)
-    }
-
-    /// MusicXML's `<accidental>` names the visible symbol on the note.
-    /// MuseScore's `<Accidental><subtype>` uses SMuFL names like `accidentalSharp`.
-    private static func decodeAccidental(_ node: XMLTreeNode) -> Accidental? {
-        guard let text = node.first("accidental")?.text, !text.isEmpty else {
-            return nil
-        }
-        switch text {
-        case "sharp": return .sharp
-        case "flat": return .flat
-        case "natural": return .natural
-        case "double-sharp", "sharp-sharp": return .doubleSharp
-        case "flat-flat": return .doubleFlat
-        default: return nil
-        }
     }
 
     /// MusicXML wraps a notehead in parentheses via `<notehead parentheses="yes">`.
