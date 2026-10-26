@@ -267,6 +267,28 @@ struct MeasureAccidentalsPlannerTests {
         #expect(chord.notes[0].accidental == nil) // and covers the C♯ it leads into
     }
 
+    /// MuseScore's `hasAlteredUnison`: F and F♯ in one chord each draw their sign, though C major already reads the
+    /// F as natural — and an F♯ read after an earlier F♯ keeps its ♯ when the chord also holds an F♮.
+    @Test func `an altered unison in one chord draws both accidentals`() {
+        var score = ScoreEditor(score: EditingFixtures.twoMeasuresOfQuarterRests(key: 0)).score
+        score[VoiceElementID(EditingFixtures.restID(element: 0))] = .chord(Chord(
+            duration: .quarter, notes: [Note(pitch: 65, tpc: 13), Note(pitch: 66, tpc: 20)],
+        ))
+        score[VoiceElementID(EditingFixtures.restID(element: 1))] = .chord(Chord(
+            duration: .quarter, notes: [Note(pitch: 66, tpc: 20)],
+        ))
+        score[VoiceElementID(EditingFixtures.restID(element: 2))] = .chord(Chord(
+            duration: .quarter, notes: [Note(pitch: 66, tpc: 20), Note(pitch: 65, tpc: 13)],
+        ))
+        let repaired = Self.renotated(score, measures: 0 ..< 1)
+        let elements = repaired.parts[0].staves[0].measures[0].voices[0].elements
+        guard case let .chord(first) = elements[0], case let .chord(second) = elements[2]
+        else { Issue.record("chords"); return }
+        #expect(first.notes.map(\.accidental) == [.natural, .sharp])
+        #expect(Self.accidental(repaired, measure: 0, element: 1) == nil) // covered by the chord's F♯
+        #expect(second.notes.map(\.accidental) == [.sharp, .natural])
+    }
+
     /// A letter key reads a grace note earlier in the bar like any other written note.
     @Test func `a letter key reads an earlier grace note`() throws {
         var score = ScoreEditor(score: EditingFixtures.twoMeasuresOfQuarterRests(key: 0)).score

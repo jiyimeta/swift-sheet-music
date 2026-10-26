@@ -33,6 +33,9 @@ extension Score {
     /// when the alteration is the same. A tie that changes the spelling (F♯ held on as G♭) is read like any other
     /// note.
     ///
+    /// Two notes of one chord on the same line at different alterations (F and F♯) both keep their accidental, even
+    /// where the state already covers one of them (`AccidentalLineState.hasAlteredUnison`).
+    ///
     /// Grace notes are read in MuseScore's order — a chord's graces before, then the chord, then its graces after
     /// (`MeasureAccidentalWalk`) — and suppressed like any other note.
     ///
@@ -168,7 +171,7 @@ extension Score {
         for ref in refs {
             guard let note = MeasureAccidentalWalk.note(at: ref, in: measure.voices) else { continue }
 
-            guard let spelled = spelling(pitch: note.pitch, tpc: note.tpc) else {
+            guard let spelled = AccidentalLineState.spelling(pitch: note.pitch, tpc: note.tpc) else {
                 // Can't reliably derive the written line / alteration —
                 // never suppress, and don't disturb the state.
                 continue
@@ -178,10 +181,15 @@ extension Score {
 
             var draws = note.accidental != nil
             if let accidental = note.accidental {
-                let isRedundant = !current.needsAccidental(for: spelled.alter)
-                let tiedKeepingItsSpelling = note.tieBack != nil
-                    && ref.mainAddress.flatMap { tieStarts[$0] } == note.tpc
-                if isRedundant || tiedKeepingItsSpelling,
+                // MuseScore's `Note::updateAccidental`: a note the state asks to speak does, unless a tie that keeps
+                // its spelling carries the alteration; one the state covers speaks only to tell an altered unison
+                // apart.
+                let speaks = if current.needsAccidental(for: spelled.alteration) {
+                    note.tieBack == nil || ref.mainAddress.flatMap { tieStarts[$0] } != note.tpc
+                } else {
+                    MeasureAccidentalWalk.hasAlteredUnison(at: ref, in: measure.voices)
+                }
+                if !speaks,
                    note.accidentalRole == .auto,
                    isStandardAccidental(accidental)
                 {
@@ -196,50 +204,11 @@ extension Score {
             }
             // The written alteration is now in force on this line for any
             // following note, whether or not a glyph was drawn.
-            state[lineKey] = current.after(note, alteration: spelled.alter, drawsAccidental: draws)
+            state[lineKey] = current.after(note, alteration: spelled.alteration, drawsAccidental: draws)
         }
     }
 
-    // MARK: - TPC / pitch spelling
-
-    /// TPC of each natural letter, in `C D E F G A B` order.
-    private static let naturalTpcByLetter = [14, 16, 18, 13, 15, 17, 19]
-    /// Semitone offset of each natural letter from C, `C D E F G A B`.
-    private static let naturalSemitoneByLetter = [0, 2, 4, 5, 7, 9, 11]
-
-    /// Derive the WRITTEN `(letter, octave, alteration)` of a note from
-    /// its `tpc` and MIDI `pitch`. Returns `nil` when the pair is outside
-    /// MuseScore's valid TPC range or is internally inconsistent (the
-    /// `tpc`-implied pitch class disagrees with the MIDI pitch) — callers
-    /// must treat that as "do not suppress".
-    ///
-    /// `letter` is 0=C … 6=B; `octave` is the scientific octave of the
-    /// written note (middle C = octave 4); `alteration` is the chromatic
-    /// shift from the natural (♮=0, ♯=+1, ♭=−1, ×=+2, ♭♭=−2).
-    private static func spelling(
-        pitch: Int, tpc: Int,
-    ) -> (letter: Int, octave: Int, alter: Int)? {
-        // MuseScore's Tpc range: TPC_MIN = -1 (F♭♭) … TPC_MAX = 33 (B♯♯).
-        guard (-1 ... 33).contains(tpc) else { return nil }
-        let letter = letterIndex(forTpc: tpc)
-        // tpc = naturalTpc + 7 * alter, exactly.
-        let alter = (tpc - naturalTpcByLetter[letter]) / 7
-        let naturalSemi = naturalSemitoneByLetter[letter]
-        // Consistency guard: the written pitch class must match the
-        // actual MIDI pitch class. A mismatch means a corrupt or unusual
-        // pitch+tpc pairing — bail rather than risk a wrong suppression.
-        let expectedPC = ((naturalSemi + alter) % 12 + 12) % 12
-        guard ((pitch % 12) + 12) % 12 == expectedPC else { return nil }
-        let octave = (pitch - naturalSemi - alter) / 12 - 1
-        return (letter, octave, alter)
-    }
-
-    /// Diatonic letter index (0=C … 6=B) of a `tpc`. Rotates the line of
-    /// fifths (`F C G D A E B`) onto `C D E F G A B` order.
-    private static func letterIndex(forTpc tpc: Int) -> Int {
-        let table = [3, 0, 4, 1, 5, 2, 6]
-        return table[((tpc + 1) % 7 + 7) % 7]
-    }
+    // MARK: - Key signature
 
     /// Per-letter alteration (`0`, `+1`, or `−1`) implied by a concert-key
     /// value, keyed by letter index (0=C … 6=B). Sharps follow the circle

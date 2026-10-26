@@ -35,6 +35,12 @@ and this project adheres to
   `plannedConcertPitch` read the alteration in force through a note tied into the bar, so the letter F after a
   tied-over F♯ in C major wrote F♯ with no glyph. It now skips a tied note that draws no accidental of its own, as
   MuseScore's `Measure::findAccidental` does, so the letter writes F♮ and renotation gives it its ♮.
+- **Two notes of one chord on the same line at different alterations both draw their accidental.** With F and F♯ in
+  one chord, the F drew no ♮ where C major already reads F natural, and an F♯ after an earlier F♯ in the bar drew no ♯
+  when its chord also held an F — so the two noteheads on one line could not be told apart. Both passes now keep the
+  glyph of a note whose chord holds another on its line at a different alteration, as MuseScore's `hasAlteredUnison`
+  does; the bar's state is left as it was. The pitch-and-tpc spelling the two passes each carried is now one
+  (`AccidentalLineState.spelling`).
 - **A MusicXML tuplet is a tuplet.** The import shortened each member by its `<time-modification>` and made no
   `Voice.tuplets` entry, so the page showed no bracket or number, and a MuseScore save wrote every member as a bare
   fraction (`<durationType>measure</durationType><duration>1/12</duration>`), which MuseScore opens as whole notes.
