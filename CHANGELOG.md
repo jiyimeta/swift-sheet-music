@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.21.0] - 2026-10-26
+
 ### Fixed
 
 - **A note after a tie over the barline restates its accidental, as MuseScore does.** A note tied into a bar carries
