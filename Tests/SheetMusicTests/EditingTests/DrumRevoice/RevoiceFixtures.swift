@@ -124,6 +124,24 @@ enum RevoiceFixtures {
         return midi
     }
 
+    /// `score` with the chord at `element` of bar `measure`'s voice `voice` changed by `edit`. Element 0 of bar 0's
+    /// voice 0 is the time signature, so that voice's first chord is element 1.
+    static func editingChord(
+        _ score: Score, measure: Int, voice: Int, element: Int, _ edit: (inout Chord) -> Void,
+    ) -> Score {
+        var result = score
+        result.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[measure].voices[voice].elements.updateValue(at: element) { slot in
+                    guard case var .chord(chord) = slot else { preconditionFailure("element \(element) is no chord") }
+                    edit(&chord)
+                    slot = .chord(chord)
+                }
+            }
+        }
+        return result
+    }
+
     // MARK: Reading back
 
     /// The text form of `voice`'s chords, rests and tuplets — every other element is left out. A chord's drums are
@@ -190,5 +208,15 @@ enum RevoiceFixtures {
         guard let plan = try command.plan(in: result, ids: ids) else { return (result, nil) }
         _ = try plan.apply(to: &result, ids: &ids)
         return (result, plan)
+    }
+
+    /// What `RevoiceBarPlanner` decides for bar `measure` of `staff` under `map`, read as the command reads it; nil
+    /// when the score has no such staff.
+    static func barPlan(
+        _ score: Score, measure: Int, to map: [Int: Int], policy: RhythmSpellingPolicy = .default,
+    ) -> RevoiceBarPlan? {
+        guard let target = score[staff] else { return nil }
+        let bar = RevoiceBar(staff: target, measureIndex: measure, division: score.division)
+        return RevoiceBarPlanner.plan(bar, voiceForPitch: map, policy: policy)
     }
 }

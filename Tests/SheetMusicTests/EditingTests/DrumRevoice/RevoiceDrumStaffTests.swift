@@ -194,6 +194,63 @@ struct RevoiceDrumStaffTests {
         try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
     }
 
+    /// The half-note hit outlasts the beat after it, so the chord keeps its half; read to the next beat only, both
+    /// parts would become `H/4 r/4 H/4 H/4` and `K/4 r/4 r/2`.
+    @Test func `a hit longer than the next beat keeps its length`() throws {
+        let score = RevoiceFixtures.score([["H+K/2 H/4 H/4"]])
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["H/2 H/4 H/4", "K/2 r/2"])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
+    /// Both voices sound the snare on 1, each with its own notehead; one voice holds one snare there, the first
+    /// voice's. The gate's model check sees the second voice's snare go — that is the merge — and nothing else: what
+    /// plays is the same.
+    @Test func `two hits of one pitch at one onset keep the lower voice's note`() throws {
+        var score = RevoiceFixtures.score([["S/4 H/4 H/4 H/4", "S/4 r/4 r/2"]])
+        score = RevoiceFixtures.editingChord(score, measure: 0, voice: 0, element: 1) { chord in
+            chord.notes.updateNote(at: 0) { $0.headType = "cross" }
+        }
+        score = RevoiceFixtures.editingChord(score, measure: 0, voice: 1, element: 0) { chord in
+            chord.notes.updateNote(at: 0) { $0.headType = "diamond" }
+        }
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.oneVoice)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["S/4 H/4 H/4 H/4"])
+        let merged = try #require(after[RevoiceFixtures.staff]?.measures[0].voices[0].elements[1])
+        guard case let .chord(snare) = merged else {
+            Issue.record("element 1 is no chord: \(merged)")
+            return
+        }
+        #expect(snare.notes.map(\.headType) == ["cross"])
+        let problems = try RevoiceSoundGate.problems(before: score, after: after, staff: RevoiceFixtures.staff)
+        #expect(problems.count == 1)
+        #expect(problems.allSatisfy { $0.hasPrefix("hit lost: bar 0 tick 0 pitch 38") && $0.contains("diamond") })
+    }
+
+    @Test func `a location shift leaves the bar as written`() {
+        var score = RevoiceFixtures.score([["H/4 H/4 H/4 H/4", "K/4 r/4 r/2"]])
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[1] = RevoiceFixtures.voice(
+                    "K/4 r/2", leading: [.locationShift(delta: Fraction(numerator: 1, denominator: 4))],
+                )
+            }
+        }
+        let plan = RevoiceFixtures.barPlan(score, measure: 0, to: RevoiceFixtures.oneVoice)
+        #expect(plan == .leftAsWritten(.unsupported))
+    }
+
+    /// The snare sits in the second voice but this kit names it in the first, and no foot hit is left for the second:
+    /// the rewrite writes one voice and removes the other, though the kit's form has two.
+    @Test func `a voice below the target count goes when nothing lands in it`() throws {
+        let kit = [35: 1, 36: 1, 44: 1, 38: 0]
+        let score = RevoiceFixtures.score([["H/4 H/4 H/4 H/4", "S/4 r/4 S/4 r/4"]])
+        let (after, plan) = try RevoiceFixtures.converted(score, to: kit)
+        #expect(plan != nil)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["H+S/4 H/4 H+S/4 H/4"])
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
+    }
+
     @Test func `a bar with no foot hit gets no voice 2`() throws {
         let score = RevoiceFixtures.score([["H/8 H/8 H+S/8 H/8 H/8 H/8 H+S/8 H/8"]])
         let (after, plan) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.handsAndFeet)
