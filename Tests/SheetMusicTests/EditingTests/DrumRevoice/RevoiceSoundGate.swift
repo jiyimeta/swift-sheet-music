@@ -5,8 +5,10 @@ import Testing
 /// The drum voice conversion's invariant (design 2026-10-26 §5, in the form decision D1 gives it): a conversion
 /// keeps what plays and where every marking sits. Every difference is recorded as an `Issue` at the caller's line.
 ///
-/// 1. Rendered, track by track: the SET of note-ons `(tick, channel, pitch)` is equal, and so is the multiset of
-///    every event that is neither a note-on nor a note-off — only the note-offs of drum hits may move.
+/// 1. Rendered, track by track: the SET of note-ons `(tick, channel, pitch, velocity)` is equal, read from renders
+///    with every velocity-shaping articulation taken off (so what it compares is what the dynamics and hairpins make
+///    of each note — they are voice-scoped, `HairpinRamps+Part.swift`); and the multiset of every event that is
+///    neither a note-on nor a note-off is equal in the renders as they are. Only the note-offs of drum hits may move.
 /// 2. In the model, the SET of hits `(bar, onset, pitch, note)` on the staff is equal, tie flags left out.
 /// 3. A hit that was tied either way or carried a `.single` tremolo keeps its tie flags, its tremolo and its
 ///    chord's length, since those lengths are audible (§4.4).
@@ -24,36 +26,48 @@ enum RevoiceSoundGate {
     static func expectKeepsSound(
         before: Score, after: Score, staff: StaffAddress, sourceLocation: SourceLocation = #_sourceLocation,
     ) throws {
-        var problems: [String] = []
-        try compareRenderings(before: before, after: after, into: &problems)
-        let hitsBefore = HitIndex(score: before, staff: staff)
-        let hitsAfter = HitIndex(score: after, staff: staff)
-        compareNotes(before: hitsBefore, after: hitsAfter, into: &problems)
-        compareAudibleLengthsAndAccents(before: hitsBefore, after: hitsAfter, into: &problems)
-        let annotationsBefore = annotations(in: before, staff: staff)
-        let annotationsAfter = annotations(in: after, staff: staff)
-        problems += difference(annotationsBefore, annotationsAfter).map { "annotation lost: \($0)" }
-        problems += difference(annotationsAfter, annotationsBefore).map { "annotation gained: \($0)" }
-        compareOtherStaves(before: before, after: after, staff: staff, into: &problems)
-        for problem in problems {
+        for problem in try problems(before: before, after: after, staff: staff) {
             Issue.record(Comment(rawValue: problem), sourceLocation: sourceLocation)
         }
+    }
+
+    /// Every difference the six checks find, as the text `expectKeepsSound` records — what the gate's own tests read
+    /// to tell which check caught a change.
+    static func problems(before: Score, after: Score, staff: StaffAddress) throws -> [String] {
+        var found: [String] = []
+        try compareRenderings(before: before, after: after, into: &found)
+        let hitsBefore = HitIndex(score: before, staff: staff)
+        let hitsAfter = HitIndex(score: after, staff: staff)
+        compareNotes(before: hitsBefore, after: hitsAfter, into: &found)
+        compareAudibleLengthsAndAccents(before: hitsBefore, after: hitsAfter, into: &found)
+        let annotationsBefore = annotations(in: before, staff: staff)
+        let annotationsAfter = annotations(in: after, staff: staff)
+        found += difference(annotationsBefore, annotationsAfter).map { "annotation lost: \($0)" }
+        found += difference(annotationsAfter, annotationsBefore).map { "annotation gained: \($0)" }
+        compareOtherStaves(before: before, after: after, staff: staff, into: &found)
+        return found
     }
 
     // MARK: 1. What the renderer plays
 
     private static func compareRenderings(before: Score, after: Score, into problems: inout [String]) throws {
+        // Velocity comes from renders with the velocity-shaping marks off: check 4 judges those (the D1 union may
+        // add one on a merge), so what is left to compare is what the dynamics and hairpins give each note.
+        let heardBefore = try MidiRenderer.render(score: withoutVelocityShaping(before))
+        let heardAfter = try MidiRenderer.render(score: withoutVelocityShaping(after))
         let was = try MidiRenderer.render(score: before)
         let now = try MidiRenderer.render(score: after)
-        guard was.tracks.count == now.tracks.count else {
+        guard was.tracks.count == now.tracks.count, heardBefore.tracks.count == heardAfter.tracks.count else {
             problems.append("track count \(was.tracks.count) became \(now.tracks.count)")
             return
         }
-        for (index, (old, new)) in zip(was.tracks, now.tracks).enumerated() {
+        for (index, (old, new)) in zip(heardBefore.tracks, heardAfter.tracks).enumerated() {
             let onsBefore = noteOns(old)
             let onsAfter = noteOns(new)
             problems += onsBefore.subtracting(onsAfter).sorted().map { "track \(index): note-on lost at \($0)" }
             problems += onsAfter.subtracting(onsBefore).sorted().map { "track \(index): note-on gained at \($0)" }
+        }
+        for (index, (old, new)) in zip(was.tracks, now.tracks).enumerated() {
             let othersBefore = otherEvents(old)
             let othersAfter = otherEvents(new)
             problems += difference(othersBefore, othersAfter).map { "track \(index): event lost: \($0)" }
@@ -61,10 +75,33 @@ enum RevoiceSoundGate {
         }
     }
 
+    /// `score` with every velocity-shaping articulation taken off every chord of every staff.
+    private static func withoutVelocityShaping(_ score: Score) -> Score {
+        var result = score
+        result.parts.mapValues { part in
+            var part = part
+            part.staves.mapValues { staff in
+                var staff = staff
+                for measureIndex in staff.measures.indices {
+                    for voiceIndex in staff.measures[measureIndex].voices.indices {
+                        staff.measures[measureIndex].voices[voiceIndex].elements.mapValues { element in
+                            guard case var .chord(chord) = element else { return element }
+                            chord.articulations.removeAll { velocityShapingKinds.contains($0.kind) }
+                            return .chord(chord)
+                        }
+                    }
+                }
+                return staff
+            }
+            return part
+        }
+        return result
+    }
+
     private static func noteOns(_ track: MidiTrack) -> Set<String> {
         Set(track.events.compactMap { timed -> String? in
             guard case let .noteOn(channel, pitch, velocity) = timed.event, velocity > 0 else { return nil }
-            return "tick \(timed.tick) channel \(channel) pitch \(pitch)"
+            return "tick \(timed.tick) channel \(channel) pitch \(pitch) velocity \(velocity)"
         })
     }
 

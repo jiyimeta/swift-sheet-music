@@ -29,6 +29,7 @@ struct RevoiceDrumStaffTests {
         #expect(RevoiceFixtures.voices(after, measure: 0) == ["H+K/4 H/4 H+S/4 H/4"])
         let before = score.parts[0].staves[0].measures[0].voices[0]
         #expect(after.parts[0].staves[0].measures[0].voices[0].elements.values == before.elements.values)
+        try RevoiceSoundGate.expectKeepsSound(before: score, after: after, staff: RevoiceFixtures.staff)
     }
 
     @Test func `a rest-only second voice stays under hands and feet`() throws {
@@ -52,6 +53,32 @@ struct RevoiceDrumStaffTests {
         #expect(plan != nil)
         #expect(after.parts[0].staves[0].measures[0].voices.count == 1)
         #expect(after.parts[0].staves[0].measures[1].voices == score.parts[0].staves[0].measures[1].voices)
+    }
+
+    /// A hidden rest carries no marking, so its voice goes; a rest carrying an articulation would lose it with the
+    /// voice, so that bar is left as written — and the preview says which is which.
+    @Test func `a rest carrying a marking keeps its voice and a hidden rest does not`() throws {
+        var score = RevoiceFixtures.score([["H+K/4 H/4 H+S/4 H/4", "r/m"], ["H/4 H/4 H+S/4 H/4", "r/m"]])
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[1].elements.updateValue(at: 0) { slot in
+                    guard case var .chord(rest) = slot else { return }
+                    rest.visible = false
+                    slot = .chord(rest)
+                }
+                staff.measures[1].voices[1].elements.updateValue(at: 0) { slot in
+                    guard case var .chord(rest) = slot else { return }
+                    rest.articulations = [ChordArticulation(kind: .tenuto)]
+                    slot = .chord(rest)
+                }
+            }
+        }
+        let command = RevoiceDrumStaff(
+            staff: RevoiceFixtures.staff, voiceForPitch: RevoiceFixtures.oneVoice, policy: .default,
+        )
+        #expect(command.preview(in: score) == RevoicePreview(rewrittenMeasures: [0], measuresLeftAsWritten: [1]))
+        let (after, _) = try RevoiceFixtures.converted(score, to: RevoiceFixtures.oneVoice)
+        #expect(after.parts[0].staves[0].measures.map(\.voices.count) == [1, 2])
     }
 
     @Test func `an out-of-range voice index is refused`() {

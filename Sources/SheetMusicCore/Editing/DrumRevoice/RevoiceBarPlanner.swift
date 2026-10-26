@@ -34,8 +34,9 @@ enum RevoiceBarPlan: Equatable, Sendable {
     /// Converting it would break one of the design's anti-goals; it stays as it was (§4.7).
     case leftAsWritten(RevoiceKeepReason)
     /// Write these voices, then leave the bar with `voiceCountAfter` voices — creating the ones a write targets that
-    /// the bar does not have yet, and removing every voice from the last down to that count. Never empty: a bar that
-    /// would change nothing is `.untouched`.
+    /// the bar does not have yet, and removing every voice from the last down to that count. The list of writes may
+    /// be empty (`.rewrite([], voiceCountAfter:)` only removes voices), but the effect never is: a bar that would
+    /// change nothing is `.untouched`.
     case rewrite([RevoiceVoiceWrite], voiceCountAfter: Int)
 }
 
@@ -84,13 +85,17 @@ enum RevoiceBarPlanner {
         }
     }
 
-    /// The voice holds nothing a removal would drop: rests only, none of them carrying a grace note or a
-    /// chord-anchored spanner, and no other element.
+    /// The voice holds nothing a removal would drop: no element but rests, and each rest bare — equal to a plain
+    /// rest of its duration once its `elementProperties` (visibility, color, offset, placement — none a marking) are
+    /// set aside. A rest carrying anything else — an articulation, an ornament, a tremolo, an arpeggio, a lyric, a
+    /// grace, a chord-anchored spanner, preserved markup — leaves its bar as written rather than losing it with the
+    /// voice.
     static func holdsOnlyRests(_ voice: Voice) -> Bool {
         voice.elements.allSatisfy { element in
-            guard case let .chord(chord) = element else { return false }
-            return chord.notes.isEmpty && chord.graceNotesBefore.isEmpty && chord.graceNotesAfter.isEmpty
-                && chord.spanners.isEmpty
+            guard case let .chord(chord) = element, chord.notes.isEmpty else { return false }
+            var bare = Chord(duration: chord.duration, notes: [])
+            bare.elementProperties = chord.elementProperties
+            return chord == bare
         }
     }
 }
