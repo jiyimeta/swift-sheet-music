@@ -140,8 +140,9 @@ extension Score {
         // blocks the next on that tick.
         let tempoRegistry = MusicXMLTempoRegistryBox()
         let partGroups = MusicXMLPartGroups(partList: partList)
+        var lengths: [MusicXMLMeasureLengths.PartLengths] = []
         for (index, partNode) in root.all("part").enumerated() {
-            let (part, staffElements) = try decodeOnePart(
+            let (part, staffElements, partLengths) = try decodeOnePart(
                 partNode: partNode,
                 scoreParts: scoreParts,
                 partGroups: partGroups,
@@ -153,6 +154,7 @@ extension Score {
             )
             parts.append(part)
             perStaffSystemElements.append(contentsOf: staffElements)
+            lengths.append(partLengths)
         }
         let measureCount = perStaffSystemElements
             .map(\.perMeasure.count)
@@ -173,7 +175,8 @@ extension Score {
         let lanes = laneElements.map { SystemMeasure(elements: laneOrdered($0)) }
         // MuseScore numbers an implicit brace's column `bracketLevels + 1`, which leaves column 0 empty; it draws an
         // empty column at no width, where ssm's gutter gives every column up to the highest one a spatium.
-        let compacted = Score.canonicalizingBracketColumns(addingFinalBarLines(parts))
+        let measured = MusicXMLMeasureLengths(parts: lengths).applied(to: parts)
+        let compacted = Score.canonicalizingBracketColumns(addingFinalBarLines(measured))
         return (parts: compacted, systemMeasures: lanes)
     }
 
@@ -247,7 +250,11 @@ extension Score {
         options: MusicXMLImportOptions,
         software: MusicXMLExporterSoftware,
         tempoRegistry: MusicXMLTempoRegistryBox,
-    ) throws -> (part: Part, staffElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])]) {
+    ) throws -> (
+        part: Part,
+        staffElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])],
+        lengths: MusicXMLMeasureLengths.PartLengths,
+    ) {
         let id = partNode.attributes["id"] ?? ""
         guard let scorePart = scoreParts.first(where: { $0.attributes["id"] == id })
             ?? (index < scoreParts.count ? scoreParts[index] : nil)
@@ -313,7 +320,7 @@ extension Score {
         // Tempo markings belong to the score's top staff whatever part wrote them (`addElemOffset`, "TempoText must
         // be in track 0").
         staffElements.append((StaffAddress(partIndex: 0, staffIndexInPart: 0), walker.tempoElementsByMeasure))
-        return (part, staffElements)
+        return (part, staffElements, walker.lengths)
     }
 
     /// The part's instrument changes, per measure. A drum part has none: its `<instrument>` names a drum of the kit,

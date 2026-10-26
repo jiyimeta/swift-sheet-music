@@ -97,7 +97,7 @@ extension MusicXMLMeasureWalker {
                 state.builders[staffIdx].append(.breath(breath), toVoice: voice)
             }
         case let .new(elements):
-            let duration = positiveDuration(child, divisions: divisions) ?? .zeroTick
+            let duration = timedDuration(child, elements: elements, divisions: divisions)
             // A tuplet this note stops short is padded with a rest, which the note follows (`P2:2848-2860`).
             let tuplet = MusicXMLTupletNote(node: child, divisions: divisions)
             if let tuplet {
@@ -271,14 +271,48 @@ extension MusicXMLMeasureWalker {
         }
     }
 
-    /// The measure's length, which the spanners' `<next>` offsets roll over (`P1:2839-2852`): how far its clock went,
-    /// or, for an empty measure, the last `<time>`'s `beats / beat-type`, or 4/4 when there is none.
-    static func measureLength(_ state: MusicXMLMeasureState, attributes: MusicXMLAttributesSnapshot) -> Fraction {
-        guard state.clock.furthest.isZeroTick else { return state.clock.furthest }
-        if let beats = attributes.timeN, let beatType = attributes.timeD, beats > 0, beatType > 0 {
-            return Fraction(numerator: beats, denominator: beatType)
+    /// The part's length for the measure (`P1:2833-2878`), which the spanners' `<next>` offsets roll over and the
+    /// score's measure takes the longest of: how far its clock reached, a tuplet's padding included; for an empty
+    /// measure, the last `<time>`'s `beats / beat-type`, or 4/4 when there is none. A length that is no whole number
+    /// of 128ths rounds up to the next one, or down when it passes one by less than a division (MuseScore keeps a
+    /// measure to whole 128ths).
+    static func measureLength(
+        _ state: MusicXMLMeasureState, attributes: MusicXMLAttributesSnapshot, divisions: DivisionsContext,
+    ) -> Fraction {
+        let reach = state.clock.reach
+        guard !reach.isZeroTick else { return nominalLength(attributes) ?? Fraction(numerator: 4, denominator: 4) }
+        let in128ths = Fraction(numerator: reach.numerator * 128, denominator: reach.denominator)
+        guard in128ths.denominator != 1 else { return reach }
+        let whole = in128ths.numerator / in128ths.denominator
+        let down = Fraction(numerator: whole, denominator: 128)
+        let past = reach - down
+        if divisions.perQuarter > 0, past.precedes(Fraction(numerator: 1, denominator: 4 * divisions.perQuarter)) {
+            return down
         }
-        return Fraction(numerator: 4, denominator: 4)
+        return Fraction(numerator: whole + 1, denominator: 128)
+    }
+
+    /// The last `<time>`'s `beats / beat-type`, the length MuseScore gives the measure's time signature; nil before
+    /// any `<time>`.
+    static func nominalLength(_ attributes: MusicXMLAttributesSnapshot) -> Fraction? {
+        guard let beats = attributes.timeN, let beatType = attributes.timeD, beats > 0, beatType > 0 else { return nil }
+        return Fraction(numerator: beats, denominator: beatType)
+    }
+
+    /// How far a chord or rest moves the clock: its value as the note decoder read it, which is MuseScore's
+    /// `checkTiming` — `<type>`, dots and `<time-modification>` before `<duration>` (`P2:7091-7094`). A whole rest
+    /// takes its `<duration>`, as Sibelius writes a measure rest so, and a measure rest, which has no value of its own,
+    /// does too.
+    private static func timedDuration(
+        _ node: XMLTreeNode, elements: [VoiceElement], divisions: DivisionsContext,
+    ) -> Fraction {
+        let specified = positiveDuration(node, divisions: divisions)
+        let value = elements.lazy.compactMap { element -> NoteDuration? in
+            if case let .chord(chord) = element { chord.duration } else { nil }
+        }.first
+        let isWholeRest = node.children.contains { $0.name == "rest" } && node.first("type")?.text == "whole"
+        guard let value, value != .measure, !isWholeRest || specified == nil else { return specified ?? .zeroTick }
+        return value.asFraction
     }
 
     /// The node's `<duration>` as a fraction of a whole note, when it is a positive integer.

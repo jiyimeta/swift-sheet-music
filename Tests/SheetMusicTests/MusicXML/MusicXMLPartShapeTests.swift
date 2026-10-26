@@ -5,7 +5,8 @@ import SheetMusicXMLTools
 import Testing
 
 /// What MuseScore's importer adds to a part's shape that the file does not spell out: the implicit brace of a
-/// multi-staff part (`P1:1483-1499`) and the explicit normal bar line closing the score (`P2:2109-2118`).
+/// multi-staff part (`P1:1483-1499`), the explicit normal bar line closing the score (`P2:2109-2118`) and the length
+/// of a bar that is not its time signature's (`P1:453-480`).
 @Suite("MusicXML part shape")
 struct MusicXMLPartShapeTests {
     private typealias F = DirectionFixtures
@@ -97,6 +98,45 @@ struct MusicXMLPartShapeTests {
         let repeated = try F.score(measures: [F.fourQuarters + repeatEnd])
         let last = Self.lastElement(repeated)
         #expect(last.map { element in if case .barLine = element { true } else { false } } != true)
+    }
+
+    // MARK: - Measure length
+
+    private static let threeQuarters = ["C", "D", "E"].map { F.quarter($0) }.joined()
+
+    private static func lengths(_ score: Score, part: Int = 0) -> [Fraction?] {
+        score.parts[part].staves[0].measures.map(\.actualLength)
+    }
+
+    @Test("a bar shorter than its time signature keeps its length, as MuseScore's len; a full bar has none")
+    func shortBarKeepsItsLength() throws {
+        let score = try F.score(measures: [F.fourQuarters, Self.threeQuarters, F.fourQuarters])
+        #expect(Self.lengths(score) == [nil, Fraction(numerator: 3, denominator: 4), nil])
+    }
+
+    @Test("a bar is as long as its longest part, in every part")
+    func longestPartSetsTheLength() throws {
+        let score = try F.score(parts: [
+            [Self.threeQuarters, Self.threeQuarters],
+            [F.fourQuarters, Self.threeQuarters],
+        ])
+        let short = Fraction(numerator: 3, denominator: 4)
+        #expect(Self.lengths(score, part: 0) == [nil, short])
+        #expect(Self.lengths(score, part: 1) == [nil, short])
+    }
+
+    @Test("notes whose <duration> falls short of their <type> fill the bar their types fill (checkTiming)")
+    func typesNotDurationsMeasureTheBar() throws {
+        let sloppy = ["C", "D", "E", "F"].map { F.note($0, duration: 470, type: "quarter") }.joined()
+        let score = try F.score(measures: [sloppy])
+        #expect(Self.lengths(score) == [nil])
+    }
+
+    @Test("a length that is no whole number of 128ths rounds up to the next one")
+    func lengthRoundsToWhole128ths() throws {
+        // 100 of 1920 divisions to the whole is 5/96, between 6/128 and 7/128 by more than a division.
+        let score = try F.score(measures: ["<forward><duration>100</duration></forward>"])
+        #expect(Self.lengths(score) == [Fraction(numerator: 7, denominator: 128)])
     }
 
     @Test("an <encoding><encoder> is MuseScore's encoder meta tag (testSibOttavas)")

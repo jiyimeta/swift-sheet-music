@@ -52,6 +52,12 @@ and this project adheres to
   changed between `<Tuplet>` and the tuplet's first note, so the tuplet's range opened on that preserved `<Beam>`, and
   the encoder, looking for the unit only at the range's first element, wrote no `<baseNote>` — MuseScore 3 crashes on
   such a tuplet and MuseScore 4 cannot measure it. The unit now comes from the first chord or rest in the range.
+- **A MusicXML bar shorter than its time signature keeps its length.** The import gave no bar an `actualLength`, so
+  a pickup or a short bar was laid out and saved as a full one. A bar now takes MuseScore's length — the longest part's,
+  rounded to whole 128ths (`determineMeasureLength`) — and keeps it as `actualLength` (MuseScore's `len`) where it is
+  not the time signature's. The measure clock now moves by a note's `<type>`, dots and `<time-modification>` rather
+  than its `<duration>`, as MuseScore's `checkTiming` does, so a file whose `<duration>`s are a little off no longer
+  places its directions, or measures its bars, by them.
 
 ## [4.20.0] - 2026-10-24
 

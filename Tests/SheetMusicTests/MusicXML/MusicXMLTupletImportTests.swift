@@ -34,15 +34,11 @@ struct MusicXMLTupletImportTests {
     ]
 
     /// The fixtures whose notes compare as well. Parked here only, each for a difference that is not a tuplet's:
-    /// - `testTuplets2` — its second bar holds 3/4 of a 4/4 bar; MuseScore gives the bar that length (`len="3/4"`),
-    ///   and the import sets no bar's `actualLength`.
     /// - `testTuplets3` — its piano's bottom staff ends the last bar in its second voice, and the import puts the end
     ///   bar line in the voice that wrote the last note, where MuseScore puts it in the first.
     /// - `testIncompleteTuplet` — MuseScore reads its written flats as `user` accidentals where the import reads
     ///   `auto`, and its end repeat, written before the bottom staff's notes, stays off that staff in MuseScore.
-    static let noteFixtures = tupletFixtures.filter {
-        !["testTuplets2", "testTuplets3", "testIncompleteTuplet"].contains($0)
-    }
+    static let noteFixtures = tupletFixtures.filter { !["testTuplets3", "testIncompleteTuplet"].contains($0) }
 
     @Test("MuseScore's tuplet fixtures group their tuplets as MuseScore does", arguments: tupletFixtures)
     func tupletsMatchMuseScore(_ fixture: String) throws {

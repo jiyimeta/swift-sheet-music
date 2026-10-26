@@ -34,6 +34,9 @@ enum MusicXMLMeasureWalker {
         let tempoElementsByMeasure: [[PositionedSystemElement]]
         /// The lines, heads and stems the part's drum notes were written with, which the part's kit is built from.
         let drumKit: MusicXMLDrumKit
+        /// The part's length for each measure (`measureLength`), which the score's measure takes the longest of, and
+        /// the time signature's length in force at each.
+        let lengths: MusicXMLMeasureLengths.PartLengths
     }
 
     static func decode(
@@ -62,7 +65,7 @@ enum MusicXMLMeasureWalker {
         var directionEvents: [MusicXMLDirectionEvent] = []
         var anchors: [[[MusicXMLChordAnchor]]] = Array(repeating: [], count: staffCount)
         var tempoElements: [[PositionedSystemElement]] = []
-        var measureLengths: [Fraction] = []
+        var lengths = MusicXMLMeasureLengths.PartLengths()
         // The lines inferred from words live across measures; their limit is measured from the part's start.
         var inferredLines = MusicXMLInferredLineLog()
         var partTick = Fraction.zeroTick
@@ -90,8 +93,8 @@ enum MusicXMLMeasureWalker {
                 directionEvents: &directionEvents, drumKit: &drumKit,
             )
             tempoElements.append(state.tempoElements)
-            let length = measureLength(state, attributes: previousAttributes)
-            measureLengths.append(length)
+            let length = measureLength(state, attributes: previousAttributes, divisions: divisions)
+            lengths.append(length, nominal: nominalLength(previousAttributes))
             inferredLines = state.inferredLines
             repeats = state.repeats
             delayedOttavas = state.delayedOttavas
@@ -103,14 +106,14 @@ enum MusicXMLMeasureWalker {
             }
         }
         // The markers and jumps settle into their bars by the recorded lengths (the clock `partTick` sums).
-        repeats.apply(measureLengths: measureLengths, to: &perStaffMeasures[0])
+        repeats.apply(measureLengths: lengths.lengths, to: &perStaffMeasures[0])
         var withGlides = applyGlides(attachments: glideTracker.attachments, measures: perStaffMeasures)
         // The delayed ottava stops move to the notes they waited for, or to the part's end (`P2:2297-2304`).
-        directionEvents = delayedOttavas.finished(directionEvents, measureLengths: measureLengths, partEnd: partTick)
+        directionEvents = delayedOttavas.finished(directionEvents, measureLengths: lengths.lengths, partEnd: partTick)
         // Spanner starts and stops pair part-wide once the part is walked, and the inferred lines close at their ends
         // (`P2:2307-2314`); their begin sides and end markers join the queue after the direction's other voice
         // elements, in the pairing's order.
-        let spanners = spannerEvents(directionEvents, inferredLines: inferredLines, measureLengths: measureLengths)
+        let spanners = spannerEvents(directionEvents, inferredLines: inferredLines, measureLengths: lengths.lengths)
         MusicXMLDirectionSplicer.apply(directionEvents + spanners, anchors: anchors, to: &withGlides)
         let dropped = dropUnmatchedTies(withGlides)
         return PartResult(
@@ -118,7 +121,7 @@ enum MusicXMLMeasureWalker {
             measuresByStaff: dropped,
             systemElementsByStaffMeasure: perStaffSystemElements,
             lineCountByStaff: previousAttributes.lineCountByStaff,
-            tempoElementsByMeasure: tempoElements, drumKit: drumKit,
+            tempoElementsByMeasure: tempoElements, drumKit: drumKit, lengths: lengths,
         )
     }
 
