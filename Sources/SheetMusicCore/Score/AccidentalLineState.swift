@@ -40,6 +40,45 @@ struct AccidentalLineState: Equatable {
         note.tieBack != nil && note.accidental == nil
     }
 
+    /// Whether another note of `notes` stands on the written line of `notes[index]` with a different alteration — the
+    /// unison MuseScore spells out on both notes (`hasAlteredUnison` in `note.cpp`). With F and F♯ in one chord the F
+    /// draws its ♮ even where the bar already reads natural, and the F♯ its ♯ even after an earlier F♯. It decides a
+    /// glyph only; the state is left as the bar had it.
+    static func hasAlteredUnison(at index: Int, in notes: ChordNotes) -> Bool {
+        guard let own = spelling(pitch: notes[index].pitch, tpc: notes[index].tpc) else { return false }
+        return notes.indices.contains { other in
+            guard other != index, let spelled = spelling(pitch: notes[other].pitch, tpc: notes[other].tpc)
+            else { return false }
+            return spelled.letter == own.letter && spelled.octave == own.octave
+                && spelled.alteration != own.alteration
+        }
+    }
+
+    /// TPC of each natural letter, `C D E F G A B` order.
+    static let naturalTpcByLetter = [14, 16, 18, 13, 15, 17, 19]
+    /// Semitone offset of each natural letter from C, `C D E F G A B` order.
+    private static let naturalSemitoneByLetter = [0, 2, 4, 5, 7, 9, 11]
+
+    /// The WRITTEN `(letter, octave, alteration)` behind a `pitch` / `tpc` pair — letter 0=C … 6=B, middle C in octave
+    /// 4, alteration ♮=0, ♯=+1, ♭=−1 and so on — or nil when the two disagree or the tpc is outside MuseScore's range
+    /// (`TPC_MIN = -1` F♭♭ … `TPC_MAX = 33` B♯♯). Callers must read nil as "say nothing about this note": a corrupt
+    /// or unusual pairing would otherwise decide a glyph wrongly.
+    static func spelling(pitch: Int, tpc: Int) -> (letter: Int, octave: Int, alteration: Int)? {
+        guard (-1 ... 33).contains(tpc) else { return nil }
+        let letter = letter(forTpc: tpc)
+        let alteration = (tpc - naturalTpcByLetter[letter]) / 7
+        let naturalSemi = naturalSemitoneByLetter[letter]
+        let expectedPitchClass = ((naturalSemi + alteration) % 12 + 12) % 12
+        guard ((pitch % 12) + 12) % 12 == expectedPitchClass else { return nil }
+        return (letter, (pitch - naturalSemi - alteration) / 12 - 1, alteration)
+    }
+
+    /// Diatonic letter index (0=C … 6=B) of a TPC. `(tpc + 1) % 7` rotates the line of fifths to align with
+    /// `F C G D A E B`; the table maps that rotation back to `C D E F G A B` order.
+    static func letter(forTpc tpc: Int) -> Int {
+        [3, 0, 4, 1, 5, 2, 6][((tpc + 1) % 7 + 7) % 7]
+    }
+
     /// The glyph a note spelled with `alteration` draws when it has to speak, or nil for an alteration no single glyph
     /// spells.
     static func glyph(forAlteration alteration: Int) -> Accidental? {

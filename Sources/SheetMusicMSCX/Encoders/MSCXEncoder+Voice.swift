@@ -230,12 +230,6 @@ extension Voice {
         var previousChordTrailingBendGrace: Int?
         var seenChordInVoice = false
         var voiceTotal = Fraction(numerator: 0, denominator: 1)
-        /// Two-chord tremolo (`span == .between`) lives only on the
-        /// start chord; emitting it stashes the tremolo here so the
-        /// next chord-bearing element can carry its own matching
-        /// `<Tremolo>` block (MuseScore's serialized form repeats the
-        /// `c8/c16/c32` element on both chords). Cleared on consume.
-        var pendingFollowerTremolo: Tremolo?
         /// Chord-anchored spanner end markers still looking for their chord.
         /// Records for *this* measure carry `measuresAway == 0`; the walk
         /// claims one when the cursor reaches its `fraction`.

@@ -94,7 +94,7 @@ enum MusicXMLMeasureWalker {
             )
             tempoElements.append(state.tempoElements)
             let length = measureLength(state, attributes: previousAttributes, divisions: divisions)
-            lengths.append(length, nominal: nominalLength(previousAttributes))
+            lengths.append(length, nominal: nominalLength(previousAttributes), of: measureNode)
             inferredLines = state.inferredLines
             repeats = state.repeats
             delayedOttavas = state.delayedOttavas

@@ -482,11 +482,12 @@ extension Voice {
 
     /// Second pass over the decoded `elements`: every chord whose
     /// first-pass tremolo carries `.between` is the *start* of a
-    /// two-chord (`c8` / `c16` / `c32`) tremolo. MuseScore writes the
-    /// same `<Tremolo>` element on both members of the pair, so the
-    /// follower's redundant copy must be cleared here — otherwise the
-    /// follower would render its own beams and the MIDI / playback
-    /// passes would double-count the tremolo.
+    /// two-chord (`c8` / `c16` / `c32`) tremolo. MuseScore writes it on
+    /// the first chord alone, but ssm before 4.21.0 wrote the same
+    /// element on both members of the pair, so a follower's redundant
+    /// copy must be cleared here — otherwise the follower would render
+    /// its own beams and the MIDI / playback passes would double-count
+    /// the tremolo.
     ///
     /// The follower is the next `.chord` in voice order. Non-chord
     /// elements (dynamics, location shifts, …) are skipped defensively;

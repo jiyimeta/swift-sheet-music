@@ -173,6 +173,36 @@ struct MusicXMLPartShapeTests {
         #expect(Self.barLines(in: score.parts[0].staves[0].measures[0].voices[0]) == [BarLine(subtype: "double-heavy")])
     }
 
+    private static func spanned(from: Int, to: Int) -> BarLine {
+        BarLine(preservedMarkup: [
+            PreservedXML(name: "spanFromOffset", text: String(from)),
+            PreservedXML(name: "spanToOffset", text: String(to)),
+        ])
+    }
+
+    @Test("none is a hidden normal bar line; tick and short are normal ones with MuseScore's span offsets")
+    func hiddenAndPartialBarLines() throws {
+        let cases: [(style: String, line: BarLine)] = [
+            ("none", BarLine(visible: false)),
+            ("tick", Self.spanned(from: -1, to: -7)),
+            ("short", Self.spanned(from: 2, to: -2)),
+        ]
+        for entry in cases {
+            let score = try F.score(measures: [F.fourQuarters + Self.barline(entry.style), F.fourQuarters])
+            #expect(Self.barLines(in: score.parts[0].staves[0].measures[0].voices[0]) == [entry.line], "\(entry.style)")
+        }
+    }
+
+    @Test("a score ending on a hidden, tick or short bar line ends on a plain one, as MuseScore's import ends it")
+    func normalFinalBarLineIsReplaced() throws {
+        for style in ["none", "tick", "short"] {
+            let score = try F.score(parts: [[F.fourQuarters + Self.barline(style)], [F.fourQuarters]])
+            for part in score.parts {
+                #expect(Self.barLines(in: part.staves[0].measures[0].voices[0]) == [BarLine()], "\(style)")
+            }
+        }
+    }
+
     @Test("repeats sit on the score's first staff alone, whichever part wrote them")
     func repeatsOnTheFirstStaff() throws {
         let start = Self.barline("heavy-light", repeat: "forward", location: "left")
@@ -223,6 +253,28 @@ struct MusicXMLPartShapeTests {
         // 100 of 1920 divisions to the whole is 5/96, between 6/128 and 7/128 by more than a division.
         let score = try F.score(measures: ["<forward><duration>100</duration></forward>"])
         #expect(Self.lengths(score) == [Fraction(numerator: 7, denominator: 128)])
+    }
+
+    @Test("a measure one part calls implicit is left out of the bar numbers in every part (setIrregular)")
+    func implicitMeasureIsIrregular() throws {
+        let measures = [F.quarter("G"), F.fourQuarters]
+        let document = try #require(String(bytes: F.data(parts: [(measures, 1), (measures, 1)]), encoding: .utf8))
+        // Only the first part's pickup says so.
+        let first = try #require(document.range(of: "<measure number=\"1\">"))
+        let marked = document.replacingCharacters(in: first, with: "<measure number=\"0\" implicit=\"yes\">")
+        let score = try MusicXMLParser.parse(Data(marked.utf8))
+        #expect(score.parts.map { $0.staves[0].measures.map(\.irregular) } == [[true, false], [true, false]])
+        #expect([0, 1].map(score.displayedMeasureNumber(at:)) == [nil, 1])
+    }
+
+    @Test("implicit=\"no\" and no implicit leave a measure regular")
+    func explicitMeasureIsRegular() throws {
+        let document = try #require(String(bytes: F.data(parts: [([F.fourQuarters], 1)]), encoding: .utf8))
+        let marked = document.replacingOccurrences(
+            of: "<measure number=\"1\">", with: "<measure number=\"1\" implicit=\"no\">",
+        )
+        let score = try MusicXMLParser.parse(Data(marked.utf8))
+        #expect(score.parts[0].staves[0].measures.map(\.irregular) == [false])
     }
 
     @Test("an <encoding><encoder> is MuseScore's encoder meta tag (testSibOttavas)")

@@ -81,17 +81,13 @@ extension Score {
             tags["movementNumber"] = number
         }
         if let id = root.first("identification") {
+            // MuseScore takes a creator's type as the meta tag's name, whatever it is — `poet`, `editor` — as
+            // well as the composer, lyricist and arranger it shows (`P1:1516-1519`).
             for creator in id.all("creator") {
                 let type = creator.attributes["type"] ?? "composer"
                 let value = creator.text
                 guard !value.isEmpty else { continue }
-                switch type {
-                case "composer", "lyricist", "arranger":
-                    tags[type] = value
-                default:
-                    // Unknown creator types (e.g. "editor") are out of seed scope.
-                    continue
-                }
+                tags[type] = value
             }
             let rights = id.all("rights")
                 .map(\.text)
@@ -206,11 +202,11 @@ extension Score {
     }
 
     /// MuseScore sets the last measure's bar line to normal "or MuseScore will generate light-heavy EndBarline"
-    /// (`P2:2109-2118`): when the score's first staff ends its last measure with a normal bar line — no styled bar
-    /// line, no end repeat — every staff's last measure gets an explicit untyped `BarLine` at its end, in voice 0. A
-    /// `bar-style` of `none` is not told apart from no bar line here.
+    /// (`P2:2109-2118`): when the score's first staff ends its last measure with a normal bar line — none at all, or
+    /// a normal one however it is spanned or hidden, and no end repeat — every staff's last measure ends with a plain
+    /// untyped `BarLine` in voice 0, in place of the one it had there.
     static func addingFinalBarLines(_ parts: [Part]) -> [Part] {
-        guard let first = parts.first?.staves.first?.measures.last, endsWithImplicitBarLine(first) else { return parts }
+        guard let first = parts.first?.staves.first?.measures.last, endsWithNormalBarLine(first) else { return parts }
         return parts.map { part in
             var copy = part
             copy.staves.mapValues { staff in
@@ -218,22 +214,30 @@ extension Score {
                 guard let last = changed.measures.indices.last, !changed.measures[last].voices.isEmpty
                 else { return staff }
                 // The slots are not identified yet (`assignMissingIDs` runs after), so rebuilding loses nothing.
-                let elements = changed.measures[last].voices[0].elements.values + [.barLine(BarLine())]
-                changed.measures[last].voices[0].elements = IdentifiedArray(elements)
+                var elements = changed.measures[last].voices[0].elements.values
+                if let end = endBarLineIndex(in: elements) { elements.remove(at: end) }
+                changed.measures[last].voices[0].elements = IdentifiedArray(elements + [.barLine(BarLine())])
                 return changed
             }
             return copy
         }
     }
 
-    /// No end repeat, and no voice holds a bar line after its last chord or rest (an end marker may follow one).
-    private static func endsWithImplicitBarLine(_ measure: Measure) -> Bool {
+    /// No end repeat, and the bar line closing the first voice, if any, is a normal one (`endBarLineType() & NORMAL`).
+    private static func endsWithNormalBarLine(_ measure: Measure) -> Bool {
         guard measure.endRepeatCount == nil else { return false }
-        return !measure.voices.contains { voice in
-            let elements = voice.elements.values
-            let lastChord = elements.lastIndex { if case .chord = $0 { true } else { false } } ?? -1
-            return elements[(lastChord + 1)...].contains { if case .barLine = $0 { true } else { false } }
-        }
+        guard let elements = measure.voices.first?.elements.values, let end = endBarLineIndex(in: elements),
+              case let .barLine(line) = elements[end]
+        else { return true }
+        return line.subtype == nil
+    }
+
+    /// The last bar line after a voice's last chord or rest (an end marker may follow it).
+    private static func endBarLineIndex(in elements: [VoiceElement]) -> Int? {
+        let lastChord = elements.lastIndex { if case .chord = $0 { true } else { false } } ?? -1
+        guard let last = elements.lastIndex(where: { if case .barLine = $0 { true } else { false } }), last > lastChord
+        else { return nil }
+        return last
     }
 
     /// Decode a single top-level `<part>` into its `Part` plus the

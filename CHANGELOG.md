@@ -16,6 +16,8 @@ and this project adheres to
   what plays is left as written. `RevoiceDrumStaff.preview(in:)` reports which bars it would rewrite and which it would
   leave, so a host can tell the user. The intent resolves to nothing to apply when no bar needs re-voicing.
 
+## [4.21.0] - 2026-10-26
+
 ### Fixed
 
 - **A note after a tie over the barline restates its accidental, as MuseScore does.** A note tied into a bar carries
@@ -44,6 +46,12 @@ and this project adheres to
   `plannedConcertPitch` read the alteration in force through a note tied into the bar, so the letter F after a
   tied-over F♯ in C major wrote F♯ with no glyph. It now skips a tied note that draws no accidental of its own, as
   MuseScore's `Measure::findAccidental` does, so the letter writes F♮ and renotation gives it its ♮.
+- **Two notes of one chord on the same line at different alterations both draw their accidental.** With F and F♯ in
+  one chord, the F drew no ♮ where C major already reads F natural, and an F♯ after an earlier F♯ in the bar drew no ♯
+  when its chord also held an F — so the two noteheads on one line could not be told apart. Both passes now keep the
+  glyph of a note whose chord holds another on its line at a different alteration, as MuseScore's `hasAlteredUnison`
+  does; the bar's state is left as it was. The pitch-and-tpc spelling the two passes each carried is now one
+  (`AccidentalLineState.spelling`).
 - **A MusicXML tuplet is a tuplet.** The import shortened each member by its `<time-modification>` and made no
   `Voice.tuplets` entry, so the page showed no bracket or number, and a MuseScore save wrote every member as a bare
   fraction (`<durationType>measure</durationType><duration>1/12</duration>`), which MuseScore opens as whole notes.
@@ -102,6 +110,38 @@ and this project adheres to
   MuseScore takes it (a triplet written 6:2 is 3:2). A score saved before keeps its pairs as they were written —
   a pair saved without a `<duration>` still lasts its written value. The parity replay's step 46, which makes a
   two-note tremolo, has a new fingerprint for it.
+- **A MusicXML pickup is left out of the bar numbers.** A `<measure implicit="yes">` was numbered like any other, so
+  every bar after a pickup carried a number one too high. A measure any part calls implicit is now `irregular`, as
+  MuseScore's import makes it (`setIrregular`). A measure number the file skips or repeats still restarts nothing:
+  the model has no per-measure number offset (MuseScore's `noOffset`).
+- **MusicXML accidentals read as MuseScore reads them.** The import knew five names and dropped every other
+  `<accidental>`, and ignored its attributes. It now takes MuseScore's whole table (`musicXmlString2accidentalType`):
+  quarter tones, arrows, slashes, commas, triple sharps and flats, `sori` and `koron`, and `other` with a `smufl`
+  glyph from the sets MuseScore reads; `natural-sharp` and `natural-flat` are the plain sharp and flat, as there. A
+  cautionary or editorial accidental is `user`, in parentheses or brackets as MuseScore puts them unless the file
+  says `parentheses="no"` or `bracket="no"`, and `parentheses="yes"` / `bracket="yes"` bracket any accidental. A
+  microtonal accidental is always `user` (`markUserAccidentals`). An accidental's color and cue size are not read.
+- **A bar line inside a bar no longer takes the bar's end line away, and a hidden end bar line hides it.** The layout
+  drew the usual end line only when no voice held a bar line anywhere in the bar, so a dashed line in a bar's middle
+  — a MuseScore score's mid-measure `<BarLine>`, or a MusicXML `location="middle"` one — left that bar with no end
+  line; and it ignored a hidden bar line when deciding, so a hidden end bar line got a plain visible one drawn in its
+  place, where MuseScore draws nothing. Only a bar line after a voice's last chord or rest now ends the bar, hidden or
+  not.
+- **MusicXML `none`, `tick` and `short` bar lines are MuseScore's.** `none` made no bar line and is now a hidden
+  normal one, as MuseScore makes it; `tick` and `short` kept their names as subtypes MuseScore does not have, which a
+  MuseScore save wrote and MuseScore read as plain bar lines. They are now normal bar lines carrying the
+  `<spanFromOffset>` / `<spanToOffset>` MuseScore gives them (`createBarline`), so a save opens in MuseScore as a tick
+  or a short bar line; ssm still draws them across the whole staff. A score that ends on one of the three ends on a
+  plain bar line instead, as MuseScore's import ends it.
+- **A tremolo is saved the way MuseScore saves it.** The encoder wrote every tremolo under MuseScore 3's name
+  `<Tremolo>`, a MuseScore 4 save included, and wrote a two-note tremolo on both of its chords, where MuseScore 3 and
+  4 write it on the first alone and pair it with the next chord as they read it. A MuseScore 4 save now writes
+  `<TremoloSingleChord>` / `<TremoloTwoChord>`, a MuseScore 3 save `<Tremolo>`, each on the first chord only. A file
+  saved before, with the copy on the second chord, still reads as one pair.
+- **Every MusicXML creator is a meta tag.** The import kept a `<creator>` only when it was the composer, lyricist or
+  arranger; MuseScore names a meta tag after any creator's type, so a `poet` or an `editor` now comes in too. A creator
+  with no type is still the composer. MuseScore's testTremolo, whose poet showed it, now compares against the `.mscx`
+  MuseScore 4.7.4 writes, its one- and two-note tremolos included.
 
 ## [4.20.0] - 2026-10-24
 

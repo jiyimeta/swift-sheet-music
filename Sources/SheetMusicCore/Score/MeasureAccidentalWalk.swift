@@ -82,17 +82,28 @@ enum MeasureAccidentalWalk {
 
     /// The note `ref` names in `voices`, or nil when the address no longer holds one.
     static func note(at ref: NoteRef, in voices: [Voice]) -> Note? {
+        guard let notes = chordNotes(at: ref, in: voices), notes.indices.contains(ref.note) else { return nil }
+        return notes[ref.note]
+    }
+
+    /// The notes of the chord — or grace chord — `ref` stands in, its own included.
+    static func chordNotes(at ref: NoteRef, in voices: [Voice]) -> ChordNotes? {
         guard voices.indices.contains(ref.voice),
               voices[ref.voice].elements.indices.contains(ref.element),
               case let .chord(chord) = voices[ref.voice].elements[ref.element]
         else { return nil }
-        let notes: ChordNotes
         switch ref.slot {
-        case .main: notes = chord.notes
-        case let .graceBefore(index): notes = chord.graceNotesBefore[index].notes
-        case let .graceAfter(index): notes = chord.graceNotesAfter[index].notes
+        case .main: return chord.notes
+        case let .graceBefore(index): return chord.graceNotesBefore[index].notes
+        case let .graceAfter(index): return chord.graceNotesAfter[index].notes
         }
-        return notes.indices.contains(ref.note) ? notes[ref.note] : nil
+    }
+
+    /// Whether the note `ref` names shares its written line with another note of its chord at a different alteration
+    /// (`AccidentalLineState.hasAlteredUnison`).
+    static func hasAlteredUnison(at ref: NoteRef, in voices: [Voice]) -> Bool {
+        guard let notes = chordNotes(at: ref, in: voices), notes.indices.contains(ref.note) else { return false }
+        return AccidentalLineState.hasAlteredUnison(at: ref.note, in: notes)
     }
 
     /// `body` applied to the note `ref` names in `voices`.

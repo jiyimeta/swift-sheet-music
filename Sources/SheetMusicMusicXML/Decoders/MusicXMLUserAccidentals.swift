@@ -7,9 +7,10 @@ import SheetMusicFoundation
 ///
 /// An accidental is one when its alteration is the key's on its line, it is the plain sharp, flat or natural of that
 /// alteration, and no earlier note of the measure on that line took an accidental the key does not imply — after
-/// one, a note back in the key needs its accidental and is left `auto`. The measure is read as MuseScore reads it:
-/// by onset, then staff and voice, the part's staves together, each chord from its lowest note; grace notes are not
-/// read. The key is the one in force where the measure starts.
+/// one, a note back in the key needs its accidental and is left `auto`. A microtonal accidental is always `user`, and
+/// does not count as such an earlier one. The measure is read as MuseScore reads it: by onset, then staff and voice,
+/// the part's staves together, each chord from its lowest note; grace notes are not read. The key is the one in force
+/// where the measure starts.
 enum MusicXMLUserAccidentals {
     /// The part's staves' measure, as built, with the written accidentals the key implies made `user`.
     static func marking(_ built: [StaffMeasureBuilder.Built], keyFifths: Int) -> [StaffMeasureBuilder.Built] {
@@ -38,6 +39,11 @@ enum MusicXMLUserAccidentals {
                 if implied, neededOnLine[spelling.line] != true {
                     chord.notes.updateNote(at: noteIndex) { $0.accidentalRole = .user }
                     changed = true
+                } else if MusicXMLAccidental.microtonal.contains(accidental) {
+                    // Kept as written, and a note back in the key after it still has its accidental taken as implied.
+                    chord.notes.updateNote(at: noteIndex) { $0.accidentalRole = .user }
+                    changed = true
+                    if neededOnLine[spelling.line] == nil { neededOnLine[spelling.line] = false }
                 } else if neededOnLine[spelling.line] == nil {
                     neededOnLine[spelling.line] = true
                 }

@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <programVersion>4.7.4</programVersion>
+  <programRevision>7688c00</programRevision>
+  <Score>
+    <eid>n9xPP7IrGEN_bNfkqts8TpI</eid>
+    <Division>480</Division>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <open>1</open>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer">Leon Vinken</metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="creationDate">2026-10-26</metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="originalFormat">xml</metaTag>
+    <metaTag name="platform">Apple Macintosh</metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber">MuseScore testfile</metaTag>
+    <metaTag name="workTitle">Accidentals 1</metaTag>
+    <Part id="1">
+      <Staff>
+        <eid>4Gx1a2VP4PO_mEG04wptHy</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        </Staff>
+      <trackName>Staff 1</trackName>
+      <Instrument id="piano">
+        <longName>Staff 1</longName>
+        <trackName>Staff 1</trackName>
+        <minPitchP>21</minPitchP>
+        <maxPitchP>108</maxPitchP>
+        <minPitchA>21</minPitchA>
+        <maxPitchA>108</maxPitchA>
+        <instrumentId>keyboard.piano</instrumentId>
+        <clef staff="2">F</clef>
+        <singleNoteDynamics>0</singleNoteDynamics>
+        <Articulation>
+          <velocity>100</velocity>
+          <gateTime>95</gateTime>
+          </Articulation>
+        <Articulation name="staccatissimo">
+          <velocity>100</velocity>
+          <gateTime>33</gateTime>
+          </Articulation>
+        <Articulation name="staccato">
+          <velocity>100</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="portato">
+          <velocity>100</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="tenuto">
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="marcato">
+          <velocity>120</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="sforzato">
+          <velocity>150</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="sforzatoStaccato">
+          <velocity>150</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoStaccato">
+          <velocity>120</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoTenuto">
+          <velocity>120</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Channel>
+          <program value="0"/>
+          <controller ctrl="7" value="0"/>
+          <controller ctrl="10" value="127"/>
+          <synti>Fluid</synti>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <eid>eW69GOS1WuJ_wEuTr1bF7nP</eid>
+        <Text>
+          <eid>fX+fSQNks4E_ZY+ocPw1JXL</eid>
+          <style>title</style>
+          <text>Accidentals 1</text>
+          </Text>
+        <Text>
+          <eid>Pyz0pW4QZ/C_JMad6ks6CzI</eid>
+          <style>subtitle</style>
+          <text>MuseScore testfile</text>
+          </Text>
+        <Text>
+          <eid>qSypKQKKnQL_CBuc4VLEfAH</eid>
+          <style>composer</style>
+          <text>Leon Vinken</text>
+          </Text>
+        </VBox>
+      <Measure>
+        <eid>E0OWW9sibaH_P6kL8K6iXuK</eid>
+        <voice>
+          <Clef>
+            <concertClefType>G</concertClefType>
+            <transposingClefType>G</transposingClefType>
+            <isHeader>1</isHeader>
+            <eid>QnEi3IyAFQM_J+GcPAX6YuB</eid>
+            </Clef>
+          <TimeSig>
+            <eid>rHFKPKrdL/C_D3itRr+hy9E</eid>
+            <sigN>3</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <Chord>
+            <eid>psiUt/5vHDJ_omX8QsC9DWN</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>xneA306CcmG_zN1MMQZiBFE</eid>
+              <pitch>67</pitch>
+              <tpc>15</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>hsZOR++6CbH_NKgSpTrEkRF</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>673WCtpTqf_XRofIF2pZQI</eid>
+              <Accidental>
+                <subtype>accidentalSharp</subtype>
+                <eid>dWIAE3OAQsJ_VJgLHfr6iQF</eid>
+                </Accidental>
+              <pitch>70</pitch>
+              <tpc>24</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>VF/QwCaddbJ_NqzseOccL9</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>sD7s+2T8SYF_B45gfvIeEMK</eid>
+              <Accidental>
+                <subtype>accidentalFlat</subtype>
+                <eid>eHZ/rWGeoDD_7dUP9YKh8vG</eid>
+                </Accidental>
+              <pitch>70</pitch>
+              <tpc>12</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>GrDLOiQA78J_27SmtPhwTHB</eid>
+        <voice>
+          <Chord>
+            <eid>Z3g5thS/KJB_wz9ygYYKvwC</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>4sPCXvN3w+B_viOSHQr8WzF</eid>
+              <Accidental>
+                <subtype>accidentalDoubleSharp</subtype>
+                <eid>3OF4ndkAuMI_3iW0wnacVRE</eid>
+                </Accidental>
+              <pitch>74</pitch>
+              <tpc>28</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>YZIMur/6/VD_W+yszPK7YrO</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>LIi4SHD+6/C_uYOoeent2KL</eid>
+              <Accidental>
+                <subtype>accidentalDoubleFlat</subtype>
+                <eid>tQsgIajxMON_IjwNo1leyNG</eid>
+                </Accidental>
+              <pitch>72</pitch>
+              <tpc>2</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>1L0PRspZ3qG_eZQN52gsvoN</eid>
+            <durationType>quarter</durationType>
+            <StemDirection>down</StemDirection>
+            <Note>
+              <eid>VHdfevnJDZN_7M+0tfeuYCK</eid>
+              <Accidental>
+                <subtype>accidentalNatural</subtype>
+                <eid>A6zs4yYWk6E_X74c4t6VluJ</eid>
+                </Accidental>
+              <pitch>74</pitch>
+              <tpc>16</tpc>
+              </Note>
+            </Chord>
+          <BarLine>
+            <eid>RxPNR6qqxr_oOy0oeXjLLH</eid>
+            </BarLine>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>

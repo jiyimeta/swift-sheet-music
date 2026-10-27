@@ -218,6 +218,27 @@ struct AccidentalVisibilityTests {
         #expect(result.notes[0].accidental == nil) // covered by the grace's ♯
     }
 
+    @Test("F and F♯ in one chord both keep their accidental, even where the bar already covers one")
+    func alteredUnisonKeepsBoth() {
+        let fNatural4 = Note(pitch: 65, tpc: 13, accidental: .natural, accidentalRole: .auto)
+        let staff = Staff(measures: [Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: [fNatural4, Self.fSharp4()])), // ♮ covered by C major
+            .chord(Chord(duration: .quarter, notes: [Self.fSharp4()])), // covered by the chord's F♯
+            .chord(Chord(duration: .quarter, notes: [Self.fSharp4(), fNatural4])), // ♯ covered by the F♯ before
+            .chord(Chord(duration: .quarter, notes: [fNatural4])), // covered, and alone in its chord
+        ])])])
+        let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
+        let out = Score(division: 480, parts: [part]).suppressingRedundantAccidentals()
+        let chords = out.parts[0].staves[0].measures[0].voices[0].elements.compactMap { element -> Chord? in
+            if case let .chord(chord) = element { return chord }
+            return nil
+        }
+        #expect(chords[0].notes.map(\.accidental) == [.natural, .sharp])
+        #expect(chords[1].notes.map(\.accidental) == [nil])
+        #expect(chords[2].notes.map(\.accidental) == [.sharp, .natural])
+        #expect(chords[3].notes.map(\.accidental) == [nil])
+    }
+
     // MARK: - Regression: every accidental needed → none removed
 
     @Test("All-needed accidentals → none removed")

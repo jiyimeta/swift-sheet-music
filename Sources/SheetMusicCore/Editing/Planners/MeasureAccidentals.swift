@@ -44,7 +44,7 @@ public enum MeasureAccidentals {
     ) -> (pitch: Int, tpc: Int)? {
         guard let natural = NoteInputKeyMap.pitch(forLetter: letter, octave: 4) else { return nil }
         let keySig = score.activeKey(staff: location.staff, measureIndex: location.measureIndex)
-        let letterIndex = letterIndex(forTpc: natural.tpc)
+        let letterIndex = AccidentalLineState.letter(forTpc: natural.tpc)
         let keyAlteration = keyAlteration(forLetter: letterIndex, keySig: keySig)
         let chosen: (pitch: Int, tpc: Int)?
         if let reference {
@@ -203,7 +203,8 @@ public enum MeasureAccidentals {
     /// A tied note follows MuseScore's tie rule (`Chord::cmdUpdateNotes`): spelled like the note it is tied from, it
     /// draws no glyph, since the tie carries the alteration — and it marks its line (`AccidentalLineState.tiedOver`),
     /// so the next note there restates its accidental. Spelled otherwise (F♯ held on as G♭) it is renotated like any
-    /// other note.
+    /// other note. Two notes of one chord on the same line at different alterations (F and F♯) both get their glyph,
+    /// even where the state already covers one of them (`AccidentalLineState.hasAlteredUnison`).
     ///
     /// Four kinds of note are read for their alteration but never rewritten:
     ///
@@ -229,7 +230,7 @@ public enum MeasureAccidentals {
         var state: [Line: AccidentalLineState] = [:]
         for ref in MeasureAccidentalWalk.noteRefs(in: measure, division: division, measureDuration: measureDuration) {
             guard let note = MeasureAccidentalWalk.note(at: ref, in: voices),
-                  let written = spelling(pitch: note.pitch, tpc: note.tpc)
+                  let written = AccidentalLineState.spelling(pitch: note.pitch, tpc: note.tpc)
             else { continue }
             let line = Line(letter: written.letter, octave: written.octave)
             let inForce = state[line]
@@ -238,6 +239,7 @@ public enum MeasureAccidentals {
             if let wanted = glyph(
                 for: note, alteration: written.alteration, against: inForce,
                 tiedFrom: ref.mainAddress.flatMap { tieStarts[$0] },
+                alteredUnison: MeasureAccidentalWalk.hasAlteredUnison(at: ref, in: voices),
             ), wanted != note.accidental {
                 MeasureAccidentalWalk.updateNote(at: ref, in: &voices) {
                     $0.accidental = wanted
@@ -269,17 +271,22 @@ public enum MeasureAccidentals {
     }
 
     /// The glyph `note` should carry against `inForce`, or nil (outer) to leave the one it has — `tiedFrom` is the
-    /// tpc of the note it is tied from, when it is tied back and that start was found.
+    /// tpc of the note it is tied from, when it is tied back and that start was found, and `alteredUnison` whether
+    /// another note of its chord stands on its line at a different alteration.
+    ///
+    /// MuseScore's `Note::updateAccidental`: a note the state asks to speak does, unless a tie that keeps its spelling
+    /// carries the alteration; one the state covers speaks only to tell an altered unison apart.
     private static func glyph(
-        for note: Note, alteration: Int, against inForce: AccidentalLineState, tiedFrom: Int?,
+        for note: Note, alteration: Int, against inForce: AccidentalLineState, tiedFrom: Int?, alteredUnison: Bool,
     ) -> Accidental?? {
         guard note.accidentalRole != .user else { return nil }
         if let existing = note.accidental, !isStandard(existing) { return nil }
+        let needed = inForce.needsAccidental(for: alteration)
         if note.tieBack != nil {
             guard let tiedFrom else { return nil }
-            if tiedFrom == note.tpc { return .some(nil) }
+            if needed, tiedFrom == note.tpc { return .some(nil) }
         }
-        guard inForce.needsAccidental(for: alteration) else { return .some(nil) }
+        guard needed || alteredUnison else { return .some(nil) }
         // An alteration no single glyph can spell: saying nothing beats clearing the sign it has.
         return AccidentalLineState.glyph(forAlteration: alteration).map { .some($0) }
     }
@@ -314,7 +321,7 @@ public enum MeasureAccidentals {
             guard ref.tick < cutoff else { break }
             guard let note = MeasureAccidentalWalk.note(at: ref, in: measure.voices),
                   !AccidentalLineState.isUnwrittenTie(note),
-                  let written = spelling(pitch: note.pitch, tpc: note.tpc),
+                  let written = AccidentalLineState.spelling(pitch: note.pitch, tpc: note.tpc),
                   written.letter == line.letter, written.octave == line.octave
             else { continue }
             alteration = written.alteration
@@ -332,36 +339,11 @@ public enum MeasureAccidentals {
 
     // MARK: - Spelling
 
-    /// TPC of each natural letter, `C D E F G A B` order.
-    private static let naturalTpcByLetter = [14, 16, 18, 13, 15, 17, 19]
-    /// Semitone offset of each natural letter from C, `C D E F G A B` order.
-    private static let naturalSemitoneByLetter = [0, 2, 4, 5, 7, 9, 11]
-
-    /// Diatonic letter index (0=C … 6=B) of a TPC. `(tpc + 1) % 7` rotates the line of fifths to align with
-    /// `F C G D A E B`; the table maps that rotation back to `C D E F G A B` order.
-    private static func letterIndex(forTpc tpc: Int) -> Int {
-        let table = [3, 0, 4, 1, 5, 2, 6]
-        return table[((tpc + 1) % 7 + 7) % 7]
-    }
-
     /// The alteration a key signature of `keySig` puts on `letter` (0=C … 6=B). Reuses `StaffStepPitch`'s in-key
     /// window so the two paths can't drift apart.
     private static func keyAlteration(forLetter letter: Int, keySig: Int) -> Int {
-        let natural = naturalTpcByLetter[letter]
+        let natural = AccidentalLineState.naturalTpcByLetter[letter]
         return (StaffStepPitch.inKeyTpc(naturalTpc: natural, keySig: keySig) - natural) / 7
-    }
-
-    /// The WRITTEN `(letter, octave, alteration)` behind a `pitch` / `tpc` pair, or nil when the two disagree or the
-    /// tpc is outside MuseScore's range (`TPC_MIN = -1` F♭♭ … `TPC_MAX = 33` B♯♯) — callers must read nil as "say
-    /// nothing about this note".
-    private static func spelling(pitch: Int, tpc: Int) -> (letter: Int, octave: Int, alteration: Int)? {
-        guard (-1 ... 33).contains(tpc) else { return nil }
-        let letter = letterIndex(forTpc: tpc)
-        let alteration = (tpc - naturalTpcByLetter[letter]) / 7
-        let naturalSemi = naturalSemitoneByLetter[letter]
-        let expectedPitchClass = ((naturalSemi + alteration) % 12 + 12) % 12
-        guard ((pitch % 12) + 12) % 12 == expectedPitchClass else { return nil }
-        return (letter, (pitch - naturalSemi - alteration) / 12 - 1, alteration)
     }
 
     /// Whether an accidental's alteration is fully captured by the tpc, and so may be replaced on tpc evidence
