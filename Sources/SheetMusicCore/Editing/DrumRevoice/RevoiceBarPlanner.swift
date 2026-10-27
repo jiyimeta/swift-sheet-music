@@ -56,19 +56,27 @@ enum RevoiceBarPlanner {
     /// The bar's chords and rests by where they sit.
     typealias SourceIndex = [RevoiceBar.ChordRef: RevoiceBar.SourceChord]
 
-    /// A rewrite that would change how long a fermata holds is left as written instead: the hold is heard, as the
-    /// tempo it stretches (`keepsFermataHolds`).
+    /// A bar that would be rewritten is left as written instead when its first voice does not last the bar
+    /// (`firstVoiceFillsTheBar`), or when the rewrite would change how long a fermata holds — the hold is heard, as
+    /// the tempo it stretches (`keepsFermataHolds`).
     static func plan(_ bar: RevoiceBar, voiceForPitch: [Int: Int], policy: RhythmSpellingPolicy) -> RevoiceBarPlan {
         if bar.isMeasureRepeat { return .untouched }
         let planned = isInTargetVoices(bar, voiceForPitch: voiceForPitch)
             ? removingVoices(bar, voiceForPitch: voiceForPitch, policy: policy)
             : rewrite(bar, voiceForPitch: voiceForPitch, policy: policy)
-        if case let .rewrite(writes, voiceCountAfter) = planned,
-           !keepsFermataHolds(bar, writes: writes, voiceCountAfter: voiceCountAfter)
-        {
+        guard case let .rewrite(writes, voiceCountAfter) = planned else { return planned }
+        guard firstVoiceFillsTheBar(bar) else { return .leftAsWritten(.unsupported) }
+        guard keepsFermataHolds(bar, writes: writes, voiceCountAfter: voiceCountAfter) else {
             return .leftAsWritten(.annotationPlacement)
         }
         return planned
+    }
+
+    /// The chords and rests of the bar's first voice last exactly the bar. The renderer measures a bar by its first
+    /// voice's written lengths (`MidiRenderer.measureTicks`) and places every later bar from that, while a rewritten
+    /// voice always fills the bar: rewriting an underfull or overfull first voice would move everything after it.
+    private static func firstVoiceFillsTheBar(_ bar: RevoiceBar) -> Bool {
+        bar.chords.filter { $0.ref.voiceIndex == 0 }.reduce(0) { $0 + $1.length } == bar.meter.barTicks
     }
 
     /// A bar whose notes all sit in their target voices (§4.6): untouched unless it has voices beyond the target's
@@ -83,7 +91,7 @@ enum RevoiceBarPlanner {
         let extra = bar.voices[targetCount...].flatMap(\.elements.values)
         let moved = bar.annotations.filter { $0.voiceIndex >= targetCount }
         guard extra.allSatisfy({ isBareRest($0) || !isChord($0) }),
-              !moved.contains(where: { movesPlayback($0, in: bar) })
+              !moved.contains(where: { movesPlayback($0, in: bar, voiceCount: targetCount) })
         else { return .leftAsWritten(.unsupported) }
         guard !moved.isEmpty else { return .rewrite([], voiceCountAfter: targetCount) }
         guard let write = insertingAnnotations(moved, into: bar) else {
@@ -178,9 +186,9 @@ extension RevoiceBarPlanner {
     static func rewrite(
         _ bar: RevoiceBar, voiceForPitch: [Int: Int], policy: RhythmSpellingPolicy,
     ) -> RevoiceBarPlan {
-        if let reason = reasonToLeave(bar) { return .leftAsWritten(reason) }
-        let sources = SourceIndex(uniqueKeysWithValues: bar.chords.map { ($0.ref, $0) })
         let chordsByVoice = targetChords(of: bar, voiceForPitch: voiceForPitch)
+        if let reason = reasonToLeave(bar, voiceCount: chordsByVoice.count) { return .leftAsWritten(reason) }
+        let sources = SourceIndex(uniqueKeysWithValues: bar.chords.map { ($0.ref, $0) })
         let landings = RevoiceLandings(bar: bar, chordsByVoice: chordsByVoice, voiceForPitch: voiceForPitch)
         var laidOut: [(units: [RevoiceTupletUnit], timeline: [RevoiceTimedSlot])] = []
         for (voiceIndex, chords) in chordsByVoice.enumerated() {
@@ -214,12 +222,14 @@ extension RevoiceBarPlanner {
     }
 
     /// Why a bar not in the target form is left as written before anything is written, nil when the writer takes it
-    /// on: a meter that cannot be read, an element that moves its voice's playback (`movesPlayback`), nested
-    /// tuplets, a two-note tremolo that pairs a chord with its neighbor, notes that glide or bend, or a rest carrying
-    /// a marking — rests are spelled afresh, so nothing a rest carries could travel.
-    static func reasonToLeave(_ bar: RevoiceBar) -> RevoiceKeepReason? {
+    /// on: a meter that cannot be read, an element that moves playback where the bar keeps `voiceCount` voices
+    /// (`movesPlayback`), nested tuplets, a two-note tremolo that pairs a chord with its neighbor, notes that glide or
+    /// bend, or a rest carrying a marking — rests are spelled afresh, so nothing a rest carries could travel.
+    static func reasonToLeave(_ bar: RevoiceBar, voiceCount: Int) -> RevoiceKeepReason? {
         guard bar.isMeterReadable else { return .unsupported }
-        if bar.annotations.contains(where: { movesPlayback($0, in: bar) }) { return .unsupported }
+        if bar.annotations.contains(where: { movesPlayback($0, in: bar, voiceCount: voiceCount) }) {
+            return .unsupported
+        }
         if bar.hasNestedTuplets { return .unsupported }
         if bar.hits.contains(where: { glidesOrBends($0.note) }) { return .unsupported }
         if bar.chords.contains(where: { pairsWithNeighbor($0.chord) }) { return .unsupported }
@@ -227,14 +237,21 @@ extension RevoiceBarPlanner {
         return nil
     }
 
-    /// A location shift moves its voice's cursor; a breath's pause delays every later note of its voice
-    /// (`MidiRenderer`'s voice walk), so a bar whose notes change voice around one would play differently. A pause at
-    /// the bar's end delays nothing.
-    static func movesPlayback(_ annotation: RevoiceBar.Annotation, in bar: RevoiceBar) -> Bool {
+    /// A location shift moves its voice's cursor. A breath's pause delays every later note of its voice in the bar
+    /// (`MidiRenderer`'s voice walk), so a bar whose notes change voice around one would play differently; and a
+    /// pause in the first voice lengthens the bar itself — the renderer measures a bar by its first voice
+    /// (`MidiRenderer.measureTicks`) — so one that would move there from another voice, at the bar's end too, would
+    /// delay everything after the bar. `voiceCount` is how many voices the bar keeps, which decides where an
+    /// annotation goes (`annotationVoice`).
+    static func movesPlayback(_ annotation: RevoiceBar.Annotation, in bar: RevoiceBar, voiceCount: Int) -> Bool {
         switch annotation.element {
-        case .locationShift: true
-        case let .breath(breath): breath.pause > 0 && annotation.tick < bar.meter.barTicks
-        default: false
+        case .locationShift:
+            return true
+        case let .breath(breath):
+            let changesVoice = annotationVoice(of: annotation, voiceCount: voiceCount) != annotation.voiceIndex
+            return breath.pause > 0 && (annotation.tick < bar.meter.barTicks || changesVoice)
+        default:
+            return false
         }
     }
 

@@ -194,16 +194,18 @@ extension RevoiceBarPlanner {
     /// A target chord holding notes from several source chords can carry all they carry: none has an arpeggio or a
     /// chord bracket, all roll alike and share their ornaments (none counts as alike), and at most one carries a
     /// chord-anchored spanner. Whatever the chord holds, at most one source chord whose lowest part it is brings
-    /// lyrics, and at most one source chord's graces ride on each side of it.
+    /// lyrics, at most one source chord's graces ride on each side of it, and a grace handed to it by a source chord
+    /// that sends it no note rides alike (`ridesAlike`).
     private static func mergeAgrees(
         _ chord: RevoiceTargetChord, voiceIndex: Int, sources: SourceIndex, landings: RevoiceLandings,
     ) -> Bool {
         let carried = chord.sources.compactMap { sources[$0]?.chord }
+        guard let host = carried.first else { return true }
         if carried.count > 1 {
             if carried.contains(where: { $0.arpeggio != nil || $0.bracket != nil }) { return false }
-            guard let first = carried.first,
-                  carried.allSatisfy({ $0.tremolo == first.tremolo && $0.ornaments == first.ornaments })
-            else { return false }
+            guard carried.allSatisfy({ $0.tremolo == host.tremolo && $0.ornaments == host.ornaments }) else {
+                return false
+            }
             if carried.count(where: { !$0.spanners.isEmpty }) > 1 { return false }
         }
         let lyricists = chord.sources.count(where: { source in
@@ -211,9 +213,21 @@ extension RevoiceBarPlanner {
         })
         if lyricists > 1 { return false }
         let riders = landings.graces(at: RevoiceLandings.Spot(voiceIndex: voiceIndex, onset: chord.onset))
-        return [false, true].allSatisfy { isAfter in
+        let onePerSide = [false, true].allSatisfy { isAfter in
             Set(riders.filter { $0.isAfter == isAfter }.map(\.source)).count <= 1
         }
+        return onePerSide && riders.allSatisfy { rider in
+            chord.sources.contains(rider.source) || ridesAlike(rider, on: host, sources: sources)
+        }
+    }
+
+    /// A grace handed to another source chord's notes sounds as it did only when its new chord plays graces the way
+    /// its own did. A rolled chord plays none of them — the voice walk sends it to the tremolo path, which has no
+    /// grace code (`MidiRenderer.renderTremoloChord`) — so the two must roll alike, unrolled included. An after-grace
+    /// takes its time from its chord's tail, which shortens the span an arpeggio spreads its notes across
+    /// (`MidiRenderer.arpeggioNoteEvents`), so it cannot ride on an arpeggiated chord.
+    private static func ridesAlike(_ rider: RevoiceLandings.Grace, on host: Chord, sources: SourceIndex) -> Bool {
+        sources[rider.source]?.chord.tremolo == host.tremolo && (!rider.isAfter || host.arpeggio == nil)
     }
 
     /// A timed slot as a voice element (design §4.5, D3). A chord's notes keep every note-level property and their

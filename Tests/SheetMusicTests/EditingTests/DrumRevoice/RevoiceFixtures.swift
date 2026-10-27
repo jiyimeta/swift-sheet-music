@@ -142,7 +142,39 @@ enum RevoiceFixtures {
         return result
     }
 
+    /// `score` with `element` inserted at `index` of bar `measure`'s voice `voice`, a voice that holds no tuplet.
+    static func inserting(
+        _ element: VoiceElement, into score: Score, measure: Int = 0, voice: Int = 0, at index: Int,
+    ) -> Score {
+        var result = score
+        result.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                var elements = staff.measures[measure].voices[voice].elements.values
+                elements.insert(element, at: index)
+                staff.measures[measure].voices[voice] = Voice(elements: elements)
+            }
+        }
+        return result
+    }
+
+    /// A grace chord of `drums`, in the text form's letters (`S`, `K+S`), drawn as an eighth.
+    static func grace(_ type: GraceType, _ drums: String) -> GraceChord {
+        guard case let .chord(chord)? = voice("\(drums)/8").elements.first else {
+            preconditionFailure("\(drums) is no chord")
+        }
+        return GraceChord(graceType: type, duration: .eighth, notes: chord.notes)
+    }
+
     // MARK: Reading back
+
+    /// The chords and rests of bar `measure`'s voice `voice` on `staff`, in order; none when it has no such voice.
+    static func chords(_ score: Score, measure: Int = 0, voice: Int) -> [Chord] {
+        guard let voices = score[staff]?.measures[measure].voices, voices.indices.contains(voice) else { return [] }
+        return voices[voice].elements.compactMap { element in
+            guard case let .chord(chord) = element else { return nil }
+            return chord
+        }
+    }
 
     /// The text form of `voice`'s chords, rests and tuplets — every other element is left out. A chord's drums are
     /// written highest first (`H+K`, `C+K`, `H+S`), so a result reads as the design's cases do; `~` marks a chord
