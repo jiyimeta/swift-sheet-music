@@ -18,18 +18,19 @@ and this project adheres to
   repeats and jumps (the end of the last measure-play, or the notated length without a repeat plan), and every
   measure-play with its start and duration on both the unrolled and the notated clock.
 
-- **`PlaybackEngine.exportAudioFile(…, countIn:)`** — an export can count in, as live playback does: `countIn: true`
-  puts the count `play(from:in:countIn:)` plays from the range's start in front of the music, on both the
-  AUMIDISynth pipeline and an injected backend's offline instance. The clicks sound at the metronome strip's volume
-  whatever the metronome toggle says, and the file grows by `preRollSeconds(division:)` divided by the export's rate.
-  A start with no count-in exports as `countIn: false`, which stays the default. The Apple example app's export
+- **(Apple) `PlaybackEngine.exportAudioFile(…, countIn:)`** — an export can count in, as live playback does:
+  `countIn: true` puts the count `play(from:in:countIn:)` plays from the range's start in front of the music, on both
+  the AUMIDISynth pipeline and an injected backend's offline instance. The clicks sound at the metronome strip's
+  volume whatever the metronome toggle says, and the file grows by `preRollSeconds(division:)` divided by the export's
+  rate. A start with no count-in exports as `countIn: false`, which stays the default. The Apple example app's export
   sheet gains a Count-in toggle.
 
 - **`AndroidPlaybackEngine.exportAudioFile(…, countIn = true)`** — the Android export can count in too, with the
   count live playback plays from the range's start: the shared count-in click sequence on the metronome's transport,
   with the score held for exactly the pre-roll's length of output (`CountInWire.totalSeconds` divided by the rate).
   The clicks sound whatever the metronome toggle says. A start with no count-in exports as `countIn = false`, which
-  stays the default.
+  stays the default. `countIn` sits before `progress`: named arguments and a trailing `progress` lambda compile as
+  before, but a call passing `progress` as the fifth positional argument no longer does — name it.
 
 - **`FontMetrics.withProvider(_:operation:)`** — runs a computation with a font-metrics provider of its own: every
   `FontMetrics.provider` read the task makes (layout, the draw program's encoding, a PDF writer's chrome, drawing)
@@ -41,17 +42,31 @@ and this project adheres to
   the stub for a missing face, the stub's per-character estimate for a missing character, and Edwin as the drawn face
   of every text face that is not Bravura.
 
+- **`ScorePages.encodedDrawProgram()`** (SheetMusicPages) — the pages a host computed, as the encoded draw program the
+  same release's Kotlin `DrawProgramReader.decode` reads: every page in one payload, byte for byte what the Android
+  Reader's `nativeComputeLayout` returns for the same score and options when there are no page margins. It is how an
+  Android host lays out in its own Swift code — `ScorePages.compute` inside `FontMetrics.withProvider`, which a JNI
+  entry reading the library's process-wide metrics cannot see — and draws the result in Kotlin
+  (`drawScoreCommands`). The bytes are fixed when `compute` returns; encoding them measures nothing.
+
+- **(Apple) `TitleFrameLayerBuilder.build(frame:images:width:height:)` is public** (SheetMusicUI) — the layer tree of
+  a box's content, the title block with `LayoutDocument.titleImages` or a frame between systems with its own, for a
+  host that draws a box outside `ScoreView`. It resolves every outline at the call, in the face the current
+  `FontMetrics.provider` draws it in, so a tree built inside a `withProvider` scope keeps Edwin after the scope ends.
+
 - **(Apple) `SheetMusicFonts.portableMetricsTableURL` and `SheetMusicFonts.bravuraURL`** — `SheetMusicLayoutApple`
   now bundles `sheet-music-styled.smft`, the portable table Android and Windows lay out with, so an Apple host can lay
   a computation out exactly as those platforms do (`fontMetricsTableProvider` inside `withProvider`); `bravuraURL` is
-  the bundled `Bravura.otf`, the music-face bytes `ScorePDFFonts(smufl:…)` embeds. Both are `nil` only when the
-  module's resource bundle is missing from the host.
+  the bundled `Bravura.otf`, the music-face bytes `ScorePDFFonts(smufl:…)` embeds. Either is `nil` when the host's
+  copy of the module's resource bundle lacks the file — a stale incremental embed, which a clean build of the host
+  replaces; a host missing the bundle altogether traps in `Bundle.module` on the first read instead.
 
-- **(Apple) Inside a non-CoreText `FontMetrics` scope the Apple renderers draw every text in the provider's
+- **(Apple) Under a non-CoreText `FontMetrics.provider` the Apple renderers draw every text in the provider's
   `renderingTextFont`** — Edwin under the portable table — so a layout the table measured is drawn in the faces it
-  was measured in. That covers the styled texts (`ResolvedTextStyle`, which took each style's raw face), the
-  system-semibold labels (tuplet numbers, volta labels, the Canvas's measure numbers and staff names) and the title
-  block's system face, on the CALayer tree and the Canvas alike. CoreText output is unchanged.
+  was measured in. The renderers read whichever provider is current when they draw: one scoped with `withProvider`,
+  or one installed process-wide. That covers the styled texts (`ResolvedTextStyle`, which took each style's raw face),
+  the system-semibold labels (tuplet numbers, volta labels, the Canvas's measure numbers and staff names) and the
+  title block's system face, on the CALayer tree and the Canvas alike. CoreText output is unchanged.
 
 - **(Android) `Canvas.drawScoreCommands(commands, pxPerMM, fontProvider, originXPx, originYPx, clipPx, styledText)`**
   — replays a draw program onto an `android.graphics.Canvas` outside Compose, such as one backed by a `Bitmap`:
@@ -70,11 +85,14 @@ and this project adheres to
 
 - **(Android) An audio export of a score with repeats or jumps no longer stops at the notated length.** The export
   range stayed in notated ticks while its player runs the unrolled sequence; both ends are now mapped onto the
-  player's clock, the score's end to the unrolled total.
-- **An audio export of a score ending on D.C. / D.S. al Fine (or al Coda) no longer runs past the music with
+  player's clock, the score's end to the unrolled total. A region that stops short of the score's end ends at its
+  mapped start plus its notated span, as the live A-B loop plays it, so a region spanning a repeat exports one pass.
+  Apple and Windows range exports still end at the first occurrence of the notated end, a known divergence for a
+  range spanning a repeat; whole-score exports agree.
+- **(Apple) An audio export of a score ending on D.C. / D.S. al Fine (or al Coda) no longer runs past the music with
   silence.** The export mapped the notated end of the score onto the unrolled clock, which lies after the last
   measure-play when the music stops at the Fine; it now ends where the last measure-play ends.
-- **A SwiftySynth count-in waits out the whole count at any playback rate.** The metronome transport plays the
+- **(Apple) A SwiftySynth count-in waits out the whole count at any playback rate.** The metronome transport plays the
   pre-roll at the playback rate, but `SwiftySynthBackend.play(afterCountInSeconds:)` held the score for the
   sequence-clock length, so at half speed the music started half way through the count. The hold is now
   `seconds / rate` of output, and `SynthBackend.play(afterCountInSeconds:)` documents `seconds` as sequence-clock

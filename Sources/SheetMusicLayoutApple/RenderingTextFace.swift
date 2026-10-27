@@ -5,9 +5,11 @@ import SheetMusicLayout
 ///
 /// A layout measures every text in the provider's `renderingTextFont` answer. Under CoreText that is the font asked
 /// for, and the renderers draw what they always drew. A table provider carries no system face and no author face, so it
-/// answers Edwin for every text face but Bravura. A layout made inside such a scope (`FontMetrics.withProvider`) is
-/// therefore measured in Edwin, and each text site asks this before choosing its font, so that the layout is drawn in
-/// the face it was measured in rather than in the system face or the author's.
+/// answers Edwin for every text face but Bravura. A layout made under such a provider — scoped with
+/// `FontMetrics.withProvider` or installed process-wide — is therefore measured in Edwin, and each text site asks this
+/// before choosing its font, so that the layout is drawn in the face it was measured in rather than in the system face
+/// or the author's. It reads whichever provider is current at the draw, so a draw must happen where the layout's
+/// provider is current.
 @available(macOS 15.0, *)
 package enum RenderingTextFace {
     /// The font the current `FontMetrics.provider` draws `font` in, when that differs from `font`; nil when it draws

@@ -44,14 +44,20 @@ public enum SheetMusicFonts {
     /// ```
     ///
     /// The table measures every text face as Edwin, so the text is drawn right only where the host registered
-    /// Edwin's faces (`register(urls:)`). `nil` only when the module's resource bundle is missing from the host.
+    /// Edwin's faces (`register(urls:)`).
+    ///
+    /// `nil` when the host's copy of the module's resource bundle lacks the file — a stale incremental embed, for one,
+    /// which a clean build of the host replaces. A host missing the bundle altogether does not get `nil`: the first
+    /// read traps in `Bundle.module`.
     public static let portableMetricsTableURL: URL? = BundledResource.url(
         forResource: "sheet-music-styled", withExtension: "smft",
     )
 
     /// The Bravura font file this module bundles, which `BravuraFont.register` registers: the bytes a PDF written in
-    /// Swift embeds as its music face (`ScorePDFFonts(smufl:…)`, SheetMusicPDFWriter). `nil` only when the module's
-    /// resource bundle is missing from the host.
+    /// Swift embeds as its music face (`ScorePDFFonts(smufl:…)`, SheetMusicPDFWriter).
+    ///
+    /// `nil` when the host's copy of the module's resource bundle lacks the file (a stale incremental embed); a host
+    /// missing the bundle altogether traps in `Bundle.module` on the first read, as `portableMetricsTableURL` does.
     public static let bravuraURL: URL? = BundledResource.url(forResource: "Bravura", withExtension: "otf")
 
     /// Register one or more font files with CoreText for the lifetime

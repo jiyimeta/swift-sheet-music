@@ -78,12 +78,18 @@ public struct UnrolledTimeMap: Sendable {
         )
     }
 
-    /// One measure-play on both clocks.
+    /// One measure-play on both clocks. Every time is in seconds at rate 1, the timeline's own: divide by the playback
+    /// rate for the time it takes.
     public struct MeasurePlay: Sendable, Equatable {
         /// Where the play sits in the unrolled and notated tick spaces.
         public let span: PlaybackUnroll.Span
+        /// When the play starts on the unrolled clock — the transport's, which runs every repeat and jump in turn.
         public let unrolledStartSeconds: TimeInterval
+        /// When the measure it plays starts on the notated clock — `PlaybackTimeline.seconds(atTick:)` of the span's
+        /// notated start, the same for every pass of a repeated measure.
         public let notatedStartSeconds: TimeInterval
+        /// How long this play lasts: the notated time its measure covers, which is also the gap to the next play's
+        /// `unrolledStartSeconds`. Per play, not cumulative.
         public let durationSeconds: TimeInterval
     }
 
