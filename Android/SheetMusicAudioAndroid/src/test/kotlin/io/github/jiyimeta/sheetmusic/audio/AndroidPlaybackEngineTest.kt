@@ -2685,8 +2685,9 @@ class AndroidPlaybackEngineTest {
         engine: AndroidPlaybackEngine,
         countIn: Boolean,
         metronome: RecordingBindings,
+        range: AudioExportRange = AudioExportRange.Full,
+        score: RecordingBindings = RecordingBindings(),
     ): Int {
-        val score = RecordingBindings()
         var synthsBuilt = 0
         var playersBuilt = 0
         var framesBeforeScorePlay = 0
@@ -2715,12 +2716,58 @@ class AndroidPlaybackEngineTest {
             outputFd = null,
             scoreHandle = 1L,
             format = AudioFileFormat.Wav(),
-            range = AudioExportRange.Full,
+            range = range,
             countIn = countIn,
             progress = null,
             exporterFactory = { exporter },
         )
         return framesBeforeScorePlay
+    }
+
+    @Test
+    fun `export of a score with repeats runs to the unrolled end`() = runTest {
+        // The notated score is 960 ticks, but its repeats play it out to 1920. The export's range comes back from the
+        // timeline in NOTATED ticks and the player runs on the unrolled clock, so a full export that ended at the
+        // notated 960 would stop halfway through the played score.
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L, 1920L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(0L, 960L),
+        )
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        val score = RecordingBindings()
+        exportFramesBeforeScorePlay(engine, countIn = false, metronome = RecordingBindings(), score = score)
+
+        assertTrue(
+            "the score player ran to the unrolled end, not the notated 960 (stopped at ${score.tickToReturn})",
+            score.tickToReturn >= 1920L,
+        )
+    }
+
+    @Test
+    fun `a range export that starts after a repeat seeks the player to the unrolled start`() = runTest {
+        // Bar 2 notates at 3840 but plays at 7680, after the repeat: the player runs on the unrolled clock, so it must
+        // be seeked to 7680 — the same tick the count-in clicks are built for.
+        val bridge = object : FakeJniBridge(
+            timelineSummaryResult = longArrayOf(7680L, 8_000_000L, 480L, 11520L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(3840L, 7680L),
+        ) {
+            override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
+                if (notatedTick >= 3840L) notatedTick + 3840L else notatedTick
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        val score = RecordingBindings()
+        exportFramesBeforeScorePlay(engine, countIn = false, metronome = RecordingBindings(), score = score)
+
+        assertEquals("the score player starts at the unrolled start", 7680L, score.seekTicks.firstOrNull())
+        assertTrue("and runs to the unrolled end (${score.tickToReturn})", score.tickToReturn >= 11520L)
     }
 
     @Test

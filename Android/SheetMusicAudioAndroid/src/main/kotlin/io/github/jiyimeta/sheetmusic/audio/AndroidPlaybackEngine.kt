@@ -1466,8 +1466,7 @@ class AndroidPlaybackEngine internal constructor(
      * or the native bridge declines the projection (see [JniBridge.unrolledTickForNotated]), which
      * is what this engine did before the projection existed and stays correct without a repeat.
      */
-    private fun unrolledTick(forNotated: Long): Long {
-        val handle = transportScoreHandle
+    private fun unrolledTick(forNotated: Long, handle: Long = transportScoreHandle): Long {
         if (handle == 0L || forNotated < 0) return forNotated
         val projected = jniBridge.unrolledTickForNotated(handle, forNotated)
         return if (projected < 0) forNotated else projected
@@ -2002,7 +2001,7 @@ class AndroidPlaybackEngine internal constructor(
         // Resolve tick range. `CurrentLoop` is resolved on the Kotlin side
         // from the live [_loopRange]; the other variants need a Swift-side
         // timeline lookup via the JNI seam.
-        val (startTick, endTick) = when (range) {
+        val (notatedStart, notatedEnd) = when (range) {
             is AudioExportRange.CurrentLoop -> {
                 val loop = _loopRange.value
                 if (loop != null) Pair(loop.startTick, loop.endTick) else Pair(0L, totalTicks)
@@ -2015,6 +2014,17 @@ class AndroidPlaybackEngine internal constructor(
                 }
                 Pair(resolved[0], resolved[1])
             }
+        }
+
+        // The range is in NOTATED ticks but the exporter's player runs the unrolled sequence, so map both ends onto
+        // its clock, projecting through the export's own score (the one whose SMF is rendered). The score's end is
+        // the unrolled total, which keeps an al Fine ending exact. This is the one projection of the start: the
+        // count-in below takes the mapped value as is.
+        val startTick = unrolledTick(forNotated = notatedStart, handle = scoreHandle)
+        val endTick = if (notatedEnd >= totalTicks) {
+            if (unrolledTotalTicks > 0) unrolledTotalTicks else notatedEnd
+        } else {
+            unrolledTick(forNotated = notatedEnd, handle = scoreHandle)
         }
 
         // Capture a snapshot of live engine state before flipping the
@@ -2047,7 +2057,7 @@ class AndroidPlaybackEngine internal constructor(
             out
         }
         val strips = stripsOrFallback(decodeInstrumentParams(scoreHandle), staffParams)
-        val countInExport = if (countIn) exportCountIn(scoreHandle, notatedStartTick = startTick) else null
+        val countInExport = if (countIn) exportCountIn(scoreHandle, startUnrolled = startTick) else null
 
         // Synth and encoder MUST share the same sample rate; otherwise the file
         // header advertises one rate while the samples were produced at another,
@@ -2087,12 +2097,10 @@ class AndroidPlaybackEngine internal constructor(
      *
      * Reads [scoreHandle], the score as the host has it, like the rest of the export.
      */
-    private fun exportCountIn(scoreHandle: Long, notatedStartTick: Long): CountInExport? {
-        // The one projection of the export's start onto the player's clock: `frameAtTick` reads an UNROLLED tick, and
-        // the count-in sequence is built for the tick the player starts at. Once the range handed to the exporter is
-        // itself on the player's clock, pass that start in here instead and drop this projection — the start is then
-        // already unrolled, and projecting it again lands it a repeat later.
-        val startUnrolled = unrolledTick(forNotated = notatedStartTick)
+    private fun exportCountIn(scoreHandle: Long, startUnrolled: Long): CountInExport? {
+        // [startUnrolled] is already on the player's clock (the range is mapped once, by the caller): `frameAtTick`
+        // reads an UNROLLED tick and the count-in sequence is built for the tick the player starts at. Never project
+        // it again — that lands it a repeat later.
         val frameBytes = jniBridge.frameAtTick(scoreHandle, startUnrolled)
         val cursor = if (frameBytes.isEmpty()) {
             ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)

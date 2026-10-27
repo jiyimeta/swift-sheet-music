@@ -33,6 +33,9 @@ and this project adheres to
 
 ### Fixed
 
+- **(Android) An audio export of a score with repeats or jumps no longer stops at the notated length.** The export
+  range stayed in notated ticks while its player runs the unrolled sequence; both ends are now mapped onto the
+  player's clock, the score's end to the unrolled total.
 - **An audio export of a score ending on D.C. / D.S. al Fine (or al Coda) no longer runs past the music with
   silence.** The export mapped the notated end of the score onto the unrolled clock, which lies after the last
   measure-play when the music stops at the Fine; it now ends where the last measure-play ends.
