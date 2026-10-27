@@ -47,6 +47,12 @@ and this project adheres to
   the bundled `Bravura.otf`, the music-face bytes `ScorePDFFonts(smufl:…)` embeds. Both are `nil` only when the
   module's resource bundle is missing from the host.
 
+- **(Apple) Inside a non-CoreText `FontMetrics` scope the Apple renderers draw every text in the provider's
+  `renderingTextFont`** — Edwin under the portable table — so a layout the table measured is drawn in the faces it
+  was measured in. That covers the styled texts (`ResolvedTextStyle`, which took each style's raw face), the
+  system-semibold labels (tuplet numbers, volta labels, the Canvas's measure numbers and staff names) and the title
+  block's system face, on the CALayer tree and the Canvas alike. CoreText output is unchanged.
+
 ### Fixed
 
 - **(Android) An audio export of a score with repeats or jumps no longer stops at the notated length.** The export

@@ -23,7 +23,8 @@ extension GraphicsContext {
         draw(resolved, at: origin, anchor: anchor)
     }
 
-    /// Draw short text (dynamic markings, tempo labels).
+    /// Draw short text (dynamic markings, tempo labels) in the system semibold, or in the face the current metrics
+    /// provider draws it in (`LabelFont`).
     mutating func drawExpressionText(
         _ string: String,
         at origin: CGPoint,
@@ -33,9 +34,13 @@ extension GraphicsContext {
         anchor: UnitPoint = .leading,
     ) {
         let base = Text(string).foregroundColor(color)
-        let styled = italic
-            ? base.font(.system(size: size, weight: .semibold).italic())
-            : base.font(.system(size: size, weight: .semibold))
+        let styled: Text = if let substitute = LabelFont.substitute(size: size, italic: italic) {
+            base.font(Font(substitute))
+        } else if italic {
+            base.font(.system(size: size, weight: .semibold).italic())
+        } else {
+            base.font(.system(size: size, weight: .semibold))
+        }
         let resolved = resolve(styled)
         draw(resolved, at: origin, anchor: anchor)
     }

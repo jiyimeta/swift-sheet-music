@@ -92,9 +92,15 @@ extension ScoreLayerBuilder {
     private nonisolated(unsafe) static var cachedSystemKey:
         (size: CGFloat, italic: Bool) = (0, false)
 
+    /// The labels' face: the system semibold, or the face the current metrics provider draws it in
+    /// (`LabelFont`). The substitute is answered ahead of the single-entry cache and never stored in it, so a caller
+    /// outside a scope never gets a scope's face.
     static func systemFont(
         size: CGFloat, italic: Bool,
     ) -> CTFont {
+        if let substitute = LabelFont.substitute(size: size, italic: italic) {
+            return substitute
+        }
         if let font = cachedSystemFont,
            cachedSystemKey == (size, italic)
         {
