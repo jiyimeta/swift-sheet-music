@@ -3072,7 +3072,8 @@
             case .timeSignature: "Time signatures can't be deleted yet."
             case .barLine: "Barlines can't be deleted yet."
             case .articulation: "Articulations can't be deleted yet."
-            case .tie, .slur, .jump, .marker, .glissando: "This element can't be deleted."
+            case .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
+                "This element can't be deleted."
             }
         }
 
@@ -3139,6 +3140,7 @@
             case .single(.note): return "note"
             case .single(.tuplet): return "tuplet"
             case .single(.clef): return "clef"
+            case .single(.graceNote): return "grace note"
             case .single(.text): return "text"
             case .single(.element): return "element"
             case .range: return "range"
@@ -3455,7 +3457,8 @@
                 selection = .none
                 return
             case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote:
+                 .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote, .swing, .partName, .arpeggio,
+                 .chordLine, .tremolo:
                 // An engraved marking or a grace note selects itself rather than the chord beside it, so the
                 // renderer tints just that. It takes no part in the note-range logic below.
                 selection = target.selectableItem.map { .single($0) } ?? .none
@@ -3527,7 +3530,8 @@
                 )
             case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
                  .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker, .glissando:
+                 .articulation, .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio,
+                 .chordLine, .tremolo:
                 return
             }
             textEntryFocused = true
