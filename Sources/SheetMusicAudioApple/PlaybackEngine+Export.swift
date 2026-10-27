@@ -282,7 +282,11 @@ extension PlaybackEngine {
     ///
     /// With `countIn`, the SMF is the live count-in build instead (`buildCountInSequencer`): the staves shifted
     /// behind the count, the count's own click track, then the body metronome.
-    private static func makeExportSequencer(
+    ///
+    /// `internal` (not `private`) so a test can read the routing back: a track left without a destination still
+    /// sounds, through whatever instrument `AVAudioSequencer` falls back to, so no rendered file can tell a count
+    /// routed to the metronome sampler from one sounding through the score synth.
+    static func makeExportSequencer(
         score: Score,
         plan: LiveChannelPlan,
         snapshot: ExportEngineSnapshot,
@@ -405,7 +409,8 @@ extension PlaybackEngine {
         return scoreGainMixer
     }
 
-    private struct ScoreSynth {
+    /// `internal` only so a test can hand `makeExportSequencer` the units to route to.
+    struct ScoreSynth {
         let melodic: AVAudioUnitMIDIInstrument
         /// Separate percussion unit (GM channel 9), built only when the score has a drum part — mirrors the live
         /// engine's lazy percussion unit so a drumless export doesn't load the SoundFont twice. `nil` ⇒ no drums.

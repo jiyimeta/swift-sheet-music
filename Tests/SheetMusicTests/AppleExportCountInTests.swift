@@ -181,6 +181,53 @@
                 #expect(controlPeak < 1e-5, "without a count-in the opening peaked at \(controlPeak)")
             }
 
+            /// The count's click tracks are routed to the metronome sampler — the unit holding the click SoundFont
+            /// and the strip's volume. Read back from the sequencer itself, because the file cannot say: a track
+            /// left without a destination still sounds, through whatever instrument `AVAudioSequencer` falls back to
+            /// (the score synth, which without a SoundFont plays its seed sine), and the test above stays green with
+            /// the count routed nowhere.
+            @Test func theCountsTracksPlayOnTheMetronomeSampler() throws {
+                let score = try loadScore("midi01")
+                let engine = PlaybackEngine(soundfontResolver: NoSoundFont())
+                try engine.prepare(score: score)
+                let timeline = try #require(engine.exportTimeline())
+                let countIn = try #require(PlaybackEngine.exportCountIn(
+                    score: score, timeline: timeline, unrolled: engine.exportUnrolledTimeMap(), startTick: 0,
+                ))
+
+                // Attached in the export's own order: the score synth first, the metronome sampler last.
+                let graph = AVAudioEngine()
+                let melodic = MIDISynthBuilder.make()
+                let sampler = MIDISynthBuilder.make()
+                for unit in [melodic, sampler] {
+                    graph.attach(unit)
+                    graph.connect(unit, to: graph.mainMixerNode, format: nil)
+                }
+                let sequencer = try PlaybackEngine.makeExportSequencer(
+                    score: score,
+                    plan: LiveChannelPlan.build(score: score),
+                    snapshot: engine.exportEngineSnapshot(),
+                    engine: graph,
+                    metronomeOutput: graph.mainMixerNode,
+                    exportSynth: PlaybackEngine.ScoreSynth(
+                        melodic: melodic, percussion: nil, staffIsDrum: [:], instrumentMIDIChannels: [:],
+                    ),
+                    metronomeSampler: sampler,
+                    countIn: countIn,
+                )
+
+                // The staves, then the count's clicks, then the body metronome (on by default, so not empty).
+                let staffCount = score.allStaves.count
+                #expect(sequencer.tracks.count == staffCount + 2)
+                for (index, track) in sequencer.tracks.enumerated() {
+                    let expected: AVAudioUnit = index < staffCount ? melodic : sampler
+                    #expect(
+                        track.destinationAudioUnit === expected,
+                        "track \(index) of \(sequencer.tracks.count) is routed to the wrong unit",
+                    )
+                }
+            }
+
             /// On the backend path the count rides the metronome transport, exactly as `startBackendCountIn` plays
             /// it live: loaded with the pre-roll's clicks ahead of the body's, muted as the toggle says (the backend
             /// sounds the count regardless), and the score held for the pre-roll.
