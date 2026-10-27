@@ -25,6 +25,12 @@ import org.junit.Test
  */
 class AudioExporterCountInTest {
 
+    private companion object {
+        /** Where the exported range starts — past tick 0, see [render]. */
+        const val RANGE_START = 480L
+        const val RANGE_END = 1440L
+    }
+
     // ── Stubs ────────────────────────────────────────────────────────────────
 
     private class StubSoundfontResolver : SoundfontResolver {
@@ -74,9 +80,12 @@ class AudioExporterCountInTest {
     )
 
     /**
-     * Runs an export from tick 0 to 960 at 48 kHz. The score synth (the first one built) counts the frames it renders
-     * while the score player has not been started, and once it has, advances the player 240 ticks per block so the
-     * render loop ends. The metronome's synth and player (the second of each) only record.
+     * Runs an export of `[RANGE_START, RANGE_END)` at 48 kHz. The score synth (the first one built) counts the frames
+     * it renders while the score player has not been started, and once it has, advances the player 240 ticks per
+     * block so the render loop ends. The metronome's synth and player (the second of each) only record.
+     *
+     * The range starts past tick 0 so that the click transport's start tells the two sequences apart: a count-in
+     * sequence starts at its head, 0, and the plain one at the range's start.
      */
     private suspend fun render(snapshot: ExportEngineSnapshot, countIn: CountInExport?): Render {
         val createdSynths = mutableListOf<FakeSynthDriver>()
@@ -119,8 +128,8 @@ class AudioExporterCountInTest {
             smfBytes = ByteArray(16),
             strips = strips,
             snapshot = snapshot,
-            startTick = 0L,
-            endTick = 960L,
+            startTick = RANGE_START,
+            endTick = RANGE_END,
             ticksPerBeat = 480,
             format = AudioFileFormat.Wav(),
             sampleRate = 48000,
@@ -182,6 +191,9 @@ class AudioExporterCountInTest {
             "the metronome renders past the count, got ${render.metronomeFrames} frames",
             render.metronomeFrames > 48_000,
         )
+        // From the head of the count-in sequence, not the range's start: the body behind the pre-roll is already where
+        // the range starts, and starting there would skip the count and shift every click after it.
+        assertEquals(listOf(0L), render.metronome.seekTicks)
     }
 
     @Test
@@ -193,6 +205,6 @@ class AudioExporterCountInTest {
             "the plain click sequence is loaded",
             render.metronome.loadCalls.firstOrNull()?.contentEquals(bodyClicks) == true,
         )
-        assertEquals("and started from the export's start tick", listOf(0L), render.metronome.seekTicks)
+        assertEquals("and started from the export's start tick", listOf(RANGE_START), render.metronome.seekTicks)
     }
 }

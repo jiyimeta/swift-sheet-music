@@ -2791,11 +2791,14 @@ class AndroidPlaybackEngineTest {
         val engine = tracked(bridge = bridge)
         engine.prepare(1L)
 
-        exportFramesBeforeScorePlay(engine, countIn = true, metronome = RecordingBindings())
+        val metronome = RecordingBindings()
+        exportFramesBeforeScorePlay(engine, countIn = true, metronome = metronome)
 
         assertEquals("the start's frame is looked up at its unrolled tick", listOf(7680L), bridge.frameAtTickCalls)
         assertEquals("the count is computed from that frame's cursor", listOf<ScoreCursor>(barTwo), countInCursors)
         assertEquals("and its clicks are built for the same tick", listOf(7680L), countInBaseTicks)
+        // That sequence already places the start behind its pre-roll, so it plays from its own head, not the start.
+        assertEquals("the click transport starts at the count's first tick", listOf(0L), metronome.seekTicks)
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
