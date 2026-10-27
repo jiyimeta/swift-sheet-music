@@ -72,8 +72,10 @@ private struct FrameLayerContent: Equatable {
 
 // MARK: - Layer building
 
+/// The layer tree of a box's content — the title block or a frame between systems — as `ScoreView` hosts it. Public
+/// for a host that draws a box itself, outside a view (a video frame of the page's top).
 @available(macOS 15.0, *)
-package enum TitleFrameLayerBuilder {
+public enum TitleFrameLayerBuilder {
     /// The block's own layer: a white page under the title texts.
     ///
     /// White, because the staff drawing assumes white paper and the
@@ -91,8 +93,15 @@ package enum TitleFrameLayerBuilder {
     /// `build(frame:width:)` for a block `height` points tall that also holds `images`: the title block with
     /// `LayoutDocument.titleImages`, or a frame between systems with its own. The texts are flipped about `height`,
     /// and each picture becomes one image layer after them (`FrameImageDrawing.layers`), in the order the draw program
-    /// draws a box. Picture rects are in the block's own space, y down from its top.
-    package static func build(
+    /// draws a box. Picture rects are in the block's own space, y down from its top. The root is `width` × `height`
+    /// with no background: the host paints the paper.
+    ///
+    /// Builds the whole tree at the call: every text outline is resolved then, in the face the `FontMetrics.provider`
+    /// current at the call draws it in (`RenderingTextFace` — Edwin inside a `FontMetrics.withProvider` scope over the
+    /// portable table), and the layers hold paths, not fonts. So a host whose layout was measured inside a scope calls
+    /// this inside the same kind of scope, and the tree keeps that face after the scope ends. `ScoreView` builds its
+    /// boxes in its own view updates, outside any caller's scope.
+    public static func build(
         frame: LayoutTitleFrame, images: [LayoutFrameImage], width: CGFloat, height: CGFloat,
     ) -> CALayer {
         let root = CALayer()

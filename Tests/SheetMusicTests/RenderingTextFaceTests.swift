@@ -124,5 +124,54 @@
             ).boundingBoxOfPath
             #expect(abs(drawn.width - edwin.width) < 0.01, "drawn \(drawn.width) pt wide, Edwin sets it \(edwin.width)")
         }
+
+        /// A one-bar score under a one-line title block.
+        private nonisolated static let titled = Score(
+            division: 480,
+            parts: [Part(
+                id: "P1", instrument: Instrument(id: "voice"),
+                staves: [Staff(measures: [Measure(voices: [Voice(elements: [.rest(duration: .measure)])])])],
+            )],
+            systemMeasures: [SystemMeasure()],
+            titleFrame: ScoreFrame(heightSp: 12, texts: [FrameText(style: .title, text: "Sonatina")]),
+        )
+
+        /// The width of the ink a title block's layer tree holds.
+        private static func inkWidth(_ root: CALayer) -> CGFloat {
+            (root.sublayers ?? [])
+                .compactMap { ($0 as? CAShapeLayer)?.path?.boundingBoxOfPath }
+                .reduce(CGRect.null) { $0.union($1) }.width
+        }
+
+        /// What a host drawing a title block inside the scope gets (a video frame of the page's top): the builder
+        /// resolves every outline when it is called, so the tree it returns holds Edwin's paths after the scope has
+        /// ended. Built under CoreText from the same layout, the title is set in another face — so the scope, not the
+        /// layout, is what chose Edwin.
+        @available(macOS 15.0, *)
+        @Test("a title block built inside the scope is drawn in Edwin, and keeps it after the scope ends")
+        func theTitleBlockBuiltInTheScopeIsDrawnInEdwin() throws {
+            let table = try Self.table()
+            let document = FontMetrics.withProvider(table) {
+                LayoutEngine.layout(
+                    score: Self.titled, options: ScoreViewOptions(includeTitleFrame: true), availableWidth: 500,
+                )
+            }
+            let frame = try #require(document.titleFrame)
+            func build() -> CALayer {
+                TitleFrameLayerBuilder.build(
+                    frame: frame, images: document.titleImages, width: document.size.width, height: frame.height,
+                )
+            }
+            let scoped = FontMetrics.withProvider(table) { build() }
+            let underCoreText = FontMetrics.withProvider(AppleFontMetricsProvider()) { build() }
+
+            let line = try #require(TitleFrameRenderer.placedLines(frame).first)
+            let edwinFont = CTFontCreateWithName("Edwin" as CFString, line.fontSize, nil)
+            let edwin = try #require(ScoreLayerBuilder.textPath(line.text, font: edwinFont)).boundingBoxOfPath
+            let drawn = Self.inkWidth(scoped)
+            #expect(abs(drawn - edwin.width) < 0.01, "drawn \(drawn) pt wide, Edwin sets it \(edwin.width)")
+            let system = Self.inkWidth(underCoreText)
+            #expect(abs(system - edwin.width) > 0.5, "CoreText set the title \(system) pt wide, as Edwin would")
+        }
     }
 #endif
