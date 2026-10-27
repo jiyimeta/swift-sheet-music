@@ -136,10 +136,13 @@ struct RevoiceSoundGateTests {
             try Self.gate(score, address: RevoiceFixtures.staff, name: "generated #\(index)", counts: &counts)
         }
         Issue.record(Comment(rawValue: "generated coverage: \(counts)"), severity: .warning)
-        #expect(counts.rewrittenToHandsAndFeet > 0)
-        #expect(counts.leftToHandsAndFeet > 0)
-        #expect(counts.rewrittenToOneVoice > 0)
-        #expect(counts.leftToOneVoice > 0)
+        // Floors a little under what the gate saw when they were set (2026-10-27: 48 scores, 96 conversions;
+        // to hands and feet 158 bars rewritten and 1 left, to one voice 321 rewritten and 36 left). They turn red
+        // if the generator or the command stops reaching either outcome, and are lowered only with a reason.
+        #expect(counts.rewrittenToHandsAndFeet >= 150, "rewritten to hands and feet: \(counts.rewrittenToHandsAndFeet)")
+        #expect(counts.leftToHandsAndFeet >= 1, "left to hands and feet: \(counts.leftToHandsAndFeet)")
+        #expect(counts.rewrittenToOneVoice >= 300, "rewritten to one voice: \(counts.rewrittenToOneVoice)")
+        #expect(counts.leftToOneVoice >= 30, "left to one voice: \(counts.leftToOneVoice)")
     }
 
     // MARK: Synthetic cases
