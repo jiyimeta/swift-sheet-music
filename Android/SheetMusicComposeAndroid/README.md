@@ -157,6 +157,26 @@ a PDF canvas becomes a PDF text operator with the typeface embedded.
 A continuous program exports as one very long page. That is legal PDF and
 almost never what a reader wants; paginate first.
 
+### Draw onto a Canvas outside Compose
+
+```kotlin
+import io.github.jiyimeta.sheetmusic.compose.render.drawScoreCommands
+
+val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+bitmap.eraseColor(Color.WHITE) // only ink is painted
+Canvas(bitmap).drawScoreCommands(
+    commands = program.pages[0].commands,
+    pxPerMM = widthPx / program.pages[0].widthMM.toFloat(),
+    fontProvider = fonts,
+)
+```
+
+The same renderer `ScoreCanvas` draws with, for a frame of video or any
+other picture. `originXPx` / `originYPx` place the page's top-left corner,
+`clipPx` bounds the ink, and the canvas comes back with its save stack as
+it was. A layout measured with `sheet-music-styled.smft` also passes
+`styledText = bundledStyledTextTypefaces(context)` (see *Print resources*).
+
 ## Fonts
 
 `bundledFontProvider(context)` returns the two typefaces from this
@@ -176,7 +196,10 @@ the same bytes to both:
 
 - `Edwin-Italic.otf`, `Edwin-Bold.otf`, `Edwin-BdIta.otf` — the styled
   faces the PDF writer embeds for italic, bold and bold-italic text.
-  The screen renderer synthesizes those from `Edwin-Roman.otf` instead.
+  The screen renderer synthesizes those from `Edwin-Roman.otf` instead,
+  unless `Canvas.drawScoreCommands(…)` is given
+  `styledText = bundledStyledTextTypefaces(context)`, which draws them
+  in these faces.
 - `sheet-music-styled.smft` — the metrics table whose bold and italic
   records measure those real faces (a copy of the Windows table,
   `Sources/SheetMusicRenderWindows/Resources/sheet-music.smft`). Install

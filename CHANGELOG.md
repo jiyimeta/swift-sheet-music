@@ -53,6 +53,19 @@ and this project adheres to
   system-semibold labels (tuplet numbers, volta labels, the Canvas's measure numbers and staff names) and the title
   block's system face, on the CALayer tree and the Canvas alike. CoreText output is unchanged.
 
+- **(Android) `Canvas.drawScoreCommands(commands, pxPerMM, fontProvider, originXPx, originYPx, clipPx, styledText)`**
+  — replays a draw program onto an `android.graphics.Canvas` outside Compose, such as one backed by a `Bitmap`:
+  document millimetre (x, y) lands at pixel (originXPx + x·pxPerMM, originYPx + y·pxPerMM), `clipPx` (canvas
+  pixels, before the origin shift) bounds the ink, and the canvas's save stack is restored on return. It is the
+  renderer `ScoreCanvas` draws with, and `ScorePdfExporter` now replays each PDF page through it, so there is one
+  code path. All but the first three parameters are defaulted.
+
+- **(Android) `StyledTextTypefaces` and `bundledStyledTextTypefaces(context)`** — real bold, italic and bold-italic
+  text faces (the bundled `Edwin-Bold.otf`, `Edwin-Italic.otf` and `Edwin-BdIta.otf`). Passed as
+  `drawScoreCommands(…, styledText = …)`, styled runs draw in them instead of synthesizing bold and italic from the
+  text face, which is what a layout measured with `sheet-music-styled.smft` needs. Without them the output is
+  unchanged.
+
 ### Fixed
 
 - **(Android) An audio export of a score with repeats or jumps no longer stops at the notated length.** The export
