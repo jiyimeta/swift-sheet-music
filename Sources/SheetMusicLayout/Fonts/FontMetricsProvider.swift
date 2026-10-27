@@ -113,13 +113,26 @@ public enum FontMetrics {
     private nonisolated(unsafe) static var installedProvider: any FontMetricsProvider
         = StubFontMetricsProvider()
 
-    /// A package-scoped override keeps backend verification local to its task.
+    /// A task-local override keeps a provider local to one computation (`withProvider(_:operation:)`).
     /// Provider caches remain owned by each provider; app installation is unchanged.
     @TaskLocal package static var scopedProvider: (any FontMetricsProvider)?
 
     public static var provider: any FontMetricsProvider {
         get { scopedProvider ?? installedProvider }
         set { installedProvider = newValue }
+    }
+
+    /// Runs `operation` with `provider` answering every `FontMetrics.provider` read this task makes — layout, the draw
+    /// program's encoding, a PDF writer's chrome, drawing — then restores what was there. Task-local: child tasks
+    /// inherit it, `Task.detached` and other threads do not. The process-wide provider is never touched.
+    ///
+    /// For a computation that must measure with other metrics than the app's — a video laid out with the portable
+    /// table on Apple, so its picture is the one Android lays out — while the app's own views keep laying out with
+    /// the installed provider at the same time. Scopes nest: the innermost answers until it ends.
+    public static func withProvider<Result>(
+        _ provider: any FontMetricsProvider, operation: () throws -> Result,
+    ) rethrows -> Result {
+        try $scopedProvider.withValue(provider, operation: operation)
     }
 }
 

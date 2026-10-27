@@ -30,6 +30,30 @@ public enum SheetMusicFonts {
         category: "Fonts",
     )
 
+    /// The portable font-metrics table this module bundles, `sheet-music-styled.smft`: the table Android and Windows
+    /// lay out with (a copy of `Sources/SheetMusicRenderWindows/Resources/sheet-music.smft`), whose Edwin bold and
+    /// italic records measure the family's own styled faces. Lay a computation out with it where its picture must be
+    /// the one those platforms draw — scoped to that computation, never installed over the app's CoreText provider:
+    ///
+    /// ```swift
+    /// guard let tableURL = SheetMusicFonts.portableMetricsTableURL else { return }
+    /// let table = try fontMetricsTableProvider(Data(contentsOf: tableURL)) // SheetMusicPages
+    /// let pages = FontMetrics.withProvider(table) {
+    ///     ScorePages.compute(score: score, pageWidthMM: 210, pageHeightMM: 297)
+    /// }
+    /// ```
+    ///
+    /// The table measures every text face as Edwin, so the text is drawn right only where the host registered
+    /// Edwin's faces (`register(urls:)`). `nil` only when the module's resource bundle is missing from the host.
+    public static let portableMetricsTableURL: URL? = BundledResource.url(
+        forResource: "sheet-music-styled", withExtension: "smft",
+    )
+
+    /// The Bravura font file this module bundles, which `BravuraFont.register` registers: the bytes a PDF written in
+    /// Swift embeds as its music face (`ScorePDFFonts(smufl:…)`, SheetMusicPDFWriter). `nil` only when the module's
+    /// resource bundle is missing from the host.
+    public static let bravuraURL: URL? = BundledResource.url(forResource: "Bravura", withExtension: "otf")
+
     /// Register one or more font files with CoreText for the lifetime
     /// of this process. Idempotent — already-registered URLs are
     /// reported as success.

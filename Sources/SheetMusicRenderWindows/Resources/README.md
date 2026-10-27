@@ -20,6 +20,13 @@ measure Edwin's own styled files above — the faces this renderer draws
 and the PDF writer embeds — where the web's keep the regular advances
 and stroke or shear the regular outlines, as the browser draws them.
 
+The table is copied in turn, as `sheet-music-styled.smft`: into the
+Android AAR's `assets/fonts/` for a print laid out in Swift, and into
+`Sources/SheetMusicLayoutApple/Fonts/Resources/` for a layout on Apple
+that must match those platforms' (`SheetMusicFonts.portableMetricsTableURL`).
+After regenerating it, copy it to both; `PrintResourceCopiesTests.swift`
+pins the copies.
+
 `Tests/SheetMusicTests/WindowsBundledResourcesTests.swift` pins every
 copy here byte-equal to its source, and `WindowsMetricsTableTests.swift`
 pins the table to the web's regular records and to the styled files, so

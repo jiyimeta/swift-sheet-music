@@ -31,6 +31,22 @@ and this project adheres to
   The clicks sound whatever the metronome toggle says. A start with no count-in exports as `countIn = false`, which
   stays the default.
 
+- **`FontMetrics.withProvider(_:operation:)`** — runs a computation with a font-metrics provider of its own: every
+  `FontMetrics.provider` read the task makes (layout, the draw program's encoding, a PDF writer's chrome, drawing)
+  answers from it, and the process-wide provider is never touched. Task-local, so child tasks inherit it and other
+  threads do not. It is how a host lays one computation out with other metrics than its views use.
+
+- **`fontMetricsTableProvider(_:)` is public** (SheetMusicPages) — the provider `installFontMetricsTable(_:)` installs,
+  made without installing it, for use inside `withProvider`. Its doc states what it answers for what the table lacks:
+  the stub for a missing face, the stub's per-character estimate for a missing character, and Edwin as the drawn face
+  of every text face that is not Bravura.
+
+- **(Apple) `SheetMusicFonts.portableMetricsTableURL` and `SheetMusicFonts.bravuraURL`** — `SheetMusicLayoutApple`
+  now bundles `sheet-music-styled.smft`, the portable table Android and Windows lay out with, so an Apple host can lay
+  a computation out exactly as those platforms do (`fontMetricsTableProvider` inside `withProvider`); `bravuraURL` is
+  the bundled `Bravura.otf`, the music-face bytes `ScorePDFFonts(smufl:…)` embeds. Both are `nil` only when the
+  module's resource bundle is missing from the host.
+
 ### Fixed
 
 - **(Android) An audio export of a score with repeats or jumps no longer stops at the notated length.** The export

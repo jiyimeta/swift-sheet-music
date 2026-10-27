@@ -184,7 +184,7 @@ the same bytes to both:
   table `FontMetricsBuilder` builds on the device measures synthesized
   styles, which would not match the faces the writer embeds.
 
-`AndroidPrintResourcesTests` pins each file byte-equal to its source.
+`PrintResourceCopiesTests` pins each file byte-equal to its source.
 
 ## ABI matrix
 
