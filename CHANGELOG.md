@@ -102,6 +102,14 @@ and this project adheres to
   rounded to a whole BPM — at 92.5 BPM the count lasts 2.581 s, and the music came in 14 ms behind it. Android's
   `CountInWire.totalSeconds` and beat offsets carried the same error, though its live count hands over by tick and
   reads the total only as a timeout. All of them now read `preRollSeconds(division:)`.
+- **(Apple) `PlaybackEngine.replaceScore(with:)` no longer rebuilds the synth when only a strip's own mix changed.** A
+  part's level, sound, mute, solo or name in the score — what a mixer's "save to score" writes — counted as a new
+  channel layout, so the swap re-prepared and the SwiftySynth backend reloaded its SoundFont, cutting playing music
+  for as long as that took (49–76 ms with GeneralUser GS). Such a swap now stays in place
+  (`PlaybackChannelLayout.hasSameChannels(as:)`), and the mixer takes each setting the score changed while keeping
+  the listener's others (`takingChangedDefaults`), so `.swappedInPlace` no longer means the mixer is untouched: a host
+  with its own layer of mixer settings re-applies it after either outcome. Strips added, removed or moved to another
+  channel, and a part that becomes a drum kit, still re-prepare. The Windows and Android engines decide as before.
 
 ## [4.21.0] - 2026-10-26
 
