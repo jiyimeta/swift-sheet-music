@@ -2016,16 +2016,7 @@ class AndroidPlaybackEngine internal constructor(
             }
         }
 
-        // The range is in NOTATED ticks but the exporter's player runs the unrolled sequence, so map both ends onto
-        // its clock, projecting through the export's own score (the one whose SMF is rendered). The score's end is
-        // the unrolled total, which keeps an al Fine ending exact. This is the one projection of the start: the
-        // count-in below takes the mapped value as is.
-        val startTick = unrolledTick(forNotated = notatedStart, handle = scoreHandle)
-        val endTick = if (notatedEnd >= totalTicks) {
-            if (unrolledTotalTicks > 0) unrolledTotalTicks else notatedEnd
-        } else {
-            unrolledTick(forNotated = notatedEnd, handle = scoreHandle)
-        }
+        val (startTick, endTick) = exportPlayerRange(scoreHandle, notatedStart, notatedEnd)
 
         // Capture a snapshot of live engine state before flipping the
         // state machine — these reads must not race with the EXPORTING
@@ -2090,12 +2081,36 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
+     * Maps an export's NOTATED range onto the clock of the exporter's player, which runs the unrolled sequence,
+     * projecting through the export's own score ([scoreHandle], the one whose SMF is rendered). This is the one
+     * projection of the start: the count-in takes the mapped value as is.
+     *
+     * A range reaching the score's end ends at the unrolled total, which keeps an al Fine ending exact. Any other
+     * range covers the same passage the live A-B loop plays ([armLoop]): its notated span from the mapped start,
+     * never the end's own first occurrence, which lands in the wrong pass of a repeat. It is clamped to no earlier
+     * than the start and no later than the unrolled total.
+     */
+    internal fun exportPlayerRange(scoreHandle: Long, notatedStart: Long, notatedEnd: Long): Pair<Long, Long> {
+        val start = unrolledTick(forNotated = notatedStart, handle = scoreHandle)
+        // `totalTicks` is the prepared score's; the range was resolved against the host's handle, which can differ
+        // only by an unadopted edit, so reaching it means "the end of the score".
+        val end = if (notatedEnd >= totalTicks) {
+            if (unrolledTotalTicks > 0) unrolledTotalTicks else notatedEnd
+        } else {
+            val span = start + (notatedEnd - notatedStart)
+            if (unrolledTotalTicks > 0) span.coerceIn(start, maxOf(start, unrolledTotalTicks)) else maxOf(start, span)
+        }
+        return Pair(start, end)
+    }
+
+    /**
      * The count live playback plays from an export's start, read from the same shared Swift its count-in reads
      * ([beginCountInOrNull]): the schedule from `CountInBeats` for its length, the count-in click sequence for its
      * clicks. Null when that start has no count-in — the schedule is empty or undecodable, or the sequence fails to
      * render — and the export then runs as if `countIn` were false, as Apple's does.
      *
-     * Reads [scoreHandle], the score as the host has it, like the rest of the export.
+     * Reads [scoreHandle], the score as the host has it, like the rest of the export. [startUnrolled] is the export's
+     * start already on the player's clock ([exportPlayerRange]); it is used as is, never projected again.
      */
     private fun exportCountIn(scoreHandle: Long, startUnrolled: Long): CountInExport? {
         // [startUnrolled] is already on the player's clock (the range is mapped once, by the caller): `frameAtTick`

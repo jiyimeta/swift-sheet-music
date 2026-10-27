@@ -2748,6 +2748,57 @@ class AndroidPlaybackEngineTest {
     }
 
     @Test
+    fun `a range export that ends inside a repeated passage plays the span the live loop plays`() = runTest {
+        // Notated 0..1920 is played twice, so notated 2880 first plays at 4800 — after the repeat. The region 960..2880
+        // is 1920 ticks long; like the live A-B loop (`armLoop`) the export covers start + span, 960..2880 on the
+        // player's clock, not the end's own first occurrence (4800), which would drag the second pass in.
+        val bridge = object : FakeJniBridge(
+            timelineSummaryResult = longArrayOf(4800L, 8_000_000L, 480L, 8640L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(960L, 2880L),
+        ) {
+            override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
+                if (notatedTick >= 1920L) notatedTick + 1920L else notatedTick
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        val score = RecordingBindings()
+        exportFramesBeforeScorePlay(engine, countIn = false, metronome = RecordingBindings(), score = score)
+
+        assertEquals(960L, score.seekTicks.firstOrNull())
+        assertEquals("the export ends at start + span", 2880L, score.tickToReturn)
+    }
+
+    @Test
+    fun `a range export never ends before it starts`() = runTest {
+        // The end's first occurrence (2880) precedes the start's second-pass tick (7680); the range must collapse to
+        // empty at the start rather than run backwards.
+        val bridge = object : FakeJniBridge(
+            timelineSummaryResult = longArrayOf(7680L, 8_000_000L, 480L, 11520L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(3840L, 2880L),
+        ) {
+            override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
+                if (notatedTick >= 3840L) notatedTick + 3840L else notatedTick
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        // The exporter's render loop would not run on an inverted range either, so the mapped range itself is the
+        // observable: its end must not fall below its start.
+        assertEquals(Pair(7680L, 7680L), engine.exportPlayerRange(1L, notatedStart = 3840L, notatedEnd = 2880L))
+
+        val score = RecordingBindings()
+        exportFramesBeforeScorePlay(engine, countIn = false, metronome = RecordingBindings(), score = score)
+
+        assertEquals(7680L, score.seekTicks.firstOrNull())
+        assertEquals("the empty range renders nothing past its start", 7680L, score.tickToReturn)
+    }
+
+    @Test
     fun `a range export that starts after a repeat seeks the player to the unrolled start`() = runTest {
         // Bar 2 notates at 3840 but plays at 7680, after the repeat: the player runs on the unrolled clock, so it must
         // be seeked to 7680 — the same tick the count-in clicks are built for.
