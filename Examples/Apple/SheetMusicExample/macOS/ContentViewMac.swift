@@ -3117,7 +3117,8 @@
             case .timeSignature: "Time signatures can't be deleted yet."
             case .barLine: "Barlines can't be deleted yet."
             case .articulation: "Articulations can't be deleted yet."
-            case .tie, .slur, .jump, .marker, .glissando: "This element can't be deleted."
+            case .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
+                "This element can't be deleted."
             }
         }
 
@@ -3184,6 +3185,7 @@
             case .single(.note): return "note"
             case .single(.tuplet): return "tuplet"
             case .single(.clef): return "clef"
+            case .single(.graceNote): return "grace note"
             case .single(.text): return "text"
             case .single(.element): return "element"
             case .range: return "range"
@@ -3493,14 +3495,15 @@
                 primary = .note(first)
             case let .clef(anchor):
                 primary = .clef(anchor)
-            case .lyric, .staffText, .harmony, .rehearsalMark:
+            case .lyric, .staffText, .harmony, .rehearsalMark, .partName:
                 // Engraved text is reported by the hit tester but has no `ScoreItemID` to select, and
                 // resolving it to the note it hangs from would move the note selection on a click aimed at
                 // a syllable. Opening a caret from here is a later step; for now a text click deselects.
                 selection = .none
                 return
             case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote:
+                 .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote, .swing, .arpeggio,
+                 .chordLine, .tremolo:
                 // An engraved marking or a grace note selects itself rather than the chord beside it, so the
                 // renderer tints just that. It takes no part in the note-range logic below.
                 selection = target.selectableItem.map { .single($0) } ?? .none
@@ -3572,7 +3575,8 @@
                 )
             case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
                  .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker, .glissando:
+                 .articulation, .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio,
+                 .chordLine, .tremolo:
                 return
             }
             textEntryFocused = true
