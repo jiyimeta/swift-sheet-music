@@ -14,8 +14,15 @@ and this project adheres to
   It is the one conversion every engine and host reads; at a playback rate other than 1 the output lasts this divided
   by the rate.
 
+- **`UnrolledTimeMap.unrolledLength(of:)` and `UnrolledTimeMap.measurePlays`** — how long a timeline plays with its
+  repeats and jumps (the end of the last measure-play, or the notated length without a repeat plan), and every
+  measure-play with its start and duration on both the unrolled and the notated clock.
+
 ### Fixed
 
+- **An audio export of a score ending on D.C. / D.S. al Fine (or al Coda) no longer runs past the music with
+  silence.** The export mapped the notated end of the score onto the unrolled clock, which lies after the last
+  measure-play when the music stops at the Fine; it now ends where the last measure-play ends.
 - **A SwiftySynth count-in waits out the whole count at any playback rate.** The metronome transport plays the
   pre-roll at the playback rate, but `SwiftySynthBackend.play(afterCountInSeconds:)` held the score for the
   sequence-clock length, so at half speed the music started half way through the count. The hold is now

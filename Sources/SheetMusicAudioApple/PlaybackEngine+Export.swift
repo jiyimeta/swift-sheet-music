@@ -57,7 +57,11 @@ extension PlaybackEngine {
         // there — then on the unrolled clock the sequencer actually runs, so repeats and jumps play out in full.
         let unrolled = exportUnrolledTimeMap()
         let startSec = unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(startTick)))
-        let endSec = unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(endTick)))
+        // The end of the score is where the last measure-play ends, which for an al Fine / al Coda ending is not the
+        // notated end.
+        let endSec = endTick >= timeline.totalTicks
+            ? unrolled.unrolledLength(of: timeline)
+            : unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(endTick)))
         let durationSec = max(0, endSec - startSec)
 
         let outputFormat = AudioFileExporter.outputFormat(for: format)
