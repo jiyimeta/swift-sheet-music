@@ -45,6 +45,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -2668,6 +2669,133 @@ class AndroidPlaybackEngineTest {
             progress = null,
             exporterFactory = { error("must not be invoked") },
         )
+    }
+
+    // exportAudioFile — count-in
+
+    /**
+     * Exports [engine]'s prepared score through an [AudioExporter] built from fakes, counting in when [countIn] is set.
+     * The score synth (the first built) counts the frames it renders before the score player is started, and after
+     * that advances the player 240 ticks per block so the render ends; the metronome's player (the second built)
+     * records into [metronome].
+     *
+     * @return the frames rendered before the score player started.
+     */
+    private suspend fun exportFramesBeforeScorePlay(
+        engine: AndroidPlaybackEngine,
+        countIn: Boolean,
+        metronome: RecordingBindings,
+    ): Int {
+        val score = RecordingBindings()
+        var synthsBuilt = 0
+        var playersBuilt = 0
+        var framesBeforeScorePlay = 0
+        val exporter = AudioExporter(
+            resolver = StubSoundfontResolver(),
+            context = null,
+            synthFactory = { _ ->
+                FakeSynthDriver(synthsBuilt).also { synth ->
+                    if (synthsBuilt++ == 0) {
+                        synth.onWriteFloat = { frames ->
+                            if (score.playCalls.isEmpty()) {
+                                framesBeforeScorePlay += frames
+                                check(framesBeforeScorePlay < 10 * 44_100) { "the score player never started" }
+                            } else {
+                                score.tickToReturn += 240
+                            }
+                        }
+                    }
+                }
+            },
+            playerFactory = { _ -> PlayerDriver(0L, if (playersBuilt++ == 0) score else metronome) },
+            encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
+            masterTuningControlChanges = MarkerMasterTuning::invoke,
+        )
+        engine.exportAudioFileWith(
+            outputFd = null,
+            scoreHandle = 1L,
+            format = AudioFileFormat.Wav(),
+            range = AudioExportRange.Full,
+            countIn = countIn,
+            progress = null,
+            exporterFactory = { exporter },
+        )
+        return framesBeforeScorePlay
+    }
+
+    @Test
+    fun `export with countIn plays the shared count-in sequence`() = runTest {
+        val countInClicks = byteArrayOf(5, 5, 5)
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            countInResult = twoClickCountIn(),
+            renderCountInMetronomeMidiResult = countInClicks,
+            frameAtTickResult = encodeFrameBytes(tick = 0L, timeMicros = 0L, cursor = ScoreCursor.Beat(0, 0)),
+        )
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        val counted = RecordingBindings()
+        val framesCounted = exportFramesBeforeScorePlay(engine, countIn = true, metronome = counted)
+        // The count is the one live playback plays from the same start: its clicks are the sequence the shared Swift
+        // renders for it, and its length is the shared schedule's — one second, at the WAV default of 44.1 kHz.
+        assertArrayEquals(countInClicks, counted.loadCalls.firstOrNull())
+        assertEquals(44_100, framesCounted)
+
+        val plain = RecordingBindings()
+        val framesPlain = exportFramesBeforeScorePlay(engine, countIn = false, metronome = plain)
+        assertEquals("without a count-in the music starts on the first frame", 0, framesPlain)
+        assertTrue(
+            "and the count-in sequence is never loaded",
+            plain.loadCalls.none { it.contentEquals(countInClicks) },
+        )
+    }
+
+    @Test
+    fun `an export counts in from its start's unrolled tick and cursor`() = runTest {
+        // The repeated score of [repeatedScoreBridge]: bar 2 notates at 3840 but plays at 7680, after the repeat. The
+        // count-in's cursor lookup and its click sequence both take the player's UNROLLED tick, so the export's notated
+        // start is projected once, before either — never twice.
+        val barTwo = ScoreCursor.Beat(measureIndex = 2, tickInMeasure = 0)
+        val countInCursors = mutableListOf<ScoreCursor>()
+        val countInBaseTicks = mutableListOf<Long>()
+        val bridge = object : FakeJniBridge(
+            timelineSummaryResult = longArrayOf(7680L, 8_000_000L, 480L, 11520L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            countInResult = twoClickCountIn(),
+            renderCountInMetronomeMidiResult = byteArrayOf(5, 5, 5),
+            frameAtTickResult = encodeFrameBytes(tick = 3840L, timeMicros = 4_000_000L, cursor = barTwo),
+            resolveExportTickRangeResult = longArrayOf(3840L, 7680L),
+        ) {
+            /** `[m0, m1, m0, m1, m2, m3]`: bars 2 and 3 first play one repeat (3840 ticks) late. */
+            override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
+                if (notatedTick >= 3840L) notatedTick + 3840L else notatedTick
+
+            override fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+                countInCursors += ScoreCursorCodec.decode(cursorBytes)
+                return super.countIn(scoreHandle, cursorBytes)
+            }
+
+            override fun renderCountInMetronomeMidi(
+                scoreHandle: Long,
+                cursorBytes: ByteArray,
+                baseTick: Long,
+            ): ByteArray {
+                countInBaseTicks += baseTick
+                return super.renderCountInMetronomeMidi(scoreHandle, cursorBytes, baseTick)
+            }
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        exportFramesBeforeScorePlay(engine, countIn = true, metronome = RecordingBindings())
+
+        assertEquals("the start's frame is looked up at its unrolled tick", listOf(7680L), bridge.frameAtTickCalls)
+        assertEquals("the count is computed from that frame's cursor", listOf<ScoreCursor>(barTwo), countInCursors)
+        assertEquals("and its clicks are built for the same tick", listOf(7680L), countInBaseTicks)
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

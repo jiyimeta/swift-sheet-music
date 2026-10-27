@@ -25,6 +25,12 @@ and this project adheres to
   A start with no count-in exports as `countIn: false`, which stays the default. The Apple example app's export
   sheet gains a Count-in toggle.
 
+- **`AndroidPlaybackEngine.exportAudioFile(…, countIn = true)`** — the Android export can count in too, with the
+  count live playback plays from the range's start: the shared count-in click sequence on the metronome's transport,
+  with the score held for exactly the pre-roll's length of output (`CountInWire.totalSeconds` divided by the rate).
+  The clicks sound whatever the metronome toggle says. A start with no count-in exports as `countIn = false`, which
+  stays the default.
+
 ### Fixed
 
 - **An audio export of a score ending on D.C. / D.S. al Fine (or al Coda) no longer runs past the music with

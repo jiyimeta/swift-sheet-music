@@ -5,6 +5,7 @@ import android.os.ParcelFileDescriptor
 import io.github.jiyimeta.sheetmusic.CountInWire
 import io.github.jiyimeta.sheetmusic.CountInWireCodec
 import io.github.jiyimeta.sheetmusic.audio.export.AudioExporter
+import io.github.jiyimeta.sheetmusic.audio.export.CountInExport
 import io.github.jiyimeta.sheetmusic.audio.export.ExportEngineSnapshot
 import io.github.jiyimeta.sheetmusic.audio.jni.SheetMusicAudioJNI
 import io.github.jiyimeta.sheetmusic.audio.model.AudioClockPosition
@@ -1936,6 +1937,11 @@ class AndroidPlaybackEngine internal constructor(
      *
      * Concurrent calls are serialized through an internal mutex.
      *
+     * `countIn = true` puts the count live playback plays from the range's start ([countInEnabled]) in front of the
+     * music: its clicks, which sound whatever the metronome toggle says, then the range itself, so the file is longer
+     * by the count-in's pre-roll (`CountInBeats.Result.preRollSeconds(division:)`) divided by the playback rate. A
+     * start with no count-in exports as if it were `false`. Mirrors Apple's `exportAudioFile(…, countIn:)`.
+     *
      * @throws AudioBackendException.NoScorePrepared if [scoreHandle]
      *   doesn't match the most recent [prepare] call.
      * @throws AudioBackendException.RangeNotInTimeline if a `.Region`
@@ -1953,12 +1959,14 @@ class AndroidPlaybackEngine internal constructor(
         scoreHandle: Long,
         format: AudioFileFormat,
         range: AudioExportRange = AudioExportRange.Full,
+        countIn: Boolean = false,
         progress: ((Float) -> Unit)? = null,
     ) = exportAudioFileWith(
         outputFd = outputFd,
         scoreHandle = scoreHandle,
         format = format,
         range = range,
+        countIn = countIn,
         progress = progress,
     ) {
         AudioExporter(
@@ -1983,6 +1991,7 @@ class AndroidPlaybackEngine internal constructor(
         scoreHandle: Long,
         format: AudioFileFormat,
         range: AudioExportRange,
+        countIn: Boolean = false,
         progress: ((Float) -> Unit)?,
         exporterFactory: () -> AudioExporter,
     ) = exportMutex.withLock {
@@ -2038,6 +2047,7 @@ class AndroidPlaybackEngine internal constructor(
             out
         }
         val strips = stripsOrFallback(decodeInstrumentParams(scoreHandle), staffParams)
+        val countInExport = if (countIn) exportCountIn(scoreHandle, notatedStartTick = startTick) else null
 
         // Synth and encoder MUST share the same sample rate; otherwise the file
         // header advertises one rate while the samples were produced at another,
@@ -2061,11 +2071,42 @@ class AndroidPlaybackEngine internal constructor(
                 ticksPerBeat = ticksPerBeat,
                 format = format,
                 sampleRate = sampleRate,
+                countIn = countInExport,
                 progress = progress,
             )
         } finally {
             _state.value = PlaybackState.STOPPED
         }
+    }
+
+    /**
+     * The count live playback plays from an export's start, read from the same shared Swift its count-in reads
+     * ([beginCountInOrNull]): the schedule from `CountInBeats` for its length, the count-in click sequence for its
+     * clicks. Null when that start has no count-in — the schedule is empty or undecodable, or the sequence fails to
+     * render — and the export then runs as if `countIn` were false, as Apple's does.
+     *
+     * Reads [scoreHandle], the score as the host has it, like the rest of the export.
+     */
+    private fun exportCountIn(scoreHandle: Long, notatedStartTick: Long): CountInExport? {
+        // The one projection of the export's start onto the player's clock: `frameAtTick` reads an UNROLLED tick, and
+        // the count-in sequence is built for the tick the player starts at. Once the range handed to the exporter is
+        // itself on the player's clock, pass that start in here instead and drop this projection — the start is then
+        // already unrolled, and projecting it again lands it a repeat later.
+        val startUnrolled = unrolledTick(forNotated = notatedStartTick)
+        val frameBytes = jniBridge.frameAtTick(scoreHandle, startUnrolled)
+        val cursor = if (frameBytes.isEmpty()) {
+            ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
+        } else {
+            FrameCodec.decode(frameBytes).cursor
+        }
+        val cursorBytes = ScoreCursorCodec.encode(cursor)
+        val schedule = runCatching {
+            CountInWireCodec.decode(jniBridge.countIn(scoreHandle, cursorBytes))
+        }.getOrNull() ?: return null
+        if (schedule.preRollTicks <= 0 || schedule.beats.isEmpty()) return null
+        val smf = jniBridge.renderCountInMetronomeMidi(scoreHandle, cursorBytes, startUnrolled)
+        if (smf.isEmpty()) return null
+        return CountInExport(metronomeSmfBytes = smf, preRollSeconds = schedule.totalSeconds)
     }
 
     // ── Teardown ─────────────────────────────────────────────────────
