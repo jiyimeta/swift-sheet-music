@@ -7,6 +7,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`CountInBeats.Result.preRollSeconds(division:)`** — how long the count-in's pre-roll lasts on the sequence clock
+  (rate 1): `preRollTicks` at `microsecondsPerQuarter`, the whole-BPM tempo every pre-roll sequence is seeded with.
+  It is the one conversion every engine and host reads; at a playback rate other than 1 the output lasts this divided
+  by the rate.
+
+### Fixed
+
+- **A SwiftySynth count-in waits out the whole count at any playback rate.** The metronome transport plays the
+  pre-roll at the playback rate, but `SwiftySynthBackend.play(afterCountInSeconds:)` held the score for the
+  sequence-clock length, so at half speed the music started half way through the count. The hold is now
+  `seconds / rate` of output, and `SynthBackend.play(afterCountInSeconds:)` documents `seconds` as sequence-clock
+  time.
+- **The count-in's length is measured at the tempo its clicks play.** The Apple engine's backend hold and the web
+  `countInSeconds` converted the pre-roll at the unrounded start tempo, while the count sequence plays at that tempo
+  rounded to a whole BPM — at 92.5 BPM the count lasts 2.581 s, and the music came in 14 ms behind it. Android's
+  `CountInWire.totalSeconds` and beat offsets carried the same error, though its live count hands over by tick and
+  reads the total only as a timeout. All of them now read `preRollSeconds(division:)`.
+
 ## [4.21.0] - 2026-10-26
 
 ### Fixed

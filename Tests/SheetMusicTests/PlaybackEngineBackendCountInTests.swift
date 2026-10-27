@@ -36,8 +36,9 @@
             }
 
             /// Two 4/4 measures of quarter notes at division 480 — enough for a count-in to have
-            /// a full measure of its own in front of the start.
-            private func makeScore() -> Score {
+            /// a full measure of its own in front of the start. `quarterBpm` marks a tempo at the
+            /// first measure's start; without it the score plays at the default 120.
+            private func makeScore(quarterBpm: Double? = nil) -> Score {
                 let quarter = Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])
                 let first = Voice(elements: [
                     .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
@@ -53,7 +54,14 @@
                         Measure(voices: [first]), Measure(voices: [second]),
                     ])],
                 )
-                return Score(division: 480, parts: [part])
+                guard let quarterBpm else { return Score(division: 480, parts: [part]) }
+                let tempo = PositionedSystemElement(
+                    position: .start, element: .tempo(Tempo(beatsPerSecond: quarterBpm / 60)),
+                )
+                return Score(
+                    division: 480, parts: [part],
+                    systemMeasures: [SystemMeasure(elements: [tempo]), SystemMeasure()],
+                )
             }
 
             private func noteID(measureIndex: Int, elementIndex: Int) -> NoteID {
@@ -123,6 +131,23 @@
                 // Playing from the top: the body starts at score 0, a whole pre-roll into the
                 // metronome's own clock.
                 #expect(abs(backend.metronomeOffsetSeconds - preRollSeconds) < 0.001)
+            }
+
+            /// The count sequence is seeded with the start's tempo rounded to a whole BPM, so the
+            /// backend has to hold the score for the pre-roll at THAT tempo — 92.5 plays as 93
+            /// (`microsecondsPerQuarter` = 645_161). Held for the unrounded length instead, the
+            /// music comes in 14 ms behind the count.
+            @Test("the hold is the pre-roll the count sequence plays")
+            func theHoldIsThePreRollTheSequencePlays() throws {
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                let score = makeScore(quarterBpm: 92.5)
+                try engine.prepare(score: score)
+
+                engine.play(from: nil, in: score, countIn: true)
+
+                let seconds = try #require(backend.countInSeconds)
+                #expect(abs(seconds - 2.580644) < 1e-6) // was 2.594595 (unrounded 92.5 BPM)
             }
 
             @Test("a plain play after a count-in drops the pre-roll clicks again")

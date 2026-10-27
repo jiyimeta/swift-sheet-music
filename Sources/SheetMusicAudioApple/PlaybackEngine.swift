@@ -1826,8 +1826,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         backend: any SynthBackend, score: Score, plan: CountInBeats.Result,
         baseTick: Int, rendered: MidiFile, timeline: PlaybackTimeline,
     ) throws {
-        let preRollSeconds = Double(plan.preRollTicks)
-            * (60.0 / plan.quarterBpm) / Double(timeline.division)
+        // On the sequence clock, at the rounded tempo the count sequence is seeded with.
+        let preRollSeconds = plan.preRollSeconds(division: timeline.division)
         if sequencerScore != score {
             loadBackendNormalSequence(
                 backend: backend, score: score,

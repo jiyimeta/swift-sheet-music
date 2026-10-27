@@ -95,11 +95,9 @@ import SheetMusicFoundation
           let result = CountInBeats.compute(score: score, startCursor: cursor),
           score.division > 0, result.quarterBpm > 0
     else { return 0 }
-    // `division` is ticks per quarter, so `tick / division` is quarter notes and
-    // `× 60 / quarterBpm` turns that into seconds — the same projection
-    // `CountInCodec.wire(from:division:)` makes for the Android host.
-    let secondsPerTick = 60.0 / (result.quarterBpm * Double(score.division))
-    return Double(result.preRollTicks) * secondsPerTick
+    // The pre-roll at the rounded tempo the count sequence plays — the same
+    // length `CountInCodec.wire(from:division:)` hands the Android host.
+    return result.preRollSeconds(division: score.division)
 }
 
 /// Build a bank-128 SoundFont from two click WAVs, mapping the strong click to

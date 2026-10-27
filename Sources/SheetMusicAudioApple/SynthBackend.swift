@@ -134,6 +134,11 @@ public protocol SynthBackend: AnyObject {
     /// `setMetronomeMuted` says: counting in is an explicit request, not the
     /// metronome toggle.
     ///
+    /// `seconds` is on the SEQUENCE clock — the clock `loadMetronomeSequence(_:offsetSeconds:)` speaks, i.e.
+    /// `CountInBeats.Result.preRollSeconds(division:)` at rate 1. The metronome transport plays the pre-roll at
+    /// the rate `setRate` set, so the backend holds the score for `seconds / rate` of output; holding `seconds`
+    /// would start the music part way through the count whenever the rate is not 1.
+    ///
     /// The wait belongs to the backend rather than the engine because it is the
     /// only place with a sample clock: a main-actor timer would quantize the
     /// downbeat to whichever render buffer happened to notice the deadline had

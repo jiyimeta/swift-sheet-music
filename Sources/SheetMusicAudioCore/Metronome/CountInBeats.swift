@@ -1,4 +1,5 @@
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Computes the count-in ("pre-roll") click schedule for playback starting at `startCursor`: one prepended
 /// measure of the effective meter, an anacrusis right-align shim, and the mid-measure lead-in — as ticks,
@@ -97,5 +98,19 @@ public enum CountInBeats {
         // Nominal measure duration as a Fraction, for resolving whole-measure (`.measure`) rests.
         let measureDuration = Fraction(numerator: max(1, nominalTicks), denominator: 4 * division)
         return voice0.elements.reduce(0) { $0 + ($1.tickCount(division: division, in: measureDuration) ?? 0) }
+    }
+}
+
+extension CountInBeats.Result {
+    /// How long the pre-roll lasts on the sequence clock (rate 1): `preRollTicks` at `microsecondsPerQuarter`, the
+    /// rounded tempo every pre-roll sequence is seeded with. This is the one conversion every engine and host uses —
+    /// the backend's count-in hold, Android's `CountInWire.totalSeconds` and the web `countInSeconds` all read it, so
+    /// none of them can drift from the clicks the sequence actually plays. At a playback rate other than 1 the
+    /// output lasts this divided by the rate.
+    ///
+    /// `0` for a non-positive `division`.
+    public func preRollSeconds(division: Int) -> TimeInterval {
+        guard division > 0 else { return 0 }
+        return Double(preRollTicks) * Double(microsecondsPerQuarter) / 1_000_000 / Double(division)
     }
 }

@@ -160,6 +160,22 @@ struct CountInBeatsTests {
         #expect(result?.quarterBpm == 120.0)
     }
 
+    @Test func preRollSecondsIsTheLengthTheSequencePlays() {
+        let result = CountInBeats.Result(preRollTicks: 1920, beats: [], quarterBpm: 120)
+        #expect(result.preRollSeconds(division: 480) == 2.0)
+    }
+
+    /// 92.5 rounds to 93 (`microsecondsPerQuarter` = 645_161), the tempo every pre-roll sequence is seeded with —
+    /// not the 2.594 s an unrounded conversion gives.
+    @Test func preRollSecondsUsesTheRoundedSequenceTempo() {
+        let result = CountInBeats.Result(preRollTicks: 1920, beats: [], quarterBpm: 92.5)
+        #expect(abs(result.preRollSeconds(division: 480) - 2.580644) < 1e-9)
+    }
+
+    @Test func preRollSecondsIsZeroWithoutADivision() {
+        #expect(CountInBeats.Result(preRollTicks: 1920, beats: [], quarterBpm: 120).preRollSeconds(division: 0) == 0)
+    }
+
     @Test func emptyScoreReturnsNil() {
         let empty = Score(division: 480, parts: [], systemMeasures: [], metaTags: [:])
         #expect(CountInBeats.compute(score: empty, startCursor: nil) == nil)
