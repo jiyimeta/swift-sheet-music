@@ -35,14 +35,20 @@ extension PlaybackEngine {
     /// `prepare(score:)` must have been called for the same `score`
     /// instance; otherwise throws `.noScorePrepared`.
     ///
+    /// `countIn: true` puts the count live playback plays from the range's start (`play(from:in:countIn:)`) in front
+    /// of the music: its clicks at the metronome strip's volume whatever the metronome toggle says, then the range
+    /// itself, so the file is longer by `CountInBeats.Result.preRollSeconds(division:)` divided by the playback rate.
+    /// A start with no count-in (`CountInBeats.compute` is nil) exports as if it were `false`.
+    ///
     /// On `Task.cancel()` the in-flight render is aborted at the
     /// next buffer boundary; the partial output file at `url` is
     /// deleted.
-    public func exportAudioFile(
+    public func exportAudioFile( // swiftlint:disable:this function_body_length
         to url: URL,
         score: Score,
         format: AudioFileFormat,
         range: AudioExportRange = .full,
+        countIn: Bool = false,
         progress: (@Sendable (Double) -> Void)? = nil,
     ) async throws {
         guard let timeline = exportTimeline() else {
@@ -63,6 +69,10 @@ extension PlaybackEngine {
             ? unrolled.unrolledLength(of: timeline)
             : unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(endTick)))
         let durationSec = max(0, endSec - startSec)
+        // The count live playback plays from this start, ahead of the range on the same sequence clock.
+        let countIn = countIn
+            ? Self.exportCountIn(score: score, timeline: timeline, unrolled: unrolled, startTick: startTick)
+            : nil
 
         let outputFormat = AudioFileExporter.outputFormat(for: format)
         let snapshot = exportEngineSnapshot()
@@ -71,9 +81,10 @@ extension PlaybackEngine {
         // snapshot.rate` below), so a rate < 1 (slow-practice export)
         // needs MORE wall-clock frames, not `durationSec * sampleRate`
         // worth — otherwise the render loop stops before the slowed
-        // piece has finished sounding.
+        // piece has finished sounding. The count plays at that rate too.
         let framesToRender = Self.renderFrameCount(
-            durationSec: durationSec, rate: snapshot.rate, sampleRate: outputFormat.sampleRate,
+            durationSec: durationSec + (countIn?.preRollSeconds ?? 0),
+            rate: snapshot.rate, sampleRate: outputFormat.sampleRate,
         )
         let writer = try AudioFileExporter.makeWriter(url: url, format: format)
         let exporter = AudioFileExporter()
@@ -86,6 +97,7 @@ extension PlaybackEngine {
                 outputFormat: outputFormat,
                 timeline: timeline,
                 startTick: startTick,
+                countIn: countIn,
             )
             // Tear the pipeline down on the way out however this ends. A
             // cancelled export used to leave its engine running in manual
@@ -148,6 +160,7 @@ extension PlaybackEngine {
         outputFormat: AVAudioFormat,
         timeline: PlaybackTimeline,
         startTick: Int,
+        countIn: ExportCountIn?,
     ) async throws -> ExportPipeline {
         if let offline = backend?.makeOfflineInstance(
             sampleRate: outputFormat.sampleRate,
@@ -158,6 +171,7 @@ extension PlaybackEngine {
                 outputFormat: outputFormat,
                 timeline: timeline,
                 startTick: startTick,
+                countIn: countIn,
                 backend: offline,
             )
         }
@@ -167,6 +181,7 @@ extension PlaybackEngine {
             outputFormat: outputFormat,
             timeline: timeline,
             startTick: startTick,
+            countIn: countIn,
         )
     }
 
@@ -186,6 +201,7 @@ extension PlaybackEngine {
         outputFormat: AVAudioFormat,
         timeline: PlaybackTimeline,
         startTick: Int,
+        countIn: ExportCountIn?,
     ) throws -> ExportPipeline {
         let engine = AVAudioEngine()
         let resolver = snapshot.resolver
@@ -215,18 +231,19 @@ extension PlaybackEngine {
 
         // 2. Optional metronome synth / track. Onto `scoreGainMixer`, like
         //    the score — the click is scaled by the master gain, matching
-        //    the live engine (see `PlaybackEngine.init`).
+        //    the live engine (see `PlaybackEngine.init`). A count-in needs it
+        //    whatever the metronome toggle says.
         let metronomeSampler = buildMetronomeSampler(
-            snapshot: snapshot, engine: engine, output: scoreGainMixer,
+            snapshot: snapshot, countsIn: countIn != nil, engine: engine, output: scoreGainMixer,
         )
 
         // 3. Render MIDI bytes (score tracks + optional metronome
-        //    track) and load into a fresh sequencer bound to the
-        //    fresh engine.
+        //    track, or the count-in assembly) and load into a fresh
+        //    sequencer bound to the fresh engine.
         let sequencer = try makeExportSequencer(
             score: score, plan: plan, snapshot: snapshot, engine: engine,
             metronomeOutput: scoreGainMixer, exportSynth: exportSynth,
-            metronomeSampler: metronomeSampler,
+            metronomeSampler: metronomeSampler, countIn: countIn,
         )
 
         // 4. Switch to manual rendering mode and start. Engine is
@@ -241,9 +258,11 @@ extension PlaybackEngine {
         return ExportPipeline(
             engine: engine,
             start: {
+                // A count-in sequence starts at its pre-roll origin: the assembler already moved `startTick`'s
+                // content to `preRollTicks`, behind the count.
                 try startSequencer(
                     sequencer, melodic: exportSynth.melodic,
-                    timeline: timeline, startTick: startTick,
+                    timeline: timeline, startTick: countIn == nil ? startTick : 0,
                 )
             },
             teardown: {
@@ -260,6 +279,9 @@ extension PlaybackEngine {
     /// sounded, post-process it for AUMIDISynth, and load it into a fresh
     /// `AVAudioSequencer` bound to `engine` with each track routed to its
     /// melodic / percussion / metronome unit.
+    ///
+    /// With `countIn`, the SMF is the live count-in build instead (`buildCountInSequencer`): the staves shifted
+    /// behind the count, the count's own click track, then the body metronome.
     private static func makeExportSequencer(
         score: Score,
         plan: LiveChannelPlan,
@@ -268,6 +290,7 @@ extension PlaybackEngine {
         metronomeOutput: AVAudioMixerNode,
         exportSynth: ScoreSynth,
         metronomeSampler: AVAudioUnitMIDIInstrument?,
+        countIn: ExportCountIn?,
     ) throws -> AVAudioSequencer {
         var midi = try MidiRenderer.render(score: score)
         // Collapse the MuseScore-exact multi-port SMF onto the same
@@ -277,26 +300,43 @@ extension PlaybackEngine {
         // `PlaybackEngine.cachedRender` for the identical live-playback
         // ordering.
         MidiChannelRemap.apply(midi: &midi, plan: plan)
-        if metronomeSampler != nil {
-            // This controller is used only to generate the metronome MIDI track; `prepare(soundfontURL:)` is never
-            // called on it, so `output` is never connected. Pass the real metronome output anyway (not
-            // `mainMixerNode`) so that if a future change does call `prepare`, the click lands where the live engine
-            // puts it rather than silently bypassing the gain stage and the soft clip.
-            let metronome = MetronomeController(
-                engine: engine, output: metronomeOutput,
+        // The tracks past the staves that the metronome sampler plays.
+        var metronomeTracks: Set<Int> = []
+        if let countIn {
+            // The body metronome is empty with the toggle off: the count is the only click asked for. The
+            // assembler applies the same post-process as the branch below, so it is not run twice.
+            let assembled = PreRollSequenceAssembler.assemble(
+                rendered: midi,
+                metronomeBeats: snapshot.metronomeEnabled ? snapshot.metronomeBeats : [],
+                mixerManagedChannels: plan.managedChannels,
+                plan: countIn.plan,
+                baseTick: countIn.baseTick,
             )
-            midi.tracks.append(metronome.metronomeTrack(
-                beats: snapshot.metronomeBeats, division: midi.division,
-            ))
+            midi = assembled.midi
+            metronomeTracks = [assembled.preRollTrackIndex, assembled.bodyMetronomeTrackIndex]
+        } else {
+            if metronomeSampler != nil {
+                // This controller is used only to generate the metronome MIDI track; `prepare(soundfontURL:)` is
+                // never called on it, so `output` is never connected. Pass the real metronome output anyway (not
+                // `mainMixerNode`) so that if a future change does call `prepare`, the click lands where the live
+                // engine puts it rather than silently bypassing the gain stage and the soft clip.
+                let metronome = MetronomeController(
+                    engine: engine, output: metronomeOutput,
+                )
+                midi.tracks.append(metronome.metronomeTrack(
+                    beats: snapshot.metronomeBeats, division: midi.division,
+                ))
+                metronomeTracks = [midi.tracks.count - 1]
+            }
+            // Strip RAC + complete RPN Data-Entry pair, and drop CC 7 on the
+            // mixer-managed channels so the export's `applyMixerSnapshot`
+            // volume / mute / solo wins instead of the SMF's tick-0 CC 7 —
+            // see `PlaybackEngine.postProcessForMIDISynth` for rationale.
+            postProcessForMIDISynth(
+                midi: &midi,
+                mixerManagedChannels: plan.managedChannels,
+            )
         }
-        // Strip RAC + complete RPN Data-Entry pair, and drop CC 7 on the
-        // mixer-managed channels so the export's `applyMixerSnapshot`
-        // volume / mute / solo wins instead of the SMF's tick-0 CC 7 —
-        // see `PlaybackEngine.postProcessForMIDISynth` for rationale.
-        postProcessForMIDISynth(
-            midi: &midi,
-            mixerManagedChannels: plan.managedChannels,
-        )
         let bytes = try MidiWriter.write(midi)
         let sequencer = AVAudioSequencer(audioEngine: engine)
         try sequencer.load(from: bytes, options: [])
@@ -306,7 +346,7 @@ extension PlaybackEngine {
                 track.destinationAudioUnit = exportSynth.staffIsDrum[i] == true
                     ? (exportSynth.percussion ?? exportSynth.melodic)
                     : exportSynth.melodic
-            } else if let s = metronomeSampler {
+            } else if metronomeTracks.contains(i), let s = metronomeSampler {
                 track.destinationAudioUnit = s
             }
         }
@@ -481,12 +521,15 @@ extension PlaybackEngine {
         )
     }
 
+    /// The click sampler, at the metronome strip's volume — built when the metronome toggle is on, or when the export
+    /// counts in, whose count sounds whatever the toggle says. `nil` without a click SoundFont.
     private static func buildMetronomeSampler(
         snapshot: ExportEngineSnapshot,
+        countsIn: Bool,
         engine: AVAudioEngine,
         output: AVAudioNode,
     ) -> AVAudioUnitMIDIInstrument? {
-        guard snapshot.metronomeEnabled,
+        guard snapshot.metronomeEnabled || countsIn,
               let metroURL = snapshot.metronomeSoundFontURL
         else { return nil }
         let s = MIDISynthBuilder.make()

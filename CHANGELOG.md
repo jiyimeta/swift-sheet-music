@@ -18,6 +18,13 @@ and this project adheres to
   repeats and jumps (the end of the last measure-play, or the notated length without a repeat plan), and every
   measure-play with its start and duration on both the unrolled and the notated clock.
 
+- **`PlaybackEngine.exportAudioFile(…, countIn:)`** — an export can count in, as live playback does: `countIn: true`
+  puts the count `play(from:in:countIn:)` plays from the range's start in front of the music, on both the
+  AUMIDISynth pipeline and an injected backend's offline instance. The clicks sound at the metronome strip's volume
+  whatever the metronome toggle says, and the file grows by `preRollSeconds(division:)` divided by the export's rate.
+  A start with no count-in exports as `countIn: false`, which stays the default. The Apple example app's export
+  sheet gains a Count-in toggle.
+
 ### Fixed
 
 - **An audio export of a score ending on D.C. / D.S. al Fine (or al Coda) no longer runs past the music with

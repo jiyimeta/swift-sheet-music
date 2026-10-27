@@ -21,6 +21,7 @@ struct AudioExportSheet: View {
     @State private var tag: FormatTag = .wav
     @State private var pcm = PCMOptions()
     @State private var comp = CompressedOptions()
+    @State private var countIn = false
     @State private var progress: Double = 0
     @State private var exportTask: Task<Void, Error>?
     @State private var errorText: String?
@@ -72,6 +73,9 @@ struct AudioExportSheet: View {
                         Text("Stereo").tag(AudioChannelCount.stereo)
                     }
                 }
+            }
+            Section("Count-in") {
+                Toggle("Count in before the music", isOn: $countIn)
             }
             if exportTask != nil {
                 Section {
@@ -142,6 +146,7 @@ struct AudioExportSheet: View {
                 try await engine.exportAudioFile(
                     to: url, score: score,
                     format: resolvedFormat,
+                    countIn: countIn,
                     progress: { p in progress = p },
                 )
                 exportTask = nil

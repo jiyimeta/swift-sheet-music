@@ -22,6 +22,31 @@
                 frameCapacity: AVAudioFrameCount(file.length),
             ) else { throw EmptyExport() }
             try file.read(into: buffer)
+            return peak(of: buffer)
+        }
+
+        /// Largest absolute sample in frames `[from · sampleRate, to · sampleRate)` of `url`, across all channels,
+        /// with the window clamped to the file — "did anything sound between these two moments".
+        ///
+        /// Throws `EmptyExport` when the clamped window holds no frame: a window past the end of the file is a
+        /// mistake in the test, and reading it as silence would let it pass whatever the export did.
+        static func peakAmplitude(of url: URL, from: TimeInterval, to: TimeInterval) throws -> Float {
+            let file = try AVAudioFile(forReading: url)
+            let sampleRate = file.processingFormat.sampleRate
+            // Clamped as `Double`s, so `to: .infinity` means "to the end" instead of trapping in the conversion.
+            let length = Double(file.length)
+            let start = AVAudioFramePosition(min(max(0, from * sampleRate), length))
+            let end = AVAudioFramePosition(min(max(Double(start), to * sampleRate), length))
+            let frameCount = AVAudioFrameCount(end - start)
+            guard frameCount > 0, let buffer = AVAudioPCMBuffer(
+                pcmFormat: file.processingFormat, frameCapacity: frameCount,
+            ) else { throw EmptyExport() }
+            file.framePosition = start
+            try file.read(into: buffer, frameCount: frameCount)
+            return peak(of: buffer)
+        }
+
+        private static func peak(of buffer: AVAudioPCMBuffer) -> Float {
             guard let channels = buffer.floatChannelData else { return 0 }
             var peak: Float = 0
             for channel in 0 ..< Int(buffer.format.channelCount) {
