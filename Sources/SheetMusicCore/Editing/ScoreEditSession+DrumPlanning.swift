@@ -1,16 +1,23 @@
 import SheetMusicFoundation
 
-/// The drum note-entry intents' planning half — `EditIntent` → `EditCommand` for `.createVoice`, `.splitRest`
-/// and `.setNoteHead`.
+/// The drum intents' planning half — `EditIntent` → `EditCommand` for `.createVoice`, `.splitRest`, `.setNoteHead`,
+/// `.setDrumsetEntry` and `.revoiceDrumStaff`.
 ///
 /// Split out of `ScoreEditSession+Planning.swift` for the reason the signature and rehearsal-mark planners are:
-/// that file's switch is at SwiftLint's body budget, and these three share a subject (making a drum key's whole
+/// that file's switch is at SwiftLint's body budget, and these share a subject (making a drum key's whole
 /// meaning reachable) rather than a mechanism.
 extension ScoreEditSession {
     /// `default: return nil` here is the hazard `structuralCommand`'s doc comment warns about — an intent nobody
     /// wired would resolve to "nothing to apply" instead of failing to build. It is acceptable only because the
-    /// caller's switch already narrows to these three cases; keep that `case` list and this one in step.
-    static func drumInputCommand(for intent: EditIntent, in score: Score) -> (any EditCommand)? {
+    /// caller's switch already narrows to these five cases (`createVoice`, `splitRest`, `setNoteHead`,
+    /// `setDrumsetEntry`, `revoiceDrumStaff`); keep that `case` list and this one in step.
+    ///
+    /// `.revoiceDrumStaff` hands back the PLANNED COMPOSITE, as `.formatRhythms` does: it reports the first bar
+    /// actually rewritten, which the command alone cannot know, and it spares the apply a second walk of the staff.
+    /// A plan that throws falls back to the bare command, so the refusal is raised, and recorded, at apply time.
+    static func drumInputCommand(
+        for intent: EditIntent, in score: Score, ids: EIDAllocator,
+    ) throws -> (any EditCommand)? {
         switch intent {
         case let .createVoice(staff, measureIndex, voiceIndex):
             // Nothing to do when the voice is already there. The refusals that DO belong to this intent — a gap
@@ -41,6 +48,17 @@ extension ScoreEditSession {
                 return nil
             }
             return SetDrumsetEntry(partIndex: partIndex, pitch: pitch, entry: entry)
+        case let .revoiceDrumStaff(staff, assignments, policy):
+            // Later rows win, so a host can append an override without rewriting the list.
+            let rows = assignments.map { ($0.pitch, $0.voiceIndex) }
+            let command = RevoiceDrumStaff(
+                staff: staff, voiceForPitch: Dictionary(rows) { _, last in last }, policy: policy,
+            )
+            do {
+                return try command.plan(in: score, ids: ids)
+            } catch {
+                return command
+            }
         default:
             return nil
         }

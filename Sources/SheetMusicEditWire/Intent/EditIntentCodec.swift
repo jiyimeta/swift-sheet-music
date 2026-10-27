@@ -141,6 +141,7 @@ import Wirelet
 /// 92 = retimeRun(RetimeRunIntentWire), see EditIntentPayloads+Range.swift
 /// 93 = removeSlur(SlurIDWire) — the slur identity's own wire form, no wrapper struct
 /// 94 = setStripMix(SetStripMixIntentWire), see EditIntentPayloads+Range.swift
+/// 95 = revoiceDrumStaff(RevoiceDrumStaffIntentWire), see EditIntentPayloads+Range.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -1161,6 +1162,8 @@ public enum EditIntentWire {
     /// Appended for folino's "save the mix to the score" (spec 2026-10-22) — index 94. Never renumber anything above
     /// it.
     case setStripMix(SetStripMixIntentWire)
+    /// Appended for folino's drum voice conversion (design 2026-10-26) — index 95. Never renumber anything above it.
+    case revoiceDrumStaff(RevoiceDrumStaffIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1373,6 +1376,8 @@ public enum EditIntentWire {
             self = .removeSlur(SlurIDWire(from: id))
         case let .setStripMix(mixes):
             self = .setStripMix(SetStripMixIntentWire(mixes: mixes))
+        case let .revoiceDrumStaff(staff, assignments, policy):
+            self = .revoiceDrumStaff(RevoiceDrumStaffIntentWire(staff: staff, assignments: assignments, policy: policy))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         case let .setElementColor(target, color):
@@ -1670,6 +1675,9 @@ public enum EditIntentWire {
             return .removeSlur(wire.decoded())
         case let .setStripMix(wire):
             return .setStripMix(wire.decoded())
+        case let .revoiceDrumStaff(wire):
+            let decoded = wire.decoded()
+            return .revoiceDrumStaff(staff: decoded.staff, assignments: decoded.assignments, policy: decoded.policy)
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)

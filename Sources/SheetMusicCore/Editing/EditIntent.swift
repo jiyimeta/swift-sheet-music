@@ -567,4 +567,14 @@ public enum EditIntent: Sendable, Equatable {
     /// already holds (`ScoreElementID.slur`). Refused as `.noSpannerAtLocation` when nothing is there. See
     /// `RemoveSlur`.
     case removeSlur(SlurID)
+
+    // Appended for folino's drum voice conversion (design 2026-10-26) — index 95.
+
+    /// Re-voice the drum staff at `staff` by pitch, as one undo step: every note moves to the voice its pitch is
+    /// assigned (a pitch with no row goes to voice 0, and the highest index named sets how many voices the staff ends
+    /// with, so no rows is one voice), and a bar is rewritten so its notes sit there. A later row for the same pitch
+    /// wins. A bar already in that form is not touched, and a bar that cannot be converted without changing what plays
+    /// is left as written. `policy` spells the rests of a rewritten bar. Resolves to nothing to apply when no bar
+    /// needs re-voicing; a staff the score does not have is refused as `.staffNotFound`. See `RevoiceDrumStaff`.
+    case revoiceDrumStaff(staff: StaffAddress, assignments: [DrumVoiceAssignment], policy: RhythmSpellingPolicy)
 }
