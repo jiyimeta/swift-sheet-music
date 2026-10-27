@@ -259,6 +259,32 @@
                 #expect(offline.seekCalls == [0])
                 #expect(abs(countedSeconds - 4.0) < 0.01, "exported \(countedSeconds) s with a count-in")
             }
+
+            /// The backend export starts its count in the order `startBackendCountIn` starts it live: the seek, which
+            /// moves both transports; the count's metronome load, which re-parks the metronome at the count's first
+            /// click; the mute; the held play. Loaded before the seek, the count is skipped whole on SwiftySynth —
+            /// and the test above stays green, since the recorder plays nothing.
+            @Test func theBackendExportStartsTheCountInLiveOrder() async throws {
+                let score = try loadScore("multiPartMixedStaves")
+                let live = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NoSoundFont(), backend: live)
+                try engine.prepare(score: score)
+                engine.setMetronomeEnabled(false)
+
+                let url = try await export(engine, score, countIn: true)
+                defer { try? FileManager.default.removeItem(at: url) }
+
+                let offline = try #require(live.offlineInstance)
+                let preRoll = try #require(offline.countInSeconds)
+                // The count's own load, not the plain one the transports were loaded with (offset 0).
+                #expect(offline.metronomeOffsetSeconds > 0)
+                #expect(offline.lastStart == [
+                    .seek(tick: 0),
+                    .loadMetronomeSequence(offsetSeconds: offline.metronomeOffsetSeconds),
+                    .setMetronomeMuted(true),
+                    .playAfterCountIn(seconds: preRoll),
+                ], "\(offline.transportEvents)")
+            }
         }
     }
 #endif

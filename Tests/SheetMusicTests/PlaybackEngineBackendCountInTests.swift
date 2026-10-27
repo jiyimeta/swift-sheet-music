@@ -150,6 +150,30 @@
                 #expect(abs(seconds - 2.580644) < 1e-6) // was 2.594595 (unrounded 92.5 BPM)
             }
 
+            /// The count is heard only in this order: the seek moves both transports, so it comes first; the count's
+            /// metronome load re-parks the metronome at the count's first click; then the mute and the held play.
+            /// Loaded before the seek, SwiftySynth starts the metronome at the body's start and skips the count whole.
+            @Test("a count-in starts with the seek, then the count's load, the mute and the held play")
+            func countInStartsInOrder() throws {
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                let score = makeScore()
+                try engine.prepare(score: score)
+                engine.setMetronomeEnabled(false)
+
+                engine.play(from: nil, in: score, countIn: true)
+
+                let preRoll = try #require(backend.countInSeconds)
+                // The count's own load, not a plain one (offset 0).
+                #expect(backend.metronomeOffsetSeconds > 0)
+                #expect(backend.lastStart == [
+                    .seek(tick: 0),
+                    .loadMetronomeSequence(offsetSeconds: backend.metronomeOffsetSeconds),
+                    .setMetronomeMuted(true),
+                    .playAfterCountIn(seconds: preRoll),
+                ], "\(backend.transportEvents)")
+            }
+
             @Test("a plain play after a count-in drops the pre-roll clicks again")
             func plainPlayReloadsThePlainMetronomeSequence() throws {
                 let backend = RecordingBackend()
