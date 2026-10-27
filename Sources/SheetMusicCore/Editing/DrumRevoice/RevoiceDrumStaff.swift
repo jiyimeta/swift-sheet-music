@@ -103,11 +103,31 @@ public struct RevoiceDrumStaff: EditCommand {
     }
 
     /// Every bar of `target` with its plan, in bar order. The staff's meters and lengths are read once for the walk.
+    ///
+    /// D6: a dynamic or hairpin that plays in its own voice only governs other notes once notes change voice, and its
+    /// level holds until the voice's next dynamic, wherever that is. So from the bar of the staff's first such marking
+    /// to the staff's end, a bar that would be rewritten is left as written instead (`.voiceOnlyDynamics`).
     private func barPlans(of target: Staff, division: Int) -> [(measureIndex: Int, plan: RevoiceBarPlan)] {
         let bars = FormatRhythmsBars(staff: target, division: division)
+        let voiceOnlyFrom = target.measures.firstIndex(where: Self.holdsVoiceOnlyDynamic) ?? target.measures.count
         return target.measures.indices.map { measureIndex in
             let bar = RevoiceBar(staff: target, measureIndex: measureIndex, bars: bars)
-            return (measureIndex, RevoiceBarPlanner.plan(bar, voiceForPitch: voiceForPitch, policy: policy))
+            let plan = RevoiceBarPlanner.plan(bar, voiceForPitch: voiceForPitch, policy: policy)
+            guard measureIndex >= voiceOnlyFrom, case .rewrite = plan else { return (measureIndex, plan) }
+            return (measureIndex, .leftAsWritten(.voiceOnlyDynamics))
+        }
+    }
+
+    /// The bar holds a dynamic, or a hairpin, assigned to its own voice only (`VoiceAssignment.currentVoiceOnly`).
+    private static func holdsVoiceOnlyDynamic(_ measure: Measure) -> Bool {
+        measure.voices.contains { voice in
+            voice.elements.contains { element in
+                switch element {
+                case let .dynamic(dynamic): dynamic.voiceAssignment == .currentVoiceOnly
+                case let .spanner(spanner): spanner.hairpin?.voiceAssignment == .currentVoiceOnly
+                default: false
+                }
+            }
         }
     }
 

@@ -18,35 +18,36 @@ struct RevoiceTimedSlot {
 enum RevoiceChordLength: Equatable {
     /// Nothing makes its length heard, so the writer chooses it (design §4.2).
     case free
-    /// A tie, a roll or after-graces make its length heard (§4.4): it lasts `ticks`, its source chord's length, and
-    /// is written as `written`, its source chord's own value.
-    case fixed(ticks: Int, written: NoteDuration)
+    /// Its length is heard (§4.4): it lasts `ticks` and is written as `written`, the length and value of the source
+    /// chord that makes it heard. When the voice cannot give it that, the bar is left as written for `reason`.
+    case fixed(ticks: Int, written: NoteDuration, reason: RevoiceKeepReason)
 }
 
 extension RevoiceBarPlanner {
     /// One target voice's chords laid out across the bar (design §4.2, §4.4, §4.5).
     ///
     /// A drum hit's written length says nothing about how it sounds, so a free chord at `o` lasts until the next
-    /// boundary of its voice (its next onset, or the start of the next tuplet the voice carries; the bar's end for
-    /// the last) or until `max(o + the longest source length among its hits, the next beat after o)`, whichever comes
-    /// first. That span is written as ONE value, the first `RhythmSpelling` gives for it, never a tie, and the chord
-    /// lasts as long as that value. A fixed chord keeps its source length and value unchanged, and the voice's next
-    /// boundary must not fall before it ends — no other hit of the voice, and no tuplet it carries, may start inside a
-    /// roll or a tied note.
+    /// boundary of its voice (its next onset, the start of the next tuplet the voice carries, or the next tick an
+    /// annotation of the voice stands at; the bar's end for the last) or until `max(o + the longest source length
+    /// among its hits, the next beat after o)`, whichever comes first. That span is written as ONE value, the first
+    /// `RhythmSpelling` gives for it, never a tie, and the chord lasts as long as that value. A fixed chord keeps its
+    /// length and value unchanged, and the voice's next onset must not fall before it ends — no other hit of the
+    /// voice, and no tuplet it carries, may start inside a roll or a tied note. An annotation inside one is
+    /// `voiceWrite`'s to refuse.
     ///
     /// A tuplet the voice carries (`units`, from `tupletUnits`) is laid out whole, one slot per member
     /// (`memberSlots`), and the chords inside it are its members; §4.2's extension never enters it.
     ///
     /// The time a chord or tuplet leaves before the next boundary, and the time before the voice's first one, is rest
-    /// spelled by the meter under `policy`; a voice with no chord is one span of rest, which a full bar spells as a
-    /// measure rest. Beats and spellings are read in the notional bar, a pickup's offset added. Fails with
-    /// `.audibleLength` when a chord cannot keep the length that is heard, and with `.unspellable` when the meter
-    /// cannot spell a span to the tick.
+    /// spelled by the meter under `policy`, split at the voice's annotation ticks so each annotation finds a slot
+    /// starting where it stands; a voice with no chord is one span of rest, which a full bar spells as a measure
+    /// rest. Beats and spellings are read in the notional bar, a pickup's offset added. Fails with the reason a chord
+    /// cannot keep the length that is heard, and with `.unspellable` when the meter cannot spell a span to the tick.
     static func timeline(
         of chords: [RevoiceTargetChord], units: [RevoiceTupletUnit], voiceIndex: Int, in bar: RevoiceBar,
-        sources: SourceIndex, voiceForPitch: [Int: Int], policy: RhythmSpellingPolicy,
+        sources: SourceIndex, landings: RevoiceLandings, policy: RhythmSpellingPolicy,
     ) -> Result<[RevoiceTimedSlot], RevoiceKeepReason> {
-        let speller = RevoiceSpeller(meter: bar.meter, policy: policy)
+        let speller = RevoiceSpeller(meter: bar.meter, policy: policy, cuts: landings.annotationTicks(of: voiceIndex))
         let pieces = timelinePieces(of: chords, units: units)
         var slots: [RevoiceTimedSlot] = []
         var cursor = 0
@@ -58,7 +59,7 @@ extension RevoiceBarPlanner {
             case let .tuplet(unit, unitIndex):
                 let members = memberSlots(
                     of: unit, index: unitIndex, chords: chords, voiceIndex: voiceIndex, sources: sources,
-                    voiceForPitch: voiceForPitch,
+                    landings: landings,
                 )
                 switch members {
                 case let .success(laidOut):
@@ -70,7 +71,7 @@ extension RevoiceBarPlanner {
             case let .chord(chord):
                 let boundary = pieces.indices.contains(index + 1) ? pieces[index + 1].onset : bar.meter.barTicks
                 let laidOut = layOut(
-                    chord, before: boundary, voiceIndex: voiceIndex, sources: sources, voiceForPitch: voiceForPitch,
+                    chord, before: boundary, voiceIndex: voiceIndex, sources: sources, landings: landings,
                     speller: speller,
                 )
                 switch laidOut {
@@ -95,21 +96,24 @@ extension RevoiceBarPlanner {
     }
 
     /// A chord outside every tuplet its voice carries, laid out from its onset to at most `boundary` (§4.2, §4.4):
-    /// its slot, and the tick it ends at.
+    /// its slot, and the tick it ends at. A fixed chord's value must be one a plain chord can be written as — a
+    /// tuplet member's scaled value or a measure rest's marker, which a fermata or a grace can hand a chord outside
+    /// any tuplet, cannot.
     private static func layOut(
         _ chord: RevoiceTargetChord, before boundary: Int, voiceIndex: Int, sources: SourceIndex,
-        voiceForPitch: [Int: Int], speller: RevoiceSpeller,
+        landings: RevoiceLandings, speller: RevoiceSpeller,
     ) -> Result<(slot: RevoiceTimedSlot, end: Int), RevoiceKeepReason> {
-        switch chordLength(of: chord, voiceIndex: voiceIndex, sources: sources, voiceForPitch: voiceForPitch) {
-        case nil:
-            return .failure(.audibleLength)
-        case let .fixed(ticks, written)?:
-            guard chord.onset + ticks <= boundary else { return .failure(.audibleLength) }
+        switch chordLength(of: chord, voiceIndex: voiceIndex, sources: sources, landings: landings) {
+        case let .failure(reason):
+            return .failure(reason)
+        case let .success(.fixed(ticks, written, reason)):
+            guard chord.onset + ticks <= boundary, written.baseAndDots() != nil else { return .failure(reason) }
             let timed = RevoiceTimedSlot(onset: chord.onset, duration: written, chord: chord)
             return .success((slot: timed, end: chord.onset + ticks))
-        case .free?:
+        case .success(.free):
             let longest = chord.sources.compactMap { sources[$0]?.length }.max() ?? 0
-            let end = min(boundary, chord.onset + max(longest, speller.ticksToNextBeat(chord.onset)))
+            let reach = min(boundary, speller.nextCut(after: chord.onset) ?? boundary)
+            let end = min(reach, chord.onset + max(longest, speller.ticksToNextBeat(chord.onset)))
             let spelled = speller.durations(forTicks: end - chord.onset, at: chord.onset, isRest: false)
             guard let written = spelled.first else { return .failure(.unspellable) }
             let timed = RevoiceTimedSlot(onset: chord.onset, duration: written, chord: chord)
@@ -119,31 +123,37 @@ extension RevoiceBarPlanner {
 
     /// The length `chord` keeps in voice `voiceIndex` (design §4.4). A hit fixes it when its note is tied either way
     /// — a tie must end exactly where its partner starts — or when its source chord rolls, since a roll lasts its
-    /// written length, or has after-graces that land in this voice, since they sound in their chord's tail. Nil when
-    /// the chord cannot keep one: the hits that fix it come from chords of different lengths, or a duplicate it drops
-    /// (two voices sounding one drum at once) differs in its ties from the note it keeps.
+    /// written length, or spreads an arpeggio, whose notes are timed across it (`MidiRenderer.arpeggioNoteEvents`).
+    /// Whatever rides on the chord fixes it too (`RevoiceLandings.keptLengths`): graces that sound in its time and a
+    /// fermata that holds it. Fails when the chord cannot keep one length — those that fix it differ, or a duplicate
+    /// it drops (two voices sounding one drum at once) differs in its ties from the note it keeps — with the reason of
+    /// what rides on it when that is what differs, `.audibleLength` otherwise.
     static func chordLength(
-        of chord: RevoiceTargetChord, voiceIndex: Int, sources: SourceIndex, voiceForPitch: [Int: Int],
-    ) -> RevoiceChordLength? {
+        of chord: RevoiceTargetChord, voiceIndex: Int, sources: SourceIndex, landings: RevoiceLandings,
+    ) -> Result<RevoiceChordLength, RevoiceKeepReason> {
         let keepsEveryTie = chord.incoming.allSatisfy { hit in
             chord.hits.contains { kept in
                 kept.pitch == hit.pitch && kept.note.tieForward == hit.note.tieForward
                     && kept.note.tieBack == hit.note.tieBack
             }
         }
-        guard keepsEveryTie else { return nil }
-        let fixing = chord.incoming.compactMap { hit -> RevoiceBar.SourceChord? in
+        guard keepsEveryTie else { return .failure(.audibleLength) }
+        let heard = chord.incoming.compactMap { hit -> RevoiceLandings.KeptLength? in
             guard let source = sources[hit.source] else { return nil }
             let isTied = hit.note.tieForward != nil || hit.note.tieBack != nil
             let rolls = source.chord.tremolo?.span == .single
-            let gracesHere = source.chord.graceNotesAfter.contains { grace in
-                targetVoice(of: grace, in: voiceForPitch) == voiceIndex
-            }
-            return isTied || rolls || gracesHere ? source : nil
+            let spreads = source.chord.arpeggio != nil
+            guard isTied || rolls || spreads else { return nil }
+            return RevoiceLandings.KeptLength(
+                ticks: source.length, written: source.chord.duration, reason: .audibleLength,
+            )
         }
-        guard let first = fixing.first else { return .free }
-        guard fixing.allSatisfy({ $0.length == first.length }) else { return nil }
-        return .fixed(ticks: first.length, written: first.chord.duration)
+        let kept = heard + landings.keptLengths(at: voiceIndex, onset: chord.onset)
+        guard let first = kept.first else { return .success(.free) }
+        if let other = kept.first(where: { $0.ticks != first.ticks }) {
+            return .failure(other.reason == .audibleLength ? first.reason : other.reason)
+        }
+        return .success(.fixed(ticks: first.ticks, written: first.written, reason: first.reason))
     }
 }
 
@@ -153,11 +163,15 @@ private struct RevoiceSpeller {
     let meter: BarMeter
     let policy: RhythmSpellingPolicy
     let beats: RhythmMeter
+    /// The ticks the voice's annotations stand at, ascending: a free chord ends by the next one, and rest is split
+    /// at each.
+    let cuts: [Int]
 
     /// The caller has checked the meter is readable (`RevoiceBar.isMeterReadable`).
-    init(meter: BarMeter, policy: RhythmSpellingPolicy) {
+    init(meter: BarMeter, policy: RhythmSpellingPolicy, cuts: [Int]) {
         self.meter = meter
         self.policy = policy
+        self.cuts = cuts
         beats = RhythmMeter(numerator: meter.numerator, denominator: meter.denominator, division: meter.division)
     }
 
@@ -165,6 +179,11 @@ private struct RevoiceSpeller {
     /// 6/8. A position on a beat is a whole beat from the next.
     func ticksToNextBeat(_ rtick: Int) -> Int {
         beats.ticksToNextBeat(rtick + meter.pickupOffset)
+    }
+
+    /// The first annotation tick after `rtick`, nil when none follows.
+    func nextCut(after rtick: Int) -> Int? {
+        cuts.first { $0 > rtick }
     }
 
     func durations(forTicks ticks: Int, at rtick: Int, isRest: Bool) -> [NoteDuration] {
@@ -181,16 +200,18 @@ private struct RevoiceSpeller {
         return duration.resolved(in: bar).ticks(division: meter.division)
     }
 
-    /// Appends the rests that fill `start ..< end` — nothing for an empty span — and answers whether the meter could
-    /// spell them to the tick.
+    /// Appends the rests that fill `start ..< end` — nothing for an empty span — each piece between two annotation
+    /// ticks spelled on its own, and answers whether the meter could spell them to the tick.
     func appendRests(from start: Int, to end: Int, into slots: inout [RevoiceTimedSlot]) -> Bool {
-        guard start != end else { return true }
-        let rests = durations(forTicks: end - start, at: start, isRest: true)
-        guard !rests.isEmpty else { return false }
-        var onset = start
-        for rest in rests {
-            slots.append(RevoiceTimedSlot(onset: onset, duration: rest, chord: nil))
-            onset += ticks(of: rest)
+        let bounds = [start] + cuts.filter { start < $0 && $0 < end } + [end]
+        for (from, to) in zip(bounds, bounds.dropFirst()) where from != to {
+            let rests = durations(forTicks: to - from, at: from, isRest: true)
+            guard !rests.isEmpty else { return false }
+            var onset = from
+            for rest in rests {
+                slots.append(RevoiceTimedSlot(onset: onset, duration: rest, chord: nil))
+                onset += ticks(of: rest)
+            }
         }
         return true
     }

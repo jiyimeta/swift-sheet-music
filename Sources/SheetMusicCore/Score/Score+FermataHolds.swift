@@ -78,8 +78,9 @@ extension Score {
     /// search first — both MusicXML and MuseScore 4's MSCX write the fermata BEFORE the chord it
     /// holds, as one of that segment's annotations (`AdjacentElementSlot`), and `SetFermata` writes
     /// it there — then a backward fallback, which still catches a producer that trailed it after the
-    /// chord. A fermata with no chord in either direction is dropped.
-    private static func holds(
+    /// chord. A fermata with no chord in either direction is dropped. `RevoiceDrumStaff` reads one bar's
+    /// holds through it, so a conversion is judged by the same anchoring the renderer plays.
+    static func holds(
         in voice: Voice, measureIndex: Int, measureDuration: Fraction, division: Int,
     ) -> [FermataHold] {
         // Onset of each chord within the bar, so both searches are O(1) lookups. `.locationShift`

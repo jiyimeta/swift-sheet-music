@@ -131,21 +131,21 @@ extension RevoiceBarPlanner {
 
     /// The slots of `unit`, the voice's `index`-th carried tuplet: one per member, holding the voice's chord that
     /// starts there at the member's value, or a rest of it. §4.2's extension never enters a tuplet. A chord whose
-    /// length is heard (§4.4) must already last exactly its member; fails with `.audibleLength` otherwise.
+    /// length is heard (§4.4) must already last exactly its member; fails with the reason it cannot otherwise.
     static func memberSlots(
         of unit: RevoiceTupletUnit, index: Int, chords: [RevoiceTargetChord], voiceIndex: Int, sources: SourceIndex,
-        voiceForPitch: [Int: Int],
+        landings: RevoiceLandings,
     ) -> Result<[RevoiceTimedSlot], RevoiceKeepReason> {
         var slots: [RevoiceTimedSlot] = []
         for member in unit.members {
             let chord = chords.first { $0.onset == member.onset }
             if let chord {
-                switch chordLength(of: chord, voiceIndex: voiceIndex, sources: sources, voiceForPitch: voiceForPitch) {
-                case nil:
-                    return .failure(.audibleLength)
-                case let .fixed(ticks, _)?:
-                    guard ticks == member.length else { return .failure(.audibleLength) }
-                case .free?:
+                switch chordLength(of: chord, voiceIndex: voiceIndex, sources: sources, landings: landings) {
+                case let .failure(reason):
+                    return .failure(reason)
+                case let .success(.fixed(ticks, _, reason)):
+                    guard ticks == member.length else { return .failure(reason) }
+                case .success(.free):
                     break
                 }
             }
