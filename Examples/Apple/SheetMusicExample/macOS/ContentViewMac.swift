@@ -614,6 +614,14 @@
                             + "implies.",
                     )
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu("Drum Voices") {
+                        Button("One Voice") { revoiceSelectedDrumStaff(handsAndFeet: false) }
+                        Button("Hands and Feet") { revoiceSelectedDrumStaff(handsAndFeet: true) }
+                    }
+                    .disabled(selectedDrumStaff == nil)
+                    .help("Re-voice the selected drum staff by pitch.")
+                }
             }
             .sheet(isPresented: $showExport) {
                 // Deliberately the *untransposed* score: audio transpose is a
@@ -2690,6 +2698,43 @@
                   case let .note(fullID) = fullEditingItem(.note(id))
             else { return false }
             return !isDrumStaff(noteID: fullID, controller: controller)
+        }
+
+        /// The staff of the current selection when it is a drum staff, else nil.
+        private var selectedDrumStaff: StaffAddress? {
+            let item: ScoreItemID
+            switch selection {
+            case let .single(single): item = single
+            case let .range(anchor, _): item = anchor
+            default: return nil
+            }
+            guard let controller = inputController,
+                  let full = fullEditingItem(item),
+                  controller.score.part(at: full.staff)?.instrument.useDrumset == true
+            else { return nil }
+            return full.staff
+        }
+
+        /// Runs `RevoiceDrumStaff` on the selected drum staff: one voice, or hands and feet (every drum whose
+        /// `GMDrumset` voice is not 0 moves to that voice). Bars it cannot convert are reported through
+        /// `errorMessage`.
+        private func revoiceSelectedDrumStaff(handsAndFeet: Bool) {
+            guard let staff = selectedDrumStaff, let controller = inputController else { return }
+            var voiceForPitch: [Int: Int] = [:]
+            if handsAndFeet {
+                for (pitch, entry) in GMDrumset.entries where entry.voiceIndex != 0 {
+                    voiceForPitch[pitch] = entry.voiceIndex
+                }
+            }
+            let command = RevoiceDrumStaff(staff: staff, voiceForPitch: voiceForPitch, policy: .default)
+            let left = command.preview(in: controller.score).measuresLeftAsWritten
+            do {
+                try controller.apply(command, undoManager: undoManager)
+                adoptEditedScore(controller.score)
+                errorMessage = left.first.map { "\(left.count) bars left as written, first \($0 + 1)" }
+            } catch {
+                errorMessage = exampleErrorDescription(error)
+            }
         }
 
         /// Toolbar button for one accidental value. Emits a `SetAccidental`
