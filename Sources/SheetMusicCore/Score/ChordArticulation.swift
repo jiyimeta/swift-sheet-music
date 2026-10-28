@@ -112,6 +112,23 @@ public struct ChordArticulation: Sendable, Equatable {
             }
         }
 
+        /// Whether the MIDI renderer changes how a note plays for this kind: the velocity-shaping family and the
+        /// duration-shaping family named in the type's doc. Mirrors the cases `MidiRenderer.velocityPreset(for:)` and
+        /// `MidiRenderer.gatePreset(for:)` answer (both in SheetMusicMIDI, which this module cannot see);
+        /// `ChordArticulationPlaybackTests` renders every kind and fails when the two drift apart. A kind that does
+        /// not shape playback is drawn and plays as written.
+        var shapesPlayback: Bool {
+            switch self {
+            case .staccato, .staccatissimo, .tenuto, .accent, .marcato, .accentStaccato, .marcatoStaccato,
+                 .tenutoStaccato, .tenutoAccent, .marcatoTenuto, .staccatissimoStroke, .staccatissimoWedge,
+                 .softAccentStaccato, .softAccentTenuto, .softAccentTenutoStaccato:
+                true
+            case .stress, .unstress, .softAccent, .muteOpen, .muteClosed, .harmonic, .upBow, .downBow,
+                 .laissezVibrer, .unknown:
+                false
+            }
+        }
+
         /// Reverse of `mscxToken` for the modeled kinds. `nil` for anything else — including an anchor-bearing
         /// string, since callers strip the anchor first. Never returns `.unknown`: a caller that wants the
         /// round-trip-preserving fallback builds it itself, so that "this is a kind I model" and "this is a string

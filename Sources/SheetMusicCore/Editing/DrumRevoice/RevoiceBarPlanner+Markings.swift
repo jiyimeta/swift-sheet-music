@@ -233,7 +233,8 @@ extension RevoiceBarPlanner {
     /// A timed slot as a voice element (design §4.5, D3). A chord's notes keep every note-level property and their
     /// identifiers. The first of the source chords that sent it notes — the chord of its lowest-voice note — gives
     /// its roll, ornaments, arpeggio, bracket, visibility and stem and beam visibility, which a merge shares
-    /// (`markingsReason`). Its articulations are all of theirs in source order, each kind once (D1). A source chord
+    /// (`markingsReason`). Its articulations are theirs in source order, each kind once (D1), except that a kind that
+    /// only draws (`shapesPlayback` is false) goes to a source chord's lowest part alone. A source chord
     /// whose lowest part this is adds its preserved markup, its lyrics and its chord lines written on the chord; a
     /// line written on one note goes with that note (`chordLines`). A chord-anchored spanner rides on the chord its
     /// source carries whole. Its graces are those that ride on it. Its stem and beam directions are left to the voice
@@ -257,12 +258,13 @@ extension RevoiceBarPlanner {
             chord.beamVisible = lowest.beamVisible
         }
         for source in carried {
+            let isLowestPart = landings.lowestVoice(of: source.ref) == voiceIndex
             for articulation in source.chord.articulations
-                where !chord.articulations.contains(where: { $0.kind == articulation.kind })
+                where (isLowestPart || articulation.kind.shapesPlayback)
+                && !chord.articulations.contains(where: { $0.kind == articulation.kind })
             {
                 chord.articulations.append(articulation)
             }
-            let isLowestPart = landings.lowestVoice(of: source.ref) == voiceIndex
             chord.chordLines += chordLines(of: source, on: target, isLowestPart: isLowestPart)
             if isLowestPart {
                 chord.preservedMarkup += source.chord.preservedMarkup
