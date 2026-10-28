@@ -48,6 +48,16 @@ extension PDFImporter {
 
     /// Reads every page the vector walker found no music on.
     ///
+    /// "No music" means no classified glyph, NOT no content. A page whose
+    /// engraving was outlined into paths — a purchased PDF re-saved through
+    /// macOS Preview, a print driver that converts text to outlines — hands
+    /// the walker staff lines, stems and filled notehead shapes but not one
+    /// glyph, so the vector reading of it is a skeleton of empty measures.
+    /// Such a page is read as an image, and the walker's paths and curves on
+    /// it are DROPPED rather than merged: they are the same ink in another
+    /// frame, and every raster-aware consumer gates on `detectedFromRaster`,
+    /// which a surviving vector path would contradict.
+    ///
     /// PER PAGE, so a document mixing a typeset title page with scanned music
     /// needs no decision from the caller. NOT containment, though: `buildScore`
     /// derives one document-wide ensemble staff count as a GCD over every
@@ -72,17 +82,16 @@ extension PDFImporter {
         var rasterPages: Set<Int> = []
         let dpi = renderDPI(for: options)
         for index in 0 ..< document.pageCount {
-            // Music, specifically: `texts` are deliberately NOT consulted.
-            // A scan often carries an invisible OCR text layer, and counting
-            // that as content would make the one document class this whole
-            // path exists for the one it declines to read.
-            let hasContent = walked.glyphs.contains { $0.geometry.pageIndex == index }
-                || walked.paths.contains { $0.pageIndex == index }
-            guard !hasContent else { continue }
+            // Music, specifically: neither `texts` nor `paths` are consulted.
+            // A scan often carries an invisible OCR text layer, and an
+            // outlined engraving is nothing BUT paths; counting either as
+            // music would decline exactly the pages this path exists to read.
+            let hasMusic = walked.glyphs.contains { $0.geometry.pageIndex == index }
+            guard !hasMusic else { continue }
             guard let page = document.page(at: index)?.pageRef else {
                 options.diagnostics?(PDFImportDiagnostic(
                     severity: .warning, location: "page \(index)",
-                    message: "OMR: this page has no vector content and cannot be rasterized "
+                    message: "OMR: this page has no vector music and cannot be rasterized "
                         + "either — PDFKit did not hand back a CGPDFPage for it",
                 ))
                 continue
@@ -99,7 +108,7 @@ extension PDFImporter {
                 // was lost, and leave the page as the vector walk left it.
                 options.diagnostics?(PDFImportDiagnostic(
                     severity: .warning, location: "page \(index)",
-                    message: "OMR: this page has no vector content and could not be read as an "
+                    message: "OMR: this page has no vector music and could not be read as an "
                         + "image either; nothing was imported from it",
                     context: "\(error)",
                 ))
@@ -113,6 +122,8 @@ extension PDFImporter {
                 continue
             }
             rasterPages.insert(index)
+            walked.paths.removeAll { $0.pageIndex == index }
+            walked.curves.removeAll { $0.pageIndex == index }
             walked.glyphs += result.walked.glyphs
             walked.paths += result.walked.paths
             // The analysis's own frame, never the mediaBox: on a resampled page
