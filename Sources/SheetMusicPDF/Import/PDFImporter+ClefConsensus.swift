@@ -158,4 +158,38 @@ extension PDFImporter {
         out.insert(.clefChange(decided, atMeasureIndex: 0), at: 0)
         return out
     }
+
+    /// Drop a percussion clef the DETECTOR proposed inside a system that did
+    /// not open with one.
+    ///
+    /// A drum staff is one from its first system on: its clef is re-engraved
+    /// at the left edge of every system, and no engraving switches a pitched
+    /// staff to percussion mid-system. The detector proposes one there anyway
+    /// — an end-repeat barline's two thick strokes are the percussion clef's
+    /// shape — and the cost of a single one is the whole part, not a run of
+    /// measures: `staffIsPercussion` marks a staff percussion if it carries
+    /// such a clef ANYWHERE, so every note in the part is remapped to a drum
+    /// key. Measured on a two-page lead sheet read as images: one false
+    /// `clefPercussion` on the `:|` of a first ending turned all 47 measures
+    /// into a drum staff.
+    ///
+    /// For raster-read systems only, and only after the initial-clef
+    /// consensus: a vector page's clef is a glyph the engraver drew, and a
+    /// consensus that filled in a percussion opening clef is the evidence that
+    /// keeps a real drum staff's mid-system re-reads.
+    static func droppingMidSystemPercussionClefs(
+        _ events: [ScoreStateEvent],
+    ) -> [ScoreStateEvent] {
+        let opensAsPercussion = events.contains { event in
+            if case let .clefChange(clef, 0) = event { return clef.concertClefType == "PERCUSSION" }
+            return false
+        }
+        guard !opensAsPercussion else { return events }
+        return events.filter { event in
+            if case let .clefChange(clef, measureIndex) = event, measureIndex > 0 {
+                return clef.concertClefType != "PERCUSSION"
+            }
+            return true
+        }
+    }
 }
