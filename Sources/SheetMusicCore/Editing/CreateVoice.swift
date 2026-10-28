@@ -68,12 +68,12 @@ public struct CreateVoice: EditCommand {
     }
 }
 
-/// `CreateVoice`'s inverse: drop the LAST voice of a measure again. Not public — a host has no reason to remove
-/// a voice outright, and `CreateVoice` is the only thing that can put the score in the state this undoes.
+/// Drop the LAST voice of a measure, whatever it holds: `CreateVoice`'s inverse, and how `RevoiceDrumStaff` takes a
+/// voice out of a bar it re-voices (a rest-only voice 2 under a one-voice target). Not public — a host removes a
+/// voice through one of those commands, never outright.
 ///
-/// It drops the voice wholesale rather than restoring its contents, which is exact because `CreateVoice` created
-/// it empty. Anything written into that voice afterwards is undone by its own inverse first — the undo stack is
-/// a stack.
+/// Its inverse is a `CreateVoice` restoring the removed voice exactly — elements, tuplets and identifiers — so
+/// removing a filled voice undoes as exactly as removing the empty one `CreateVoice` made.
 struct RemoveVoice: EditCommand {
     let staff: StaffAddress
     let measureIndex: Int

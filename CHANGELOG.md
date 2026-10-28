@@ -7,6 +7,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`RevoiceDrumStaff`, `RevoicePreview` and `EditIntent.revoiceDrumStaff(staff:assignments:policy:)` (wire index
+  95).** Re-voices a drum staff by pitch as one undo step: every note moves to the voice its pitch is assigned, so a
+  staff converts to one voice or to hands and feet (kicks and pedal hi-hat in voice 2). A bar already in the target form
+  is not touched, a rest-only voice beyond the target's count goes, and a bar that cannot be converted without changing
+  what plays is left as written. `RevoiceDrumStaff.preview(in:)` reports which bars it would rewrite and which it would
+  leave, so a host can tell the user. A mark that only draws (the open and closed hi-hat signs, say) goes to the lowest
+  part when a chord splits, where one that changes how a note plays goes to every part. The intent resolves to nothing to apply when no bar needs re-voicing.
+
 ### Fixed
 
 - **A PDF whose engraving is outlined into paths is read as an image.** A purchased PDF re-saved through macOS

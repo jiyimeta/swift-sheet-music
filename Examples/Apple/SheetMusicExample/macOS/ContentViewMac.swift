@@ -614,6 +614,14 @@
                             + "implies.",
                     )
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu("Drum Voices") {
+                        Button("One Voice") { revoiceSelectedDrumStaff(handsAndFeet: false) }
+                        Button("Hands and Feet") { revoiceSelectedDrumStaff(handsAndFeet: true) }
+                    }
+                    .disabled(selectedDrumStaff == nil)
+                    .help("Re-voice the selected drum staff by pitch.")
+                }
             }
             .sheet(isPresented: $showExport) {
                 // Deliberately the *untransposed* score: audio transpose is a
@@ -2692,6 +2700,43 @@
             return !isDrumStaff(noteID: fullID, controller: controller)
         }
 
+        /// The staff of the current selection when it is a drum staff, else nil.
+        private var selectedDrumStaff: StaffAddress? {
+            let item: ScoreItemID
+            switch selection {
+            case let .single(single): item = single
+            case let .range(anchor, _): item = anchor
+            default: return nil
+            }
+            guard let controller = inputController,
+                  let full = fullEditingItem(item),
+                  controller.score.part(at: full.staff)?.instrument.useDrumset == true
+            else { return nil }
+            return full.staff
+        }
+
+        /// Runs `RevoiceDrumStaff` on the selected drum staff: one voice, or hands and feet (every drum whose
+        /// `GMDrumset` voice is not 0 moves to that voice). Bars it cannot convert are reported through
+        /// `errorMessage`.
+        private func revoiceSelectedDrumStaff(handsAndFeet: Bool) {
+            guard let staff = selectedDrumStaff, let controller = inputController else { return }
+            var voiceForPitch: [Int: Int] = [:]
+            if handsAndFeet {
+                for (pitch, entry) in GMDrumset.entries where entry.voiceIndex != 0 {
+                    voiceForPitch[pitch] = entry.voiceIndex
+                }
+            }
+            let command = RevoiceDrumStaff(staff: staff, voiceForPitch: voiceForPitch, policy: .default)
+            let left = command.preview(in: controller.score).measuresLeftAsWritten
+            do {
+                try controller.apply(command, undoManager: undoManager)
+                adoptEditedScore(controller.score)
+                errorMessage = left.first.map { "\(left.count) bars left as written, first \($0 + 1)" }
+            } catch {
+                errorMessage = exampleErrorDescription(error)
+            }
+        }
+
         /// Toolbar button for one accidental value. Emits a `SetAccidental`
         /// command when clicked and selects the resulting (respelled) note
         /// so the user can chain another edit. Disabled when no note is
@@ -3072,7 +3117,8 @@
             case .timeSignature: "Time signatures can't be deleted yet."
             case .barLine: "Barlines can't be deleted yet."
             case .articulation: "Articulations can't be deleted yet."
-            case .tie, .slur, .jump, .marker, .glissando: "This element can't be deleted."
+            case .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
+                "This element can't be deleted."
             }
         }
 
@@ -3139,6 +3185,7 @@
             case .single(.note): return "note"
             case .single(.tuplet): return "tuplet"
             case .single(.clef): return "clef"
+            case .single(.graceNote): return "grace note"
             case .single(.text): return "text"
             case .single(.element): return "element"
             case .range: return "range"
@@ -3448,14 +3495,15 @@
                 primary = .note(first)
             case let .clef(anchor):
                 primary = .clef(anchor)
-            case .lyric, .staffText, .harmony, .rehearsalMark:
+            case .lyric, .staffText, .harmony, .rehearsalMark, .partName:
                 // Engraved text is reported by the hit tester but has no `ScoreItemID` to select, and
                 // resolving it to the note it hangs from would move the note selection on a click aimed at
                 // a syllable. Opening a caret from here is a later step; for now a text click deselects.
                 selection = .none
                 return
             case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote:
+                 .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote, .swing, .arpeggio,
+                 .chordLine, .tremolo:
                 // An engraved marking or a grace note selects itself rather than the chord beside it, so the
                 // renderer tints just that. It takes no part in the note-range logic below.
                 selection = target.selectableItem.map { .single($0) } ?? .none
@@ -3527,7 +3575,8 @@
                 )
             case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
                  .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker, .glissando:
+                 .articulation, .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio,
+                 .chordLine, .tremolo:
                 return
             }
             textEntryFocused = true

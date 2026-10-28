@@ -122,11 +122,11 @@ extension ScoreEditSession {
             )
         case let .removeTimeSignature(measureIndex):
             return removeTimeSignatureCommand(at: measureIndex, in: score)
-        // Drum note entry's three additions — a voice to write into, a slot at the caret's tick, and the note's
-        // head. Factored into `drumInputCommand` for the same reason the shape-changing intents are factored into
-        // `structuralCommand`, and written on one line for the same reason again: this switch is at the body
-        // budget, and a case per intent would put it over.
-        case .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry: return drumInputCommand(for: intent, in: score)
+        // Drum note entry's additions — a voice, a slot, a head, a kit row — and the staff-wide voice conversion.
+        // Factored into `drumInputCommand` for the same reason the shape-changing intents are factored into
+        // `structuralCommand`, and written as one case for the same reason again: this switch is at the body budget.
+        case .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry, .revoiceDrumStaff:
+            return try drumInputCommand(for: intent, in: score, ids: ids)
         case let .setNotePitch(location, pitch, tpc, accidental):
             return retuneCommand(at: location, pitch: pitch, tpc: tpc, accidental: accidental, in: score)
         case .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet, .removeTuplet:

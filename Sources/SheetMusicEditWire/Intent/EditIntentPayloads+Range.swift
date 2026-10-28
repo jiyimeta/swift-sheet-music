@@ -295,3 +295,53 @@ public struct SetStripMixIntentWire {
         mixes.map { $0.decoded() }
     }
 }
+
+// Appended for folino's drum voice conversion (design 2026-10-26) — intent 95. The staff, the pitch → voice rows and
+// the Format Rhythms policy's three raw values, all scalars.
+
+/// One row of `revoiceDrumStaff`'s mapping.
+@WireFormat
+public struct DrumVoiceAssignmentWire {
+    public var pitch: Int32
+    public var voiceIndex: Int32
+
+    public init(from assignment: DrumVoiceAssignment) {
+        pitch = Int32(assignment.pitch)
+        voiceIndex = Int32(assignment.voiceIndex)
+    }
+
+    public func decoded() -> DrumVoiceAssignment {
+        DrumVoiceAssignment(pitch: Int(pitch), voiceIndex: Int(voiceIndex))
+    }
+}
+
+@WireFormat
+public struct RevoiceDrumStaffIntentWire {
+    public var staff: StaffAddressWire
+    public var assignments: [DrumVoiceAssignmentWire]
+    public var dotLevel: UInt8
+    public var midBarSyncopations: UInt8
+    public var beatCrossingRests: UInt8
+
+    public init(staff: StaffAddress, assignments: [DrumVoiceAssignment], policy: RhythmSpellingPolicy) {
+        self.staff = StaffAddressWire(from: staff)
+        self.assignments = assignments.map(DrumVoiceAssignmentWire.init(from:))
+        dotLevel = UInt8(policy.dotLevel.rawValue)
+        midBarSyncopations = UInt8(policy.midBarSyncopations.rawValue)
+        beatCrossingRests = UInt8(policy.beatCrossingRests.rawValue)
+    }
+
+    /// Unknown policy raw values fall back to the field's `RhythmSpellingPolicy.default` value, as
+    /// `FormatRhythmsIntentWire.decoded()` does, so a log written by a newer build still replays.
+    public func decoded() -> (staff: StaffAddress, assignments: [DrumVoiceAssignment], policy: RhythmSpellingPolicy) {
+        let fallback = RhythmSpellingPolicy.default
+        let policy = RhythmSpellingPolicy(
+            dotLevel: RhythmSpellingPolicy.DotLevel(rawValue: Int(dotLevel)) ?? fallback.dotLevel,
+            midBarSyncopations: RhythmSpellingPolicy.Crossing(rawValue: Int(midBarSyncopations))
+                ?? fallback.midBarSyncopations,
+            beatCrossingRests: RhythmSpellingPolicy.Crossing(rawValue: Int(beatCrossingRests))
+                ?? fallback.beatCrossingRests,
+        )
+        return (staff: staff.decoded(), assignments: assignments.map { $0.decoded() }, policy: policy)
+    }
+}

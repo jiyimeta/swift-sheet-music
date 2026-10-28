@@ -300,6 +300,14 @@ struct EditIntentCodecTests {
                 StripMix(partIndex: 0, points: [0], volume: 0, program: 127, isMuted: false, isSoloed: true),
             ]),
             .setStripMix([]),
+            // Appended for folino's drum voice conversion — index 95. A policy that differs from `.default` in every
+            // knob and two assignments, and the empty list (one voice), so a dropped repeated field or a policy knob
+            // written into the wrong tag cannot round-trip.
+            .revoiceDrumStaff(
+                staff: staff, assignments: [.init(pitch: 36, voiceIndex: 1), .init(pitch: 44, voiceIndex: 1)],
+                policy: .museScore,
+            ),
+            .revoiceDrumStaff(staff: staff, assignments: [], policy: .default),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -462,6 +470,22 @@ struct EditIntentCodecTests {
 
     @Test func `strip mix keeps wire index 94`() {
         #expect(EditIntentCodec.encode(.setStripMix([]))[1] == 94)
+    }
+
+    @Test func `drum revoice keeps wire index 95`() {
+        let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        #expect(EditIntentCodec.encode(.revoiceDrumStaff(staff: staff, assignments: [], policy: .default))[1] == 95)
+    }
+
+    /// The policy decodes as Format Rhythms' does: a raw value this build has never heard of falls back to the
+    /// field's `.default` value, so a log written by a newer build still replays.
+    @Test func `an unknown revoice policy value decodes to the default`() {
+        let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        var wire = RevoiceDrumStaffIntentWire(staff: staff, assignments: [], policy: .museScore)
+        wire.dotLevel = 200
+        wire.midBarSyncopations = 200
+        wire.beatCrossingRests = 200
+        #expect(wire.decoded().policy == RhythmSpellingPolicy.default)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field
