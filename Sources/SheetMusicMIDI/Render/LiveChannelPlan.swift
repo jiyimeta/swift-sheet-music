@@ -56,6 +56,22 @@ public struct LiveChannelPlan: Sendable, Equatable {
             self.instrument = instrument
             self.liveChannel = liveChannel
         }
+
+        /// The strip with its instrument's names and every channel's level, program, mute and solo cleared — what
+        /// `hasSameChannels(as:)` compares.
+        fileprivate var withoutMix: Strip {
+            var instrument = instrument
+            instrument.longName = nil
+            instrument.shortName = nil
+            instrument.trackName = nil
+            for index in instrument.channels.indices {
+                instrument.channels[index].volume = 0
+                instrument.channels[index].program = 0
+                instrument.channels[index].isMuted = false
+                instrument.channels[index].isSoloed = false
+            }
+            return Strip(partIndex: partIndex, ordinal: ordinal, instrument: instrument, liveChannel: liveChannel)
+        }
     }
 
     public let strips: [Strip]
@@ -106,6 +122,16 @@ public struct LiveChannelPlan: Sendable, Equatable {
     public func timelineIndices(partIndex: Int, ordinal: Int) -> [Int] {
         guard ordinalByTimelineIndex.indices.contains(partIndex) else { return [] }
         return ordinalByTimelineIndex[partIndex].indices.filter { ordinalByTimelineIndex[partIndex][$0] == ordinal }
+    }
+
+    /// Whether `other` lays out the same strips on the same live channels, whatever each strip's own mix: its level,
+    /// sound, mute, solo and names. Those are what a mixer starts each strip from, not where a strip plays, so a score
+    /// that changed only them — a mix saved into it, a part renamed — is one an engine can take up without building
+    /// its synth again.
+    package func hasSameChannels(as other: LiveChannelPlan) -> Bool {
+        remap == other.remap
+            && ordinalByTimelineIndex == other.ordinalByTimelineIndex
+            && strips.map(\.withoutMix) == other.strips.map(\.withoutMix)
     }
 
     public static func build(score: Score) -> LiveChannelPlan {

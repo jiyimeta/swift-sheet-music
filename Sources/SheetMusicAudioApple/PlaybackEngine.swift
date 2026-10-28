@@ -756,6 +756,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// layout. A layout change, an unprepared engine, or the AUMIDISynth path
     /// falls back to the same full graph preparation as `prepare(score:)`.
     ///
+    /// A change to a strip's own mix alone — the level, sound, mute or solo the score starts it from, or its name —
+    /// is not a layout change: the synth stays, and the mixer takes each setting the score changed while keeping the
+    /// listener's others (`takingChangedDefaults`).
+    ///
     /// Either way the transport carries over, as it does across `restartGraphPreservingState()`: a playing engine
     /// keeps playing, a paused one stays paused, and the cursor and the loop are found again in the new score at the
     /// same measure and offset (`PlaybackMeasurePosition`), kept inside it when the edit shortened the score. The swap
@@ -772,9 +776,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     }
 
     private func swapScore(with prepared: PreparedPlayback) throws -> ScoreReplacementOutcome {
+        // A score that changed only its strips' own mix keeps the synth: a mixer's "save to score" used to read as a
+        // new layout and reload the SoundFont, cutting the music for as long as that took.
         guard usingBackend,
               loadedScore != nil,
-              loadedChannelLayout == prepared.channelLayout
+              let previousLayout = loadedChannelLayout,
+              previousLayout.hasSameChannels(as: prepared.channelLayout)
         else {
             try prepare(
                 score: prepared.score,
@@ -797,6 +804,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             score: prepared.score,
             derivation: prepared.derivation,
             renderedMidi: prepared.renderedMidi,
+        )
+        takeChangedMixDefaults(
+            from: previousLayout.mixerChannels,
+            to: prepared.channelLayout.mixerChannels,
         )
         return .swappedInPlace
     }
@@ -1826,8 +1837,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         backend: any SynthBackend, score: Score, plan: CountInBeats.Result,
         baseTick: Int, rendered: MidiFile, timeline: PlaybackTimeline,
     ) throws {
-        let preRollSeconds = Double(plan.preRollTicks)
-            * (60.0 / plan.quarterBpm) / Double(timeline.division)
+        // On the sequence clock, at the rounded tempo the count sequence is seeded with.
+        let preRollSeconds = plan.preRollSeconds(division: timeline.division)
         if sequencerScore != score {
             loadBackendNormalSequence(
                 backend: backend, score: score,

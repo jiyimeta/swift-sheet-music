@@ -23,21 +23,25 @@ public struct UnrolledTimeMap: Sendable {
     /// Notated start time of each measure-play, parallel to `unroll.spans`.
     private let notatedStartSeconds: [TimeInterval]
     private let spans: [PlaybackUnroll.Span]
+    /// End of the last measure-play on the unrolled clock; 0 for `identity`.
+    private let totalUnrolledSeconds: TimeInterval
 
     /// Pass-through map, for a score with no repeat plan (`PlaybackUnroll.identity`) — the
     /// unrolled and notated clocks are the same, so nothing needs projecting.
     public static let identity = UnrolledTimeMap(
-        unrolledStartSeconds: [], notatedStartSeconds: [], spans: [],
+        unrolledStartSeconds: [], notatedStartSeconds: [], spans: [], totalUnrolledSeconds: 0,
     )
 
     private init(
         unrolledStartSeconds: [TimeInterval],
         notatedStartSeconds: [TimeInterval],
         spans: [PlaybackUnroll.Span],
+        totalUnrolledSeconds: TimeInterval,
     ) {
         self.unrolledStartSeconds = unrolledStartSeconds
         self.notatedStartSeconds = notatedStartSeconds
         self.spans = spans
+        self.totalUnrolledSeconds = totalUnrolledSeconds
     }
 
     /// Integrate `unroll`'s measure-plays against `timeline`'s notated tick→seconds clock.
@@ -70,7 +74,43 @@ public struct UnrolledTimeMap: Sendable {
             unrolledStartSeconds: unrolledStarts,
             notatedStartSeconds: notatedStarts,
             spans: spans,
+            totalUnrolledSeconds: cumulative,
         )
+    }
+
+    /// One measure-play on both clocks. Every time is in seconds at rate 1, the timeline's own: divide by the playback
+    /// rate for the time it takes.
+    public struct MeasurePlay: Sendable, Equatable {
+        /// Where the play sits in the unrolled and notated tick spaces.
+        public let span: PlaybackUnroll.Span
+        /// When the play starts on the unrolled clock — the transport's, which runs every repeat and jump in turn.
+        public let unrolledStartSeconds: TimeInterval
+        /// When the measure it plays starts on the notated clock — `PlaybackTimeline.seconds(atTick:)` of the span's
+        /// notated start, the same for every pass of a repeated measure.
+        public let notatedStartSeconds: TimeInterval
+        /// How long this play lasts: the notated time its measure covers, which is also the gap to the next play's
+        /// `unrolledStartSeconds`. Per play, not cumulative.
+        public let durationSeconds: TimeInterval
+    }
+
+    /// Every measure-play in playback order; empty for `identity`.
+    public var measurePlays: [MeasurePlay] {
+        spans.indices.map { index in
+            let end = index + 1 < spans.count ? unrolledStartSeconds[index + 1] : totalUnrolledSeconds
+            return MeasurePlay(
+                span: spans[index],
+                unrolledStartSeconds: unrolledStartSeconds[index],
+                notatedStartSeconds: notatedStartSeconds[index],
+                durationSeconds: max(0, end - unrolledStartSeconds[index]),
+            )
+        }
+    }
+
+    /// How long `timeline` plays with its repeats and jumps: the end of the last measure-play — which for a D.C. /
+    /// D.S. al Fine ending is not the notated end — or `timeline.seconds(atTick: totalTicks)` without a repeat plan.
+    public func unrolledLength(of timeline: PlaybackTimeline) -> TimeInterval {
+        guard !spans.isEmpty else { return timeline.seconds(atTick: Double(timeline.totalTicks)) }
+        return totalUnrolledSeconds
     }
 
     /// The notated time corresponding to `unrolledSeconds` on the transport's clock.

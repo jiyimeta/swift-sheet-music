@@ -3495,14 +3495,14 @@
                 primary = .note(first)
             case let .clef(anchor):
                 primary = .clef(anchor)
-            case .lyric, .staffText, .harmony, .rehearsalMark, .partName:
+            case .lyric, .staffText, .harmony, .rehearsalMark:
                 // Engraved text is reported by the hit tester but has no `ScoreItemID` to select, and
                 // resolving it to the note it hangs from would move the note selection on a click aimed at
                 // a syllable. Opening a caret from here is a later step; for now a text click deselects.
                 selection = .none
                 return
             case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote, .swing, .arpeggio,
+                 .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote, .swing, .partName, .arpeggio,
                  .chordLine, .tremolo:
                 // An engraved marking or a grace note selects itself rather than the chord beside it, so the
                 // renderer tints just that. It takes no part in the note-range logic below.

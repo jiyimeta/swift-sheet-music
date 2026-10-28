@@ -40,4 +40,38 @@ struct InstallFontMetricsTableTests {
         #expect(throws: (any Error).self) { try fontMetricsTableProvider(Data()) }
         #expect(throws: (any Error).self) { try fontMetricsTableProvider(Data("not a table".utf8)) }
     }
+
+    // MARK: - What the public doc promises (characterizations: these held before the function was public)
+
+    /// The table carries no text face but Edwin, so a host draws every other one — the platform UI face that labels
+    /// ask for in semibold, a face the score names — as Edwin, and the layout measures it so.
+    @Test("the table draws every text face in Edwin, semibold as regular, and Bravura as Bravura")
+    func theTableDrawsEveryTextFaceInEdwin() throws {
+        let table = try fontMetricsTableProvider(Self.tableBytes())
+
+        let label = table.renderingTextFont(LayoutFont(face: "", pointSize: 10, weight: .semibold))
+        #expect(label.face == "Edwin")
+        #expect(label.weight == .regular)
+        #expect(table.renderingTextFont(LayoutFont(face: "FreeSerif", pointSize: 10)).face == "Edwin")
+        #expect(table.renderingTextFont(Self.bravuraEm).face == SMuFLFamily.bravura)
+    }
+
+    @Test("a face the table lacks, and a character a face lacks, are measured as the stub measures them")
+    func whatTheTableLacksIsTheStubs() throws {
+        let table = try fontMetricsTableProvider(Self.tableBytes())
+        let stub = StubFontMetricsProvider()
+
+        let missingFace = LayoutFont(face: "FreeSerif", pointSize: 10)
+        #expect(table.ascent(font: missingFace) == stub.ascent(font: missingFace))
+        let missingFaceWidth = table.typographicWidth(text: "Wq", font: missingFace)
+        #expect(missingFaceWidth == stub.typographicWidth(text: "Wq", font: missingFace))
+
+        let edwin = LayoutFont(face: "Edwin", pointSize: 10)
+        // Not vacuous: Edwin itself is the table's, not the stub's.
+        #expect(table.ascent(font: edwin) != stub.ascent(font: edwin))
+        // Edwin has no CJK: the scalar gets the stub's per-scalar estimate (1 em), next to a measured Latin letter.
+        let mixed = table.typographicWidth(text: "W音", font: edwin)
+        let latin = table.typographicWidth(text: "W", font: edwin)
+        #expect(abs(Double(mixed - latin) - Double(stub.typographicWidth(text: "音", font: edwin))) < 1e-9)
+    }
 }

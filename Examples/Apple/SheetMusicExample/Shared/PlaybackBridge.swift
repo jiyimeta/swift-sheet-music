@@ -77,13 +77,14 @@ func primaryItemID(of target: ScoreHitTarget?) -> ScoreItemID? {
         return .clef(anchor)
     case let .graceNote(id):
         return .graceNote(id)
-    case .lyric, .staffText, .harmony, .rehearsalMark, .partName:
+    case .lyric, .staffText, .harmony, .rehearsalMark:
         // Engraved text has no `ScoreItemID`, and resolving it to the note it hangs from would make
         // tap-to-seek jump on a click aimed at a syllable. Same answer the library's own
         // `LayoutDocument.editingHitTest` gives.
         return nil
     case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-         .articulation, .tie, .slur, .jump, .marker, .glissando, .swing, .arpeggio, .chordLine, .tremolo:
+         .articulation, .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine,
+         .tremolo:
         // An engraved marking is selectable, but seeking to the chord it hangs from would move the
         // playhead on a click aimed at the marking — the same reasoning as text above.
         return nil

@@ -1,5 +1,6 @@
 import SheetMusicCore
 import SheetMusicLayout
+import SheetMusicLayoutApple
 import SwiftUI
 
 /// Single source of truth that converts `(TextStyleType, optional
@@ -14,6 +15,11 @@ import SwiftUI
 @available(macOS 15.0, *)
 enum ResolvedTextStyle {
     /// Resolve `style + overrides` to a renderable description.
+    ///
+    /// The face, size, bold and italic are the ones the current metrics provider draws the style's font in
+    /// (`RenderingTextFace`) when it draws it as another font — Edwin, for every face under the portable table — since
+    /// that is the font a layout made under that provider measured the text in. Under CoreText it draws the font as
+    /// asked, and the style's own face is used.
     static func resolve(
         _ style: TextStyleType,
         overrides: TextProperties = TextProperties(),
@@ -23,6 +29,22 @@ enum ResolvedTextStyle {
         let pointSize = TextRoleStyle.fontSize(
             defaults: defaults, sp: metrics.sp,
         )
+        let asked = LayoutFont(
+            face: defaults.face, pointSize: pointSize,
+            weight: defaults.style.contains(.bold) ? .bold : .regular, isItalic: defaults.style.contains(.italic),
+        )
+        if let substitute = RenderingTextFace.substitute(for: asked) {
+            var drawnStyle = defaults.style.subtracting([.bold, .italic])
+            if substitute.weight == .bold { drawnStyle.insert(.bold) }
+            if substitute.isItalic { drawnStyle.insert(.italic) }
+            return Resolution(
+                face: substitute.face,
+                pointSize: substitute.pointSize,
+                style: drawnStyle,
+                frameType: defaults.frameType,
+                framePadding: CGFloat(defaults.framePadding) * metrics.sp,
+            )
+        }
         return Resolution(
             face: defaults.face,
             pointSize: pointSize,

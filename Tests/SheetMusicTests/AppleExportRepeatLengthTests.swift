@@ -45,6 +45,28 @@
         }
     }
 
+    /// A real-`AVAudioEngine` export, so it lives under the serial parent like every such test.
+    extension AudioEngineSerial {
+        @Suite("Export ends at the last measure-play")
+        @MainActor
+        struct AppleExportAlFineLengthTests {
+            /// D.S. al Fine, 6 measure-plays of 2 s: the export used to run to the notated end, 14 s, with 2 s of
+            /// silence after the music.
+            @Test func anAlFineScoreEndsAtItsLastMeasurePlay() async throws {
+                let score = RepeatPlanFixtures.dalSegnoAlFine()
+                let engine = PlaybackEngine(soundfontResolver: NoSoundFont())
+                try engine.prepare(score: score)
+                let out = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("alfine-\(UUID().uuidString).wav")
+                defer { try? FileManager.default.removeItem(at: out) }
+                try await engine.exportAudioFile(to: out, score: score, format: .wav())
+                let file = try AVAudioFile(forReading: out)
+                let seconds = Double(file.length) / file.fileFormat.sampleRate
+                #expect(abs(seconds - 12.0) < 0.01, "exported \(seconds) s")
+            }
+        }
+    }
+
     private struct NoSoundFont: SoundfontResolver {
         func soundfontURL(forBank _: UInt8, program _: UInt8, isDrums _: Bool) -> URL? {
             nil

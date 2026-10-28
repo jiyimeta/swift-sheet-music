@@ -441,8 +441,11 @@ public final class SwiftySynthBackend: SynthBackend {
         }
     }
 
+    /// `seconds` is on the sequence clock; the metronome transport counts it at `speed = rate`, so the score is held
+    /// for `seconds / rate` of output — at half speed a 2 s count lasts 4 s, and holding only 2 s would start the
+    /// music half way through it.
     public func play(afterCountInSeconds seconds: TimeInterval) {
-        let frames = max(0, Int((seconds * sampleRate).rounded()))
+        let frames = max(0, Int((seconds / max(0.01, Double(rate)) * sampleRate).rounded()))
         lock.withLockUnchecked { shared in
             shared.preRollFramesRemaining = frames
             shared.isPlaying = true

@@ -1,15 +1,10 @@
 package io.github.jiyimeta.sheetmusic.compose.export
 
 import android.graphics.pdf.PdfDocument
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Canvas
-import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import io.github.jiyimeta.sheetmusic.compose.draw.model.DrawProgram
 import io.github.jiyimeta.sheetmusic.compose.draw.model.EncodablePage
 import io.github.jiyimeta.sheetmusic.compose.render.FontProvider
-import io.github.jiyimeta.sheetmusic.compose.render.drawCommands
+import io.github.jiyimeta.sheetmusic.compose.render.drawScoreCommands
 import java.io.OutputStream
 import kotlin.math.max
 
@@ -99,25 +94,17 @@ object ScorePdfExporter {
         val pdfPage = document.startPage(info)
         try {
             // Reuse the screen renderer rather than a second interpretation of
-            // the command list. `CanvasDrawScope` adapts the PDF page's
-            // `android.graphics.Canvas` into the `DrawScope` the renderer takes,
-            // so there is exactly one place that knows what each opcode means —
-            // the failure ARCHITECTURE.md records for the Apple side, where two
-            // back-ends over one layout meant a change to either could leave the
-            // other drawing a missing glyph.
-            CanvasDrawScope().draw(
-                density = Density(density = 1f, fontScale = 1f),
-                layoutDirection = LayoutDirection.Ltr,
-                canvas = Canvas(pdfPage.canvas),
-                size = Size(widthPt.toFloat(), heightPt.toFloat()),
-            ) {
-                drawCommands(
-                    commands = page.commands,
-                    pxPerMM = POINTS_PER_MM,
-                    smufl = fontProvider.smuflTypeface(),
-                    text = fontProvider.textTypeface(),
-                )
-            }
+            // the command list. `drawScoreCommands` replays it onto the PDF
+            // page's `android.graphics.Canvas` (the entry a Bitmap-backed
+            // picture uses too), so there is exactly one place that knows what
+            // each opcode means. Two back-ends over one layout is the failure
+            // ARCHITECTURE.md records for the Apple side, where a change to
+            // either could leave the other drawing a missing glyph.
+            pdfPage.canvas.drawScoreCommands(
+                commands = page.commands,
+                pxPerMM = POINTS_PER_MM,
+                fontProvider = fontProvider,
+            )
         } finally {
             // `finishPage` must run even if drawing throws, or the document is
             // left with an open page and `writeTo` fails with a state error

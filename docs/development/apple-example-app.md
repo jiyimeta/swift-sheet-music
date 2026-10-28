@@ -55,6 +55,25 @@ xcodebuild -project Examples/Apple/SheetMusicExample.xcodeproj -scheme SheetMusi
 
 ## Last verified
 
+**2026-10-27**, worktree `.claude/worktrees/score-video-export` (branch
+`score-video-export`, on `deff1a40` = 4.21.0), for folino's score-video export
+(export count-in, scoped portable metrics, Android canvas replay):
+
+- `Scripts/link-apple-sounds.sh` — linked the main worktree's `Sounds/`.
+- `xcodegen generate --spec Examples/Apple/project.yml --project Examples/Apple`
+  — succeeded.
+- The first build of both targets failed on switches over `ScoreHitTarget`,
+  `ScoreElementID` and `ScoreSelection` that the selection commits
+  (`c2142fe0`, `3e03bb4e`, `181018b1`) had made non-exhaustive — already broken
+  on `origin/main`; fixed in `2ab629c1` and `0a238535`.
+- `SheetMusicExampleMac` (`platform=macOS`) — **BUILD SUCCEEDED**.
+- `SheetMusicExample` (`generic/platform=iOS Simulator`) — **BUILD
+  SUCCEEDED**.
+
+The export sheet gained a Count-in toggle (`exportAudioFile(…, countIn:)`).
+
+## Previously verified
+
 **2026-09-11**, worktree `eid-p3-p4` (branch `worktree-eid-p3-p4`), as part
 of the fix wave closing out the note-identity branch (11 commits on
 `3b592744`, notes gaining stable `EID`s):
@@ -71,8 +90,6 @@ of the fix wave closing out the note-identity branch (11 commits on
 This branch rewrote `ChordNotes` (a portable container type shared with the
 layout/rendering call sites the example apps exercise); no build had
 compiled either target since it landed before this run.
-
-## Previously verified
 
 **2026-09-04**, worktree `macos-foundations` (branch
 `worktree-macos-foundations`), after landing the `fixedLayoutWidth` option

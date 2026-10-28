@@ -29,12 +29,16 @@ extension PlaybackEngine {
     /// may do that off the main actor, and every transport command is contracted
     /// to be dropped until `isReady`. The engine is left in manual-rendering
     /// mode and started, so the caller can `start()` and pull frames.
+    ///
+    /// With `countIn`, `start` counts in the way `startBackendCountIn` does live: the count rides the metronome
+    /// transport ahead of the body's own clicks, and the score transport is held for the pre-roll.
     static func buildBackendExportPipeline(
         score: Score,
         snapshot: ExportEngineSnapshot,
         outputFormat: AVAudioFormat,
         timeline: PlaybackTimeline,
         startTick: Int,
+        countIn: ExportCountIn?,
         backend: any SynthBackend,
     ) async throws -> ExportPipeline {
         let engine = AVAudioEngine()
@@ -62,10 +66,18 @@ extension PlaybackEngine {
         )
         try await waitUntilReady(backend)
 
-        try loadTransports(
+        let rendered = try loadTransports(
             backend: backend, score: score, plan: plan,
             snapshot: snapshot, timeline: timeline,
         )
+        // The count's clicks fill `[0, preRollTicks)` of the metronome sequence, ahead of the body's own beats —
+        // which stay in it, muted or not as the toggle says, exactly as live.
+        let countInMetronome = countIn.map { count in
+            PreRollSequenceAssembler.metronomeOnly(
+                rendered: rendered, metronomeBeats: snapshot.metronomeBeats,
+                plan: count.plan, baseTick: count.baseTick, includingPreRollClicks: true,
+            )
+        }
 
         try engine.enableManualRenderingMode(
             .offline,
@@ -80,13 +92,27 @@ extension PlaybackEngine {
                 // Seek FIRST, mixer second: the seek resets the synth's channels
                 // to GM defaults, so a mixer pushed before it would be silently
                 // undone (same ordering as `PlaybackEngine.seek`'s backend branch).
+                // The seek also comes before a count-in's metronome load: it moves
+                // both transports, and the load re-parks the metronome at tick 0 —
+                // the count's first click (`startBackendCountIn`).
                 backend.seek(toTick: startTick)
+                if let countIn, let countInMetronome {
+                    backend.loadMetronomeSequence(
+                        countInMetronome, offsetSeconds: countIn.metronomeOffsetSeconds,
+                    )
+                }
+                backend.setMetronomeMuted(!snapshot.metronomeEnabled)
                 applyMixerSnapshotToBackend(
                     backend: backend,
                     channels: snapshot.mixerChannels,
                     plan: plan,
                 )
-                backend.play()
+                if let countIn {
+                    // The backend sounds the count whatever the mute says, and holds the score for it.
+                    backend.play(afterCountInSeconds: countIn.preRollSeconds)
+                } else {
+                    backend.play()
+                }
             },
             teardown: {
                 backend.stop()
@@ -101,13 +127,16 @@ extension PlaybackEngine {
     /// across them (rate, tuning). Rate + tuning go FIRST: both are contracted
     /// to persist across transport operations, and `loadSequence` / `seek`
     /// re-assert whatever the backend has stored — a fresh synth resets them.
+    ///
+    /// Returns the channel-remapped render both sequences were built from, so a count-in can build its metronome
+    /// sequence from the same one. The metronome's mute is left to `start`, after any count-in load.
     private static func loadTransports(
         backend: any SynthBackend,
         score: Score,
         plan: LiveChannelPlan,
         snapshot: ExportEngineSnapshot,
         timeline: PlaybackTimeline,
-    ) throws {
+    ) throws -> MidiFile {
         backend.setRate(snapshot.rate)
         backend.setTuning(
             cents: snapshot.masterTuningCents,
@@ -132,7 +161,7 @@ extension PlaybackEngine {
             offsetSeconds: 0,
         )
         backend.setMetronomeVolume(snapshot.metronomeVolume)
-        backend.setMetronomeMuted(!snapshot.metronomeEnabled)
+        return rendered
     }
 
     /// The live MIDI channels that render as percussion — each drum part's

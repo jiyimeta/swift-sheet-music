@@ -16,6 +16,7 @@ import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
+import kotlin.math.roundToLong
 
 /**
  * Orchestrates an offline audio render: builds a dedicated FluidSynth +
@@ -57,13 +58,20 @@ internal class AudioExporter(
         ticksPerBeat: Int,
         format: AudioFileFormat,
         sampleRate: Int,
+        /**
+         * The count to play ahead of the range, or null for none. Its clicks sound whatever
+         * [ExportEngineSnapshot.metronomeEnabled] says, as live playback's count-in does.
+         */
+        countIn: CountInExport? = null,
         progress: ((Float) -> Unit)?,
     ) {
         val synth = synthFactory(sampleRate)
         val player = playerFactory(synth.nativeHandle)
         val encoder = encoderFactory(format, sampleRate, outputFd)
+        // A count-in needs the click synth even with the metronome off: wanting a count but no click through the
+        // piece is a normal combination, and live playback opens the metronome's mix path for the pre-roll alone.
         val metronomeMixer =
-            if (snapshot.metronomeEnabled && snapshot.metronomeSmfBytes.isNotEmpty()) {
+            if ((snapshot.metronomeEnabled && snapshot.metronomeSmfBytes.isNotEmpty()) || countIn != null) {
                 val ms = synthFactory(sampleRate)
                 MetronomeSf2Loader.load(ms, snapshot.metronomeResolution, resolver, context)
                 ms.setGain(snapshot.metronomeVolume)
@@ -71,8 +79,11 @@ internal class AudioExporter(
                     val mp = playerFactory(ms.nativeHandle)
                     if (mp.load(smf) == 0) mp else { mp.close(); null }
                 }
-                mixer.loadSequence(snapshot.metronomeSmfBytes)
-                mixer.also { it.isEnabled = true }
+                // The count-in sequence carries the body's clicks too, shifted behind the pre-roll, so it is the
+                // only sequence a counted render needs.
+                mixer.loadSequence(countIn?.metronomeSmfBytes ?: snapshot.metronomeSmfBytes)
+                // Audible through the music only when the metronome is on; the count raises `isCountingIn`.
+                mixer.also { it.isEnabled = snapshot.metronomeEnabled }
             } else {
                 null
             }
@@ -88,14 +99,37 @@ internal class AudioExporter(
                 metronomeMixer?.setTempo(snapshot.rate.toDouble())
             }
             player.seekTick(startTick)
-            player.play()
-            // Both transports start from the same tick and are then advanced by the same frame counts
-            // below, so the offline render places clicks exactly where live playback does.
-            metronomeMixer?.start(startTick)
 
             val left = FloatArray(BUFFER_FRAMES)
             val right = FloatArray(BUFFER_FRAMES)
             val totalTicks = (endTick - startTick).coerceAtLeast(0)
+
+            if (countIn != null) {
+                // The count plays from the head of its sequence while the score player waits at the range's start.
+                // Live playback hands over when the click transport reaches the pre-roll's last tick, which it polls
+                // for; an offline render has no clock to poll, so the score is held for exactly the pre-roll's length
+                // of output instead — its sequence-clock length divided by the rate both transports play at. The
+                // last block is cut short rather than rounded up, or the music would come in up to a block late.
+                metronomeMixer?.isCountingIn = true
+                metronomeMixer?.start(0L)
+                val rate = snapshot.rate.toDouble().coerceAtLeast(0.01)
+                var remaining = ((countIn.preRollSeconds / rate) * sampleRate).roundToLong()
+                while (remaining > 0) {
+                    coroutineContext.ensureActive()
+                    val frames = minOf(BUFFER_FRAMES.toLong(), remaining).toInt()
+                    synth.writeFloat(frames, left, right)
+                    metronomeMixer?.let { mixMetronome(it, frames, left, right) }
+                    encoder.appendPcmFloat(left, right, frames)
+                    remaining -= frames
+                }
+                metronomeMixer?.isCountingIn = false
+                player.play()
+            } else {
+                player.play()
+                // Both transports start from the same tick and are then advanced by the same frame counts
+                // below, so the offline render places clicks exactly where live playback does.
+                metronomeMixer?.start(startTick)
+            }
 
             while (player.currentTick < endTick) {
                 coroutineContext.ensureActive()
@@ -103,15 +137,7 @@ internal class AudioExporter(
                 // currentTick crossing endTick regardless of frame budget.
                 val frames = BUFFER_FRAMES
                 synth.writeFloat(frames, left, right)
-                metronomeMixer?.let { mm ->
-                    val mLeft = FloatArray(frames)
-                    val mRight = FloatArray(frames)
-                    mm.synth.writeFloat(frames, mLeft, mRight)
-                    for (i in 0 until frames) {
-                        left[i] += mLeft[i]
-                        right[i] += mRight[i]
-                    }
-                }
+                metronomeMixer?.takeIf { it.isAudible }?.let { mixMetronome(it, frames, left, right) }
                 encoder.appendPcmFloat(left, right, frames)
                 val nowMs = System.currentTimeMillis()
                 if (progress != null && totalTicks > 0 &&
@@ -133,6 +159,17 @@ internal class AudioExporter(
             try { synth.close() } catch (_: Throwable) {}
             try { metronomeMixer?.close() } catch (_: Throwable) {}
             try { encoder.close() } catch (_: Throwable) {}
+        }
+    }
+
+    /** Renders [frames] of the metronome's synth and sums them into [left] / [right]. */
+    private fun mixMetronome(mixer: MetronomeMixer, frames: Int, left: FloatArray, right: FloatArray) {
+        val mLeft = FloatArray(frames)
+        val mRight = FloatArray(frames)
+        mixer.synth.writeFloat(frames, mLeft, mRight)
+        for (i in 0 until frames) {
+            left[i] += mLeft[i]
+            right[i] += mRight[i]
         }
     }
 
