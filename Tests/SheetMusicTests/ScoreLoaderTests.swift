@@ -64,6 +64,34 @@ struct ScoreLoaderTests {
         }
     }
 
+    /// The sniff reads only the first 256 bytes, and a title near the top of a MusicXML file (music21 and MuseScore
+    /// both write `<work-title>` there) can straddle that cut. A prefix ending inside a character must still be read:
+    /// decoded strictly it came back nil, and a valid file was refused as an unknown format.
+    @Test
+    func aPrefixEndingInsideAMultibyteCharacterStillSniffs() throws {
+        let opening = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <score-partwise version="4.0">
+          <work><work-title>
+        """
+        // ASCII padding puts the three-byte "あ" at bytes 255...257, across the cut.
+        let padding = String(repeating: "x", count: 255 - opening.utf8.count)
+        let body = """
+        </work-title></work>
+          <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+          <part id="P1"><measure number="1">
+            <attributes><divisions>1</divisions></attributes>
+            <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><type>whole</type></note>
+          </measure></part>
+        </score-partwise>
+        """
+        let bytes = Data((opening + padding + "あいう" + body).utf8)
+        try #require(String(data: bytes.prefix(256), encoding: .utf8) == nil, "the cut no longer splits a character")
+
+        #expect(ScoreLoader.sniff(bytes) == .musicXML)
+        #expect(try !ScoreLoader.loadScore(bytes: bytes).parts.isEmpty)
+    }
+
     /// MuseScore 1.x, which keeps the score's children directly under
     /// `<museScore>` with no `<Score>` wrapper at all.
     private static let museScore1 = Data("""

@@ -29,6 +29,10 @@ and this project adheres to
   as an image, the detector can take an end-repeat barline's two thick strokes for a percussion clef, and one such
   clef anywhere made `staffIsPercussion` remap every note of the part to drum keys. A percussion clef inside a
   raster-read system that did not open with one is now dropped; a real drum staff opens every system with its clef.
+- **A MusicXML file whose title straddles byte 256 loads.** `ScoreLoader.sniff` tells mscx from MusicXML by the root
+  element in the first 256 bytes, and decoded them as strict UTF-8 — so when a multibyte title near the top of the
+  file (music21 and MuseScore both write `<work-title>` there) was cut mid-character, the decode returned nil and a
+  valid file was refused with `bridge.scoreFormat.unrecognized`. The root names are now matched as bytes.
 
 ## [4.21.0] - 2026-10-26
 

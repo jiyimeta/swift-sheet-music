@@ -66,14 +66,13 @@ public enum ScoreLoader {
         {
             return .midi
         }
-        // XML (with or without BOM). Distinguish mscx vs musicXML by root element name in the first 256 bytes.
+        // XML (with or without BOM). Distinguish mscx vs musicXML by root element name in the first 256 bytes, matched
+        // as bytes since the names are ASCII. Decoding the prefix instead failed whenever a multibyte title near the
+        // top of the file straddled the cut, and refused valid files as an unknown format.
         let prefix = bytes.prefix(256)
-        if let text = String(data: prefix, encoding: .utf8) {
-            if text.contains("<museScore") { return .mscx }
-            if text.contains("<score-partwise") || text.contains("<score-timewise") {
-                return .musicXML
-            }
-        }
+        let hasRoot = { (name: String) in prefix.firstRange(of: Array("<\(name)".utf8)) != nil }
+        if hasRoot("museScore") { return .mscx }
+        if hasRoot("score-partwise") || hasRoot("score-timewise") { return .musicXML }
         return .unknown
     }
 
