@@ -26,11 +26,27 @@
     ///   at all.
     /// - `.raster` re-wraps the same PDF as images (`MSCZScanSimulator`) and
     ///   reads it through `omrTileClassifier`.
+    ///
+    /// A third mode, `.external`, scores another OMR system's reading of the
+    /// same PDFs — a MusicXML file per score under `root`, at the score's
+    /// relative path — against the same truth with the same metric, so an
+    /// outside engine is compared on this corpus rather than on its own
+    /// benchmark. The reading is produced outside this harness; a missing
+    /// file is a `failed` row, since an engine that produced nothing failed.
     @MainActor
     enum MSCZGroundTruthSweep {
-        enum Mode: String {
+        enum Mode: Equatable {
             case vector
             case raster
+            case external(label: String, root: URL)
+
+            var tag: String {
+                switch self {
+                case .vector: "vector"
+                case .raster: "raster"
+                case let .external(label, _): "external-\(label)"
+                }
+            }
         }
 
         /// One corpus entry: the score and the PDF MuseScore made from it.
@@ -116,7 +132,7 @@
                     if dumpDivergence { dump(item, truth: truth, read: read, mode: mode) }
                 } catch {
                     totals.failed += 1
-                    print("[mscz-fail] mode=\(mode.rawValue) file=\(item.name) error=\(error)")
+                    print("[mscz-fail] mode=\(mode.tag) file=\(item.name) error=\(error)")
                 }
             }
             return totals
@@ -141,6 +157,11 @@
             case .raster:
                 let data = try MSCZScanSimulator.imageOnlyPDF(of: item.pdf, dpi: scanDPI)
                 return try PDFImporter.parse(pdfData: data, options: options)
+            case let .external(_, root):
+                let reading = root.appendingPathComponent(
+                    (item.name as NSString).deletingPathExtension + ".musicxml",
+                )
+                return try ScoreLoader.loadScore(contentsOf: reading)
             }
         }
 
@@ -152,7 +173,7 @@
         ) {
             let aligned = ScoreSemanticMetrics.alignNotefulParts(scoreA: truth, scoreB: read)
             print(ScoreSemanticMetrics.summaryRow(
-                tag: "[mscz-\(mode.rawValue)][\(item.name)]", scoreA: truth, scoreB: read,
+                tag: "[mscz-\(mode.tag)][\(item.name)]", scoreA: truth, scoreB: read,
                 pdfRecovered: true, aligned: aligned, hiddenLoss: 0,
             ))
             totals.scored += 1
@@ -185,7 +206,7 @@
         /// Prints the staff layout of both sides too, since a part/staff
         /// regrouping is the alignment hypothesis's own signature.
         private static func dump(_ item: Case, truth: Score, read: Score, mode: Mode) {
-            let tag = "[mscz-diverge][\(mode.rawValue)][\(item.name)]"
+            let tag = "[mscz-diverge][\(mode.tag)][\(item.name)]"
             for (label, score) in [("A(truth)", truth), ("B(read)", read)] {
                 let shape = score.parts.map { part in
                     part.staves.map { staff in
@@ -566,7 +587,7 @@
             func mean(_ values: [Double]) -> Double {
                 values.reduce(0, +) / Double(values.count)
             }
-            return "[mscz][SUMMARY] mode=\(mode.rawValue) files=\(totals.files) "
+            return "[mscz][SUMMARY] mode=\(mode.tag) files=\(totals.files) "
                 + "scored=\(totals.scored) truthFailed=\(totals.truthFailed) "
                 + "failed=\(totals.failed) "
                 + "pitchP50=\(fmt(totals.pitchPcts) { OMRDetectorMetrics.percentile($0, 0.5) }) "
