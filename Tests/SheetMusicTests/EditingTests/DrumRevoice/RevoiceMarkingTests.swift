@@ -70,6 +70,45 @@ struct RevoiceMarkingTests {
         #expect(RevoiceFixtures.chords(after, voice: 1).first?.articulations == [Self.accent])
     }
 
+    /// A mark that is drawn but plays as written goes to the lowest part only: layout puts the open sign above every
+    /// chord it is on, so a copy on the kick would draw an "o" over each kick.
+    @Test func `an open sign on a split chord goes to the lowest part only`() throws {
+        let muteOpen = ChordArticulation(kind: .muteOpen)
+        let score = Self.marking(RevoiceFixtures.score([["H+K/4 H/4 H/4 H/4"]]), element: 1) { chord in
+            chord.articulations = [muteOpen]
+        }
+        let after = try Self.convertKeepingSound(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["H/4 H/4 H/4 H/4", "K/4 r/4 r/2"])
+        #expect(RevoiceFixtures.chords(after, voice: 0).first?.articulations == [muteOpen])
+        #expect(RevoiceFixtures.chords(after, voice: 1).first?.articulations == [])
+    }
+
+    /// An accent plays on every note, so it goes to both parts; the closed sign beside it goes to the lowest only.
+    @Test func `an accent and a closed sign on a split chord part ways`() throws {
+        let muteClosed = ChordArticulation(kind: .muteClosed)
+        let score = Self.marking(RevoiceFixtures.score([["H+K/4 H/4 H/4 H/4"]]), element: 1) { chord in
+            chord.articulations = [Self.accent, muteClosed]
+        }
+        let after = try Self.convertKeepingSound(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.chords(after, voice: 0).first?.articulations == [Self.accent, muteClosed])
+        #expect(RevoiceFixtures.chords(after, voice: 1).first?.articulations == [Self.accent])
+    }
+
+    /// A merge unites its sources' marks (D1), and the part that splits back out is the lowest again: the open sign
+    /// ends on the hi-hat and the kick gains none.
+    @Test func `an open sign survives a merge and a split on the hi-hat only`() throws {
+        let muteOpen = ChordArticulation(kind: .muteOpen)
+        let score = Self.marking(
+            RevoiceFixtures.score([["H/4 H/4 H/4 H/4", "K/4 r/4 r/2"]]), element: 1,
+        ) { $0.articulations = [muteOpen] }
+        let merged = try Self.convertKeepingSound(score, to: RevoiceFixtures.oneVoice)
+        #expect(RevoiceFixtures.chords(merged, voice: 0).first?.articulations == [muteOpen])
+        let after = try Self.convertKeepingSound(merged, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["H/4 H/4 H/4 H/4", "K/4 r/4 r/2"])
+        #expect(RevoiceFixtures.chords(after, voice: 0).first?.articulations == [muteOpen])
+        #expect(RevoiceFixtures.chords(after, voice: 1).first?.articulations == [])
+    }
+
     /// D1: the kick merged with an accented snare takes the accent. In bar 1 both carry one, and the kick adds a
     /// staccato: the union lists each kind once, the snare's first.
     @Test func `merged chords take the union of their marks`() throws {
