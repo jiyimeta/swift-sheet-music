@@ -8,7 +8,8 @@ public struct RecordingTrack: Sendable {
     /// Unique in a track list and stable across `setRecordingTracks(_:)` calls: a track whose id was already playing
     /// carries on from where it is.
     public let id: String
-    /// The PCM cache file to play, mapped by `setRecordingTracks(_:)`.
+    /// The PCM cache file to play, mapped by `setRecordingTracks(_:)`, and kept mapped by later calls for as long as
+    /// the track keeps its `id` and this URL.
     public let pcmFile: URL
     /// Seconds into the reference recording's time at which this file starts.
     public var offsetSeconds: TimeInterval
@@ -63,9 +64,14 @@ extension PlaybackEngine {
     /// Replaces the recordings mixed with the score, each played at its strip's mix. Callable while playing: a track
     /// whose `id` was already playing carries on from where it is.
     ///
-    /// Every file is mapped before anything changes: a file that cannot be (`MappedRecording.Failure`) throws, and the
-    /// recordings already playing stay as they were. A soloed track silences every unsoloed instrument strip, so the
-    /// instrument strips are re-applied too. On a backend that cannot play recordings
+    /// A track that keeps its `id` and its `pcmFile` keeps the mapping it has, so a list that changes only a track's
+    /// mix, offset or transposition hands the backend the same recording, and a backend reading it through a stretcher
+    /// carries on rather than restarting it. A file rewritten in place under the same URL is therefore not re-read: a
+    /// new file needs a new URL (`RecordingPCMCache` keys its files by content) or a new `id`.
+    ///
+    /// Every other file is mapped before anything changes: a file that cannot be (`MappedRecording.Failure`) throws,
+    /// and the recordings already playing stay as they were. A soloed track silences every unsoloed instrument strip,
+    /// so the instrument strips are re-applied too. On a backend that cannot play recordings
     /// (`SynthBackend.canPlayRecordings`) the tracks are kept and their solos still count, but nothing sounds.
     ///
     /// The tracks belong to the host, not to the score: they survive `prepare(score:)` and `teardown()`, as the
@@ -73,10 +79,14 @@ extension PlaybackEngine {
     /// (`setRecordingTracks([])`, `setAlignment(warp: nil, segments: [])`), or sets the new score's, before it plays.
     public func setRecordingTracks(_ tracks: [RecordingTrack]) throws {
         let loaded = try tracks.map { track in
-            try LoadedRecordingTrack(track: track, recording: MappedRecording(pcmFile: track.pcmFile))
+            let kept = recordings.first { $0.track.id == track.id && $0.track.pcmFile == track.pcmFile }
+            return try LoadedRecordingTrack(
+                track: track, recording: kept?.recording ?? MappedRecording(pcmFile: track.pcmFile),
+            )
         }
         recordings = loaded
-        // New mappings: hand them over even if they resolve to what was sent.
+        // Hand the list over even if it resolves to what was sent: a new mapping can reuse a released one's address,
+        // and with it the `ObjectIdentifier` the comparison reads.
         sentRecordingRenders = nil
         applyMixerState()
         prefetchRecordings()

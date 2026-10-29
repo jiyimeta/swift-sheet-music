@@ -34,7 +34,8 @@ and this project adheres to
   `setRecordingMix(id:volume:isMuted:isSoloed:)`, `setAlignment(warp:segments:)`, `hasAlignment`).** Recordings mix
   with the score at their strip's volume and mute, on one solo bus with the instrument strips (the click stays off it),
   follow the reader's transposition, take an alignment while playing without stopping it, and a gain change ramps
-  instead of clicking. With an alignment set, `currentTimeSeconds`, `currentTimeSecondsContinuous`,
+  instead of clicking. A track that keeps its id and file keeps its mapping across `setRecordingTracks(_:)`, so a
+  change of mix never restarts a recording read through a stretcher. With an alignment set, `currentTimeSeconds`, `currentTimeSecondsContinuous`,
   `totalTimeSeconds`, `seek(toTimeSeconds:)` and `skip(by:)` speak the recording's warped seconds, repeats played
   out. `notatedTimeSecondsContinuous` stays on the notated timeline for what is drawn against the score, and
   `notatedSeconds(forReportedSeconds:)` / `reportedSeconds(forNotatedSeconds:)` convert between the two clocks (a
