@@ -112,6 +112,7 @@
                         )
                     }
                     let countIn = Self.frame(2.5)
+                    try #require(samples.count > countIn, "\(samples.count) frames")
                     #expect(Self.peak(samples[countIn...]) < 1e-6, "the strip is muted: no click in the body")
                 }
 

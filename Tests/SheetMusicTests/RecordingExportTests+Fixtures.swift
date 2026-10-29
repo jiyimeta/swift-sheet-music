@@ -118,14 +118,16 @@
 
             /// The first frame at or after `start` whose level reaches `threshold`, or nil.
             static func firstAudible(in samples: [Float], from start: Int = 0, threshold: Float = 1e-4) -> Int? {
-                (max(0, start) ..< samples.count).first { abs(samples[$0]) >= threshold }
+                (min(max(0, start), samples.count) ..< samples.count).first { abs(samples[$0]) >= threshold }
             }
 
-            /// How far (frames) the first impulse within 0.1 s of `expected` is from it, or nil when there is none.
+            /// How far (frames) the first impulse within 0.1 s of `expected` is from it, or nil when there is none —
+            /// also when the file ends before the window.
             static func impulseOffset(in samples: [Float], expected: Int) -> Int? {
                 let window = frame(0.1)
-                let range = max(0, expected - window) ..< min(samples.count, expected + window)
-                return range.first { samples[$0] >= 0.5 }.map { $0 - expected }
+                let upper = min(samples.count, expected + window)
+                let lower = min(max(0, expected - window), upper)
+                return (lower ..< upper).first { samples[$0] >= 0.5 }.map { $0 - expected }
             }
 
             static func peak(_ samples: ArraySlice<Float>) -> Float {
