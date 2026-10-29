@@ -61,15 +61,22 @@ enum OCRTextGlyphs {
     /// `tokenGapLineHeights` × the line height) may become a lyric.
     ///
     /// False when the token has no letter (digits, punctuation, symbols), when it is a dynamic or a direction word
-    /// (compared lowercased, trailing `.` removed), or when it is the two-word `a tempo`.
+    /// (compared lowercased, with leading and trailing non-letters removed), or when it is the two-word `a tempo`.
     static func isLyricEligible(_ token: String) -> Bool {
         guard token.contains(where: \.isLetter) else { return false }
-        var normalized = token.lowercased()
-        while normalized.hasSuffix(".") {
-            normalized.removeLast()
-        }
+        let normalized = strippedOfOuterNonLetters(token)
         if normalized == "a tempo" { return false }
         return !dynamics.contains(normalized) && !directionWords.contains(normalized)
+    }
+
+    /// `token` lowercased with the non-letters at both ends removed, so `Ped.*`, `(p)` and `mf,` match their words.
+    /// Interior characters (`shin-ing`, apostrophes) are kept.
+    private static func strippedOfOuterNonLetters(_ token: String) -> String {
+        let lowered = Substring(token.lowercased())
+        guard let first = lowered.firstIndex(where: \.isLetter),
+              let last = lowered.lastIndex(where: \.isLetter)
+        else { return "" }
+        return String(lowered[first ... last])
     }
 
     // MARK: - Tokens
@@ -119,7 +126,8 @@ enum OCRTextGlyphs {
         let strings = tokens.map { range in line.characters[range].map(\.text).joined() }
         var eligibility = strings.map(isLyricEligible)
         for index in strings.indices.dropLast()
-            where strings[index].lowercased() == "a" && strings[index + 1].lowercased() == "tempo"
+            where strippedOfOuterNonLetters(strings[index]) == "a"
+            && strippedOfOuterNonLetters(strings[index + 1]) == "tempo"
         {
             eligibility[index] = false
             eligibility[index + 1] = false
