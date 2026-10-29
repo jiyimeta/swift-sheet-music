@@ -55,8 +55,9 @@ internal class Mp3MediaCodecEncoder(
         while (true) {
             val inIdx = codec.dequeueInputBuffer(10_000)
             if (inIdx < 0) {
-                // No input buffer — drain outputs to free one up.
-                drainEncoder(endOfStream)
+                // No input buffer — drain what is ready to free one up. Never the end-of-stream drain: it waits for
+                // an end-of-stream buffer this call has not queued yet, so finish() with the inputs full hung.
+                drainEncoder(false)
                 continue
             }
             val buf = codec.getInputBuffer(inIdx) ?: return

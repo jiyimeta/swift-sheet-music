@@ -7,6 +7,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **(Android) An M4A or MP3 export no longer hangs at its end.** When the codec held every input buffer as the export
+  finished, `AacM4aEncoder` and `Mp3MediaCodecEncoder` waited for the end-of-stream output before they had queued the
+  end-of-stream input, and `exportAudioFile` never returned (seen on a Pixel 8a: the file stopped growing with no
+  `moov` box and the call spun in `dequeueOutputBuffer`). A full codec is now drained without that wait until the
+  end-of-stream buffer goes in.
+
 ## [4.22.0] - 2026-10-30
 
 ### Added
