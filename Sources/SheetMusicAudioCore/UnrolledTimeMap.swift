@@ -127,4 +127,18 @@ public struct UnrolledTimeMap: Sendable {
         }
         return notatedSeconds
     }
+
+    /// Where a transport seeking notated tick `tick` waits on this unrolled clock: `onset` is the tick's first
+    /// occurrence (`unrolledSeconds(fromNotated:)`), `parked` half a tick before it, so a note-on exactly at the onset
+    /// is dispatched by the first render rather than chased past by the seek.
+    ///
+    /// The half tick comes off after the projection. Projecting the instant half a tick before the onset instead puts
+    /// a tick just after a backward jump — the downbeat after a repeat — at the end of an earlier measure-play, a
+    /// whole pass away. One rule for a backend's seek and for an export's arithmetic about it.
+    package func park(atTick tick: Int, timeline: PlaybackTimeline) -> (parked: TimeInterval, onset: TimeInterval) {
+        let notated = timeline.seconds(atTick: Double(tick))
+        let halfTick = notated - timeline.seconds(atTick: Double(tick) - 0.5)
+        let onset = unrolledSeconds(fromNotated: notated)
+        return (onset - halfTick, onset)
+    }
 }

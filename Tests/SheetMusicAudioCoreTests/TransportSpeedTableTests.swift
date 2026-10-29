@@ -149,14 +149,26 @@ struct TransportSpeedTableTests {
         let table = try TransportSpeedTable(warp: Self.warp([
             Span(start: 0, end: 2, duration: 2.5), Span(start: 2, end: 4, duration: 2),
         ]))
-        // Parked half a tick (at 120 BPM, division 480) before the onset, as a seek leaves the transport.
-        let first = table.countIn(seconds: 2, userSpeed: 1, bodyStart: -0.0005)
+        let first = table.countIn(seconds: 2, userSpeed: 1, bodyStart: 0)
         #expect(abs(first.duration - 2.5) < 1e-12)
         #expect(first.speed.map { abs($0 - 0.8) < 1e-12 } == true)
         // At 70 % the count into the second measure runs at 0.7 and lasts 2 / 0.7 s.
-        let second = table.countIn(seconds: 2, userSpeed: 0.7, bodyStart: 2 - 0.0005)
+        let second = table.countIn(seconds: 2, userSpeed: 0.7, bodyStart: 2)
         #expect(abs(second.duration - 2 / 0.7) < 1e-12)
         #expect(second.speed.map { abs($0 - 0.7) < 1e-12 } == true)
+    }
+
+    @Test
+    func `a count-in into a slow measure reads the body's stretch at its onset, not where a seek parks`() throws {
+        // 4/4 at 60 BPM: measures of 4 s; the first lasts 5 s (stretch 0.8), the second 4 s (stretch 1).
+        let table = try TransportSpeedTable(warp: Self.warp([
+            Span(start: 0, end: 4, duration: 5), Span(start: 4, end: 8, duration: 4),
+        ]))
+        let fromOnset = table.countIn(seconds: 4, userSpeed: 1, bodyStart: 4)
+        #expect(abs(fromOnset.duration - 4) < 1e-12)
+        // Half a tick at 60 BPM, division 480, is 1.04 ms: from the parked second the lookup lands a measure early.
+        let fromParked = table.countIn(seconds: 4, userSpeed: 1, bodyStart: 4 - 0.5 / 480)
+        #expect(abs(fromParked.duration - 5) < 1e-12)
     }
 
     @Test

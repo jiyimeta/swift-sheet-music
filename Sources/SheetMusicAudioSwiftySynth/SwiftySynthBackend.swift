@@ -87,6 +87,11 @@ public final class SwiftySynthBackend: SynthBackend {
     /// repeats aren't expanded — which is why every conversion below reads the same either way.
     private var unrolledTimeMap: UnrolledTimeMap = .identity
 
+    /// Where the last `seek(toTick:)` parked the transport (clamped at 0, as the sequencer clamps it) and the onset it
+    /// parked before, both on the unrolled clock. A count-in reads its speed at that onset
+    /// (`play(afterCountInSeconds:)`).
+    private var lastPark: (parked: TimeInterval, onset: TimeInterval)?
+
     // Persisted transport/tuning state, re-applied whenever the synth or
     // sequence is rebuilt (both reset SwiftySynth's channel/speed state).
     // `rate` is internal so `SwiftySynthBackend+Recordings.swift` can tell which groups need a stretcher.
@@ -475,20 +480,24 @@ public final class SwiftySynthBackend: SynthBackend {
     /// Under a warp the count runs at the speed of the measure it counts into — `seconds` are the metronome SMF's, so
     /// it lasts `seconds / speed` — and keeps that speed to its end, a table swap during it applying from the body on.
     /// Without a warp the count's length and speed are what they always were. The rule is
-    /// `TransportSpeedTable.countIn(seconds:userSpeed:bodyStart:)`, which an export's length reads too.
+    /// `TransportSpeedTable.countIn(seconds:userSpeed:bodyStart:)`, which an export's length reads too, from the same
+    /// onset.
     public func play(afterCountInSeconds seconds: TimeInterval) {
         let sampleRate = sampleRate
+        let lastPark = lastPark
         lock.withLockUnchecked { shared in
             var countIn: (duration: TimeInterval, speed: Double?) = (seconds, nil)
             if let sequencer = shared.sequencer {
                 let position = sequencer.position.components
-                // Where `seek(toTick:)` parked the transport: half a tick before the measure's first onset.
                 let held = shared.alignment.transportSeconds(
                     quantized: Double(position.seconds) + Double(position.attoseconds) * 1e-18,
                     sampleRate: sampleRate, blockSize: sequencer.synthesizer.blockSize,
                 )
+                // The body starts at the onset the last seek parked before, while the transport still waits there;
+                // where it waits is half a tick earlier, which at a slow tempo is still the measure before.
+                let onset = lastPark.flatMap { abs($0.parked - held) < 1e-9 ? $0.onset : nil }
                 countIn = shared.alignment.speedTable.countIn(
-                    seconds: seconds, userSpeed: shared.alignment.userSpeed, bodyStart: held,
+                    seconds: seconds, userSpeed: shared.alignment.userSpeed, bodyStart: onset ?? held,
                 )
             }
             shared.alignment.countInSpeed = countIn.speed
@@ -550,10 +559,13 @@ public final class SwiftySynthBackend: SynthBackend {
         // notated seconds have to be projected onto the transport's own clock before they mean
         // anything to it. Identity on a score without repeats; on one with them this is the
         // difference between landing on the requested measure and landing on whatever the
-        // sequence happens to be playing that many seconds in.
-        let seconds = unrolledTimeMap.unrolledSeconds(
-            fromNotated: timeline.seconds(atTick: Double(tick) - 0.5),
-        )
+        // sequence happens to be playing that many seconds in. The onset is projected first and
+        // the half tick comes off on the unrolled clock (`UnrolledTimeMap.park`): projecting the
+        // half-tick-earlier instant put the downbeat after a repeat at the end of the repeated
+        // pass, so play-from there replayed the repeat.
+        let park = unrolledTimeMap.park(atTick: tick, timeline: timeline)
+        let seconds = park.parked
+        lastPark = (parked: max(0, seconds), onset: park.onset)
         lock.withLockUnchecked { shared in
             // A seek is "play from here, now": it ends any count-in still owed
             // rather than counting the user in a second time from a new spot.

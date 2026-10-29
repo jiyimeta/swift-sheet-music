@@ -45,10 +45,12 @@ and this project adheres to
 
 ### Fixed
 
-- **An exported range after a repeat starts where the range does, through an injected backend.** The offline instance
-  was never handed the unrolled time map live playback hands its backend, so it took the range's notated start for a
-  second of the unrolled sequence and began on whatever played there — in `|: A :| B`, a range of B began on A's
-  repeat.
+- **Playing or exporting from the measure after a repeat starts on that measure.** `SwiftySynthBackend` backed a seek
+  off half a tick on the notated clock and then projected it onto the unrolled one, which put the downbeat after a
+  backward jump at the end of the earlier pass: in `|: A :| B`, play-from-B replayed A's repeat first. A seek now
+  projects the onset and backs off on the unrolled clock. An export through an injected backend also never handed its
+  offline instance the unrolled time map, so a range after a repeat began wherever the sequence played at the range's
+  notated second.
 - **A PDF whose engraving is outlined into paths is read as an image.** A purchased PDF re-saved through macOS
   Preview, or a print driver that converts text to outlines, carries staff lines, stems and filled notehead shapes
   but not one glyph, and the raster fallback only read pages with no vector content at all — so such a page was read

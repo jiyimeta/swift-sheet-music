@@ -140,10 +140,10 @@ extension PlaybackEngine {
         return countIn + body + AVAudioFrameCount(max(0, allowanceFrames))
     }
 
-    /// The span of the transport an export plays: the range's ends on the unrolled clock, and the earliest second a
-    /// seek to its start may park the transport at — a tick before the onset, never before 0. A backend parks short
-    /// of the onset so the onset's note-on is dispatched (`SwiftySynthBackend` parks half a tick before), and the body
-    /// then runs that much past its end.
+    /// The span of the transport an export plays: the range's ends on the unrolled clock, and the second a seek to its
+    /// start parks the transport at, never before 0 — half a tick before the onset (`UnrolledTimeMap.park`, the rule
+    /// `SwiftySynthBackend.seek(toTick:)` follows), so the onset's note-on is dispatched; the body then runs that much
+    /// past its end.
     struct ExportBody {
         let startSeconds: TimeInterval
         let endSeconds: TimeInterval
@@ -154,12 +154,10 @@ extension PlaybackEngine {
         /// and the file stopped there — then on the unrolled clock the sequencer actually runs, so repeats and jumps
         /// play out in full.
         init(timeline: PlaybackTimeline, unrolled: UnrolledTimeMap, startTick: Int, endTick: Int) {
-            func seconds(_ tick: Int) -> TimeInterval {
-                unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(tick)))
-            }
-            startSeconds = seconds(startTick)
-            endSeconds = seconds(endTick)
-            parkedSeconds = max(0, seconds(startTick - 1))
+            let park = unrolled.park(atTick: startTick, timeline: timeline)
+            startSeconds = park.onset
+            endSeconds = unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(endTick)))
+            parkedSeconds = max(0, park.parked)
         }
     }
 
