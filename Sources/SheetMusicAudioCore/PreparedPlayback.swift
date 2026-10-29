@@ -200,4 +200,15 @@ package struct PlaybackChannelLayout: Sendable, Equatable {
         defaults.append(MixerChannel(id: .metronome, name: "Metronome"))
         mixerChannels = defaults
     }
+
+    /// Whether `other` plays the same strips on the same channels and drum channels, whatever the score sets each
+    /// strip's mix to (`mixerChannels`): a change to those alone needs no new synth, only the new defaults.
+    package func hasSameChannels(as other: PlaybackChannelLayout) -> Bool {
+        liveChannelPlan.hasSameChannels(as: other.liveChannelPlan)
+            && staffMIDIChannels == other.staffMIDIChannels
+            && staffIsDrum == other.staffIsDrum
+            && instrumentMIDIChannels == other.instrumentMIDIChannels
+            && drumChannels == other.drumChannels
+            && mixerChannels.map(\.id) == other.mixerChannels.map(\.id)
+    }
 }

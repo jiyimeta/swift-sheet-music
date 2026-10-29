@@ -45,6 +45,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -2668,6 +2669,234 @@ class AndroidPlaybackEngineTest {
             progress = null,
             exporterFactory = { error("must not be invoked") },
         )
+    }
+
+    // exportAudioFile — count-in
+
+    /**
+     * Exports [engine]'s prepared score through an [AudioExporter] built from fakes, counting in when [countIn] is set.
+     * The score synth (the first built) counts the frames it renders before the score player is started, and after
+     * that advances the player 240 ticks per block so the render ends; the metronome's player (the second built)
+     * records into [metronome].
+     *
+     * @return the frames rendered before the score player started.
+     */
+    private suspend fun exportFramesBeforeScorePlay(
+        engine: AndroidPlaybackEngine,
+        countIn: Boolean,
+        metronome: RecordingBindings,
+        range: AudioExportRange = AudioExportRange.Full,
+        score: RecordingBindings = RecordingBindings(),
+    ): Int {
+        var synthsBuilt = 0
+        var playersBuilt = 0
+        var framesBeforeScorePlay = 0
+        val exporter = AudioExporter(
+            resolver = StubSoundfontResolver(),
+            context = null,
+            synthFactory = { _ ->
+                FakeSynthDriver(synthsBuilt).also { synth ->
+                    if (synthsBuilt++ == 0) {
+                        synth.onWriteFloat = { frames ->
+                            if (score.playCalls.isEmpty()) {
+                                framesBeforeScorePlay += frames
+                                check(framesBeforeScorePlay < 10 * 44_100) { "the score player never started" }
+                            } else {
+                                score.tickToReturn += 240
+                            }
+                        }
+                    }
+                }
+            },
+            playerFactory = { _ -> PlayerDriver(0L, if (playersBuilt++ == 0) score else metronome) },
+            encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
+            masterTuningControlChanges = MarkerMasterTuning::invoke,
+        )
+        engine.exportAudioFileWith(
+            outputFd = null,
+            scoreHandle = 1L,
+            format = AudioFileFormat.Wav(),
+            range = range,
+            countIn = countIn,
+            progress = null,
+            exporterFactory = { exporter },
+        )
+        return framesBeforeScorePlay
+    }
+
+    @Test
+    fun `export of a score with repeats runs to the unrolled end`() = runTest {
+        // The notated score is 960 ticks, but its repeats play it out to 1920. The export's range comes back from the
+        // timeline in NOTATED ticks and the player runs on the unrolled clock, so a full export that ended at the
+        // notated 960 would stop halfway through the played score.
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L, 1920L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(0L, 960L),
+        )
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        val score = RecordingBindings()
+        exportFramesBeforeScorePlay(engine, countIn = false, metronome = RecordingBindings(), score = score)
+
+        assertTrue(
+            "the score player ran to the unrolled end, not the notated 960 (stopped at ${score.tickToReturn})",
+            score.tickToReturn >= 1920L,
+        )
+    }
+
+    @Test
+    fun `a range export that ends inside a repeated passage plays the span the live loop plays`() = runTest {
+        // Notated 0..1920 is played twice, so notated 2880 first plays at 4800 — after the repeat. The region 960..2880
+        // is 1920 ticks long; like the live A-B loop (`armLoop`) the export covers start + span, 960..2880 on the
+        // player's clock, not the end's own first occurrence (4800), which would drag the second pass in.
+        val bridge = object : FakeJniBridge(
+            timelineSummaryResult = longArrayOf(4800L, 8_000_000L, 480L, 8640L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(960L, 2880L),
+        ) {
+            override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
+                if (notatedTick >= 1920L) notatedTick + 1920L else notatedTick
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        val score = RecordingBindings()
+        exportFramesBeforeScorePlay(engine, countIn = false, metronome = RecordingBindings(), score = score)
+
+        assertEquals(960L, score.seekTicks.firstOrNull())
+        assertEquals("the export ends at start + span", 2880L, score.tickToReturn)
+    }
+
+    @Test
+    fun `a range export never ends before it starts`() = runTest {
+        // The end's first occurrence (2880) precedes the start's second-pass tick (7680); the range must collapse to
+        // empty at the start rather than run backwards.
+        val bridge = object : FakeJniBridge(
+            timelineSummaryResult = longArrayOf(7680L, 8_000_000L, 480L, 11520L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(3840L, 2880L),
+        ) {
+            override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
+                if (notatedTick >= 3840L) notatedTick + 3840L else notatedTick
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        // The exporter's render loop would not run on an inverted range either, so the mapped range itself is the
+        // observable: its end must not fall below its start.
+        assertEquals(Pair(7680L, 7680L), engine.exportPlayerRange(1L, notatedStart = 3840L, notatedEnd = 2880L))
+
+        val score = RecordingBindings()
+        exportFramesBeforeScorePlay(engine, countIn = false, metronome = RecordingBindings(), score = score)
+
+        assertEquals(7680L, score.seekTicks.firstOrNull())
+        assertEquals("the empty range renders nothing past its start", 7680L, score.tickToReturn)
+    }
+
+    @Test
+    fun `a range export that starts after a repeat seeks the player to the unrolled start`() = runTest {
+        // Bar 2 notates at 3840 but plays at 7680, after the repeat: the player runs on the unrolled clock, so it must
+        // be seeked to 7680 — the same tick the count-in clicks are built for.
+        val bridge = object : FakeJniBridge(
+            timelineSummaryResult = longArrayOf(7680L, 8_000_000L, 480L, 11520L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(3840L, 7680L),
+        ) {
+            override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
+                if (notatedTick >= 3840L) notatedTick + 3840L else notatedTick
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        val score = RecordingBindings()
+        exportFramesBeforeScorePlay(engine, countIn = false, metronome = RecordingBindings(), score = score)
+
+        assertEquals("the score player starts at the unrolled start", 7680L, score.seekTicks.firstOrNull())
+        assertTrue("and runs to the unrolled end (${score.tickToReturn})", score.tickToReturn >= 11520L)
+    }
+
+    @Test
+    fun `export with countIn plays the shared count-in sequence`() = runTest {
+        val countInClicks = byteArrayOf(5, 5, 5)
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            countInResult = twoClickCountIn(),
+            renderCountInMetronomeMidiResult = countInClicks,
+            frameAtTickResult = encodeFrameBytes(tick = 0L, timeMicros = 0L, cursor = ScoreCursor.Beat(0, 0)),
+        )
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        val counted = RecordingBindings()
+        val framesCounted = exportFramesBeforeScorePlay(engine, countIn = true, metronome = counted)
+        // The count is the one live playback plays from the same start: its clicks are the sequence the shared Swift
+        // renders for it, and its length is the shared schedule's — one second, at the WAV default of 44.1 kHz.
+        assertArrayEquals(countInClicks, counted.loadCalls.firstOrNull())
+        assertEquals(44_100, framesCounted)
+
+        val plain = RecordingBindings()
+        val framesPlain = exportFramesBeforeScorePlay(engine, countIn = false, metronome = plain)
+        assertEquals("without a count-in the music starts on the first frame", 0, framesPlain)
+        assertTrue(
+            "and the count-in sequence is never loaded",
+            plain.loadCalls.none { it.contentEquals(countInClicks) },
+        )
+    }
+
+    @Test
+    fun `an export counts in from its start's unrolled tick and cursor`() = runTest {
+        // The repeated score of [repeatedScoreBridge]: bar 2 notates at 3840 but plays at 7680, after the repeat. The
+        // count-in's cursor lookup and its click sequence both take the player's UNROLLED tick, so the export's notated
+        // start is projected once, before either — never twice.
+        val barTwo = ScoreCursor.Beat(measureIndex = 2, tickInMeasure = 0)
+        val countInCursors = mutableListOf<ScoreCursor>()
+        val countInBaseTicks = mutableListOf<Long>()
+        val bridge = object : FakeJniBridge(
+            timelineSummaryResult = longArrayOf(7680L, 8_000_000L, 480L, 11520L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            countInResult = twoClickCountIn(),
+            renderCountInMetronomeMidiResult = byteArrayOf(5, 5, 5),
+            frameAtTickResult = encodeFrameBytes(tick = 3840L, timeMicros = 4_000_000L, cursor = barTwo),
+            resolveExportTickRangeResult = longArrayOf(3840L, 7680L),
+        ) {
+            /** `[m0, m1, m0, m1, m2, m3]`: bars 2 and 3 first play one repeat (3840 ticks) late. */
+            override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
+                if (notatedTick >= 3840L) notatedTick + 3840L else notatedTick
+
+            override fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+                countInCursors += ScoreCursorCodec.decode(cursorBytes)
+                return super.countIn(scoreHandle, cursorBytes)
+            }
+
+            override fun renderCountInMetronomeMidi(
+                scoreHandle: Long,
+                cursorBytes: ByteArray,
+                baseTick: Long,
+            ): ByteArray {
+                countInBaseTicks += baseTick
+                return super.renderCountInMetronomeMidi(scoreHandle, cursorBytes, baseTick)
+            }
+        }
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        val metronome = RecordingBindings()
+        exportFramesBeforeScorePlay(engine, countIn = true, metronome = metronome)
+
+        assertEquals("the start's frame is looked up at its unrolled tick", listOf(7680L), bridge.frameAtTickCalls)
+        assertEquals("the count is computed from that frame's cursor", listOf<ScoreCursor>(barTwo), countInCursors)
+        assertEquals("and its clicks are built for the same tick", listOf(7680L), countInBaseTicks)
+        // That sequence already places the start behind its pre-roll, so it plays from its own head, not the start.
+        assertEquals("the click transport starts at the count's first tick", listOf(0L), metronome.seekTicks)
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

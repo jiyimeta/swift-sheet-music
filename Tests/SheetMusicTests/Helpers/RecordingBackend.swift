@@ -54,6 +54,40 @@
         /// Every alignment the engine handed over, in order.
         private(set) var alignmentCalls: [(warp: PlaybackTimeWarp?, segments: [RecordingSegment])] = []
 
+        /// A transport call whose place in the order decides what a start sounds like.
+        enum TransportEvent: Equatable {
+            case seek(tick: Int)
+            case loadMetronomeSequence(offsetSeconds: TimeInterval)
+            case setMetronomeMuted(Bool)
+            case play
+            case playAfterCountIn(seconds: TimeInterval)
+
+            var isSeek: Bool {
+                if case .seek = self { true } else { false }
+            }
+
+            var isPlay: Bool {
+                switch self {
+                case .play, .playAfterCountIn: true
+                default: false
+                }
+            }
+        }
+
+        /// The transport calls in the order they arrived. A count-in is heard only in one order — the seek, which
+        /// moves both transports; the count's metronome load, which re-parks that transport at the count's first
+        /// click; the mute; the held play — and nothing else the recorder keeps can tell the orders apart.
+        private(set) var transportEvents: [TransportEvent] = []
+
+        /// The last start: the calls from the last seek through the first play after it (to the end of the log when
+        /// none followed). Empty when nothing seeked.
+        var lastStart: [TransportEvent] {
+            guard let seek = transportEvents.lastIndex(where: \.isSeek) else { return [] }
+            let tail = transportEvents[seek...]
+            guard let play = tail.firstIndex(where: \.isPlay) else { return Array(tail) }
+            return Array(tail[...play])
+        }
+
         func clearRecordings() {
             volumeSends.removeAll()
             programSends.removeAll()
@@ -89,10 +123,12 @@
         func loadMetronomeSequence(_ midi: MidiFile, offsetSeconds: TimeInterval) {
             lastMetronomeSequence = midi
             metronomeOffsetSeconds = offsetSeconds
+            transportEvents.append(.loadMetronomeSequence(offsetSeconds: offsetSeconds))
         }
 
         func setMetronomeMuted(_ muted: Bool) {
             metronomeMuted = muted
+            transportEvents.append(.setMetronomeMuted(muted))
         }
 
         func setMetronomeVolume(_ volume: Float) {
@@ -103,12 +139,14 @@
             countInSeconds = nil
             didPlay = true
             playCallCount += 1
+            transportEvents.append(.play)
         }
 
         func play(afterCountInSeconds seconds: TimeInterval) {
             countInSeconds = seconds
             didPlay = true
             playCallCount += 1
+            transportEvents.append(.playAfterCountIn(seconds: seconds))
         }
 
         /// A second recorder, so an export test can assert what the offline
@@ -131,6 +169,7 @@
 
         func seek(toTick tick: Int) {
             seekCalls.append(tick)
+            transportEvents.append(.seek(tick: tick))
             guard let timeline else { return }
             currentPositionSeconds = timeline.seconds(atTick: Double(tick))
         }

@@ -273,7 +273,7 @@
                     // The export reads the score the engine prepared.
                     if engine.state == .stopped { try engine.prepare(score: score) }
                     try await engine.exportAudioFile(
-                        to: url, score: score, format: .m4a(), includesCountIn: countIn,
+                        to: url, score: score, format: .m4a(), countIn: countIn,
                         progress: { fraction in Task { @MainActor in self.exportProgress = fraction } },
                     )
                     NSWorkspace.shared.activateFileViewerSelecting([url])

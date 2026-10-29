@@ -128,10 +128,10 @@
                 #expect(backend.metronomeMuted == true)
             }
 
-            @Test("an instrument layout edit falls back to full prepare")
+            @Test("a strip layout edit falls back to full prepare")
             func instrumentEditUsesFullPrepare() throws {
-                let original = makeScore(pitch: 60, program: 0)
-                let edited = makeScore(pitch: 60, program: 40)
+                let original = makeScore(pitch: 60)
+                let edited = makeScore(pitch: 60, drums: true)
                 let backend = RecordingBackend()
                 let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
                 try engine.prepare(score: original)
@@ -297,8 +297,8 @@
 
             @Test("a layout change keeps the transport too")
             func fullPrepareKeepsPosition() throws {
-                let original = makeScore(pitch: 60, program: 0, measureCount: 2)
-                let edited = makeScore(pitch: 60, program: 40, measureCount: 2)
+                let original = makeScore(pitch: 60, measureCount: 2)
+                let edited = makeScore(pitch: 60, drums: true, measureCount: 2)
                 let backend = RecordingBackend()
                 let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
                 try engine.prepare(score: original)
@@ -372,6 +372,7 @@
             private func makeScore(
                 pitch: Int,
                 program: Int = 0,
+                drums: Bool = false,
                 measureCount: Int = 1,
             ) -> Score {
                 let measures = (0 ..< measureCount).map { index in
@@ -393,6 +394,7 @@
                         instrument: Instrument(
                             id: "piano", longName: "Piano",
                             channels: [InstrumentChannel(program: program)],
+                            useDrumset: drums,
                         ),
                         staves: [Staff(measures: measures)],
                     )],

@@ -64,6 +64,21 @@ extension PlaybackEngine {
         replaceMixerChannels(PlaybackChannelLayout(score: score).mixerChannels)
     }
 
+    /// After a replacement that kept every strip: takes the settings the score's own mix changed from `previous` to
+    /// `next` (`takingChangedDefaults`) and sounds them, keeping the rest of the listener's mix.
+    func takeChangedMixDefaults(from previous: [MixerChannel], to next: [MixerChannel]) {
+        let current = mixerChannels
+        let updated = current.takingChangedDefaults(from: previous, to: next)
+        guard updated != current else { return }
+        replaceMixerChannels(updated)
+        for (before, after) in zip(current, updated) where before.program != after.program {
+            if let program = after.program {
+                loadProgram(forChannel: after.id, program: program)
+            }
+        }
+        applyMixerState()
+    }
+
     /// Push the current mixer state into the live audio graph. Mute /
     /// volume are sent as CC 7 (Channel Volume) on each strip's
     /// renderer-assigned MIDI channel of its owning synth unit (melodic

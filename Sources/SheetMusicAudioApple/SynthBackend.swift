@@ -129,13 +129,17 @@ public protocol SynthBackend: AnyObject {
     var currentTick: Int { get }
 
     /// Start playing, but hold the SCORE transport first while the metronome
-    /// transport — already loaded with a count-in sequence — plays the pre-roll.
-    /// `seconds` is the pre-roll's length on the metronome sequence's own clock;
-    /// the hold lasts as long as the metronome takes to play it at the speed it
-    /// runs at, `seconds` ÷ the rate (`setRate`), so the body comes in as the
-    /// count ends. The count MUST be audible during that window whatever
-    /// `setMetronomeMuted` says: counting in is an explicit request, not the
-    /// metronome toggle.
+    /// transport — already loaded with a count-in sequence — plays the pre-roll,
+    /// so the body comes in as the count ends. The count MUST be audible during
+    /// that window whatever `setMetronomeMuted` says: counting in is an explicit
+    /// request, not the metronome toggle.
+    ///
+    /// `seconds` is on the SEQUENCE clock — the clock `loadMetronomeSequence(_:offsetSeconds:)` speaks, i.e.
+    /// `CountInBeats.Result.preRollSeconds(division:)` at rate 1. The metronome transport plays the pre-roll at
+    /// the rate `setRate` set, so the backend holds the score for `seconds / rate` of output; holding `seconds`
+    /// would start the music part way through the count whenever the rate is not 1. A backend following an
+    /// alignment (`setPlaybackAlignment(warp:segments:)`) counts at the speed it plays the measure it counts into,
+    /// and holds the score for as long as that takes.
     ///
     /// The wait belongs to the backend rather than the engine because it is the
     /// only place with a sample clock: a main-actor timer would quantize the

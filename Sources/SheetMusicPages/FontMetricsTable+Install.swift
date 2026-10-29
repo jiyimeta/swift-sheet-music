@@ -15,9 +15,19 @@ public func installFontMetricsTable(_ bytes: Data) throws {
     FontMetrics.provider = try fontMetricsTableProvider(bytes)
 }
 
-/// The provider `installFontMetricsTable` installs, made without installing it. Tests check this rather than the
-/// process-wide provider: every suite in the test process shares that one, and a test that swaps it and puts it back
-/// can put back a stale value over another suite's install.
-func fontMetricsTableProvider(_ bytes: Data) throws -> any FontMetricsProvider {
+/// The provider `installFontMetricsTable` installs, made without installing it — for a computation that lays out with
+/// the table inside `FontMetrics.withProvider(_:operation:)` while the rest of the process keeps its own provider (a
+/// video on Apple, laid out as Android lays it out). Tests check this rather than the process-wide provider too: every
+/// suite in the test process shares that one, and a test that swaps it and puts it back can put back a stale value
+/// over another suite's install.
+///
+/// What it answers for what the table does not carry:
+/// - A face the table lacks is measured by `StubFontMetricsProvider`.
+/// - A character a carried face lacks — Edwin's missing CJK, most often — gets the stub's per-character estimate.
+/// - `renderingTextFont` answers Edwin for every face that is not Bravura (semibold as regular): the table carries no
+///   other text face, so a host draws text in Edwin and the layout measures it so.
+///
+/// Throws when the bytes do not decode (empty bytes are truncated).
+public func fontMetricsTableProvider(_ bytes: Data) throws -> any FontMetricsProvider {
     try makeFontMetricsTableProvider(table: FontMetricsTable.decode(bytes))
 }

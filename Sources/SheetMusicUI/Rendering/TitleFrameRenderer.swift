@@ -109,10 +109,13 @@ public enum TitleFrameRenderer {
     /// `LayoutTitleFrame.font(size:)`, the font the draw-program
     /// bridge measures and names a title line with, so the Apple
     /// screen, the PDF and a reader of the draw program set the title
-    /// in the same type.
+    /// in the same type. Under a metrics provider that draws the system face as another (`RenderingTextFace`), that
+    /// other face — the one the layout measured the title in.
     static func ctFont(size: CGFloat) -> CTFont {
-        AppleFontMetricsProvider().renderingFont(
-            for: LayoutTitleFrame.font(size: size),
-        )
+        let asked = LayoutTitleFrame.font(size: size)
+        if let substitute = RenderingTextFace.substitute(for: asked) {
+            return RenderingTextFace.ctFont(substitute)
+        }
+        return AppleFontMetricsProvider().renderingFont(for: asked)
     }
 }

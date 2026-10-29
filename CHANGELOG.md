@@ -35,31 +35,19 @@ and this project adheres to
   with the score at their strip's volume and mute, on one solo bus with the instrument strips (the click stays off it),
   follow the reader's transposition, take an alignment while playing without stopping it, and a gain change ramps
   instead of clicking. A track that keeps its id and file keeps its mapping across `setRecordingTracks(_:)`, so a
-  change of mix never restarts a recording read through a stretcher. With an alignment set, `currentTimeSeconds`, `currentTimeSecondsContinuous`,
-  `totalTimeSeconds`, `seek(toTimeSeconds:)` and `skip(by:)` speak the recording's warped seconds, repeats played
-  out. `notatedTimeSecondsContinuous` stays on the notated timeline for what is drawn against the score, and
+  change of mix never restarts a recording read through a stretcher. With an alignment set, `currentTimeSeconds`,
+  `currentTimeSecondsContinuous`, `totalTimeSeconds`, `seek(toTimeSeconds:)` and `skip(by:)` speak the recording's
+  warped seconds, repeats played out. `notatedTimeSecondsContinuous` stays on the notated timeline for what is drawn against the score, and
   `notatedSeconds(forReportedSeconds:)` / `reportedSeconds(forNotatedSeconds:)` convert between the two clocks (a
   notated second in a repeat reports at its first pass). The tracks and the alignment belong to the host and survive
   `prepare(score:)`: a host switching scores clears them.
-- **Exports include recordings and an optional count-in (`exportAudioFile(…, includesCountIn:)`).** Through an
-  injected backend the file carries the recordings at their strips' mix, on the same solo bus as live, follows the
-  alignment — a warped score or range lasts its warped length — and can open with the count-in live playback plays:
-  at the user's rate, or under a warp at the speed of the measure it counts into.
-- **`RevoiceDrumStaff`, `RevoicePreview` and `EditIntent.revoiceDrumStaff(staff:assignments:policy:)` (wire index
-  95).** Re-voices a drum staff by pitch as one undo step: every note moves to the voice its pitch is assigned, so a
-  staff converts to one voice or to hands and feet (kicks and pedal hi-hat in voice 2). A bar already in the target form
-  is not touched, a rest-only voice beyond the target's count goes, and a bar that cannot be converted without changing
-  what plays is left as written. `RevoiceDrumStaff.preview(in:)` reports which bars it would rewrite and which it would
-  leave, so a host can tell the user. A mark that only draws (the open and closed hi-hat signs, say) goes to the lowest
-  part when a chord splits, where one that changes how a note plays goes to every part. The intent resolves to nothing to apply when no bar needs re-voicing.
+- **Exports include recordings and follow the alignment (`exportAudioFile(…)`).** Through an injected backend the
+  file carries the recordings at their strips' mix, on the same solo bus as live, and follows the alignment — a warped
+  score or range lasts its warped length. An export's count-in (`countIn: true`) follows it too: under a warp it
+  counts at the speed of the measure it counts into, as live.
 
 ### Fixed
 
-- **A count-in at a tempo other than 100 % ends on the body's downbeat.** `SwiftySynthBackend` held the score for the
-  count's length at 100 % while the click counted at the user's rate, so at 70 % a 2 s count held the score for 2 s
-  while the click had counted 1.4 s of it: the music came in during the count's third beat, and the click stayed that
-  far behind it for the rest of the playback (above 100 % the music came in late instead). The score is now held for
-  the count's length divided by the rate, live and at the head of an export.
 - **Playing or exporting from the measure after a repeat starts on that measure.** `SwiftySynthBackend` backed a seek
   off half a tick on the notated clock and then projected it onto the unrolled one, which put the downbeat after a
   backward jump at the end of the earlier pass: in `|: A :| B`, play-from-B replayed A's repeat first. A seek now
@@ -68,6 +56,129 @@ and this project adheres to
   notated second. And `UnrolledTimeMap` compared a notated instant against each measure-play's end rebuilt from
   running sums, which with a tempo change before the repeat could round one ULP past the next measure's start; the
   downbeat after the repeat then projected a whole pass early (480 of 40 401 integer tempo pairs from 40 to 240 BPM).
+
+## [4.22.0] - 2026-10-30
+
+### Added
+
+- **`CountInBeats.Result.preRollSeconds(division:)`** — how long the count-in's pre-roll lasts on the sequence clock
+  (rate 1): `preRollTicks` at `microsecondsPerQuarter`, the whole-BPM tempo every pre-roll sequence is seeded with.
+  It is the one conversion every engine and host reads; at a playback rate other than 1 the output lasts this divided
+  by the rate.
+
+- **`UnrolledTimeMap.unrolledLength(of:)` and `UnrolledTimeMap.measurePlays`** — how long a timeline plays with its
+  repeats and jumps (the end of the last measure-play, or the notated length without a repeat plan), and every
+  measure-play with its start and duration on both the unrolled and the notated clock.
+
+- **(Apple) `PlaybackEngine.exportAudioFile(…, countIn:)`** — an export can count in, as live playback does:
+  `countIn: true` puts the count `play(from:in:countIn:)` plays from the range's start in front of the music, on both
+  the AUMIDISynth pipeline and an injected backend's offline instance. The clicks sound at the metronome strip's
+  volume whatever the metronome toggle says, and the file grows by `preRollSeconds(division:)` divided by the export's
+  rate. A start with no count-in exports as `countIn: false`, which stays the default. The Apple example app's export
+  sheet gains a Count-in toggle.
+
+- **`AndroidPlaybackEngine.exportAudioFile(…, countIn = true)`** — the Android export can count in too, with the
+  count live playback plays from the range's start: the shared count-in click sequence on the metronome's transport,
+  with the score held for exactly the pre-roll's length of output (`CountInWire.totalSeconds` divided by the rate).
+  The clicks sound whatever the metronome toggle says. A start with no count-in exports as `countIn = false`, which
+  stays the default. `countIn` sits before `progress`: named arguments and a trailing `progress` lambda compile as
+  before, but a call passing `progress` as the fifth positional argument no longer does — name it.
+
+- **`FontMetrics.withProvider(_:operation:)`** — runs a computation with a font-metrics provider of its own: every
+  `FontMetrics.provider` read the task makes (layout, the draw program's encoding, a PDF writer's chrome, drawing)
+  answers from it, and the process-wide provider is never touched. Task-local, so child tasks inherit it and other
+  threads do not. It is how a host lays one computation out with other metrics than its views use.
+
+- **`fontMetricsTableProvider(_:)` is public** (SheetMusicPages) — the provider `installFontMetricsTable(_:)` installs,
+  made without installing it, for use inside `withProvider`. Its doc states what it answers for what the table lacks:
+  the stub for a missing face, the stub's per-character estimate for a missing character, and Edwin as the drawn face
+  of every text face that is not Bravura.
+
+- **`ScorePages.encodedDrawProgram()`** (SheetMusicPages) — the pages a host computed, as the encoded draw program the
+  same release's Kotlin `DrawProgramReader.decode` reads: every page in one payload, byte for byte what the Android
+  Reader's `nativeComputeLayout` returns for the same score and options when there are no page margins. It is how an
+  Android host lays out in its own Swift code — `ScorePages.compute` inside `FontMetrics.withProvider`, which a JNI
+  entry reading the library's process-wide metrics cannot see — and draws the result in Kotlin
+  (`drawScoreCommands`). The bytes are fixed when `compute` returns; encoding them measures nothing.
+
+- **`ScorePages.systemCommandRanges(onPage:)`** (SheetMusicPages) — each system's run of a page's draw commands, for a
+  host that draws one system at a time: in command order and covering the page's commands exactly, each run with the
+  system's index in `document.systems`, or `nil` for the title block and a box between systems. A run replayed alone
+  from the draw program's default state paints what the whole page paints there.
+
+- **(Apple) `TitleFrameLayerBuilder.build(frame:images:width:height:)` is public** (SheetMusicUI) — the layer tree of
+  a box's content, the title block with `LayoutDocument.titleImages` or a frame between systems with its own, for a
+  host that draws a box outside `ScoreView`. It resolves every outline at the call, in the face the current
+  `FontMetrics.provider` draws it in, so a tree built inside a `withProvider` scope keeps Edwin after the scope ends.
+
+- **(Apple) `SheetMusicFonts.portableMetricsTableURL` and `SheetMusicFonts.bravuraURL`** — `SheetMusicLayoutApple`
+  now bundles `sheet-music-styled.smft`, the portable table Android and Windows lay out with, so an Apple host can lay
+  a computation out exactly as those platforms do (`fontMetricsTableProvider` inside `withProvider`); `bravuraURL` is
+  the bundled `Bravura.otf`, the music-face bytes `ScorePDFFonts(smufl:…)` embeds. Either is `nil` when the host's
+  copy of the module's resource bundle lacks the file — a stale incremental embed, which a clean build of the host
+  replaces; a host missing the bundle altogether traps in `Bundle.module` on the first read instead.
+
+- **(Apple) Under a non-CoreText `FontMetrics.provider` the Apple renderers draw every text in the provider's
+  `renderingTextFont`** — Edwin under the portable table — so a layout the table measured is drawn in the faces it
+  was measured in. The renderers read whichever provider is current when they draw: one scoped with `withProvider`,
+  or one installed process-wide. That covers the styled texts (`ResolvedTextStyle`, which took each style's raw face),
+  the system-semibold labels (tuplet numbers, volta labels, the Canvas's measure numbers and staff names) and the
+  title block's system face, on the CALayer tree and the Canvas alike. CoreText output is unchanged.
+
+- **(Android) `Canvas.drawScoreCommands(commands, pxPerMM, fontProvider, originXPx, originYPx, clipPx, styledText)`**
+  — replays a draw program onto an `android.graphics.Canvas` outside Compose, such as one backed by a `Bitmap`:
+  document millimetre (x, y) lands at pixel (originXPx + x·pxPerMM, originYPx + y·pxPerMM), `clipPx` (canvas
+  pixels, before the origin shift) bounds the ink, and the canvas's save stack is restored on return. It is the
+  renderer `ScoreCanvas` draws with, and `ScorePdfExporter` now replays each PDF page through it, so there is one
+  code path. All but the first three parameters are defaulted.
+
+- **(Android) `StyledTextTypefaces` and `bundledStyledTextTypefaces(context)`** — real bold, italic and bold-italic
+  text faces (the bundled `Edwin-Bold.otf`, `Edwin-Italic.otf` and `Edwin-BdIta.otf`). Passed as
+  `drawScoreCommands(…, styledText = …)`, styled runs draw in them instead of synthesizing bold and italic from the
+  text face, which is what a layout measured with `sheet-music-styled.smft` needs. Without them the output is
+  unchanged.
+
+- **`RevoiceDrumStaff`, `RevoicePreview` and `EditIntent.revoiceDrumStaff(staff:assignments:policy:)` (wire index
+  95).** Re-voices a drum staff by pitch as one undo step: every note moves to the voice its pitch is assigned, so a
+  staff converts to one voice or to hands and feet (kicks and pedal hi-hat in voice 2). A bar already in the target form
+  is not touched, a rest-only voice beyond the target's count goes, and a bar that cannot be converted without changing
+  what plays is left as written. `RevoiceDrumStaff.preview(in:)` reports which bars it would rewrite and which it would
+  leave, so a host can tell the user. A mark that only draws (the open and closed hi-hat signs, say) goes to the lowest
+  part when a chord splits, where one that changes how a note plays goes to every part. The intent resolves to
+  nothing to apply when no bar needs re-voicing.
+
+### Fixed
+
+- **(Android) An audio export of a score with repeats or jumps no longer stops at the notated length.** The export
+  range stayed in notated ticks while its player runs the unrolled sequence; both ends are now mapped onto the
+  player's clock, the score's end to the unrolled total. A region that stops short of the score's end ends at its
+  mapped start plus its notated span, as the live A-B loop plays it, so a region spanning a repeat exports one pass.
+  Apple and Windows range exports still end at the first occurrence of the notated end, a known divergence for a
+  range spanning a repeat; whole-score exports agree.
+- **(Apple) An audio export of a score ending on D.C. / D.S. al Fine (or al Coda) no longer runs past the music with
+  silence.** The export mapped the notated end of the score onto the unrolled clock, which lies after the last
+  measure-play when the music stops at the Fine; it now ends where the last measure-play ends.
+- **(Apple) A SwiftySynth count-in waits out the whole count at any playback rate.** The metronome transport plays the
+  pre-roll at the playback rate, but `SwiftySynthBackend.play(afterCountInSeconds:)` held the score for the
+  sequence-clock length, so at half speed the music started half way through the count. The hold is now
+  `seconds / rate` of output, and `SynthBackend.play(afterCountInSeconds:)` documents `seconds` as sequence-clock
+  time.
+- **The count-in's length is measured at the tempo its clicks play.** The Apple engine's backend hold and the web
+  `countInSeconds` converted the pre-roll at the unrounded start tempo, while the count sequence plays at that tempo
+  rounded to a whole BPM — at 92.5 BPM the count lasts 2.581 s, and the music came in 14 ms behind it. Android's
+  `CountInWire.totalSeconds` and beat offsets carried the same error, though its live count hands over by tick and
+  reads the total only as a timeout. All of them now read `preRollSeconds(division:)`.
+- **(Apple) `PlaybackEngine.replaceScore(with:)` no longer rebuilds the synth when only a strip's own mix changed.** A
+  part's level, sound, mute, solo or name in the score — what a mixer's "save to score" writes — counted as a new
+  channel layout, so the swap re-prepared and the SwiftySynth backend reloaded its SoundFont, cutting playing music
+  for as long as that took (49–76 ms with GeneralUser GS). Such a swap now stays in place
+  (`PlaybackChannelLayout.hasSameChannels(as:)`), and the mixer takes each setting the score changed while keeping
+  the listener's others (`takingChangedDefaults`), so `.swappedInPlace` no longer means the mixer is untouched: a host
+  with its own layer of mixer settings re-applies it after either outcome. Strips added, removed or moved to another
+  channel, and a part that becomes a drum kit, still re-prepare. The Windows and Android engines decide as before.
+
+### Fixed
+
 - **A PDF whose engraving is outlined into paths is read as an image.** A purchased PDF re-saved through macOS
   Preview, or a print driver that converts text to outlines, carries staff lines, stems and filled notehead shapes
   but not one glyph, and the raster fallback only read pages with no vector content at all — so such a page was read

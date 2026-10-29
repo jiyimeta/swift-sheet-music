@@ -793,6 +793,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// layout. A layout change, an unprepared engine, or the AUMIDISynth path
     /// falls back to the same full graph preparation as `prepare(score:)`.
     ///
+    /// A change to a strip's own mix alone — the level, sound, mute or solo the score starts it from, or its name —
+    /// is not a layout change: the synth stays, and the mixer takes each setting the score changed while keeping the
+    /// listener's others (`takingChangedDefaults`).
+    ///
     /// Either way the transport carries over, as it does across `restartGraphPreservingState()`: a playing engine
     /// keeps playing, a paused one stays paused, and the cursor and the loop are found again in the new score at the
     /// same measure and offset (`PlaybackMeasurePosition`), kept inside it when the edit shortened the score. The swap
@@ -809,9 +813,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     }
 
     private func swapScore(with prepared: PreparedPlayback) throws -> ScoreReplacementOutcome {
+        // A score that changed only its strips' own mix keeps the synth: a mixer's "save to score" used to read as a
+        // new layout and reload the SoundFont, cutting the music for as long as that took.
         guard usingBackend,
               loadedScore != nil,
-              loadedChannelLayout == prepared.channelLayout
+              let previousLayout = loadedChannelLayout,
+              previousLayout.hasSameChannels(as: prepared.channelLayout)
         else {
             try prepare(
                 score: prepared.score,
@@ -834,6 +841,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             score: prepared.score,
             derivation: prepared.derivation,
             renderedMidi: prepared.renderedMidi,
+        )
+        takeChangedMixDefaults(
+            from: previousLayout.mixerChannels,
+            to: prepared.channelLayout.mixerChannels,
         )
         return .swappedInPlace
     }
@@ -1891,22 +1902,24 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         startCursorTimer()
     }
 
-    /// A count-in as a backend plays it (`startBackendCountIn`, and an export's): the metronome-only sequence that
-    /// opens with the count, how far its clock runs ahead of the score's, and the count's own length in seconds.
+    /// A count-in as a backend plays it — live (`startBackendCountIn`) or in an export's offline instance: the
+    /// metronome-only sequence that opens with the count, how far its clock runs ahead of the score's, and the count's
+    /// own length in seconds. An export takes the last two from `ExportCountIn` (`exportCountIn`), which applies the
+    /// rules `backendCountIn` does, so a file's count-in is the one the user hears.
     struct BackendCountIn {
         let metronomeSequence: MidiFile
         let metronomeOffsetSeconds: TimeInterval
-        /// The pre-roll at the start position's tempo — what `SynthBackend.play(afterCountInSeconds:)` takes.
+        /// The pre-roll on the sequence clock — what `SynthBackend.play(afterCountInSeconds:)` takes.
         let seconds: TimeInterval
     }
 
-    /// The count-in `plan` into notated tick `baseTick`, for the backend path. Shared by live playback and the export,
-    /// so a file's count-in is the one the user hears.
+    /// The count-in `plan` into notated tick `baseTick`, for the live backend path.
     static func backendCountIn(
         plan: CountInBeats.Result, rendered: MidiFile, metronomeBeats: [MetronomeBeat], baseTick: Int,
         timeline: PlaybackTimeline, unrolledTimeMap: UnrolledTimeMap,
     ) -> BackendCountIn {
-        let seconds = Double(plan.preRollTicks) * (60.0 / plan.quarterBpm) / Double(timeline.division)
+        // On the sequence clock, at the rounded tempo the count sequence is seeded with.
+        let seconds = plan.preRollSeconds(division: timeline.division)
         return BackendCountIn(
             metronomeSequence: PreRollSequenceAssembler.metronomeOnly(
                 rendered: rendered, metronomeBeats: metronomeBeats,

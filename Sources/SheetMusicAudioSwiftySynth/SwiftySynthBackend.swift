@@ -477,11 +477,13 @@ public final class SwiftySynthBackend: SynthBackend {
         }
     }
 
-    /// `seconds` are the metronome SMF's, and the score is held for as long as the click takes to count them. Under a
-    /// warp the count runs at the speed of the measure it counts into, so it lasts `seconds / speed`, and keeps that
-    /// speed to its end, a table swap during it applying from the body on. Without a warp it counts at the user's
-    /// rate and lasts `seconds / rate`. The rule is `TransportSpeedTable.countIn(seconds:userSpeed:bodyStart:)`, which
-    /// an export's length reads too, from the same onset.
+    /// `seconds` are the metronome SMF's — the sequence clock — and the score is held for as long as the click takes to
+    /// count them. Under a warp the count runs at the speed of the measure it counts into, so it lasts
+    /// `seconds / speed`, and keeps that speed to its end, a table swap during it applying from the body on. Without a
+    /// warp it counts at the user's rate and lasts `seconds / rate` — at half speed a 2 s count lasts 4 s, and holding
+    /// only 2 s would start the music half way through it. The rule is
+    /// `TransportSpeedTable.countIn(seconds:userSpeed:bodyStart:)`, which an export's length reads too, from the same
+    /// onset.
     public func play(afterCountInSeconds seconds: TimeInterval) {
         let sampleRate = sampleRate
         let lastPark = lastPark

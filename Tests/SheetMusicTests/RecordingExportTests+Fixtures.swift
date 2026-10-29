@@ -103,7 +103,7 @@
                 try await engine.exportAudioFile(
                     to: url, score: score,
                     format: .wav(PCMOptions(sampleRate: sampleRate, bitDepth: .float32, channels: .stereo)),
-                    range: range, includesCountIn: countIn,
+                    range: range, countIn: countIn,
                 )
                 let file = try AVAudioFile(forReading: url)
                 let buffer = try #require(AVAudioPCMBuffer(

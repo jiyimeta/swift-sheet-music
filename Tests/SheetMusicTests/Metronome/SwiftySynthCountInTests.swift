@@ -79,10 +79,13 @@
                 ///   - metronomeMuted: the host's metronome toggle. `true` is the case that matters —
                 ///     a count-in is asked for explicitly and has to sound anyway.
                 ///   - metronomeVolume: set to 0 to silence the click and measure the score alone.
+                ///   - rate: the playback rate, set before anything loads — it persists across loads, as the
+                ///     engine relies on.
                 private func envelope(
                     preRollSeconds: TimeInterval,
                     metronomeMuted: Bool,
                     metronomeVolume: Float? = nil,
+                    rate: Float = 1,
                     clickSoundfont: URL?,
                     chunks: Int,
                 ) async throws -> [Float] {
@@ -93,6 +96,7 @@
                         drumChannels: [],
                     )
                     try await awaitReady(backend)
+                    backend.setRate(rate)
 
                     let scoreURL = try #require(
                         TestResources.url(forResource: "midi01", withExtension: "mscx"),
@@ -182,6 +186,18 @@
                     let message = "the body must not start before the count ends: \(peaks)"
                     #expect((peaks[0 ... 3].max() ?? 1) < 0.0001, Comment(rawValue: message))
                     #expect((peaks[6 ... 9].min() ?? 0) > 0.001, Comment(rawValue: message))
+                }
+
+                @Test("the hold scales with the playback rate", .enabled(if: swiftySynthGMSoundfontAvailable))
+                func theHoldScalesWithThePlaybackRate() async throws {
+                    // 0.5 s of pre-roll on the sequence clock is 1.0 s of output at half speed.
+                    let peaks = try await envelope(
+                        preRollSeconds: 0.5, metronomeMuted: true, metronomeVolume: 0, rate: 0.5,
+                        clickSoundfont: nil, chunks: 15,
+                    )
+                    let message = "the body must wait out the count at the playback rate: \(peaks)"
+                    #expect((peaks[0 ... 8].max() ?? 1) < 0.0001, Comment(rawValue: message))
+                    #expect((peaks[11 ... 14].min() ?? 0) > 0.001, Comment(rawValue: message))
                 }
             }
         }

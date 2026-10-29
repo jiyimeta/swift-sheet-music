@@ -236,7 +236,7 @@
             private func export(countIn: Bool = false) async throws -> (offline: RecordingBackend, frames: Int64) {
                 let url = AudioExportProbe.temporaryWAV()
                 defer { try? FileManager.default.removeItem(at: url) }
-                try await engine.exportAudioFile(to: url, score: score, format: .wav(), includesCountIn: countIn)
+                try await engine.exportAudioFile(to: url, score: score, format: .wav(), countIn: countIn)
                 return try (#require(live.offlineInstance), AVAudioFile(forReading: url).length)
             }
 

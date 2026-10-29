@@ -124,12 +124,16 @@ private fun DrawScope.drawPage(
 /**
  * Paint one command run. Split out of [drawPage] so a band ([ScoreBand]) — a self-contained slice of a
  * page's commands, still in page coordinates — can be drawn by the same renderer under a translate.
+ *
+ * [styled] draws bold / italic text runs in real faces instead of synthesizing them from [text]; see
+ * [chooseTextFace] for when each is right.
  */
 internal fun DrawScope.drawCommands(
     commands: List<DrawCommand>,
     pxPerMM: Float,
     smufl: android.graphics.Typeface,
     text: android.graphics.Typeface,
+    styled: StyledTextTypefaces? = null,
 ) {
     val path = Path()
     var strokeStarted = false
@@ -158,20 +162,22 @@ internal fun DrawScope.drawCommands(
     }
 
     /**
-     * Apply the active style to [glyphPaint] before a text draw.
+     * Set [glyphPaint]'s face and synthesis for a text run in [fontId] under the active style.
      *
-     * `isFakeBoldText` rather than a bold typeface: this library ships Edwin as a single Roman face,
-     * and `FontMetricsBuilder` measures its `Edwin-Bold` record with the same synthesis — so what
-     * the metrics table reports is what lands on the canvas. A rehearsal mark's frame is sized from
-     * that measurement, so the two have to agree.
-     *
-     * The `SEMIBOLD` bit is ignored and draws regular: no semibold face ships here, and the
-     * portable metrics provider measured the text in regular.
+     * Without [styled], bold is `isFakeBoldText` and italic a skew of the text face, because
+     * `FontMetricsBuilder` measures its `Edwin-Bold` / `Edwin-Italic` records with the same synthesis
+     * — so what the metrics table reports is what lands on the canvas. A rehearsal mark's frame is
+     * sized from that measurement, so the two have to agree. With [styled], the run draws in its real
+     * face, which is what the styled table measures. A music-font run never takes a text face.
      */
-    fun applyTextStyle() {
-        glyphPaint.isFakeBoldText = (textStyleFlags and DrawCommand.TextStyleFlag.BOLD) != 0u.toUByte()
-        glyphPaint.textSkewX =
-            if ((textStyleFlags and DrawCommand.TextStyleFlag.ITALIC) != 0u.toUByte()) ITALIC_SKEW else 0f
+    fun applyTextStyle(fontId: FontID) {
+        val faces = styled.takeIf { fontId != FontID.SMUFL }
+        val choice = chooseTextFace(
+            textStyleFlags, typefaceFor(fontId), faces?.bold, faces?.italic, faces?.boldItalic,
+        )
+        glyphPaint.typeface = choice.face
+        glyphPaint.isFakeBoldText = choice.fakeBold
+        glyphPaint.textSkewX = if (choice.skewItalic) ITALIC_SKEW else 0f
     }
     for (cmd in commands) {
         when (cmd) {
@@ -237,10 +243,9 @@ internal fun DrawScope.drawCommands(
                 }
             }
             is DrawCommand.Text -> {
-                glyphPaint.typeface = typefaceFor(cmd.fontId)
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
-                applyTextStyle()
+                applyTextStyle(cmd.fontId)
                 drawIntoCanvas { canvas ->
                     canvas.nativeCanvas.drawText(
                         cmd.text, cmd.x.toFloat() * pxPerMM, cmd.y.toFloat() * pxPerMM, glyphPaint,

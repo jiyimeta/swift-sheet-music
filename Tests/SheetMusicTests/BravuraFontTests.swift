@@ -1,5 +1,6 @@
 #if os(macOS)
     import CoreText
+    import Foundation
     @testable import SheetMusicLayout
     @testable import SheetMusicLayoutApple
     @testable import SheetMusicUI
@@ -22,6 +23,15 @@
                 resolvedFamily == "Bravura",
                 "CoreText resolved '\(resolvedFamily)' instead of 'Bravura' — glyphs will render as tofu",
             )
+        }
+
+        /// The file `register` registers, handed to a host for the bytes a Swift-written PDF embeds as its music face.
+        @available(macOS 15.0, *)
+        @Test("the bundle lookup finds the Bravura file")
+        func theBundleFindsBravura() throws {
+            let url = try #require(SheetMusicFonts.bravuraURL)
+            #expect(url.lastPathComponent == "Bravura.otf")
+            #expect(try !Data(contentsOf: url).isEmpty)
         }
     }
 #endif

@@ -7,12 +7,9 @@ import os
 /// Registration is process-scoped — it does not affect system font caches
 /// outside the host application.
 ///
-/// The font is located via a cascade of strategies so it works in all
-/// three typical load contexts:
-///   1. SwiftPM / `swift run` / `swift test` — uses `Bundle.module`.
-///   2. Xcode-built host app consuming the SwiftPM library — finds the
-///      embedded `SheetMusicUI_SheetMusicUI.bundle` inside the app.
-///   3. Xcode Preview runner — scans every loaded Bundle for the font.
+/// The font is `SheetMusicFonts.bravuraURL`, located through `BundledResource`'s
+/// cascade of bundles so it works in SwiftPM, in an Xcode-built host app and
+/// in the Xcode Preview runner alike.
 ///
 /// When CoreText resolves "Bravura" to the fallback system font (because
 /// registration silently failed), SwiftUI displays tofu boxes in place of
@@ -29,7 +26,7 @@ public enum BravuraFont {
             category: "BravuraFont",
         )
 
-        if let url = locateBravuraURL(logger: logger) {
+        if let url = SheetMusicFonts.bravuraURL {
             var error: Unmanaged<CFError>?
             let ok = CTFontManagerRegisterFontsForURL(
                 url as CFURL, .process, &error,
@@ -55,57 +52,4 @@ public enum BravuraFont {
         }
         return false
     }()
-
-    /// Walk every bundle strategy until Bravura.otf is located.
-    ///
-    /// The `.copy("Fonts/Resources")` resource rule in Package.swift
-    /// preserves the last path component as a subdirectory inside the
-    /// bundle — so in Xcode-built host apps the font ends up at
-    /// `bundle/Contents/Resources/Resources/Bravura.otf`. Plain
-    /// `url(forResource:withExtension:)` only scans the resource root,
-    /// hence the explicit `subdirectory: "Resources"` fallback.
-    private static func locateBravuraURL(logger: Logger) -> URL? {
-        let candidates: [Bundle] = [
-            Bundle.module,
-            Bundle(for: BundleAnchor.self),
-        ] + Bundle.allBundles + Bundle.allFrameworks
-
-        for bundle in candidates {
-            if let url = find(in: bundle) { return url }
-            // Host apps may also embed the SheetMusicUI resource bundle
-            // as a sibling .bundle; open it explicitly and search inside.
-            if let nestedURL = bundle.url(
-                forResource: "swift-sheet-music_SheetMusicLayoutApple",
-                withExtension: "bundle",
-            ),
-                let nested = Bundle(url: nestedURL),
-                let url = find(in: nested)
-            {
-                return url
-            }
-        }
-        logger.debug("Bravura.otf not located via any bundle strategy")
-        return nil
-    }
-
-    private static func find(in bundle: Bundle) -> URL? {
-        if let url = bundle.url(
-            forResource: "Bravura", withExtension: "otf",
-        ) {
-            return url
-        }
-        if let url = bundle.url(
-            forResource: "Bravura", withExtension: "otf",
-            subdirectory: "Resources",
-        ) {
-            return url
-        }
-        return nil
-    }
 }
-
-/// Private anchor used by `Bundle(for:)` to locate the binary that
-/// contains the SheetMusicUI code (and, by convention, its resource
-/// bundle). Not exposed — existence is an implementation detail.
-@available(macOS 15.0, *)
-private final class BundleAnchor {}

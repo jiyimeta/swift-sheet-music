@@ -30,8 +30,9 @@ extension PlaybackEngine {
     /// to be dropped until `isReady`. The engine is left in manual-rendering
     /// mode and started, so the caller can `start()` and pull frames.
     ///
-    /// The instance gets the live recordings and alignment as the snapshot holds them, and with `includesCountIn` the
-    /// count-in live playback plays into `startTick` (`backendCountIn`), started as `startBackendCountIn` starts it.
+    /// The instance gets the live recordings and alignment as the snapshot holds them. With `countIn`, `start` counts
+    /// in the way `startBackendCountIn` does live: the count rides the metronome transport ahead of the body's own
+    /// clicks, and the score transport is held for the pre-roll, at the speed of the measure it counts into.
     static func buildBackendExportPipeline(
         score: Score,
         snapshot: ExportEngineSnapshot,
@@ -39,7 +40,7 @@ extension PlaybackEngine {
         timeline: PlaybackTimeline,
         unrolledTimeMap: UnrolledTimeMap,
         startTick: Int,
-        includesCountIn: Bool,
+        countIn: ExportCountIn?,
         backend: any SynthBackend,
     ) async throws -> ExportPipeline {
         let engine = AVAudioEngine()
@@ -72,14 +73,18 @@ extension PlaybackEngine {
             snapshot: snapshot, timeline: timeline, unrolledTimeMap: unrolledTimeMap,
         )
         loadRecordings(backend: backend, snapshot: snapshot)
-        let countIn = includesCountIn
-            ? CountInBeats.compute(score: score, startCursor: timeline.frame(atTick: startTick)?.cursor).map {
-                backendCountIn(
-                    plan: $0, rendered: rendered, metronomeBeats: snapshot.metronomeBeats, baseTick: startTick,
-                    timeline: timeline, unrolledTimeMap: unrolledTimeMap,
-                )
-            }
-            : nil
+        // The count's clicks fill `[0, preRollTicks)` of the metronome sequence, ahead of the body's own beats —
+        // which stay in it, muted or not as the toggle says, exactly as live.
+        let countInStart = countIn.map { count in
+            BackendCountIn(
+                metronomeSequence: PreRollSequenceAssembler.metronomeOnly(
+                    rendered: rendered, metronomeBeats: snapshot.metronomeBeats,
+                    plan: count.plan, baseTick: count.baseTick, includingPreRollClicks: true,
+                ),
+                metronomeOffsetSeconds: count.metronomeOffsetSeconds,
+                seconds: count.preRollSeconds,
+            )
+        }
 
         try engine.enableManualRenderingMode(
             .offline,
@@ -90,11 +95,11 @@ extension PlaybackEngine {
 
         return ExportPipeline(
             engine: engine,
-            countInSeconds: countIn?.seconds,
+            countInSeconds: countInStart?.seconds,
             followsAlignment: backend.canPlayRecordings,
             start: {
                 startTransport(
-                    backend: backend, snapshot: snapshot, plan: plan, startTick: startTick, countIn: countIn,
+                    backend: backend, snapshot: snapshot, plan: plan, startTick: startTick, countIn: countInStart,
                 )
             },
             teardown: {
@@ -110,7 +115,9 @@ extension PlaybackEngine {
     /// across them (rate, tuning). Rate + tuning go FIRST: both are contracted
     /// to persist across transport operations, and `loadSequence` / `seek`
     /// re-assert whatever the backend has stored — a fresh synth resets them.
-    /// Returns the rendered score, whose tempo map a count-in's metronome sequence copies.
+    ///
+    /// Returns the channel-remapped render both sequences were built from, so a count-in can build its metronome
+    /// sequence from the same one. The metronome's mute is left to `start`, after any count-in load.
     private static func loadTransports(
         backend: any SynthBackend,
         score: Score,
@@ -147,11 +154,11 @@ extension PlaybackEngine {
             offsetSeconds: 0,
         )
         backend.setMetronomeVolume(snapshot.metronomeVolume)
-        backend.setMetronomeMuted(!snapshot.metronomeEnabled)
         return rendered
     }
 
-    /// Position the offline transport at `startTick` and start it — through `countIn` first when there is one.
+    /// Position the offline transport at `startTick` and start it — through `countIn` first when there is one — in the
+    /// order `startBackendCountIn` starts it live: the seek, the count's metronome load, the mute, the held play.
     private static func startTransport(
         backend: any SynthBackend, snapshot: ExportEngineSnapshot, plan: LiveChannelPlan, startTick: Int,
         countIn: BackendCountIn?,
@@ -165,6 +172,8 @@ extension PlaybackEngine {
             // click, as `startBackendCountIn` does.
             backend.loadMetronomeSequence(countIn.metronomeSequence, offsetSeconds: countIn.metronomeOffsetSeconds)
         }
+        // After any count-in load, as live.
+        backend.setMetronomeMuted(!snapshot.metronomeEnabled)
         applyMixerSnapshotToBackend(
             backend: backend,
             channels: snapshot.mixerChannels,
