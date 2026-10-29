@@ -15,6 +15,7 @@ and this project adheres to
   pickup in 4/4), so a host can turn its own alignment into a time warp over the transport clock.
 - **`PlaybackTimeWarp`.** A host can stretch the score's playback to an external timing: a list of spans on the
   transport's seconds, each saying how long it must last at 100 % rate, with the sequencer speed following per span.
+  A span stretched to under 0.02 or over 50 times the notated speed is rejected as `.invalidSpan`.
 - **`RecordingPCMCache` and `MappedRecording`.** Recordings are decoded once into an Int16 stereo PCM cache file that is
   memory-mapped for playback, so long recordings cost address space rather than resident memory.
 - **Tempo and transposition keep a recording's pitch and timing (`RecordingStretcher`, `RecordingStretcherFactory`,

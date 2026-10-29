@@ -137,6 +137,28 @@ struct TransportSpeedTableTests {
     }
 
     @Test
+    func `a span whose stretch is outside 0.02 to 50 throws invalidSpan, and the bounds are accepted`() throws {
+        // The stretch is (end − start) / duration: 1 s lasting 51 s is 1/51, 51 s lasting 1 s is 51.
+        let bad: [Span] = [
+            Span(start: 0, end: 1, duration: 51),
+            Span(start: 0, end: 51, duration: 1),
+            Span(start: 0, end: 1, duration: 1e-6),
+            Span(start: 0, end: 1, duration: 1e6),
+        ]
+        for span in bad {
+            #expect(throws: PlaybackTimeWarpError.invalidSpan(index: 1)) {
+                try PlaybackTimeWarp(spans: [Span(start: -2, end: -1, duration: 1), span])
+            }
+        }
+        let bounds = try PlaybackTimeWarp(spans: [
+            Span(start: 0, end: 1, duration: 50), Span(start: 1, end: 51, duration: 1),
+        ])
+        let table = TransportSpeedTable(warp: bounds)
+        #expect(table.stretch(atTransport: 0.5) == 0.02)
+        #expect(table.stretch(atTransport: 2) == 50)
+    }
+
+    @Test
     func `a count-in without a span lasts its own seconds at the user's rate`() {
         // The click counts at the user's rate, so the score is held as long as the count takes at that rate.
         let slow = TransportSpeedTable(warp: nil).countIn(seconds: 2, userSpeed: 0.5, bodyStart: 4)
