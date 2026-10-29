@@ -477,6 +477,7 @@ if isWasm {
                 "SheetMusicAudio",
                 .product(name: "SwiftySynth", package: "swiftysynth"),
                 "SheetMusicAudioSwiftySynth",
+                "SheetMusicAudioSignalsmith",
                 "SheetMusicPDF",
                 "SheetMusicOMRModel",
                 .product(name: "Wirelet", package: "swift-wirelet"),
@@ -501,6 +502,9 @@ if !isAppleFree {
         // Pure-Swift, MIT SoundFont2 playback backend (SwiftySynth). Works on
         // iOS + macOS, App-Store clean — the default stealing-free synth.
         .library(name: "SheetMusicAudioSwiftySynth", targets: ["SheetMusicAudioSwiftySynth"]),
+        // `RecordingStretcherFactory.signalsmith`: tempo and transposition for recordings that keep their pitch and
+        // timing. Its own product so a host that plays no recording links none of the stretcher.
+        .library(name: "SheetMusicAudioSignalsmith", targets: ["SheetMusicAudioSignalsmith"]),
         // Separately linkable so only a consumer that wants scanned-PDF reading carries
         // the model's ~1.1MB. SheetMusicPDF itself never depends on it.
         .library(name: "SheetMusicOMRModel", targets: ["SheetMusicOMRModel"]),
@@ -549,6 +553,28 @@ if !isAppleFree {
                 "SheetMusicAudioCore",
                 "SheetMusicAudioApple",
             ],
+        ),
+        // Signalsmith Stretch (MIT) and the FFT it uses, header-only C++ vendored with a C shim
+        // (`Sources/CSignalsmithStretch/VENDORED.md`). Only `SheetMusicAudioSignalsmith` imports it; everything else
+        // sees `RecordingStretcher`. No optimization flag of its own: `unsafeFlags` would stop a host from resolving
+        // this package by version, so a Debug build runs the stretcher unoptimized.
+        .target(
+            name: "CSignalsmithStretch",
+            path: "Sources/CSignalsmithStretch",
+            exclude: [
+                "VENDORED.md",
+                "signalsmith-stretch/LICENSE.txt",
+                "signalsmith-linear/LICENSE.txt",
+            ],
+            cxxSettings: [
+                .define("SIGNALSMITH_USE_ACCELERATE"),
+                .headerSearchPath("."),
+            ],
+            linkerSettings: [.linkedFramework("Accelerate")],
+        ),
+        .target(
+            name: "SheetMusicAudioSignalsmith",
+            dependencies: ["SheetMusicAudioCore", "CSignalsmithStretch"],
         ),
         .target(
             name: "SheetMusicOMRModel",
