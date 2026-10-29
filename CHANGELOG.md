@@ -13,6 +13,10 @@ and this project adheres to
   `setPlaybackAlignment(warp:segments:)`, `RecordingTrackRender`).** `SwiftySynthBackend` mixes mapped recordings into
   its own render, read at the position its transport is at, so they stay locked to the synthesized parts and the click;
   an alignment change applies while playing, from the next synthesizer block, without stopping or seeking it.
+- **Tempo and transposition keep a recording's pitch and timing (`RecordingStretcher`, `RecordingStretcherFactory`,
+  `SwiftySynthBackend(sampleRate:stretcherFactory:)`, the `SheetMusicAudioSignalsmith` product).** Away from 100 %,
+  or with a track transposed, a recording is read through a time stretcher instead of being sped up or slowed down
+  with its pitch: Signalsmith Stretch (MIT), behind a protocol so another stretcher can replace it.
 - **`RecordingPCMCache` and `MappedRecording`.** Recordings are decoded once into an Int16 stereo PCM cache file that is
   memory-mapped for playback, so long recordings cost address space rather than resident memory.
 - **`PlaybackTimeWarp`.** A host can stretch the score's playback to an external timing: a list of spans on the

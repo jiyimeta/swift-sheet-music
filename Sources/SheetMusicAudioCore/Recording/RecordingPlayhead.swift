@@ -16,6 +16,11 @@ package struct RecordingPlayhead {
 
     package init() {}
 
+    /// Nothing sounds and nothing is fading: a frame rendered with a nil target is silence.
+    package var isSilent: Bool {
+        !hasSource && fadeFramesRemaining == 0
+    }
+
     /// One output frame: `target` is where the recording should be read now (`nil` = silence) and `step` how far the
     /// read advances per output frame. A target more than `jumpToleranceFrames` from the continuation starts a
     /// `fadeFrames`-long linear crossfade from the continuation, which keeps advancing under the fade. A jump arriving

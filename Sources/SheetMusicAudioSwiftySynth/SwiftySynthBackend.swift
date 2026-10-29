@@ -89,7 +89,8 @@ public final class SwiftySynthBackend: SynthBackend {
 
     // Persisted transport/tuning state, re-applied whenever the synth or
     // sequence is rebuilt (both reset SwiftySynth's channel/speed state).
-    private var rate: Float = 1
+    // `rate` is internal so `SwiftySynthBackend+Recordings.swift` can tell which groups need a stretcher.
+    var rate: Float = 1
     private var tuningCents: Double = 0
     private var transposeSemitones = 0
 
@@ -136,8 +137,17 @@ public final class SwiftySynthBackend: SynthBackend {
         sourceNode
     }
 
-    public init(sampleRate: Double = 44100) {
+    /// What makes the stretchers recordings are read through when the rate is not 100 % or a track is transposed. Nil:
+    /// recordings are read directly at any rate (varispeed) and their transposition is ignored.
+    let stretcherFactory: RecordingStretcherFactory?
+    /// The main actor's copy of `Shared.alignment.groups`' layout and pairs (`SwiftySynthBackend+Recordings.swift`).
+    var recordingGroupLayout: [RecordingGroupLayout] = []
+    /// The input capacity of the stretch scratch handed to the render thread, 0 before the first.
+    var stretchScratchCapacity = 0
+
+    public init(sampleRate: Double = 44100, stretcherFactory: RecordingStretcherFactory? = nil) {
         self.sampleRate = sampleRate
+        self.stretcherFactory = stretcherFactory
         sourceNode = Self.makeSourceNode(lock: lock, sampleRate: sampleRate)
     }
 
@@ -380,13 +390,19 @@ public final class SwiftySynthBackend: SynthBackend {
 
     /// Under a warp the speed written here is the unstretched one, but it never reaches a block: the sequencer applies
     /// a speed only at a block start, and the render sets the stretched one there first.
+    ///
+    /// A rate away from 100 % makes the stretcher pairs the recordings now need, here on the main actor; they are
+    /// kept when the rate comes back, so a tempo drag makes them once.
     public func setRate(_ rate: Float) {
         self.rate = rate
         let speed = max(0.01, Double(rate))
+        let stretchers = stretchersForRate()
+        var scratch = stretchers.scratch
         lock.withLockUnchecked { shared in
             shared.alignment.userSpeed = speed
             shared.sequencer?.speed = speed
             shared.metronomeSequencer?.speed = speed
+            Self.installStretchers(stretchers.pairs, scratch: &scratch, into: &shared)
         }
     }
 
@@ -642,7 +658,7 @@ public final class SwiftySynthBackend: SynthBackend {
     /// Cheap to make: `init` only builds the `AVAudioSourceNode`; the SoundFont
     /// isn't touched until `prepare`.
     public func makeOfflineInstance(sampleRate: Double) -> (any SynthBackend)? {
-        SwiftySynthBackend(sampleRate: sampleRate)
+        SwiftySynthBackend(sampleRate: sampleRate, stretcherFactory: stretcherFactory)
     }
 
     public func teardown() {

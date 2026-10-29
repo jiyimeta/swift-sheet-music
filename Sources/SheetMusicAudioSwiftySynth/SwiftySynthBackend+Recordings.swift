@@ -27,6 +27,11 @@ struct RenderedRecording {
 /// actor and swapped in whole, so the render thread allocates nothing.
 struct PlaybackAlignmentState {
     var tracks: [RenderedRecording] = []
+    /// The tracks grouped by transposition, each with the stretcher pair it is read through when the rate is not 100 %
+    /// or its transposition is not 0 (`SwiftySynthBackend+Stretch.swift`).
+    var groups: [RecordingStretchGroup] = []
+    /// The stretched reading's buffers, sized on the main actor for every pair in `groups`.
+    var stretchScratch: StretchScratch?
     var speedTable = TransportSpeedTable(warp: nil)
     var schedule = RecordingSchedule(segments: [])
     /// Whether `speedTable` holds a span; a nil or empty warp is the identity.
@@ -55,6 +60,18 @@ struct PlaybackAlignmentState {
         for index in tracks.indices {
             tracks[index].playhead.reset()
         }
+        for index in groups.indices {
+            groups[index].state.silence()
+        }
+    }
+
+    /// Whether group `index` is read through its stretcher now: it has a pair, the rate or its transposition needs one,
+    /// and a seek at this rate fits the scratch (past the sized rate it is read directly).
+    func readsThroughStretcher(group index: Int) -> Bool {
+        guard let pair = groups[index].pair, let stretchScratch,
+              userSpeed != 1 || groups[index].transposeSemitones != 0
+        else { return false }
+        return pair.first.seekLength(rate: userSpeed) <= stretchScratch.inputCapacity
     }
 
     /// The exact transport second of the next body frame. `MidiFileSequencer.position` advances once per block, at
@@ -135,8 +152,9 @@ extension SwiftySynthBackend {
 
     /// Add every recording to one chunk of the body, whose first frame is at transport second `transportStart` and
     /// whose frames each advance the transport by `transportPerFrame`. The speed table turns each frame's transport
-    /// second into a warped one, where the schedule says what each track plays; every track is read directly
-    /// (varispeed). Allocation-free.
+    /// second into a warped one, where the schedule says what each track plays. A group at 100 % and no transposition
+    /// is read directly, track by track; any other is read through its stretcher. A switch between the two is a jump:
+    /// the reading switched from fades out while the other fades in. Allocation-free.
     nonisolated static func mixRecordings(
         into left: UnsafeMutableBufferPointer<Float>,
         _ right: UnsafeMutableBufferPointer<Float>,
@@ -151,12 +169,53 @@ extension SwiftySynthBackend {
             frames: left.count, table: alignment.speedTable,
         )
         let fadeFrames = max(1, Int((recordingFadeSeconds * sampleRate).rounded()))
-        for index in alignment.tracks.indices {
-            mixTrack(
-                &alignment.tracks[index], into: left, right, clock: clock,
-                table: alignment.speedTable, schedule: alignment.schedule, fadeFrames: fadeFrames,
+        for group in alignment.groups.indices {
+            let stretched = alignment.readsThroughStretcher(group: group)
+            for index in alignment.groups[group].trackIndices {
+                if stretched {
+                    fadeOutTrack(
+                        &alignment.tracks[index], into: left, right, clock: clock,
+                        table: alignment.speedTable, fadeFrames: fadeFrames,
+                    )
+                } else {
+                    mixTrack(
+                        &alignment.tracks[index], into: left, right, clock: clock,
+                        table: alignment.speedTable, schedule: alignment.schedule, fadeFrames: fadeFrames,
+                    )
+                }
+            }
+            mixStretchGroup(
+                group, playing: stretched, into: left, right, clock: clock,
+                sampleRate: sampleRate, fadeFrames: fadeFrames, alignment: &alignment,
             )
         }
+    }
+
+    /// A track whose group is read through its stretcher: its direct reading fades out from where it was, then is
+    /// skipped.
+    nonisolated static func fadeOutTrack(
+        _ track: inout RenderedRecording,
+        into left: UnsafeMutableBufferPointer<Float>,
+        _ right: UnsafeMutableBufferPointer<Float>,
+        clock: ChunkClock,
+        table: TransportSpeedTable,
+        fadeFrames: Int,
+    ) {
+        guard !track.playhead.isSilent else { return }
+        let frames = track.frames
+        let rate = frames.sampleRate
+        let gain = track.gain
+        var playhead = track.playhead
+        var output = clock.outputSeconds(atFrame: 0, table: table)
+        for frame in 0 ..< left.count where !playhead.isSilent {
+            let next = clock.outputSeconds(atFrame: frame + 1, table: table)
+            let step = (next - output) * rate
+            let sample = playhead.render(target: nil, step: step, from: frames, fadeFrames: fadeFrames)
+            left[frame] += gain * sample.left
+            right[frame] += gain * sample.right
+            output = next
+        }
+        track.playhead = playhead
     }
 
     /// One track over one chunk: per frame, the warped second → the track file's second (nil = silence) → its frame,
@@ -197,12 +256,30 @@ extension SwiftySynthBackend {
     }
 
     /// Replaces the recordings in one lock section. A track whose `id` was already playing keeps its playhead, so a new
-    /// gain neither fades nor jumps it. The previous array is released after the lock, never on the render thread.
+    /// gain neither fades nor jumps it; a group whose transposition was already playing keeps its stretchers and where
+    /// they are, and a group whose transposition changed carries on from its first track's old group and crossfades to
+    /// a retuned stretcher. Stretchers a group now needs are made here, on the main actor. The previous arrays,
+    /// stretchers and scratch are released after the lock, never on the render thread.
     public func setRecordingTracks(_ tracks: [RecordingTrackRender]) {
         var incoming = tracks.map { track in
             RenderedRecording(
                 id: track.id, recording: track.recording, frames: track.recording.frames,
                 offsetSeconds: track.offsetSeconds, gain: track.gain,
+            )
+        }
+        let plan = RecordingGroupPlan.make(tracks: tracks, previous: recordingGroupLayout)
+        var layouts = plan.map { group in
+            RecordingGroupLayout(
+                transposeSemitones: group.transposeSemitones,
+                trackIDs: group.trackIndices.map { tracks[$0].id },
+                pair: group.continues.flatMap { recordingGroupLayout[$0].pair },
+            )
+        }
+        var scratch = stretchScratchIfNeeded(capacity: makeMissingPairs(in: &layouts))
+        var groups = plan.indices.map { index in
+            RecordingStretchGroup(
+                transposeSemitones: plan[index].transposeSemitones, trackIndices: plan[index].trackIndices,
+                pair: layouts[index].pair,
             )
         }
         lock.withLockUnchecked { shared in
@@ -212,8 +289,72 @@ extension SwiftySynthBackend {
                     incoming[index].playhead = playing.playhead
                 }
             }
+            for index in groups.indices {
+                guard let previous = plan[index].continues, shared.alignment.groups.indices.contains(previous)
+                else { continue }
+                groups[index].state = shared.alignment.groups[previous].state
+                if shared.alignment.groups[previous].transposeSemitones != groups[index].transposeSemitones {
+                    groups[index].state.needsRetune = true
+                }
+            }
             swap(&shared.alignment.tracks, &incoming)
+            swap(&shared.alignment.groups, &groups)
+            if scratch != nil { swap(&shared.alignment.stretchScratch, &scratch) }
         }
+        recordingGroupLayout = layouts
+    }
+
+    // MARK: Stretchers (main actor)
+
+    /// Whether a group of this transposition is read through a stretcher at the current rate.
+    func needsStretcher(transposeSemitones: Double) -> Bool {
+        rate != 1 || transposeSemitones != 0
+    }
+
+    /// Gives every group that needs a stretcher and has none a new pair from the factory (none without a factory), and
+    /// returns the scratch input capacity the new pairs need. Only a new pair is asked: one already handed to the
+    /// render thread is the render thread's to call.
+    func makeMissingPairs(in layouts: inout [RecordingGroupLayout]) -> Int {
+        guard let stretcherFactory else { return 0 }
+        var capacity = 0
+        for index in layouts.indices where layouts[index].pair == nil {
+            guard needsStretcher(transposeSemitones: layouts[index].transposeSemitones) else { continue }
+            let pair = StretcherPair(factory: stretcherFactory, sampleRate: sampleRate)
+            capacity = max(capacity, StretchScratch.inputCapacity(for: pair.first))
+            layouts[index].pair = pair
+        }
+        return capacity
+    }
+
+    /// A scratch of `capacity` when the installed one is smaller; nil when it is big enough.
+    func stretchScratchIfNeeded(capacity: Int) -> StretchScratch? {
+        guard capacity > stretchScratchCapacity else { return nil }
+        stretchScratchCapacity = capacity
+        return StretchScratch(inputCapacity: capacity)
+    }
+
+    /// Before a rate change reaches the render: pairs for the groups that need one at `rate` and lack it, with the
+    /// scratch they need. `installStretchers` hands them over inside the lock section.
+    func stretchersForRate() -> (pairs: [(group: Int, pair: StretcherPair)], scratch: StretchScratch?) {
+        var layouts = recordingGroupLayout
+        let capacity = makeMissingPairs(in: &layouts)
+        var made: [(group: Int, pair: StretcherPair)] = []
+        for index in layouts.indices where recordingGroupLayout[index].pair == nil {
+            if let pair = layouts[index].pair { made.append((index, pair)) }
+        }
+        recordingGroupLayout = layouts
+        return (made, stretchScratchIfNeeded(capacity: capacity))
+    }
+
+    /// Inside the lock: installs what `stretchersForRate` made. The swapped-out scratch comes back in `scratch`, to be
+    /// released after the lock.
+    nonisolated static func installStretchers(
+        _ pairs: [(group: Int, pair: StretcherPair)], scratch: inout StretchScratch?, into shared: inout Shared,
+    ) {
+        for (group, pair) in pairs where shared.alignment.groups.indices.contains(group) {
+            shared.alignment.groups[group].pair = pair
+        }
+        if scratch != nil { swap(&shared.alignment.stretchScratch, &scratch) }
     }
 
     /// Swaps the speed table and the schedule together in one lock section: the next render call sees either the old

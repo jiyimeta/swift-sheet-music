@@ -95,8 +95,9 @@
 
                 static func make(
                     score: SheetMusicMIDI.MidiFile, font: URL, slice: AVAudioFrameCount = sliceFrames,
+                    stretcherFactory: RecordingStretcherFactory? = nil,
                 ) async throws -> Rig {
-                    let backend = SwiftySynthBackend(sampleRate: sampleRate)
+                    let backend = SwiftySynthBackend(sampleRate: sampleRate, stretcherFactory: stretcherFactory)
                     backend.prepare(soundfontURL: font, metronomeSoundfontURL: font, drumChannels: [])
                     for _ in 0 ..< 250 where !backend.isReady {
                         try await Task.sleep(for: .milliseconds(20))
