@@ -46,8 +46,6 @@ struct PlaybackAlignmentState {
     var stretchScratch: StretchScratch?
     var speedTable = TransportSpeedTable(warp: nil)
     var schedule = RecordingSchedule(segments: [])
-    /// Whether `speedTable` holds a span; a nil or empty warp is the identity.
-    var hasWarp = false
     /// The host's rate (`setRate`). The render sets both transports to it × the table's stretch at every block start.
     var userSpeed: Double = 1
     /// The metronome's speed for a count-in started under a warp — the speed of the measure it counts into, fixed for
@@ -363,11 +361,9 @@ extension SwiftySynthBackend {
     public func setPlaybackAlignment(warp: PlaybackTimeWarp?, segments: [RecordingSegment]) {
         var table = TransportSpeedTable(warp: warp)
         var schedule = RecordingSchedule(segments: segments)
-        let hasWarp = !(warp?.spans.isEmpty ?? true)
         lock.withLockUnchecked { shared in
             swap(&shared.alignment.speedTable, &table)
             swap(&shared.alignment.schedule, &schedule)
-            shared.alignment.hasWarp = hasWarp
         }
     }
 }

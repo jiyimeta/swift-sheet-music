@@ -474,24 +474,25 @@ public final class SwiftySynthBackend: SynthBackend {
 
     /// Under a warp the count runs at the speed of the measure it counts into — `seconds` are the metronome SMF's, so
     /// it lasts `seconds / speed` — and keeps that speed to its end, a table swap during it applying from the body on.
-    /// Without a warp the count's length and speed are what they always were.
+    /// Without a warp the count's length and speed are what they always were. The rule is
+    /// `TransportSpeedTable.countIn(seconds:userSpeed:bodyStart:)`, which an export's length reads too.
     public func play(afterCountInSeconds seconds: TimeInterval) {
         let sampleRate = sampleRate
         lock.withLockUnchecked { shared in
-            var frames = max(0, Int((seconds * sampleRate).rounded()))
-            shared.alignment.countInSpeed = nil
-            if shared.alignment.hasWarp, let sequencer = shared.sequencer {
+            var countIn: (duration: TimeInterval, speed: Double?) = (seconds, nil)
+            if let sequencer = shared.sequencer {
                 let position = sequencer.position.components
+                // Where `seek(toTick:)` parked the transport: half a tick before the measure's first onset.
                 let held = shared.alignment.transportSeconds(
                     quantized: Double(position.seconds) + Double(position.attoseconds) * 1e-18,
                     sampleRate: sampleRate, blockSize: sequencer.synthesizer.blockSize,
                 )
-                // 1 ms in, because `seek(toTick:)` parks the transport half a tick before the measure's first onset.
-                let speed = shared.alignment.speed(atTransport: held + 0.001)
-                shared.alignment.countInSpeed = speed
-                frames = max(0, Int((seconds / speed * sampleRate).rounded()))
+                countIn = shared.alignment.speedTable.countIn(
+                    seconds: seconds, userSpeed: shared.alignment.userSpeed, bodyStart: held,
+                )
             }
-            shared.preRollFramesRemaining = frames
+            shared.alignment.countInSpeed = countIn.speed
+            shared.preRollFramesRemaining = max(0, Int((countIn.duration * sampleRate).rounded()))
             shared.isPlaying = true
         }
     }

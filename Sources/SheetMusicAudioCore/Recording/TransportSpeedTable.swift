@@ -67,6 +67,21 @@ package struct TransportSpeedTable: Sendable {
         return ends[index] + (o - outputEnds[index])
     }
 
+    /// How a count-in plays when the body it counts into starts at transport second `bodyStart`; `seconds` is the
+    /// count's own length, its metronome SMF's. Under a warp the count runs at the speed of the stretch the body starts
+    /// in — `userSpeed` × the stretch 1 ms past `bodyStart`, past a transport parked half a tick before the onset —
+    /// for its whole length, so it lasts `seconds` ÷ that speed. Without a span it lasts `seconds` whatever the rate,
+    /// and `speed` is nil: the count keeps the user's rate, as it did before warps existed.
+    ///
+    /// One rule for the count-in a backend plays and the length an export gives it.
+    package func countIn(
+        seconds: TimeInterval, userSpeed: Double, bodyStart: TimeInterval,
+    ) -> (duration: TimeInterval, speed: Double?) {
+        guard !starts.isEmpty else { return (seconds, nil) }
+        let speed = max(0.01, userSpeed * stretch(atTransport: bodyStart + 0.001))
+        return (seconds / speed, speed)
+    }
+
     /// The smallest span start or end strictly after `t`, or nil past the last one. The render loop cuts its chunks
     /// there, because the stretch can change.
     package func nextBoundary(after t: TimeInterval) -> TimeInterval? {

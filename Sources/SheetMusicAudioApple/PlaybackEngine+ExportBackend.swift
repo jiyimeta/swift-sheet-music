@@ -29,12 +29,17 @@ extension PlaybackEngine {
     /// may do that off the main actor, and every transport command is contracted
     /// to be dropped until `isReady`. The engine is left in manual-rendering
     /// mode and started, so the caller can `start()` and pull frames.
+    ///
+    /// The instance gets the live recordings and alignment as the snapshot holds them, and with `includesCountIn` the
+    /// count-in live playback plays into `startTick` (`backendCountIn`), started as `startBackendCountIn` starts it.
     static func buildBackendExportPipeline(
         score: Score,
         snapshot: ExportEngineSnapshot,
         outputFormat: AVAudioFormat,
         timeline: PlaybackTimeline,
+        unrolledTimeMap: UnrolledTimeMap,
         startTick: Int,
+        includesCountIn: Bool,
         backend: any SynthBackend,
     ) async throws -> ExportPipeline {
         let engine = AVAudioEngine()
@@ -62,10 +67,19 @@ extension PlaybackEngine {
         )
         try await waitUntilReady(backend)
 
-        try loadTransports(
+        let rendered = try loadTransports(
             backend: backend, score: score, plan: plan,
             snapshot: snapshot, timeline: timeline,
         )
+        loadRecordings(backend: backend, snapshot: snapshot)
+        let countIn = includesCountIn
+            ? CountInBeats.compute(score: score, startCursor: timeline.frame(atTick: startTick)?.cursor).map {
+                backendCountIn(
+                    plan: $0, rendered: rendered, metronomeBeats: snapshot.metronomeBeats, baseTick: startTick,
+                    timeline: timeline, unrolledTimeMap: unrolledTimeMap,
+                )
+            }
+            : nil
 
         try engine.enableManualRenderingMode(
             .offline,
@@ -76,17 +90,12 @@ extension PlaybackEngine {
 
         return ExportPipeline(
             engine: engine,
+            countInSeconds: countIn?.seconds,
+            followsAlignment: backend.canPlayRecordings,
             start: {
-                // Seek FIRST, mixer second: the seek resets the synth's channels
-                // to GM defaults, so a mixer pushed before it would be silently
-                // undone (same ordering as `PlaybackEngine.seek`'s backend branch).
-                backend.seek(toTick: startTick)
-                applyMixerSnapshotToBackend(
-                    backend: backend,
-                    channels: snapshot.mixerChannels,
-                    plan: plan,
+                startTransport(
+                    backend: backend, snapshot: snapshot, plan: plan, startTick: startTick, countIn: countIn,
                 )
-                backend.play()
             },
             teardown: {
                 backend.stop()
@@ -101,13 +110,14 @@ extension PlaybackEngine {
     /// across them (rate, tuning). Rate + tuning go FIRST: both are contracted
     /// to persist across transport operations, and `loadSequence` / `seek`
     /// re-assert whatever the backend has stored — a fresh synth resets them.
+    /// Returns the rendered score, whose tempo map a count-in's metronome sequence copies.
     private static func loadTransports(
         backend: any SynthBackend,
         score: Score,
         plan: LiveChannelPlan,
         snapshot: ExportEngineSnapshot,
         timeline: PlaybackTimeline,
-    ) throws {
+    ) throws -> MidiFile {
         backend.setRate(snapshot.rate)
         backend.setTuning(
             cents: snapshot.masterTuningCents,
@@ -133,6 +143,48 @@ extension PlaybackEngine {
         )
         backend.setMetronomeVolume(snapshot.metronomeVolume)
         backend.setMetronomeMuted(!snapshot.metronomeEnabled)
+        return rendered
+    }
+
+    /// Position the offline transport at `startTick` and start it — through `countIn` first when there is one.
+    private static func startTransport(
+        backend: any SynthBackend, snapshot: ExportEngineSnapshot, plan: LiveChannelPlan, startTick: Int,
+        countIn: BackendCountIn?,
+    ) {
+        // Seek FIRST, mixer second: the seek resets the synth's channels
+        // to GM defaults, so a mixer pushed before it would be silently
+        // undone (same ordering as `PlaybackEngine.seek`'s backend branch).
+        backend.seek(toTick: startTick)
+        if let countIn {
+            // After the seek, which moves both transports: the load re-parks the metronome on the count's first
+            // click, as `startBackendCountIn` does.
+            backend.loadMetronomeSequence(countIn.metronomeSequence, offsetSeconds: countIn.metronomeOffsetSeconds)
+        }
+        applyMixerSnapshotToBackend(
+            backend: backend,
+            channels: snapshot.mixerChannels,
+            soloing: snapshot.isSoloing,
+            plan: plan,
+        )
+        // The backend holds the score through the count, at the speed of the measure it counts into, and sounds it
+        // whatever the metronome strip says (`SynthBackend.play(afterCountInSeconds:)`).
+        if let countIn {
+            backend.play(afterCountInSeconds: countIn.seconds)
+        } else {
+            backend.play()
+        }
+    }
+
+    /// Hand the offline instance the live recordings and alignment, after the rate (`loadTransports`), so the
+    /// stretchers a rate away from 100 % needs are made with the tracks. With neither, nothing is sent: an export
+    /// without recordings drives the backend exactly as it always did.
+    private static func loadRecordings(backend: any SynthBackend, snapshot: ExportEngineSnapshot) {
+        if snapshot.alignmentWarp != nil || !snapshot.alignmentSegments.isEmpty {
+            backend.setPlaybackAlignment(warp: snapshot.alignmentWarp, segments: snapshot.alignmentSegments)
+        }
+        if !snapshot.recordings.isEmpty {
+            backend.setRecordingTracks(snapshot.recordings)
+        }
     }
 
     /// The live MIDI channels that render as percussion — each drum part's
@@ -157,13 +209,14 @@ extension PlaybackEngine {
     /// `mixerChannels` so a mix changed mid-export can't leak into the file.
     ///
     /// Each strip's CC 7 is `exportVolumeCC7(of:soloing:)` — playback's own
-    /// audibility rule, shared with the AUMIDISynth export.
+    /// audibility rule, shared with the AUMIDISynth export — against the live
+    /// solo bus, recordings included (`ExportEngineSnapshot.isSoloing`).
     private static func applyMixerSnapshotToBackend(
         backend: any SynthBackend,
         channels: [MixerChannel],
+        soloing: Bool,
         plan: LiveChannelPlan,
     ) {
-        let soloing = channels.isSoloing
         var midiChannels: [MixerChannel.Kind: UInt8] = [:]
         for strip in plan.strips {
             midiChannels[

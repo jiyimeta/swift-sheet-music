@@ -1,6 +1,7 @@
 #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import AVFoundation
     @testable import SheetMusicAudioApple
+    import SheetMusicAudioCore
     import Testing
 
     /// Covers Gap B: `PlaybackEngine.renderFrameCount(durationSec:rate:sampleRate:)`
@@ -75,6 +76,34 @@
                 durationSec: 0, rate: 0.5, sampleRate: 44100,
             )
             #expect(frames == 0)
+        }
+
+        @Test("a count-in goes in front unscaled by the rate, the allowance after")
+        func countInAndAllowanceAddToTheBody() {
+            let frames = PlaybackEngine.renderFrameCount(
+                durationSec: 10, rate: 0.5, sampleRate: 44100, countInSeconds: 2.5, allowanceFrames: 36,
+            )
+            // The count-in's seconds are already at its own speed; the body is stretched by the rate.
+            #expect(frames == AVAudioFrameCount(2.5 * 44100) + AVAudioFrameCount(20 * 44100) + 36)
+        }
+
+        @Test("without a span there is no drift allowance")
+        func noWarpNoAllowance() {
+            #expect(PlaybackEngine.warpDriftAllowanceFrames(table: TransportSpeedTable(warp: nil), from: 0, to: 8) == 0)
+        }
+
+        /// Stretches 0.8, 1, 2/3 and 0.8 over four 2 s measures; outside them 1. Half a 64-frame block × |Δ| ÷ the
+        /// stretch after, per boundary: 8 at 0 (where the body starts, parked just before it), 6.4 at 2, 16 at 4 and
+        /// 5.33 at 6 — the boundary at 8 is where the body ends, past which nothing is cut.
+        @Test("the drift allowance sums each boundary the body crosses, from just before its start")
+        func allowanceSumsTheBoundariesTheBodyCrosses() throws {
+            let table = try TransportSpeedTable(warp: PlaybackTimeWarp(spans: [
+                .init(start: 0, end: 2, duration: 2.5), .init(start: 2, end: 4, duration: 2),
+                .init(start: 4, end: 6, duration: 3), .init(start: 6, end: 8, duration: 2.5),
+            ]))
+            #expect(PlaybackEngine.warpDriftAllowanceFrames(table: table, from: 0, to: 8) == 36)
+            // A range of the second and third measures crosses the boundaries at 2 and 4: 6.4 + 16.
+            #expect(PlaybackEngine.warpDriftAllowanceFrames(table: table, from: 2, to: 6) == 23)
         }
     }
 #endif

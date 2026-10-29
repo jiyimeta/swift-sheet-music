@@ -520,10 +520,21 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         /// A4-calibration offset captured from `PlaybackEngine.masterTuningCents`,
         /// so the export synths reproduce the live engine's tuning.
         let masterTuningCents: Double // swiftlint:disable:this inclusive_language
+        /// The live solo bus (`PlaybackEngine.isSoloing`): an instrument strip or a recording soloed. Every strip's
+        /// CC 7 in the file is decided against it, so a soloed recording silences the instruments there, as live.
+        let isSoloing: Bool
+        /// The recordings as the live engine hands them to its backend — each gain resolved from volume, mute and the
+        /// solo bus, each transposition the reader's plus the track's own — by the same `recordingRenders(soloing:)`.
+        /// The mapped files are shared with the live backend; they are read-only.
+        let recordings: [RecordingTrackRender]
+        /// The live alignment (`setAlignment(warp:segments:)`).
+        let alignmentWarp: PlaybackTimeWarp?
+        let alignmentSegments: [RecordingSegment]
     }
 
     func exportEngineSnapshot() -> ExportEngineSnapshot {
-        ExportEngineSnapshot(
+        let soloing = isSoloing
+        return ExportEngineSnapshot(
             resolver: resolver,
             mixerChannels: mixerChannels,
             metronomeEnabled: metronome.isEnabled,
@@ -535,6 +546,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             metronomeSoundFontURL: clickResolver.resolvedSoundFontURL(),
             transposeSemitones: transposeSemitones,
             masterTuningCents: masterTuningCents,
+            isSoloing: soloing,
+            recordings: recordingRenders(soloing: soloing),
+            alignmentWarp: alignmentWarp,
+            alignmentSegments: alignmentSegments,
         )
     }
 
@@ -1843,8 +1858,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         backend: any SynthBackend, score: Score, plan: CountInBeats.Result,
         baseTick: Int, rendered: MidiFile, timeline: PlaybackTimeline,
     ) throws {
-        let preRollSeconds = Double(plan.preRollTicks)
-            * (60.0 / plan.quarterBpm) / Double(timeline.division)
+        let countIn = Self.backendCountIn(
+            plan: plan, rendered: rendered, metronomeBeats: metronomeBeats, baseTick: baseTick,
+            timeline: timeline, unrolledTimeMap: unrolledTimeMap,
+        )
         if sequencerScore != score {
             loadBackendNormalSequence(
                 backend: backend, score: score,
@@ -1856,8 +1873,35 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // transports, and the metronome's own load right after re-parks it at
         // tick 0 — the first click of the count.
         backend.seek(toTick: baseTick)
-        backend.loadMetronomeSequence(
-            PreRollSequenceAssembler.metronomeOnly(
+        backend.loadMetronomeSequence(countIn.metronomeSequence, offsetSeconds: countIn.metronomeOffsetSeconds)
+        backendMetronomeHasPreRoll = true
+        backend.setMetronomeMuted(!metronome.isEnabled)
+        currentCursor = timeline.frame(atTick: baseTick)?.cursor
+        backend.play(afterCountInSeconds: countIn.seconds)
+        reapplyMixerPrograms()
+        applyMixerState()
+        state = .playing
+        startCursorTimer()
+    }
+
+    /// A count-in as a backend plays it (`startBackendCountIn`, and an export's): the metronome-only sequence that
+    /// opens with the count, how far its clock runs ahead of the score's, and the count's own length in seconds.
+    struct BackendCountIn {
+        let metronomeSequence: MidiFile
+        let metronomeOffsetSeconds: TimeInterval
+        /// The pre-roll at the start position's tempo — what `SynthBackend.play(afterCountInSeconds:)` takes.
+        let seconds: TimeInterval
+    }
+
+    /// The count-in `plan` into notated tick `baseTick`, for the backend path. Shared by live playback and the export,
+    /// so a file's count-in is the one the user hears.
+    static func backendCountIn(
+        plan: CountInBeats.Result, rendered: MidiFile, metronomeBeats: [MetronomeBeat], baseTick: Int,
+        timeline: PlaybackTimeline, unrolledTimeMap: UnrolledTimeMap,
+    ) -> BackendCountIn {
+        let seconds = Double(plan.preRollTicks) * (60.0 / plan.quarterBpm) / Double(timeline.division)
+        return BackendCountIn(
+            metronomeSequence: PreRollSequenceAssembler.metronomeOnly(
                 rendered: rendered, metronomeBeats: metronomeBeats,
                 plan: plan, baseTick: baseTick, includingPreRollClicks: true,
             ),
@@ -1866,18 +1910,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // render's seconds — which is also where `SynthBackend.seek(toTick:)`
             // puts the score transport — so the subtrahend is projected too, or the
             // click track drifts from the music by the unrolled sequence's head start.
-            offsetSeconds: preRollSeconds - unrolledTimeMap.unrolledSeconds(
+            metronomeOffsetSeconds: seconds - unrolledTimeMap.unrolledSeconds(
                 fromNotated: timeline.seconds(atTick: Double(baseTick)),
             ),
+            seconds: seconds,
         )
-        backendMetronomeHasPreRoll = true
-        backend.setMetronomeMuted(!metronome.isEnabled)
-        currentCursor = timeline.frame(atTick: baseTick)?.cursor
-        backend.play(afterCountInSeconds: preRollSeconds)
-        reapplyMixerPrograms()
-        applyMixerState()
-        state = .playing
-        startCursorTimer()
     }
 
     /// Position the sequencer for a normal (no count-in) play. Runs only with

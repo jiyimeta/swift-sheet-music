@@ -137,6 +137,29 @@ struct TransportSpeedTableTests {
     }
 
     @Test
+    func `a count-in without a span lasts its own seconds at any rate`() {
+        let countIn = TransportSpeedTable(warp: nil).countIn(seconds: 2, userSpeed: 0.5, bodyStart: 4)
+        #expect(countIn.duration == 2)
+        #expect(countIn.speed == nil)
+    }
+
+    @Test
+    func `a count-in under a warp runs at the speed of the stretch its body starts in`() throws {
+        // Transport 0–2 s lasts 2.5 s (stretch 0.8), 2–4 s lasts 2 s (stretch 1).
+        let table = try TransportSpeedTable(warp: Self.warp([
+            Span(start: 0, end: 2, duration: 2.5), Span(start: 2, end: 4, duration: 2),
+        ]))
+        // Parked half a tick (at 120 BPM, division 480) before the onset, as a seek leaves the transport.
+        let first = table.countIn(seconds: 2, userSpeed: 1, bodyStart: -0.0005)
+        #expect(abs(first.duration - 2.5) < 1e-12)
+        #expect(first.speed.map { abs($0 - 0.8) < 1e-12 } == true)
+        // At 70 % the count into the second measure runs at 0.7 and lasts 2 / 0.7 s.
+        let second = table.countIn(seconds: 2, userSpeed: 0.7, bodyStart: 2 - 0.0005)
+        #expect(abs(second.duration - 2 / 0.7) < 1e-12)
+        #expect(second.speed.map { abs($0 - 0.7) < 1e-12 } == true)
+    }
+
+    @Test
     func `lookups on a 3600-span table stay fast`() throws {
         let spans = (0 ..< 3600).map { index -> Span in
             let start = Double(index) * 2

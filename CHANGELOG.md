@@ -9,6 +9,10 @@ and this project adheres to
 
 ### Added
 
+- **Exports include recordings and an optional count-in (`exportAudioFile(…, includesCountIn:)`).** Through an
+  injected backend the file carries the recordings at their strips' mix, on the same solo bus as live, follows the
+  alignment — a warped score or range lasts its warped length — and can open with the count-in live playback plays,
+  at the speed of the measure it counts into.
 - **Recording tracks on `PlaybackEngine` (`RecordingTrack`, `setRecordingTracks(_:)`,
   `setRecordingMix(id:volume:isMuted:isSoloed:)`, `setAlignment(warp:segments:)`, `hasAlignment`).** Recordings mix
   with the score at their strip's volume and mute, on one solo bus with the instrument strips (the click stays off it),

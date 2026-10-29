@@ -38,11 +38,20 @@ extension PlaybackEngine {
     /// On `Task.cancel()` the in-flight render is aborted at the
     /// next buffer boundary; the partial output file at `url` is
     /// deleted.
+    ///
+    /// Through an injected backend's offline instance the file also carries the recordings
+    /// (`setRecordingTracks(_:)`) at their strips' mix — one solo bus with the instrument strips, as live — and
+    /// follows the alignment (`setAlignment(warp:segments:)`): a warped score lasts its warped length, and a range is
+    /// that range's warped length. `includesCountIn` opens the file with the count-in live playback plays from the
+    /// range's start, at the speed of the measure it counts into; it sounds whatever the metronome strip says, and the
+    /// strip decides whether the click goes on after it. The AUMIDISynth fallback renders neither recordings nor a
+    /// count-in.
     public func exportAudioFile(
         to url: URL,
         score: Score,
         format: AudioFileFormat,
         range: AudioExportRange = .full,
+        includesCountIn: Bool = false,
         progress: (@Sendable (Double) -> Void)? = nil,
     ) async throws {
         guard let timeline = exportTimeline() else {
@@ -52,25 +61,11 @@ extension PlaybackEngine {
         let (startTick, endTick) = try range.resolveTickRange(
             timeline: timeline, loop: loopRange,
         )
-        // How long the range plays: its ends on the continuous notated clock — a frame lookup lands on the last onset
-        // at or before a tick, which for the end of the score is the start of its last beat, and the file stopped
-        // there — then on the unrolled clock the sequencer actually runs, so repeats and jumps play out in full.
         let unrolled = exportUnrolledTimeMap()
-        let startSec = unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(startTick)))
-        let endSec = unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(endTick)))
-        let durationSec = max(0, endSec - startSec)
+        let body = ExportBody(timeline: timeline, unrolled: unrolled, startTick: startTick, endTick: endTick)
 
         let outputFormat = AudioFileExporter.outputFormat(for: format)
         let snapshot = exportEngineSnapshot()
-        // `durationSec` is timeline-seconds at rate 1.0, but the export
-        // sequencer runs at `snapshot.rate` (`sequencer.rate =
-        // snapshot.rate` below), so a rate < 1 (slow-practice export)
-        // needs MORE wall-clock frames, not `durationSec * sampleRate`
-        // worth — otherwise the render loop stops before the slowed
-        // piece has finished sounding.
-        let framesToRender = Self.renderFrameCount(
-            durationSec: durationSec, rate: snapshot.rate, sampleRate: outputFormat.sampleRate,
-        )
         let writer = try AudioFileExporter.makeWriter(url: url, format: format)
         let exporter = AudioFileExporter()
 
@@ -81,7 +76,12 @@ extension PlaybackEngine {
                 snapshot: snapshot,
                 outputFormat: outputFormat,
                 timeline: timeline,
+                unrolledTimeMap: unrolled,
                 startTick: startTick,
+                includesCountIn: includesCountIn,
+            )
+            let framesToRender = Self.exportFrameCount(
+                body: body, pipeline: pipeline, snapshot: snapshot, sampleRate: outputFormat.sampleRate,
             )
             // Tear the pipeline down on the way out however this ends. A
             // cancelled export used to leave its engine running in manual
@@ -127,11 +127,94 @@ extension PlaybackEngine {
     /// small positive value so a stray `0` (or negative) can't produce an
     /// infinite or zero frame count. `internal` (not `private`) so tests can
     /// exercise the rate-correction math directly.
+    ///
+    /// A count-in of `countInSeconds` (wall-clock, already at its own speed) goes in front, rounded to the frame as the
+    /// backend rounds it, and `allowanceFrames` after (`warpDriftAllowanceFrames`). Both 0 is the frame count an
+    /// export always had.
     static func renderFrameCount(
-        durationSec: Double, rate: Float, sampleRate: Double,
+        durationSec: Double, rate: Float, sampleRate: Double, countInSeconds: Double = 0, allowanceFrames: Int = 0,
     ) -> AVAudioFrameCount {
         let renderSeconds = durationSec / Double(max(rate, 0.01))
-        return AVAudioFrameCount((renderSeconds * sampleRate).rounded(.up))
+        let body = AVAudioFrameCount((renderSeconds * sampleRate).rounded(.up))
+        let countIn = AVAudioFrameCount((max(0, countInSeconds) * sampleRate).rounded())
+        return countIn + body + AVAudioFrameCount(max(0, allowanceFrames))
+    }
+
+    /// The span of the transport an export plays: the range's ends on the unrolled clock, and the earliest second a
+    /// seek to its start may park the transport at — a tick before the onset, never before 0. A backend parks short
+    /// of the onset so the onset's note-on is dispatched (`SwiftySynthBackend` parks half a tick before), and the body
+    /// then runs that much past its end.
+    struct ExportBody {
+        let startSeconds: TimeInterval
+        let endSeconds: TimeInterval
+        let parkedSeconds: TimeInterval
+
+        /// How long the range `[startTick, endTick)` plays: its ends on the continuous notated clock — a frame lookup
+        /// lands on the last onset at or before a tick, which for the end of the score is the start of its last beat,
+        /// and the file stopped there — then on the unrolled clock the sequencer actually runs, so repeats and jumps
+        /// play out in full.
+        init(timeline: PlaybackTimeline, unrolled: UnrolledTimeMap, startTick: Int, endTick: Int) {
+            func seconds(_ tick: Int) -> TimeInterval {
+                unrolled.unrolledSeconds(fromNotated: timeline.seconds(atTick: Double(tick)))
+            }
+            startSeconds = seconds(startTick)
+            endSeconds = seconds(endTick)
+            parkedSeconds = max(0, seconds(startTick - 1))
+        }
+    }
+
+    /// How many frames an export renders. The body lasts its length on the warped clock when the pipeline's transport
+    /// follows the alignment — the notated one otherwise — divided by the rate; a count-in lasts what the backend
+    /// holds the score for (`TransportSpeedTable.countIn(seconds:userSpeed:bodyStart:)`, the rule the backend reads).
+    /// A warped body is followed by an allowance for where its end can land late: the drift at the span boundaries
+    /// (`warpDriftAllowanceFrames`) and the parked lead. Without a warp or a count-in this is the frame count an export
+    /// always had.
+    static func exportFrameCount(
+        body: ExportBody, pipeline: ExportPipeline, snapshot: ExportEngineSnapshot, sampleRate: Double,
+    ) -> AVAudioFrameCount {
+        let warp = pipeline.followsAlignment ? snapshot.alignmentWarp : nil
+        let table = TransportSpeedTable(warp: warp)
+        let warpedSeconds = table.outputSeconds(atTransport: body.endSeconds)
+            - table.outputSeconds(atTransport: body.startSeconds)
+        // The user speed exactly as the backend holds it (`SynthBackend.setRate`), so the count-in rounds alike.
+        let userSpeed = max(0.01, Double(snapshot.rate))
+        let countIn = pipeline.countInSeconds.map {
+            table.countIn(seconds: $0, userSpeed: userSpeed, bodyStart: body.startSeconds).duration
+        }
+        var allowance = 0
+        if !(warp?.spans.isEmpty ?? true) {
+            let lead = table.outputSeconds(atTransport: body.startSeconds)
+                - table.outputSeconds(atTransport: body.parkedSeconds)
+            allowance = warpDriftAllowanceFrames(table: table, from: body.parkedSeconds, to: body.endSeconds)
+                + Int((max(0, lead) / userSpeed * sampleRate).rounded(.up))
+        }
+        return renderFrameCount(
+            durationSec: max(0, warpedSeconds), rate: snapshot.rate, sampleRate: sampleRate,
+            countInSeconds: countIn ?? 0, allowanceFrames: allowance,
+        )
+    }
+
+    /// Frames a warped export renders past its body, so the body's end is never cut.
+    ///
+    /// A backend that follows a warp sets its transport's speed per synthesizer block (`SwiftySynthBackend`: 64
+    /// frames), by the stretch where the block's middle falls. A block that straddles a span boundary therefore runs
+    /// at one side's speed throughout, and from there the transport lags or leads the table by up to half a block ×
+    /// |Δstretch| ÷ the stretch after the boundary, in output frames (2–4 frames measured over two boundaries). The
+    /// sum over every boundary the body crosses — from just before its start, where a seek parks the transport — is
+    /// the most it can end late. 0 without a span, so an unwarped export keeps its length.
+    static func warpDriftAllowanceFrames(
+        table: TransportSpeedTable, from start: TimeInterval, to end: TimeInterval,
+    ) -> Int {
+        let halfBlockFrames = 32.0
+        var frames = 0.0
+        var previous = start - 0.01
+        while let boundary = table.nextBoundary(after: previous), boundary < end {
+            let before = table.stretch(atTransport: (previous + boundary) / 2)
+            let after = table.stretch(atTransport: boundary)
+            frames += halfBlockFrames * abs(before - after) / after
+            previous = boundary
+        }
+        return Int(frames.rounded(.up))
     }
 
     /// Choose the export pipeline. An injected `SynthBackend` that can build an
@@ -143,7 +226,9 @@ extension PlaybackEngine {
         snapshot: ExportEngineSnapshot,
         outputFormat: AVAudioFormat,
         timeline: PlaybackTimeline,
+        unrolledTimeMap: UnrolledTimeMap,
         startTick: Int,
+        includesCountIn: Bool,
     ) async throws -> ExportPipeline {
         if let offline = backend?.makeOfflineInstance(
             sampleRate: outputFormat.sampleRate,
@@ -153,7 +238,9 @@ extension PlaybackEngine {
                 snapshot: snapshot,
                 outputFormat: outputFormat,
                 timeline: timeline,
+                unrolledTimeMap: unrolledTimeMap,
                 startTick: startTick,
+                includesCountIn: includesCountIn,
                 backend: offline,
             )
         }
@@ -206,7 +293,7 @@ extension PlaybackEngine {
             engine: engine, output: scoreGainMixer,
         )
         applyMixerSnapshot(
-            scoreSynth: exportSynth, channels: snapshot.mixerChannels,
+            scoreSynth: exportSynth, channels: snapshot.mixerChannels, soloing: snapshot.isSoloing,
         )
 
         // 2. Optional metronome synth / track. Onto `scoreGainMixer`, like
@@ -236,6 +323,8 @@ extension PlaybackEngine {
 
         return ExportPipeline(
             engine: engine,
+            countInSeconds: nil,
+            followsAlignment: false,
             start: {
                 try startSequencer(
                     sequencer, melodic: exportSynth.melodic,
@@ -499,8 +588,8 @@ extension PlaybackEngine {
     /// The CC 7 an export renders an instrument strip at — playback's own rule (`MixerChannel.isSilenced`, under
     /// which mute wins over solo), so a strip the user hears silent is silent in the file. Both export pipelines read
     /// it: `applyMixerSnapshot` below for AUMIDISynth, `applyMixerSnapshotToBackend` for an injected backend.
-    /// `soloing` is the snapshot's `isSoloing`, scoped to the solo bus — the metronome is off it, and whether the click
-    /// renders is carried by the snapshot's own `metronomeEnabled`.
+    /// `soloing` is the snapshot's `isSoloing` — the live solo bus, a soloed recording included; the metronome is off
+    /// it, and whether the click renders is carried by the snapshot's own `metronomeEnabled`.
     nonisolated static func exportVolumeCC7(of channel: MixerChannel, soloing: Bool) -> UInt8 {
         let gain: Float = channel.isSilenced(soloing: soloing) ? 0 : channel.volume
         return UInt8(clamping: Int((gain * 127).rounded()))
@@ -513,8 +602,8 @@ extension PlaybackEngine {
     private static func applyMixerSnapshot(
         scoreSynth: ScoreSynth,
         channels: [MixerChannel],
+        soloing: Bool,
     ) {
-        let soloing = channels.isSoloing
         for chan in channels {
             guard case .instrument = chan.id,
                   let midiCh = scoreSynth.instrumentMIDIChannels[chan.id]
@@ -538,6 +627,10 @@ extension PlaybackEngine {
     /// paths share no transport type.
     struct ExportPipeline {
         let engine: AVAudioEngine
+        /// The count-in's own seconds (`BackendCountIn.seconds`) when `start` plays one before the body, else nil.
+        let countInSeconds: TimeInterval?
+        /// Whether the transport follows the snapshot's alignment: an offline backend that plays recordings.
+        let followsAlignment: Bool
         let start: @MainActor () throws -> Void
         let teardown: @MainActor () -> Void
     }

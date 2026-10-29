@@ -105,8 +105,8 @@ extension PlaybackEngine {
     /// Whether the solo bus is engaged — i.e. at least one channel that
     /// is *on* that bus, or one recording, is soloed. The one place the
     /// live rule is expressed; `applyMixerState` and
-    /// `reassertBackendChannelState` read it so they can't drift apart.
-    /// The export snapshot reads its own channels' `isSoloing`.
+    /// `reassertBackendChannelState` read it so they can't drift apart,
+    /// and an export captures it (`ExportEngineSnapshot.isSoloing`).
     var isSoloing: Bool {
         mixerChannels.isSoloing || recordings.contains { $0.track.isSoloed }
     }
