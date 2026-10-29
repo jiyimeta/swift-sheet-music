@@ -79,6 +79,7 @@ extension PlaybackEngine {
         // New mappings: hand them over even if they resolve to what was sent.
         sentRecordingRenders = nil
         applyMixerState()
+        prefetchRecordings()
     }
 
     /// Sets a recording strip's volume (linear, applied clamped to `0...1`), mute and solo, as `setVolume`, `setMuted`
@@ -137,7 +138,9 @@ extension PlaybackEngine {
         alignmentWarp = warp
         alignmentSegments = segments
         alignmentSpeedTable = TransportSpeedTable(warp: warp)
+        alignmentSchedule = RecordingSchedule(segments: segments)
         backend?.setPlaybackAlignment(warp: warp, segments: segments)
+        prefetchRecordings()
     }
 
     /// Whether the transport follows an alignment: one with a span or a segment is set, on a backend that plays
@@ -145,5 +148,54 @@ extension PlaybackEngine {
     public var hasAlignment: Bool {
         guard backend?.canPlayRecordings == true else { return false }
         return !(alignmentWarp?.spans.isEmpty ?? true) || !alignmentSegments.isEmpty
+    }
+
+    // MARK: Reading ahead
+
+    /// Wall-clock seconds of each recording read in ahead of the transport.
+    nonisolated static let recordingPrefetchAheadSeconds = 2.0
+    /// File seconds read in behind each stretch as well: a stretcher primed at a jump is fed the input before it.
+    nonisolated static let recordingPrefetchBehindSeconds = 0.5
+    /// Cursor polls (about 30 a second) between read-aheads while playing.
+    static let recordingPrefetchTickInterval = 10
+
+    /// Asks for the pages each recording plays over the next couple of seconds to be read in now, so the render thread
+    /// does not fault on them (`MappedRecording.prefetch(seconds:)`): from where the transport is, and while a loop is
+    /// set also from its start, where the wrap lands. Called on the main actor after a play, a seek, a loop wrap, a new
+    /// alignment or track list, and every `recordingPrefetchTickInterval` cursor polls while playing. The position is
+    /// the transport's, turned into each track's file seconds by the warp and the segments; nothing of the render
+    /// thread's own state is read.
+    func prefetchRecordings() {
+        recordingPrefetchCountdown = Self.recordingPrefetchTickInterval
+        guard let backend, backend.canPlayRecordings, !recordings.isEmpty else { return }
+        var origins = [backend.currentPositionSeconds]
+        if let loop = transportLoop { origins.append(loop.startSeconds) }
+        for loaded in recordings {
+            for origin in origins {
+                let ranges = Self.recordingPrefetchRanges(
+                    transportSeconds: origin, rate: Double(pendingRate), table: alignmentSpeedTable,
+                    schedule: alignmentSchedule, offset: loaded.track.offsetSeconds,
+                )
+                for seconds in ranges {
+                    loaded.recording.prefetch(seconds: seconds)
+                }
+            }
+        }
+    }
+
+    /// The file seconds a track plays from transport second `transportSeconds` on, `recordingPrefetchAheadSeconds` of
+    /// wall-clock time at `rate` (and never fewer warped seconds than that), each stretch widened back by
+    /// `recordingPrefetchBehindSeconds` for the history a stretcher is primed with. `table` turns the transport second
+    /// into a warped one and `schedule` the warped window into the track's file, at its `offset`.
+    nonisolated static func recordingPrefetchRanges(
+        transportSeconds: TimeInterval, rate: Double, table: TransportSpeedTable, schedule: RecordingSchedule,
+        offset: TimeInterval,
+    ) -> [Range<TimeInterval>] {
+        let output = table.outputSeconds(atTransport: transportSeconds)
+        let speed = rate.isFinite ? max(1, rate) : 1
+        let window = schedule.sourceRanges(
+            fromOutput: output, to: output + recordingPrefetchAheadSeconds * speed, offset: offset,
+        )
+        return window.map { max(0, $0.lowerBound - recordingPrefetchBehindSeconds) ..< $0.upperBound }
     }
 }

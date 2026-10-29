@@ -229,5 +229,30 @@ struct RecordingPlayheadTests {
     @Test
     func `an empty schedule is silence`() {
         #expect(RecordingSchedule(segments: []).sourceSeconds(atOutput: 0, offset: 0) == nil)
+        #expect(RecordingSchedule(segments: []).sourceRanges(fromOutput: 0, to: 2, offset: 0).isEmpty)
+    }
+
+    @Test
+    func `sourceRanges gives the file seconds each segment in the window plays, clipped to the window`() {
+        // Output 5–15 s: the rest of the first segment (reference 15–20 s), the gap, the second's first 3 s.
+        #expect(Self.schedule.sourceRanges(fromOutput: 5, to: 15, offset: 0) == [15 ..< 20, 40 ..< 43])
+        // A window starting inside the second segment, and one running past its end.
+        #expect(Self.schedule.sourceRanges(fromOutput: 13, to: 14, offset: 0) == [41 ..< 42])
+        #expect(Self.schedule.sourceRanges(fromOutput: 20, to: 30, offset: 0) == [48 ..< 50])
+        // In the gap, past the last segment, and for a window that is not one: nothing.
+        #expect(Self.schedule.sourceRanges(fromOutput: 10.5, to: 11.5, offset: 0).isEmpty)
+        #expect(Self.schedule.sourceRanges(fromOutput: 100, to: 102, offset: 0).isEmpty)
+        #expect(Self.schedule.sourceRanges(fromOutput: 3, to: 3, offset: 0).isEmpty)
+        #expect(Self.schedule.sourceRanges(fromOutput: .nan, to: 3, offset: 0).isEmpty)
+    }
+
+    @Test
+    func `sourceRanges honors a track offset and clips at the file's start`() {
+        #expect(Self.schedule.sourceRanges(fromOutput: 0, to: 2, offset: 1.5) == [8.5 ..< 10.5])
+        // A stem starting 1.5 s into the reference, which this segment plays from 1 s: the file from its start.
+        let early = RecordingSchedule(segments: [RecordingSegment(sourceStart: 1, sourceEnd: 5, outputStart: 0)])
+        #expect(early.sourceRanges(fromOutput: 0, to: 2, offset: 1.5) == [0 ..< 1.5])
+        // Before the stem starts nothing of it plays.
+        #expect(early.sourceRanges(fromOutput: 0, to: 0.4, offset: 1.5).isEmpty)
     }
 }

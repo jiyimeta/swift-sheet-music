@@ -47,4 +47,33 @@ package struct RecordingSchedule: Sendable {
         let seconds = segment.sourceStart + intoSegment - offset
         return seconds >= 0 ? seconds : nil
     }
+
+    /// The stretches of a track file heard while warped output seconds run from `start` to `end`, for a track starting
+    /// `offset` seconds into the reference time: one per segment the window overlaps, clipped to the window and to the
+    /// file's start, in output order. Empty when nothing sounds in the window. What a host reads in ahead of the render
+    /// thread; it allocates, so not on that thread.
+    package func sourceRanges(
+        fromOutput start: TimeInterval, to end: TimeInterval, offset: TimeInterval,
+    ) -> [Range<TimeInterval>] {
+        guard start.isFinite, end.isFinite, offset.isFinite, end > start else { return [] }
+        // From the last segment starting at or before `start` (the one that may already be playing there) on.
+        var low = 0
+        var high = segments.count
+        while low < high {
+            let middle = (low + high) / 2
+            if segments[middle].outputStart <= start { low = middle + 1 } else { high = middle }
+        }
+        var ranges: [Range<TimeInterval>] = []
+        var index = max(0, low - 1)
+        while index < segments.count, segments[index].outputStart < end {
+            let segment = segments[index]
+            let from = max(start, segment.outputStart)
+            let to = min(end, segment.outputStart + segment.duration)
+            let sourceFrom = max(0, segment.sourceStart + (from - segment.outputStart) - offset)
+            let sourceTo = segment.sourceStart + (to - segment.outputStart) - offset
+            if to > from, sourceTo > sourceFrom { ranges.append(sourceFrom ..< sourceTo) }
+            index += 1
+        }
+        return ranges
+    }
 }

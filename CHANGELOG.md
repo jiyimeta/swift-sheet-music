@@ -17,7 +17,10 @@ and this project adheres to
   transport's seconds, each saying how long it must last at 100 % rate, with the sequencer speed following per span.
   A span stretched to under 0.02 or over 50 times the notated speed is rejected as `.invalidSpan`.
 - **`RecordingPCMCache` and `MappedRecording`.** Recordings are decoded once into an Int16 stereo PCM cache file that is
-  memory-mapped for playback, so long recordings cost address space rather than resident memory.
+  memory-mapped for playback, so long recordings cost address space rather than resident memory. `PlaybackEngine`
+  asks for the pages each recording plays over the next two seconds ahead of the render thread — while playing, and
+  at once after a seek, a loop wrap or a new alignment or track list — so a page dropped under memory pressure is
+  asked for again before the render thread reaches it, rather than when it does.
 - **Tempo and transposition keep a recording's pitch and timing (`RecordingStretcher`, `RecordingStretcherFactory`,
   `SwiftySynthBackend(sampleRate:stretcherFactory:)`, the `SheetMusicAudioSignalsmith` product).** Away from 100 %,
   or with a track transposed, a recording is read through a time stretcher instead of being sped up or slowed down

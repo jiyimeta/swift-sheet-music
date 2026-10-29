@@ -231,8 +231,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Most recent rate set by the host. Stored separately from the
     /// sequencer so the value survives `buildSequencer` rebuilds —
     /// every fresh `AVAudioSequencer` starts at 1.0 and we re-apply
-    /// this value once it's built.
-    private var pendingRate: Float = 1.0
+    /// this value once it's built. Readable by `+Recordings`, which reads ahead by it.
+    private(set) var pendingRate: Float = 1.0
     /// Pre-computed time → item mapping, used by the cursor poll
     /// to translate `sequencer.currentPositionInSeconds` into a
     /// `ScoreItemID`.
@@ -299,6 +299,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     var alignmentSegments: [RecordingSegment] = []
     /// `alignmentWarp` laid out for time reporting: transport seconds to the warped seconds the seek bar shows.
     @ObservationIgnored var alignmentSpeedTable = TransportSpeedTable(warp: nil)
+    /// `alignmentSegments` laid out for reading ahead: which file seconds each warped second plays
+    /// (`prefetchRecordings()`).
+    @ObservationIgnored var alignmentSchedule = RecordingSchedule(segments: [])
+    /// Cursor polls left until the next read-ahead of the recordings (`prefetchRecordings()`).
+    @ObservationIgnored var recordingPrefetchCountdown = 0
 
     /// When set, an alternate synth + transport backend (e.g. SwiftySynth)
     /// replaces the built-in AUMIDISynth path. Injected by a host that wants to
@@ -1791,6 +1796,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             backend.play()
             reapplyMixerPrograms()
             applyMixerState()
+            prefetchRecordings()
             state = .playing
             startCursorTimer()
         } catch {
@@ -1880,6 +1886,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         backend.play(afterCountInSeconds: countIn.seconds)
         reapplyMixerPrograms()
         applyMixerState()
+        prefetchRecordings()
         state = .playing
         startCursorTimer()
     }
@@ -1993,6 +2000,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // the host's seek bar, the lock-screen scrubber, and the ±10 s skip all land here.
             reapplyMixerPrograms()
             applyMixerState()
+            prefetchRecordings()
             currentCursor = timeline.frame(atTick: tick)?.cursor
             return
         }
@@ -2868,6 +2876,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             backend.seek(toTick: notatedLoop.startTick)
             reapplyMixerPrograms()
             applyMixerState()
+            prefetchRecordings()
             currentCursor = timeline.frame(atTick: notatedLoop.startTick)?.cursor
             return
         }
@@ -2880,6 +2889,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         if let frame = timeline.frame(atTime: notatedSeconds), frame.cursor != currentCursor {
             currentCursor = frame.cursor
         }
+        // Keep the recordings' pages ahead of the render thread (`prefetchRecordings()`).
+        recordingPrefetchCountdown -= 1
+        if recordingPrefetchCountdown <= 0 { prefetchRecordings() }
         // End of score: ask the TRANSPORT, not the timeline. The loaded SMF is the
         // unrolled render (repeats / jumps expanded) and may carry a count-in shift on
         // top, while the timeline is notated and un-shifted — so any timeline-space end
