@@ -42,23 +42,24 @@ public enum PlayedMeasures {
         guard !starts.isEmpty else { return [] }
 
         // A score with no repeat plan plays each notated measure once, in order, on the notated clock.
-        let plays: [(notatedStart: Int, notatedLength: Int, startSeconds: TimeInterval)]
+        let plays: [(measureIndex: Int, notatedStart: Int, notatedLength: Int, startSeconds: TimeInterval)]
         if unroll.spans.isEmpty {
             plays = starts.indices.map { index in
                 let end = index + 1 < starts.count ? starts[index + 1] : max(timeline.totalTicks, starts[index])
-                return (starts[index], end - starts[index], timeline.seconds(atTick: Double(starts[index])))
+                return (index, starts[index], end - starts[index], timeline.seconds(atTick: Double(starts[index])))
             }
         } else {
-            plays = zip(unroll.spans, unrolledTimeMap.spanStartSeconds).map { ($0.notatedStart, $0.notatedLength, $1) }
+            plays = zip(unroll.spans, unrolledTimeMap.spanStartSeconds).map {
+                ($0.measureIndex, $0.notatedStart, $0.notatedLength, $1)
+            }
         }
 
         let grid = PlaybackTimeline.metronomeGrid(score: score)
         var passes: [Int: Int] = [:]
         var result: [PlayedMeasure] = []
         result.reserveCapacity(plays.count)
-        for (notatedStart, notatedLength, startSeconds) in plays {
-            // The last measure starting at or before the span: a zero-length measure shares its start with the next.
-            guard let measureIndex = starts.lastIndex(where: { $0 <= notatedStart }) else { continue }
+        for (measureIndex, notatedStart, notatedLength, startSeconds) in plays {
+            guard grid.stepTicks.indices.contains(measureIndex) else { continue }
             let pass = (passes[measureIndex] ?? 0) + 1
             passes[measureIndex] = pass
 
@@ -68,7 +69,7 @@ public enum PlayedMeasures {
                 guard beat.tick >= notatedStart, beat.tick < notatedEnd else { return nil }
                 return startSeconds + timeline.seconds(atTick: Double(beat.tick)) - notatedStartSeconds
             }
-            let step = measureIndex < grid.stepTicks.count ? grid.stepTicks[measureIndex] : 1
+            let step = grid.stepTicks[measureIndex]
             result.append(PlayedMeasure(
                 measureIndex: measureIndex,
                 pass: pass,

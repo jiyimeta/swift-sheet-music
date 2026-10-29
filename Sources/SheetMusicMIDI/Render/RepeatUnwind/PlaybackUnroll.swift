@@ -28,6 +28,9 @@ public struct PlaybackUnroll: Sendable, Equatable {
         /// `tickSpan`). Lets `unrolledTicks(forNotated:)` test whether a
         /// notated tick falls inside `[notatedStart, notatedStart + notatedLength)`.
         public var notatedLength: Int
+        /// The notated measure this measure-play replays. Carried from the plan rather than recovered from
+        /// `notatedStart`, which is ambiguous where a measure has no length.
+        public var measureIndex: Int
     }
 
     /// Sorted ascending by `unrolledStart`. Empty for `identity`.
@@ -151,6 +154,7 @@ extension MidiRenderer {
                 unrolledStart: entry.tickOffset,
                 notatedStart: notatedBases[entry.measureIndex],
                 notatedLength: measureTickSpan,
+                measureIndex: entry.measureIndex,
             ))
             total = max(total, entry.tickOffset + measureTickSpan)
         }

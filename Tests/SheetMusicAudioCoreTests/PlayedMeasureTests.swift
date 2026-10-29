@@ -65,6 +65,18 @@ struct PlayedMeasureTests {
         #expect(played[1].beatSeconds == [2.0, 2.5, 3.0, 3.5])
     }
 
+    @Test func aZeroLengthMeasureInsideARepeatIsAttributedToItself() {
+        // m1 has an empty voice 0, so it starts on the same tick as m2. A lookup by start tick would credit its
+        // plays to m2; the span carries the real index.
+        let empty = Measure(voices: [Voice(elements: [])], startRepeat: true, endRepeatCount: 2)
+        let played = PlayedMeasures.make(score: Self.score([Self.measure(), empty, Self.measure()]))
+        #expect(played.map(\.measureIndex) == [0, 1, 1, 2])
+        #expect(played.map(\.pass) == [1, 1, 2, 1])
+        #expect(played[1].beatSeconds.isEmpty)
+        #expect(played[1].lengthInBeats == 0)
+        #expect(played[3].lengthInBeats == 4)
+    }
+
     @Test func anEighthNotePickup() {
         let played = PlayedMeasures.make(score: Self.score([
             Self.measure(duration: .eighth, actualLength: Fraction(numerator: 1, denominator: 8), irregular: true),
