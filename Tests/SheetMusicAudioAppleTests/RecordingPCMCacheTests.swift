@@ -224,6 +224,23 @@ struct RecordingPCMCacheTests {
         }
     }
 
+    /// Each of these used to trap converting the rate for the file name or the header (NaN, ±∞, beyond `UInt32`), or
+    /// fail later as a decode error (zero, negative, under 1 Hz once rounded).
+    @Test(arguments: [Double.nan, .infinity, -.infinity, 0, -48000, 0.4, 5e9])
+    func aSampleRateThatIsNotARateThrowsBeforeAnythingIsWritten(rate: Double) async throws {
+        let scratch = try Scratch()
+        let source = scratch.directory.appendingPathComponent("tone.wav")
+        _ = try writeSine(to: source, seconds: 0.1, sampleRate: 48000)
+
+        await #expect(throws: RecordingPCMCache.Failure.invalidSampleRate) {
+            try await RecordingPCMCache.prepare(
+                source: source, cacheKey: "k", sampleRate: rate, directory: scratch.directory,
+            )
+        }
+        let written = try FileManager.default.contentsOfDirectory(atPath: scratch.directory.path)
+        #expect(written == ["tone.wav"], "\(written)")
+    }
+
     @Test func mappingASixMinuteFileDoesNotMakeItResident() throws {
         let scratch = try Scratch()
         let frameCount = 360 * 48000

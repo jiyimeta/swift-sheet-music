@@ -16,17 +16,24 @@ public enum RecordingPCMCache {
         case decodeFailed(String)
         /// The decoded audio does not fit the cache format (empty, or more than UInt32 frames).
         case invalidLength(frames: Int)
+        /// The sample rate asked for is not finite, or does not round to 1 … `UInt32.max` Hz.
+        case invalidSampleRate
     }
 
     /// Decodes `source` (anything `AVAudioFile` reads; mono is duplicated to both channels) to interleaved Int16
-    /// stereo at `sampleRate` and writes it to `directory/<cacheKey>-<Int(sampleRate)>.pcm`, returning that URL. An
-    /// existing valid file is reused untouched; an invalid one is rebuilt. Decoding runs off the caller's actor and
-    /// stops between chunks when the task is cancelled.
+    /// stereo at `sampleRate` and writes it to `directory/<cacheKey>-<sampleRate in whole Hz>.pcm`, returning that URL.
+    /// An existing valid file is reused untouched; an invalid one is rebuilt. Decoding runs off the caller's actor and
+    /// stops between chunks when the task is cancelled. A `sampleRate` that is not finite or does not round to
+    /// 1 … `UInt32.max` Hz throws `.invalidSampleRate` before anything is read or written.
     @concurrent
     public static func prepare(
         source: URL, cacheKey: String, sampleRate: Double, directory: URL,
     ) async throws -> URL {
-        let destination = directory.appendingPathComponent("\(cacheKey)-\(Int(sampleRate)).pcm")
+        let wholeHertz = sampleRate.rounded()
+        guard wholeHertz.isFinite, wholeHertz >= 1, wholeHertz <= Double(UInt32.max) else {
+            throw Failure.invalidSampleRate
+        }
+        let destination = directory.appendingPathComponent("\(cacheKey)-\(Int(wholeHertz)).pcm")
         if (try? MappedRecording(pcmFile: destination)) != nil { return destination }
         guard FileManager.default.fileExists(atPath: source.path) else { throw Failure.noFile }
 
