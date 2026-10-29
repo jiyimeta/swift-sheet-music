@@ -53,6 +53,9 @@
 
         @ObservationIgnored private weak var engine: PlaybackEngine?
         @ObservationIgnored private var score: Score?
+        /// Click beats in a full first measure: the numerator of the time signature active there (the click step is
+        /// the denominator's unit, as in `PlaybackTimeline.metronomeGrid`).
+        @ObservationIgnored private var nominalFirstMeasureBeats = 4.0
         @ObservationIgnored private var pushed: [String: AudioTrackStrip] = [:]
 
         static let nudgeLimit = 0.3
@@ -65,6 +68,7 @@
 
         func scoreChanged(_ score: Score?) {
             self.score = score
+            nominalFirstMeasureBeats = score.map(Self.nominalBeatsOfFirstMeasure) ?? 4
             playedMeasures = score.map { PlayedMeasures.make(score: $0) } ?? []
             nudgesSeconds = nudgesSeconds.filter { $0.key < playedMeasures.count }
             nudgeIndex = min(max(1, nudgeIndex), max(1, playedMeasures.count - 1))
@@ -138,6 +142,29 @@
 
         // MARK: Grid -> alignment
 
+        /// A first measure shorter than its time signature is a pickup, whole-beat or fractional; one equal to it is
+        /// not, even when that is a fractional number of click beats.
+        nonisolated static func isPickup(lengthInBeats: Double, nominalBeats: Double) -> Bool {
+            lengthInBeats < nominalBeats - 1e-6
+        }
+
+        /// The time signature's numerator at measure 0, found as the metronome grid does: the first time signature
+        /// ahead of the first chord in measure 0 of any staff, else 4/4.
+        nonisolated static func nominalBeatsOfFirstMeasure(of score: Score) -> Double {
+            for entry in score.allStaves {
+                guard let measure = entry.staff.measures.first else { continue }
+                for element in measure.voices.first?.elements ?? [] {
+                    switch element {
+                    case let .timeSignature(signature): return Double(signature.numerator)
+                    case .chord: break
+                    default: continue
+                    }
+                    break
+                }
+            }
+            return 4
+        }
+
         /// Hands the engine the warp and the segment the grid describes. With the grid off (or an invalid BPM, or no
         /// score) there is no warp and one identity segment, so the recordings play from their start at the notated
         /// tempo instead of going silent. Callable while playing (a table swap on the backend).
@@ -149,7 +176,8 @@
                 return
             }
             if usesGrid, bpm > 0, let result = Self.alignment(
-                for: playedMeasures, bpm: bpm, firstDownbeat: firstDownbeatSeconds, nudges: nudgesSeconds,
+                for: playedMeasures, nominalFirstMeasureBeats: nominalFirstMeasureBeats, bpm: bpm,
+                firstDownbeat: firstDownbeatSeconds, nudges: nudgesSeconds,
             ) {
                 isAligned = true
                 engine.setAlignment(warp: result.warp, segments: result.segments)
@@ -167,7 +195,8 @@
         /// makes a pickup end-anchored (it plays the last part of its first beat) without a special case. A nudge
         /// moves a measure's downbeat: the previous measure's last beat gets longer and this one's first shorter.
         nonisolated static func alignment(
-            for measures: [PlayedMeasure], bpm: Double, firstDownbeat: Double, nudges: [Int: Double],
+            for measures: [PlayedMeasure], nominalFirstMeasureBeats: Double, bpm: Double, firstDownbeat: Double,
+            nudges: [Int: Double],
         ) -> (warp: PlaybackTimeWarp, segments: [RecordingSegment])? {
             let beatSeconds = 60 / bpm
             var raw: [(start: Double, end: Double)] = []
@@ -191,15 +220,14 @@
             }
             guard !raw.isEmpty else { return nil }
 
-            // A pickup (a first measure that is not a whole number of beats) is end-anchored: it ends at the first
-            // full measure's downbeat, so the recording starts that much earlier. Measured before any nudge, so a
-            // nudge moves the downbeat rather than the anchor.
+            // A pickup (a first measure shorter than its time signature) is end-anchored: it ends at the first full
+            // measure's downbeat, so the recording starts that much earlier. Measured before any nudge, so a nudge
+            // moves the downbeat rather than the anchor.
             var pickupSeconds = 0.0
-            if measures.count > 1, let first = firstSpan[0], let last = lastSpan[0] {
-                let beats = measures[0].lengthInBeats
-                if beats - beats.rounded(.down) > 1e-6 {
-                    pickupSeconds = durations[first ... last].reduce(0, +)
-                }
+            if measures.count > 1, let first = firstSpan[0], let last = lastSpan[0],
+               isPickup(lengthInBeats: measures[0].lengthInBeats, nominalBeats: nominalFirstMeasureBeats)
+            {
+                pickupSeconds = durations[first ... last].reduce(0, +)
             }
 
             let minimum = 0.05
