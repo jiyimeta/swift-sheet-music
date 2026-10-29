@@ -215,6 +215,43 @@
                     #expect(level.lowest > 0.395 && level.highest < 0.405, "A + B across the change: \(level)")
                 }
 
+                /// A stretcher's input is each track read at its own offset, from its own file, so changing either
+                /// moves what that input is. Fed on, the jump would reach the output a stretcher lead later as an
+                /// unfaded step; the group has to restart, as it does for a new transposition, and crossfade.
+                @Test(
+                    "an offset or a recording change at 70 % restarts the group and crossfades, with no step",
+                    arguments: [true, false],
+                )
+                func offsetOrRecordingChangeCrossfades(changesOffset: Bool) async throws {
+                    let recorder = FakeStretcherRecorder()
+                    let rig = try await Self.rig(recorder.factory)
+                    defer { rig.finish() }
+                    rig.backend.setRate(0.7)
+                    // 0.6 for the first second, 0.2 after it.
+                    let steps = try Fixtures.recording(rate: 44100, frames: 44100 * 4) { $0 < 44100 ? 19661 : 6554 }
+                    Self.play([RecordingTrackRender(id: "take", recording: steps)], on: rig.backend)
+                    // 1.5 s at 70 % reads the file at 1.05 s: 0.2.
+                    let before = try rig.render(seconds: 1.5)
+                    // Either the same file half a second later in the reference — read at 0.55 s — or another file.
+                    let level = try Fixtures.recording(rate: 44100, frames: 44100 * 4) { _ in 19661 }
+                    rig.backend.setRecordingTracks([
+                        changesOffset
+                            ? RecordingTrackRender(id: "take", recording: steps, offsetSeconds: 0.5)
+                            : RecordingTrackRender(id: "take", recording: level),
+                    ])
+                    let after = try rig.render(seconds: 0.3)
+
+                    let around = Array(before.suffix(100)) + after
+                    let largestStep = zip(around.dropFirst(), around).map { abs($0 - $1) }.max() ?? 1
+                    #expect(largestStep < 0.01, "largest step between frames: \(largestStep)")
+                    #expect(abs((before.last ?? 0) - 0.2) < 0.01, "before: \(before.last ?? 0)")
+                    #expect(abs((after.last ?? 0) - 0.6) < 0.01, "after: \(after.last ?? 0)")
+                    // The idle instance of the pair was restarted at the new input; no new pair was made.
+                    try #require(recorder.made.count == 2)
+                    let seek = Call.seek(frames: recorder.made[0].seekLength(rate: Self.rate70), rate: Self.rate70)
+                    #expect(recorder.made[0].calls.prefix(3) == [.reset, .transpose(0), seek])
+                }
+
                 // MARK: Helpers
 
                 typealias Call = FakeStretcher.Call

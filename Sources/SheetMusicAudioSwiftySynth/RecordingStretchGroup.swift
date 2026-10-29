@@ -38,8 +38,9 @@ struct StretchGroupState {
     var fadingVoice = -1
     /// Input the fading stretcher is owed but was not fed, under a frame.
     var fadingRemainder: Double = 0
-    /// The group's transposition or tracks changed: the next frame that plays is a jump to a stretcher primed with the
-    /// new input and retuned, so the change is heard after the 5 ms fade rather than after the stretcher's lead.
+    /// The group's transposition or tracks changed, or a track's file or offset: the next frame that plays is a jump to
+    /// a stretcher primed with the new input and retuned, so the change is heard after the 5 ms fade rather than after
+    /// the stretcher's lead.
     var needsRestart = false
 
     /// Nothing sounds and nothing fades. A group that is not playing stays so.
@@ -96,8 +97,8 @@ enum RecordingGroupPlan {
         let trackIndices: [Int]
         /// The previous group whose pair and reading this one takes over, if any.
         let continues: Int?
-        /// The group it carries on from had another transposition or other tracks: the render restarts it, primed and
-        /// retuned, and crossfades.
+        /// The group it carries on from had another transposition or other tracks, or one of its tracks now reads
+        /// another file or at another offset: the render restarts it, primed and retuned, and crossfades.
         let restarts: Bool
     }
 
@@ -150,11 +151,21 @@ enum RecordingGroupPlan {
             let restarts = continues[group].map { index in
                 previous[index].transposeSemitones != transpositions[group]
                     || Set(previousIDs[index]) != Set(memberIDs[group])
+                    || !readsTheSameInput(previous[index], members[group].map { tracks[$0] })
             } ?? false
             return Group(
                 transposeSemitones: transpositions[group], trackIndices: members[group],
                 continues: continues[group], restarts: restarts,
             )
+        }
+    }
+
+    /// Whether every track in `tracks` that `layout` already held reads the same file at the same offset: what the
+    /// stretcher is fed is each track's file read at its offset, so a change to either is a jump in its input.
+    private static func readsTheSameInput(_ layout: RecordingGroupLayout, _ tracks: [RecordingTrackRender]) -> Bool {
+        tracks.allSatisfy { track in
+            guard let held = layout.tracks.first(where: { $0.id == track.id }) else { return true }
+            return held.recording === track.recording && held.offsetSeconds == track.offsetSeconds
         }
     }
 }

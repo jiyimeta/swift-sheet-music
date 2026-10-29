@@ -305,10 +305,10 @@ extension SwiftySynthBackend {
     /// Replaces the recordings in one lock section. A track whose `id` was already playing keeps its playhead and its
     /// gain ramp, so a new gain neither fades nor jumps it: the render ramps to it over the fade. A group carries on
     /// the stretchers of the previous group that held most of its tracks (`RecordingGroupPlan`); when its
-    /// transposition or its tracks changed, the render restarts it, primed and retuned, and crossfades. A previous
-    /// group nobody carries on is kept draining until its fade-out is over, and dropped by the first call after that.
-    /// Stretchers a group now needs are made here, on the main actor. The previous arrays, stretchers and scratch are
-    /// released after the lock, never on the render thread.
+    /// transposition or its tracks changed, or a track's file or offset, the render restarts it, primed and retuned,
+    /// and crossfades. A previous group nobody carries on is kept draining until its fade-out is over, and dropped by
+    /// the first call after that. Stretchers a group now needs are made here, on the main actor. The previous arrays,
+    /// stretchers and scratch are released after the lock, never on the render thread.
     public func setRecordingTracks(_ tracks: [RecordingTrackRender]) {
         var incoming = tracks.map { RenderedRecording($0) }
         let plan = RecordingGroupPlan.make(tracks: tracks, previous: recordingGroupLayout)
