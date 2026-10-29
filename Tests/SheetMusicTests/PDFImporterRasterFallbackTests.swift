@@ -27,25 +27,28 @@
             #expect(!score.parts.isEmpty)
         }
 
-        /// The per-page gate, in both directions. A page the vector walker
-        /// filled must NOT reach the detector; a page it left empty MUST.
+        /// The per-page gate, in every direction. A page the vector walker
+        /// read music on must NOT reach the detector; a page it left empty
+        /// MUST, and so must a page whose engraving is all paths.
         ///
         /// Both directions matter: asserting only "not asked" would pass even
         /// if the fallback were deleted outright, and a test that cannot fail
         /// is this repository's most-recorded defect class.
-        @Test func theDetectorIsAskedOnlyForPagesWithNoVectorContent() throws {
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func theDetectorIsAskedOnlyForPagesWithNoVectorMusic() throws {
             // Fixture construction stays OUTSIDE the `try?`: swallowing a
             // `FixtureError` there would let the vector half pass because no
             // document was ever parsed.
             let vectorData = try Self.vectorPDF()
             let imageData = try Self.imageOnlyPDF(Self.staffBitmap())
+            let outlinedData = try Self.outlinedPDF()
 
             let onVector = Tripwire()
             var vectorOptions = PDFImportOptions()
             vectorOptions.omrDetector = onVector
             vectorOptions.omrRenderDPI = Self.renderDPI
             _ = try? PDFImporter.parse(pdfData: vectorData, options: vectorOptions)
-            #expect(onVector.pagesAsked.isEmpty, "a page with vector content must not be rasterized")
+            #expect(onVector.pagesAsked.isEmpty, "a page with vector music must not be rasterized")
 
             let onImage = Tripwire()
             var imageOptions = PDFImportOptions()
@@ -53,6 +56,53 @@
             imageOptions.omrRenderDPI = Self.renderDPI
             _ = try? PDFImporter.parse(pdfData: imageData, options: imageOptions)
             #expect(onImage.pagesAsked == [0], "an image-only page must reach the detector exactly once")
+
+            let onOutlined = Tripwire()
+            var outlinedOptions = PDFImportOptions()
+            outlinedOptions.omrDetector = onOutlined
+            outlinedOptions.omrRenderDPI = Self.renderDPI
+            _ = try? PDFImporter.parse(pdfData: outlinedData, options: outlinedOptions)
+            #expect(onOutlined.pagesAsked == [0], "a page of paths and no glyph must reach the detector")
+        }
+
+        /// The premise both gate tests stand on, measured rather than assumed:
+        /// the vector fixture's clefs are CLASSIFIED glyphs, and the outlined
+        /// fixture carries vector paths and curves but no glyph. Without the
+        /// first, the "vector" arms would be rasterized pages; without the
+        /// second, the outlined arm would be an empty page under another name.
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func theFixturesCarryWhatTheGateKeysOn() throws {
+            let vector = try PDFImporter.walkDocument(PDFImporter.openDocument(Self.vectorPDF()))
+            #expect(!vector.content.glyphs.isEmpty, "the vector fixture's clefs must classify")
+
+            let outlined = try PDFImporter.walkDocument(PDFImporter.openDocument(Self.outlinedPDF()))
+            #expect(outlined.content.glyphs.isEmpty)
+            #expect(outlined.content.paths.contains { $0.kind == .rectangle })
+            #expect(!outlined.content.curves.isEmpty)
+        }
+
+        /// A page read as an image keeps NONE of the vector walker's paths or
+        /// curves. Merged, they would be the same staff lines twice in two
+        /// frames, and vector strokes on a page whose raster-aware consumers
+        /// gate on `detectedFromRaster` — the noteheads' outlines read as ties.
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func anOutlinedPageIsReadWithoutItsVectorPaths() throws {
+            let document = try PDFImporter.openDocument(Self.outlinedPDF())
+            let walk = try PDFImporter.walkDocument(document)
+            var content = walk.content
+            var pageSizes = walk.pageSizes
+            var options = PDFImportOptions()
+            options.omrRenderDPI = Self.renderDPI
+            let rasterPages = PDFImporter.applyRasterFallback(
+                to: &content, pageSizes: &pageSizes,
+                document: document, detector: Tripwire(), options: options,
+            )
+
+            #expect(rasterPages == [0], "the rendered staves must be read, or nothing below is measured")
+            #expect(!content.paths.isEmpty)
+            let vectorSurvivors = content.paths.filter { !$0.detectedFromRaster }
+            #expect(vectorSurvivors.isEmpty, "no vector path may survive")
+            #expect(content.curves.isEmpty, "the outlined noteheads must not survive as tie candidates")
         }
 
         /// `nil` means today's behavior LITERALLY: no rasterization, no
@@ -101,7 +151,8 @@
         /// alone — `buildScore` derives ONE document-wide ensemble staff count
         /// as a GCD over every page, so a raster page that miscounts can drop
         /// every page, vector ones included, onto the per-page heuristic.
-        @Test func aMixedDocumentLeavesTheVectorPageUnchanged() throws {
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func aMixedDocumentLeavesTheVectorPageUnchanged() throws {
             var options = PDFImportOptions()
             options.omrTileClassifier = try CoreMLTileClassifier()
             options.omrRenderDPI = Self.renderDPI
@@ -134,7 +185,8 @@
         /// it at. Without this, the mixed-document test still passes but
         /// exercises none of the coupling it exists for — so the fixture is
         /// measured here rather than assumed from its constants.
-        @Test func bothFixturePagesCarryATwoStaffEnsemble() throws {
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func bothFixturePagesCarryATwoStaffEnsemble() throws {
             let document = try PDFImporter.openDocument(Self.vectorPDF())
             let walk = try PDFImporter.walkDocument(document)
             let vectorStaves = PDFImporter.detectStaves(
@@ -174,7 +226,8 @@
         /// today's outcome for that page — otherwise setting
         /// `omrTileClassifier` on a mixed 200-page document turns a parse that
         /// succeeded on its vector pages into a total failure over one page.
-        @Test func aPageTheFallbackCannotReadDoesNotFailTheDocument() throws {
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func aPageTheFallbackCannotReadDoesNotFailTheDocument() throws {
             let log = DiagnosticLog()
             var options = PDFImportOptions()
             options.omrDetector = FailingDetector()
@@ -256,7 +309,8 @@
         /// has when parsed alone, and the raster page adds none — so the
         /// exclusion is per page, not a document-wide switch that would take
         /// the cursor off the typeset pages around one scan.
-        @Test func aMixedDocumentKeepsOnlyTheVectorPagesGeometry() throws {
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func aMixedDocumentKeepsOnlyTheVectorPagesGeometry() throws {
             var options = PDFImportOptions()
             options.omrTileClassifier = try CoreMLTileClassifier()
             options.omrRenderDPI = Self.renderDPI

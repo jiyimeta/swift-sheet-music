@@ -125,6 +125,23 @@ and this project adheres to
   with its own layer of mixer settings re-applies it after either outcome. Strips added, removed or moved to another
   channel, and a part that becomes a drum kit, still re-prepare. The Windows and Android engines decide as before.
 
+### Fixed
+
+- **A PDF whose engraving is outlined into paths is read as an image.** A purchased PDF re-saved through macOS
+  Preview, or a print driver that converts text to outlines, carries staff lines, stems and filled notehead shapes
+  but not one glyph, and the raster fallback only read pages with no vector content at all — so such a page was read
+  as a skeleton of empty measures and the import failed. The fallback now reads every page the vector walker found no
+  classified glyph on, and drops that page's vector paths and curves instead of merging them, since they are the same
+  ink in another frame. Pages with music glyphs, and every parse without `omrTileClassifier`, are unchanged.
+- **A percussion clef read inside a pitched system no longer turns the whole part into a drum staff.** On a page read
+  as an image, the detector can take an end-repeat barline's two thick strokes for a percussion clef, and one such
+  clef anywhere made `staffIsPercussion` remap every note of the part to drum keys. A percussion clef inside a
+  raster-read system that did not open with one is now dropped; a real drum staff opens every system with its clef.
+- **A MusicXML file whose title straddles byte 256 loads.** `ScoreLoader.sniff` tells mscx from MusicXML by the root
+  element in the first 256 bytes, and decoded them as strict UTF-8 — so when a multibyte title near the top of the
+  file (music21 and MuseScore both write `<work-title>` there) was cut mid-character, the decode returned nil and a
+  valid file was refused with `bridge.scoreFormat.unrecognized`. The root names are now matched as bytes.
+
 ## [4.21.0] - 2026-10-26
 
 ### Fixed

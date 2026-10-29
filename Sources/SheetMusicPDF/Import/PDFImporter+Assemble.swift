@@ -34,9 +34,7 @@ extension PDFImporter {
         // staves than the body), which would otherwise truncate every later
         // system's surplus staves in `appendSystem`'s zip. The richest
         // system is the best single template for the full ensemble.
-        let referenceSystem = systems.max { lhs, rhs in
-            totalStaves(lhs) < totalStaves(rhs)
-        } ?? systems[0]
+        let referenceSystem = systems.max { totalStaves($0) < totalStaves($1) } ?? systems[0]
         let shape = partShape(from: referenceSystem)
         // Strip the arrangers' colon-prefixed StaffText performance notes
         // ("Lead:…", "Perc.:…") from the text pool up front, so they can't
@@ -80,6 +78,7 @@ extension PDFImporter {
                 graceSizeThreshold: graceSizeThreshold,
                 clefOverrides: f8vaOverrides,
                 clefConsensus: clefConsensus,
+                rasterRead: rasterPages?.contains(system.pageIndex) == true,
                 stavesContent: &stavesContent,
                 state: &state,
                 options: options,
@@ -170,6 +169,7 @@ extension PDFImporter {
         graceSizeThreshold: CGFloat,
         clefOverrides: [Int: Clef],
         clefConsensus: [Int: [Int: Clef]],
+        rasterRead: Bool,
         stavesContent: inout [[Measure]],
         state: inout StaffStateMap,
         options: PDFImportOptions,
@@ -226,6 +226,7 @@ extension PDFImporter {
                     graceSizeThreshold: graceSizeThreshold,
                     clefOverride: clefOverrides[slot],
                     clefConsensus: clefConsensus[slot]?[sysIndex],
+                    rasterRead: rasterRead,
                     nextStaffTopY: nextStaffTopY,
                     state: &state,
                     slot: slot,
@@ -301,6 +302,7 @@ extension PDFImporter {
         graceSizeThreshold: CGFloat,
         clefOverride: Clef?,
         clefConsensus: Clef?,
+        rasterRead: Bool,
         nextStaffTopY: CGFloat?,
         state: inout StaffStateMap,
         slot: Int,
@@ -318,6 +320,9 @@ extension PDFImporter {
         // purpose: a clef this pass FILLS IN must be downgraded by the same
         // whole-part decision as one the system read for itself.
         events = applyInitialClefConsensus(events, to: clefConsensus)
+        // After the consensus, so a filled-in percussion opening clef protects
+        // a real drum staff's mid-system re-reads.
+        if rasterRead { events = droppingMidSystemPercussionClefs(events) }
         // Apply the whole-part E065 (F8va) clef resolution decided up front by
         // `resolveF8vaSlots`. Confined to the F8va case. See `remapF8vaClef`.
         events = remapF8vaClef(events, to: clefOverride)

@@ -97,5 +97,42 @@
             )
             #expect(resolved.map { $0?.concertClefType } == ["G8vb"])
         }
+
+        private func clefChanges(_ events: [ScoreStateEvent]) -> [String] {
+            events.compactMap { event in
+                if case let .clefChange(clef, measureIndex) = event {
+                    return "\(measureIndex):\(clef.concertClefType)"
+                }
+                return nil
+            }
+        }
+
+        @Test func dropsAPercussionClefInsideAPitchedSystem() {
+            // The measured failure: the `:|` of a first ending read as a
+            // percussion clef, two measures into a treble system. A genuine
+            // mid-system change to another pitched clef must survive beside it.
+            let events: [ScoreStateEvent] = [
+                .clefChange(clef("G"), atMeasureIndex: 0),
+                .clefChange(clef("PERCUSSION"), atMeasureIndex: 2),
+                .clefChange(clef("F"), atMeasureIndex: 3),
+            ]
+            #expect(clefChanges(PDFImporter.droppingMidSystemPercussionClefs(events)) == ["0:G", "3:F"])
+        }
+
+        @Test func dropsAPercussionClefInsideASystemThatReadNoOpeningClef() {
+            // Silence at the left edge is not a drum staff either.
+            let events: [ScoreStateEvent] = [.clefChange(clef("PERCUSSION"), atMeasureIndex: 1)]
+            #expect(PDFImporter.droppingMidSystemPercussionClefs(events).isEmpty)
+        }
+
+        @Test func keepsEveryClefOfASystemThatOpensAsPercussion() {
+            let events: [ScoreStateEvent] = [
+                .clefChange(clef("PERCUSSION"), atMeasureIndex: 0),
+                .clefChange(clef("PERCUSSION"), atMeasureIndex: 4),
+            ]
+            #expect(
+                clefChanges(PDFImporter.droppingMidSystemPercussionClefs(events)) == ["0:PERCUSSION", "4:PERCUSSION"],
+            )
+        }
     }
 #endif

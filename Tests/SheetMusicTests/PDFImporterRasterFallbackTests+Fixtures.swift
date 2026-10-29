@@ -1,7 +1,9 @@
 #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import CoreGraphics
+    import CoreText
     import Foundation
     @testable import SheetMusicCore
+    import SheetMusicLayoutApple
     @testable import SheetMusicPDF
     import Testing
 
@@ -54,10 +56,18 @@
             return bitmap
         }
 
+        /// The vector page needs a music glyph, not just paths: the fallback
+        /// reads every page without one, so a staff-lines-only page would be
+        /// rasterized and the "vector" arm of every test would measure OMR.
+        static var bravuraAvailable: Bool {
+            guard #available(macOS 15.0, *) else { return false }
+            return BravuraFont.register
+        }
+
         /// The five-line staves the vector walker reads, as stroked paths —
         /// the shape `PDFImporterFaçadeTests` proves `buildScore` accepts,
         /// twice, for the reason on `staffBandCount`.
-        static func drawVectorStaff(into context: CGContext) {
+        static func drawStaffLines(into context: CGContext) {
             context.setLineWidth(0.5)
             context.setStrokeColor(gray: 0, alpha: 1)
             for band in 0 ..< staffBandCount {
@@ -69,6 +79,59 @@
                     context.strokePath()
                 }
             }
+        }
+
+        /// The staves plus a Bravura G clef on each — the glyph that makes the
+        /// page one the vector walker read music on. 40pt is four 10pt staff
+        /// spaces; the clef's origin sits on the G line, the second from the
+        /// bottom. Its PDF must go through `vectorMusic(_:)`.
+        static func drawVectorStaff(into context: CGContext) {
+            drawStaffLines(into: context)
+            let font = CTFontCreateWithName("Bravura" as CFString, 40, nil)
+            let clef = NSAttributedString(string: "\u{E050}", attributes: [.font: font])
+            for band in 0 ..< staffBandCount {
+                context.textPosition = CGPoint(x: 30, y: CGFloat(40 + band * 100))
+                CTLineDraw(CTLineCreateWithAttributedString(clef), context)
+            }
+        }
+
+        /// An engraving outlined into paths, the way a PDF re-saved through
+        /// macOS Preview carries one: staff lines, filled notehead shapes and
+        /// a stroked frame, and not one glyph. The frame and the heads are the
+        /// vector walker's `.rectangle` paths and curves — kinds no raster
+        /// front-end emits — so a test can tell whether any of them survived.
+        ///
+        /// 7pt staff spaces, not `drawStaffLines`' 10pt: rendered at
+        /// `renderDPI`, 10pt is 41.7px, past the 40px ceiling the raster staff
+        /// estimator accepts as a within-staff gap, so the page would yield no
+        /// staff and the fallback would leave it as the vector walk read it.
+        static func drawOutlinedStaff(into context: CGContext) {
+            context.setLineWidth(0.5)
+            context.setStrokeColor(gray: 0, alpha: 1)
+            for band in 0 ..< staffBandCount {
+                for line in 0 ..< 5 {
+                    let y = CGFloat(40 + band * 90 + line * 7)
+                    context.beginPath()
+                    context.move(to: CGPoint(x: 25, y: y))
+                    context.addLine(to: CGPoint(x: 275, y: y))
+                    context.strokePath()
+                }
+            }
+            context.stroke(CGRect(x: 10, y: 10, width: 280, height: 180))
+            context.setFillColor(gray: 0, alpha: 1)
+            for band in 0 ..< staffBandCount {
+                for step in 0 ..< 4 {
+                    let center = CGPoint(x: 80 + step * 50, y: 47 + band * 90 + step * 3)
+                    context.fillEllipse(in: CGRect(x: center.x - 4, y: center.y - 3, width: 8, height: 6))
+                }
+            }
+        }
+
+        /// CoreGraphics writes a `/ToUnicode` CMap that sends the clef to an
+        /// unrelated Latin scalar, which no classifier tier reads — see
+        /// `PDFFixtureBuilder.strippingToUnicodeCMaps`.
+        static func vectorMusic(_ data: Data) -> Data {
+            PDFFixtureBuilder.strippingToUnicodeCMaps(from: data).data
         }
 
         static func drawBitmap(_ bitmap: GrayBitmap, into context: CGContext) throws {
@@ -120,15 +183,19 @@
         }
 
         static func vectorPDF() throws -> Data {
-            try pdf(pages: [{ drawVectorStaff(into: $0) }])
+            try vectorMusic(pdf(pages: [{ drawVectorStaff(into: $0) }]))
+        }
+
+        static func outlinedPDF() throws -> Data {
+            try pdf(pages: [{ drawOutlinedStaff(into: $0) }])
         }
 
         /// Page 0 vector, page 1 image-only.
         static func mixedPDF() throws -> Data {
-            try pdf(pages: [
+            try vectorMusic(pdf(pages: [
                 { drawVectorStaff(into: $0) },
                 { try drawBitmap(staffBitmap(), into: $0) },
-            ])
+            ]))
         }
 
         /// `PDFImporter`'s own internal `Staff`, not `SheetMusicCore.Staff`:

@@ -10,6 +10,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual runs on any branch (`gh workflow run ci.yml --ref <branch>`). Work lands on main without pull requests
+  # here, so this is how a branch gets the full gate before it does.
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}

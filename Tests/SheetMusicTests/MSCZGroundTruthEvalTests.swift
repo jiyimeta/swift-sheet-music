@@ -49,7 +49,11 @@
                 return
             }
             print("[mscz] pairs=\(cases.count)")
+            if Self.listedCases(cases) { return }
             let scanDPI = Self.doubleEnv("OMR_MSCZ_SCAN_DPI", default: 300)
+            // `OMR_MSCZ_SKIP_NATIVE=1` leaves only the `.external` sweeps, for
+            // checking an outside engine's files before a full round.
+            let native = Self.env("OMR_MSCZ_SKIP_NATIVE") != "1"
             Self.proveTheRasterPathIsLoadBearing(cases[0], scanDPI: scanDPI)
             // Off by default: one dump is several lines per file, which over
             // a 657-file sweep buries the rows the sweep exists to produce.
@@ -59,19 +63,12 @@
             // sweep at τ=0.02 is run FOR — the score-level rows at that τ
             // are junk and cost the same 15 minutes per 200 files.
             let probesOnly = Self.env("OMR_MSCZ_PROBES_ONLY") == "1"
-
-            var vectorOptions = PDFImportOptions()
-            // Attached to BOTH modes, deliberately. A diagnostic the importer
-            // emits is emitted for every caller, so a new one has to be shown
-            // NOT to fire on ordinary vector documents before it ships — and
-            // this corpus is the only place that can be measured.
-            vectorOptions.diagnostics = Self.diagnosticSink(mode: "vector")
             if !probesOnly {
-                let vector = MSCZGroundTruthSweep.sweep(
-                    cases: cases, mode: .vector, scanDPI: scanDPI, options: vectorOptions,
-                    dumpDivergence: dump,
-                )
-                print(MSCZGroundTruthSweep.summaryLine(mode: .vector, totals: vector))
+                Self.sweepVectorAndExternal(cases: cases, scanDPI: scanDPI, dump: dump, native: native)
+            }
+            if !native {
+                print("[mscz] native sweeps skipped (OMR_MSCZ_SKIP_NATIVE=1)")
+                return
             }
 
             var rasterOptions = PDFImportOptions()
@@ -106,6 +103,54 @@
                 dumpDivergence: dump,
             )
             print(MSCZGroundTruthSweep.summaryLine(mode: .raster, totals: raster))
+        }
+
+        /// `OMR_MSCZ_LIST_CASES=1`: print the population an outside engine has
+        /// to read, in this sweep's own order, and stop. Re-deriving the prefix
+        /// outside Swift would have to reproduce `String` ordering over NFD
+        /// file names exactly.
+        static func listedCases(_ cases: [MSCZGroundTruthSweep.Case]) -> Bool {
+            guard env("OMR_MSCZ_LIST_CASES") == "1" else { return false }
+            for item in cases {
+                print("[mscz-case] \(item.name)")
+            }
+            return true
+        }
+
+        /// The vector sweep (unless `native` is off) and every `.external` one.
+        /// They share one set of options: an outside engine's MusicXML never
+        /// reaches the importer, so the options only matter to the vector mode.
+        @MainActor
+        static func sweepVectorAndExternal(
+            cases: [MSCZGroundTruthSweep.Case], scanDPI: Double, dump: Bool, native: Bool,
+        ) {
+            var vectorOptions = PDFImportOptions()
+            // Attached to BOTH modes, deliberately. A diagnostic the importer
+            // emits is emitted for every caller, so a new one has to be shown
+            // NOT to fire on ordinary vector documents before it ships — and
+            // this corpus is the only place that can be measured.
+            vectorOptions.diagnostics = diagnosticSink(mode: "vector")
+            var modes = externalModes()
+            if native { modes.insert(.vector, at: 0) }
+            for mode in modes {
+                let totals = MSCZGroundTruthSweep.sweep(
+                    cases: cases, mode: mode, scanDPI: scanDPI, options: vectorOptions,
+                    dumpDivergence: dump,
+                )
+                print(MSCZGroundTruthSweep.summaryLine(mode: mode, totals: totals))
+            }
+        }
+
+        /// `OMR_MSCZ_EXTERNAL=oemer=/path/a,smt=/path/b` — one `.external`
+        /// sweep per entry, each reading `<path>/<score>.musicxml`.
+        static func externalModes() -> [MSCZGroundTruthSweep.Mode] {
+            (env("OMR_MSCZ_EXTERNAL") ?? "").split(separator: ",").compactMap { entry in
+                let pair = entry.split(separator: "=", maxSplits: 1)
+                guard pair.count == 2 else { return nil }
+                return .external(
+                    label: String(pair[0]), root: URL(fileURLWithPath: String(pair[1]), isDirectory: true),
+                )
+            }
         }
 
         /// The classifier the raster mode runs, with the `OMR_DECODE_*` sweep
@@ -221,7 +266,8 @@
             // `#expect(throws:)` would pass just as happily on the untouched
             // vector PDF and prove nothing about the simulation.
             // `pdf.content.empty` is the only code that means "no glyphs and
-            // no paths", which is the condition `applyRasterFallback` keys on.
+            // no paths": no glyph is what `applyRasterFallback` keys on, and no
+            // path means nothing of the vector reading is left to be scored.
             #expect(Self.refusalCode(of: scanned) == "pdf.content.empty")
             #expect(
                 try Self.refusalCode(of: Self.vectorPDF(pages: 2)) == "pdf.staff.noneDetected",
