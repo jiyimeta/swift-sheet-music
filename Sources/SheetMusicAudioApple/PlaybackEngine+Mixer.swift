@@ -18,7 +18,10 @@ extension PlaybackEngine {
 
     /// Set a channel's solo button state. Multiple channels can solo
     /// simultaneously; non-soloed channels are silenced whenever any
-    /// channel is soloed.
+    /// channel is soloed. The bus spans the recordings too
+    /// (`setRecordingMix(id:volume:isMuted:isSoloed:)`): a soloed strip
+    /// silences every unsoloed recording, and a soloed recording every
+    /// unsoloed strip.
     ///
     /// No-op for a channel that isn't on the solo bus (the metronome —
     /// see `MixerChannel.isSoloable`), so its `isSoloed` can never read
@@ -70,11 +73,17 @@ extension PlaybackEngine {
     /// `PlaybackEngine.postProcessForMIDISynth`, so a seek / loop-wrap
     /// rewind can no longer chase-fire it and clobber the user's choice.
     ///
-    /// Solo overrides everything else — when any instrument channel is
-    /// soloed, non-soloed instrument channels go silent. The metronome
-    /// is off the solo bus (`MixerChannel.isSoloable`) and answers to
-    /// its own mute alone: soloing a part to practise against the click
-    /// used to take the click with it.
+    /// Solo overrides everything else — when any instrument channel or
+    /// recording is soloed, non-soloed instrument channels and
+    /// recordings go silent. The metronome is off the solo bus
+    /// (`MixerChannel.isSoloable`) and answers to its own mute alone:
+    /// soloing a part to practise against the click used to take the
+    /// click with it.
+    ///
+    /// The recordings are handed to the backend only when what they
+    /// resolve to changed (`pushRecordingTracks(soloing:)`): the backend
+    /// keeps them across play, seek and loop wrap, so the re-assert
+    /// after each of those sends nothing for them.
     func applyMixerState() {
         let soloing = isSoloing
         for channel in mixerChannels {
@@ -90,14 +99,16 @@ extension PlaybackEngine {
                 setMetronomeVolume(channel.volume)
             }
         }
+        pushRecordingTracks(soloing: soloing)
     }
 
     /// Whether the solo bus is engaged — i.e. at least one channel that
-    /// is *on* that bus is soloed. The one place the rule is expressed;
-    /// `applyMixerState`, `reassertBackendChannelState` and the export
-    /// snapshot all read it so they can't drift apart.
+    /// is *on* that bus, or one recording, is soloed. The one place the
+    /// live rule is expressed; `applyMixerState` and
+    /// `reassertBackendChannelState` read it so they can't drift apart.
+    /// The export snapshot reads its own channels' `isSoloing`.
     var isSoloing: Bool {
-        mixerChannels.isSoloing
+        mixerChannels.isSoloing || recordings.contains { $0.track.isSoloed }
     }
 
     /// Re-assert EVERY mixer-managed instrument channel's program +

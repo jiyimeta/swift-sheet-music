@@ -9,6 +9,12 @@ and this project adheres to
 
 ### Added
 
+- **Recording tracks on `PlaybackEngine` (`RecordingTrack`, `setRecordingTracks(_:)`,
+  `setRecordingMix(id:volume:isMuted:isSoloed:)`, `setAlignment(warp:segments:)`, `hasAlignment`).** Recordings mix
+  with the score at their strip's volume and mute, on one solo bus with the instrument strips (the click stays off it),
+  follow the reader's transposition, take an alignment while playing without stopping it, and with an alignment set the
+  elapsed and total time, `seek(toTimeSeconds:)` and `skip(by:)` speak the recording's warped seconds; a gain change
+  ramps instead of clicking.
 - **Recordings on the SwiftySynth transport (`SynthBackend.setRecordingTracks(_:)`,
   `setPlaybackAlignment(warp:segments:)`, `RecordingTrackRender`).** `SwiftySynthBackend` mixes mapped recordings into
   its own render, read at the position its transport is at, so they stay locked to the synthesized parts and the click;

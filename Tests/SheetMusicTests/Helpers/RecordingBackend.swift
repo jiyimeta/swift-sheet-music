@@ -44,6 +44,15 @@
         private(set) var offlineInstance: RecordingBackend?
         private(set) var offlineSampleRate: Double?
         private(set) var timeline: PlaybackTimeline?
+        /// Transport calls, counted, so a test can assert that something did NOT move the transport.
+        private(set) var playCallCount = 0
+        private(set) var pauseCallCount = 0
+        /// Whether the double claims to mix recordings. A test sets it false to stand in for a backend that cannot.
+        var canPlayRecordings = true
+        /// Every track list the engine handed over, in order.
+        private(set) var recordingTrackCalls: [[RecordingTrackRender]] = []
+        /// Every alignment the engine handed over, in order.
+        private(set) var alignmentCalls: [(warp: PlaybackTimeWarp?, segments: [RecordingSegment])] = []
 
         func clearRecordings() {
             volumeSends.removeAll()
@@ -86,11 +95,13 @@
         func play() {
             countInSeconds = nil
             didPlay = true
+            playCallCount += 1
         }
 
         func play(afterCountInSeconds seconds: TimeInterval) {
             countInSeconds = seconds
             didPlay = true
+            playCallCount += 1
         }
 
         /// A second recorder, so an export test can assert what the offline
@@ -102,7 +113,10 @@
             return instance
         }
 
-        func pause() {}
+        func pause() {
+            pauseCallCount += 1
+        }
+
         func stop() {
             stopCallCount += 1
             currentPositionSeconds = 0
@@ -150,6 +164,14 @@
 
         func teardown() {
             teardownCallCount += 1
+        }
+
+        func setRecordingTracks(_ tracks: [RecordingTrackRender]) {
+            recordingTrackCalls.append(tracks)
+        }
+
+        func setPlaybackAlignment(warp: PlaybackTimeWarp?, segments: [RecordingSegment]) {
+            alignmentCalls.append((warp, segments))
         }
     }
 #endif

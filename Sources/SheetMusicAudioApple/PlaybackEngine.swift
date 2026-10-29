@@ -287,6 +287,19 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// this array and re-render on change.
     public private(set) var mixerChannels: [MixerChannel] = []
 
+    /// The recordings the host set (`setRecordingTracks(_:)`), in its order, each with its PCM mapped and its strip's
+    /// mix. They share the solo bus with the instrument strips. `internal` for `+Recordings` and `+Mixer`.
+    var recordings: [LoadedRecordingTrack] = []
+    /// What the backend was last handed for the recordings, or nil when the next mixer pass must hand them over
+    /// whatever they resolve to. A pass that resolves to the same tracks sends nothing. `internal` for `+Recordings`.
+    @ObservationIgnored var sentRecordingRenders: [RecordingRenderKey]? = []
+    /// The alignment the host set (`setAlignment(warp:segments:)`): the warp the transport follows and the segments of
+    /// the reference recording. `internal` for `+Recordings`.
+    var alignmentWarp: PlaybackTimeWarp?
+    var alignmentSegments: [RecordingSegment] = []
+    /// `alignmentWarp` laid out for time reporting: transport seconds to the warped seconds the seek bar shows.
+    @ObservationIgnored var alignmentSpeedTable = TransportSpeedTable(warp: nil)
+
     /// When set, an alternate synth + transport backend (e.g. SwiftySynth)
     /// replaces the built-in AUMIDISynth path. Injected by a host that wants to
     /// avoid AUMIDISynth's voice stealing; `nil` keeps the default AUMIDISynth.
@@ -581,10 +594,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// NOTATION half (`LayoutOptionsWire.transposeDelta`) is clamped to the
     /// same range and must move with it — a wider sound than notation makes
     /// the score look and sound like different pieces past the narrower bound.
+    ///
+    /// The recordings follow it too, each at this plus its own transposition (`RecordingTrack.transposeSemitones`),
+    /// handed over under the same ids so none of them jumps.
     public func setTranspose(semitones: Int) {
         let clamped = max(-12, min(12, semitones))
         transposeSemitones = clamped
         applyTuning()
+        pushRecordingTracks(soloing: isSoloing)
     }
 
     /// Push calibration + transpose onto both units' global AU tuning.
@@ -2069,9 +2086,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     ///
     /// The AUMIDISynth branch folds inline below; the backend branch folds in seconds via
     /// `foldSecondsForLoop`, since its clock is time-based.
+    ///
+    /// With an alignment set (`hasAlignment`) this is the warped second, at 100 % rate, of the current frame's onset:
+    /// the recording's time, which is what a seek bar under it shows (`backendAlignedSeconds`).
     public var currentTimeSeconds: TimeInterval {
         guard let timeline else { return 0 }
         if let backend {
+            if hasAlignment {
+                return backendAlignedSeconds(backend, timeline: timeline, snappedToFrame: true)
+            }
             // Snapped to the frame's onset, matching the AUMIDISynth branch below. The
             // position comes from the transport's own seconds clock rather than
             // `backend.currentTick`: that tick is a notated `frame(atTime:)` lookup of an
@@ -2116,9 +2139,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// that steps once per note/beat. Same tempo-map fidelity and A-B
     /// loop fold as `currentTimeSeconds`; the only difference is the
     /// unrounded tick fed to `PlaybackTimeline.seconds(atTick:)`.
+    ///
+    /// With an alignment set, the warped second of the transport's position, unsnapped.
     public var currentTimeSecondsContinuous: TimeInterval {
         guard let timeline else { return 0 }
         if let backend {
+            if hasAlignment {
+                return backendAlignedSeconds(backend, timeline: timeline, snappedToFrame: false)
+            }
             // The transport's seconds clock is already continuous, so this needs no frame
             // lookup at all — reading it through `backend.currentTick` was what quantized it
             // to note onsets (and made it unroll-blind and saturating along the way).
@@ -2195,8 +2223,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     /// Total playable duration in seconds for the loaded score.
     /// Zero before `prepare(score:)` runs.
+    ///
+    /// With an alignment set, the warped length of the whole transport — repeats played out — at 100 % rate.
     public var totalTimeSeconds: TimeInterval {
-        timeline?.totalSeconds ?? 0
+        guard let timeline else { return 0 }
+        guard hasAlignment else { return timeline.totalSeconds }
+        return alignmentSpeedTable.outputSeconds(atTransport: transportTotalSeconds(timeline: timeline))
     }
 
     /// Skip playback forward (`seconds > 0`) or backward
@@ -2205,12 +2237,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// playing, restarts the transport at the new position so audio
     /// keeps flowing; when paused, just moves the cursor and the next
     /// `play()` resumes from there. No-op before the transport is built.
+    ///
+    /// With an alignment set, `seconds` are warped seconds, as `currentTimeSeconds` reports them.
     public func skip(by seconds: TimeInterval) {
         guard state != .exporting else { return }
         guard let timeline else { return }
         let now = currentTimeSeconds
-        let target = max(0, min(timeline.totalSeconds, now + seconds))
-        guard let frame = timeline.frame(atTime: target) else { return }
+        let target = max(0, min(totalTimeSeconds, now + seconds))
+        guard let frame = timeline.frame(atTime: notatedSeconds(forReported: target)) else { return }
         // Injected-backend path: the AUMIDISynth `sequencer` is never built (see `play`), so a
         // `guard let sequencer` above would make every skip a silent no-op — the host's seek bar,
         // the lock-screen scrubber (`changePlaybackPositionCommand`), and the ±N-second skip all
@@ -2249,6 +2283,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// handler receives an absolute target time. Internally reuses
     /// `skip(by:)`'s clamp + state-preserve machinery — no new code
     /// path through the sequencer.
+    ///
+    /// With an alignment set, `seconds` is a warped second, as the seek bar shows it.
     public func seek(toTimeSeconds seconds: TimeInterval) {
         skip(by: seconds - currentTimeSeconds)
     }
@@ -2695,6 +2731,46 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         foldSecondsForLoop(
             unrolledTimeMap.notatedSeconds(fromUnrolled: backend.currentPositionSeconds),
         )
+    }
+
+    /// With an alignment set: the backend transport's position as a warped second at 100 % rate — the recording's
+    /// time. The alignment's warp is a table over the TRANSPORT's clock (the unrolled SMF, repeats played out), so the
+    /// position is loop-folded on that clock (`TransportLoop`'s seconds) and only then warped. `snappedToFrame` first
+    /// moves it back to the onset of the frame it is in, the way `currentTimeSeconds` snaps; within one measure-play
+    /// the two clocks run 1:1, so the onset sits the same distance back on both.
+    private func backendAlignedSeconds(
+        _ backend: any SynthBackend, timeline: PlaybackTimeline, snappedToFrame: Bool,
+    ) -> TimeInterval {
+        var transport = backend.currentPositionSeconds
+        if let loop = transportLoop, loop.endSeconds > loop.startSeconds, transport >= loop.endSeconds {
+            transport = loop.startSeconds
+                + (transport - loop.startSeconds).truncatingRemainder(dividingBy: loop.endSeconds - loop.startSeconds)
+        }
+        if snappedToFrame {
+            let notated = unrolledTimeMap.notatedSeconds(fromUnrolled: transport)
+            guard let frame = timeline.frame(atTime: notated) else { return 0 }
+            transport -= notated - frame.timeSeconds
+        }
+        return alignmentSpeedTable.outputSeconds(atTransport: transport)
+    }
+
+    /// The transport's whole length in seconds: the notated length, or with repeats the end of the last measure-play
+    /// on the unrolled clock `UnrolledTimeMap` lays out.
+    private func transportTotalSeconds(timeline: PlaybackTimeline) -> TimeInterval {
+        guard let last = unroll.spans.last, let lastStart = unrolledTimeMap.spanStartSeconds.last else {
+            return timeline.totalSeconds
+        }
+        let lastLength = timeline.seconds(atTick: Double(last.notatedStart + last.notatedLength))
+            - timeline.seconds(atTick: Double(last.notatedStart))
+        return lastStart + max(0, lastLength)
+    }
+
+    /// The notated second a reported one (`currentTimeSeconds`' clock) stands for: itself, or with an alignment set
+    /// the warped second taken back to the transport and onto the notated timeline. A position in a repeat's later
+    /// pass maps to that pass's notated second, which a seek then plays at its first occurrence, as every seek does.
+    private func notatedSeconds(forReported seconds: TimeInterval) -> TimeInterval {
+        guard hasAlignment else { return seconds }
+        return unrolledTimeMap.notatedSeconds(fromUnrolled: alignmentSpeedTable.transportSeconds(atOutput: seconds))
     }
 
     private func backendTickCursor(
