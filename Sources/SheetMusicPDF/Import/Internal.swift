@@ -189,6 +189,17 @@ struct TextGlyph {
     /// on changes those detectors' output and needs its own corpus gate.
     var bbox: CGRect
     var pageIndex: Int
+    /// Set only on a glyph read by OCR from a raster page; `nil` on every walker glyph.
+    var ocr: OCRTextInfo?
+}
+
+/// What only an OCR-read glyph knows. `nil` on every walker glyph.
+struct OCRTextInfo: Equatable {
+    /// Horizontal centre of the character's measured box, page points.
+    var inkCenterX: CGFloat
+    /// False for characters of a token that must never become a lyric (digits, symbols, dynamics…).
+    /// Such glyphs still reach the title, tempo and tuplet passes.
+    var lyricEligible: Bool
 }
 
 /// Output of stage [4]. One staff (5-line band) on a page.

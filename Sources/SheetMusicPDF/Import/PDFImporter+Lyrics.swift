@@ -315,6 +315,7 @@ extension PDFImporter {
                 && cx >= xLo
                 && cx <= xHi
                 && !t.text.trimmingCharacters(in: .whitespaces).isEmpty
+                && t.ocr?.lyricEligible != false
                 && !excludingOrigins.contains {
                     abs($0.x - t.origin.x) < 0.01 && abs($0.y - t.origin.y) < 0.01
                 }

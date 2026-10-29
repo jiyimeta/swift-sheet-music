@@ -51,7 +51,10 @@ extension PDFImporter {
     /// `TextGlyph` carries no per-glyph width, so the advance is estimated
     /// by character class. A run may hold several characters (the CMap loop
     /// accumulates consecutive non-PUA codes), so they are summed.
+    ///
+    /// An OCR glyph is the exception: it carries its measured centre, so nothing is estimated.
     static func centerX(_ glyph: TextGlyph) -> CGFloat {
+        if let ocr = glyph.ocr { return ocr.inkCenterX }
         let trimmed = glyph.text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, glyph.renderedSize > 0 else { return glyph.origin.x }
         var ems: CGFloat = 0
