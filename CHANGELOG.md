@@ -9,32 +9,32 @@ and this project adheres to
 
 ### Added
 
-- **Exports include recordings and an optional count-in (`exportAudioFile(…, includesCountIn:)`).** Through an
-  injected backend the file carries the recordings at their strips' mix, on the same solo bus as live, follows the
-  alignment — a warped score or range lasts its warped length — and can open with the count-in live playback plays,
-  at the speed of the measure it counts into.
+- **`PlayedMeasure`, `PlayedMeasures.make(score:)` and `PreparedPlayback.playedMeasures`.** Every measure as playback
+  plays it, repeats and jumps unrolled, with its pass number, its start and end on the transport's seconds at the
+  notated tempo, the transport second of each click beat in it, and its length in click beats (0.5 for an eighth-note
+  pickup in 4/4), so a host can turn its own alignment into a time warp over the transport clock.
+- **`PlaybackTimeWarp`.** A host can stretch the score's playback to an external timing: a list of spans on the
+  transport's seconds, each saying how long it must last at 100 % rate, with the sequencer speed following per span.
+- **`RecordingPCMCache` and `MappedRecording`.** Recordings are decoded once into an Int16 stereo PCM cache file that is
+  memory-mapped for playback, so long recordings cost address space rather than resident memory.
+- **Tempo and transposition keep a recording's pitch and timing (`RecordingStretcher`, `RecordingStretcherFactory`,
+  `SwiftySynthBackend(sampleRate:stretcherFactory:)`, the `SheetMusicAudioSignalsmith` product).** Away from 100 %,
+  or with a track transposed, a recording is read through a time stretcher instead of being sped up or slowed down
+  with its pitch: Signalsmith Stretch (MIT), behind a protocol so another stretcher can replace it.
+- **Recordings on the SwiftySynth transport (`SynthBackend.setRecordingTracks(_:)`,
+  `setPlaybackAlignment(warp:segments:)`, `RecordingTrackRender`).** `SwiftySynthBackend` mixes mapped recordings into
+  its own render, read at the position its transport is at, so they stay locked to the synthesized parts and the click;
+  an alignment change applies while playing, from the next synthesizer block, without stopping or seeking it.
 - **Recording tracks on `PlaybackEngine` (`RecordingTrack`, `setRecordingTracks(_:)`,
   `setRecordingMix(id:volume:isMuted:isSoloed:)`, `setAlignment(warp:segments:)`, `hasAlignment`).** Recordings mix
   with the score at their strip's volume and mute, on one solo bus with the instrument strips (the click stays off it),
   follow the reader's transposition, take an alignment while playing without stopping it, and with an alignment set the
   elapsed and total time, `seek(toTimeSeconds:)` and `skip(by:)` speak the recording's warped seconds; a gain change
   ramps instead of clicking.
-- **Recordings on the SwiftySynth transport (`SynthBackend.setRecordingTracks(_:)`,
-  `setPlaybackAlignment(warp:segments:)`, `RecordingTrackRender`).** `SwiftySynthBackend` mixes mapped recordings into
-  its own render, read at the position its transport is at, so they stay locked to the synthesized parts and the click;
-  an alignment change applies while playing, from the next synthesizer block, without stopping or seeking it.
-- **Tempo and transposition keep a recording's pitch and timing (`RecordingStretcher`, `RecordingStretcherFactory`,
-  `SwiftySynthBackend(sampleRate:stretcherFactory:)`, the `SheetMusicAudioSignalsmith` product).** Away from 100 %,
-  or with a track transposed, a recording is read through a time stretcher instead of being sped up or slowed down
-  with its pitch: Signalsmith Stretch (MIT), behind a protocol so another stretcher can replace it.
-- **`RecordingPCMCache` and `MappedRecording`.** Recordings are decoded once into an Int16 stereo PCM cache file that is
-  memory-mapped for playback, so long recordings cost address space rather than resident memory.
-- **`PlaybackTimeWarp`.** A host can stretch the score's playback to an external timing: a list of spans on the
-  transport's seconds, each saying how long it must last at 100 % rate, with the sequencer speed following per span.
-- **`PlayedMeasure`, `PlayedMeasures.make(score:)` and `PreparedPlayback.playedMeasures`.** Every measure as playback
-  plays it, repeats and jumps unrolled, with its pass number, its start and end on the transport's seconds at the
-  notated tempo, the transport second of each click beat in it, and its length in click beats (0.5 for an eighth-note
-  pickup in 4/4), so a host can turn its own alignment into a time warp over the transport clock.
+- **Exports include recordings and an optional count-in (`exportAudioFile(…, includesCountIn:)`).** Through an
+  injected backend the file carries the recordings at their strips' mix, on the same solo bus as live, follows the
+  alignment — a warped score or range lasts its warped length — and can open with the count-in live playback plays,
+  at the speed of the measure it counts into.
 - **`RevoiceDrumStaff`, `RevoicePreview` and `EditIntent.revoiceDrumStaff(staff:assignments:policy:)` (wire index
   95).** Re-voices a drum staff by pitch as one undo step: every note moves to the voice its pitch is assigned, so a
   staff converts to one voice or to hands and feet (kicks and pedal hi-hat in voice 2). A bar already in the target form
