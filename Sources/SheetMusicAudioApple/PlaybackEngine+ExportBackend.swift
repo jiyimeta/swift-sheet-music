@@ -69,7 +69,7 @@ extension PlaybackEngine {
 
         let rendered = try loadTransports(
             backend: backend, score: score, plan: plan,
-            snapshot: snapshot, timeline: timeline,
+            snapshot: snapshot, timeline: timeline, unrolledTimeMap: unrolledTimeMap,
         )
         loadRecordings(backend: backend, snapshot: snapshot)
         let countIn = includesCountIn
@@ -117,6 +117,7 @@ extension PlaybackEngine {
         plan: LiveChannelPlan,
         snapshot: ExportEngineSnapshot,
         timeline: PlaybackTimeline,
+        unrolledTimeMap: UnrolledTimeMap,
     ) throws -> MidiFile {
         backend.setRate(snapshot.rate)
         backend.setTuning(
@@ -135,6 +136,10 @@ extension PlaybackEngine {
             ),
             timeline: timeline,
         )
+        // The sequence just loaded is the unrolled render, and `startTick` is notated: hand over the projection before
+        // the seek, as live playback does (`loadBackendNormalSequence`), or a range after a repeat starts on whatever
+        // the sequence plays that many notated seconds in.
+        backend.setUnrolledTimeMap(unrolledTimeMap)
         backend.loadMetronomeSequence(
             PreRollSequenceAssembler.metronomeOnly(
                 rendered: rendered, metronomeBeats: snapshot.metronomeBeats,

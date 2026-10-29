@@ -79,6 +79,13 @@
             self.timeline = timeline
         }
 
+        /// The projection the engine last handed over, or nil when it never did.
+        private(set) var unrolledTimeMap: UnrolledTimeMap?
+
+        func setUnrolledTimeMap(_ map: UnrolledTimeMap) {
+            unrolledTimeMap = map
+        }
+
         func loadMetronomeSequence(_ midi: MidiFile, offsetSeconds: TimeInterval) {
             lastMetronomeSequence = midi
             metronomeOffsetSeconds = offsetSeconds

@@ -121,6 +121,41 @@
                 #expect(offline.metronomeMuted == false)
             }
 
+            /// The offline transport runs the UNROLLED render while the range is notated ticks: without the projection
+            /// a range after a repeat would start on whatever the sequence plays that many notated seconds in.
+            @Test("The offline instance gets the unrolled time map, so a range after a repeat starts where it should")
+            func offlineInstanceGetsTheUnrolledTimeMap() async throws {
+                // |: m1 :| m2, 4/4 quarters at 120 BPM: m2 starts 2 s into the notation and 4 s into the playback.
+                let quarter = Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])
+                let first = Voice(elements: [.timeSignature(TimeSignature(numerator: 4, denominator: 4))]
+                    + Array(repeating: VoiceElement.chord(quarter), count: 4))
+                let second = Voice(elements: Array(repeating: VoiceElement.chord(quarter), count: 4))
+                let part = Part(
+                    id: "p", instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
+                    staves: [Staff(measures: [
+                        Measure(voices: [first], startRepeat: true, endRepeatCount: 2), Measure(voices: [second]),
+                    ])],
+                )
+                let score = Score(division: 480, parts: [part])
+                let live = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: live)
+                try engine.prepare(score: score)
+
+                let url = temporaryWAV()
+                defer { try? FileManager.default.removeItem(at: url) }
+                try await engine.exportAudioFile(
+                    to: url, score: score, format: .wav(),
+                    range: .region(
+                        from: .beat(measureIndex: 1, tickInMeasure: 0), to: .beat(measureIndex: 1, tickInMeasure: 1920),
+                    ),
+                )
+
+                let offline = try #require(live.offlineInstance)
+                let map = try #require(offline.unrolledTimeMap)
+                #expect(abs(map.unrolledSeconds(fromNotated: 2) - 4) < 1e-9)
+                #expect(offline.seekCalls == [1920])
+            }
+
             @Test("A backend without an offline instance still exports (AU fallback)")
             func offlinelessBackendFallsBackToAUMIDISynth() async throws {
                 let score = try loadScore()
