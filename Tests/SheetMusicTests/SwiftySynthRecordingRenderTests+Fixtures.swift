@@ -22,23 +22,9 @@
                 return url
             }
 
-            /// A PCM cache file (`RecordingPCMCache`'s format: "SMPC", version 1, frame count, rate, then interleaved
-            /// Int16 left / right) holding `frames` frames of `sample(frame)` on both channels, mapped.
+            /// A PCM cache file (`PCMCacheFixture`) of `frames` frames of `sample(frame)` on both channels, mapped.
             static func recording(rate: Int, frames: Int, sample: (Int) -> Int16) throws -> MappedRecording {
-                var bytes = Data(Array("SMPC".utf8))
-                for word in [UInt32(1), UInt32(frames), UInt32(rate)] {
-                    withUnsafeBytes(of: word.littleEndian) { bytes.append(contentsOf: $0) }
-                }
-                var samples: [Int16] = []
-                samples.reserveCapacity(frames * 2)
-                for frame in 0 ..< frames {
-                    let value = sample(frame)
-                    samples.append(value.littleEndian)
-                    samples.append(value.littleEndian)
-                }
-                samples.withUnsafeBytes { bytes.append(contentsOf: $0) }
-                let url = FileManager.default.temporaryDirectory.appendingPathComponent("rec-\(UUID()).pcm")
-                try bytes.write(to: url)
+                let url = try PCMCacheFixture.write(rate: rate, frames: frames, sample: sample)
                 defer { try? FileManager.default.removeItem(at: url) }
                 return try MappedRecording(pcmFile: url)
             }

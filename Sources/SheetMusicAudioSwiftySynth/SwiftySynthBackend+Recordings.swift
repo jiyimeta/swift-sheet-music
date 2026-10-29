@@ -18,16 +18,18 @@ struct RenderedRecording {
     let recording: MappedRecording
     let frames: PCMFrames
     let offsetSeconds: Double
+    /// The gain the engine resolved. What a frame is scaled by is `gainRamp`'s, which heads for this one.
     let gain: Float
     var playhead = RecordingPlayhead()
+    var gainRamp: RecordingGainRamp
 }
 
 extension RenderedRecording {
-    /// A track as the host described it, its playhead at rest.
+    /// A track as the host described it, its playhead at rest and its gain where it is headed.
     init(_ track: RecordingTrackRender) {
         self.init(
             id: track.id, recording: track.recording, frames: track.recording.frames,
-            offsetSeconds: track.offsetSeconds, gain: track.gain,
+            offsetSeconds: track.offsetSeconds, gain: track.gain, gainRamp: RecordingGainRamp(gain: track.gain),
         )
     }
 }
@@ -65,10 +67,12 @@ struct PlaybackAlignmentState {
     }
 
     /// The recordings are not mixed for a while (a pause, a stop, a load, a count-in, a paused buffer): the next frame
-    /// that mixes them fades them in.
+    /// that mixes them fades them in, at the gain each is headed for.
     mutating func silenceRecordings() {
         for index in tracks.indices {
             tracks[index].playhead.reset()
+            let gain = tracks[index].gain
+            tracks[index].gainRamp.settle(at: gain)
         }
         for index in groups.indices {
             groups[index].state.silence()
@@ -165,7 +169,10 @@ extension SwiftySynthBackend {
     /// whose frames each advance the transport by `transportPerFrame`. The speed table turns each frame's transport
     /// second into a warped one, where the schedule says what each track plays. A group at 100 % and no transposition
     /// is read directly, track by track; any other is read through its stretcher. A switch between the two is a jump:
-    /// the reading switched from fades out while the other fades in. Allocation-free.
+    /// the reading switched from fades out while the other fades in.
+    ///
+    /// A track handed a new gain heads for it over the fade (`RecordingGainRamp`): per output frame when read
+    /// directly, per input frame when read through a stretcher, whose input carries the gain. Allocation-free.
     nonisolated static func mixRecordings(
         into left: UnsafeMutableBufferPointer<Float>,
         _ right: UnsafeMutableBufferPointer<Float>,
@@ -181,6 +188,10 @@ extension SwiftySynthBackend {
             frames: left.count, table: alignment.speedTable,
         )
         let fadeFrames = max(1, Int((recordingFadeSeconds * sampleRate).rounded()))
+        for index in alignment.tracks.indices {
+            let gain = alignment.tracks[index].gain
+            alignment.tracks[index].gainRamp.head(for: gain, frames: fadeFrames)
+        }
         for group in alignment.groups.indices {
             let stretched = alignment.readsThroughStretcher(group: group)
             // A draining group's track indices are into its own tracks: only its stretcher finishes fading out.
@@ -198,15 +209,22 @@ extension SwiftySynthBackend {
                     )
                 }
             }
-            mixStretchGroup(
+            let fed = mixStretchGroup(
                 group, playing: stretched, into: left, right, clock: clock,
                 sampleRate: sampleRate, fadeFrames: fadeFrames, alignment: &alignment,
             )
+            // The stretched reading read each track's ramp without moving it (its reader held the track list, which
+            // must not be written meanwhile); the frames it fed move it now.
+            if stretched, fed > 0 {
+                for index in alignment.groups[group].trackIndices {
+                    alignment.tracks[index].gainRamp.advance(by: fed)
+                }
+            }
         }
     }
 
     /// A track whose group is read through its stretcher: its direct reading fades out from where it was, then is
-    /// skipped.
+    /// skipped. Its gain ramp is read, not moved: the stretched reading moves it.
     nonisolated static func fadeOutTrack(
         _ track: inout RenderedRecording,
         into left: UnsafeMutableBufferPointer<Float>,
@@ -218,22 +236,24 @@ extension SwiftySynthBackend {
         guard !track.playhead.isSilent else { return }
         let frames = track.frames
         let rate = frames.sampleRate
-        let gain = track.gain
+        var gain = track.gainRamp
         var playhead = track.playhead
         var output = clock.outputSeconds(atFrame: 0, table: table)
         for frame in 0 ..< left.count where !playhead.isSilent {
             let next = clock.outputSeconds(atFrame: frame + 1, table: table)
             let step = (next - output) * rate
             let sample = playhead.render(target: nil, step: step, from: frames, fadeFrames: fadeFrames)
-            left[frame] += gain * sample.left
-            right[frame] += gain * sample.right
+            let scale = gain.next()
+            left[frame] += scale * sample.left
+            right[frame] += scale * sample.right
             output = next
         }
         track.playhead = playhead
     }
 
     /// One track over one chunk: per frame, the warped second → the track file's second (nil = silence) → its frame,
-    /// read by the playhead, which crossfades a jump and fades in after silence, and scaled by the track's gain.
+    /// read by the playhead, which crossfades a jump and fades in after silence, and scaled by the track's gain as its
+    /// ramp stands at that frame.
     nonisolated static func mixTrack(
         _ track: inout RenderedRecording,
         into left: UnsafeMutableBufferPointer<Float>,
@@ -245,8 +265,8 @@ extension SwiftySynthBackend {
     ) {
         let frames = track.frames
         let rate = frames.sampleRate
-        let gain = track.gain
         let offset = track.offsetSeconds
+        var gain = track.gainRamp
         var playhead = track.playhead
         var output = clock.outputSeconds(atFrame: 0, table: table)
         for frame in 0 ..< left.count {
@@ -256,11 +276,13 @@ extension SwiftySynthBackend {
             let sample = playhead.render(
                 target: target, step: (next - output) * rate, from: frames, fadeFrames: fadeFrames,
             )
-            left[frame] += gain * sample.left
-            right[frame] += gain * sample.right
+            let scale = gain.next()
+            left[frame] += scale * sample.left
+            right[frame] += scale * sample.right
             output = next
         }
         track.playhead = playhead
+        track.gainRamp = gain
     }
 
     // MARK: SynthBackend
@@ -269,12 +291,13 @@ extension SwiftySynthBackend {
         true
     }
 
-    /// Replaces the recordings in one lock section. A track whose `id` was already playing keeps its playhead, so a new
-    /// gain neither fades nor jumps it. A group carries on the stretchers of the previous group that held most of its
-    /// tracks (`RecordingGroupPlan`); when its transposition or its tracks changed, the render restarts it, primed and
-    /// retuned, and crossfades. A previous group nobody carries on is kept draining until its fade-out is over, and
-    /// dropped by the first call after that. Stretchers a group now needs are made here, on the main actor. The
-    /// previous arrays, stretchers and scratch are released after the lock, never on the render thread.
+    /// Replaces the recordings in one lock section. A track whose `id` was already playing keeps its playhead and its
+    /// gain ramp, so a new gain neither fades nor jumps it: the render ramps to it over the fade. A group carries on
+    /// the stretchers of the previous group that held most of its tracks (`RecordingGroupPlan`); when its
+    /// transposition or its tracks changed, the render restarts it, primed and retuned, and crossfades. A previous
+    /// group nobody carries on is kept draining until its fade-out is over, and dropped by the first call after that.
+    /// Stretchers a group now needs are made here, on the main actor. The previous arrays, stretchers and scratch are
+    /// released after the lock, never on the render thread.
     public func setRecordingTracks(_ tracks: [RecordingTrackRender]) {
         var incoming = tracks.map { RenderedRecording($0) }
         let plan = RecordingGroupPlan.make(tracks: tracks, previous: recordingGroupLayout)
@@ -305,6 +328,7 @@ extension SwiftySynthBackend {
                 let id = incoming[index].id
                 if let playing = shared.alignment.tracks.first(where: { $0.id == id }) {
                     incoming[index].playhead = playing.playhead
+                    incoming[index].gainRamp = playing.gainRamp
                 }
             }
             for index in groups.indices {

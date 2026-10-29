@@ -230,7 +230,10 @@ public struct RecordingTrackRender: Sendable {
     public let recording: MappedRecording
     /// Seconds into the reference recording's time at which this track's file starts.
     public var offsetSeconds: TimeInterval
-    /// The strip's effective volume × mute × solo, resolved by the engine.
+    /// The strip's effective volume × mute × solo, resolved by the engine. A backend ramps to a new gain for a playing
+    /// track rather than stepping, which would click: `SwiftySynthBackend` ramps over its 5 ms recording fade. A track
+    /// read through a stretcher (a rate other than 100 %, or a transposition) carries its gain in the stretcher's
+    /// input, so there the change reaches the output one stretcher lead late — about 0.1 s with Signalsmith Stretch.
     public var gain: Float
     /// The track's own transposition plus the reader's, resolved by the engine.
     public var transposeSemitones: Double
