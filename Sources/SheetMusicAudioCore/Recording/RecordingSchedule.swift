@@ -31,7 +31,7 @@ package struct RecordingSchedule: Sendable {
     /// The seconds of a track file heard at warped output second `o`, for a track starting `offset` seconds into the
     /// reference time, or nil (silence) outside every segment, at or past a segment's `sourceEnd`, or before the track
     /// itself starts (`reference − offset < 0`).
-    func sourceSeconds(atOutput o: TimeInterval, offset: TimeInterval) -> TimeInterval? {
+    package func sourceSeconds(atOutput o: TimeInterval, offset: TimeInterval) -> TimeInterval? {
         guard o.isFinite else { return nil }
         // The last segment starting at or before `o`.
         var low = 0

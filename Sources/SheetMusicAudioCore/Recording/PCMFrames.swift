@@ -2,9 +2,9 @@
 /// keeps `base` alive and `frameCount` frames long for as long as the view is used. Allocation-free, so it is safe to
 /// read on the render thread.
 package struct PCMFrames {
-    let base: UnsafePointer<Int16>
-    let frameCount: Int
-    let sampleRate: Double
+    package let base: UnsafePointer<Int16>
+    package let frameCount: Int
+    package let sampleRate: Double
 
     package init(base: UnsafePointer<Int16>, frameCount: Int, sampleRate: Double) {
         self.base = base
@@ -14,7 +14,7 @@ package struct PCMFrames {
 
     /// The stereo sample at a fractional frame, linearly interpolated between frames ⌊p⌋ and ⌊p⌋ + 1. Silence outside
     /// `[0, frameCount − 1)` and for a non-finite position; never traps.
-    func sample(at frame: Double) -> (left: Float, right: Float) {
+    package func sample(at frame: Double) -> (left: Float, right: Float) {
         guard frame.isFinite, frame >= 0, frame < Double(frameCount - 1) else { return (0, 0) }
         let index = Int(frame)
         let fraction = Float(frame - Double(index))
