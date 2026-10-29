@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.22.0] - 2026-10-30
+
 ### Added
 
 - **`CountInBeats.Result.preRollSeconds(division:)`** — how long the count-in's pre-roll lasts on the sequence clock
