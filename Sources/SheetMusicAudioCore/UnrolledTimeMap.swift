@@ -22,21 +22,27 @@ public struct UnrolledTimeMap: Sendable {
     private let unrolledStartSeconds: [TimeInterval]
     /// Notated start time of each measure-play, parallel to `unroll.spans`.
     private let notatedStartSeconds: [TimeInterval]
+    /// Notated end time of each measure-play, parallel to `unroll.spans`: the same `seconds(atTick:)` value as the
+    /// start of the measure that follows it in notation, so a notated instant on that barline belongs to exactly one
+    /// side of it.
+    private let notatedEndSeconds: [TimeInterval]
     private let spans: [PlaybackUnroll.Span]
 
     /// Pass-through map, for a score with no repeat plan (`PlaybackUnroll.identity`) — the
     /// unrolled and notated clocks are the same, so nothing needs projecting.
     public static let identity = UnrolledTimeMap(
-        unrolledStartSeconds: [], notatedStartSeconds: [], spans: [],
+        unrolledStartSeconds: [], notatedStartSeconds: [], notatedEndSeconds: [], spans: [],
     )
 
     private init(
         unrolledStartSeconds: [TimeInterval],
         notatedStartSeconds: [TimeInterval],
+        notatedEndSeconds: [TimeInterval],
         spans: [PlaybackUnroll.Span],
     ) {
         self.unrolledStartSeconds = unrolledStartSeconds
         self.notatedStartSeconds = notatedStartSeconds
+        self.notatedEndSeconds = notatedEndSeconds
         self.spans = spans
     }
 
@@ -51,8 +57,10 @@ public struct UnrolledTimeMap: Sendable {
         }
         var unrolledStarts: [TimeInterval] = []
         var notatedStarts: [TimeInterval] = []
+        var notatedEnds: [TimeInterval] = []
         unrolledStarts.reserveCapacity(spans.count)
         notatedStarts.reserveCapacity(spans.count)
+        notatedEnds.reserveCapacity(spans.count)
         var cumulative: TimeInterval = 0
         for span in spans {
             let start = timeline.seconds(atTick: Double(span.notatedStart))
@@ -61,6 +69,7 @@ public struct UnrolledTimeMap: Sendable {
             )
             unrolledStarts.append(cumulative)
             notatedStarts.append(start)
+            notatedEnds.append(end)
             // `max(0, …)` is defense in depth: a well-formed span has positive duration, and a
             // degenerate one must not make the axis run backwards (which would break the
             // binary search below).
@@ -69,6 +78,7 @@ public struct UnrolledTimeMap: Sendable {
         self.init(
             unrolledStartSeconds: unrolledStarts,
             notatedStartSeconds: notatedStarts,
+            notatedEndSeconds: notatedEnds,
             spans: spans,
         )
     }
@@ -116,11 +126,10 @@ public struct UnrolledTimeMap: Sendable {
         if notatedSeconds <= 0 { return 0 }
         for index in spans.indices {
             let start = notatedStartSeconds[index]
-            let end = index + 1 < spans.count
-                // A span's notated end is its own start plus its duration; derive it from the
-                // unrolled axis, which was built from exactly those durations.
-                ? start + (unrolledStartSeconds[index + 1] - unrolledStartSeconds[index])
-                : .infinity
+            // The stored notated end, not one derived from the unrolled axis: `start` plus the difference of two
+            // cumulative sums can round one ULP past the next measure's notated start, and the downbeat after a
+            // repeat then matched the repeat's first pass and projected a whole pass early.
+            let end = index + 1 < spans.count ? notatedEndSeconds[index] : .infinity
             if notatedSeconds >= start, notatedSeconds < end {
                 return unrolledStartSeconds[index] + (notatedSeconds - start)
             }

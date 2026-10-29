@@ -50,7 +50,9 @@ and this project adheres to
   backward jump at the end of the earlier pass: in `|: A :| B`, play-from-B replayed A's repeat first. A seek now
   projects the onset and backs off on the unrolled clock. An export through an injected backend also never handed its
   offline instance the unrolled time map, so a range after a repeat began wherever the sequence played at the range's
-  notated second.
+  notated second. And `UnrolledTimeMap` compared a notated instant against each measure-play's end rebuilt from
+  running sums, which with a tempo change before the repeat could round one ULP past the next measure's start; the
+  downbeat after the repeat then projected a whole pass early (480 of 40 401 integer tempo pairs from 40 to 240 BPM).
 - **A PDF whose engraving is outlined into paths is read as an image.** A purchased PDF re-saved through macOS
   Preview, or a print driver that converts text to outlines, carries staff lines, stems and filled notehead shapes
   but not one glyph, and the raster fallback only read pages with no vector content at all — so such a page was read
