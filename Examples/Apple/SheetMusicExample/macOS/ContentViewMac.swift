@@ -485,7 +485,7 @@
                 }
             }
             .inspector(isPresented: $showsAudioTracks) {
-                AudioTrackPanel(model: audioTracks, hasScore: score != nil)
+                AudioTrackPanel(model: audioTracks, hasScore: score != nil, isStopped: playbackEngine.state == .stopped)
                     .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
             }
             .onAppear(perform: loadBundled)

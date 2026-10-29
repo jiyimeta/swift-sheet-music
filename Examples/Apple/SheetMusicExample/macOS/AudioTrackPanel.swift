@@ -1,5 +1,6 @@
 #if os(macOS)
     import AppKit
+    import CryptoKit
     import Observation
     import SheetMusic
     import SheetMusicAudio
@@ -11,6 +12,8 @@
         let id: String
         let name: String
         let pcmFile: URL
+        /// Length of the decoded file, for the unaligned (identity) segment.
+        let durationSeconds: Double
         var volume: Float = 1
         var isMuted = false
         var isSoloed = false
@@ -31,10 +34,12 @@
         var isPreparing = false
         var message: String?
 
-        // Grid
+        /// Grid
         var usesGrid = true
+        /// Whether the engine currently follows the grid (false: recordings play unaligned from 0:00).
+        private(set) var isAligned = false
         var bpm: Double = 120
-        /// Recording seconds at which the first played measure starts.
+        /// Recording seconds of the first FULL measure's downbeat. A pickup before it is end-anchored: it ends there.
         var firstDownbeatSeconds: Double = 0
         /// Playback-order position (1-based; position 0 has nothing before it to lengthen) of the measure nudged.
         var nudgeIndex = 1
@@ -76,13 +81,15 @@
                 defer { isPreparing = false }
                 for url in urls {
                     do {
-                        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                        let key = Self.cacheKey(name: url.deletingPathExtension().lastPathComponent, size: size)
+                        let key = Self.cacheKey(for: url)
                         let pcm = try await RecordingPCMCache.prepare(
                             source: url, cacheKey: key, sampleRate: Self.sampleRate, directory: Self.cacheDirectory,
                         )
                         let id = "\(key)-\(UUID().uuidString.prefix(6))"
-                        strips.append(AudioTrackStrip(id: id, name: url.lastPathComponent, pcmFile: pcm))
+                        let duration = try MappedRecording(pcmFile: pcm).durationSeconds
+                        strips.append(AudioTrackStrip(
+                            id: id, name: url.lastPathComponent, pcmFile: pcm, durationSeconds: duration,
+                        ))
                     } catch {
                         message = "Could not add \(url.lastPathComponent): \(error)"
                     }
@@ -131,17 +138,28 @@
 
         // MARK: Grid -> alignment
 
-        /// Hands the engine the warp and the segment the grid describes, or clears the alignment when the grid is off
-        /// or there is nothing to align. Callable while playing (a table swap on the backend).
+        /// Hands the engine the warp and the segment the grid describes. With the grid off (or an invalid BPM, or no
+        /// score) there is no warp and one identity segment, so the recordings play from their start at the notated
+        /// tempo instead of going silent. Callable while playing (a table swap on the backend).
         func applyAlignment() {
             guard let engine else { return }
-            guard usesGrid, !strips.isEmpty, bpm > 0, let result = Self.alignment(
-                for: playedMeasures, bpm: bpm, firstDownbeat: firstDownbeatSeconds, nudges: nudgesSeconds,
-            ) else {
+            guard !strips.isEmpty else {
+                isAligned = false
                 engine.setAlignment(warp: nil, segments: [])
                 return
             }
-            engine.setAlignment(warp: result.warp, segments: result.segments)
+            if usesGrid, bpm > 0, let result = Self.alignment(
+                for: playedMeasures, bpm: bpm, firstDownbeat: firstDownbeatSeconds, nudges: nudgesSeconds,
+            ) {
+                isAligned = true
+                engine.setAlignment(warp: result.warp, segments: result.segments)
+            } else {
+                isAligned = false
+                let longest = strips.map(\.durationSeconds).max() ?? 0
+                engine.setAlignment(
+                    warp: nil, segments: [RecordingSegment(sourceStart: 0, sourceEnd: longest, outputStart: 0)],
+                )
+            }
         }
 
         /// Pure mapping, so it reads top to bottom: one span per click beat lasting that beat's duration on the
@@ -173,6 +191,17 @@
             }
             guard !raw.isEmpty else { return nil }
 
+            // A pickup (a first measure that is not a whole number of beats) is end-anchored: it ends at the first
+            // full measure's downbeat, so the recording starts that much earlier. Measured before any nudge, so a
+            // nudge moves the downbeat rather than the anchor.
+            var pickupSeconds = 0.0
+            if measures.count > 1, let first = firstSpan[0], let last = lastSpan[0] {
+                let beats = measures[0].lengthInBeats
+                if beats - beats.rounded(.down) > 1e-6 {
+                    pickupSeconds = durations[first ... last].reduce(0, +)
+                }
+            }
+
             let minimum = 0.05
             for position in nudges.keys.sorted() where position >= 1 {
                 guard let previous = lastSpan[position - 1], let first = firstSpan[position] else { continue }
@@ -187,8 +216,13 @@
                 PlaybackTimeWarp.Span(start: raw[$0].start, end: raw[$0].end, duration: durations[$0])
             }
             guard let warp = try? PlaybackTimeWarp(spans: spans) else { return nil }
+            // The recording cannot start before 0:00: shift the output start by what would go negative.
+            let rawStart = firstDownbeat - pickupSeconds
+            let sourceStart = max(0, rawStart)
+            let outputStart = max(0, -rawStart)
             let segment = RecordingSegment(
-                sourceStart: firstDownbeat, sourceEnd: firstDownbeat + durations.reduce(0, +), outputStart: 0,
+                sourceStart: sourceStart, sourceEnd: sourceStart + durations.reduce(0, +) - outputStart,
+                outputStart: outputStart,
             )
             return (warp, [segment])
         }
@@ -228,9 +262,17 @@
                 ?? FileManager.default.temporaryDirectory).appendingPathComponent("AudioTracks", isDirectory: true)
         }
 
-        private static func cacheKey(name: String, size: Int) -> String {
+        /// File name plus a digest of the absolute path, size and modification date, so two different files that share
+        /// a name and size (or a file edited in place) never share a cache file.
+        private static func cacheKey(for url: URL) -> String {
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            let size = values?.fileSize ?? 0
+            let modified = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
+            let identity = "\(url.standardizedFileURL.path)|\(size)|\(modified)"
+            let digest = SHA256.hash(data: Data(identity.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
+            let name = url.deletingPathExtension().lastPathComponent
             let safe = name.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) ? Character($0) : "_" }
-            return "\(String(safe))-\(size)"
+            return "\(String(safe))-\(digest)"
         }
     }
 
@@ -240,6 +282,8 @@
     struct AudioTrackPanel: View {
         @Bindable var model: AudioTrackModel
         let hasScore: Bool
+        /// Exporting while playing or paused tears down live playback, so Export is offered only when stopped.
+        let isStopped: Bool
 
         var body: some View {
             Form {
@@ -286,6 +330,12 @@
                 Toggle("Align score to grid", isOn: $model.usesGrid)
                     .accessibilityLabel("Align score to grid")
                     .onChange(of: model.usesGrid) { _, _ in model.applyAlignment() }
+                if !model.strips.isEmpty, !model.isAligned {
+                    Text("Not aligned — recordings play from 0:00")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .accessibilityLabel("Not aligned, recordings play from zero")
+                }
                 HStack {
                     Text("BPM")
                     Spacer()
@@ -296,7 +346,7 @@
                         .onSubmit { model.applyAlignment() }
                 }
                 HStack {
-                    Text("First downbeat (s)")
+                    Text("First full-measure downbeat (s)")
                     Spacer()
                     TextField(
                         "First downbeat", value: $model.firstDownbeatSeconds,
@@ -304,7 +354,7 @@
                     )
                     .multilineTextAlignment(.trailing)
                     .frame(width: 70)
-                    .accessibilityLabel("First downbeat seconds")
+                    .accessibilityLabel("First full measure downbeat seconds")
                     .onSubmit { model.applyAlignment() }
                 }
                 if model.playedMeasures.count > 1 {
@@ -363,7 +413,7 @@
                     .accessibilityLabel("Include count-in")
                 HStack {
                     Button("Export…") { model.export() }
-                        .disabled(!hasScore || model.exportProgress != nil)
+                        .disabled(!hasScore || !isStopped || model.exportProgress != nil)
                         .accessibilityLabel("Export audio")
                     if let progress = model.exportProgress {
                         ProgressView(value: progress)
