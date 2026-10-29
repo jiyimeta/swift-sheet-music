@@ -74,6 +74,82 @@ struct RecordingPCMCacheTests {
         #expect(worst <= 1, "worst deviation \(worst) LSB over \(samples.count) frames")
     }
 
+    /// Signal power of `frequency` in one channel of interleaved frames (Goertzel).
+    private func power(
+        _ base: UnsafePointer<Int16>, frames: Int, channel: Int, frequency: Double, rate: Double,
+    ) -> Double {
+        let coefficient = 2 * cos(2 * Double.pi * frequency / rate)
+        var previous = 0.0, beforePrevious = 0.0
+        for index in 0 ..< frames {
+            let current = Double(base[2 * index + channel]) / 32768 + coefficient * previous - beforePrevious
+            beforePrevious = previous
+            previous = current
+        }
+        return (previous * previous + beforePrevious * beforePrevious - coefficient * previous * beforePrevious)
+            / Double(frames * frames)
+    }
+
+    @Test(arguments: [("m4a", 0), ("aac", 0), ("aac", 1500)])
+    func stereoAACEndsCleanlyAndKeepsChannelOrder(container: String, truncatedBytes: Int) async throws {
+        let scratch = try Scratch()
+        let source = scratch.directory.appendingPathComponent("stereo.\(container)")
+        let rate = 44100.0
+        let count = Int(3 * rate)
+        do {
+            let format = try #require(AVAudioFormat(standardFormatWithSampleRate: rate, channels: 2))
+            let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(count)))
+            buffer.frameLength = AVAudioFrameCount(count)
+            let channels = try #require(buffer.floatChannelData)
+            for index in 0 ..< count {
+                let time = Double(index) / rate
+                channels[0][index] = Float(0.5 * sin(2 * Double.pi * 440 * time))
+                channels[1][index] = Float(0.5 * sin(2 * Double.pi * 660 * time))
+            }
+            let file = try AVAudioFile(forWriting: source, settings: [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: rate,
+                AVNumberOfChannelsKey: 2,
+            ])
+            try file.write(from: buffer)
+        }
+        if truncatedBytes > 0 {
+            let data = try Data(contentsOf: source)
+            try data.prefix(data.count - truncatedBytes).write(to: source)
+        }
+
+        let cache = try await RecordingPCMCache.prepare(
+            source: source, cacheKey: "aac", sampleRate: 48000, directory: scratch.directory,
+        )
+        let mapped = try MappedRecording(pcmFile: cache)
+        defer { withExtendedLifetime(mapped) {} }
+        let frames = mapped.frames
+        // AAC adds priming and padding frames, so allow a couple of packets (1024 frames each) either way.
+        let expected = 3 * 48000
+        let shortfall = truncatedBytes > 0 ? 12000 : 0
+        let deviation = abs(frames.frameCount + shortfall / 2 - expected)
+        #expect(deviation <= 4096 + shortfall / 2, "got \(frames.frameCount) frames, expected ~\(expected)")
+        func band(_ channel: Int, _ frequency: Double) -> Double {
+            power(frames.base, frames: frames.frameCount, channel: channel, frequency: frequency, rate: 48000)
+        }
+        #expect(band(0, 440) > 20 * band(0, 660))
+        #expect(band(1, 660) > 20 * band(1, 440))
+    }
+
+    /// A WAV whose header promises more data than the file holds, as an interrupted download leaves.
+    @Test func wavWithOverstatedDataChunkEndsCleanly() async throws {
+        let scratch = try Scratch()
+        let source = scratch.directory.appendingPathComponent("cut.wav")
+        _ = try writeSine(to: source, seconds: 3, sampleRate: 48000)
+        let data = try Data(contentsOf: source)
+        try data.prefix(data.count - 40000).write(to: source)
+
+        let cache = try await RecordingPCMCache.prepare(
+            source: source, cacheKey: "cut", sampleRate: 48000, directory: scratch.directory,
+        )
+        let count = try MappedRecording(pcmFile: cache).frames.frameCount
+        #expect(abs(count - (3 * 48000 - 10000)) <= 1, "got \(count) frames")
+    }
+
     @Test func resamplesTo48kHz() async throws {
         let scratch = try Scratch()
         let source = scratch.directory.appendingPathComponent("slow.wav")
