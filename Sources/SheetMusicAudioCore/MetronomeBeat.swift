@@ -26,11 +26,19 @@ extension PlaybackTimeline {
     /// in MuseScore (`src/engraving/playback/playbackeventsrenderer.cpp`)
     /// for the simple-meter case: one beat per denominator unit, with
     /// the first marked as `BeatType::DOWNBEAT`.
-    public static func metronomeBeats(score: Score) -> [MetronomeBeat] { // swiftlint:disable:this function_body_length
+    public static func metronomeBeats(score: Score) -> [MetronomeBeat] {
+        metronomeGrid(score: score).beats
+    }
+
+    /// `metronomeBeats(score:)` together with each measure's beat step in ticks (the spacing the click uses there),
+    /// so a caller measuring a bar in beats divides by the same step the click does.
+    package static func metronomeGrid( // swiftlint:disable:this function_body_length
+        score: Score,
+    ) -> (beats: [MetronomeBeat], stepTicks: [Int]) {
         let division = score.division
         let measures = score.parts.first?.staves.first?.measures ?? []
         let measureCount = measures.count
-        guard measureCount > 0 else { return [] }
+        guard measureCount > 0 else { return ([], []) }
 
         // Per-measure cache: start tick (along voice 0 / staff 0's
         // spine), active time signature, and spine length consumed
@@ -84,12 +92,15 @@ extension PlaybackTimeline {
 
         var beats: [MetronomeBeat] = []
         beats.reserveCapacity(measureCount * 4)
+        var steps: [Int] = []
+        steps.reserveCapacity(measureCount)
         for mi in 0 ..< measureCount {
             let ts = measureTimeSigs[mi]
             // ticks-per-quarter * 4 / denominator. 4/4 → division;
             // 6/8 → division/2; 3/2 → division*2. See
             // `PlaybackTimeline.init` for the same step formula.
             let step = max(1, division * 4 / ts.denominator)
+            steps.append(step)
             // Anacrusis / pickup measures (`Measure.irregular` or
             // `actualLength` shorter than the nominal time signature)
             // produce fewer than `numerator` beats and start without
@@ -105,7 +116,7 @@ extension PlaybackTimeline {
                 ))
             }
         }
-        return beats
+        return (beats, steps)
     }
 
     /// `metronomeBeats(score:)` (NOTATED ticks) projected onto the

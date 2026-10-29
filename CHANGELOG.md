@@ -9,6 +9,10 @@ and this project adheres to
 
 ### Added
 
+- **`PlayedMeasure`, `PlayedMeasures.make(score:)` and `PreparedPlayback.playedMeasures`.** Every measure as playback
+  plays it, repeats and jumps unrolled, with its pass number, its start and end on the transport's seconds at the
+  notated tempo, the transport second of each click beat in it, and its length in click beats (0.5 for an eighth-note
+  pickup in 4/4), so a host can turn its own alignment into a time warp over the transport clock.
 - **`RevoiceDrumStaff`, `RevoicePreview` and `EditIntent.revoiceDrumStaff(staff:assignments:policy:)` (wire index
   95).** Re-voices a drum staff by pitch as one undo step: every note moves to the voice its pitch is assigned, so a
   staff converts to one voice or to hands and feet (kicks and pedal hi-hat in voice 2). A bar already in the target form

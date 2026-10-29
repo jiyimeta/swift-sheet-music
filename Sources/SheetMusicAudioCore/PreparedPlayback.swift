@@ -15,6 +15,9 @@ public struct PreparedPlayback: Sendable {
     package let staffChannelSwitches: [Int: [StaffChannelSwitch]]
     package let renderedMidi: MidiFile
 
+    /// Every measure as playback plays it (repeats and jumps unrolled), on the transport's seconds; computed once.
+    public let playedMeasures: [PlayedMeasure]
+
     package var derivation: PlaybackScoreDerivation {
         PlaybackScoreDerivation(
             timeline: timeline,
@@ -47,6 +50,12 @@ public struct PreparedPlayback: Sendable {
             channelLayout: derivation.channelLayout,
             staffChannelSwitches: derivation.staffChannelSwitches,
             renderedMidi: render(score: score, channelLayout: derivation.channelLayout),
+            playedMeasures: PlayedMeasures.make(
+                score: score,
+                timeline: derivation.timeline,
+                unroll: derivation.unroll,
+                unrolledTimeMap: derivation.unrolledTimeMap,
+            ),
         )
     }
 

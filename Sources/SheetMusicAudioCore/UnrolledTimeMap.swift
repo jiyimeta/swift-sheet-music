@@ -73,6 +73,11 @@ public struct UnrolledTimeMap: Sendable {
         )
     }
 
+    /// Unrolled start time of each measure-play, parallel to `PlaybackUnroll.spans`. Empty for `identity`.
+    package var spanStartSeconds: [TimeInterval] {
+        unrolledStartSeconds
+    }
+
     /// The notated time corresponding to `unrolledSeconds` on the transport's clock.
     ///
     /// Clamps below zero to zero. Past the final measure-play it extrapolates from that
