@@ -67,6 +67,10 @@ extension PlaybackEngine {
     /// recordings already playing stay as they were. A soloed track silences every unsoloed instrument strip, so the
     /// instrument strips are re-applied too. On a backend that cannot play recordings
     /// (`SynthBackend.canPlayRecordings`) the tracks are kept and their solos still count, but nothing sounds.
+    ///
+    /// The tracks belong to the host, not to the score: they survive `prepare(score:)` and `teardown()`, as the
+    /// alignment does (`setAlignment(warp:segments:)`). A host that switches to another score clears both
+    /// (`setRecordingTracks([])`, `setAlignment(warp: nil, segments: [])`), or sets the new score's, before it plays.
     public func setRecordingTracks(_ tracks: [RecordingTrack]) throws {
         let loaded = try tracks.map { track in
             try LoadedRecordingTrack(track: track, recording: MappedRecording(pcmFile: track.pcmFile))
@@ -122,8 +126,13 @@ extension PlaybackEngine {
     ///
     /// While one is set (`hasAlignment`), `currentTimeSeconds`, `currentTimeSecondsContinuous` and
     /// `totalTimeSeconds` report warped seconds at 100 % rate — the recording's time, which is what a seek bar under
-    /// it shows — and `seek(toTimeSeconds:)` and `skip(by:)` take them. `setAlignment(warp: nil, segments: [])`
-    /// clears it.
+    /// it shows — and `seek(toTimeSeconds:)` and `skip(by:)` take them. `notatedTimeSecondsContinuous` stays on the
+    /// notated timeline, and `notatedSeconds(forReportedSeconds:)` / `reportedSeconds(forNotatedSeconds:)` convert
+    /// between the two clocks. `setAlignment(warp: nil, segments: [])` clears it.
+    ///
+    /// The alignment belongs to the host, not to the score: it survives `prepare(score:)` and `teardown()`, as the
+    /// recordings do (`setRecordingTracks(_:)`). A host that switches to another score clears both, or sets the new
+    /// score's, before it plays.
     public func setAlignment(warp: PlaybackTimeWarp?, segments: [RecordingSegment]) {
         alignmentWarp = warp
         alignmentSegments = segments

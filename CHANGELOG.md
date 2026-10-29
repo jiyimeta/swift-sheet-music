@@ -28,9 +28,13 @@ and this project adheres to
 - **Recording tracks on `PlaybackEngine` (`RecordingTrack`, `setRecordingTracks(_:)`,
   `setRecordingMix(id:volume:isMuted:isSoloed:)`, `setAlignment(warp:segments:)`, `hasAlignment`).** Recordings mix
   with the score at their strip's volume and mute, on one solo bus with the instrument strips (the click stays off it),
-  follow the reader's transposition, take an alignment while playing without stopping it, and with an alignment set the
-  elapsed and total time, `seek(toTimeSeconds:)` and `skip(by:)` speak the recording's warped seconds; a gain change
-  ramps instead of clicking.
+  follow the reader's transposition, take an alignment while playing without stopping it, and a gain change ramps
+  instead of clicking. With an alignment set, `currentTimeSeconds`, `currentTimeSecondsContinuous`,
+  `totalTimeSeconds`, `seek(toTimeSeconds:)` and `skip(by:)` speak the recording's warped seconds, repeats played
+  out. `notatedTimeSecondsContinuous` stays on the notated timeline for what is drawn against the score, and
+  `notatedSeconds(forReportedSeconds:)` / `reportedSeconds(forNotatedSeconds:)` convert between the two clocks (a
+  notated second in a repeat reports at its first pass). The tracks and the alignment belong to the host and survive
+  `prepare(score:)`: a host switching scores clears them.
 - **Exports include recordings and an optional count-in (`exportAudioFile(…, includesCountIn:)`).** Through an
   injected backend the file carries the recordings at their strips' mix, on the same solo bus as live, follows the
   alignment — a warped score or range lasts its warped length — and can open with the count-in live playback plays:

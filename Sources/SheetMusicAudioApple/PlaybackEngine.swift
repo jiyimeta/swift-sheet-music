@@ -2177,13 +2177,23 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// loop fold as `currentTimeSeconds`; the only difference is the
     /// unrounded tick fed to `PlaybackTimeline.seconds(atTick:)`.
     ///
-    /// With an alignment set, the warped second of the transport's position, unsnapped.
+    /// With an alignment set, the warped second of the transport's position, unsnapped; `notatedTimeSecondsContinuous`
+    /// is the same position on the notated timeline.
     public var currentTimeSecondsContinuous: TimeInterval {
+        if let backend, let timeline, hasAlignment {
+            return backendAlignedSeconds(backend, timeline: timeline, snappedToFrame: false)
+        }
+        return notatedTimeSecondsContinuous
+    }
+
+    /// `currentTimeSecondsContinuous` on the NOTATED timeline whatever the alignment. Without one (`hasAlignment`)
+    /// the two are the same value; with one this stays notated, where `currentTimeSecondsContinuous` turns warped: a
+    /// position in a repeat's later pass reads that pass's notated second, as the cursor does. What a host draws
+    /// against the score's own notes and barlines (a pitch trail under the staff) reads this; a seek bar under the
+    /// recording reads `currentTimeSecondsContinuous`.
+    public var notatedTimeSecondsContinuous: TimeInterval {
         guard let timeline else { return 0 }
         if let backend {
-            if hasAlignment {
-                return backendAlignedSeconds(backend, timeline: timeline, snappedToFrame: false)
-            }
             // The transport's seconds clock is already continuous, so this needs no frame
             // lookup at all — reading it through `backend.currentTick` was what quantized it
             // to note onsets (and made it unroll-blind and saturating along the way).
@@ -2281,7 +2291,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard let timeline else { return }
         let now = currentTimeSeconds
         let target = max(0, min(totalTimeSeconds, now + seconds))
-        guard let frame = timeline.frame(atTime: notatedSeconds(forReported: target)) else { return }
+        guard let frame = timeline.frame(atTime: notatedSeconds(forReportedSeconds: target)) else { return }
         // Injected-backend path: the AUMIDISynth `sequencer` is never built (see `play`), so a
         // `guard let sequencer` above would make every skip a silent no-op — the host's seek bar,
         // the lock-screen scrubber (`changePlaybackPositionCommand`), and the ±N-second skip all
@@ -2802,12 +2812,24 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         return lastStart + max(0, lastLength)
     }
 
-    /// The notated second a reported one (`currentTimeSeconds`' clock) stands for: itself, or with an alignment set
-    /// the warped second taken back to the transport and onto the notated timeline. A position in a repeat's later
-    /// pass maps to that pass's notated second, which a seek then plays at its first occurrence, as every seek does.
-    private func notatedSeconds(forReported seconds: TimeInterval) -> TimeInterval {
+    /// The notated second a reported one stands for — reported being the clock `currentTimeSeconds`,
+    /// `currentTimeSecondsContinuous` and `totalTimeSeconds` speak. Without an alignment (`hasAlignment`) that clock
+    /// is the notated timeline's and this is the identity. With one, a reported second is a warped second on the
+    /// transport's clock, repeats played out: it is taken back through the warp to the transport and onto the notated
+    /// timeline, so a second in a repeat's later pass maps to that pass's notated second (which a seek then plays at
+    /// its first occurrence, as every seek does).
+    public func notatedSeconds(forReportedSeconds seconds: TimeInterval) -> TimeInterval {
         guard hasAlignment else { return seconds }
         return unrolledTimeMap.notatedSeconds(fromUnrolled: alignmentSpeedTable.transportSeconds(atOutput: seconds))
+    }
+
+    /// The reported second (`notatedSeconds(forReportedSeconds:)`) at which notated second `seconds` plays: the
+    /// identity without an alignment. With one, a notated second inside a repeated passage plays once per pass, and
+    /// this is its FIRST occurrence, where a seek to it lands. What a host reads to place the score's own marks
+    /// (rehearsal marks, measure numbers) on a seek bar that `totalTimeSeconds` spans.
+    public func reportedSeconds(forNotatedSeconds seconds: TimeInterval) -> TimeInterval {
+        guard hasAlignment else { return seconds }
+        return alignmentSpeedTable.outputSeconds(atTransport: unrolledTimeMap.unrolledSeconds(fromNotated: seconds))
     }
 
     private func backendTickCursor(
