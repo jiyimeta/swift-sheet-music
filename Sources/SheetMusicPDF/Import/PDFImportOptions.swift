@@ -130,6 +130,14 @@ public struct PDFImportOptions: Sendable {
     /// rather than ignoring it silently.
     public var omrTileClassifier: (any OMRTileClassifier)?
 
+    /// A text recognizer for the lyrics and other text on pages read by the raster fallback. `nil` — the default —
+    /// means no OCR: the importer behaves exactly as it always has.
+    ///
+    /// Acts only on pages read by the raster fallback, and only when `omrTileClassifier` (or the testing
+    /// `omrDetector`) is also set. `parseUsingSwiftReader` and the Android entry ignore it the same way they ignore
+    /// the classifier.
+    public var omrTextRecognizer: (any OMRTextRecognizer)?
+
     /// Resolution at which a page with no vector content is rasterized. The
     /// training corpus's DPI grid is 200/300/400, so 300 sits mid-distribution.
     ///

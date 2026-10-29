@@ -58,5 +58,9 @@
             )
             #expect(lyricTexts(out) == ["a"])
         }
+
+        @Test func ocrIsOffByDefault() {
+            #expect(PDFImportOptions().omrTextRecognizer == nil)
+        }
     }
 #endif
