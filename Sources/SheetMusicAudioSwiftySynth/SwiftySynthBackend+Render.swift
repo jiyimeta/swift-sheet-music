@@ -34,19 +34,21 @@ extension SwiftySynthBackend {
             lock.withLockUnchecked { shared in
                 if shared.isPlaying, let sequencer = shared.sequencer {
                     renderPlaying(
-                        into: left, right, sequencer: sequencer, shared: &shared,
+                        into: left, right, sequencer: sequencer, sampleRate: sampleRate, shared: &shared,
                     )
                 } else if let synthesizer = shared.synthesizer {
                     // Paused/stopped: render release tails but don't advance the
-                    // transports.
+                    // transports. The recordings are silent, and fade in when play resumes.
                     synthesizer.render(left: left, right: right)
                     mixMetronome(
                         into: left, right, shared: &shared,
                         render: { seq, l, r in seq.synthesizer.render(left: l, right: r) },
                     )
+                    shared.alignment.silenceRecordings()
                 } else {
                     left.update(repeating: 0)
                     right.update(repeating: 0)
+                    shared.alignment.silenceRecordings()
                 }
             }
             return noErr
@@ -64,27 +66,79 @@ extension SwiftySynthBackend {
         into left: UnsafeMutableBufferPointer<Float>,
         _ right: UnsafeMutableBufferPointer<Float>,
         sequencer: MidiFileSequencer,
+        sampleRate: Double,
         shared: inout Shared,
     ) {
         let count = left.count
         let preRoll = min(max(shared.preRollFramesRemaining, 0), count)
         if preRoll > 0 {
+            // A count-in started under a warp runs at the speed it was given (`play(afterCountInSeconds:)`); a table
+            // swap during it applies from the body on.
+            if let speed = shared.alignment.countInSpeed {
+                shared.metronomeSequencer?.speed = speed
+            }
             renderCountIn(into: left, right, upTo: preRoll, shared: &shared)
             shared.preRollFramesRemaining -= preRoll
+            // Nothing of the recordings sounds under the count: the body fades them in.
+            shared.alignment.silenceRecordings()
         }
         guard preRoll < count else { return }
         let bodyL = UnsafeMutableBufferPointer(rebasing: left[preRoll ..< count])
         let bodyR = UnsafeMutableBufferPointer(rebasing: right[preRoll ..< count])
-        // Advance the score transport, dispatch due events, render.
-        sequencer.render(left: bodyL, right: bodyR)
-        // Mix the metronome in when it's audible. While muted or at zero gain it is NOT rendered
-        // at all (its transport freezes), so the effects-free click synth costs zero —
-        // `setMetronomeMuted` / `setMetronomeVolume` reseek it to the score position when it
-        // becomes audible again, so it lands back on the beat.
-        mixMetronome(
-            into: bodyL, bodyR, shared: &shared,
-            render: { seq, l, r in seq.render(left: l, right: r) },
-        )
+        renderBody(into: bodyL, bodyR, sequencer: sequencer, sampleRate: sampleRate, shared: &shared)
+    }
+
+    /// The body of a playing buffer — score transport, recordings, metronome — in chunks, so both transports' speed
+    /// can follow the speed table: at each chunk that starts on a sequencer block start, the speed is set to the
+    /// user's rate × the stretch where the block's middle falls. Without a warp the speed never changes, and the
+    /// chunks (one, or two when the buffer starts mid-block) render sample for sample what one call always did.
+    /// Allocation-free.
+    nonisolated static func renderBody(
+        into left: UnsafeMutableBufferPointer<Float>,
+        _ right: UnsafeMutableBufferPointer<Float>,
+        sequencer: MidiFileSequencer,
+        sampleRate: Double,
+        shared: inout Shared,
+    ) {
+        let count = left.count
+        let blockSize = sequencer.synthesizer.blockSize
+        var offset = 0
+        while offset < count {
+            let position = sequencer.position.components
+            let now = shared.alignment.transportSeconds(
+                quantized: Double(position.seconds) + Double(position.attoseconds) * 1e-18,
+                sampleRate: sampleRate, blockSize: blockSize,
+            )
+            if shared.alignment.blockPhase == 0 {
+                let middle = now + Double(blockSize) / 2 * sequencer.speed / sampleRate
+                let speed = shared.alignment.speed(atTransport: middle)
+                if sequencer.speed != speed { sequencer.speed = speed }
+                if let metronome = shared.metronomeSequencer, metronome.speed != speed { metronome.speed = speed }
+                shared.alignment.blockSpeed = speed
+            }
+            let speed = shared.alignment.blockSpeed
+            let chunk = max(1, shared.alignment.framesBeforeSpeedDecision(
+                at: now, speed: speed, sampleRate: sampleRate, blockSize: blockSize, limit: count - offset,
+            ))
+            let chunkL = UnsafeMutableBufferPointer(rebasing: left[offset ..< offset + chunk])
+            let chunkR = UnsafeMutableBufferPointer(rebasing: right[offset ..< offset + chunk])
+            // Advance the score transport, dispatch due events, render.
+            sequencer.render(left: chunkL, right: chunkR)
+            mixRecordings(
+                into: chunkL, chunkR, transportStart: now, transportPerFrame: speed / sampleRate,
+                sampleRate: sampleRate, alignment: &shared.alignment,
+            )
+            // Mix the metronome in when it's audible. While muted or at zero gain it is NOT rendered
+            // at all (its transport freezes), so the effects-free click synth costs zero —
+            // `setMetronomeMuted` / `setMetronomeVolume` reseek it to the score position when it
+            // becomes audible again, so it lands back on the beat.
+            mixMetronome(
+                into: chunkL, chunkR, shared: &shared,
+                render: { seq, l, r in seq.render(left: l, right: r) },
+            )
+            shared.alignment.advance(frames: chunk, blockSize: blockSize)
+            offset += chunk
+        }
     }
 
     /// The count-in window: the first `frames` frames of this buffer, during

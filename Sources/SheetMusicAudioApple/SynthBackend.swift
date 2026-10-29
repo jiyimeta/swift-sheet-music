@@ -204,6 +204,47 @@ public protocol SynthBackend: AnyObject {
     /// Returning `nil` is not a soft failure: exports then sound like the AUMIDISynth path, i.e. with the voice
     /// stealing this backend exists to avoid. Return `nil` only from a backend that genuinely can't render offline.
     func makeOfflineInstance(sampleRate: Double) -> (any SynthBackend)?
+
+    // MARK: Recordings
+
+    /// Whether this backend mixes recordings into its own render, locked to its transport
+    /// (`setRecordingTracks`, `setPlaybackAlignment`). Defaults to `false`, and the other two then do nothing.
+    var canPlayRecordings: Bool { get }
+
+    /// The recordings to mix, replacing the previous set. Callable while playing: a track whose `id` was already
+    /// playing carries on from where it is, so a change of gain neither fades nor jumps it. Defaults to a no-op.
+    func setRecordingTracks(_ tracks: [RecordingTrackRender])
+
+    /// The alignment the transport and the recordings follow: `warp` sets how long each stretch of the transport's
+    /// clock lasts (nil = the notated tempo), and `segments` say which seconds of the reference recording sound at each
+    /// warped second. Callable while playing — the new speed applies from the next synthesizer block, without a stop,
+    /// a seek or a reload. A recording plays only inside a segment. Defaults to a no-op.
+    func setPlaybackAlignment(warp: PlaybackTimeWarp?, segments: [RecordingSegment])
+}
+
+/// One recording as a backend mixes it: the mapped PCM and how it sits against the reference timing, with the gain and
+/// transposition the engine has already resolved from the mixer.
+public struct RecordingTrackRender: Sendable {
+    /// Stable across calls, so a backend can keep a playing track's position when the set is replaced.
+    public let id: String
+    public let recording: MappedRecording
+    /// Seconds into the reference recording's time at which this track's file starts.
+    public var offsetSeconds: TimeInterval
+    /// The strip's effective volume × mute × solo, resolved by the engine.
+    public var gain: Float
+    /// The track's own transposition plus the reader's, resolved by the engine.
+    public var transposeSemitones: Double
+
+    public init(
+        id: String, recording: MappedRecording, offsetSeconds: TimeInterval = 0, gain: Float = 1,
+        transposeSemitones: Double = 0,
+    ) {
+        self.id = id
+        self.recording = recording
+        self.offsetSeconds = offsetSeconds
+        self.gain = gain
+        self.transposeSemitones = transposeSemitones
+    }
 }
 
 extension SynthBackend {
@@ -232,4 +273,15 @@ extension SynthBackend {
 
     /// Default for a backend with no live pitch wheel: an audition plays on its semitone key.
     public func sendPitchBend(channel _: UInt8, value _: UInt16) {}
+
+    /// Default for a backend that cannot mix recordings into its render.
+    public var canPlayRecordings: Bool {
+        false
+    }
+
+    /// Default: ignored (see `canPlayRecordings`).
+    public func setRecordingTracks(_: [RecordingTrackRender]) {}
+
+    /// Default: ignored (see `canPlayRecordings`).
+    public func setPlaybackAlignment(warp _: PlaybackTimeWarp?, segments _: [RecordingSegment]) {}
 }

@@ -9,6 +9,10 @@ and this project adheres to
 
 ### Added
 
+- **Recordings on the SwiftySynth transport (`SynthBackend.setRecordingTracks(_:)`,
+  `setPlaybackAlignment(warp:segments:)`, `RecordingTrackRender`).** `SwiftySynthBackend` mixes mapped recordings into
+  its own render, read at the position its transport is at, so they stay locked to the synthesized parts and the click;
+  an alignment change applies while playing, from the next synthesizer block, without stopping or seeking it.
 - **`RecordingPCMCache` and `MappedRecording`.** Recordings are decoded once into an Int16 stereo PCM cache file that is
   memory-mapped for playback, so long recordings cost address space rather than resident memory.
 - **`PlaybackTimeWarp`.** A host can stretch the score's playback to an external timing: a list of spans on the

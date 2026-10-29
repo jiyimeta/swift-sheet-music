@@ -59,12 +59,16 @@ public final class SwiftySynthBackend: SynthBackend {
         /// render block allocates nothing. Sized in `prepare`.
         var scratchL: [Float] = []
         var scratchR: [Float] = []
+        /// The speed table both transports follow, the recordings mixed on them and the render thread's block
+        /// bookkeeping (`SwiftySynthBackend+Recordings.swift`). Survives a `prepare`, like `metronomeGain`.
+        var alignment = PlaybackAlignmentState()
     }
 
     /// The one lock serializing all SwiftySynth access. `Sendable`, so the
     /// `@Sendable` render block can capture it; the non-`Sendable` `Shared`
     /// (it holds a `Synthesizer`) lives inside it via `uncheckedState`.
-    private let lock = OSAllocatedUnfairLock(uncheckedState: Shared())
+    /// `internal` so `SwiftySynthBackend+Recordings.swift` can swap its tables in.
+    let lock = OSAllocatedUnfairLock(uncheckedState: Shared())
 
     /// Render-thread scratch capacity (frames). Larger caller chunks are mixed
     /// in `scratchCapacity`-frame slices, so any `frameCount` is handled.
@@ -174,6 +178,8 @@ public final class SwiftySynthBackend: SynthBackend {
         // Drop the old synth so the render block goes silent until the new one lands.
         lock.withLockUnchecked { shared in
             shared.isPlaying = false
+            shared.alignment.sequencerRepositioned()
+            shared.alignment.silenceRecordings()
             shared.synthesizer = nil
             shared.sequencer = nil
             shared.metronomeSynthesizer = nil
@@ -301,6 +307,8 @@ public final class SwiftySynthBackend: SynthBackend {
             shared.sequencer?.play(smf, loop: false)
             shared.isPlaying = false
             shared.preRollFramesRemaining = 0
+            shared.alignment.sequencerRepositioned()
+            shared.alignment.silenceRecordings()
         }
         // `sequencer.play` resets the synthesizer, so re-assert rate + tuning.
         applyRateAndTuning()
@@ -370,10 +378,13 @@ public final class SwiftySynthBackend: SynthBackend {
         return smf
     }
 
+    /// Under a warp the speed written here is the unstretched one, but it never reaches a block: the sequencer applies
+    /// a speed only at a block start, and the render sets the stretched one there first.
     public func setRate(_ rate: Float) {
         self.rate = rate
         let speed = max(0.01, Double(rate))
         lock.withLockUnchecked { shared in
+            shared.alignment.userSpeed = speed
             shared.sequencer?.speed = speed
             shared.metronomeSequencer?.speed = speed
         }
@@ -395,6 +406,7 @@ public final class SwiftySynthBackend: SynthBackend {
     private func applyRateAndTuning() {
         let speed = max(0.01, Double(rate))
         lock.withLockUnchecked { shared in
+            shared.alignment.userSpeed = speed
             shared.sequencer?.speed = speed
             shared.metronomeSequencer?.speed = speed
             if let synthesizer = shared.synthesizer {
@@ -441,9 +453,25 @@ public final class SwiftySynthBackend: SynthBackend {
         }
     }
 
+    /// Under a warp the count runs at the speed of the measure it counts into — `seconds` are the metronome SMF's, so
+    /// it lasts `seconds / speed` — and keeps that speed to its end, a table swap during it applying from the body on.
+    /// Without a warp the count's length and speed are what they always were.
     public func play(afterCountInSeconds seconds: TimeInterval) {
-        let frames = max(0, Int((seconds * sampleRate).rounded()))
+        let sampleRate = sampleRate
         lock.withLockUnchecked { shared in
+            var frames = max(0, Int((seconds * sampleRate).rounded()))
+            shared.alignment.countInSpeed = nil
+            if shared.alignment.hasWarp, let sequencer = shared.sequencer {
+                let position = sequencer.position.components
+                let held = shared.alignment.transportSeconds(
+                    quantized: Double(position.seconds) + Double(position.attoseconds) * 1e-18,
+                    sampleRate: sampleRate, blockSize: sequencer.synthesizer.blockSize,
+                )
+                // 1 ms in, because `seek(toTick:)` parks the transport half a tick before the measure's first onset.
+                let speed = shared.alignment.speed(atTransport: held + 0.001)
+                shared.alignment.countInSpeed = speed
+                frames = max(0, Int((seconds / speed * sampleRate).rounded()))
+            }
             shared.preRollFramesRemaining = frames
             shared.isPlaying = true
         }
@@ -462,6 +490,7 @@ public final class SwiftySynthBackend: SynthBackend {
     public func pause() {
         lock.withLockUnchecked { shared in
             shared.isPlaying = false
+            shared.alignment.silenceRecordings()
             shared.synthesizer?.noteOffAll(immediate: true)
             shared.metronomeSynthesizer?.noteOffAll(immediate: true)
         }
@@ -471,6 +500,8 @@ public final class SwiftySynthBackend: SynthBackend {
         lock.withLockUnchecked { shared in
             shared.isPlaying = false
             shared.preRollFramesRemaining = 0
+            shared.alignment.sequencerRepositioned()
+            shared.alignment.silenceRecordings()
             shared.sequencer?.seek(to: .zero)
             shared.synthesizer?.noteOffAll(immediate: true)
             // Score tick 0 sits `metronomeOffsetSeconds` into a count-in
@@ -507,6 +538,9 @@ public final class SwiftySynthBackend: SynthBackend {
             // A seek is "play from here, now": it ends any count-in still owed
             // rather than counting the user in a second time from a new spot.
             shared.preRollFramesRemaining = 0
+            // The recordings keep their playheads: a seek while playing (a loop wrap) is a jump of their read
+            // position, which the playhead crossfades from where it was.
+            shared.alignment.sequencerRepositioned()
             shared.sequencer?.seek(to: .seconds(seconds))
             shared.metronomeSequencer?.seek(to: Self.metronomePosition(seconds, in: shared))
         }
@@ -624,6 +658,8 @@ public final class SwiftySynthBackend: SynthBackend {
             shared.isPlaying = false
             shared.preRollFramesRemaining = 0
             shared.metronomeOffsetSeconds = 0
+            shared.alignment.sequencerRepositioned()
+            shared.alignment.silenceRecordings()
             shared.sequencer?.stop()
             shared.metronomeSequencer?.stop()
             shared.sequencer = nil
