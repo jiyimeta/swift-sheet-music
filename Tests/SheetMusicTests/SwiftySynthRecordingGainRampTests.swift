@@ -48,6 +48,107 @@
                     #expect(step <= 1.5 * Self.rampStep, "largest step \(step), a ramp's is \(Self.rampStep)")
                 }
 
+                // MARK: A gain handed over while the recording is silent
+
+                /// Nothing is heard in a gap, so the gain steps there: the stretcher is primed on its return with the
+                /// gain it was handed, not with history at the old one, which would play for a stretcher lead.
+                @Test("a mute in a gap is the gain a recording read through a stretcher comes back at")
+                func muteInAGapHoldsWhenTheStretchedReadingReturns() async throws {
+                    let recorder = FakeStretcherRecorder()
+                    let rig = try await RecordingStretcherRenderTests.rig(recorder.factory)
+                    defer { rig.finish() }
+                    rig.backend.setRate(0.7)
+                    let level = try Fixtures.recording(rate: 44100, frames: 44100 * 4) { _ in 16384 }
+                    rig.backend.setRecordingTracks([RecordingTrackRender(id: "level", recording: level)])
+                    // Heard for warped 0–0.5 s and again from 1 s on, a gap between.
+                    rig.backend.setPlaybackAlignment(warp: nil, segments: [
+                        RecordingSegment(sourceStart: 0, sourceEnd: 0.5, outputStart: 0),
+                        RecordingSegment(sourceStart: 1, sourceEnd: 4, outputStart: 1),
+                    ])
+                    rig.backend.play()
+                    // At 70 % warped 0.5 s comes 0.71 s in, and warped 1 s 1.43 s in.
+                    let before = try rig.render(seconds: 0.85)
+                    rig.backend.setRecordingTracks([RecordingTrackRender(id: "level", recording: level, gain: 0)])
+                    let after = try rig.render(seconds: 1)
+
+                    #expect(recorder.made.count == 2, "read through a stretcher pair")
+                    #expect((before.map(abs).max() ?? 0) > 0.45, "heard before the gap")
+                    #expect((before.suffix(Fixtures.frame(0.05)).map(abs).max() ?? 1) < 1e-6, "silent in the gap")
+                    let leak = after.map(abs).max() ?? 1
+                    #expect(leak < 1e-6, "loudest sample after the mute, across the return: \(leak)")
+                }
+
+                /// A paused graph may be parked, so no render runs between a pause and the next play to settle the
+                /// gain: the resume itself must start at the gain handed over meanwhile.
+                @Test("a mute while paused is the gain a recording read through a stretcher resumes at")
+                func muteWhilePausedHoldsWhenTheStretchedReadingResumes() async throws {
+                    let recorder = FakeStretcherRecorder()
+                    let rig = try await RecordingStretcherRenderTests.rig(recorder.factory)
+                    defer { rig.finish() }
+                    rig.backend.setRate(0.7)
+                    let (before, after) = try Self.muteWhilePaused(on: rig)
+
+                    #expect(recorder.made.count == 2, "read through a stretcher pair")
+                    #expect(abs((before.last ?? 0) - 0.5) < 0.01, "heard before the pause")
+                    let leak = after.map(abs).max() ?? 1
+                    #expect(leak < 1e-6, "loudest sample after the resume: \(leak)")
+                }
+
+                /// Read directly, a ramp from the old gain would run against the playhead's fade-in, a bump of up to
+                /// a quarter of the level.
+                @Test("a mute while paused is the gain a recording read directly resumes at")
+                func muteWhilePausedHoldsWhenTheDirectReadingResumes() async throws {
+                    let rig = try await RecordingStretcherRenderTests.rig(nil)
+                    defer { rig.finish() }
+                    let (before, after) = try Self.muteWhilePaused(on: rig)
+
+                    #expect(abs((before.last ?? 0) - 0.5) < 0.01, "heard before the pause")
+                    let leak = after.map(abs).max() ?? 1
+                    #expect(leak < 1e-6, "loudest sample after the resume: \(leak)")
+                }
+
+                /// A rate change back to 100 % switches a recording to direct reading, which fades in from silence
+                /// while the stretcher fades out. A mute handed over with it is the gain the direct reading fades in
+                /// at: only the stretcher's fade-out from the old level is heard.
+                @Test("a mute handed over with a switch to direct reading is the gain that reading fades in at")
+                func muteWithASwitchToDirectReadingHolds() async throws {
+                    let recorder = FakeStretcherRecorder()
+                    let rig = try await RecordingStretcherRenderTests.rig(recorder.factory)
+                    defer { rig.finish() }
+                    rig.backend.setRate(0.7)
+                    let level = try Fixtures.recording(rate: 44100, frames: 44100 * 4) { _ in 16384 }
+                    rig.backend.setRecordingTracks([RecordingTrackRender(id: "level", recording: level)])
+                    rig.backend.setPlaybackAlignment(warp: nil, segments: Fixtures.wholeRecording(4))
+                    rig.backend.play()
+                    let before = try rig.render(seconds: 0.5)
+                    rig.backend.setRate(1)
+                    rig.backend.setRecordingTracks([RecordingTrackRender(id: "level", recording: level, gain: 0)])
+                    let after = try rig.render(seconds: 0.05)
+
+                    #expect(abs((before.last ?? 0) - 0.5) < 0.01, "heard before the switch")
+                    // The stretcher's fade-out: 0.5 falling linearly to 0 over the fade.
+                    let fade = Fixtures.fadeFrames
+                    let excess = after.indices.map { frame in
+                        abs(after[frame]) - 0.5 * Float(max(0, fade - frame)) / Float(fade)
+                    }.max() ?? 1
+                    #expect(excess < 0.01, "loudest sample above the stretcher's fade-out: \(excess)")
+                }
+
+                /// A constant 0.5 played for 0.5 s, paused, handed over at gain 0 with nothing rendered meanwhile, as
+                /// with the graph parked, then played for 0.5 s.
+                static func muteWhilePaused(on rig: Fixtures.Rig) throws -> (before: [Float], after: [Float]) {
+                    let level = try Fixtures.recording(rate: 44100, frames: 44100 * 4) { _ in 16384 }
+                    rig.backend.setRecordingTracks([RecordingTrackRender(id: "level", recording: level)])
+                    rig.backend.setPlaybackAlignment(warp: nil, segments: Fixtures.wholeRecording(4))
+                    rig.backend.play()
+                    let before = try rig.render(seconds: 0.5)
+                    rig.backend.pause()
+                    rig.backend.setRecordingTracks([RecordingTrackRender(id: "level", recording: level, gain: 0)])
+                    rig.backend.play()
+                    let after = try rig.render(seconds: 0.5)
+                    return (before, after)
+                }
+
                 /// What was heard: the last 0.1 s at full gain, 0.2 s after the mute, 0.2 s after the unmute.
                 struct Heard {
                     let playing: [Float]

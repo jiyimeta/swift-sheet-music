@@ -48,7 +48,7 @@ struct RecordingGainRamp {
         remaining == 0 && current == 0
     }
 
-    /// Jumps to `gain`, for a track whose recording is silent anyway (a pause, a stop, a load): it fades in afterwards.
+    /// Jumps to `gain`, for a track nothing is heard from (a pause, a stop, a load, a gap): it fades in afterwards.
     mutating func settle(at gain: Float) {
         target = gain
         current = gain

@@ -172,7 +172,10 @@ extension SwiftySynthBackend {
     /// the reading switched from fades out while the other fades in.
     ///
     /// A track handed a new gain heads for it over the fade (`RecordingGainRamp`): per output frame when read
-    /// directly, per input frame when read through a stretcher, whose input carries the gain. Allocation-free.
+    /// directly, per input frame when read through a stretcher, whose input carries the gain. A track nothing is heard
+    /// from takes its new gain at once instead, so it comes back at that gain: read directly, a ramp from the old one
+    /// would run against the fade-in; read through a stretcher, the prime's history would carry the old one for a
+    /// stretcher lead. Allocation-free.
     nonisolated static func mixRecordings(
         into left: UnsafeMutableBufferPointer<Float>,
         _ right: UnsafeMutableBufferPointer<Float>,
@@ -196,6 +199,16 @@ extension SwiftySynthBackend {
             let stretched = alignment.readsThroughStretcher(group: group)
             // A draining group's track indices are into its own tracks: only its stretcher finishes fading out.
             let liveTracks = alignment.groups[group].drainTracks == nil
+            // A track heard from nowhere steps to its gain: its direct reading is silent, and so is the stretcher when
+            // it is the one read. A reading that starts in this chunk then fades in at that gain, and a stretcher is
+            // primed with it. (A stretcher fading out under a switch to direct reading is not heard from the input
+            // this chunk feeds it: that reaches its output a lead later, after the fade.)
+            if liveTracks, !stretched || alignment.groups[group].state.isSilent {
+                for index in alignment.groups[group].trackIndices where alignment.tracks[index].playhead.isSilent {
+                    let gain = alignment.tracks[index].gain
+                    alignment.tracks[index].gainRamp.settle(at: gain)
+                }
+            }
             for index in alignment.groups[group].trackIndices where liveTracks {
                 if stretched {
                     fadeOutTrack(
