@@ -55,6 +55,8 @@
         let onExportMSCZv3: () -> Void
         let onExportMIDI: () -> Void
         let onExportAudio: () -> Void
+        /// Shows the audio-track inspector (recordings, grid alignment, export with tracks).
+        @Binding var showsAudioTracks: Bool
 
         var body: some View {
             List {
@@ -135,6 +137,12 @@
                         Slider(value: $playbackRate, in: 0.5 ... 2.0, step: 0.05)
                     }
                     .disabled(score == nil)
+                }
+                Section("Audio tracks") {
+                    Toggle(isOn: $showsAudioTracks) {
+                        Label("Audio tracks", systemImage: "waveform")
+                    }
+                    .accessibilityLabel("Audio tracks panel")
                 }
                 if soundfontChoices.count > 1 {
                     Section("SoundFont") {

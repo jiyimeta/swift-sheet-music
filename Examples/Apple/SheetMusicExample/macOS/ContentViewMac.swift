@@ -6,6 +6,7 @@
 
     // SwiftySynth playback backend (pure-Swift, MIT): eliminates AUMIDISynth's
     // voice stealing with lightweight SoundFonts, on iOS and macOS alike.
+    import SheetMusicAudioSignalsmith
     import SheetMusicAudioSwiftySynth
     import SheetMusicOMRModel
     import SheetMusicPDF
@@ -143,8 +144,12 @@
             soundfontResolver: SelectableSoundfontResolver(
                 gmSoundfontURL: SoundfontCatalog.bundledChoices().first?.url,
             ),
-            backend: SwiftySynthBackend(),
+            backend: SwiftySynthBackend(stretcherFactory: .signalsmith),
         )
+        /// Recordings mixed with the score (the audio-track inspector). Held here so the strips survive the
+        /// inspector being closed.
+        @State private var audioTracks = AudioTrackModel()
+        @State private var showsAudioTracks = false
         /// SoundFonts discovered in the bundled `Sounds/` directory.
         @State private var soundfontChoices = SoundfontCatalog.bundledChoices()
         /// File name of the selected SoundFont. Empty until `onAppear`
@@ -454,6 +459,7 @@
                     onExportMSCZv3: exportMSCZv3,
                     onExportMIDI: exportMIDI,
                     onExportAudio: { showExport = true },
+                    showsAudioTracks: $showsAudioTracks,
                 )
             } detail: {
                 if let score {
@@ -478,9 +484,14 @@
                     )
                 }
             }
+            .inspector(isPresented: $showsAudioTracks) {
+                AudioTrackPanel(model: audioTracks, hasScore: score != nil)
+                    .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
+            }
             .onAppear(perform: loadBundled)
             .onAppear(perform: installKeyMonitor)
             .onAppear {
+                audioTracks.attach(playbackEngine)
                 if nowPlaying == nil {
                     nowPlaying = NowPlayingController(engine: playbackEngine)
                 }
@@ -490,6 +501,7 @@
             }
             .onChange(of: score) { _, newScore in
                 nowPlaying?.update(score: newScore)
+                audioTracks.scoreChanged(newScore)
             }
             .onChange(of: playbackEngine.state) { _, _ in
                 nowPlaying?.refreshNowPlayingInfo()
