@@ -9,6 +9,8 @@ and this project adheres to
 
 ### Added
 
+- **`PlaybackTimeWarp`.** A host can stretch the score's playback to an external timing: a list of spans on the
+  transport's seconds, each saying how long it must last at 100 % rate, with the sequencer speed following per span.
 - **`PlayedMeasure`, `PlayedMeasures.make(score:)` and `PreparedPlayback.playedMeasures`.** Every measure as playback
   plays it, repeats and jumps unrolled, with its pass number, its start and end on the transport's seconds at the
   notated tempo, the transport second of each click beat in it, and its length in click beats (0.5 for an eighth-note
