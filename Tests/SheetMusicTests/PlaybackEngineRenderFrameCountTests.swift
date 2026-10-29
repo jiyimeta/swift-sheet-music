@@ -78,12 +78,13 @@
             #expect(frames == 0)
         }
 
-        @Test("a count-in goes in front unscaled by the rate, the allowance after")
+        @Test("a count-in goes in front as the wall-clock length it is handed, the allowance after")
         func countInAndAllowanceAddToTheBody() {
             let frames = PlaybackEngine.renderFrameCount(
                 durationSec: 10, rate: 0.5, sampleRate: 44100, countInSeconds: 2.5, allowanceFrames: 36,
             )
-            // The count-in's seconds are already at its own speed; the body is stretched by the rate.
+            // `countInSeconds` is what the backend holds the score for — already at the rate, or at the warped speed
+            // (`TransportSpeedTable.countIn`), so it is not divided again; the body is stretched by the rate.
             #expect(frames == AVAudioFrameCount(2.5 * 44100) + AVAudioFrameCount(20 * 44100) + 36)
         }
 

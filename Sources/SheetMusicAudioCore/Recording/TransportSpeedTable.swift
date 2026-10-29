@@ -70,8 +70,9 @@ package struct TransportSpeedTable: Sendable {
     /// How a count-in plays when the body it counts into starts at transport second `bodyStart`; `seconds` is the
     /// count's own length, its metronome SMF's. Under a warp the count runs at the speed of the stretch the body starts
     /// in — `userSpeed` × the stretch 1 ms past `bodyStart`, clear of rounding at the barline — for its whole length,
-    /// so it lasts `seconds` ÷ that speed. Without a span it lasts `seconds` whatever the rate, and `speed` is nil: the
-    /// count keeps the user's rate, as it did before warps existed.
+    /// so it lasts `seconds` ÷ that speed. Without a span `speed` is nil: the count keeps the user's rate, as it did
+    /// before warps existed, so it lasts `seconds` ÷ `userSpeed` (floored as the transport's speed is). `duration` is
+    /// what the score is held for, so the body comes in as the count ends.
     ///
     /// `bodyStart` is the body's onset (`UnrolledTimeMap.park(atTick:timeline:).onset`), never where a seek parks the
     /// transport: half a tick before a slow measure's barline (over 1 ms below 62.5 BPM at division 480) still lies in
@@ -79,7 +80,7 @@ package struct TransportSpeedTable: Sendable {
     package func countIn(
         seconds: TimeInterval, userSpeed: Double, bodyStart: TimeInterval,
     ) -> (duration: TimeInterval, speed: Double?) {
-        guard !starts.isEmpty else { return (seconds, nil) }
+        guard !starts.isEmpty else { return (seconds / max(0.01, userSpeed), nil) }
         let speed = max(0.01, userSpeed * stretch(atTransport: bodyStart + 0.001))
         return (seconds / speed, speed)
     }

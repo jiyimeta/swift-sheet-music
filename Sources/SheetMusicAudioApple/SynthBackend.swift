@@ -128,9 +128,12 @@ public protocol SynthBackend: AnyObject {
     func seek(toTick tick: Int)
     var currentTick: Int { get }
 
-    /// Start playing, but hold the SCORE transport for `seconds` first while the
-    /// metronome transport — already loaded with a count-in sequence — plays the
-    /// pre-roll. The count MUST be audible during that window whatever
+    /// Start playing, but hold the SCORE transport first while the metronome
+    /// transport — already loaded with a count-in sequence — plays the pre-roll.
+    /// `seconds` is the pre-roll's length on the metronome sequence's own clock;
+    /// the hold lasts as long as the metronome takes to play it at the speed it
+    /// runs at, `seconds` ÷ the rate (`setRate`), so the body comes in as the
+    /// count ends. The count MUST be audible during that window whatever
     /// `setMetronomeMuted` says: counting in is an explicit request, not the
     /// metronome toggle.
     ///

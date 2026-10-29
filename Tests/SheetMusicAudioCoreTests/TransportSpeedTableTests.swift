@@ -137,10 +137,17 @@ struct TransportSpeedTableTests {
     }
 
     @Test
-    func `a count-in without a span lasts its own seconds at any rate`() {
-        let countIn = TransportSpeedTable(warp: nil).countIn(seconds: 2, userSpeed: 0.5, bodyStart: 4)
-        #expect(countIn.duration == 2)
-        #expect(countIn.speed == nil)
+    func `a count-in without a span lasts its own seconds at the user's rate`() {
+        // The click counts at the user's rate, so the score is held as long as the count takes at that rate.
+        let slow = TransportSpeedTable(warp: nil).countIn(seconds: 2, userSpeed: 0.5, bodyStart: 4)
+        #expect(slow.duration == 4)
+        #expect(slow.speed == nil)
+        let seventy = TransportSpeedTable(warp: nil).countIn(seconds: 2, userSpeed: 0.7, bodyStart: 0)
+        #expect(abs(seventy.duration - 2 / 0.7) < 1e-12)
+        #expect(TransportSpeedTable(warp: nil).countIn(seconds: 2, userSpeed: 1, bodyStart: 0).duration == 2)
+        // Floored as the transport's speed is.
+        let stopped = TransportSpeedTable(warp: nil).countIn(seconds: 2, userSpeed: 0, bodyStart: 0)
+        #expect(abs(stopped.duration - 200) < 1e-9)
     }
 
     @Test

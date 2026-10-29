@@ -477,16 +477,16 @@ public final class SwiftySynthBackend: SynthBackend {
         }
     }
 
-    /// Under a warp the count runs at the speed of the measure it counts into — `seconds` are the metronome SMF's, so
-    /// it lasts `seconds / speed` — and keeps that speed to its end, a table swap during it applying from the body on.
-    /// Without a warp the count's length and speed are what they always were. The rule is
-    /// `TransportSpeedTable.countIn(seconds:userSpeed:bodyStart:)`, which an export's length reads too, from the same
-    /// onset.
+    /// `seconds` are the metronome SMF's, and the score is held for as long as the click takes to count them. Under a
+    /// warp the count runs at the speed of the measure it counts into, so it lasts `seconds / speed`, and keeps that
+    /// speed to its end, a table swap during it applying from the body on. Without a warp it counts at the user's
+    /// rate and lasts `seconds / rate`. The rule is `TransportSpeedTable.countIn(seconds:userSpeed:bodyStart:)`, which
+    /// an export's length reads too, from the same onset.
     public func play(afterCountInSeconds seconds: TimeInterval) {
         let sampleRate = sampleRate
         let lastPark = lastPark
         lock.withLockUnchecked { shared in
-            var countIn: (duration: TimeInterval, speed: Double?) = (seconds, nil)
+            var bodyStart: TimeInterval = 0
             if let sequencer = shared.sequencer {
                 let position = sequencer.position.components
                 let held = shared.alignment.transportSeconds(
@@ -495,11 +495,11 @@ public final class SwiftySynthBackend: SynthBackend {
                 )
                 // The body starts at the onset the last seek parked before, while the transport still waits there;
                 // where it waits is half a tick earlier, which at a slow tempo is still the measure before.
-                let onset = lastPark.flatMap { abs($0.parked - held) < 1e-9 ? $0.onset : nil }
-                countIn = shared.alignment.speedTable.countIn(
-                    seconds: seconds, userSpeed: shared.alignment.userSpeed, bodyStart: onset ?? held,
-                )
+                bodyStart = lastPark.flatMap { abs($0.parked - held) < 1e-9 ? $0.onset : nil } ?? held
             }
+            let countIn = shared.alignment.speedTable.countIn(
+                seconds: seconds, userSpeed: shared.alignment.userSpeed, bodyStart: bodyStart,
+            )
             shared.alignment.countInSpeed = countIn.speed
             shared.preRollFramesRemaining = max(0, Int((countIn.duration * sampleRate).rounded()))
             shared.isPlaying = true

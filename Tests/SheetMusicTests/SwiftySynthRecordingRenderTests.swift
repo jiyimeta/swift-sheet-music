@@ -215,6 +215,29 @@
                     #expect(abs(samples[bodyStart + 400] - 0.5) < 0.01, Comment(rawValue: around))
                 }
 
+                /// The click counts at the user's rate, so the score has to be held for as long as the count takes at
+                /// that rate: at 70 % a 1 s count lasts 1 / 0.7 s. Held for the count's 1 s at 100 %, the body came in
+                /// during the count, and the click then ran 0.3 s of its own clock behind the music.
+                @Test("without a warp the count-in lasts its seconds at the user's rate")
+                func countInWithoutAWarpFollowsTheRate() async throws {
+                    let font = try Self.writeClickSoundFont()
+                    defer { try? FileManager.default.removeItem(at: font) }
+                    let rig = try await Rig.make(score: Self.silentScore(), font: font)
+                    defer { rig.finish() }
+                    let level = try Self.recording(rate: 44100, frames: 44100 * 4) { _ in 16384 }
+                    rig.backend.setRecordingTracks([RecordingTrackRender(id: "level", recording: level)])
+                    rig.backend.setPlaybackAlignment(warp: nil, segments: Self.wholeRecording(4))
+                    rig.backend.setRate(0.7)
+                    rig.backend.play(afterCountInSeconds: 1)
+                    let samples = try rig.render(seconds: 2)
+
+                    // `setRate` takes a `Float`, so the count lasts 1 ÷ Float(0.7) seconds.
+                    let bodyStart = Self.frame(1 / Double(Float(0.7)))
+                    let around = "around the body's start: \(samples[bodyStart - 1]) | \(samples[bodyStart + 400])"
+                    #expect(samples[..<bodyStart].allSatisfy { $0 == 0 }, Comment(rawValue: around))
+                    #expect(abs(samples[bodyStart + 400] - 0.5) < 0.01, Comment(rawValue: around))
+                }
+
                 /// With no warp and no recording the render is SwiftySynth's own: the same samples a bare
                 /// `MidiFileSequencer` renders from the same SMF at the same speed, in the same slices. Slices of 500
                 /// frames end mid-block, so the chunked body's block bookkeeping is exercised.

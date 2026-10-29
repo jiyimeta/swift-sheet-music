@@ -33,8 +33,8 @@ and this project adheres to
   ramps instead of clicking.
 - **Exports include recordings and an optional count-in (`exportAudioFile(…, includesCountIn:)`).** Through an
   injected backend the file carries the recordings at their strips' mix, on the same solo bus as live, follows the
-  alignment — a warped score or range lasts its warped length — and can open with the count-in live playback plays,
-  at the speed of the measure it counts into.
+  alignment — a warped score or range lasts its warped length — and can open with the count-in live playback plays:
+  at the user's rate, or under a warp at the speed of the measure it counts into.
 - **`RevoiceDrumStaff`, `RevoicePreview` and `EditIntent.revoiceDrumStaff(staff:assignments:policy:)` (wire index
   95).** Re-voices a drum staff by pitch as one undo step: every note moves to the voice its pitch is assigned, so a
   staff converts to one voice or to hands and feet (kicks and pedal hi-hat in voice 2). A bar already in the target form
@@ -45,6 +45,11 @@ and this project adheres to
 
 ### Fixed
 
+- **A count-in at a tempo other than 100 % ends on the body's downbeat.** `SwiftySynthBackend` held the score for the
+  count's length at 100 % while the click counted at the user's rate, so at 70 % a 2 s count held the score for 2 s
+  while the click had counted 1.4 s of it: the music came in during the count's third beat, and the click stayed that
+  far behind it for the rest of the playback (above 100 % the music came in late instead). The score is now held for
+  the count's length divided by the rate, live and at the head of an export.
 - **Playing or exporting from the measure after a repeat starts on that measure.** `SwiftySynthBackend` backed a seek
   off half a tick on the notated clock and then projected it onto the unrolled one, which put the downbeat after a
   backward jump at the end of the earlier pass: in `|: A :| B`, play-from-B replayed A's repeat first. A seek now

@@ -79,6 +79,33 @@
                     expectImpulsesOnTheirBeats(in: samples, bodyStart: countIn)
                 }
 
+                /// No warp, at 70 %: the count is one 4/4 measure of 2 s counted at the rate, so the body (8 s at 0.7)
+                /// starts 2 ÷ 0.7 s into the file, and the recording with it.
+                @Test("at 70 % without a warp the count-in lasts its measure at the rate, and the body starts after it")
+                func countInAtSeventyPercentWithoutAWarp() async throws {
+                    let engine = try Self.makeEngine(font: font, score: score)
+                    try engine.setRecordingTracks([RecordingTrack(id: "rec", pcmFile: recordingFile)])
+                    engine.setAlignment(warp: nil, segments: Self.segments)
+                    engine.setRate(0.7)
+                    let samples = try await Self.export(engine, score, countIn: true)
+
+                    // `setRate` takes a `Float`; the backend holds that speed.
+                    let speed = Double(Float(0.7))
+                    let countIn = Self.frame(2 / speed)
+                    let end = countIn + Self.frame(8 / speed)
+                    #expect(samples.count >= end, "the body is never cut short: \(samples.count) frames")
+                    #expect(samples.count - end <= Self.buffer, "\(samples.count) frames")
+                    let first = try #require(Self.firstAudible(in: samples))
+                    #expect(abs(first - countIn) <= Self.millisecond, "first audible frame \(first), body \(countIn)")
+                    for seconds in Self.impulseSeconds.dropLast() {
+                        let offset = Self.impulseOffset(in: samples, expected: countIn + Self.frame(seconds / speed))
+                        #expect(
+                            offset.map { abs($0) <= Self.millisecond } == true,
+                            "impulse at \(seconds) s: \(offset.map(String.init) ?? "missing") frames off",
+                        )
+                    }
+                }
+
                 @Test("a muted recording is silent in the file")
                 func mutedRecordingIsSilent() async throws {
                     let engine = try engineWithRecording()
