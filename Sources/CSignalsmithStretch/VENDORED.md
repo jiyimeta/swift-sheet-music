@@ -25,6 +25,13 @@ table, and run `SignalsmithStretcherTests` and `RecordingStretcherRenderTests`.
 - No optimization flag of its own. Upstream recommends optimizing even Debug builds, as the unoptimized stretcher
   is up to 10× slower, but `-O2` needs `unsafeFlags`, which SwiftPM refuses in a package resolved by version, as
   folino resolves this one. A Debug build therefore runs the stretcher unoptimized. Audio QA runs a Release build.
+- Measured on 2026-10-30 in thread CPU time, 48 kHz stereo, rate 0.7, one pair with both instances processing (a
+  crossfade), 512-frame calls: a jump's `seek` takes 9–18 ms of CPU unoptimized (`-O0`, a SwiftPM or Xcode Debug
+  build), against 0.6–1.4 ms at `-Os` (Xcode Release) and 0.5–1.2 ms at `-O2`. That is more than one 512-frame
+  render callback (10.67 ms), so a Debug build can drop out at a jump — a seek, a loop wrap, a cut between segments, a
+  retune — while recordings play away from 100 % or transposed. The pair costs 150–158 ms of CPU per second of audio
+  unoptimized against 10.7–12.3 ms at `-Os`. A dropout heard in a Debug build is not evidence; audio QA uses a
+  Release build.
 - No `cxxLanguageStandard`: the headers need C++11, and the toolchain default is newer.
 
 ## The C shim

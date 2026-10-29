@@ -53,6 +53,10 @@ struct PlayedMeasureTests {
         #expect(played.map(\.endSeconds) == [2, 4, 6, 8])
         #expect(played[1].beatSeconds == [2.0, 2.5, 3.0, 3.5])
         #expect(played.map(\.lengthInBeats) == [4, 4, 4, 4])
+        // A host's own measure-play, built field by field, is the same value.
+        #expect(played[1] == PlayedMeasure(
+            measureIndex: 1, pass: 1, startSeconds: 2, endSeconds: 4, beatSeconds: [2, 2.5, 3, 3.5], lengthInBeats: 4,
+        ))
     }
 
     @Test func aRepeatedMeasureGetsPassesOneAndTwoOnConsecutiveStretches() {

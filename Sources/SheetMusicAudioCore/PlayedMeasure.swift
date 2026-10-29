@@ -17,6 +17,19 @@ public struct PlayedMeasure: Sendable, Equatable {
     public let beatSeconds: [TimeInterval]
     /// The measure's actual length divided by the click's beat step (0.5 for an eighth pickup in 4/4).
     public let lengthInBeats: Double
+
+    /// A measure-play as `PlayedMeasures.make(score:)` reports one; a host's tests build their own with it.
+    public init(
+        measureIndex: Int, pass: Int, startSeconds: TimeInterval, endSeconds: TimeInterval,
+        beatSeconds: [TimeInterval], lengthInBeats: Double,
+    ) {
+        self.measureIndex = measureIndex
+        self.pass = pass
+        self.startSeconds = startSeconds
+        self.endSeconds = endSeconds
+        self.beatSeconds = beatSeconds
+        self.lengthInBeats = lengthInBeats
+    }
 }
 
 public enum PlayedMeasures {

@@ -2,8 +2,9 @@
 /// through when the tempo is not 100 % or the recording is transposed. The render path names only this protocol, so
 /// the library behind it can be replaced; `SheetMusicAudioSignalsmith` supplies Signalsmith Stretch's.
 ///
-/// An instance is made on the main actor (`RecordingStretcherFactory`) and released there. Every requirement is then
-/// called on the render thread, so none may allocate, lock or block.
+/// An instance is made on the main actor (`RecordingStretcherFactory`) and released there. Before a backend hands it to
+/// its render thread, the main actor may call `seekLength(rate:)` on it to size the buffers it is read through. From
+/// the hand-over on, every requirement is called on the render thread only, so none may allocate, lock or block.
 ///
 /// Timing: the output plays the input `inputLatency + outputLatency × rate` frames behind the frame the next input
 /// begins at, `rate` being input frames per output frame. A caller that wants output frame `t` to play input frame
