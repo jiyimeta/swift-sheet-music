@@ -9,6 +9,8 @@ and this project adheres to
 
 ### Added
 
+- **`RecordingPCMCache` and `MappedRecording`.** Recordings are decoded once into an Int16 stereo PCM cache file that is
+  memory-mapped for playback, so long recordings cost address space rather than resident memory.
 - **`PlaybackTimeWarp`.** A host can stretch the score's playback to an external timing: a list of spans on the
   transport's seconds, each saying how long it must last at 100 % rate, with the sequencer speed following per span.
 - **`PlayedMeasure`, `PlayedMeasures.make(score:)` and `PreparedPlayback.playedMeasures`.** Every measure as playback
