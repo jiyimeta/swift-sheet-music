@@ -13,7 +13,7 @@ package struct TransportSpeedTable: Sendable {
     private let outputEnds: [TimeInterval]
 
     /// A nil warp is the identity.
-    init(warp: PlaybackTimeWarp?) {
+    package init(warp: PlaybackTimeWarp?) {
         let spans = warp?.spans ?? []
         var starts: [TimeInterval] = []
         var ends: [TimeInterval] = []
@@ -41,14 +41,14 @@ package struct TransportSpeedTable: Sendable {
     }
 
     /// `(end − start) / duration` inside a span, 1 outside.
-    func stretch(atTransport t: TimeInterval) -> Double {
+    package func stretch(atTransport t: TimeInterval) -> Double {
         guard let index = Self.lastIndex(in: starts, atOrBefore: t), t < ends[index] else { return 1 }
         return (ends[index] - starts[index]) / (outputEnds[index] - outputStarts[index])
     }
 
     /// The warped seconds at 100 % rate for transport second `t`; strictly increasing. Identity for `t` before the
     /// first span, including negative `t`.
-    func outputSeconds(atTransport t: TimeInterval) -> TimeInterval {
+    package func outputSeconds(atTransport t: TimeInterval) -> TimeInterval {
         guard let index = Self.lastIndex(in: starts, atOrBefore: t) else { return t }
         if t < ends[index] {
             let fraction = (t - starts[index]) / (ends[index] - starts[index])
@@ -58,7 +58,7 @@ package struct TransportSpeedTable: Sendable {
     }
 
     /// The inverse of `outputSeconds(atTransport:)`.
-    func transportSeconds(atOutput o: TimeInterval) -> TimeInterval {
+    package func transportSeconds(atOutput o: TimeInterval) -> TimeInterval {
         guard let index = Self.lastIndex(in: outputStarts, atOrBefore: o) else { return o }
         if o < outputEnds[index] {
             let fraction = (o - outputStarts[index]) / (outputEnds[index] - outputStarts[index])
@@ -69,7 +69,7 @@ package struct TransportSpeedTable: Sendable {
 
     /// The smallest span start or end strictly after `t`, or nil past the last one. The render loop cuts its chunks
     /// there, because the stretch can change.
-    func nextBoundary(after t: TimeInterval) -> TimeInterval? {
+    package func nextBoundary(after t: TimeInterval) -> TimeInterval? {
         // The first end after `t` and the first start after `t`: spans ascend, so each list is sorted.
         let nextEnd = Self.firstIndex(in: ends, after: t).map { ends[$0] }
         let nextStart = Self.firstIndex(in: starts, after: t).map { starts[$0] }

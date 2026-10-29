@@ -24,7 +24,7 @@ public struct PlaybackTimeWarp: Sendable, Equatable {
     }
 
     /// Ascending and non-overlapping (touching is allowed).
-    let spans: [Span]
+    package private(set) var spans: [Span]
 
     /// Throws `.invalidSpan` for a span with a non-finite field, `end <= start` or `duration <= 0`, and
     /// `.notAscending` when a span starts before the previous one ends. Both carry the offending span's index.
