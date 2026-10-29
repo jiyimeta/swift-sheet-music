@@ -164,7 +164,94 @@
                     #expect(lowest > 0.49 && highest < 0.51, "both tracks, across the retune: \(lowest) … \(highest)")
                 }
 
+                /// The reader transposing by +2 moves stem A from 0 to +2 and stem B from +2 to +4. The new +2 group
+                /// is A's, not the old +2 group that held B: each group keeps its own pair and restarts it retuned.
+                /// Taken by value, the old +2 pair would go on playing B for its lead, a new +4 pair would fade B in
+                /// on top of it, and A's old group would stop dead.
+                @Test("a transposition moving two stems at 70 % retunes each stem's own pair, with no dip or doubling")
+                func transposingTwoStemsRetunesEachPair() async throws {
+                    let recorder = FakeStretcherRecorder()
+                    let rig = try await Self.rig(recorder.factory)
+                    defer { rig.finish() }
+                    rig.backend.setRate(0.7)
+                    let stems = try Self.stems(a: 0, b: 2)
+                    Self.play(stems.tracks, on: rig.backend)
+                    let before = try rig.render(seconds: 0.3)
+                    rig.backend.setRecordingTracks(stems.retransposed(a: 2, b: 4))
+                    let after = try rig.render(seconds: 0.3)
+
+                    #expect(recorder.made.count == 4, "no pair beyond the two groups' own")
+                    try #require(recorder.made.count >= 4)
+                    let seek = Call.seek(frames: recorder.made[0].seekLength(rate: Self.rate70), rate: Self.rate70)
+                    #expect(recorder.made[0].calls.prefix(3) == [.reset, .transpose(2), seek], "A's pair, retuned")
+                    #expect(recorder.made[2].calls.prefix(3) == [.reset, .transpose(4), seek], "B's pair, retuned")
+                    let level = Self.range(Array(before[Self.fadeFrames...]) + after)
+                    #expect(level.lowest > 0.395 && level.highest < 0.405, "A + B across the change: \(level)")
+                }
+
+                /// Stem B's transposition comes down to A's at 70 %: B joins A's group, which restarts with both stems,
+                /// while B's old group fades out instead of stopping, and is not fed once it has.
+                @Test("a stem joining another group at 70 % crossfades into it while its old group drains")
+                func stemJoiningAnotherGroupCrossfades() async throws {
+                    let recorder = FakeStretcherRecorder()
+                    let rig = try await Self.rig(recorder.factory)
+                    defer { rig.finish() }
+                    rig.backend.setRate(0.7)
+                    let stems = try Self.stems(a: 0, b: 2)
+                    Self.play(stems.tracks, on: rig.backend)
+                    let before = try rig.render(seconds: 0.3)
+                    rig.backend.setRecordingTracks(stems.retransposed(a: 0, b: 0))
+                    let after = try rig.render(seconds: 0.3)
+
+                    #expect(recorder.made.count == 4, "no new pair")
+                    try #require(recorder.made.count >= 4)
+                    let seek = Call.seek(frames: recorder.made[0].seekLength(rate: Self.rate70), rate: Self.rate70)
+                    #expect(recorder.made[0].calls.prefix(3) == [.reset, .transpose(0), seek], "A's group restarts")
+                    #expect(recorder.made[2].seeks.isEmpty && recorder.made[3].seeks.count == 1, "B's old pair drains")
+                    let drained = recorder.made[3].processedOutput
+                    _ = try rig.render(seconds: 0.1)
+                    #expect(recorder.made[3].processedOutput == drained, "a drained group is not fed")
+                    let level = Self.range(Array(before[Self.fadeFrames...]) + after)
+                    #expect(level.lowest > 0.395 && level.highest < 0.405, "A + B across the change: \(level)")
+                }
+
                 // MARK: Helpers
+
+                typealias Call = FakeStretcher.Call
+
+                /// Stem A at 0.1 and stem B at 0.3, 4 s each, so a stem missing or doubled shows in the level.
+                struct Stems {
+                    let a: MappedRecording
+                    let b: MappedRecording
+                    let tracks: [RecordingTrackRender]
+
+                    func retransposed(a aSemitones: Double, b bSemitones: Double) -> [RecordingTrackRender] {
+                        [
+                            RecordingTrackRender(id: "a", recording: a, transposeSemitones: aSemitones),
+                            RecordingTrackRender(id: "b", recording: b, transposeSemitones: bSemitones),
+                        ]
+                    }
+                }
+
+                static func stems(a aSemitones: Double, b bSemitones: Double) throws -> Stems {
+                    let a = try Fixtures.recording(rate: 44100, frames: 44100 * 4) { _ in 3277 }
+                    let b = try Fixtures.recording(rate: 44100, frames: 44100 * 4) { _ in 9830 }
+                    let tracks = [
+                        RecordingTrackRender(id: "a", recording: a, transposeSemitones: aSemitones),
+                        RecordingTrackRender(id: "b", recording: b, transposeSemitones: bSemitones),
+                    ]
+                    return Stems(a: a, b: b, tracks: tracks)
+                }
+
+                static func play(_ tracks: [RecordingTrackRender], on backend: SwiftySynthBackend) {
+                    backend.setRecordingTracks(tracks)
+                    backend.setPlaybackAlignment(warp: nil, segments: Fixtures.wholeRecording(4))
+                    backend.play()
+                }
+
+                static func range(_ samples: [Float]) -> (lowest: Float, highest: Float) {
+                    (samples.min() ?? 0, samples.max() ?? 0)
+                }
 
                 static func rig(_ factory: RecordingStretcherFactory?) async throws -> Fixtures.Rig {
                     let font = try Fixtures.writeClickSoundFont()

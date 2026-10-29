@@ -57,7 +57,7 @@ struct StretchReader {
             state.active = idle
             state.hasSource = true
             state.expected = target
-            state.needsRetune = false
+            state.needsRestart = false
         } else {
             state.hasSource = false
         }
@@ -180,8 +180,10 @@ extension SwiftySynthBackend {
         guard let pair = alignment.groups[index].pair, let scratch = alignment.stretchScratch else { return }
         var state = alignment.groups[index].state
         guard playing || state.hasSource || state.fadeFramesRemaining > 0 else { return }
+        // A draining group reads the tracks it was left with; the track list no longer has them.
+        let tracks = if let drainTracks = alignment.groups[index].drainTracks { drainTracks } else { alignment.tracks }
         let reader = StretchReader(
-            group: alignment.groups[index], pair: pair, scratch: scratch, tracks: alignment.tracks,
+            group: alignment.groups[index], pair: pair, scratch: scratch, tracks: tracks,
             rate: alignment.userSpeed, sampleRate: sampleRate,
         )
         let table = alignment.speedTable
@@ -224,7 +226,7 @@ extension SwiftySynthBackend {
     /// tolerance, and not owed a retune), or silence after silence.
     nonisolated static func continues(_ state: StretchGroupState, at target: Double?) -> Bool {
         guard let target else { return !state.hasSource }
-        return state.hasSource && !state.needsRetune && abs(target - state.expected) <= stretchJumpToleranceFrames
+        return state.hasSource && !state.needsRestart && abs(target - state.expected) <= stretchJumpToleranceFrames
     }
 
     /// Whether a run's next frame, whose target is `target`, carries on from a frame whose continuation is `expected`.

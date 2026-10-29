@@ -142,6 +142,9 @@ public final class SwiftySynthBackend: SynthBackend {
     let stretcherFactory: RecordingStretcherFactory?
     /// The main actor's copy of `Shared.alignment.groups`' layout and pairs (`SwiftySynthBackend+Recordings.swift`).
     var recordingGroupLayout: [RecordingGroupLayout] = []
+    /// The main actor's copy of the groups left draining after the track list dropped them; in the render's array they
+    /// follow `recordingGroupLayout`'s.
+    var drainingGroupLayout: [RecordingGroupLayout] = []
     /// The input capacity of the stretch scratch handed to the render thread, 0 before the first.
     var stretchScratchCapacity = 0
 

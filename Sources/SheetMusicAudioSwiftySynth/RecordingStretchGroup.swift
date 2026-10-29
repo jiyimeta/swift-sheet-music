@@ -38,8 +38,14 @@ struct StretchGroupState {
     var fadingVoice = -1
     /// Input the fading stretcher is owed but was not fed, under a frame.
     var fadingRemainder: Double = 0
-    /// The group's transposition changed: the next frame that plays is a jump to a stretcher retuned for it.
-    var needsRetune = false
+    /// The group's transposition or tracks changed: the next frame that plays is a jump to a stretcher primed with the
+    /// new input and retuned, so the change is heard after the 5 ms fade rather than after the stretcher's lead.
+    var needsRestart = false
+
+    /// Nothing sounds and nothing fades. A group that is not playing stays so.
+    var isSilent: Bool {
+        !hasSource && fadeFramesRemaining == 0
+    }
 
     func cursor(_ voice: Int) -> Double {
         voice == 0 ? cursors.0 : cursors.1
@@ -54,26 +60,33 @@ struct StretchGroupState {
         hasSource = false
         fadeFramesRemaining = 0
         fadingVoice = -1
-        needsRetune = false
+        needsRestart = false
     }
 }
 
 /// One group as the render thread reads it.
 struct RecordingStretchGroup {
     let transposeSemitones: Double
-    /// Indices into `PlaybackAlignmentState.tracks`.
+    /// Indices into the tracks it reads: `PlaybackAlignmentState.tracks`, or `drainTracks` while draining.
     let trackIndices: [Int]
     /// Nil until a stretcher is needed and the backend has a factory; the group is then read directly.
     var pair: StretcherPair?
     var state = StretchGroupState()
+    /// Set for a group no longer in the track list that was left to fade out: the tracks its stretcher is still fed
+    /// until the fade ends. Nil for a group in the track list.
+    var drainTracks: [RenderedRecording]?
 }
 
 /// The main actor's copy of a group: what it holds and its pair, so a new track list or rate can be planned and its
 /// stretchers made before the lock, without reading the render thread's state.
 struct RecordingGroupLayout {
     let transposeSemitones: Double
-    let trackIDs: [String]
+    let tracks: [RecordingTrackRender]
     var pair: StretcherPair?
+
+    var trackIDs: [String] {
+        tracks.map(\.id)
+    }
 }
 
 /// How a track list groups by transposition, and which previous group each new one carries on from.
@@ -83,11 +96,16 @@ enum RecordingGroupPlan {
         let trackIndices: [Int]
         /// The previous group whose pair and reading this one takes over, if any.
         let continues: Int?
+        /// The group it carries on from had another transposition or other tracks: the render restarts it, primed and
+        /// retuned, and crossfades.
+        let restarts: Bool
     }
 
-    /// Groups in the order their transposition first appears. A group carries on from the previous group with the same
-    /// transposition; failing that, from the previous group its first track was in (a transposition change, which the
-    /// render then crossfades to a retuned stretcher). Each previous group is carried on by one group at most.
+    /// Groups in the order their transposition first appears. A group carries on from the previous group that held the
+    /// most of its tracks (on a tie, the one that held its first track): a stem keeps its stretcher when the reader's
+    /// transposition moves every stem, rather than handing it to whichever stem now has its old value. Failing that,
+    /// it takes a previous group of its transposition whose tracks have all gone. Each previous group is carried on by
+    /// one group at most.
     static func make(tracks: [RecordingTrackRender], previous: [RecordingGroupLayout]) -> [Group] {
         var transpositions: [Double] = []
         var members: [[Int]] = []
@@ -99,22 +117,44 @@ enum RecordingGroupPlan {
                 members.append([index])
             }
         }
+        let memberIDs = members.map { $0.map { tracks[$0].id } }
+        let previousIDs = previous.map(\.trackIDs)
         var taken = Set<Int>()
-        var continues = transpositions.map { transposition -> Int? in
-            guard let match = previous.firstIndex(where: { $0.transposeSemitones == transposition }) else { return nil }
-            taken.insert(match)
-            return match
+        var continues = [Int?](repeating: nil, count: transpositions.count)
+        for group in transpositions.indices {
+            var best: (index: Int, rank: (shared: Int, holdsFirst: Int))?
+            for candidate in previous.indices where !taken.contains(candidate) {
+                let shared = memberIDs[group].count(where: { previousIDs[candidate].contains($0) })
+                guard shared > 0 else { continue }
+                let rank = (shared: shared, holdsFirst: previousIDs[candidate].contains(memberIDs[group][0]) ? 1 : 0)
+                if let current = best, current.rank >= rank { continue }
+                best = (candidate, rank)
+            }
+            if let best {
+                taken.insert(best.index)
+                continues[group] = best.index
+            }
         }
+        let present = Set(tracks.map(\.id))
         for group in continues.indices where continues[group] == nil {
-            let firstID = tracks[members[group][0]].id
-            let match = previous.indices.first { !taken.contains($0) && previous[$0].trackIDs.contains(firstID) }
+            let match = previous.indices.first { candidate in
+                !taken.contains(candidate) && previous[candidate].transposeSemitones == transpositions[group]
+                    && !previousIDs[candidate].contains(where: present.contains)
+            }
             if let match {
                 taken.insert(match)
                 continues[group] = match
             }
         }
         return transpositions.indices.map { group in
-            Group(transposeSemitones: transpositions[group], trackIndices: members[group], continues: continues[group])
+            let restarts = continues[group].map { index in
+                previous[index].transposeSemitones != transpositions[group]
+                    || Set(previousIDs[index]) != Set(memberIDs[group])
+            } ?? false
+            return Group(
+                transposeSemitones: transpositions[group], trackIndices: members[group],
+                continues: continues[group], restarts: restarts,
+            )
         }
     }
 }
