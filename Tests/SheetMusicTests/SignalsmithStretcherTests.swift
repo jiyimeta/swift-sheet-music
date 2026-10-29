@@ -101,7 +101,10 @@
                     )
                     rig.backend.play()
 
-                    let before = try rig.render(seconds: 1.5)
+                    // 1.53 s at 70 % reaches 1.071 s past the loop start: 471.24 cycles, so the two sides of the wrap
+                    // are out of phase and a cut would show. (At 1.5 s the gap is 462 whole cycles, and a cut in place
+                    // of the crossfade went unnoticed.)
+                    let before = try rig.render(seconds: 1.53)
                     rig.backend.seek(toTick: 0)
                     let after = try rig.render(seconds: 0.3)
 
@@ -120,6 +123,10 @@
                     #expect(peak <= sourcePeak * 1.02, Comment(rawValue: detail))
                     let wrapPeak = after.prefix(Self.frame(0.05)).map(abs).max() ?? 0
                     #expect(wrapPeak > 0.4, "the tone sounds through the wrap: peak \(wrapPeak)")
+                    // The tone's own steepest step between frames is 0.5 × 2π × 440 / 44 100 ≈ 0.031; a wrap that cut
+                    // from one phase to the other would step by up to the tone's whole height.
+                    let steepest = zip(heard.dropFirst(), heard).map { abs($0 - $1) }.max() ?? 0
+                    #expect(steepest < 0.05, "largest step between frames: \(steepest)")
                 }
 
                 /// Zone statistics count the memory in use, so this sees a buffer that grows, not a `malloc` freed
