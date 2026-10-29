@@ -49,6 +49,11 @@ and this project adheres to
   entry reading the library's process-wide metrics cannot see — and draws the result in Kotlin
   (`drawScoreCommands`). The bytes are fixed when `compute` returns; encoding them measures nothing.
 
+- **`ScorePages.systemCommandRanges(onPage:)`** (SheetMusicPages) — each system's run of a page's draw commands, for a
+  host that draws one system at a time: in command order and covering the page's commands exactly, each run with the
+  system's index in `document.systems`, or `nil` for the title block and a box between systems. A run replayed alone
+  from the draw program's default state paints what the whole page paints there.
+
 - **(Apple) `TitleFrameLayerBuilder.build(frame:images:width:height:)` is public** (SheetMusicUI) — the layer tree of
   a box's content, the title block with `LayoutDocument.titleImages` or a frame between systems with its own, for a
   host that draws a box outside `ScoreView`. It resolves every outline at the call, in the face the current

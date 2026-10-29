@@ -87,6 +87,22 @@ public struct ScorePages: Sendable {
         DrawProgramCodec.encode(pages: pages)
     }
 
+    /// Page `page`'s draw commands one system at a time, for a host that draws a system on its own — caching one
+    /// recording per system, say, or drawing only the systems a view shows: each system's run of the page's commands,
+    /// as indices into that page of `encodedDrawProgram()`, in command order and covering the page's commands exactly.
+    ///
+    /// `systemIndex` is the system's index in `document.systems` — in `.page` mode the document's, not the page's — and
+    /// `nil` for the title block's run, which comes first on the page that draws it, and for each box between systems,
+    /// just before the system below it. A run replayed alone, from the draw program's default state, paints what the
+    /// whole page paints there: every state a command sets (color, dash, rotation, text style) is set and reset within
+    /// the element that needs it. A system's run can paint outside its own frame — slurs, ottava lines and brackets
+    /// reach past it — so a host that wants nothing of a neighboring system draws only the runs it means to.
+    ///
+    /// `page` must be below `pageCount`.
+    public func systemCommandRanges(onPage page: Int) -> [(systemIndex: Int?, commands: Range<Int>)] {
+        spans[page].map { (systemIndex: $0.systemIndex, commands: $0.commandRange) }
+    }
+
     /// The same layout with the items in `ids` drawn in `argb` (0xAARRGGBB): the pages re-encoded, not laid out again,
     /// so the page count and sizes stay and `ScoreSurface.setPages(_:)` redraws only the systems that changed.
     ///
