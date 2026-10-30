@@ -109,6 +109,27 @@ struct ArticulationImportTests {
         #expect(Self.articulations(of: score).map(\.kind) == [.staccato, .accent])
     }
 
+    /// MuseScore writes a SymId outside its MusicXML tables as `<other-articulation smufl="…">` and reads it back
+    /// (`exportmusicxml.cpp`, `importmusicxmlpass2.cpp`); other tools may put it under `<technical>` instead.
+    @Test("a pictChokeCymbal other-articulation or other-technical reads as the choke", arguments: [
+        "<articulations><other-articulation smufl=\"pictChokeCymbal\"/></articulations>",
+        "<technical><other-technical smufl=\"pictChokeCymbal\"/></technical>",
+    ])
+    func chokeReadsFromItsSMuFLName(notations: String) throws {
+        let score = try Self.score(notations: notations)
+        #expect(Self.articulations(of: score) == [ChordArticulation(kind: .chokeCymbal)])
+        #expect(Self.articulations(of: score, chord: 1).isEmpty)
+    }
+
+    @Test("an other-articulation naming another SMuFL glyph is still ignored")
+    func otherSMuFLNamesAreIgnored() throws {
+        let score = try Self.score(notations: """
+        <articulations><other-articulation smufl="handbellsMartellato"/><other-articulation/></articulations>
+        <technical><other-technical smufl="handbellsMartellato"/></technical>
+        """)
+        #expect(Self.articulations(of: score).isEmpty)
+    }
+
     /// An artificial harmonic is a sounding-pitch notation MuseScore does not support either (`harmonic()` logs it
     /// and drops the symbol).
     @Test("a technical element that is not a mark, or an artificial harmonic, leaves the chord bare")

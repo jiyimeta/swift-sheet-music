@@ -10,8 +10,8 @@ extension MusicXMLNoteDecoder {
     /// Two departures from that table: `detached-legato` is the one louré (`.tenutoStaccato`) rather than the tenuto
     /// plus staccato MuseScore 4 splits it into, and only the marks `ChordArticulation.Kind` models are read —
     /// `thumb-position`, the tonguings, the brass bends and the handbell marks stay unread, as does everything else
-    /// under `<technical>` (fingering, string, fret). A `harmonic` is the string harmonic unless it is `artificial`,
-    /// which MuseScore drops too (`harmonic()`).
+    /// under `<technical>` (fingering, string, fret). Of the SMuFL-named `other-…` marks, only the choke is read. A
+    /// `harmonic` is the string harmonic unless it is `artificial`, which MuseScore drops too (`harmonic()`).
     static func decodeArticulations(_ node: XMLTreeNode) -> [ChordArticulation] {
         guard let notations = node.first("notations") else { return [] }
         var result: [ChordArticulation] = []
@@ -43,8 +43,16 @@ extension MusicXMLNoteDecoder {
         case "down-bow": .downBow
         case "stopped": .muteClosed
         case "open", "open-string": .muteOpen
+        case "other-articulation", "other-technical": otherKind(smufl: mark.attributes["smufl"])
         default: nil
         }
+    }
+
+    /// The SMuFL-named marks read from `<other-articulation>` / `<other-technical>`: only the choke. MuseScore writes
+    /// a SymId outside its MusicXML tables as `<other-articulation smufl="…">` (`exportmusicxml.cpp`) and reads it
+    /// back (`importmusicxmlpass2.cpp`); other tools may put the choke under `<technical>`.
+    private static func otherKind(smufl: String?) -> ChordArticulation.Kind? {
+        smufl == ChordArticulation.Kind.chokeCymbal.mscxToken ? .chokeCymbal : nil
     }
 
     /// `placement` names the side; without it, a `type` of `up` / `down` (which `strong-accent` carries) implies
