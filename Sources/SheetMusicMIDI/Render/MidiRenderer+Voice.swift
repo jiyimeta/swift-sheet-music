@@ -111,7 +111,7 @@ extension MidiRenderer {
         // same reason as the channel.
         var tieGateDebt: [Int: Int] = [:]
         // The open tie chains that carry a choke, by sounding key, for the same reason.
-        var chokes = ChokeChains(isEmitted: emitsChokes)
+        var chokes = ChokeChains(isEmitted: emitsChokes, isDrumset: part.instrument.useDrumset)
         // The capo an open tie chain's head sounded through (`.some(nil)` for none), for the same reason.
         var sustainedCapo: CapoPoint??
 

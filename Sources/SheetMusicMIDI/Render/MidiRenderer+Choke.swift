@@ -23,10 +23,14 @@ extension MidiRenderer {
     /// length). Voice-wide for the same reason as the tie chain's channel: a chain routinely crosses a bar line.
     struct ChokeChains {
         let isEmitted: Bool
+        /// Whether the walk plays a drum kit (`Instrument.useDrumset`), judged on the instrument rather than the
+        /// channel: a kit routed to another `<midiChannel>` is still a kit, and live playback moves it to channel 9.
+        let isDrumset: Bool
         private var open: Set<Int> = []
 
-        init(isEmitted: Bool) {
+        init(isEmitted: Bool, isDrumset: Bool) {
             self.isEmitted = isEmitted
+            self.isDrumset = isDrumset
         }
 
         /// Whether `chord` carries the choke.
@@ -35,8 +39,8 @@ extension MidiRenderer {
         }
 
         /// Follows one note of a chain through the walk. A note that ties on records whether its chain is choked so
-        /// far; the note that ends the chain answers the marker to append at `offTick` — on a drum channel only for a
-        /// cymbal key, on any other channel for every key — or nil.
+        /// far; the note that ends the chain answers the marker to append at `offTick` — on a drum kit only for a
+        /// cymbal key, on any other staff for every key — or nil.
         mutating func release(
             key: Int, tiesBack: Bool, tiesForward: Bool, marked: Bool, channel: Int, offTick: Int,
         ) -> TimedMidiEvent? {
@@ -46,7 +50,7 @@ extension MidiRenderer {
                 return nil
             }
             open.remove(key)
-            guard isEmitted, choked, channel != MidiRenderer.drumChannel || ChokeMarker.cymbalKeys.contains(key)
+            guard isEmitted, choked, !isDrumset || ChokeMarker.cymbalKeys.contains(key)
             else { return nil }
             return TimedMidiEvent(
                 tick: offTick,

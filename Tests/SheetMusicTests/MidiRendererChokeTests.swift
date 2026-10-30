@@ -44,6 +44,15 @@ struct MidiRendererChokeTests {
         )
     }
 
+    /// `score` with its one part's instrument set to an explicit `<midiChannel>`.
+    private static func routing(_ score: Score, toChannel channel: Int) -> Score {
+        var score = score
+        var part = score.parts[0]
+        part.instrument.channels = [InstrumentChannel(midiChannel: channel)]
+        score.parts = IdentifiedArray([part])
+        return score
+    }
+
     private static func chokes(in file: MidiFile) -> [Choke] {
         file.tracks.flatMap(\.events).compactMap { timed in
             guard case let .controlChange(channel, controller, value) = timed.event,
@@ -107,6 +116,28 @@ struct MidiRendererChokeTests {
     @Test func `only the cymbal of a drum chord is choked`() throws {
         let file = try MidiRenderer.renderForPlayback(score: Self.drums(["C+K+46/4 r/4 r/2"], marking: [(0, 1)]))
         #expect(Self.chokes(in: file).map(\.key) == [49])
+    }
+
+    /// A drum kit the author routed to another channel is still a drum kit: the rule follows `useDrumset`, not the
+    /// channel the render happens to assign (live playback moves the kit back to channel 9 anyway).
+    @Test func `a drum kit on an explicit channel still chokes only its cymbal`() throws {
+        var score = Self.drums(["C+K+46/4 r/4 r/2"], marking: [(0, 1)])
+        score = Self.routing(score, toChannel: 5)
+        let file = try MidiRenderer.renderForPlayback(score: score)
+        #expect(Self.chokes(in: file).map(\.key) == [49])
+    }
+
+    /// The reverse: a pitched part routed to channel 9 chokes every note of the chord, as any pitched part does.
+    @Test func `a pitched part on channel 9 chokes every note`() throws {
+        let chord = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 49, tpc: 13), Note(pitch: 60, tpc: 14)],
+            articulations: [Self.choke],
+        )
+        var score = Self.piano(chord)
+        score = Self.routing(score, toChannel: 9)
+        let file = try MidiRenderer.renderForPlayback(score: score)
+        #expect(Set(Self.chokes(in: file).map(\.key)) == [49, 60])
     }
 
     /// Every cymbal key of the set is choked.
