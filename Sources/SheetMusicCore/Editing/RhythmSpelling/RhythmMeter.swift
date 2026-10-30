@@ -11,6 +11,7 @@ struct RhythmMeter {
     }
 
     let numerator: Int
+    let denominator: Int
 
     /// Ticks of one denominator unit (the "dUnit"): an eighth in x/8, a quarter in x/4.
     let dUnitTicks: Int
@@ -22,6 +23,7 @@ struct RhythmMeter {
             "unreadable meter \(numerator)/\(denominator) at division \(division)",
         )
         self.numerator = numerator
+        self.denominator = denominator
         dUnitTicks = (4 * division) / denominator
     }
 
@@ -34,6 +36,12 @@ struct RhythmMeter {
     /// Numerator above three and divisible by three: 6/8, 9/8, 12/8. 3/8 is simple.
     var isCompound: Bool {
         numerator > 3 && numerator % 3 == 0
+    }
+
+    /// Eighths (or shorter units) gathered into groups of three, each felt as one beat whose value is dotted: compound
+    /// time, and the group of three in 5/8 or 7/8, which the splitter reads as 3+2 and 4+3.
+    var groupsUnitsInThrees: Bool {
+        isCompound || (denominator >= 8 && numerator > 3 && !numerator.isMultiple(of: 2))
     }
 
     private var dUnitsPerBeat: Int {

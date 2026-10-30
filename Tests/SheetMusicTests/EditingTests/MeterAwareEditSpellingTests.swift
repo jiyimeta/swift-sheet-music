@@ -102,9 +102,10 @@ struct MeterAwareEditSpellingTests {
         var ids = EIDAllocator()
         score.assignMissingIDs(using: &ids)
         // The pickup's half rest is beats 3–4. Split after a sixteenth it leaves 7/16 from the sixteenth after beat 3:
-        // an eighth-and-a-sixteenth to beat 4 and a quarter, not the left-aligned spelling of a bar's first beats.
+        // a sixteenth and an eighth to beat 4 (a rest takes no dot in 4/4) and a quarter, not the left-aligned
+        // spelling of a bar's first beats.
         _ = try SplitRest(at: Format.slot(element: 1), tickOffset: 120).apply(to: &score, ids: &ids)
-        #expect(Format.durations(score) == [.sixteenth, NoteDuration.eighth.dotted(1), .quarter])
+        #expect(Format.durations(score) == [.sixteenth, .sixteenth, .eighth, .quarter])
     }
 
     // MARK: Accidentals

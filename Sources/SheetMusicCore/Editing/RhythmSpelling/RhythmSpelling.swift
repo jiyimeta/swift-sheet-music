@@ -7,8 +7,9 @@ public enum RhythmSpelling {
     /// Spells one span. `start` and `length` are ticks from the bar's NOTIONAL start (the caller has already added a
     /// pickup's offset). `.keepWritten` is read as `.split` here — it is a span-level rule, applied by the caller.
     ///
-    /// Rests carry at most one dot whatever `policy.dotLevel` says. A rest that is exactly one bar long, starts the
-    /// bar and is not a pickup answers `[.measure]`; `isPickup` only disables that answer.
+    /// Rests carry no dot where the beat is an undotted value and at most one where units group in threes (6/8, 5/8),
+    /// whatever `policy.dotLevel` says (one in every meter under MuseScore's reading). A rest that is exactly one bar
+    /// long, starts the bar and is not a pickup answers `[.measure]`; `isPickup` only disables that answer.
     ///
     /// Answers `[]` when the spelled values do not add up to `length` exactly; the caller keeps the span as written.
     /// Also `[]` for a meter no splitter can read — a numerator or denominator that is not positive, or a denominator
@@ -53,9 +54,13 @@ private struct RhythmSplitter {
 
     // MARK: Knobs
 
-    /// Notes may carry `dotLevel` dots; rests are capped at one.
+    /// Notes may carry `dotLevel` dots. Rests carry none where the beat is an undotted value (2/2, 4/4, 5/4, 3/8), and
+    /// at most one where units group in threes and the beat itself is dotted (6/8's dotted quarter rest, the group of
+    /// three in 5/8); MuseScore's reading caps them at one in every meter.
     private var maxDots: Int {
-        isRest ? min(policy.dotLevel.rawValue, 1) : policy.dotLevel.rawValue
+        guard isRest else { return policy.dotLevel.rawValue }
+        guard meter.groupsUnitsInThrees || policy.readsLikeMuseScore else { return 0 }
+        return min(policy.dotLevel.rawValue, 1)
     }
 
     private var allowsMidBarSyncopation: Bool {
@@ -189,6 +194,9 @@ private struct RhythmSplitter {
             mustSplit = forcesSplit(
                 length: length, startBeat: startBeat, endBeat: endBeat,
                 dUnits: dUnitsCrossed, strongest: strongest,
+            ) || splitsFineSyncopation(
+                startBeat: startBeat, endBeat: endBeat, startLevel: startLevel, endLevel: endLevel,
+                dUnits: dUnitsCrossed, strongest: strongest,
             )
         }
 
@@ -205,6 +213,23 @@ private struct RhythmSplitter {
     }
 
     // MARK: Beat-stage rules
+
+    /// folino's reading of a syncopation across one weaker beat of simple time (beat 2 or 4 of 4/4), for a note that
+    /// starts AND ends off the beat: on the half-beat grid it may cross (8th–quarter–8th), but an end finer than that
+    /// (16th–8th–16th) splits at the beat, so the beat it hides is shown. A tie chain is spelled through here as
+    /// well, so a tie written across that beat is never merged into such a note. A note with an end on a beat is
+    /// judged as MuseScore judges it, which leaves the dot level alone to decide whether a double-dotted quarter
+    /// stays whole. MuseScore keeps both kinds (its "level 2" syncopation); its reading is left as it was.
+    private func splitsFineSyncopation(
+        startBeat: RhythmMeter.BeatType, endBeat: RhythmMeter.BeatType, startLevel: Int, endLevel: Int,
+        dUnits: Int, strongest: RhythmMeter.BeatType,
+    ) -> Bool {
+        guard !isRest, !meter.isCompound, !policy.readsLikeMuseScore,
+              strongest == .simpleUnstressed, dUnits == 1,
+              startBeat > .simpleUnstressed, endBeat > .simpleUnstressed
+        else { return false }
+        return startLevel >= 2 || endLevel >= 2
+    }
 
     private func forcesSplit(
         length: Int, startBeat: RhythmMeter.BeatType, endBeat: RhythmMeter.BeatType,

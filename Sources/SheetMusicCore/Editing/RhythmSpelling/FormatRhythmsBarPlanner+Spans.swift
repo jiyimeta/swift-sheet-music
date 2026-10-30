@@ -99,7 +99,11 @@ struct FormatRhythmsBarContext {
     /// A rest or note written as ONE element is kept as written when the splitter under `.allow` gives back exactly
     /// its own duration and under `.split` would not — a genuine crossing the author wrote. Anything else is spelled
     /// under `.split`, so the formatter never creates a crossing by merging.
+    ///
+    /// So is a note written as one dotted half beat across a weaker beat (`isWrittenDottedHalfBeat`), whatever the
+    /// knobs say.
     func isKeptCrossing(at index: Int, isRest: Bool) -> Bool {
+        if !isRest, !policy.readsLikeMuseScore, isWrittenDottedHalfBeat(at: index) { return true }
         let mode = isRest ? policy.beatCrossingRests : policy.midBarSyncopations
         guard mode == .keepWritten else { return false }
         var allowed = policy
@@ -115,6 +119,24 @@ struct FormatRhythmsBarContext {
         let asAllowed = spell(ticks: own, at: onsets[index], isRest: isRest, policy: allowed)
         let asSplit = spell(ticks: own, at: onsets[index], isRest: isRest, policy: split)
         return isOwn(asAllowed, ticks: own) && !isOwn(asSplit, ticks: own)
+    }
+
+    /// A note a dotted half beat long (a dotted eighth in x/4) across exactly one weaker beat of simple time: a member
+    /// of a 3+3+2 or 2+3+3 grouping, which the splitter would cut at the beat as a 16th-grid syncopation. The grouping
+    /// is the author's phrasing, and it is recognised by the note's own shape rather than by its neighbours, so a rest,
+    /// a tie or a pair of 16ths in place of the "2" changes nothing. Kept, never created: a tie that spells the same
+    /// span is not merged into it.
+    private func isWrittenDottedHalfBeat(at index: Int) -> Bool {
+        guard RhythmMeter.isReadable(
+            numerator: facts.meterNumerator, denominator: facts.meterDenominator, division: facts.division,
+        ) else { return false }
+        let meter = RhythmMeter(
+            numerator: facts.meterNumerator, denominator: facts.meterDenominator, division: facts.division,
+        )
+        guard !meter.isCompound, lengths[index] * 4 == meter.dUnitTicks * 3 else { return false }
+        let start = onsets[index] + pickupOffset
+        let crossed = meter.strongestBeat(from: start, to: start + lengths[index], savingLast: false)
+        return crossed.dUnitsCrossed == 1 && crossed.type == .simpleUnstressed
     }
 
     private func isOwn(_ durations: [NoteDuration], ticks own: Int) -> Bool {
