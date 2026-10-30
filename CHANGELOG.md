@@ -7,6 +7,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **swiftysynth 0.4.1.** The SwiftySynth backend renders about 10× faster in a host's unoptimized (Debug) build, so a
+  Debug build plays back in real time, with rendered PCM unchanged. Also fixes `SoundFont(data:)` / `MidiFile(data:)`
+  reading garbage from a `Data` of 14 bytes or fewer in optimized builds.
+
 ## [4.23.0] - 2026-10-31
 
 ### Added
