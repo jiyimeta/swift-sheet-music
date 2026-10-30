@@ -73,8 +73,9 @@ and this project adheres to
   too. The Kotlin engine's transport, mixer and output are unchanged; the synth and its sequencer live in Swift
   (`SheetMusicAudioSwiftySynthCore`'s `HostedSynth` / `HostedSequence`) inside `libSheetMusicAndroidJNI.so`, rendered
   by one JNI call per synth per output block that allocates nothing. A `file:` SoundFont URI is memory-mapped in place
-  rather than copied into the cache. Levels follow the Apple backend (unity synth gain) rather than FluidSynth's 2.0.
-  FluidSynth, its C++ shim and its CMake / Prefab build are gone from the module, and with them the LGPL obligation
+  rather than copied into the cache. The synth renders at unity gain, as the Apple backend's does; FluidSynth's built-in
+  gain of 2.0 (+6 dB) is gone, so the output is quieter until the host calibrates it the way Apple hosts do — through
+  `setMasterGain` and `exportAudioFile(masterGain:)`, with `MasterOutputStage.SOFT_CLIP`. FluidSynth, its C++ shim and its CMake / Prefab build are gone from the module, and with them the LGPL obligation
   for apps that ship it. **Breaking for Kotlin hosts:** `AudioBackendException.FluidSynthInit` is now `SynthInit`.
 - **`SoundFontCache` moved to the new `SheetMusicAudioSwiftySynthCore` target**, with the score and metronome synth
   settings and the choke dispatch the Apple `SwiftySynthBackend` now builds through.
