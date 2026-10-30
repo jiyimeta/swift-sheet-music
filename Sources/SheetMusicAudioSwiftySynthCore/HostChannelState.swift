@@ -11,6 +11,12 @@
 /// Only what the host sent is recorded, never what the SMF played; the SMF's own controllers come back through the
 /// chase, and replaying a later SMF value after a backward seek would be wrong.
 ///
+/// The replay runs after the chase, so where the host and the SMF both set something the host wins. Today they never
+/// overlap: the SMF's programs and CC 7 sit at tick 0 and are stripped on every mixer-managed channel, the only
+/// channels the host programs and sets CC 7 on (`MidiSynthPostProcess`); the host's CC 2 opens what the SMF never
+/// sends; and the RPNs it sends are fine and coarse tune (0:1, 0:2), never the pitch-bend range (0:0) the SMF sets. An
+/// SMF that started setting one of those on a managed channel would have it overridden after every seek.
+///
 /// Fixed storage, allocated once: recording and replaying allocate nothing.
 public struct HostChannelState {
     private static let channelCount = 16
