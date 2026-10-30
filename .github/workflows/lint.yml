@@ -14,15 +14,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Both tools are installed from Homebrew rather than pinned, which
-      # matches how contributors get them (.pre-commit-config.yaml uses
+      # SwiftLint is installed from Homebrew rather than pinned, which
+      # matches how contributors get it (.pre-commit-config.yaml uses
       # `language: system`, so the hooks call whatever is on PATH). The
       # trade-off is that a new upstream release can turn on a rule that
       # was previously off and fail this job on untouched code — that is
       # how `wrapIfStatementBodies` was found. The version echo below is
       # what makes such a break diagnosable from the log alone.
+      #
+      # SwiftFormat is pinned to 0.63.0 for now. The macos-15 image of
+      # 2026-10-28 brought 0.64.4, which reports 516 findings in code no
+      # change had touched (repeatedGuard, nestedIf, docComments, indent,
+      # sortImports and more) and failed the 4.22.1 release push. Move the
+      # pin forward, or back to Homebrew, in a change of its own that
+      # reformats the tree for the newer release.
       - name: Install SwiftLint and SwiftFormat
-        run: brew install swiftlint swiftformat
+        run: |
+          brew install swiftlint
+          curl -fsSL -o "$RUNNER_TEMP/swiftformat.zip" \
+            https://github.com/nicklockwood/SwiftFormat/releases/download/0.63.0/swiftformat.zip
+          unzip -q "$RUNNER_TEMP/swiftformat.zip" -d "$RUNNER_TEMP/swiftformat"
+          echo "$RUNNER_TEMP/swiftformat" >> "$GITHUB_PATH"
 
       - name: Tool versions
         run: |
