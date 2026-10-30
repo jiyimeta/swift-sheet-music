@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import SheetMusicFoundation
 
 /// Where everything a rewritten bar carries besides its notes lands (design §4.5): the target voices each source
@@ -234,11 +235,12 @@ extension RevoiceBarPlanner {
     /// identifiers. The first of the source chords that sent it notes — the chord of its lowest-voice note — gives
     /// its roll, ornaments, arpeggio, bracket, visibility and stem and beam visibility, which a merge shares
     /// (`markingsReason`). Its articulations are theirs in source order, each kind once (D1), except that a kind that
-    /// only draws (`shapesPlayback` is false) goes to a source chord's lowest part alone. A source chord
-    /// whose lowest part this is adds its preserved markup, its lyrics and its chord lines written on the chord; a
-    /// line written on one note goes with that note (`chordLines`). A chord-anchored spanner rides on the chord its
-    /// source carries whole. Its graces are those that ride on it. Its stem and beam directions are left to the voice
-    /// it now sits in: a direction a one-voice file forced would otherwise fight voice 2.
+    /// only draws (`shapesPlayback` is false) goes to a source chord's lowest part alone, and a choke on a chord with a
+    /// cymbal to the parts holding a cymbal alone (`travels`). A source chord whose lowest part this is adds its
+    /// preserved markup, its lyrics and its chord lines written on the chord; a line written on one note goes with
+    /// that note (`chordLines`). A chord-anchored spanner rides on the chord its source carries whole. Its graces are
+    /// those that ride on it. Its stem and beam directions are left to the voice it now sits in: a direction a
+    /// one-voice file forced would otherwise fight voice 2.
     static func chordSlot(
         _ timed: RevoiceTimedSlot, voiceIndex: Int, sources: SourceIndex, landings: RevoiceLandings,
     ) -> VoiceSlot {
@@ -260,7 +262,7 @@ extension RevoiceBarPlanner {
         for source in carried {
             let isLowestPart = landings.lowestVoice(of: source.ref) == voiceIndex
             for articulation in source.chord.articulations
-                where (isLowestPart || articulation.kind.shapesPlayback)
+                where travels(articulation, from: source.chord, to: chord, isLowestPart: isLowestPart)
                 && !chord.articulations.contains(where: { $0.kind == articulation.kind })
             {
                 chord.articulations.append(articulation)
@@ -277,6 +279,19 @@ extension RevoiceBarPlanner {
         chord.graceNotesBefore = graceChords(riders.filter { !$0.isAfter }, keepingIdentifiersOf: keptSource)
         chord.graceNotesAfter = graceChords(riders.filter(\.isAfter), keepingIdentifiersOf: keptSource)
         return VoiceSlot(identity: slotIdentity, element: .chord(chord))
+    }
+
+    /// Whether `articulation` on `source` goes to `part`, the chord one of its parts builds. A mark that plays goes to
+    /// every part and one that only draws to the lowest — except the choke, which stops only cymbals: when the source
+    /// chord holds one, it goes only to a part that holds a cymbal too (`ChordArticulation.Kind.chokedCymbalKeys`).
+    private static func travels(
+        _ articulation: ChordArticulation, from source: Chord, to part: Chord, isLowestPart: Bool,
+    ) -> Bool {
+        let cymbals = ChordArticulation.Kind.chokedCymbalKeys
+        if articulation.kind == .chokeCymbal, source.notes.contains(where: { cymbals.contains($0.pitch) }) {
+            return part.notes.contains { cymbals.contains($0.pitch) }
+        }
+        return isLowestPart || articulation.kind.shapesPlayback
     }
 
     /// The chord lines `source` hands the chord built from `target`: one written on the chord when this is the

@@ -109,6 +109,44 @@ struct RevoiceMarkingTests {
         #expect(RevoiceFixtures.chords(after, voice: 1).first?.articulations == [])
     }
 
+    /// The choke stops only the chord's cymbals, so it goes to the part that holds the crash: on the kick it would
+    /// draw a mark that stops nothing.
+    @Test func `a choke on a split crash and kick goes to the crash's part only`() throws {
+        let choke = ChordArticulation(kind: .chokeCymbal)
+        let score = Self.marking(RevoiceFixtures.score([["C+K/4 C/4 C/4 C/4"]]), element: 1) { chord in
+            chord.articulations = [Self.accent, choke]
+        }
+        let after = try Self.convertKeepingSound(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["C/4 C/4 C/4 C/4", "K/4 r/4 r/2"])
+        #expect(RevoiceFixtures.chords(after, voice: 0).first?.articulations == [Self.accent, choke])
+        #expect(RevoiceFixtures.chords(after, voice: 1).first?.articulations == [Self.accent])
+    }
+
+    /// A choke on a chord with no cymbal at all stops nothing anywhere, so it travels as any playing mark does.
+    @Test func `a choke on a split snare and kick goes to both parts`() throws {
+        let choke = ChordArticulation(kind: .chokeCymbal)
+        let score = Self.marking(RevoiceFixtures.score([["S+K/4 S/4 S/4 S/4"]]), element: 1) { chord in
+            chord.articulations = [choke]
+        }
+        let after = try Self.convertKeepingSound(score, to: RevoiceFixtures.handsAndFeet)
+        #expect(RevoiceFixtures.voices(after, measure: 0) == ["S/4 S/4 S/4 S/4", "K/4 r/4 r/2"])
+        #expect(RevoiceFixtures.chords(after, voice: 0).first?.articulations == [choke])
+        #expect(RevoiceFixtures.chords(after, voice: 1).first?.articulations == [choke])
+    }
+
+    @Test func `a choke survives a split and a merge on the crash, once`() throws {
+        let choke = ChordArticulation(kind: .chokeCymbal)
+        let score = Self.marking(RevoiceFixtures.score([["C+K/4 C/4 C/4 C/4"]]), element: 1) { chord in
+            chord.articulations = [choke]
+        }
+        let split = try Self.convertKeepingSound(score, to: RevoiceFixtures.handsAndFeet)
+        let merged = try Self.convertKeepingSound(split, to: RevoiceFixtures.oneVoice)
+        #expect(RevoiceFixtures.voices(merged, measure: 0) == ["C+K/4 C/4 C/4 C/4"])
+        #expect(RevoiceFixtures.chords(merged, voice: 0).first?.articulations == [choke])
+        let markedLater = RevoiceFixtures.chords(merged, voice: 0).dropFirst().filter { !$0.articulations.isEmpty }
+        #expect(markedLater.isEmpty)
+    }
+
     /// D1: the kick merged with an accented snare takes the accent. In bar 1 both carry one, and the kick adds a
     /// staccato: the union lists each kind once, the snare's first.
     @Test func `merged chords take the union of their marks`() throws {
