@@ -151,6 +151,29 @@ struct SystemJustificationTests {
         #expect(widths[1][0] < 900 * 0.3, "the last line \(widths)")
     }
 
+    /// A line break on the score's last bar asks for the last line to be full: it breaks before nothing, so the one
+    /// thing it can mean is the meaning it has on every other line, which a break leaves justified.
+    @Test("a short last system is justified when its last bar carries a line break")
+    func lineBreakOnTheLastBarJustifiesTheLastSystem() throws {
+        let widths = Self.widthsPerSystem(Self.layout(Self.score([Self.plain], lineBreaks: [0])))
+        try #require(widths.map(\.count) == [1])
+        #expect(widths[0][0] > 900 * 0.6, "the last line \(widths)")
+    }
+
+    /// The break counts only while the layout honors it: a reflow that ignores system breaks leaves the short last
+    /// line at its natural width, as it would without the break.
+    @Test("a last-bar line break the layout ignores leaves the last system short")
+    func ignoredLineBreakOnTheLastBarKeepsNaturalWidth() throws {
+        let document = LayoutEngine.layout(
+            score: Self.score([Self.plain], lineBreaks: [0]),
+            options: ScoreViewOptions(staffSize: 28, breakPolicy: .ignoreSystemBreaks),
+            availableWidth: 900,
+        )
+        let widths = Self.widthsPerSystem(document)
+        try #require(widths.map(\.count) == [1])
+        #expect(widths[0][0] < 900 * 0.3, "the last line \(widths)")
+    }
+
     /// A section break ends a stretch of music as the score's end does: the short line before it is not stretched.
     @Test("a short system that ends a section keeps its natural width")
     func shortSystemEndingASectionKeepsNaturalWidth() throws {

@@ -46,6 +46,15 @@ and this project adheres to
   score or range lasts its warped length. An export's count-in (`countIn: true`) follows it too: under a warp it
   counts at the speed of the measure it counts into, as live.
 
+### Changed
+
+- **A line break on a score's last bar justifies its last line.** The short line a piece ends on is otherwise left at
+  its natural width (`lastSystemFillLimit`); a break on the last bar comes before nothing, so it now asks for the full
+  line a break leaves on every other line. Only while the layout honors the break (`LayoutBreakPolicy`): a reflow that
+  ignores system breaks still leaves the line short, and a frame after the last bar does not count. A section's last
+  line is unchanged. MuseScore does not read a last-bar break this way; it keeps the break and draws the line by its
+  fill limit alone.
+
 ### Fixed
 
 - **Playing or exporting from the measure after a repeat starts on that measure.** `SwiftySynthBackend` backed a seek

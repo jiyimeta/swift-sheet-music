@@ -452,7 +452,9 @@ extension LayoutEngine {
                    naturalWidth: labelW + naturalWidths.reduce(0, +)
                        + roomInside(systemStart ..< cursor, gaps: horizontalGaps),
                    availableWidth: context.availableWidth,
-                   endsMusic: cursor == measureCount || staves.first?.measures[cursor - 1].sectionBreak == true,
+                   endsMusic: endsMusic(
+                       before: cursor, measureCount: measureCount, staves: staves, policy: context.options.breakPolicy,
+                   ),
                )
             {
                 // A collapsed multi-measure rest, or a bar with nothing timed in it, has no gaps to stretch.
@@ -737,6 +739,17 @@ extension LayoutEngine {
     static func shouldJustify(naturalWidth: CGFloat, availableWidth: CGFloat, endsMusic: Bool) -> Bool {
         guard endsMusic, availableWidth > 0 else { return true }
         return naturalWidth / availableWidth >= lastSystemFillLimit
+    }
+
+    /// Whether the system closing before bar `cursor` is the line a piece or a section ends on, for `shouldJustify`.
+    ///
+    /// Not the piece's last line when its last bar carries a break the layout honors (`measureForcesLineBreak`, no
+    /// frames): that break comes before nothing, so it is taken to ask for what a break leaves every other line —
+    /// a full line. A frame after the last bar is not such a break; MuseScore justifies past nothing but a measure or
+    /// an HBox. A section break's line is left alone, since a line break is how a section is ended on its own line.
+    static func endsMusic(before cursor: Int, measureCount: Int, staves: [Staff], policy: LayoutBreakPolicy) -> Bool {
+        guard cursor == measureCount else { return staves.first?.measures[cursor - 1].sectionBreak == true }
+        return !measureForcesLineBreak(at: cursor - 1, staves: staves, policy: policy)
     }
 
     /// The widths a wrapped system's measures take when the system is justified to `availableWidth`; `widths` itself
