@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.23.0] - 2026-10-31
+
 ### Added
 
 - **`PlayedMeasure`, `PlayedMeasures.make(score:)` and `PreparedPlayback.playedMeasures`.** Every measure as playback
