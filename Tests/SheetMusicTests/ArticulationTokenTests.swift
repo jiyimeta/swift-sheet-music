@@ -1,5 +1,7 @@
+import Foundation
 @testable import SheetMusicCore
 @testable import SheetMusicMSCX
+@testable import SheetMusicXMLTools
 import Testing
 
 /// The MSCX articulation token table, now in Core: `ChordArticulation.Kind.mscxToken` and its inverse. The decode
@@ -19,6 +21,7 @@ struct ArticulationTokenTests {
         (.softAccentTenuto, "articSoftAccentTenuto"), (.softAccentTenutoStaccato, "articSoftAccentTenutoStaccato"),
         (.muteOpen, "brassMuteOpen"), (.muteClosed, "brassMuteClosed"), (.harmonic, "stringsHarmonic"),
         (.upBow, "stringsUpBow"), (.downBow, "stringsDownBow"), (.laissezVibrer, "articLaissezVibrer"),
+        (.chokeCymbal, "pictChokeCymbal"),
     ]
 
     @Test("each known kind spells its MuseScore SymId base, and reads back", arguments: known)
@@ -50,6 +53,7 @@ struct ArticulationTokenTests {
         ("brassMuteClosed", ChordArticulation(kind: .muteClosed, anchor: nil)),
         ("articLaissezVibrerBelow", ChordArticulation(kind: .laissezVibrer, anchor: .below)),
         ("articAccent", ChordArticulation(kind: .accent, anchor: nil)),
+        ("pictChokeCymbal", ChordArticulation(kind: .chokeCymbal, anchor: nil)),
         ("handbellsMartellato", ChordArticulation(kind: .unknown(subtype: "handbellsMartellato"))),
     ])
     func decodeIsUnchanged(subtype: String, expected: ChordArticulation) {
@@ -70,12 +74,34 @@ struct ArticulationTokenTests {
     /// `stringsUpBowAbove`, which MuseScore would not read — so they go out bare whatever the anchor says.
     @Test("a kind with no Above / Below pair writes its token bare")
     func singleFormKindsWriteBare() {
-        let bare: [ChordArticulation.Kind] = [.muteOpen, .muteClosed, .harmonic, .upBow, .downBow]
+        let bare: [ChordArticulation.Kind] = [.muteOpen, .muteClosed, .harmonic, .upBow, .downBow, .chokeCymbal]
         #expect(Self.known.filter { !$0.0.hasPlacementVariants }.map(\.0) == bare)
         for kind in bare {
             #expect(ChordArticulation(kind: kind, anchor: nil).subtypeXML() == kind.mscxToken)
             #expect(ChordArticulation(kind: kind, anchor: .below).subtypeXML() == kind.mscxToken)
         }
+    }
+
+    /// `modeled`'s order feeds the score fingerprint, so a new kind goes last.
+    @Test("the choke is the last modeled kind")
+    func chokeIsAppendedLast() {
+        #expect(ChordArticulation.Kind.modeled.last == .chokeCymbal)
+        #expect(ChordArticulation.Kind.chokeCymbal.hasPlacementVariants == false)
+    }
+
+    /// MuseScore writes the choke as a bare SymId under `<Articulation>` (`TRead::readProperties(Articulation*)` reads
+    /// any SymId name), so a file it saved decodes to the kind and writes back the same bytes.
+    @Test("a MuseScore choke articulation decodes to the kind and writes back byte for byte")
+    func chokeRoundTripsThroughMSCX() throws {
+        let fixture = "<Articulation><subtype>pictChokeCymbal</subtype></Articulation>"
+        let root = try XMLTreeParser.parse(Data("""
+        <Chord><durationType>quarter</durationType>\(fixture)<Note><pitch>49</pitch><tpc>16</tpc></Note></Chord>
+        """.utf8))
+        let chord = try Chord.decode(root)
+        #expect(chord.articulations == [ChordArticulation(kind: .chokeCymbal)])
+        let written = try #require(chord.encodeAsChord(eid: .invalid).all("Articulation").first)
+        let original = try #require(root.all("Articulation").first)
+        #expect(XMLTreeSerializer.serialize(written) == XMLTreeSerializer.serialize(original))
     }
 
     /// MuseScore's `ARPEGGIO_TYPES` is `0 NORMAL, 1 UP, 2 DOWN, 3 BRACKET, 4 UP_STRAIGHT, 5 DOWN_STRAIGHT`

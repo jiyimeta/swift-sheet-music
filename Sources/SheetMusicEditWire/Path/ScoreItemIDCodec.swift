@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import SheetMusicCore
 import SheetMusicFoundation
 import Wirelet
@@ -312,6 +313,7 @@ public enum ScoreArticulationKindWire {
     case upBow
     case downBow
     case laissezVibrer
+    case chokeCymbal
 
     public init(from value: ChordArticulation.Kind) {
         switch value {
@@ -340,6 +342,7 @@ public enum ScoreArticulationKindWire {
         case .upBow: self = .upBow
         case .downBow: self = .downBow
         case .laissezVibrer: self = .laissezVibrer
+        case .chokeCymbal: self = .chokeCymbal
         }
     }
 
@@ -370,6 +373,7 @@ public enum ScoreArticulationKindWire {
         case .upBow: .upBow
         case .downBow: .downBow
         case .laissezVibrer: .laissezVibrer
+        case .chokeCymbal: .chokeCymbal
         }
     }
 }

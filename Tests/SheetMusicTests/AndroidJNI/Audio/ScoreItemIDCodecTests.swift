@@ -196,6 +196,22 @@ extension ScoreItemIDCodecTests {
         }
     }
 
+    /// The articulation-kind choice is append-only: the choke takes the ordinal after the laissez vibrer (24), so its
+    /// payload is the laissez vibrer's with that one discriminator byte moved on, and it round-trips.
+    @Test("The choke articulation kind appends at 25 and round-trips")
+    func chokeArticulationKindAppends() throws {
+        let anchor = VoiceElementID(Self.start)
+        let choke = ScoreItemID.element(.articulation(anchor: anchor, kind: .chokeCymbal))
+        let laissez = [UInt8](ScoreItemIDCodec.encode(.element(.articulation(anchor: anchor, kind: .laissezVibrer))))
+        let bytes = [UInt8](ScoreItemIDCodec.encode(choke))
+        #expect(bytes.count == laissez.count)
+        let differing = zip(laissez, bytes).filter { $0 != $1 }
+        #expect(differing.count == 1)
+        #expect(differing.first.map { [$0.0, $0.1] } == [24, 25])
+        #expect(try ScoreItemIDCodec.decode(Data(bytes)) == choke)
+        #expect(ScoreArticulationKindWire(from: .chokeCymbal).decoded() == .chokeCymbal)
+    }
+
     @Test("Outer item choices retain 0 through 5")
     func outerWireDiscriminators() throws {
         let items: [ScoreItemID] = [

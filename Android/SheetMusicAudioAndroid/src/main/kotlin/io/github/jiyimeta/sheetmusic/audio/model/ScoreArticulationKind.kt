@@ -27,4 +27,5 @@ sealed class ScoreArticulationKind {
     object UpBow : ScoreArticulationKind()
     object DownBow : ScoreArticulationKind()
     object LaissezVibrer : ScoreArticulationKind()
+    object ChokeCymbal : ScoreArticulationKind()
 }

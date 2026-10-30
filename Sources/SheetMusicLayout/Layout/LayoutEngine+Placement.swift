@@ -2683,6 +2683,8 @@ extension LayoutEngine {
         case .upBow: .upBow
         case .downBow: .downBow
         case .laissezVibrer: .laissezVibrer
+        // Drawn from the layout commit on; until then a choke is kept for the round trip only.
+        case .chokeCymbal: nil
         case .unknown: nil
         }
     }
