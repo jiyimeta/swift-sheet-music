@@ -4,6 +4,39 @@
     import SheetMusicMIDI
     import SwiftySynth
 
+    /// Two channels of `frames` samples, zeroed, at addresses that stay put — what a host hands `HostedSynth.render`.
+    final class StereoBuffer {
+        let frames: Int
+        let left: UnsafeMutablePointer<Float>
+        let right: UnsafeMutablePointer<Float>
+
+        init(frames: Int) {
+            self.frames = frames
+            left = .allocate(capacity: frames)
+            right = .allocate(capacity: frames)
+            left.initialize(repeating: 0, count: frames)
+            right.initialize(repeating: 0, count: frames)
+        }
+
+        deinit {
+            left.deallocate()
+            right.deallocate()
+        }
+
+        var leftSamples: [Float] {
+            Array(UnsafeBufferPointer(start: left, count: frames))
+        }
+
+        var rightSamples: [Float] {
+            Array(UnsafeBufferPointer(start: right, count: frames))
+        }
+
+        /// The largest magnitude in either channel.
+        var peak: Float {
+            zip(leftSamples, rightSamples).reduce(0) { max($0, abs($1.0), abs($1.1)) }
+        }
+    }
+
     /// Fonts, sequences and measurements the SwiftySynth core suites share.
     enum HostedSynthFixtures {
         /// The click font's strong key; the weak one is 77. Both live in a bank-128 preset.

@@ -105,9 +105,7 @@ public struct HostChannelState {
     public func replay(_ send: (_ channel: Int, _ command: Int, _ data1: Int, _ data2: Int) -> Void) {
         for channel in 0 ..< Self.channelCount {
             if programs[channel] != Self.unset {
-                let bank = Int(banks[channel])
-                let bankSelect = channel == Self.percussionChannel && bank >= 128 ? bank - 128 : bank
-                send(channel, 0xB0, 0, min(bankSelect, 127))
+                send(channel, 0xB0, 0, Self.bankSelect(channel: channel, bank: Int(banks[channel])))
                 send(channel, 0xC0, Int(programs[channel]), 0)
             }
             let base = channel * Self.controllerCount
@@ -132,6 +130,18 @@ public struct HostChannelState {
                 send(channel, 0xB0, 100, 127)
             }
         }
+    }
+
+    /// The CC 0 value that selects the effective `bank` on `channel` (see `replay`).
+    public static func bankSelect(channel: Int, bank: Int) -> Int {
+        let value = channel == percussionChannel && bank >= 128 ? bank - 128 : bank
+        return min(max(0, value), 127)
+    }
+
+    /// The bank SwiftySynth resolves a preset in once `channel` received bank select `bankSelect`: 128 more on the
+    /// percussion channel — what `SoundFont.prefetchSamples(bank:patch:)` expects.
+    public static func effectiveBank(channel: Int, bankSelect: Int) -> Int {
+        channel == percussionChannel ? bankSelect + 128 : bankSelect
     }
 
     /// GM's percussion channel, 0-based — SwiftySynth's `Synthesizer.percussionChannel`.

@@ -698,6 +698,7 @@ if !isWindows {
             name: "SheetMusicAudioSwiftySynthCore",
             dependencies: [
                 .product(name: "SwiftySynth", package: "swiftysynth"),
+                "SheetMusicAudioCore",
                 "SheetMusicFoundation",
                 "SheetMusicMIDI",
             ],
