@@ -381,8 +381,17 @@
         /// chord element whose stem flips up → down: five unbeamed quarters the file writes `<StemDirection>down`,
         /// which MuseScore draws down (`ChordLayout::computeUp`) and the layout used to turn up by their notes'
         /// position. No note, column or other element moved.
+        ///
+        /// **Re-recorded 2026-10-30 when a score's own `lastSystemFillLimit` began to decide whether its last line is
+        /// justified, and a line break on the last bar to justify it, after reading the diff** against the digest above
+        /// (`cce2fd4b…`). 2 blocks of 70 moved, both `wrap=true`, a single system, and from a file that writes
+        /// `<lastSystemFillLimit>0</lastSystemFillLimit>`: `testArpeggio` (14 lines, 251.76 → 900) and `testMidiPort`
+        /// (300 lines, 169.59 → 900) go back to the full line MuseScore draws them at. Neither has a line break, and
+        /// no fixture ends on a bar with one, so the last-bar break moved nothing here. The other files that set the
+        /// limit to 0 already fill 30% of their line. Rendered and read: `testArpeggio`'s arpeggios and tempo mark
+        /// follow their chords out across the line.
         private static let expectedDigestSHA256 =
-            "cce2fd4b252ef46c791493a2f8b676687d927494af2b06f6919a5feb88c8321b"
+            "da6b48464f10cbae1875d3ee84c2734319ed3404f19ee95acbafcc504466118d"
 
         @Test("write digest")
         func writeDigest() throws {

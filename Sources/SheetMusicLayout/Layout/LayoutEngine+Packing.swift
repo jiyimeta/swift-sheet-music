@@ -455,6 +455,7 @@ extension LayoutEngine {
                    endsMusic: endsMusic(
                        before: cursor, measureCount: measureCount, staves: staves, policy: context.options.breakPolicy,
                    ),
+                   fillLimit: context.score.style.lastSystemFillLimit,
                )
             {
                 // A collapsed multi-measure rest, or a bar with nothing timed in it, has no gaps to stretch.
@@ -728,17 +729,16 @@ extension LayoutEngine {
         }
     }
 
-    /// MuseScore's `Sid::lastSystemFillLimit` default: a line the music ends on is justified only when its natural
-    /// width fills at least this much of the page.
-    static let lastSystemFillLimit: CGFloat = 0.3
-
     /// Whether a wrapped system is stretched across the line (`justifiedWidths`) or left at its natural width — the
     /// latter only for the line a piece or a section ends on (`endsMusic`) whose natural width, part labels and HBox
-    /// room included, fills less than `lastSystemFillLimit` of `availableWidth`, as `SystemLayout::shouldBeJustified`
-    /// decides. Stretching one bar of four quarters across a whole line set them a quarter of the page apart.
-    static func shouldJustify(naturalWidth: CGFloat, availableWidth: CGFloat, endsMusic: Bool) -> Bool {
+    /// room included, fills less than `fillLimit` of `availableWidth`, as `SystemLayout::shouldBeJustified` decides.
+    /// `fillLimit` is the score's `ScoreStyle.lastSystemFillLimit` (MuseScore's default 0.3). Stretching one bar of
+    /// four quarters across a whole line set them a quarter of the page apart.
+    static func shouldJustify(
+        naturalWidth: CGFloat, availableWidth: CGFloat, endsMusic: Bool, fillLimit: Double,
+    ) -> Bool {
         guard endsMusic, availableWidth > 0 else { return true }
-        return naturalWidth / availableWidth >= lastSystemFillLimit
+        return naturalWidth / availableWidth >= CGFloat(fillLimit)
     }
 
     /// Whether the system closing before bar `cursor` is the line a piece or a section ends on, for `shouldJustify`.

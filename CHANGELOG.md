@@ -57,6 +57,9 @@ and this project adheres to
 
 ### Fixed
 
+- **A score's own `lastSystemFillLimit` decides whether its short last line is justified
+  (`ScoreStyle.lastSystemFillLimit`).** The limit was fixed at MuseScore's default 0.3, so a score that set it to 0 —
+  every last line justified — had its last line drawn short. It is read from `<Style>` and the tag is kept as written.
 - **Playing or exporting from the measure after a repeat starts on that measure.** `SwiftySynthBackend` backed a seek
   off half a tick on the notated clock and then projected it onto the unrolled one, which put the downbeat after a
   backward jump at the end of the earlier pass: in `|: A :| B`, play-from-B replayed A's repeat first. A seek now
