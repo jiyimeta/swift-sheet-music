@@ -17,6 +17,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
 import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
+import io.github.jiyimeta.sheetmusic.audio.model.MasterOutputStage
 import io.github.jiyimeta.sheetmusic.audio.model.MixAudibilityTable
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
@@ -36,6 +37,7 @@ import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.StaffParamsCodec
 import io.github.jiyimeta.sheetmusic.audio.synth.OboeStream
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
+import io.github.jiyimeta.sheetmusic.audio.synth.SoftClip
 import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -2537,6 +2539,61 @@ class AndroidPlaybackEngineTest {
         assertEquals(PlaybackState.EXPORTING, stateDuringRun)
         assertEquals(PlaybackState.STOPPED, engine.state.value)
         assertTrue("encoder.finish() should have been called", encoder.finished)
+    }
+
+    /**
+     * `exportAudioFile`'s master gain and output stage reach the samples the encoder gets, as `setMasterGain` /
+     * `setMasterOutputStage` do live; the defaults leave them as rendered.
+     */
+    @Test
+    fun `exportAudioFile applies the master gain and stage it is given`() = runTest {
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(0L, 960L),
+        )
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        suspend fun exported(gain: Float?, stage: MasterOutputStage?): List<Float> {
+            val encoder = FakeAudioFileEncoder()
+            val (player, bindings) = FakePlayerDriver.create()
+            val synth = FakeSynthDriver().apply {
+                fillValue = 0.2f
+                onWriteFloat = { bindings.tickToReturn += 480 }
+            }
+            val exporter = AudioExporter(
+                resolver = StubSoundfontResolver(),
+                context = null,
+                synthFactory = { _ -> synth },
+                playerFactory = { _ -> player },
+                encoderFactory = { _, _, _ -> encoder },
+                masterTuningControlChanges = MarkerMasterTuning::invoke,
+            )
+            if (gain == null || stage == null) {
+                engine.exportAudioFileWith(
+                    outputFd = null, scoreHandle = 1L, format = AudioFileFormat.Wav(),
+                    range = AudioExportRange.Full, progress = null, exporterFactory = { exporter },
+                )
+            } else {
+                engine.exportAudioFileWith(
+                    outputFd = null, scoreHandle = 1L, format = AudioFileFormat.Wav(),
+                    range = AudioExportRange.Full, progress = null,
+                    masterGain = gain, masterOutputStage = stage, exporterFactory = { exporter },
+                )
+            }
+            return encoder.samples
+        }
+
+        val defaults = exported(null, null)
+        val doubled = exported(2f, MasterOutputStage.NONE)
+        val clipped = exported(5f, MasterOutputStage.SOFT_CLIP)
+
+        assertTrue(defaults.isNotEmpty())
+        assertTrue("defaults keep the rendered samples", defaults.all { it == 0.2f })
+        assertTrue("gain 2 doubles them", doubled.all { it == 0.4f })
+        assertTrue("the soft clip shapes the gained mix", clipped.all { it == SoftClip.apply(1f) })
     }
 
     @Test

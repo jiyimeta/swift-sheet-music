@@ -1958,6 +1958,11 @@ class AndroidPlaybackEngine internal constructor(
      * by the count-in's pre-roll (`CountInBeats.Result.preRollSeconds(division:)`) divided by the playback rate. A
      * start with no count-in exports as if it were `false`. Mirrors Apple's `exportAudioFile(…, countIn:)`.
      *
+     * [masterGain] scales the mix — score and click — and [masterOutputStage] then shapes it, exactly where live
+     * playback applies [setMasterVolume] and [setMasterOutputStage], before the encoder. Apple's export takes the same
+     * pair. The defaults (1, [MasterOutputStage.NONE]) leave the samples exactly as rendered; a host that calibrates
+     * its live output passes the same gain and stage here.
+     *
      * @throws AudioBackendException.NoScorePrepared if [scoreHandle]
      *   doesn't match the most recent [prepare] call.
      * @throws AudioBackendException.RangeNotInTimeline if a `.Region`
@@ -1977,6 +1982,8 @@ class AndroidPlaybackEngine internal constructor(
         range: AudioExportRange = AudioExportRange.Full,
         countIn: Boolean = false,
         progress: ((Float) -> Unit)? = null,
+        masterGain: Float = 1f,
+        masterOutputStage: MasterOutputStage = MasterOutputStage.NONE,
     ) = exportAudioFileWith(
         outputFd = outputFd,
         scoreHandle = scoreHandle,
@@ -1984,6 +1991,8 @@ class AndroidPlaybackEngine internal constructor(
         range = range,
         countIn = countIn,
         progress = progress,
+        masterGain = masterGain,
+        masterOutputStage = masterOutputStage,
     ) {
         AudioExporter(
             resolver = soundfontResolver,
@@ -2010,6 +2019,8 @@ class AndroidPlaybackEngine internal constructor(
         range: AudioExportRange,
         countIn: Boolean = false,
         progress: ((Float) -> Unit)?,
+        masterGain: Float = 1f,
+        masterOutputStage: MasterOutputStage = MasterOutputStage.NONE,
         exporterFactory: () -> AudioExporter,
     ) = exportMutex.withLock {
         if (this.scoreHandle == 0L || this.scoreHandle != scoreHandle) {
@@ -2051,6 +2062,8 @@ class AndroidPlaybackEngine internal constructor(
             // pitches because transposed playback is a tuning shift and never a re-render.
             masterTuningCents = masterTuningCents,
             transposeSemitones = transposeSemitones,
+            masterGain = masterGain,
+            masterOutputStage = masterOutputStage,
         )
 
         val smfBytes = jniBridge.renderMidi(scoreHandle)

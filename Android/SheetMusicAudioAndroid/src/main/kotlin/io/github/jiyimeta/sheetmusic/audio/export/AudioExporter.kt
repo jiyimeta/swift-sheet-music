@@ -6,11 +6,13 @@ import io.github.jiyimeta.sheetmusic.audio.AudioBackendException
 import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
+import io.github.jiyimeta.sheetmusic.audio.model.MasterOutputStage
 import io.github.jiyimeta.sheetmusic.audio.model.MidiControlChange
 import io.github.jiyimeta.sheetmusic.audio.model.MixAudibility
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeMixer
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeSf2Loader
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
+import io.github.jiyimeta.sheetmusic.audio.synth.SoftClip
 import io.github.jiyimeta.sheetmusic.audio.synth.SwiftySynthDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
 import kotlinx.coroutines.CancellationException
@@ -126,6 +128,7 @@ internal class AudioExporter(
                     val frames = minOf(BUFFER_FRAMES.toLong(), remaining).toInt()
                     synth.writeFloat(frames, left, right)
                     metronomeMixer?.let { mixMetronome(it, frames, left, right, metronomeLeft, metronomeRight) }
+                    applyMasterStage(snapshot, frames, left, right)
                     encoder.appendPcmFloat(left, right, frames)
                     remaining -= frames
                 }
@@ -147,6 +150,7 @@ internal class AudioExporter(
                 metronomeMixer?.takeIf { it.isAudible }?.let {
                     mixMetronome(it, frames, left, right, metronomeLeft, metronomeRight)
                 }
+                applyMasterStage(snapshot, frames, left, right)
                 encoder.appendPcmFloat(left, right, frames)
                 val nowMs = System.currentTimeMillis()
                 if (progress != null && totalTicks > 0 &&
@@ -168,6 +172,22 @@ internal class AudioExporter(
             try { synth.close() } catch (_: Throwable) {}
             try { metronomeMixer?.close() } catch (_: Throwable) {}
             try { encoder.close() } catch (_: Throwable) {}
+        }
+    }
+
+    /**
+     * The master chain live playback runs in `OboeStream`: the mix — score and click — times the master gain, then the
+     * output stage. Skipped outright at unity gain with no stage, so a default export's samples are the synth's own.
+     */
+    private fun applyMasterStage(snapshot: ExportEngineSnapshot, frames: Int, left: FloatArray, right: FloatArray) {
+        val gain = snapshot.masterGain
+        val softClip = snapshot.masterOutputStage == MasterOutputStage.SOFT_CLIP
+        if (gain == 1f && !softClip) return
+        for (i in 0 until frames) {
+            val l = left[i] * gain
+            val r = right[i] * gain
+            left[i] = if (softClip) SoftClip.apply(l) else l
+            right[i] = if (softClip) SoftClip.apply(r) else r
         }
     }
 

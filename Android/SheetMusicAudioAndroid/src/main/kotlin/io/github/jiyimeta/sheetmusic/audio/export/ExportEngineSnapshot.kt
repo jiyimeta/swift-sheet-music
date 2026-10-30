@@ -1,5 +1,6 @@
 package io.github.jiyimeta.sheetmusic.audio.export
 
+import io.github.jiyimeta.sheetmusic.audio.model.MasterOutputStage
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.synth.AndroidMetronomeClickResolver
 
@@ -35,6 +36,13 @@ internal data class ExportEngineSnapshot(
      * export in its original key on every device.
      */
     val transposeSemitones: Int = 0,
+    /**
+     * Linear gain on the mix — score and click together — before the output stage and the encoder, where live
+     * playback's master gain sits (`OboeStream`). 1 leaves the samples exactly as rendered.
+     */
+    val masterGain: Float = 1f,
+    /** What happens to a gained mix past full scale, as live playback's `setMasterOutputStage`. */
+    val masterOutputStage: MasterOutputStage = MasterOutputStage.NONE,
 ) {
     // `metronomeSmfBytes` makes the generated equals/hashCode identity-based; compare by content so the
     // data-class semantics hold for tests that assert on a captured snapshot.
@@ -48,7 +56,9 @@ internal data class ExportEngineSnapshot(
             rate == other.rate &&
             metronomeResolution == other.metronomeResolution &&
             masterTuningCents == other.masterTuningCents &&
-            transposeSemitones == other.transposeSemitones
+            transposeSemitones == other.transposeSemitones &&
+            masterGain == other.masterGain &&
+            masterOutputStage == other.masterOutputStage
     }
 
     override fun hashCode(): Int {
@@ -60,6 +70,8 @@ internal data class ExportEngineSnapshot(
         result = 31 * result + metronomeResolution.hashCode()
         result = 31 * result + masterTuningCents.hashCode()
         result = 31 * result + transposeSemitones
+        result = 31 * result + masterGain.hashCode()
+        result = 31 * result + masterOutputStage.hashCode()
         return result
     }
 }

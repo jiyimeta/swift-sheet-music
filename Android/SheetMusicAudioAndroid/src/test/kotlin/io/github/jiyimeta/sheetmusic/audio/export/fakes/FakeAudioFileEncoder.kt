@@ -12,8 +12,13 @@ internal class FakeAudioFileEncoder : AudioFileEncoder {
     var finished: Boolean = false
     var closed: Boolean = false
 
+    /** Every sample handed over, left then right, block by block. */
+    val samples = mutableListOf<Float>()
+
     override fun appendPcmFloat(left: FloatArray, right: FloatArray, frames: Int) {
         totalFramesWritten += frames
+        for (i in 0 until frames) samples += left[i]
+        for (i in 0 until frames) samples += right[i]
     }
 
     override fun finish() { finished = true }

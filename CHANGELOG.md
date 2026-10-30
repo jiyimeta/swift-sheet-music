@@ -9,6 +9,12 @@ and this project adheres to
 
 ### Added
 
+- **Android `exportAudioFile(…, masterGain:, masterOutputStage:)`.** The export scales the mix — score and click — by
+  `masterGain` and shapes it with `masterOutputStage` before the encoder, where live playback applies `setMasterGain`
+  and `setMasterOutputStage`, as Apple's export does. Until now an Android export applied no master gain at all. The
+  defaults (1, `NONE`) leave the samples exactly as rendered; a host that calibrates its live output passes the same
+  gain and stage here.
+
 - **`PlayedMeasure`, `PlayedMeasures.make(score:)` and `PreparedPlayback.playedMeasures`.** Every measure as playback
   plays it, repeats and jumps unrolled, with its pass number, its start and end on the transport's seconds at the
   notated tempo, the transport second of each click beat in it, and its length in click beats (0.5 for an eighth-note

@@ -80,8 +80,12 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
      */
     var tickAdvancePerWriteFloat: Int = 0
 
+    /** What [writeFloat] fills both channels with. */
+    var fillValue: Float = 0f
+
     override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int {
         calls += "writeFloat($frameCount)"
+        for (i in 0 until frameCount) { left[i] = fillValue; right[i] = fillValue }
         onWriteFloat?.invoke(frameCount)
         return 0
     }

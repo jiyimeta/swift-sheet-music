@@ -9,9 +9,11 @@ import io.github.jiyimeta.sheetmusic.audio.fakes.MarkerMasterTuning
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
+import io.github.jiyimeta.sheetmusic.audio.model.MasterOutputStage
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.synth.AndroidMetronomeClickResolver
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
+import io.github.jiyimeta.sheetmusic.audio.synth.SoftClip
 import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -132,6 +134,58 @@ class AudioExporterTest {
             drivers.bindings.tickToReturn >= 1920,
         )
         assertTrue("player should have been closed in finally", drivers.bindings.closeCalled)
+    }
+
+    /** Renders 0..960 with the synth writing [fill] everywhere, under [snapshot], and answers what reached the file. */
+    private suspend fun exportedSamples(fill: Float, snapshot: ExportEngineSnapshot): List<Float> {
+        val encoder = FakeAudioFileEncoder()
+        val drivers = makeDrivers()
+        drivers.synth.tickAdvancePerWriteFloat = 240
+        drivers.synth.fillValue = fill
+        makeExporter(drivers, encoder).run(
+            outputFd = null,
+            smfBytes = ByteArray(16),
+            strips = strips,
+            snapshot = snapshot,
+            startTick = 0,
+            endTick = 960,
+            ticksPerBeat = 480,
+            format = AudioFileFormat.Wav(),
+            sampleRate = 48000,
+            progress = null,
+        )
+        return encoder.samples
+    }
+
+    /** The default snapshot — no master gain, no output stage — hands the encoder exactly what the synth rendered. */
+    @Test
+    fun theDefaultMasterStageLeavesTheMixUntouched() = runTest {
+        val samples = exportedSamples(0.25f, snapshot)
+
+        assertTrue(samples.isNotEmpty())
+        assertTrue(samples.all { it == 0.25f })
+    }
+
+    /** The master gain scales the mix before the encoder, as live playback's does before its output stage. */
+    @Test
+    fun masterGainScalesTheExportedMix() = runTest {
+        val unity = exportedSamples(0.2f, snapshot.copy(masterGain = 1f))
+        val doubled = exportedSamples(0.2f, snapshot.copy(masterGain = 2f))
+
+        assertEquals(unity.size, doubled.size)
+        assertTrue(unity.all { it == 0.2f })
+        assertTrue(doubled.all { it == 0.4f })
+    }
+
+    /** The soft clip shapes the gained mix, exactly as `OboeStream` does live. */
+    @Test
+    fun theSoftClipStageShapesTheGainedMix() = runTest {
+        val samples = exportedSamples(
+            0.25f, snapshot.copy(masterGain = 4f, masterOutputStage = MasterOutputStage.SOFT_CLIP),
+        )
+
+        assertTrue(samples.isNotEmpty())
+        assertTrue(samples.all { it == SoftClip.apply(1f) })
     }
 
     @Test
