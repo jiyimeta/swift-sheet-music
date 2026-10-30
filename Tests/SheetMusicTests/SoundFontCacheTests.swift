@@ -2,7 +2,7 @@
     #if canImport(SwiftySynth)
         import Foundation
         import SheetMusicAudioCore
-        @testable import SheetMusicAudioSwiftySynth
+        import SheetMusicAudioSwiftySynthCore
         import SwiftySynth
         import Testing
 

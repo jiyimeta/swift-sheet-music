@@ -6,6 +6,7 @@ import Foundation
 import os
 import SheetMusicAudioApple
 import SheetMusicAudioCore
+import SheetMusicAudioSwiftySynthCore
 import SheetMusicMIDI
 import SwiftySynth
 
@@ -234,14 +235,8 @@ public final class SwiftySynthBackend: SynthBackend {
                 : (read(metronomeSoundfontURL)?.font ?? soundFont)
             if Task.isCancelled { return }
             let loaded = LoadedSynths(
-                score: Self.makeSynth(
-                    soundFont: soundFont, sampleRate: sampleRate,
-                    maximumPolyphony: 256, enableReverbAndChorus: true,
-                ),
-                metronome: Self.makeSynth(
-                    soundFont: clickFont, sampleRate: sampleRate,
-                    maximumPolyphony: 8, enableReverbAndChorus: false,
-                ),
+                score: Self.makeSynth(soundFont: soundFont, sampleRate: sampleRate, voicing: .score),
+                metronome: Self.makeSynth(soundFont: clickFont, sampleRate: sampleRate, voicing: .metronome),
                 scoreFont: scoreFont,
             )
             await self?.install(loaded, generation: generation)
@@ -282,38 +277,14 @@ public final class SwiftySynthBackend: SynthBackend {
         onReadyChanged?(ready)
     }
 
-    /// Build a `Synthesizer` + its `MidiFileSequencer` from an already-loaded
-    /// `SoundFont`. Returns nil if `soundFont` is nil or the synth can't build.
+    /// Build a `Synthesizer` + its `MidiFileSequencer` from an already-loaded `SoundFont`, with the settings every
+    /// SwiftySynth host shares (`SwiftySynthVoicing`). Returns nil if `soundFont` is nil or the synth can't build.
     private nonisolated static func makeSynth(
-        soundFont: SoundFont?, sampleRate: Double,
-        maximumPolyphony: Int, enableReverbAndChorus: Bool,
+        soundFont: SoundFont?, sampleRate: Double, voicing: SwiftySynthVoicing,
     ) -> (synth: Synthesizer, sequencer: MidiFileSequencer)? {
-        guard let soundFont,
-              // Enable SF2 note-on modulators (swiftysynth 0.2.0+): fonts that voice a
-              // preset via velocity→attenuation/filter modulators (e.g. MuseScore_General's
-              // Acoustic Grand Piano) render at their intended level instead of near-silent.
-              let settings = try? SynthesizerSettings(
-                  sampleRate: Int(sampleRate),
-                  maximumPolyphony: maximumPolyphony,
-                  enableReverbAndChorus: enableReverbAndChorus,
-                  enableModulators: true,
-              ),
-              let synth = try? Synthesizer(soundFont: soundFont, settings: settings)
+        guard let soundFont, let synth = voicing.makeSynthesizer(soundFont: soundFont, sampleRate: Int(sampleRate))
         else { return nil }
-        // SwiftySynth inherits MeltySynth's C# field initializer of 0.5 here, which is a
-        // porting artifact rather than a considered default — it costs a flat 6 dB against
-        // the host's own gain stage for no reason. The engine already owns level control
-        // (`scoreGainMixer` / `setMasterGain`), so the synth should hand back unity and let
-        // that stage decide. Measured: 0.5 → 1.0 recovers exactly 6.02 dB on a single voice.
-        //
-        // This does NOT close the whole gap against the old AUMIDISynth path, which measured
-        // ~20 dB louder — but that path peaked at +2.17 dBFS on ONE note, i.e. it was clipping
-        // and leaning on the master limiter. Matching it would mean reproducing distortion, so
-        // the rest is deliberately left to the host's master volume.
-        synth.masterVolume = 1.0
-        let sequencer = MidiFileSequencer(synthesizer: synth)
-        sequencer.onSend = Self.sendTurningChokesIntoChokes
-        return (synth, sequencer)
+        return (synth, SwiftySynthVoicing.makeSequencer(driving: synth))
     }
 
     public func setUnrolledTimeMap(_ map: UnrolledTimeMap) {
@@ -705,22 +676,5 @@ public final class SwiftySynthBackend: SynthBackend {
         }
         scoreSoundFont = nil
         sequencePresets = []
-    }
-}
-
-extension SwiftySynthBackend {
-    /// The sequencer's dispatch: every message goes to the synthesizer as before, except the choke marker the
-    /// playback render puts at the end of a choked tie chain (`ChokeMarker`), which chokes that key on that channel.
-    /// Set once per sequencer and capturing nothing, so the render thread calls it without allocating. A seek's chase
-    /// bypasses `onSend`, and the synthesizer ignores the undefined controller anyway, so a choke behind a seek point
-    /// is never replayed.
-    nonisolated static func sendTurningChokesIntoChokes(
-        _ synth: Synthesizer, channel: Int, command: Int, data1: Int, data2: Int,
-    ) {
-        if command == 0xB0, data1 == ChokeMarker.controller {
-            synth.choke(key: data2, on: channel)
-        } else {
-            synth.processMidiMessage(channel: channel, command: command, data1: data1, data2: data2)
-        }
     }
 }

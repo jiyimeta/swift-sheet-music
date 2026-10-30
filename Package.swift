@@ -456,7 +456,7 @@ if isWasm {
         "SheetMusicFoundation",
         "SheetMusicXMLTools",
         "SheetMusicZip",
-    ] + (isAndroid ? ["SheetMusicAndroidJNI"] : [])
+    ] + (isAndroid ? ["SheetMusicAndroidJNI", "SheetMusicAudioSwiftySynthCore"] : [])
 
     targets += [
         .testTarget(
@@ -477,6 +477,7 @@ if isWasm {
                 "SheetMusicAudio",
                 .product(name: "SwiftySynth", package: "swiftysynth"),
                 "SheetMusicAudioSwiftySynth",
+                "SheetMusicAudioSwiftySynthCore",
                 "SheetMusicAudioSignalsmith",
                 "SheetMusicPDF",
                 "SheetMusicOMRModel",
@@ -552,6 +553,7 @@ if !isAppleFree {
                 "SheetMusicMIDI",
                 "SheetMusicAudioCore",
                 "SheetMusicAudioApple",
+                "SheetMusicAudioSwiftySynthCore",
             ],
         ),
         // Signalsmith Stretch (MIT) and the FFT it uses, header-only C++ vendored with a C shim
@@ -665,10 +667,12 @@ if !isWasm, !isWindows {
                 "SheetMusicLayout",
                 "SheetMusicMIDI",
                 "SheetMusicAudioCore",
+                "SheetMusicAudioSwiftySynthCore",
                 "SheetMusicEditWire",
+                .product(name: "SwiftySynth", package: "swiftysynth"),
                 .product(name: "Wirelet", package: "swift-wirelet"),
                 .product(name: "SwiftJava", package: "swift-java"),
-            ],
+            ] + (isAndroid ? ["CJNI"] : []),
             exclude: [
                 "swift-java.config",
             ],
@@ -678,6 +682,24 @@ if !isWasm, !isWindows {
             linkerSettings: jniExportLinkerSettings,
             plugins: [
                 .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
+            ],
+        ),
+    ]
+}
+
+// What the SwiftySynth backends share: the synth voicings and the choke hook the Apple backend and Android both build
+// with, the SoundFont cache, and the lockable host objects Android's Kotlin engine drives through JNI. Not portable in
+// the wasm sense — SwiftySynth imports the Foundation umbrella — and nothing in the wasm graph reaches it; declared
+// there anyway because the Apple-only targets that depend on it are declared in that manifest shape too. Off Windows,
+// which still plays through FluidSynth (cymbal choke design, phase 4).
+if !isWindows {
+    targets += [
+        .target(
+            name: "SheetMusicAudioSwiftySynthCore",
+            dependencies: [
+                .product(name: "SwiftySynth", package: "swiftysynth"),
+                "SheetMusicFoundation",
+                "SheetMusicMIDI",
             ],
         ),
     ]

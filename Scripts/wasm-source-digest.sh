@@ -52,6 +52,7 @@ EXCLUDED=(
     SheetMusicAudio
     SheetMusicAudioApple
     SheetMusicAudioSwiftySynth
+    SheetMusicAudioSwiftySynthCore
     SheetMusicLayoutApple
     SheetMusicPDF
     SheetMusicUI

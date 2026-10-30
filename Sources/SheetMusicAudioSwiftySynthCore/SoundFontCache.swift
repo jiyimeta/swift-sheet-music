@@ -1,7 +1,8 @@
 import Foundation
 import SwiftySynth
 
-/// Parsed SoundFonts shared by every `SwiftySynthBackend` that loads the same file.
+/// Parsed SoundFonts shared by every SwiftySynth host that loads the same file — the Apple `SwiftySynthBackend`, and on
+/// Android the score and metronome `HostedSynth`s, which with the default General-MIDI click read the same font.
 ///
 /// A font's sample pool is read in place from a mapping of its file (`SoundFont(url:)`, swiftysynth 0.3.0): only the
 /// samples voices play are paged in, and as clean pages, so they do not count toward the app's memory footprint. Before
@@ -20,12 +21,12 @@ import SwiftySynth
 /// **Concurrent requests share one parse.** A second caller asking while the first is still parsing awaits that same
 /// parse rather than starting another — which is the case parallel part renders hit, all starting at once. The parse
 /// runs in a detached task, so the actor itself is never held for the seconds it takes.
-actor SoundFontCache {
-    static let shared = SoundFontCache()
+public actor SoundFontCache {
+    public static let shared = SoundFontCache()
 
     /// `SoundFont` is immutable but not declared `Sendable`; this is the one place it crosses isolation.
-    struct Loaded: @unchecked Sendable {
-        let font: SoundFont
+    public struct Loaded: @unchecked Sendable {
+        public let font: SoundFont
     }
 
     private struct Key: Hashable {
@@ -45,9 +46,11 @@ actor SoundFontCache {
     private var entries: [Key: WeakFont] = [:]
     private var inFlight: [Key: Task<Loaded?, Never>] = [:]
 
+    public init() {}
+
     /// The parsed font at `url`, shared with every other caller that has it loaded, or nil when the file is missing or
     /// does not parse.
-    func soundFont(at url: URL) async -> Loaded? {
+    public func soundFont(at url: URL) async -> Loaded? {
         let path = url.standardizedFileURL.path
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: path) else { return nil }
         let key = Key(
