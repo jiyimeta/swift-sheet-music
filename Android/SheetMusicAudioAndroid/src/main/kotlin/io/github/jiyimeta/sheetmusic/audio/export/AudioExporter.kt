@@ -8,10 +8,10 @@ import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
 import io.github.jiyimeta.sheetmusic.audio.model.MidiControlChange
 import io.github.jiyimeta.sheetmusic.audio.model.MixAudibility
-import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeMixer
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeSf2Loader
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
+import io.github.jiyimeta.sheetmusic.audio.synth.SwiftySynthDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
@@ -19,8 +19,8 @@ import kotlin.coroutines.coroutineContext
 import kotlin.math.roundToLong
 
 /**
- * Orchestrates an offline audio render: builds a dedicated FluidSynth +
- * PlayerDriver, applies the [ExportEngineSnapshot], pumps PCM through the
+ * Orchestrates an offline audio render: builds a dedicated synth +
+ * PlayerDriver at the format's sample rate, applies the [ExportEngineSnapshot], pumps PCM through the
  * encoder, and tears down on completion / cancellation / failure.
  *
  * Mirrors the structure of Apple's AudioFileExporter actor.
@@ -28,7 +28,12 @@ import kotlin.math.roundToLong
 internal class AudioExporter(
     private val resolver: SoundfontResolver,
     private val context: Context?,
-    private val synthFactory: (Int) -> SynthDriver = { FluidSynthDriver.create(it) },
+    private val synthFactory: (Int) -> SynthDriver = { SwiftySynthDriver.create(it) },
+    /**
+     * The click's synth. The engine passes SwiftySynth's eight dry voices; the default, the score's factory, is what a
+     * test's fake needs.
+     */
+    private val metronomeSynthFactory: (Int) -> SynthDriver = synthFactory,
     private val playerFactory: (Long) -> PlayerDriver = { PlayerDriver(it) },
     private val encoderFactory: (AudioFileFormat, Int, ParcelFileDescriptor?) -> AudioFileEncoder =
         { fmt, sr, fd -> AudioFileEncoder.create(fmt, sr, fd!!) },
@@ -72,7 +77,7 @@ internal class AudioExporter(
         // piece is a normal combination, and live playback opens the metronome's mix path for the pre-roll alone.
         val metronomeMixer =
             if ((snapshot.metronomeEnabled && snapshot.metronomeSmfBytes.isNotEmpty()) || countIn != null) {
-                val ms = synthFactory(sampleRate)
+                val ms = metronomeSynthFactory(sampleRate)
                 MetronomeSf2Loader.load(ms, snapshot.metronomeResolution, resolver, context)
                 ms.setGain(snapshot.metronomeVolume)
                 val mixer = MetronomeMixer(ms) { smf ->
@@ -102,6 +107,8 @@ internal class AudioExporter(
 
             val left = FloatArray(BUFFER_FRAMES)
             val right = FloatArray(BUFFER_FRAMES)
+            val metronomeLeft = FloatArray(BUFFER_FRAMES)
+            val metronomeRight = FloatArray(BUFFER_FRAMES)
             val totalTicks = (endTick - startTick).coerceAtLeast(0)
 
             if (countIn != null) {
@@ -118,7 +125,7 @@ internal class AudioExporter(
                     coroutineContext.ensureActive()
                     val frames = minOf(BUFFER_FRAMES.toLong(), remaining).toInt()
                     synth.writeFloat(frames, left, right)
-                    metronomeMixer?.let { mixMetronome(it, frames, left, right) }
+                    metronomeMixer?.let { mixMetronome(it, frames, left, right, metronomeLeft, metronomeRight) }
                     encoder.appendPcmFloat(left, right, frames)
                     remaining -= frames
                 }
@@ -137,7 +144,9 @@ internal class AudioExporter(
                 // currentTick crossing endTick regardless of frame budget.
                 val frames = BUFFER_FRAMES
                 synth.writeFloat(frames, left, right)
-                metronomeMixer?.takeIf { it.isAudible }?.let { mixMetronome(it, frames, left, right) }
+                metronomeMixer?.takeIf { it.isAudible }?.let {
+                    mixMetronome(it, frames, left, right, metronomeLeft, metronomeRight)
+                }
                 encoder.appendPcmFloat(left, right, frames)
                 val nowMs = System.currentTimeMillis()
                 if (progress != null && totalTicks > 0 &&
@@ -162,10 +171,15 @@ internal class AudioExporter(
         }
     }
 
-    /** Renders [frames] of the metronome's synth and sums them into [left] / [right]. */
-    private fun mixMetronome(mixer: MetronomeMixer, frames: Int, left: FloatArray, right: FloatArray) {
-        val mLeft = FloatArray(frames)
-        val mRight = FloatArray(frames)
+    /** Renders [frames] of the click into the scratch [mLeft] / [mRight] and sums it into [left] / [right]. */
+    private fun mixMetronome(
+        mixer: MetronomeMixer,
+        frames: Int,
+        left: FloatArray,
+        right: FloatArray,
+        mLeft: FloatArray,
+        mRight: FloatArray,
+    ) {
         mixer.synth.writeFloat(frames, mLeft, mRight)
         for (i in 0 until frames) {
             left[i] += mLeft[i]
@@ -177,7 +191,7 @@ internal class AudioExporter(
      * Resolves a default soundfont, loads it on [synth], and applies
      * per-strip program / drum-channel / CC7 (volume + mute/solo) state.
      * Mirrors the channel setup logic in
-     * [io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthEngine.setupStaves]
+     * [io.github.jiyimeta.sheetmusic.audio.synth.SynthEngine.setupStaves]
      * but tailored for one-shot offline export.
      *
      * Two sources, joined on [InstrumentParams.liveChannel] /

@@ -36,13 +36,14 @@ import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.StaffParamsCodec
 import io.github.jiyimeta.sheetmusic.audio.synth.AndroidMetronomeClickResolver
-import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthDriver
-import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthEngine
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeMixer
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeSf2Loader
 import io.github.jiyimeta.sheetmusic.audio.synth.OboeStream
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
+import io.github.jiyimeta.sheetmusic.audio.synth.SwiftySynthDriver
+import io.github.jiyimeta.sheetmusic.audio.synth.SwiftySynthNative
 import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
+import io.github.jiyimeta.sheetmusic.audio.synth.SynthEngine
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +64,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Public facade that wires [SheetMusicAudioJNI] + [FluidSynthEngine] +
+ * Public facade that wires [SheetMusicAudioJNI] + [SynthEngine] +
  * [PlayerDriver] + [OboeStream] + [MetronomeMixer] into a single API
  * consumed by Compose ViewModels.
  *
@@ -79,9 +80,9 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * - [prepare] is `suspend` and must be called from a coroutine. It runs
  *   its I/O-heavy work on [Dispatchers.IO].
- * - All other public methods are synchronous and thread-safe. FluidSynth
- *   native calls are mutex-free per the library documentation; StateFlow
- *   updates are atomic.
+ * - All other public methods are synchronous and thread-safe. Each Swift
+ *   synth serializes its own calls (one lock per synth, which the audio
+ *   writer holds for a block); StateFlow updates are atomic.
  * - [StateFlow] writes from the poll job are atomic; ViewModel collectors
  *   apply `flowOn(Dispatchers.Main)` on their side as needed.
  *
@@ -89,7 +90,7 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * The internal constructor accepts [Context?] so that JVM unit tests can
  * pass `null`. Production always supplies a real [Context]. The only
- * place [Context] is used is in [FluidSynthEngine.setupStaves] for SF2
+ * place [Context] is used is in [SynthEngine.setupStaves] for SF2
  * materialization; fakes never dereference it.
  */
 class AndroidPlaybackEngine internal constructor(
@@ -106,6 +107,11 @@ class AndroidPlaybackEngine internal constructor(
     private val oboeFactory: () -> OboeStream,
     /** Dispatcher used for the poll loop. Injectable for tests. */
     private val pollDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * Builds the metronome's synth — in production SwiftySynth's eight dry voices, where the score's synth has 256 with
+     * reverb and chorus. Defaults to [synthFactory], which is all a test's fake needs.
+     */
+    private val metronomeSynthFactory: (Int) -> SynthDriver = synthFactory,
 ) : AutoCloseable {
 
     // ── JniBridge seam ───────────────────────────────────────────────
@@ -251,7 +257,7 @@ class AndroidPlaybackEngine internal constructor(
         //
         // Which audition supersedes which, how long a drum rings against a melodic note, and how long the
         // audio graph has to stay alive for a release are decided by shared Swift (`NotePreviewPolicy`) that
-        // the Apple engine runs too. This engine asks and then executes, in FluidSynth's own messages. It
+        // the Apple engine runs too. This engine asks and then executes, in the synth's own messages. It
         // used to decide as well, in a hand-written copy of Apple's state machine that had neither the
         // supersede nor the release tail — both audible, and both already fixed on the other platform.
 
@@ -364,10 +370,11 @@ class AndroidPlaybackEngine internal constructor(
         soundfontResolver = soundfontResolver,
         metronomeClickProvider = metronomeClickProvider,
         jniBridge = defaultBridge,
-        synthFactory = { sr -> FluidSynthDriver.create(sr) },
+        synthFactory = { sr -> SwiftySynthDriver.create(sr) },
         playerFactory = { synthHandle -> PlayerDriver(synthHandle) },
         oboeFactory = { OboeStream() },
         pollDispatcher = Dispatchers.Default,
+        metronomeSynthFactory = { sr -> SwiftySynthDriver.create(sr, SwiftySynthNative.VOICING_METRONOME) },
     )
 
     // ── Observable state ─────────────────────────────────────────────
@@ -460,7 +467,7 @@ class AndroidPlaybackEngine internal constructor(
     private var totalTicks: Long = 0
     /**
      * Length of the UNROLLED sequence (repeats + jumps expanded) — the tick
-     * space the FluidSynth player actually traverses. End-of-score detection
+     * space the score's transport actually traverses. End-of-score detection
      * in the poll loop compares the player tick against THIS, not the shorter
      * notated [totalTicks], so a repeat's second pass or a D.C./D.S. jump does
      * not stop playback early. Equals [totalTicks] when the summary carries
@@ -493,7 +500,7 @@ class AndroidPlaybackEngine internal constructor(
      * other one does — an engine can be constructed in contexts that never load the library.
      */
     @Volatile private var previewPolicyHandle: Long = 0L
-    private var fluidSynthEngine: FluidSynthEngine? = null
+    private var synthEngine: SynthEngine? = null
     private var playerDriver: PlayerDriver? = null
     private var oboeStream: OboeStream? = null
     private var metronomeMixer: MetronomeMixer? = null
@@ -509,10 +516,11 @@ class AndroidPlaybackEngine internal constructor(
      * Where the score transport will resume from — the tick the metronome's transport has to be started
      * at so the two run together.
      *
-     * Not read from the player: `fluid_player_seek` only records the request and applies it inside the
-     * player's render callback, so `currentTick` still reports the pre-seek position until playback is
-     * actually running again. Every path that repositions a stopped player updates this instead: seek,
-     * skip, stop, the loop wrap, and pause (which captures the live tick while it is still accurate).
+     * Not read from the player. FluidSynth's player only recorded a seek and applied it inside its render, so
+     * its tick reported the pre-seek position until playback was running again; SwiftySynth's sequence reports
+     * a seek at once, but this stays the one source so the engine does not depend on which. Every path that
+     * repositions a stopped player updates this instead: seek, skip, stop, the loop wrap, and pause (which
+     * captures the live tick while it is still accurate).
      */
     @Volatile private var scoreTickIntent: Long = 0L
 
@@ -572,8 +580,8 @@ class AndroidPlaybackEngine internal constructor(
     // ── prepare ──────────────────────────────────────────────────────
 
     /**
-     * Loads score data from the Swift bridge, creates the single FluidSynth
-     * engine and assigns per-strip channels, initializes the player and
+     * Loads score data from the Swift bridge, creates the single score synth
+     * and assigns per-strip channels, initializes the player and
      * stream, and transitions to [PlaybackState.PREPARED].
      *
      * @param scoreHandle opaque handle obtained from the JNI score-loading API.
@@ -639,14 +647,14 @@ class AndroidPlaybackEngine internal constructor(
             // Tear down any prior prepared state before recreating.
             teardownInternalNoCancelScopes()
 
-            // Single fluid_synth_t, one channel per STRIP (not per staff) —
+            // Single score synth, one channel per STRIP (not per staff) —
             // keyed on each strip's live MIDI channel, which is what the
             // rendered SMF (remapped via `LiveChannelPlan` on the Swift
             // side) actually addresses. `StaffParams` is reused here purely
             // as a generic (channel, bank, program, isDrums) load spec —
-            // `FluidSynthEngine` never interprets the "staffIndex" field as
+            // `SynthEngine` never interprets the "staffIndex" field as
             // anything but a raw MIDI channel number.
-            val engine = FluidSynthEngine(
+            val engine = SynthEngine(
                 synthFactory,
                 masterTuningControlChanges = {
                     MidiControlChangeCodec.decode(jniBridge.masterTuningControlChanges(it))
@@ -665,22 +673,22 @@ class AndroidPlaybackEngine internal constructor(
             // Re-apply the combined calibration + transpose offset: a fresh synth starts at concert
             // pitch, so a score opened while either is non-zero would otherwise play untransposed.
             if (effectiveTuningCents != 0.0) engine.setMasterTuning(effectiveTuningCents)
-            this@AndroidPlaybackEngine.fluidSynthEngine = engine
+            this@AndroidPlaybackEngine.synthEngine = engine
             // Seed each strip's channel volume into the synth from the score's CC 7. The rendered SMF
             // no longer carries CC 7 on mixer-managed channels (stripped in the shared
             // MidiSynthPostProcess so the live mixer is the sole authority), so the synth must be told
-            // the score's volume here; otherwise every strip would play at FluidSynth's default. Because
+            // the score's volume here; otherwise every strip would play at the synth's default. Because
             // no tick-0 CC 7 fires when the player starts, a volume the user sets *before* the first play
             // now survives — matching iOS, where applyMixerState owns CC 7 and the SMF's is stripped.
             strips.forEach { s ->
                 engine.setChannelVolume(s.liveChannel, s.channelVolume.toInt().coerceIn(0, 127) / 127f)
             }
 
-            // Dedicated metronome synth on a separate fluid_synth_t. The
+            // Dedicated metronome synth, separate from the score's. The
             // click sound comes from the provider: .clickSamples builds an
             // SF2 from the host's WAVs (via JNI), .soundFont uses a host SF2,
             // .defaultGM / no provider falls back to the GM drum-kit.
-            val metronomeSynth = synthFactory(48_000)
+            val metronomeSynth = metronomeSynthFactory(48_000)
             MetronomeSf2Loader.load(
                 metronomeSynth, clickResolver.resolve(), soundfontResolver, context,
             )
@@ -696,8 +704,8 @@ class AndroidPlaybackEngine internal constructor(
                 it.setTempo(pendingRate.toDouble())
             }
 
-            // PlayerDriver wired to the real fluid_synth_t handle.
-            // fluid_player's default routing uses event.channel directly —
+            // PlayerDriver attached to the score synth's handle.
+            // The sequence's default routing uses event.channel directly —
             // the Swift bridge already remaps SMF channels onto the live
             // single-port channel set (`AudioMidiBridge.renderMidi`, via
             // `LiveChannelPlan` + `MidiChannelRemap`), which is exactly the
@@ -721,8 +729,13 @@ class AndroidPlaybackEngine internal constructor(
             oboe.setMasterVolume(masterVolume)
             oboe.setMasterOutputStage(masterOutputStage)
             levelHandler?.let { oboe.startLevelMonitoring(it) }
+            // The metronome's scratch, made once per stream rather than per callback: the writer calls this every block
+            // (480 frames, `OboeStream`'s default), and nothing on that thread should allocate. Grown if a stream asks
+            // for more.
+            var metronomeLeft = FloatArray(480)
+            var metronomeRight = FloatArray(480)
             oboe.setProducer { frameCount, left, right ->
-                val eng = this@AndroidPlaybackEngine.fluidSynthEngine
+                val eng = this@AndroidPlaybackEngine.synthEngine
                 if (eng == null) {
                     for (i in 0 until frameCount) { left[i] = 0f; right[i] = 0f }
                     return@setProducer
@@ -730,12 +743,14 @@ class AndroidPlaybackEngine internal constructor(
                 eng.writeFloat(frameCount, left, right)
                 val mm = this@AndroidPlaybackEngine.metronomeMixer
                 if (mm != null && mm.isAudible) {
-                    val mLeft = FloatArray(frameCount)
-                    val mRight = FloatArray(frameCount)
-                    mm.synth.writeFloat(frameCount, mLeft, mRight)
+                    if (metronomeLeft.size < frameCount) {
+                        metronomeLeft = FloatArray(frameCount)
+                        metronomeRight = FloatArray(frameCount)
+                    }
+                    mm.synth.writeFloat(frameCount, metronomeLeft, metronomeRight)
                     for (i in 0 until frameCount) {
-                        left[i] += mLeft[i]
-                        right[i] += mRight[i]
+                        left[i] += metronomeLeft[i]
+                        right[i] += metronomeRight[i]
                     }
                 }
             }
@@ -809,7 +824,7 @@ class AndroidPlaybackEngine internal constructor(
 
     /** [replaceScore]'s swap, leaving the transport stopped at the start; [restore] puts it back afterwards. */
     private suspend fun swapScore(scoreHandle: Long, derivation: ScoreDerivation): ScoreReplacementOutcome {
-        val synth = fluidSynthEngine
+        val synth = synthEngine
         if (synth == null || derivation.channelLayout != loadedChannelLayout) {
             _isPreparingSoundfont.value = true
             try {
@@ -889,10 +904,11 @@ class AndroidPlaybackEngine internal constructor(
      * after the transport is seated, so the seek is not snapped into a loop that is not armed yet.
      *
      * A paused transport is seated by seeking and then naming the state, never by [pause]: that stops the player, and
-     * the one the swap just loaded has never played. fluid_player reads its tracks on its first play, and until then a
-     * stopped player refuses any seek past tick 0 (2.4.6 `fluid_player_seek` rejects a tick past the total unless the
-     * player is still READY, and the total is 0 with no tracks read) — so the cursor was dropped and the next play
-     * started from the top. The swap's own [stop] has already silenced the output, which is all [pause] would add.
+     * the one the swap just loaded has never played. FluidSynth's player read its tracks on its first play, and until
+     * then a stopped player refused any seek past tick 0 (2.4.6 `fluid_player_seek` rejected a tick past the total
+     * unless the player was still READY, and the total was 0 with no tracks read) — so the cursor was dropped and the
+     * next play started from the top. SwiftySynth's sequence takes such a seek; the order stays, as it is right for
+     * either. The swap's own [stop] has already silenced the output, which is all [pause] would add.
      */
     private fun restore(transport: CarriedTransport?) {
         transport ?: return
@@ -1007,10 +1023,10 @@ class AndroidPlaybackEngine internal constructor(
         val decodedStrips = decodeInstrumentParams(scoreHandle)
         val strips = stripsOrFallback(decodedStrips, staves)
         // `strips.size` — NOT `staves.size` — is what actually gets
-        // handed to `FluidSynthEngine.setupStaves` (one entry
+        // handed to `SynthEngine.setupStaves` (one entry
         // per live channel, not per staff), so it is the quantity that
         // must stay within the single-synth 16-channel limit.
-        // `FluidSynthEngine.setupStaves` has its own `require(...)` for
+        // `SynthEngine.setupStaves` has its own `require(...)` for
         // this, but that throws a raw `IllegalArgumentException`
         // instead of the documented `TooManyStaves` — check
         // here first so the typed exception wins.
@@ -1191,7 +1207,7 @@ class AndroidPlaybackEngine internal constructor(
      * there. Idempotent.
      *
      * Also stops the underlying Oboe output stream. Stopping just
-     * the FluidSynth player leaves the audio stream emitting silent
+     * the score's transport leaves the audio stream emitting silent
      * frames, which Android's audio focus framework reads as
      * "audio still active" and which MediaSession's
      * `PlaybackStateCompat` aggregation may use to override an
@@ -1201,10 +1217,11 @@ class AndroidPlaybackEngine internal constructor(
      * No-op when [state] is [PlaybackState.EXPORTING].
      *
      * Only a running transport touches the players. A pause that arrives while nothing plays — a lost audio focus, a
-     * media controller's pause, any second pause — must leave a seek made since alone: the player's tick has not
-     * caught up with that seek (fluid_player applies one on its next render), so reading it back would capture the
-     * old position, and stopping a player that has never played moves it out of READY, after which it refuses any seek
-     * past tick 0. Either way the next play started somewhere else than the cursor the readout showed.
+     * media controller's pause, any second pause — must leave a seek made since alone: the player's tick had not caught
+     * up with that seek (FluidSynth's player applied one on its next render), so reading it back would capture the old
+     * position, and stopping a player that had never played moved it out of READY, after which it refused any seek past
+     * tick 0. Either way the next play started somewhere else than the cursor the readout showed. SwiftySynth's
+     * sequence has neither quirk; the rule costs nothing and keeps the engine independent of the transport behind it.
      */
     fun pause() {
         if (_state.value == PlaybackState.EXPORTING) return
@@ -1217,7 +1234,7 @@ class AndroidPlaybackEngine internal constructor(
         cancelCountIn()
         if (running) {
             playerDriver?.stop()
-            // The click transport is a fluid_player too, with the same rule about a stop before its first play.
+            // The click transport is a player too, and gets the same treatment.
             metronomeMixer?.stop()
         }
         oboeStream?.stop()
@@ -1238,7 +1255,7 @@ class AndroidPlaybackEngine internal constructor(
         metronomeMixer?.stop()
         restoreBodyMetronomeSequence()
         metronomeMixer?.seekTick(0L)
-        fluidSynthEngine?.allNotesOff()
+        synthEngine?.allNotesOff()
         oboeStream?.stop()
         stopPollJob()
         _state.value = PlaybackState.STOPPED
@@ -1279,7 +1296,7 @@ class AndroidPlaybackEngine internal constructor(
         frame ?: return
         // `frame.tick` and the loop are NOTATED; the player and the click transport are not.
         val snapped = unrolledTick(forNotated = snapTickToLoop(frame.tick))
-        fluidSynthEngine?.allNotesOff()
+        synthEngine?.allNotesOff()
         player.seekTick(snapped)
         scoreTickIntent = snapped
         // The count-in sequence only covers the region from the tick it was built for; leave it before
@@ -1310,7 +1327,7 @@ class AndroidPlaybackEngine internal constructor(
         frame ?: return
         // Back the other way: the frame's tick and the loop are notated, the player is not.
         val snapped = unrolledTick(forNotated = snapTickToLoop(frame.tick))
-        fluidSynthEngine?.allNotesOff()
+        synthEngine?.allNotesOff()
         player.seekTick(snapped)
         scoreTickIntent = snapped
         // The count-in sequence only covers the region from the tick it was built for; leave it before
@@ -1477,7 +1494,7 @@ class AndroidPlaybackEngine internal constructor(
      *
      * The restart matters at the end of the click track: the metronome sequence ends one tick after the
      * last click, so a loop whose region reaches the end of the score leaves the click transport finished
-     * — and a finished `fluid_player` ignores a bare seek. Re-playing it revives it on the wrap. While
+     * — and a finished FluidSynth player ignored a bare seek. Re-playing it revives it on the wrap. While
      * paused or stopped the seek alone is what we want; starting it there would click over the silence.
      */
     private fun repositionMetronome(tick: Long) {
@@ -1527,7 +1544,7 @@ class AndroidPlaybackEngine internal constructor(
     /** Both [playPreview]s: routes [noteId] (a negative [pitch] keeps the note's own) and sounds it. */
     private fun playRoutedPreview(noteId: NoteID, pitch: Int, durationMillis: Long, velocity: Int) {
         if (_state.value == PlaybackState.EXPORTING) return
-        if (fluidSynthEngine == null) return
+        if (synthEngine == null) return
         // The note is addressed in the score as it stands; the instrument changes that route it are the prepared
         // copy's, whose channels are the ones programmed on the synth.
         val route = jniBridge.previewRoute(
@@ -1554,7 +1571,7 @@ class AndroidPlaybackEngine internal constructor(
 
     /** Sounds one routed audition: the shared policy's ring, supersede and release on [channel]. */
     private fun soundPreview(channel: Int, pitch: Int, isDrum: Boolean, durationMillis: Long, velocity: Int) {
-        val engine = fluidSynthEngine ?: return
+        val engine = synthEngine ?: return
 
         // What this audition does — whether it supersedes one already sounding, how long it rings, how long
         // the graph has to stay alive after it — is decided by the shared policy. See `JniBridge`.
@@ -1585,7 +1602,7 @@ class AndroidPlaybackEngine internal constructor(
         // Silencing the superseded note by its own (channel, pitch) rather than Apple's CC 120 on a foreign
         // channel is a deliberate difference in the MESSAGE, not in the behaviour the policy describes. Apple's
         // branch works around AUMIDISynth swallowing a CC 120 sent immediately before a note-on on the same
-        // channel; FluidSynth needs no such workaround, and a plain note-off is both more precise — it silences
+        // channel; SwiftySynth needs no such workaround, and a plain note-off is both more precise — it silences
         // exactly the note this engine started — and gentler, since it lets the release envelope run.
         if (plan.supersedesChannel >= 0) {
             engine.previewNoteOff(plan.supersedesChannel, plan.supersedesPitch)
@@ -1656,7 +1673,7 @@ class AndroidPlaybackEngine internal constructor(
      *
      * This is what a note-input UI needs and [playPreview] cannot give it: a key held down should
      * sound for as long as it is held, not for a fixed 300 ms. The engine has had the capability all
-     * along — [FluidSynthEngine.previewNoteOn] is what [playPreview] itself calls — it was simply
+     * along — [SynthEngine.previewNoteOn] is what [playPreview] itself calls — it was simply
      * never public.
      *
      * Intended for use while stopped or paused (the caller gates this); a held note shares the
@@ -1667,7 +1684,7 @@ class AndroidPlaybackEngine internal constructor(
      */
     fun previewNoteOn(pitch: Int, onStaff: Int, velocity: Int = 96) {
         if (_state.value == PlaybackState.EXPORTING || _state.value == PlaybackState.PLAYING) return
-        val engine = fluidSynthEngine ?: return
+        val engine = synthEngine ?: return
         val liveChannel = staffLiveChannel.getOrElse(onStaff) { onStaff }
 
         // A pending fixed-duration audition must not be cut by this note's own start, and must not
@@ -1703,7 +1720,7 @@ class AndroidPlaybackEngine internal constructor(
         val held = sustainedPreview ?: return
         if (held.third != pitch) return
         sustainedPreview = null
-        fluidSynthEngine?.previewNoteOff(held.second, pitch)
+        synthEngine?.previewNoteOff(held.second, pitch)
         if (previewStreamHolders.decrementAndGet() == 0 && _state.value != PlaybackState.PLAYING) {
             oboeStream?.stop()
         }
@@ -1825,7 +1842,7 @@ class AndroidPlaybackEngine internal constructor(
         updateChannel(idx) { it.copy(volume = volume) }
         // Use setChannelVolume (not reapplyChannelAudibility) so the new CC7 is
         // recorded in rememberedCC7 and applied only when the channel is unmuted.
-        fluidSynthEngine?.setChannelVolume(liveChannel, volume)
+        synthEngine?.setChannelVolume(liveChannel, volume)
     }
 
     /**
@@ -1834,7 +1851,7 @@ class AndroidPlaybackEngine internal constructor(
      * strip's own [MixerChannel.liveChannel]) and to the mixer state.
      * No-op when [state] is [PlaybackState.EXPORTING].
      *
-     * Works for drum strips as well as melodic ones: [FluidSynthEngine.setStaffProgram] keeps the
+     * Works for drum strips as well as melodic ones: [SynthEngine.setStaffProgram] keeps the
      * channel on its own bank, so on a percussion strip this selects a kit within bank 128 rather than
      * a melodic patch. Hosts pick which catalog to offer from `MixerChannel.isDrums`.
      */
@@ -1843,7 +1860,7 @@ class AndroidPlaybackEngine internal constructor(
         val idx = channelIndex(partIndex, ordinal)
         if (idx < 0) return
         val liveChannel = _mixerChannels.value[idx].liveChannel
-        fluidSynthEngine?.setStaffProgram(liveChannel, program)
+        synthEngine?.setStaffProgram(liveChannel, program)
         updateChannel(idx) { it.copy(program = program) }
     }
 
@@ -1861,7 +1878,7 @@ class AndroidPlaybackEngine internal constructor(
      * Live whole-score transpose in [semitones], clamped to −12…+12. Persists across prepare.
      * No-op when [state] is [PlaybackState.EXPORTING].
      *
-     * Implemented as a tuning shift, not a re-render: [FluidSynthEngine.setMasterTuning] retunes the
+     * Implemented as a tuning shift, not a re-render: [SynthEngine.setMasterTuning] retunes the
      * melodic channels only and leaves drum channels at concert pitch, which is exactly the semantics
      * the Apple `PlaybackEngine.setTranspose` has (global coarse tuning on the melodic unit). Notes
      * already sounding shift with it, and no MIDI is re-sequenced.
@@ -1879,10 +1896,10 @@ class AndroidPlaybackEngine internal constructor(
     /**
      * Push calibration + transpose onto the melodic channels as one combined offset. Mirrors the Apple
      * engine's `applyTuning`: melodic = calibration + transpose, percussion = calibration only (the
-     * drum exclusion lives inside [FluidSynthEngine.setMasterTuning]).
+     * drum exclusion lives inside [SynthEngine.setMasterTuning]).
      */
     private fun applyTuning() {
-        fluidSynthEngine?.setMasterTuning(effectiveTuningCents)
+        synthEngine?.setMasterTuning(effectiveTuningCents)
     }
 
     /** Combined melodic-channel offset from A4=440: calibration plus the transpose, 100 cents per semitone. */
@@ -1923,7 +1940,7 @@ class AndroidPlaybackEngine internal constructor(
      * Offline-render the prepared score to an audio file at [outputFd].
      *
      * Mirrors Apple's `PlaybackEngine.exportAudioFile`: builds a dedicated
-     * FluidSynth + [PlayerDriver] per call, applies a snapshot of live
+     * synth + [PlayerDriver] per call, applies a snapshot of live
      * engine state, pumps PCM through the encoder, and transitions
      * `state` to [PlaybackState.EXPORTING] for the duration of the
      * render. Live playback mutators (`play` / `pause` / `seek` / …)
@@ -1972,6 +1989,7 @@ class AndroidPlaybackEngine internal constructor(
             resolver = soundfontResolver,
             context = context,
             synthFactory = synthFactory,
+            metronomeSynthFactory = metronomeSynthFactory,
             playerFactory = playerFactory,
             masterTuningControlChanges = {
                 MidiControlChangeCodec.decode(jniBridge.masterTuningControlChanges(it))
@@ -2147,12 +2165,11 @@ class AndroidPlaybackEngine internal constructor(
         oboeStream = null
         playerDriver?.let {
             try { it.stop() } catch (_: Throwable) {}
-            try { it.join() } catch (_: Throwable) {}
             it.close()
         }
         playerDriver = null
-        fluidSynthEngine?.teardown()
-        fluidSynthEngine = null
+        synthEngine?.teardown()
+        synthEngine = null
         metronomeMixer?.close()
         metronomeMixer = null
         staffLiveChannel = IntArray(0)
@@ -2181,7 +2198,7 @@ class AndroidPlaybackEngine internal constructor(
                 // wrapped at the wrong instant, and to the wrong place, on any score with a repeat.
                 val loop = transportLoop
                 if (loop != null && tick >= loop.endTick) {
-                    fluidSynthEngine?.allNotesOff()
+                    synthEngine?.allNotesOff()
                     player.seekTick(loop.startTick)
                     scoreTickIntent = loop.startTick
                     repositionMetronome(loop.startTick)
@@ -2298,10 +2315,10 @@ class AndroidPlaybackEngine internal constructor(
      * own [MixerChannel.liveChannel], NOT [idx] itself (no longer the same
      * as a MIDI channel number; see [setStaffMuted]).
      *
-     * On unmute, calls [FluidSynthEngine.unmuteChannel] which restores the
+     * On unmute, calls [SynthEngine.unmuteChannel] which restores the
      * last-captured CC7 value (SMF-emitted or user-set) rather than writing
      * the mixer slider value (which would snap volume to 127). Volume-slider
-     * changes call [FluidSynthEngine.setChannelVolume] directly via
+     * changes call [SynthEngine.setChannelVolume] directly via
      * [setStaffVolume].
      *
      * Must be called *after* [updateChannel] so the [_mixerChannels] state
@@ -2310,9 +2327,9 @@ class AndroidPlaybackEngine internal constructor(
     private fun reapplyChannelAudibility(idx: Int) {
         val ch = _mixerChannels.value.getOrNull(idx) ?: return
         if (ch.effectiveMute) {
-            fluidSynthEngine?.muteChannel(ch.liveChannel)
+            synthEngine?.muteChannel(ch.liveChannel)
         } else {
-            fluidSynthEngine?.unmuteChannel(ch.liveChannel)
+            synthEngine?.unmuteChannel(ch.liveChannel)
         }
     }
 
@@ -2331,8 +2348,8 @@ class AndroidPlaybackEngine internal constructor(
             it.close()
         }
         playerDriver = null
-        fluidSynthEngine?.teardown()
-        fluidSynthEngine = null
+        synthEngine?.teardown()
+        synthEngine = null
         metronomeMixer?.close()
         metronomeMixer = null
     }

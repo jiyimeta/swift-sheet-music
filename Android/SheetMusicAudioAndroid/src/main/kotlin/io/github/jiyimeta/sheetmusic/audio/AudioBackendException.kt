@@ -12,8 +12,8 @@ sealed class AudioBackendException(message: String) : Exception(message) {
     class EmptyScore : AudioBackendException("Score has zero staves")
     class TooManyStaves(val staffCount: Int) :
         AudioBackendException("Score has $staffCount staves; v0 supports up to 16")
-    class FluidSynthInit(cause: String) :
-        AudioBackendException("FluidSynth initialization failed: $cause")
+    class SynthInit(cause: String) :
+        AudioBackendException("Synthesizer initialization failed: $cause")
     class EngineSetupFailed(cause: String) :
         AudioBackendException("Engine setup failed: $cause")
     class NoScorePrepared :

@@ -8,7 +8,7 @@ import org.junit.Test
 /**
  * The SoundFont cache decision, isolated from the Android glue.
  *
- * `FluidSynthDriver.materializeUriToCache` keys its cache on the URI alone
+ * `SwiftySynthDriver.materializeUriToCache` keys its cache on the URI alone
  * and used to refresh only when the cached file was missing or empty. The
  * URI string does not change when a host swaps the SoundFont behind it, so
  * a stale copy was served forever — surviving every reinstall. Real cost:

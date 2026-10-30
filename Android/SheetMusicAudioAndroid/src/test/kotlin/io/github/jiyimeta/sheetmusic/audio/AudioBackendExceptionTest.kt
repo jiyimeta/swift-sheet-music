@@ -35,9 +35,9 @@ class AudioBackendExceptionTest {
         assertEquals("Score has 32 staves; v0 supports up to 16", ex.message)
     }
 
-    @Test fun fluidSynthInitMessage() {
-        val ex = AudioBackendException.FluidSynthInit("out of memory")
-        assertEquals("FluidSynth initialization failed: out of memory", ex.message)
+    @Test fun synthInitMessage() {
+        val ex = AudioBackendException.SynthInit("out of memory")
+        assertEquals("Synthesizer initialization failed: out of memory", ex.message)
     }
 
     @Test fun noScorePreparedHasReadableMessage() {

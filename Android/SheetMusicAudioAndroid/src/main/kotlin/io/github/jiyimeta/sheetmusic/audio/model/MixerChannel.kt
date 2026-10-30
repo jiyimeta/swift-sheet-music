@@ -14,7 +14,7 @@ data class MixerChannel(
     val ordinal: Int,
     /**
      * The live single-port MIDI channel (`0...15`) this strip's program /
-     * volume / mute is routed through on the shared FluidSynth engine.
+     * volume / mute is routed through on the shared score synth.
      */
     val liveChannel: Int,
     val displayName: String,

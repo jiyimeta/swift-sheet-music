@@ -8,13 +8,13 @@ package io.github.jiyimeta.sheetmusic.audio.model
  *
  * The decisions in here — which audition supersedes which, how long a drum rings versus a melodic note, how long
  * the audio graph has to stay alive after the note-off — are the shared `NotePreviewPolicy`'s, the same code the
- * Apple engine runs. This side executes them in FluidSynth's own messages. It used to decide them too, in a
+ * Apple engine runs. This side executes them in the synth's own messages. It used to decide them too, in a
  * hand-written copy that had neither the supersede nor the release tail, and both were audible.
  *
  * @property generation identifies this audition for the whole of its life; hand it back to end the note.
  * @property supersedesChannel channel of the audition this one replaces, or `-1` when none was sounding.
  * @property supersedesPitch pitch of that audition; meaningless when [supersedesChannel] is `-1`.
- * @property isDrum whether the note is on a drum staff. FluidSynth needs no different message for it, but the
+ * @property isDrum whether the note is on a drum staff. SwiftySynth needs no different message for it, but the
  *   fact travels with the plan because some synths do.
  * @property ringMilliseconds how long the note rings before the engine ends it.
  * @property releaseTailMilliseconds how much longer the audio graph must keep rendering after that end.

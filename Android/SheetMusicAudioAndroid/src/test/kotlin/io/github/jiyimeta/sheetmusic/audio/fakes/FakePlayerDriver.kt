@@ -16,27 +16,24 @@ internal object FakePlayerDriver {
         val loadCalls = mutableListOf<ByteArray>()
         val playCalls = mutableListOf<Unit>()
         val stopCalls = mutableListOf<Unit>()
-        val joinCalls = mutableListOf<Unit>()
         val seekTicks = mutableListOf<Long>()
         var closeCalled = false
         var tickToReturn: Long = 0L
 
-        override fun newPlayer(synthHandle: Long): Long = 1L
-        override fun deletePlayer(handle: Long) { closeCalled = true }
-        override fun playerAddMem(handle: Long, bytes: ByteArray): Int {
-            loadCalls += bytes; return 0
+        override fun newPlayer(synthHandle: Long, bytes: ByteArray): Long {
+            loadCalls += bytes
+            return 1L
         }
-        override fun playerPlay(handle: Long): Int { playCalls += Unit; return 0 }
-        override fun playerStop(handle: Long): Int { stopCalls += Unit; return 0 }
-        override fun playerJoin(handle: Long): Int { joinCalls += Unit; return 0 }
-        override fun playerSeek(handle: Long, tick: Long): Int {
-            seekTicks += tick; tickToReturn = tick; return 0
+        override fun deletePlayer(handle: Long) { closeCalled = true }
+        override fun playerPlay(handle: Long) { playCalls += Unit }
+        override fun playerStop(handle: Long) { stopCalls += Unit }
+        override fun playerSeek(handle: Long, tick: Long) {
+            seekTicks += tick; tickToReturn = tick
         }
         override fun playerGetCurrentTick(handle: Long): Long = tickToReturn
-        val setTempoCalls = mutableListOf<Pair<Int, Double>>()
-        override fun playerSetTempo(handle: Long, type: Int, value: Double): Int {
-            setTempoCalls += type to value
-            return 0
+        val setTempoCalls = mutableListOf<Double>()
+        override fun playerSetTempo(handle: Long, scale: Double) {
+            setTempoCalls += scale
         }
     }
 

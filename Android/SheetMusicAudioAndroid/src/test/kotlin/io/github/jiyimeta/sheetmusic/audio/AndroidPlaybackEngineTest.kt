@@ -172,46 +172,44 @@ internal class RecordingOboeStream : OboeStream() {
 // ── FakePlayerBindings for inspection ────────────────────────────────────
 
 /**
- * Records calls made through PlayerDriver's NativeBindings seam — and, like fluid_player 2.4.6, refuses a seek past tick
- * 0 on a player that was stopped before it ever played: its tracks are read on the first play, a stop leaves READY, and
- * `fluid_player_seek` rejects a tick past the total (0 with no tracks) unless the player is READY.
+ * Records calls made through PlayerDriver's NativeBindings seam — and, like FluidSynth's fluid_player 2.4.6, refuses a
+ * seek past tick 0 on a player that was stopped before it ever played: its tracks were read on the first play, a stop
+ * left READY, and `fluid_player_seek` rejected a tick past the total (0 with no tracks) unless the player was READY.
+ *
+ * SwiftySynth's sequence has no such rule; the fake keeps it as a stricter transport, so the engine's ordering — seat a
+ * paused transport by seeking, never by stopping a player that has not played — stays pinned.
  */
 private class RecordingBindings : PlayerDriver.NativeBindings {
     val loadCalls = mutableListOf<ByteArray>()
     val playCalls = mutableListOf<Unit>()
     val stopCalls = mutableListOf<Unit>()
-    val joinCalls = mutableListOf<Unit>()
     val seekTicks = mutableListOf<Long>()
     var closeCalled = false
     var tickToReturn: Long = 0L
     private var hasPlayed = false
     private var stoppedBeforePlaying = false
 
-    override fun newPlayer(synthHandle: Long): Long {
+    override fun newPlayer(synthHandle: Long, bytes: ByteArray): Long {
         hasPlayed = false
         stoppedBeforePlaying = false
+        loadCalls += bytes
         return 1L
     }
     override fun deletePlayer(handle: Long) { closeCalled = true }
-    override fun playerAddMem(handle: Long, bytes: ByteArray): Int { loadCalls += bytes; return 0 }
-    override fun playerPlay(handle: Long): Int { playCalls += Unit; hasPlayed = true; return 0 }
-    override fun playerStop(handle: Long): Int {
+    override fun playerPlay(handle: Long) { playCalls += Unit; hasPlayed = true }
+    override fun playerStop(handle: Long) {
         stopCalls += Unit
         if (!hasPlayed) stoppedBeforePlaying = true
-        return 0
     }
-    override fun playerJoin(handle: Long): Int { joinCalls += Unit; return 0 }
-    override fun playerSeek(handle: Long, tick: Long): Int {
-        if (stoppedBeforePlaying && tick > 0L) return -1 // FLUID_FAILED
+    override fun playerSeek(handle: Long, tick: Long) {
+        if (stoppedBeforePlaying && tick > 0L) return // FLUID_FAILED
         seekTicks += tick
         tickToReturn = tick
-        return 0
     }
     override fun playerGetCurrentTick(handle: Long): Long = tickToReturn
-    val setTempoCalls = mutableListOf<Pair<Int, Double>>()
-    override fun playerSetTempo(handle: Long, type: Int, value: Double): Int {
-        setTempoCalls += type to value
-        return 0
+    val setTempoCalls = mutableListOf<Double>()
+    override fun playerSetTempo(handle: Long, scale: Double) {
+        setTempoCalls += scale
     }
 }
 
@@ -656,7 +654,7 @@ class AndroidPlaybackEngineTest {
 
     @Test(expected = AudioBackendException.TooManyStaves::class)
     fun `prepare throws TooManyStaves when more than 16 STRIPS, even with few staves`() = runTest {
-        // The quantity `FluidSynthEngine.setupStaves` actually bounds is
+        // The quantity `SynthEngine.setupStaves` actually bounds is
         // `strips.size` (one entry per live channel), not `staves.size` —
         // a single staff can carry far more than 16 distinct instrument
         // strips over the course of a score. This fixture has ONE staff
@@ -766,7 +764,7 @@ class AndroidPlaybackEngineTest {
 
         assertEquals(PlaybackState.PAUSED, engine.state.value)
         assertEquals(
-            "a stop would re-seat fluid_player at its stale tick, undoing the seek",
+            "a stop would re-seat the player at its stale tick, undoing the seek",
             stopsBefore,
             player.stopCalls.size,
         )
@@ -1575,6 +1573,44 @@ class AndroidPlaybackEngineTest {
         engine.pause()
     }
 
+    /**
+     * The click gets its own, lighter synth (SwiftySynth's eight dry voices, where the score's has 256 with reverb and
+     * chorus): the metronome factory builds it, the score's factory builds only the score's.
+     */
+    @Test
+    fun `the metronome synth comes from the metronome factory`() = runTest(testDispatcher) {
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            renderMetronomeMidiResult = minimalSmf,
+        )
+        val scoreSynths = mutableListOf<FakeSynthDriver>()
+        val metronomeSynths = mutableListOf<FakeSynthDriver>()
+        val playerSynthHandles = mutableListOf<Long>()
+        val engine = AndroidPlaybackEngine(
+            context = null,
+            soundfontResolver = StubSoundfontResolver(),
+            metronomeClickProvider = null,
+            jniBridge = bridge,
+            synthFactory = { _ -> FakeSynthDriver(10).also { scoreSynths += it } },
+            playerFactory = { synthHandle ->
+                playerSynthHandles += synthHandle
+                PlayerDriver(0L, RecordingBindings())
+            },
+            oboeFactory = { FakeOboeStream.create() },
+            pollDispatcher = kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler),
+            metronomeSynthFactory = { _ -> FakeSynthDriver(20).also { metronomeSynths += it } },
+        ).also { managedEngines += it }
+
+        engine.prepare(1L)
+
+        assertEquals("one score synth", 1, scoreSynths.size)
+        assertEquals("one metronome synth", 1, metronomeSynths.size)
+        assertTrue("the click transport runs on the metronome synth", 20L in playerSynthHandles)
+        assertTrue("the score transport runs on the score synth", 10L in playerSynthHandles)
+    }
+
     @Test
     fun `pause stops the click transport with the score's`() = runTest(testDispatcher) {
         val metronome = RecordingBindings()
@@ -1621,7 +1657,7 @@ class AndroidPlaybackEngineTest {
 
         engine.setRate(1.5f)
 
-        assertEquals(listOf(0 to 1.5), metronome.setTempoCalls)
+        assertEquals(listOf(1.5), metronome.setTempoCalls)
     }
 
     @Test
@@ -1792,7 +1828,7 @@ class AndroidPlaybackEngineTest {
 
         // The count-in sequence is loaded fresh for this play, so the rate has to be re-applied to it —
         // otherwise the count would be at the notated tempo while the music it leads into is at 2×.
-        assertEquals(listOf(0 to 2.0), metronome.setTempoCalls)
+        assertEquals(listOf(2.0), metronome.setTempoCalls)
         engine.pause()
     }
 
@@ -2115,7 +2151,7 @@ class AndroidPlaybackEngineTest {
         engine.setRate(1.5f)
 
         assertEquals(1, bindings.setTempoCalls.size)
-        assertEquals(1.5, bindings.setTempoCalls.first().second, 0.0001)
+        assertEquals(1.5, bindings.setTempoCalls.first(), 0.0001)
         assertEquals(1.5f, engine.currentRate.value, 0.0001f)
         engine.teardown()
     }
@@ -2137,7 +2173,7 @@ class AndroidPlaybackEngineTest {
 
         // After prepare the pending rate must be re-applied to the new player.
         assertEquals(1, bindings.setTempoCalls.size)
-        assertEquals(0.5, bindings.setTempoCalls.first().second, 0.0001)
+        assertEquals(0.5, bindings.setTempoCalls.first(), 0.0001)
         engine.teardown()
     }
 
@@ -2905,7 +2941,7 @@ class AndroidPlaybackEngineTest {
     //
     // What an audition DOES — which one supersedes which, how long each rings — is the shared `NotePreviewPolicy`
     // in Swift, and `NotePreviewPolicyTests` over there pins it for both platforms. What is left here is whether
-    // this engine executes the plan it is handed, in FluidSynth's own messages. Both halves were once this file's,
+    // this engine executes the plan it is handed, in the synth's own messages. Both halves were once this file's,
     // and the half that drifted was the policy.
 
     /** Packs a pitch and staff index the way `JniBridge.pitchAndStaffOfNote` answers. */
@@ -2934,7 +2970,7 @@ class AndroidPlaybackEngineTest {
         engine.playPreview(anyNoteId(), durationMillis = 500L)
 
         // Released first, rather than the two piling onto one voice pool. A plain note-off and not Apple's CC 120:
-        // FluidSynth has no note-swallowing quirk to work around, and this lets the release envelope run.
+        // SwiftySynth has no note-swallowing quirk to work around, and this lets the release envelope run.
         assertEquals(listOf("noteOff(0,64)", "noteOn(0,60,96)"), synth.calls)
     }
 

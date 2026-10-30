@@ -60,8 +60,6 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
 
     override fun allNotesOff(channel: Int) { calls += "allNotesOff($channel)" }
 
-    override fun handleMidiEvent(rawEvent: Long) { calls += "handleMidiEvent($rawEvent)" }
-
     /**
      * Render-loop test affordance. When a test wires this hook, [writeFloat]
      * invokes it after recording the call — typically to advance a linked

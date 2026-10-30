@@ -14,7 +14,7 @@ import android.os.Parcel
  * fakes a real, non-null `Uri` instance to hand to
  * `SynthDriver.loadSoundFont(uri, context)`, whose fakes (see
  * `FakeSynthDriver`) never dereference the `uri` argument — only
- * `AudioExporter` / `FluidSynthEngine`'s null-check on the reference
+ * `AudioExporter` / `SynthEngine`'s null-check on the reference
  * itself matters, not its content. `Uri.EMPTY` does NOT substitute for
  * this: this module has no Robolectric, and
  * `unitTests.isReturnDefaultValues = true` makes the Android stub jar's

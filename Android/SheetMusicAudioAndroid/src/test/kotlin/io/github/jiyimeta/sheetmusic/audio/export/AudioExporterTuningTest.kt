@@ -31,7 +31,7 @@ import org.junit.Test
  * `MasterTuningTests` there; this file's subject is which cents each channel gets, which is the half that
  * was wrong on Android. `MarkerMasterTuning` is what makes the log say that outright.
  *
- * What these tests are blind to: whether FluidSynth honours the RPN, and whether the resulting audio
+ * What these tests are blind to: whether SwiftySynth honors the RPN, and whether the resulting audio
  * is actually at the requested pitch. Both are device observations.
  */
 class AudioExporterTuningTest {

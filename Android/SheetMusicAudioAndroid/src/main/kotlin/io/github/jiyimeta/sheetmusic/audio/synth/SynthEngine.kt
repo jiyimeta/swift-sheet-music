@@ -18,16 +18,18 @@ import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
  * staff's array position (maximum 16 channels, matching the MIDI limit).
  *
  * Per-channel volume / mute / solo is implemented via MIDI CC7 (channel
- * volume) on the shared synth, so the fluid_player's default channel routing
- * drives playback directly — no playback-callback shim required.
+ * volume) on the shared synth, so the sequence's default channel routing
+ * drives playback directly — no playback-callback shim required. What this
+ * class sends the synth holds for the synth's life: the Swift side sends it
+ * again after every reset its sequencer makes (`HostChannelState`).
  *
  * Inject [synthFactory] to supply a fake [SynthDriver] in unit tests —
  * production code leaves this at the default which creates a
- * [FluidSynthDriver].
+ * [SwiftySynthDriver].
  */
-internal class FluidSynthEngine(
+internal class SynthEngine(
     private val synthFactory: (sampleRate: Int) -> SynthDriver = { sr ->
-        FluidSynthDriver.create(sr)
+        SwiftySynthDriver.create(sr)
     },
     /**
      * The RPN messages that retune one channel by a cents offset off A4=440.
@@ -66,7 +68,7 @@ internal class FluidSynthEngine(
      */
     val channelCount: Int get() = channelCountValue
 
-    /** Native fluid_synth_t handle, or 0L if no synth is loaded. */
+    /** The native synth handle, or 0L if no synth is loaded. */
     val synthHandle: Long get() = synth?.nativeHandle ?: 0L
 
     // ── CC7 round-trip state (Bug 2) ─────────────────────────────────
@@ -129,7 +131,7 @@ internal class FluidSynthEngine(
         if (sfid >= 0) {
             for (p in params) {
                 if (p.isDrums) {
-                    // Bug 1 fix: lock the channel into drum semantics so FluidSynth
+                    // Bug 1 fix: lock the channel into drum semantics so the synth
                     // treats it as a percussion channel regardless of the channel number.
                     driver.setChannelType(p.staffIndex, isDrum = true)
                 }
@@ -143,7 +145,7 @@ internal class FluidSynthEngine(
             }
         }
         // Staff is silent (sfid < 0 or uri was null) but the channel routing is
-        // still correct — fluid_player replays events on the relabeled channels.
+        // still correct — the sequence replays events on the relabeled channels.
 
         // Open the breath controller on every melodic channel.
         //
@@ -261,7 +263,7 @@ internal class FluidSynthEngine(
 
     /**
      * Retune every melodic staff channel by [cents] off A4=440 via MIDI Master
-     * Tuning RPN (FluidSynth honors it). Drum channels stay at concert pitch.
+     * Tuning RPN (SwiftySynth honors it). Drum channels stay at concert pitch.
      */
     fun setMasterTuning(cents: Double) {
         val s = synth ?: return

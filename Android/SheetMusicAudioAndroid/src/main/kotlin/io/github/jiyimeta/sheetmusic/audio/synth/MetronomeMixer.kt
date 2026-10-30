@@ -6,7 +6,7 @@ package io.github.jiyimeta.sheetmusic.audio.synth
  *
  * ## Why a second player
  *
- * The clicks are MIDI events on a real transport, not notes the engine places by hand. A `fluid_player`
+ * The clicks are MIDI events on a real transport, not notes the engine places by hand. A sequence
  * advances inside its synth's render call, so as long as both synths are asked for the same frame count
  * each audio callback and both sequences carry the same tempo map, the click lands on the same sample as
  * the note it marks. Firing clicks by hand instead — as this class used to, from the UI poll loop for the

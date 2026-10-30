@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.Uri
 
 /**
- * Lowest-level audio engine seam. Production: backed by FluidSynthNative.
+ * Lowest-level audio engine seam. Production: [SwiftySynthDriver], a SwiftySynth synthesizer in Swift.
  * Tests: backed by a fake recorder.
  *
  * Context and Uri parameters are nullable to allow JVM unit tests to pass
@@ -12,7 +12,7 @@ import android.net.Uri
  * always provides non-null values; fakes never dereference these params.
  */
 internal interface SynthDriver {
-    /** Native fluid_synth_t pointer. 0L for fakes. */
+    /** The native synth handle a [PlayerDriver] attaches its sequence to. 0L for fakes. */
     val nativeHandle: Long
 
     /**
@@ -29,15 +29,13 @@ internal interface SynthDriver {
      */
     fun getCC(channel: Int, controller: Int): Int
     /**
-     * Sets the channel type: [isDrum]=true locks the channel into drum-channel
-     * semantics (CHANNEL_TYPE_DRUM), allowing any channel number to act as
-     * channel 9 for GM percussion.
+     * Marks [channel] as a drum channel ([isDrum]=true) or a melodic one. A synth whose percussion channel is fixed
+     * (SwiftySynth's is channel 9, where every drum part is rendered) treats this as a no-op.
      */
     fun setChannelType(channel: Int, isDrum: Boolean)
     fun noteOn(channel: Int, pitch: Int, velocity: Int)
     fun noteOff(channel: Int, pitch: Int)
     fun allNotesOff(channel: Int)
-    fun handleMidiEvent(rawEvent: Long)
     fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int
     fun close()
 }

@@ -140,4 +140,42 @@ class AudioExporterMetronomeTest {
         assertEquals(1, synths.size)
         assertTrue(metronome.playCalls.isEmpty())
     }
+
+    /** The click's synth comes from the metronome factory, at the export's sample rate; the score's from the other. */
+    @Test
+    fun theClickSynthComesFromTheMetronomeFactory() = runTest {
+        val scoreRates = mutableListOf<Int>()
+        val metronomeRates = mutableListOf<Int>()
+        val (scorePlayer, scoreBindings) = FakePlayerDriver.create()
+        var playersBuilt = 0
+
+        AudioExporter(
+            resolver = StubSoundfontResolver(),
+            context = null,
+            synthFactory = { rate ->
+                scoreRates += rate
+                FakeSynthDriver(0).also { it.onWriteFloat = { scoreBindings.tickToReturn += 240 } }
+            },
+            metronomeSynthFactory = { rate -> metronomeRates += rate; FakeSynthDriver(1) },
+            playerFactory = { _ ->
+                if (playersBuilt++ == 0) scorePlayer else PlayerDriver(0L, FakePlayerDriver.RecordingBindings())
+            },
+            encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
+            masterTuningControlChanges = MarkerMasterTuning::invoke,
+        ).run(
+            outputFd = null,
+            smfBytes = ByteArray(16),
+            strips = strips,
+            snapshot = snapshot(metronomeEnabled = true),
+            startTick = 0L,
+            endTick = 960L,
+            ticksPerBeat = 480,
+            format = AudioFileFormat.Wav(),
+            sampleRate = 44100,
+            progress = null,
+        )
+
+        assertEquals(listOf(44100), scoreRates)
+        assertEquals(listOf(44100), metronomeRates)
+    }
 }

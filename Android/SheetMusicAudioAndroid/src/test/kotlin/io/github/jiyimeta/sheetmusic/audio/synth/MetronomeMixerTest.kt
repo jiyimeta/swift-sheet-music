@@ -46,7 +46,6 @@ class MetronomeMixerTest {
             noteOffs += NoteOffCall(channel, pitch)
         }
         override fun allNotesOff(channel: Int) { allNotesOffChannels += channel }
-        override fun handleMidiEvent(rawEvent: Long) {}
         override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int = 0
         override fun close() { closed = true }
     }
@@ -94,8 +93,8 @@ class MetronomeMixerTest {
 
         mixer.setTempo(1.5)
 
-        // type 0 = FLUID_PLAYER_TEMPO_INTERNAL, the same scale the score player is given.
-        assertEquals(listOf(0 to 1.5), bindings.setTempoCalls)
+        // The same relative scale the score player is given.
+        assertEquals(listOf(1.5), bindings.setTempoCalls)
     }
 
     @Test fun loadSequence_reappliesTheRateToTheNewTransport() {
@@ -107,7 +106,7 @@ class MetronomeMixerTest {
         // count would run at the notated tempo while the music it leads into runs at the set rate.
         mixer.loadSequence(byteArrayOf(4, 5, 6))
 
-        assertEquals(listOf(0 to 0.5), bindings.setTempoCalls)
+        assertEquals(listOf(0.5), bindings.setTempoCalls)
     }
 
     @Test fun resyncTo_putsAFrozenTransportBackOnTheBeat() {
