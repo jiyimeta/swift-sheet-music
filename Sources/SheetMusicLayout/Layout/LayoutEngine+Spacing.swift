@@ -1088,6 +1088,15 @@ extension LayoutEngine {
                     grace.columnReach + grace.reach + metrics.sp / 2 - trailingClefWidth - spanned,
                 )
             }
+            // A mark drawn after a staff's last note (the choke, `ColumnInk.markReach`) stands before the same
+            // barline.
+            for staffInks in inks {
+                guard let tick = staffInks.keys.max(), let markReach = staffInks[tick]?.markReach, markReach > 0,
+                      let from = sortedTicks.firstIndex(of: tick)
+                else { continue }
+                let spanned = gapWeights[from ..< last].reduce(0, +)
+                gapFloors[last] = max(gapFloors[last], markReach + metrics.sp / 2 - trailingClefWidth - spanned)
+            }
         }
         return TickAggregate(
             sortedTicks: sortedTicks, gapWeights: gapWeights,

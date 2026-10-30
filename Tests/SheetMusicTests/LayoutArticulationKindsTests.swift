@@ -36,7 +36,7 @@ struct LayoutArticulationKindsTests {
     /// marcato range up (`articMarcatoAbove … articMarcatoTenutoBelow`), so a stem-up chord — whose other marks go
     /// below — still carries them above the staff.
     @Test("Technique marks and marcato-tenuto sit above a stem-up chord", arguments: [
-        ChordArticulation.Kind.upBow, .downBow, .harmonic, .muteOpen, .muteClosed, .marcatoTenuto, .chokeCymbal,
+        ChordArticulation.Kind.upBow, .downBow, .harmonic, .muteOpen, .muteClosed, .marcatoTenuto,
     ])
     func techniqueMarksSitAbove(kind: ChordArticulation.Kind) throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
@@ -47,27 +47,6 @@ struct LayoutArticulationKindsTests {
         let (art, _) = try #require(LayoutArticulationTests.soleArtAndChord(doc))
         guard case let .articulation(_, _, isAbove, _) = art else { Issue.record("not articulation"); return }
         #expect(isAbove)
-    }
-
-    /// The choke is drawn where MuseScore draws a mark with no placement variant: one glyph, above the staff whichever
-    /// way the stem points, clear of the staff rather than hugging the note.
-    @Test("A choke draws one U+E805 above the staff on a stem-up and a stem-down chord", arguments: [
-        (67, 15), // G4, stem up
-        (72, 14), // C5, stem down
-    ] as [(Int, Int)])
-    func chokeSitsAboveTheStaff(pitch: Int, tpc: Int) throws {
-        guard #available(macOS 15.0, iOS 16.0, *) else { return }
-        let doc = LayoutArticulationTests.laidOut(LayoutArticulationTests.score(
-            pitch: pitch, tpc: tpc, articulations: [.init(kind: .chokeCymbal)],
-        ))
-        let (art, _) = try #require(LayoutArticulationTests.soleArtAndChord(doc))
-        guard case let .articulation(kind, origin, isAbove, _) = art else { Issue.record("not articulation"); return }
-        #expect(kind == .chokeCymbal)
-        #expect(isAbove)
-        #expect(ArticulationGlyph.codepoint(kind: kind, isAbove: isAbove) == 0xE805)
-        let staffOriginY = try #require(doc.systems.first?.staffOrigins.first?.y)
-        let staffTopY = staffOriginY + doc.metrics.staffHeight / 2 - doc.metrics.sp * 2
-        #expect(origin.y < staffTopY, "origin \(origin.y), top line \(staffTopY)")
     }
 
     /// MuseScore 4 counts only the staccato and tenuto categories as close-to-note (`layoutCloseToNote()`), and the

@@ -21,7 +21,9 @@ import SheetMusicFoundation
 /// This file is that floor reduced to what collides in practice: per staff, the previous column's noteheads, dots
 /// and rests on the right against the next column's accidentals and the grace notes that stand before it — its own
 /// leading ones, and the previous chord's trailing ones — on the left (`LayoutEngine+GraceGroup.swift`). A trailing
-/// group with no column after it in the bar floors the bar's last gap instead (`aggregatedTickWeights`).
+/// group with no column after it in the bar floors the bar's last gap instead (`aggregatedTickWeights`). A choke drawn
+/// after the previous note (`LayoutEngine+Choke.swift`) is held off the next column's notehead as well, or off the
+/// barline after the bar's last column.
 /// `TickAggregate.gapFloors` carries the
 /// result, and every consumer of the aggregate honors it as `max(floor, k · weight)` — `tickColumns` when it places
 /// the columns, `crossStaffMinimumMeasureWidth` at `k = 1`, and `packSystems` at the host's stretch.
@@ -43,11 +45,19 @@ extension LayoutEngine {
         /// bar's FIRST column has no earlier column to hold them off, so the bar's lead-in has to
         /// (`TickAggregate.leadingGap`).
         var graceReach: CGFloat = 0
+        /// Column x to the right edge of a mark drawn after the note — the cymbal choke (`chokeReach`) — plus the
+        /// room it keeps from what follows; `0` without one. Unlike `reach`, it is held off the next column's
+        /// notehead too, not only its accidentals.
+        var markReach: CGFloat = 0
+        /// Column x to the left edge of its notehead or rest, for a previous column's `markReach` to keep clear of.
+        var headLeft: CGFloat = 0
 
         mutating func formUnion(_ other: ColumnInk) {
             left = max(left, other.left)
             reach = max(reach, other.reach)
             graceReach = max(graceReach, other.graceReach)
+            markReach = max(markReach, other.markReach)
+            headLeft = max(headLeft, other.headLeft)
         }
     }
 
@@ -65,7 +75,7 @@ extension LayoutEngine {
         guard !chord.notes.isEmpty else {
             let glyph = RestGlyph.codepoint(duration: chord.duration)
             let halfWidth = bravuraAdvance(glyph, metrics: metrics) / 2
-            return ColumnInk(reach: max(halfWidth, dotsRight(dots, sp: sp)) + sp * 0.45)
+            return ColumnInk(reach: max(halfWidth, dotsRight(dots, sp: sp)) + sp * 0.45, headLeft: halfWidth)
         }
         let displaced = holdsSecond(Array(chord.notes)) ? sp * secondDisplacementSp : 0
         let halfHead = StemGeometry.attachDx(sp: sp)
@@ -74,7 +84,10 @@ extension LayoutEngine {
         let headRight = wideHeadHalfWidth(base, metrics: metrics) ?? halfHead
         let right = max(headRight, dotsRight(dots, sp: sp)) + displaced
         let graceReach = beforeGraceReach(of: chord, mag: graceNoteMag, metrics: metrics)
-        return ColumnInk(left: max(left, graceReach), reach: right + sp * 0.35, graceReach: graceReach)
+        return ColumnInk(
+            left: max(left, graceReach), reach: right + sp * 0.35, graceReach: graceReach,
+            markReach: chokeReach(of: chord, metrics: metrics), headLeft: headRight + displaced,
+        )
     }
 
     /// Clearance between a clef written in the middle of a bar and the leftmost accidental of the column it precedes,
@@ -177,12 +190,18 @@ extension LayoutEngine {
         for staffInks in inks {
             let ticks = staffInks.keys.sorted()
             for (previousTick, tick) in zip(ticks, ticks.dropFirst()) {
-                guard let ink = staffInks[tick], ink.left > 0,
-                      let previous = staffInks[previousTick],
+                guard let ink = staffInks[tick], let previous = staffInks[previousTick],
+                      ink.left > 0 || previous.markReach > 0,
                       let from = index[previousTick], let to = index[tick], to > from
                 else { continue }
+                // Dots and heads stand clear of a plain next head by their weights alone; a mark drawn after the
+                // note is wider than that allows for, so it is held off the head as well.
+                let demand = max(
+                    ink.left > 0 ? previous.reach + ink.left : 0,
+                    previous.markReach > 0 ? previous.markReach + max(ink.left, ink.headLeft) : 0,
+                )
                 let spanned = gapWeights[from ..< to - 1].reduce(0, +)
-                floors[to - 1] = max(floors[to - 1], previous.reach + ink.left - spanned)
+                floors[to - 1] = max(floors[to - 1], demand - spanned)
             }
         }
         return floors
@@ -270,12 +289,13 @@ extension LayoutEngine {
         )
     }
 
-    // MARK: - Private
-
-    private static let trebleClef = NotatedClef(rawType: "G")
-
-    private static func dotsRight(_ dots: Int, sp: CGFloat) -> CGFloat {
+    /// From a head's center to the right edge of its last augmentation dot (`DotGeometry`); `0` without dots.
+    static func dotsRight(_ dots: Int, sp: CGFloat) -> CGFloat {
         guard dots > 0 else { return 0 }
         return sp * (DotGeometry.firstOffsetSp + CGFloat(dots - 1) * DotGeometry.spacingSp + DotGeometry.radiusSp)
     }
+
+    // MARK: - Private
+
+    private static let trebleClef = NotatedClef(rawType: "G")
 }

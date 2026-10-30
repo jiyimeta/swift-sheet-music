@@ -921,7 +921,9 @@ extension LayoutEngine {
                         for: chord.articulations,
                         anchor: elementAddress,
                         stem: stem,
-                        noteYs: chordNotes.map(\.origin.y),
+                        notes: chordNotes,
+                        duration: chord.drawnDuration,
+                        isBeamed: false,
                         chordX: chordX,
                         staffMidY: staffMidY,
                         lineGeometry: lineGeometry,
@@ -1904,7 +1906,9 @@ extension LayoutEngine {
                                 voiceIndex: voiceIdx, elementIndex: memberIdx,
                             ),
                             stem: groupDirection,
-                            noteYs: n.map(\.origin.y),
+                            notes: n,
+                            duration: modelChord.drawnDuration,
+                            isBeamed: true,
                             chordX: so.x,
                             staffMidY: staffMidY,
                             lineGeometry: lineGeometry,
@@ -1917,10 +1921,12 @@ extension LayoutEngine {
                               case let .articulation(kind, newOrigin, isAbove, anchor)
                               = replacements[k]
                         {
-                            // Keep the original X (beaming changes only Y).
+                            // Keep the original X (beaming changes only Y) — but
+                            // a choke stands right of the heads and the flag, and
+                            // the beam takes the flag away and may mirror a second.
                             out[j] = .articulation(
                                 kind: kind,
-                                origin: CGPoint(x: oldOrigin.x, y: newOrigin.y),
+                                origin: CGPoint(x: kind == .chokeCymbal ? newOrigin.x : oldOrigin.x, y: newOrigin.y),
                                 isAbove: isAbove,
                                 anchor: anchor,
                             )
@@ -2697,7 +2703,8 @@ extension LayoutEngine {
     /// tenuto-accent and marcato-tenuto) sit outside the staff. So does every
     /// mark MuseScore puts in no staccato or tenuto category
     /// (`computeCategories()`): all three staccatissimos, stress, unstress, the
-    /// soft accents, the technique marks, the laissez vibrer and the choke.
+    /// soft accents, the technique marks and the laissez vibrer. The choke is
+    /// drawn after the note instead (`chokeOrigin`), so its answer here is unused.
     static func articulationHugsNote(
         _ kind: LayoutElement.ArticulationKind,
     ) -> Bool {
@@ -2715,8 +2722,8 @@ extension LayoutEngine {
     /// the marcato family (Gould p.117 — "strong accents above the staff"),
     /// MuseScore's `articMarcatoAbove … articMarcatoTenutoBelow` range in
     /// `ChordLayout::layoutArticulations`, and the marks MuseScore anchors
-    /// `TOP` (`AnchorGroup::OTHER`): brass mutes, the harmonic, bow marks, and the choke, which has no placement
-    /// variant either.
+    /// `TOP` (`AnchorGroup::OTHER`): brass mutes, the harmonic, bow marks. The choke, which has no placement variant
+    /// either, answers `true` for its glyph's side; it is drawn after the note, beside the top head (`chokeOrigin`).
     static func articulationForcesAbove(
         _ kind: LayoutElement.ArticulationKind,
     ) -> Bool {
@@ -2750,16 +2757,23 @@ extension LayoutEngine {
     /// rendered dot lands exactly there (see `ArticulationGlyphMetrics`). Other
     /// glyphs (accent / marcato / combinations) are pushed clear of the staff.
     /// Stacking adds 1 sp per extra glyph on a side.
+    ///
+    /// The choke is the exception: it is drawn after the note, beside the top
+    /// head (`chokeOrigin`), and takes no place in either stack. `duration`
+    /// and `isBeamed` are for it — what stands right of the heads.
     static func articulationElements(
         for articulations: [ChordArticulation],
         anchor: VoiceElementID?,
         stem: StemDirection,
-        noteYs: [CGFloat],
+        notes: [LayoutChordNote],
+        duration: NoteDuration,
+        isBeamed: Bool,
         chordX: CGFloat,
         staffMidY: CGFloat,
         lineGeometry: StaffLineGeometry,
         metrics: StaffMetrics,
     ) -> [LayoutElement] {
+        let noteYs = notes.map(\.origin.y)
         let staffTopY = staffMidY - metrics.sp * 2
         let staffBottomY = staffMidY + metrics.sp * 2
         let topLineY = staffMidY - metrics.sp * 2
@@ -2775,6 +2789,13 @@ extension LayoutEngine {
         for art in articulations {
             guard let artKind = renderableArticulationKind(art.kind)
             else { continue }
+            if artKind == .chokeCymbal {
+                result.append(chokeArticulation(
+                    anchor: anchor, notes: notes, stem: stem, duration: duration, isBeamed: isBeamed,
+                    chordX: chordX, staffMidY: staffMidY, metrics: metrics,
+                ))
+                continue
+            }
             let isAbove = articulationForcesAbove(artKind)
                 ? true
                 : (stem == .down)
