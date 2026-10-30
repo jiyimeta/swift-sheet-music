@@ -311,7 +311,9 @@ public final class SwiftySynthBackend: SynthBackend {
         // and leaning on the master limiter. Matching it would mean reproducing distortion, so
         // the rest is deliberately left to the host's master volume.
         synth.masterVolume = 1.0
-        return (synth, MidiFileSequencer(synthesizer: synth))
+        let sequencer = MidiFileSequencer(synthesizer: synth)
+        sequencer.onSend = Self.sendTurningChokesIntoChokes
+        return (synth, sequencer)
     }
 
     public func setUnrolledTimeMap(_ map: UnrolledTimeMap) {
@@ -703,5 +705,22 @@ public final class SwiftySynthBackend: SynthBackend {
         }
         scoreSoundFont = nil
         sequencePresets = []
+    }
+}
+
+extension SwiftySynthBackend {
+    /// The sequencer's dispatch: every message goes to the synthesizer as before, except the choke marker the
+    /// playback render puts at the end of a choked tie chain (`ChokeMarker`), which chokes that key on that channel.
+    /// Set once per sequencer and capturing nothing, so the render thread calls it without allocating. A seek's chase
+    /// bypasses `onSend`, and the synthesizer ignores the undefined controller anyway, so a choke behind a seek point
+    /// is never replayed.
+    nonisolated static func sendTurningChokesIntoChokes(
+        _ synth: Synthesizer, channel: Int, command: Int, data1: Int, data2: Int,
+    ) {
+        if command == 0xB0, data1 == ChokeMarker.controller {
+            synth.choke(key: data2, on: channel)
+        } else {
+            synth.processMidiMessage(channel: channel, command: command, data1: data1, data2: data2)
+        }
     }
 }
