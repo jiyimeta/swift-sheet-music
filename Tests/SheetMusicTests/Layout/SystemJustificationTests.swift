@@ -151,6 +151,56 @@ struct SystemJustificationTests {
         #expect(widths[1][0] < 900 * 0.3, "the last line \(widths)")
     }
 
+    /// A line break on the score's last bar asks for the last line to be full: it breaks before nothing, so the one
+    /// thing it can mean is the meaning it has on every other line, which a break leaves justified.
+    @Test("a short last system is justified when its last bar carries a line break")
+    func lineBreakOnTheLastBarJustifiesTheLastSystem() throws {
+        let widths = Self.widthsPerSystem(Self.layout(Self.score([Self.plain], lineBreaks: [0])))
+        try #require(widths.map(\.count) == [1])
+        #expect(widths[0][0] > 900 * 0.6, "the last line \(widths)")
+    }
+
+    /// The break counts only while the layout honors it: a reflow that ignores system breaks leaves the short last
+    /// line at its natural width, as it would without the break.
+    @Test("a last-bar line break the layout ignores leaves the last system short")
+    func ignoredLineBreakOnTheLastBarKeepsNaturalWidth() throws {
+        let document = LayoutEngine.layout(
+            score: Self.score([Self.plain], lineBreaks: [0]),
+            options: ScoreViewOptions(staffSize: 28, breakPolicy: .ignoreSystemBreaks),
+            availableWidth: 900,
+        )
+        let widths = Self.widthsPerSystem(document)
+        try #require(widths.map(\.count) == [1])
+        #expect(widths[0][0] < 900 * 0.3, "the last line \(widths)")
+    }
+
+    /// The 30% is the score's own `lastSystemFillLimit`: a score that sets it to 0 has its short last line justified,
+    /// as MuseScore draws it.
+    @Test("a score whose fill limit is 0 justifies a short last system")
+    func zeroFillLimitJustifiesTheLastSystem() throws {
+        var score = Self.score([Self.plain])
+        score.style.lastSystemFillLimit = 0
+        let widths = Self.widthsPerSystem(Self.layout(score))
+        try #require(widths.map(\.count) == [1])
+        #expect(widths[0][0] > 900 * 0.6, "the last line \(widths)")
+    }
+
+    /// The limit lives in the score's style, which no measure carries: a warm cache must still follow a change to it.
+    @Test("a warm layout cache follows a changed fill limit")
+    func warmCacheFollowsTheFillLimit() throws {
+        var score = Self.score([Self.plain])
+        let cache = LayoutCache()
+        let options = ScoreViewOptions(staffSize: 28)
+        let short = LayoutEngine.layout(score: score, options: options, availableWidth: 900, cache: cache)
+        try #require(Self.widthsPerSystem(short).first?.first.map { $0 < 900 * 0.3 } == true)
+        score.style.lastSystemFillLimit = 0
+        let warm = LayoutEngine.layout(score: score, options: options, availableWidth: 900, cache: cache)
+        let cold = LayoutEngine.layout(score: score, options: options, availableWidth: 900)
+        let warmWidths = Self.widthsPerSystem(warm)
+        #expect(warmWidths.first?.first.map { $0 > 900 * 0.6 } == true, "\(warmWidths)")
+        #expect(warm == cold)
+    }
+
     /// A section break ends a stretch of music as the score's end does: the short line before it is not stretched.
     @Test("a short system that ends a section keeps its natural width")
     func shortSystemEndingASectionKeepsNaturalWidth() throws {

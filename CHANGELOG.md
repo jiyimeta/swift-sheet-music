@@ -59,8 +59,20 @@ and this project adheres to
   Splitting a drum chord sends the choke only to the parts holding a cymbal. Requires swiftysynth 0.4.0
   (`Synthesizer.choke(key:on:)`).
 
+### Changed
+
+- **A line break on a score's last bar justifies its last line.** The short line a piece ends on is otherwise left at
+  its natural width (`lastSystemFillLimit`); a break on the last bar comes before nothing, so it now asks for the full
+  line a break leaves on every other line. Only while the layout honors the break (`LayoutBreakPolicy`): a reflow that
+  ignores system breaks still leaves the line short, and a frame after the last bar does not count. A section's last
+  line is unchanged. MuseScore does not read a last-bar break this way; it keeps the break and draws the line by its
+  fill limit alone.
+
 ### Fixed
 
+- **A score's own `lastSystemFillLimit` decides whether its short last line is justified
+  (`ScoreStyle.lastSystemFillLimit`).** The limit was fixed at MuseScore's default 0.3, so a score that set it to 0 —
+  every last line justified — had its last line drawn short. It is read from `<Style>` and the tag is kept as written.
 - **Playing or exporting from the measure after a repeat starts on that measure.** `SwiftySynthBackend` backed a seek
   off half a tick on the notated clock and then projected it onto the unrolled one, which put the downbeat after a
   backward jump at the end of the earlier pass: in `|: A :| B`, play-from-B replayed A's repeat first. A seek now

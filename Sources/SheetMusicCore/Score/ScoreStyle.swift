@@ -50,6 +50,11 @@ public struct ScoreStyle: Sendable, Equatable {
     /// written: the tags stay as preserved markup, so editing this field changes layout but a save keeps the file's
     /// tags.
     public var chordSymbolCase: ChordSymbolCaseStyle
+    /// The fill, as a fraction of the line, below which the line a piece or a section ends on is left at its natural
+    /// width rather than justified; `0` justifies every such line. Read from `<Style>` for layout and NOT written,
+    /// like `chordSymbolCase`: the tag stays as preserved markup. C++: `Sid::lastSystemFillLimit`
+    /// (`styledef.cpp:279`), default 0.3.
+    public var lastSystemFillLimit: Double
     /// Source markup under this element that the model does not
     /// represent, kept so that read → write does not delete it. See
     /// `PreservedXML`.
@@ -69,8 +74,10 @@ public struct ScoreStyle: Sendable, Equatable {
         preservedMarkup: [PreservedXML] = [],
         textPlacement: TextPlacementStyles = TextPlacementStyles(),
         chordSymbolCase: ChordSymbolCaseStyle = .museScoreDefaults,
+        lastSystemFillLimit: Double = 0.3,
     ) {
         self.chordSymbolCase = chordSymbolCase
+        self.lastSystemFillLimit = lastSystemFillLimit
         self.textPlacement = textPlacement
         self.spatium = spatium
         self.pageLayout = pageLayout

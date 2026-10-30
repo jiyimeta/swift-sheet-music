@@ -47,6 +47,9 @@ extension ScoreStyle {
         decodeTitleBlockAlign(node, into: &s)
         decodeOttava(node, into: &s)
         decodeChordSymbolCase(node, into: &s)
+        // Read for layout and NOT consumed, like the chord-symbol case flags: the tag reaches the saved `<Style>`
+        // verbatim as preserved markup.
+        if let v = node.firstDouble("lastSystemFillLimit") { s.lastSystemFillLimit = v }
         s.textPlacement.overlay(node)
         // Preserved markup layers the same way the modeled fields do.
         // A `.mscz` can carry its style in `score_style.mss` AND an
