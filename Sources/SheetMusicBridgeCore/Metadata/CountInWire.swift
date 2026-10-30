@@ -25,7 +25,7 @@ public struct CountInBeatWire {
 public struct CountInWire {
     public var totalSeconds: Double
     /// The same region measured in MIDI ticks — where the music starts inside the count-in's own
-    /// sequence. The Android engine plays the pre-roll off a `fluid_player` and hands over to the score
+    /// sequence. The Android engine plays the pre-roll off the click's player and hands over to the score
     /// when that player's tick reaches this, so the clicks are placed by the audio clock rather than by
     /// a wall-clock wait (which quantized every click to whichever output buffer happened to pick the
     /// note up, and wobbled audibly).

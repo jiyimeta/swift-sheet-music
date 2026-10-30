@@ -7,7 +7,7 @@ import SheetMusicMIDI
 /// the notated score.
 ///
 /// Android does this in ticks — `nativeFrameAtTick` / `nativeSecondsAtTick` /
-/// `nativeUnrolledTickForNotated` — because the FluidSynth player reports an
+/// `nativeUnrolledTickForNotated` — because the Android score player reports an
 /// UNROLLED SMF tick. A Web Audio sequencer reports seconds instead, and
 /// `UnrolledTimeMap` already speaks seconds on both sides, so the whole tick
 /// round trip collapses into the two conversions below.

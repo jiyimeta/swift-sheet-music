@@ -21,7 +21,7 @@ extension AudioMidiBridge {
         let plan = LiveChannelPlan.build(score: score)
         MidiChannelRemap.apply(midi: &midi, plan: plan)
         // Strip the baked-in CC 7 / tick-0 program on every mixer-owned
-        // channel so the live FluidSynth mixer is the sole authority.
+        // channel so the live Android mixer is the sole authority.
         // This MUST cover every deduped instrument channel, not just the
         // primary: with all programs living at tick 0, re-asserting only
         // the primary would leave every secondary instrument on program 0.
@@ -32,14 +32,14 @@ extension AudioMidiBridge {
     }
 
     /// Render the metronome's OWN sequence — the score's tempo map plus the click track — for the second
-    /// FluidSynth player the Android engine runs on its dedicated metronome synth. Both players are advanced
+    /// player the Android engine runs on its dedicated metronome synth. Both players are advanced
     /// by the same rendered frame counts against the same tempo map, so the clicks stay locked to the score
     /// without the engine having to place them by hand.
     ///
     /// Beats are UNROLLED (repeats + jumps expanded) to match `renderMidi`'s tick space; the click patch is
     /// the one the Apple engine uses (`MetronomeSequenceBuilder`), so a click is note 76/77 at velocity
     /// 100/80 on either platform. Channel relabeling is deliberately NOT applied: this SMF plays alone on the
-    /// metronome synth, where channel 9 is the GM percussion channel FluidSynth auto-selects bank 128 for.
+    /// metronome synth, where channel 9 is the GM percussion channel the synth selects bank 128 for.
     package static func renderMetronomeMidi(score: Score) throws -> Data {
         let rendered = try MidiRenderer.render(score: score)
         let sequence = MetronomeSequenceBuilder.metronomeOnlySequence(

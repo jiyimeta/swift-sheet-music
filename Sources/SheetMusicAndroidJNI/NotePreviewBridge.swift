@@ -9,9 +9,9 @@ import SheetMusicBridgeCore
 // ``NotePreviewPolicy`` — the same code the Apple engine runs. Android reproduced that state machine by hand
 // once and it drifted in both directions that were audible; this exists so it cannot drift again.
 //
-// Only the MIDI messages stay platform-side, and that is deliberate: FluidSynth ends a note with a plain
+// Only the MIDI messages stay platform-side, and that is deliberate: Android's SwiftySynth ends a note with a plain
 // note-off where AUMIDISynth needs All Sound Off on a foreign channel, and "keep the graph rendering" means
-// holding an Oboe stream open here and not pausing an `AVAudioEngine` there.
+// holding the output stream open here and not pausing an `AVAudioEngine` there.
 
 /// One coordinator per playback engine. Kotlin owns the lifetime, as it does for a score handle.
 let previewPolicyTable = HandleTable<NotePreviewCoordinator>()

@@ -1,7 +1,7 @@
 import SheetMusicFoundation
 
 /// Shared post-processing applied to a rendered `MidiFile` before it is handed to a software MIDI
-/// synth for *playback* (both the Apple `AVAudioSequencer` path and the Android FluidSynth path).
+/// synth for *playback* (the Apple engine's backends and the Android engine's SwiftySynth sequence).
 ///
 /// The renderer bakes the score's mixer state (program / CC 7 channel volume) into tick-0 events so a
 /// standalone SMF sounds correct. But when a live mixer owns those channels, those tick-0 events

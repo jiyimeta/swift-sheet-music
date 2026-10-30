@@ -12,7 +12,7 @@ extension AudioMidiBridge {
         package let totalSecondsMicros: Int64
         package let division: Int64
         /// Length of the UNROLLED sequence (repeats + jumps expanded) —
-        /// the tick space the FluidSynth player actually traverses. The
+        /// the tick space the Android score player actually traverses. The
         /// Kotlin poll loop compares the player's tick against THIS for
         /// end-of-score, otherwise a repeat's second pass would push the
         /// unrolled tick past the (shorter) notated `totalTicks` and stop
@@ -36,7 +36,7 @@ extension AudioMidiBridge {
 // MARK: - T17: Metronome beats + staff params
 
 extension AudioMidiBridge {
-    /// UNROLLED (not notated) — the Kotlin poll loop feeds the FluidSynth
+    /// UNROLLED (not notated) — the Kotlin poll loop feeds the score
     /// player's UNROLLED tick (repeats + jumps expanded) to
     /// `MetronomeMixer.updateCurrentTick`. A beat list built from notated
     /// ticks alone would end at the notated length and go silent on a
@@ -109,7 +109,7 @@ extension AudioMidiBridge {
         // tick would wrongly resolve to the first frame.
         guard tick >= 0 else { return Data() }
         let timeline = PlaybackTimeline(score: score)
-        // `tick` arrives from the FluidSynth player in UNROLLED SMF
+        // `tick` arrives from the Android score player in UNROLLED SMF
         // coordinates (repeats + jumps expanded), but `timeline` frames
         // are NOTATED. Translate before the lookup so the cursor follows
         // a repeat's second pass and every jump instead of clamping
@@ -129,7 +129,7 @@ extension AudioMidiBridge {
     /// times cannot supply it: those times are themselves quantized, so the
     /// result steps at note granularity no matter how often it is sampled.
     ///
-    /// Takes the same unrolled coordinates the FluidSynth player reports, and
+    /// Takes the same unrolled coordinates the Android score player reports, and
     /// translates the whole part through the unroll map before carrying the
     /// fraction across. Within one pass of a repeat that map is a constant
     /// offset, so adding the remainder back is exact; the only inexact instant
@@ -154,7 +154,7 @@ extension AudioMidiBridge {
     /// direction, and the inverse of the translation `frameAtTick` performs on
     /// the read side.
     ///
-    /// Everything the Kotlin engine hands the FluidSynth player (`seekTick`)
+    /// Everything the Kotlin engine hands the score player (`seekTick`)
     /// or reads back from it (`currentTick`) is unrolled, while every tick it
     /// gets out of `frameForCursor` / `itemEndTick` / `totalTicks` is notated.
     /// One of the two has to be projected before they meet, and this is that
