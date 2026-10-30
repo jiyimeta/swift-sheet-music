@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.22.1] - 2026-10-30
+
 ### Fixed
 
 - **(Android) An M4A or MP3 export no longer hangs at its end.** When the codec held every input buffer as the export
