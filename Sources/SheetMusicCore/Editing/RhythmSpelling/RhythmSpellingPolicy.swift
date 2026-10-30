@@ -1,8 +1,10 @@
 /// The knobs that decide how `RhythmSpelling` re-spells a duration. Three questions, each with a small closed set of
 /// answers, so a host can offer them as settings and persist them as raw integers.
 public struct RhythmSpellingPolicy: Sendable, Hashable {
-    /// The most augmentation dots a NOTE may carry. Rests are capped at one dot whatever this says: a rest with two
-    /// dots is rare enough in engraved music that the dot-cap is `min(dotLevel, .single)`.
+    /// The most augmentation dots a NOTE may carry. Rests take none where the beat is an undotted value (4/4, 2/2,
+    /// 3/8) and at most one, `min(dotLevel, .single)`, where units group in threes and the beat is dotted (6/8, the
+    /// group of three in 5/8), whatever this says; MuseScore's reading (`readsLikeMuseScore`) caps them at one in every
+    /// meter.
     public enum DotLevel: Int, Sendable, CaseIterable {
         case none = 0, single = 1, double = 2, triple = 3
     }
@@ -46,4 +48,13 @@ public struct RhythmSpellingPolicy: Sendable, Hashable {
     public static let museScore = RhythmSpellingPolicy(
         dotLevel: .single, midBarSyncopations: .allow, beatCrossingRests: .split,
     )
+
+    /// Whether the meter is read as MuseScore reads it where folino's reading differs and no knob of its own covers
+    /// the difference: dotted rests where the beat is undotted, and syncopations on the 16th grid across a weaker beat.
+    /// `.allow` on `midBarSyncopations` is MuseScore's setting, which no folino control writes, so it stands for the
+    /// whole convention — the edit wire carries the three knobs and nothing else, and a `.museScore` intent must replay
+    /// as MuseScore.
+    var readsLikeMuseScore: Bool {
+        midBarSyncopations == .allow
+    }
 }

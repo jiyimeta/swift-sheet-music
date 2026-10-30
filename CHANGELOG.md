@@ -67,6 +67,18 @@ and this project adheres to
   ignores system breaks still leaves the line short, and a frame after the last bar does not count. A section's last
   line is unchanged. MuseScore does not read a last-bar break this way; it keeps the break and draws the line by its
   fill limit alone.
+- **Format Rhythms writes no dotted rest where the beat is undotted.** In 2/2, 2/4, 3/4, 4/4, 5/4 and 3/8 a rest is
+  spelled without dots — an eighth and a sixteenth rest from beat 4 stay two rests, and a dotted rest already in the
+  score is written out; where units group in threes (6/8, 9/8, 12/8, and the group of three in 5/8 and 7/8) a rest may
+  still take one dot, for the dotted beat. `RhythmSpellingPolicy.museScore` keeps MuseScore's one-dot cap everywhere.
+- **Format Rhythms shows a weaker beat a 16th syncopation hides.** In simple time, a note that starts and ends off the
+  beat and crosses beat 2 or 4 (the middle of 2/2) with an end finer than the half beat now splits at the beat: a
+  `16th~16th` tie across beat 4 stays a tie instead of becoming an eighth, and a written 16th–8th–16th is tied across
+  the beat. On the half-beat grid nothing changes (8th–quarter–8th, merged or written, stays), nor for a note with an
+  end on a beat, which the dot level decides as before. A note written as one dotted half beat (a dotted eighth in
+  x/4, as in 3+3+2 and 2+3+3) is kept as written and never created by a merge. MuseScore's reading is unchanged.
+  `midBarSyncopations == .allow` selects MuseScore's reading for both changes, so `.museScore` intents replay as before
+  and the edit wire is unchanged.
 
 ### Fixed
 

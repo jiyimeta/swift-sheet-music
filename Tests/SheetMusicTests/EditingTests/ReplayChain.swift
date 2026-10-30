@@ -59,6 +59,12 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
     }
 
     /// SP0/SP1's original chain: twenty-three note- and slot-level steps over `EditingFixtures.replayFixture()`.
+    ///
+    /// One deliberate exception, 2026-10-31: the fingerprint after step 12b (removing 3/16, re-barring back to 4/4)
+    /// and every one after it moved when rests stopped taking a dot where the beat is undotted. The re-bar spells its
+    /// columns through `RhythmSpelling`, and two of measure 1's rest columns that were dotted eighths (from 9/16 and
+    /// from 12/16) are now a sixteenth and an eighth, and an eighth and a sixteenth; nothing else in the score
+    /// differs. An engine change, not a wire one: no `step-N.bin` changed.
     static let standard = ReplayChain(
         name: "standard",
         androidAssetDir: "editReplay",
