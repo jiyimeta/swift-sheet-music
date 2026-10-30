@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.net.Uri
 import io.github.jiyimeta.sheetmusic.audio.AudioBackendException
+import java.io.File
+import java.io.OutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * Production [SynthDriver] — one SwiftySynth synthesizer in Swift (`HostedSynth`), the same synth the Apple apps play
@@ -132,9 +136,7 @@ internal class SwiftySynthDriver internal constructor(
             }
             if (soundFontCacheIsStale(target.exists(), target.length(), sourceLength)) {
                 val inStream = context.contentResolver.openInputStream(uri) ?: return null
-                inStream.use { input ->
-                    target.outputStream().use { out -> input.copyTo(out) }
-                }
+                inStream.use { input -> replaceFileAtomically(target) { out -> input.copyTo(out) } }
             }
             target.absolutePath
         } catch (e: Exception) {
@@ -151,6 +153,26 @@ internal class SwiftySynthDriver internal constructor(
  */
 internal fun soundFontFilePath(scheme: String?, path: String?): String? =
     if (scheme == "file" && !path.isNullOrEmpty()) path else null
+
+/**
+ * Replaces [target] with what [write] writes, as a new file renamed over it: written next to it under a temporary name,
+ * then moved into place in one rename. The old file is never truncated or rewritten — a synth, an export or a prefetch
+ * may still have it memory-mapped, and a page of a mapping that a truncation removed is a SIGBUS on the render thread's
+ * next read. Its mappings keep the old bytes until they are released; the next load maps the new file. On failure the
+ * old copy stays and the temporary file is deleted.
+ */
+internal fun replaceFileAtomically(target: File, write: (OutputStream) -> Unit) {
+    val temporary = File.createTempFile("${target.name}.", ".partial", target.parentFile)
+    try {
+        temporary.outputStream().use(write)
+        Files.move(
+            temporary.toPath(), target.toPath(),
+            StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING,
+        )
+    } finally {
+        temporary.delete()
+    }
+}
 
 /**
  * Whether the cached SoundFont copy must be re-materialized from its source.
