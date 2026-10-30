@@ -514,6 +514,7 @@ public enum LayoutElement: Sendable, Equatable {
         case upBow
         case downBow
         case laissezVibrer
+        case chokeCymbal
     }
 
     public enum TextMarkKind: Sendable, Equatable {

@@ -2683,8 +2683,7 @@ extension LayoutEngine {
         case .upBow: .upBow
         case .downBow: .downBow
         case .laissezVibrer: .laissezVibrer
-        // Drawn from the layout commit on; until then a choke is kept for the round trip only.
-        case .chokeCymbal: nil
+        case .chokeCymbal: .chokeCymbal
         case .unknown: nil
         }
     }
@@ -2698,7 +2697,7 @@ extension LayoutEngine {
     /// tenuto-accent and marcato-tenuto) sit outside the staff. So does every
     /// mark MuseScore puts in no staccato or tenuto category
     /// (`computeCategories()`): all three staccatissimos, stress, unstress, the
-    /// soft accents, the technique marks and the laissez vibrer.
+    /// soft accents, the technique marks, the laissez vibrer and the choke.
     static func articulationHugsNote(
         _ kind: LayoutElement.ArticulationKind,
     ) -> Bool {
@@ -2707,7 +2706,7 @@ extension LayoutEngine {
         case .staccatissimo, .accent, .marcato, .accentStaccato, .marcatoStaccato, .tenutoStaccato, .tenutoAccent,
              .marcatoTenuto, .staccatissimoStroke, .staccatissimoWedge, .stress, .unstress, .softAccent,
              .softAccentStaccato, .softAccentTenuto, .softAccentTenutoStaccato, .muteOpen, .muteClosed, .harmonic,
-             .upBow, .downBow, .laissezVibrer:
+             .upBow, .downBow, .laissezVibrer, .chokeCymbal:
             false
         }
     }
@@ -2716,12 +2715,15 @@ extension LayoutEngine {
     /// the marcato family (Gould p.117 — "strong accents above the staff"),
     /// MuseScore's `articMarcatoAbove … articMarcatoTenutoBelow` range in
     /// `ChordLayout::layoutArticulations`, and the marks MuseScore anchors
-    /// `TOP` (`AnchorGroup::OTHER`): brass mutes, the harmonic, bow marks.
+    /// `TOP` (`AnchorGroup::OTHER`): brass mutes, the harmonic, bow marks, and the choke, which has no placement
+    /// variant either.
     static func articulationForcesAbove(
         _ kind: LayoutElement.ArticulationKind,
     ) -> Bool {
         switch kind {
-        case .marcato, .marcatoStaccato, .marcatoTenuto, .muteOpen, .muteClosed, .harmonic, .upBow, .downBow: true
+        case .marcato, .marcatoStaccato, .marcatoTenuto, .muteOpen, .muteClosed, .harmonic, .upBow, .downBow,
+             .chokeCymbal:
+            true
         case .staccato, .staccatissimo, .tenuto, .accent, .accentStaccato, .tenutoStaccato, .tenutoAccent,
              .staccatissimoStroke, .staccatissimoWedge, .stress, .unstress, .softAccent, .softAccentStaccato,
              .softAccentTenuto, .softAccentTenutoStaccato, .laissezVibrer:

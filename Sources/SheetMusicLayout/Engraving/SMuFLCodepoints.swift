@@ -165,6 +165,7 @@ public enum SMuFLCodepoint {
     public static let stringsHarmonic: UInt32 = 0xE614
     public static let stringsUpBow: UInt32 = 0xE612
     public static let stringsDownBow: UInt32 = 0xE610
+    public static let pictChokeCymbal: UInt32 = 0xE805
 
     // MARK: - Brackets + braces
 

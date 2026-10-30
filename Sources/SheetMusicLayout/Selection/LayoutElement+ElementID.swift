@@ -124,6 +124,7 @@ extension LayoutElement.ArticulationKind {
         case .upBow: .upBow
         case .downBow: .downBow
         case .laissezVibrer: .laissezVibrer
+        case .chokeCymbal: .chokeCymbal
         }
     }
 }
