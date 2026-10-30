@@ -1,8 +1,15 @@
-import CoreGraphics
 import Foundation
 import SheetMusicCore
 @testable import SheetMusicLayout
 import Testing
+
+#if !canImport(CoreGraphics)
+    /// On Android and WebAssembly, Foundation's own CoreGraphics shims also export the CG types, so anchor to
+    /// SheetMusicLayout's own definitions instead of leaving them ambiguous (see `BreathLayoutTests`).
+    private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+    private typealias CGRect = SheetMusicLayout.CGRect
+#endif
 
 /// The choke is drawn after the note, at the upper right of the chord's top notehead — where Weinberg / PAS and most
 /// published drum parts print it — rather than above the chord. Right of the head and of anything already right of it
