@@ -32,10 +32,10 @@ android {
 
     buildFeatures { compose = true }
 
-    // The androidTest APK packages both transitive JNI libraries — the Swift
-    // bridge's and the CMake-built FluidSynth wrapper's — and both ship the
-    // NDK's own libc++_shared.so. Pick first; the two copies are byte-identical
-    // NDK artefacts. The example app has the same block for the same reason;
+    // The androidTest APK packages the transitive JNI libraries, and more than
+    // one dependency has shipped the NDK's own libc++_shared.so (the audio
+    // module used to ship a native wrapper too). Pick first; such copies are
+    // byte-identical NDK artefacts. The example app has the same block for the same reason;
     // this is the first configuration in THIS module that packages an APK.
     packaging {
         jniLibs {

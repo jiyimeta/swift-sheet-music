@@ -202,10 +202,12 @@ is a pure function of the score; the platform engines only schedule it.
   pure-Swift SoundFont backend. Driven by the shared timeline, exposing
   a chord-by-chord `currentCursor`. Audio-file export renders the same
   graph offline.
-- **Android** (`Android/SheetMusicAudioAndroid/`, Kotlin): FluidSynth via
-  VolcanoMobile's `.aar` + Oboe for low-latency PCM, mirroring the Apple
+- **Android** (`Android/SheetMusicAudioAndroid/`, Kotlin): the transport,
+  mixer and `AudioTrack` output in Kotlin, mirroring the Apple
   `PlaybackEngine` API surface (looping, rate, per-staff program change,
-  master tuning).
+  master tuning); synthesis is SwiftySynth in Swift
+  (`SheetMusicAudioSwiftySynthCore`'s `HostedSynth`, shared settings with
+  the Apple backend) behind the JNI library.
 
 ## Android strategy
 

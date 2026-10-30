@@ -109,12 +109,11 @@ Android audio module dependencies
 The Android playback module (Kotlin, `Android/SheetMusicAudioAndroid/`)
 depends, at build time via Gradle, on:
 
-- FluidSynth — LGPL-2.1 (https://github.com/VolcanoMobile/fluidsynth-android),
-  dynamically linked as `libfluidsynth.so`; not vendored in this
-  repository. Applications redistributing the module must honour
-  LGPL-2.1 §4 (allow replacing the shared library, include the LGPL
-  notice). See `Android/SheetMusicAudioAndroid/README.md`.
 - Oboe — Apache 2.0 (https://github.com/google/oboe)
+
+It synthesizes with SwiftySynth (MIT, https://github.com/jiyimeta/swiftysynth),
+the Swift package the Apple backend uses, compiled into the Swift JNI
+library of `Android/SheetMusicAndroid/`.
 
 Browser playback dependencies
 ------------------------------

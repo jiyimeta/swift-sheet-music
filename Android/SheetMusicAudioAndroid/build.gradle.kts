@@ -11,33 +11,14 @@ android {
 
     buildFeatures {
         buildConfig = false
-        prefab = true   // surfaces fluidsynth headers from the .aar via Prefab
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
     }
 
     defaultConfig {
         minSdk = 28
         consumerProguardFiles("proguard-consumer.pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        externalNativeBuild {
-            cmake {
-                cppFlags += listOf("-std=c++17")
-                arguments += listOf(
-                    "-DANDROID_STL=c++_shared",
-                )
-            }
-        }
-        ndk {
-            // Match Phase 4 non-audio's ABI set
-            abiFilters += listOf("arm64-v8a", "x86_64")
-        }
+        // No native code of its own: the synthesizer is SwiftySynth inside `:SheetMusicAndroid`'s
+        // libSheetMusicAndroidJNI.so (`Sources/SheetMusicAndroidJNI/Audio/`).
     }
 
     compileOptions {
@@ -86,11 +67,8 @@ afterEvaluate {
 dependencies {
     api(project(":SheetMusicAndroid"))
 
-    // FluidSynth (LGPL-2.1 dynamic-link). Vetted in Task 1; see
-    // docs/superpowers/notes/2026-05-19-fluidsynth-android-vetting.md
-    api("net.volcanomobile.fluidsynth-android:fluidsynth-android:2.4.6")
-
-    // Oboe (Apache-2.0) — low-latency PCM output
+    // Oboe (Apache-2.0) — low-latency PCM output. Unused since output moved to AudioTrack (`OboeStream`);
+    // removing it is a separate change.
     api("com.google.oboe:oboe:1.9.0")
 
     api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
@@ -239,7 +217,7 @@ afterEvaluate {
                 pom {
                     name.set("SheetMusic Audio Android")
                     description.set(
-                        "FluidSynth-backed audio playback for swift-sheet-music on Android."
+                        "SwiftySynth-backed audio playback for swift-sheet-music on Android."
                     )
                     url.set("https://github.com/jiyimeta/swift-sheet-music")
                     licenses {

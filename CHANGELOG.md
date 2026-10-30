@@ -61,6 +61,17 @@ and this project adheres to
 
 ### Changed
 
+- **Android plays through SwiftySynth instead of FluidSynth.** `sheet-music-audio-android` renders score, metronome,
+  count-in, note previews and audio export with the synthesizer the Apple backend uses, built with the same settings
+  (`SwiftySynthVoicing`), so a SoundFont sounds the same on both and a choked cymbal (`ChokeMarker`) stops on Android
+  too. The Kotlin engine's transport, mixer and output are unchanged; the synth and its sequencer live in Swift
+  (`SheetMusicAudioSwiftySynthCore`'s `HostedSynth` / `HostedSequence`) inside `libSheetMusicAndroidJNI.so`, rendered
+  by one JNI call per synth per output block that allocates nothing. A `file:` SoundFont URI is memory-mapped in place
+  rather than copied into the cache. Levels follow the Apple backend (unity synth gain) rather than FluidSynth's 2.0.
+  FluidSynth, its C++ shim and its CMake / Prefab build are gone from the module, and with them the LGPL obligation
+  for apps that ship it. **Breaking for Kotlin hosts:** `AudioBackendException.FluidSynthInit` is now `SynthInit`.
+- **`SoundFontCache` moved to the new `SheetMusicAudioSwiftySynthCore` target**, with the score and metronome synth
+  settings and the choke dispatch the Apple `SwiftySynthBackend` now builds through.
 - **A line break on a score's last bar justifies its last line.** The short line a piece ends on is otherwise left at
   its natural width (`lastSystemFillLimit`); a break on the last bar comes before nothing, so it now asks for the full
   line a break leaves on every other line. Only while the layout honors the break (`LayoutBreakPolicy`): a reflow that

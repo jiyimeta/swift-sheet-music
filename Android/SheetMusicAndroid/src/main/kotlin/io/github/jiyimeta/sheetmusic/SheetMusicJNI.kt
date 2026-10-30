@@ -181,7 +181,7 @@ object SheetMusicJNI {
      * interpolating two polled frame times — those are themselves quantized — so animating a playhead
      * or a scroll needs this entry.
      *
-     * [unrolledTick] is in the same coordinates the FluidSynth player reports (repeats and jumps
+     * [unrolledTick] is in the same coordinates the score's player reports (repeats and jumps
      * expanded); the fractional part is honoured. Returns **−1** when [scoreHandle] is unknown, which
      * a real position never is — 0 would be indistinguishable from the start of the score.
      */

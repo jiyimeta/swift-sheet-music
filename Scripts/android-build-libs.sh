@@ -75,8 +75,8 @@ TARGETS=(
 #
 # The DEFAULT is deliberately not "all of TARGETS": armeabi-v7a is opt-in.
 # It builds — the Swift Android SDK carries `armv7-unknown-linux-android28`
-# and a `swift-armv7` runtime, the NDK has the matching sysroot, and both
-# native dependencies (FluidSynth, Oboe) ship the ABI — but adding it to
+# and a `swift-armv7` runtime, the NDK has the matching sysroot, and the
+# audio module's Oboe dependency ships the ABI — but adding it to
 # every local build and every CI run costs a third full cross-compile of the
 # package, roughly a third more wall clock, for an ABI whose share of API-28+
 # devices is small and shrinking. Opt in with

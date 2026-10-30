@@ -12,8 +12,12 @@ SDK: Core, MIDI, MSCX, MusicXML, XMLTools, Zip, Layout, AudioCore, EditWire, and
 BridgeCore. `SheetMusicAndroidJNI` exposes the JNI entrypoints.
 
 `SheetMusicUI`, `SheetMusicPDF`, `SheetMusicLayoutApple`, and
-`SheetMusicAudioApple` remain Apple-only. Android playback is implemented in
-Kotlin under `Android/SheetMusicAudioAndroid/` using FluidSynth and Oboe.
+`SheetMusicAudioApple` remain Apple-only. Android playback is orchestrated in
+Kotlin under `Android/SheetMusicAudioAndroid/` and synthesized by SwiftySynth in
+`SheetMusicAndroidJNI` (`SheetMusicAudioSwiftySynthCore`'s `HostedSynth`). Its
+render entry point, `SwiftySynthNative.nativeRender`, is a hand-written JNI
+function rather than a swift-java binding, so it renders straight into the
+Kotlin arrays without a copy.
 
 Supported ABIs are `arm64-v8a` and `x86_64`; the minimum Android API level is
 28.
@@ -21,8 +25,8 @@ Supported ABIs are `arm64-v8a` and `x86_64`; the minimum Android API level is
 `armeabi-v7a` is a third, opt-in ABI rather than an unsupported one. It builds —
 the Swift Android SDK carries the `armv7-unknown-linux-android28` triple and a
 `swift-armv7` runtime, the NDK has the matching sysroot at
-`arm-linux-androideabi`, and both native dependencies of the audio module
-(FluidSynth's `.aar` and Oboe) ship the ABI. It stays out of the default because
+`arm-linux-androideabi`, and the audio module's Oboe dependency ships the
+ABI. It stays out of the default because
 a third full cross-compile costs roughly a third more wall clock on every local
 build and every CI run, for an ABI whose share of API-28-and-later devices is
 small and shrinking:

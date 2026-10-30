@@ -8,7 +8,7 @@ the same capability on Apple platforms).
 
 - `AndroidPlaybackEngine` — the Android counterpart to Apple's
   `PlaybackEngine`. Accepts a Score handle (obtained via the Phase 4
-  JNI bridge), prepares per-staff FluidSynth voices loaded from a
+  JNI bridge), prepares per-strip SwiftySynth channels loaded from a
   General MIDI SoundFont, and plays back synchronized with a cursor.
 - `SoundfontResolver` — Kotlin interface that hosts implement to
   point `AndroidPlaybackEngine` at SF2 files. Apple's
@@ -125,10 +125,15 @@ audio file. No physical device was available when this feature landed.
 
 `io.github.jiyimeta.sheetmusic.SheetMusicJNI` (in the `sheet-music-android`
 module) is the canonical loader of `libSheetMusicJNI.so` (Swift bridge).
-This module ships `libsheetmusicaudio.so` — a C JNI shim over FluidSynth
-via `libfluidsynth.so` — and triggers `SheetMusicJNI`'s class init early
-so its `external fun` declarations resolve. MIDI rendering + timeline
-lookups happen Swift-side; synthesis + Oboe output happen Kotlin-side.
+This module ships no native code of its own. MIDI rendering, timeline
+lookups and synthesis happen Swift-side, in `libSheetMusicAndroidJNI.so`:
+the score and metronome synths are SwiftySynth — the synthesizer the Apple
+backend plays through, with the same settings — driven through
+`SwiftySynthDriver` / `PlayerDriver`, and rendered into the Kotlin buffers
+by one JNI call per synth per output block. Transport orchestration, the
+mixer and audio output (`AudioTrack`) happen Kotlin-side. A `file:`
+SoundFont URI is memory-mapped in place; a `content:` one is copied into
+the app's cache once.
 
 Full design in `docs/superpowers/specs/2026-05-19-android-audio-backend-design.md`.
 
@@ -147,21 +152,8 @@ Minimum SDK: 28 (Android 9).
 The published Kotlin source code is MIT-licensed (matches the
 swift-sheet-music package). The Kotlin module pulls in:
 
-- **FluidSynth** (`net.volcanomobile.fluidsynth-android:2.4.6`) —
-  LGPL 2.1, dynamically linked via `libfluidsynth.so` packaged in the
-  AAR. Source: https://github.com/VolcanoMobile/fluidsynth-android
 - **Oboe** (transitively via Gradle) — Apache 2.0
 - **kotlinx-coroutines-android** — Apache 2.0
 
-Per LGPL §4, applications using this module must:
-1. Allow the user to replace `libfluidsynth.so` with a modified version
-   (which is automatic via the dynamic `jniLibs/` packaging — no action
-   needed by the app developer).
-2. Include the LGPL notice + a source pointer in their application's
-   open-source licenses screen.
-
-A consumer-app LICENSE notice template:
-```
-This app uses FluidSynth (https://github.com/VolcanoMobile/fluidsynth-android),
-licensed under LGPL 2.1. Library source available at the URL above.
-```
+The synthesizer, SwiftySynth (MIT, a MeltySynth port), is compiled into
+`sheet-music-android`'s Swift library. Nothing in this module is LGPL.

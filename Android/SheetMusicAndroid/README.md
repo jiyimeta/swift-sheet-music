@@ -113,7 +113,7 @@ android {
 
 dependencies {
     implementation("io.github.jiyimeta:sheet-music-android:1.0.0")
-    // Optional: FluidSynth + Oboe playback.
+    // Optional: playback (SwiftySynth).
     // implementation("io.github.jiyimeta:sheet-music-audio-android:1.0.0")
 }
 ```
@@ -164,8 +164,8 @@ Minimum SDK: 28 (Android 9).
 
 `armeabi-v7a` builds and stages: the Swift Android SDK carries the
 `armv7-unknown-linux-android28` triple and a `swift-armv7` runtime, the
-NDK has the matching sysroot, and both native dependencies of the audio
-module (FluidSynth, Oboe) ship the ABI. It is not in the default build
+NDK has the matching sysroot, and the audio module's Oboe dependency
+ships the ABI. It is not in the default build
 because a third full cross-compile of the package costs roughly a third
 more wall clock on every local build and every CI run, for an ABI whose
 share of API-28-and-later devices is small and shrinking.

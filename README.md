@@ -56,7 +56,8 @@ Windows-only; every other unmarked target is Apple-only.
 
 Android playback is delivered out-of-band as the
 `io.github.jiyimeta:sheet-music-audio-android` Kotlin Gradle module
-(`Android/SheetMusicAudioAndroid/`), which wraps FluidSynth + Oboe.
+(`Android/SheetMusicAudioAndroid/`), which plays through SwiftySynth — the
+synthesizer the Apple backend uses — and `AudioTrack`.
 See [Android](#android). Windows playback is `SheetMusicAudioWindows`
 above; see [Windows](#windows).
 
@@ -328,7 +329,7 @@ artifacts to GitHub Packages:
 | Maven artifact | Contents |
 |---|---|
 | `io.github.jiyimeta:sheet-music-android` | JNI bridge + bundled `libSheetMusicJNI.so`. Score load, layout, draw-program emit. |
-| `io.github.jiyimeta:sheet-music-audio-android` | FluidSynth (via [VolcanoMobile's `.aar`](https://github.com/VolcanoMobile/fluidsynth-android)) + [Oboe](https://github.com/google/oboe) low-latency PCM. Mirrors `PlaybackEngine` API on the Kotlin side. |
+| `io.github.jiyimeta:sheet-music-audio-android` | SwiftySynth (the Apple backend's synthesizer, compiled into `sheet-music-android`'s Swift library) + `AudioTrack` output. Mirrors `PlaybackEngine` API on the Kotlin side. |
 | `io.github.jiyimeta:sheet-music-compose-android` | Compose rendering, playback overlays, and generated draw-program codecs. |
 
 The published artifacts are at **v1.0.0**. Consuming them in your own
@@ -493,8 +494,7 @@ starts there).
 
 ### FluidSynth
 
-`SheetMusicAudioWindows` links FluidSynth 2 dynamically, as the Android
-module does. Use the official Windows release zip in its `cpp11` flavor
+`SheetMusicAudioWindows` links FluidSynth 2 dynamically. Use the official Windows release zip in its `cpp11` flavor
 (x64, no glib; verified with 2.6.1), unpack it, and pass its `include`
 and `lib` directories to every build of a package that depends on
 `SheetMusicAudioWindows`:

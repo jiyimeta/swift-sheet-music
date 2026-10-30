@@ -92,7 +92,7 @@ The following are intentionally NOT supported in v0:
 ## Failure triage
 
 If a checkbox fails:
-- Capture logcat: `adb logcat *:S AudioVM:V FluidSynth:V`
+- Capture logcat: `adb logcat *:S AudioVM:V`
 - Check the spec's "Errors / edge cases" section for the matching scenario
 - File a follow-up issue
 
