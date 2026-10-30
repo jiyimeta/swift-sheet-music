@@ -13,6 +13,7 @@ extension MidiRenderer {
     /// map as MuseScore's export does (`importexport/midi/internal/midiexport/exportmidi.cpp:177-204`); `bookends`
     /// are that track's fermata bookends, which decide with it whether a jump's target needs its tempo re-stated.
     /// `staffIndex` is `staff`'s place in `part.staves`: the voice plays every dynamic of the part that reaches it.
+    /// `emitsChokes` appends the choke marker at the end of every choked tie chain (`ChokeChains`).
     static func renderVoice( // swiftlint:disable:this function_body_length cyclomatic_complexity
         voiceIndex: Int,
         staffIndex: Int = 0,
@@ -26,6 +27,7 @@ extension MidiRenderer {
         tempoMap: ResolvedTempoMap,
         emitsTempoEvents: Bool = false,
         bookends: BookendTempoTrack = BookendTempoTrack(),
+        emitsChokes: Bool = false,
     ) throws -> (events: [TimedMidiEvent], endTick: Int, lyricAnchors: [LyricMidiCodec.Anchor]) {
         let measureDurations = staff.measures.effectiveMeasureDurations()
         // Swing reads a beat position out of a tick, so its grid has to be measured from the BAR rather than from
@@ -108,6 +110,8 @@ extension MidiRenderer {
         // What each open tie chain's gate has dropped so far, by sounding pitch (`tieGatedOff`). Voice-wide for the
         // same reason as the channel.
         var tieGateDebt: [Int: Int] = [:]
+        // The open tie chains that carry a choke, by sounding key, for the same reason.
+        var chokes = ChokeChains(isEmitted: emitsChokes)
         // The capo an open tie chain's head sounded through (`.some(nil)` for none), for the same reason.
         var sustainedCapo: CapoPoint??
 
@@ -310,6 +314,7 @@ extension MidiRenderer {
                         ottavaRanges: ottavaRanges,
                         capo: capo,
                         originalTickDelta: nominalDelta,
+                        chokes: &chokes,
                     )
                     continue
                 }
@@ -338,6 +343,7 @@ extension MidiRenderer {
                     capo: capo,
                     originalTickDelta: nominalDelta,
                     tieGateDebt: &tieGateDebt,
+                    chokes: &chokes,
                 )
                 if case .breath = element { pauseTicksInMeasure += localTick - tickBeforeElement }
             }
@@ -391,6 +397,7 @@ extension MidiRenderer {
         capo: CapoPoint?,
         originalTickDelta: Int,
         tieGateDebt: inout [Int: Int],
+        chokes: inout ChokeChains,
     ) {
         switch element {
         case let .keySignature(key):
@@ -512,6 +519,7 @@ extension MidiRenderer {
                 currentKey: currentKey,
                 events: &events,
                 tieGateDebt: &tieGateDebt,
+                chokes: &chokes,
                 playedTicksOverride: adjust == .none
                     ? nil
                     : max(1, chordTicks + adjust.lengthDelta),

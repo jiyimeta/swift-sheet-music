@@ -9,8 +9,10 @@ extension MidiRenderer {
     /// comparisons in `MidiSemanticComparison` measure exactly that, and padding it there made six of them
     /// diverge. MuseScore's PLAYBACK is a different length from MuseScore's exported file, because its transport
     /// has its own end; ours does not, so the padding has to go on the sequence a transport is handed.
+    ///
+    /// A synthesizer plays this sequence, so it carries the choke marker (`render(score:emittingChokes:)`).
     public static func renderForPlayback(score: Score) throws -> MidiFile {
-        try extendingToNotatedEnd(render(score: score), score: score)
+        try extendingToNotatedEnd(render(score: score, emittingChokes: true), score: score)
     }
 }
 

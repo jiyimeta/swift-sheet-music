@@ -131,7 +131,9 @@ extension PlaybackEngine {
             cents: snapshot.masterTuningCents,
             transposeSemitones: snapshot.transposeSemitones,
         )
-        var rendered = try MidiRenderer.render(score: score)
+        // With the choke marker: the backend plays this sequence as live playback does (`renderForPlayback`), so a
+        // choked cymbal stops in the export too. The SMF export keeps the plain render.
+        var rendered = try MidiRenderer.render(score: score, emittingChokes: true)
         MidiChannelRemap.apply(midi: &rendered, plan: plan)
         backend.loadSequence(
             PreRollSequenceAssembler.assembleNormal(

@@ -90,6 +90,7 @@ extension MidiRenderer {
         ottavaRanges: [OttavaRange],
         capo: CapoPoint?,
         originalTickDelta: Int,
+        chokes: inout ChokeChains,
     ) throws {
         let chordTicks = chord.duration
             .resolved(in: measureDuration)
@@ -133,6 +134,7 @@ extension MidiRenderer {
             pitchShift: pitchShift,
             velocityAtStroke: strokeVelocity,
             events: &events,
+            chokes: &chokes,
         )
         // Advance localTick by the start-chord's own duration only.
         // The follower's advance happens via consumedByTremolo skip.
@@ -180,7 +182,7 @@ extension MidiRenderer {
         return result
     }
 
-    private static func emitTremoloSegments(
+    private static func emitTremoloSegments( // swiftlint:disable:this function_body_length
         _ segments: [TremoloSegment],
         chord: Chord,
         followerChord: Chord?,
@@ -189,7 +191,11 @@ extension MidiRenderer {
         pitchShift: Int,
         velocityAtStroke: (Int) -> Int,
         events: inout [TimedMidiEvent],
+        chokes: inout ChokeChains,
     ) {
+        // A roll chokes at the end of the roll: each pitch at its last stroke's release (`ChokeChains`). The mark is
+        // the start chord's, or a two-note tremolo's follower's.
+        let chordChokes = ChokeChains.marks(chord) || followerChord.map(ChokeChains.marks) == true
         // Every stroke of a two-note tremolo — including the ones
         // sounding the follower's pitches — takes its velocity from the
         // *start* chord. That is not an approximation: MuseScore builds
@@ -254,6 +260,13 @@ extension MidiRenderer {
                             channel: channel, pitch: shifted, velocity: 0,
                         ),
                     ))
+                }
+                if lastSegIndex[pitch] == segIndex, let marker = chokes.release(
+                    key: shifted, tiesBack: tiedBackPitches.contains(pitch),
+                    tiesForward: tiedForwardPitches.contains(pitch), marked: chordChokes, channel: channel,
+                    offTick: cursor + seg.ticks - 1,
+                ) {
+                    events.append(marker)
                 }
             }
             cursor += seg.ticks

@@ -22,9 +22,19 @@ public enum MidiRenderer {
         try render(score: score, includingSustainPedal: false)
     }
 
+    /// `render(score:)` with the choke marker (`ChokeMarker`) at the end of every choked tie chain, for a sequence a
+    /// synthesizer plays rather than a file a user exports. `renderForPlayback(score:)` turns it on; so does an audio
+    /// export that renders through a `SynthBackend`.
+    public static func render(score: Score, emittingChokes: Bool) throws -> MidiFile {
+        try render(score: score, includingSustainPedal: false, emitsChokes: emittingChokes)
+    }
+
     /// `render(score:)` with the sustain pedal switched on — the path pedal playback will take once every engine
-    /// releases the damper on stop; its tests run it today.
-    static func render(score: Score, includingSustainPedal: Bool) throws -> MidiFile {
+    /// releases the damper on stop; its tests run it today. `emitsChokes` adds the choke marker
+    /// (`render(score:emittingChokes:)`).
+    static func render( // swiftlint:disable:this function_body_length
+        score: Score, includingSustainPedal: Bool, emitsChokes: Bool = false,
+    ) throws -> MidiFile {
         // Hold each tie chain at its head note's sounding pitch so a tie
         // whose endpoints differ in pitch (e.g. C♯ tied across a key change
         // into an invisible C-double-sharp) doesn't leave a stuck note.
@@ -97,6 +107,7 @@ public enum MidiRenderer {
                     isFirstTrack: trackIndex == 0,
                     isTopOfPart: s == 0,
                     includingSustainPedal: includingSustainPedal,
+                    emitsChokes: emitsChokes,
                     division: score.division,
                     swingMap: trackIndex < swingMaps.count
                         ? swingMaps[trackIndex]
@@ -268,6 +279,7 @@ public enum MidiRenderer {
         isFirstTrack: Bool,
         isTopOfPart: Bool,
         includingSustainPedal: Bool,
+        emitsChokes: Bool,
         division: Int,
         swingMap: SwingMap,
         systemElementsByMeasure: [[PositionedSystemElement]],
@@ -333,6 +345,7 @@ public enum MidiRenderer {
                 tempoMap: tempoMap,
                 emitsTempoEvents: isFirstTrack && voiceIndex == 0,
                 bookends: bookends,
+                emitsChokes: emitsChokes,
             )
             voiceEventBuckets.append(voiceEvents)
             lyricAnchors.append(contentsOf: anchors)

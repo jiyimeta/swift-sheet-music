@@ -136,6 +136,12 @@ public struct ChordArticulation: Sendable, Equatable {
             }
         }
 
+        /// The General MIDI keys `.chokeCymbal` stops on a drum staff — crash 1, ride 1, china, ride bell, splash,
+        /// crash 2, ride 2 — judged by the note's playback key. A kick, a snare or a hi-hat in the same chord rings on;
+        /// on a pitched staff every note of the chord is choked. Here rather than in SheetMusicMIDI because the drum
+        /// re-voicer reads it too; `ChokeMarker.cymbalKeys` is this set.
+        public static let chokedCymbalKeys: Set = [49, 51, 52, 53, 55, 57, 59]
+
         /// Reverse of `mscxToken` for the modeled kinds. `nil` for anything else — including an anchor-bearing
         /// string, since callers strip the anchor first. Never returns `.unknown`: a caller that wants the
         /// round-trip-preserving fallback builds it itself, so that "this is a kind I model" and "this is a string

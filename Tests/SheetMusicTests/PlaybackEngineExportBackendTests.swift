@@ -207,6 +207,31 @@
                 #expect(try AudioExportProbe.peakAmplitude(of: url) > 0.001)
             }
 
+            /// Audio and video export render through the backend, so they choke as playback does: the sequence the
+            /// offline instance is handed carries the choke marker the SMF export leaves out.
+            @Test("The export sequence carries the choke marker")
+            func exportSequenceCarriesTheChoke() async throws {
+                let score = RevoiceFixtures.editingChord(
+                    RevoiceFixtures.score([["C/4 r/4 r/2"]]), measure: 0, voice: 0, element: 1,
+                ) { $0.articulations = [ChordArticulation(kind: .chokeCymbal)] }
+                let live = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: live)
+                try engine.prepare(score: score)
+
+                let url = temporaryWAV()
+                defer { try? FileManager.default.removeItem(at: url) }
+                try await engine.exportAudioFile(to: url, score: score, format: .wav())
+
+                let sequence = try #require(live.offlineInstance?.lastSequence)
+                let chokes = sequence.tracks.flatMap(\.events).filter {
+                    if case let .controlChange(_, controller, value) = $0.event {
+                        return controller == ChokeMarker.controller && value == 49
+                    }
+                    return false
+                }
+                #expect(chokes.count == 1)
+            }
+
             private func loadScore() throws -> Score {
                 let url = try #require(
                     TestResources.url(forResource: "midi01", withExtension: "mscx"),

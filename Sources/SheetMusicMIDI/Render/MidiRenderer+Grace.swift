@@ -91,6 +91,7 @@ extension MidiRenderer {
         currentKey: Int,
         events: inout [TimedMidiEvent],
         tieGateDebt: inout [Int: Int],
+        chokes: inout ChokeChains,
         playedTicksOverride: Int? = nil,
         pitchShift: Int = 0,
     ) {
@@ -144,6 +145,15 @@ extension MidiRenderer {
                 in: events, channel: channel,
             )
             for i in events.indices.reversed() {
+                // A choke marker sits on its note-off's tick (`ChokeChains`) and moves with it.
+                if events[i].tick <= tick - 1, events[i].tick > tick - 1 - stealFromPrev,
+                   case let .controlChange(ch, controller, key) = events[i].event,
+                   ch == channel, controller == ChokeMarker.controller
+                {
+                    let onTick = prevNoteOnTicks[key] ?? events[i].tick
+                    events[i].tick = max(onTick + 1, events[i].tick - stealFromPrev)
+                    continue
+                }
                 guard events[i].tick <= tick - 1,
                       events[i].tick > tick - 1 - stealFromPrev,
                       case let .noteOff(ch, pitch, vel) = events[i].event,
@@ -196,6 +206,15 @@ extension MidiRenderer {
             chord: chord,
             instrument: instrument,
         )
+        // The choke marker goes at the note-off of a note that ends its tie chain (`ChokeChains`).
+        let chordChokes = ChokeChains.marks(chord)
+        func release(_ note: Note, at offTick: Int) {
+            guard note.play, let marker = chokes.release(
+                key: note.pitch, tiesBack: note.tieBack != nil, tiesForward: note.tieForward != nil,
+                marked: chordChokes, channel: channel, offTick: offTick,
+            ) else { return }
+            events.append(marker)
+        }
         if let arpeggio = chord.arpeggio {
             // Keep arpeggio behavior intact: same call as the
             // pre-grace path, just with the shifted onset / shortened
@@ -218,6 +237,7 @@ extension MidiRenderer {
                     note: note, channel: channel, velocity: mainVelocity,
                     onTick: onTick, offTick: offTick, events: &events,
                 )
+                release(note, at: offTick)
             }
         } else {
             // Only the bend-carrying note of the chord drives the chain; the
@@ -232,7 +252,10 @@ extension MidiRenderer {
                 let isShaped = (parentSlot != nil && note.pitch == chainPitch)
                     || (note.glissando != nil && shiftedGlissandoEnd != nil)
                     || (note.legacyBend != nil && shiftedLegacySpans[note.pitch] != nil)
-                if isShaped { tieGateDebt[note.pitch] = nil }
+                if isShaped {
+                    tieGateDebt[note.pitch] = nil
+                    chokes.drop(key: note.pitch)
+                }
                 if let slot = parentSlot, note.pitch == chainPitch {
                     renderBendChainNote(
                         note: note, slot: slot,
@@ -263,14 +286,14 @@ extension MidiRenderer {
                         events: &events,
                     )
                 } else {
+                    let offTick = tieGatedOff(
+                        of: note, mainOff: mainOff, droppedByGate: playedTicks - gatedTicks, debt: &tieGateDebt,
+                    )
                     emitNoteEventsForGrace(
                         note: note, channel: channel, velocity: mainVelocity,
-                        onTick: mainOnset,
-                        offTick: tieGatedOff(
-                            of: note, mainOff: mainOff, droppedByGate: playedTicks - gatedTicks, debt: &tieGateDebt,
-                        ),
-                        events: &events,
+                        onTick: mainOnset, offTick: offTick, events: &events,
                     )
+                    release(note, at: offTick)
                 }
             }
         }
