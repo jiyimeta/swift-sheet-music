@@ -39,6 +39,24 @@ struct LayoutChokePlacementTests {
         )
     }
 
+    /// The room the spacing reserves follows the value the chord is DRAWN as: a two-note tremolo's half written as a
+    /// whole gets the whole head's width, not the half's.
+    @Test("A choke's reserved reach follows the drawn value")
+    func reachFollowsTheDrawnValue() {
+        let metrics = StaffMetrics(staffSize: 20)
+        var doubled = Self.chord([(49, 14)], .half)
+        doubled.isWrittenDoubled = true
+        #expect(LayoutEngine.chokeReach(of: doubled, metrics: metrics)
+            == LayoutEngine.chokeReach(of: Self.chord([(49, 14)], .whole), metrics: metrics))
+    }
+
+    /// A chord without the choke reserves nothing, so a score with no choke is spaced exactly as before.
+    @Test("An unchoked chord reserves no reach", arguments: [NoteDuration.quarter, .eighth, .half, .whole])
+    func unchokedReservesNothing(duration: NoteDuration) {
+        let metrics = StaffMetrics(staffSize: 20)
+        #expect(LayoutEngine.chokeReach(of: Self.chord([(49, 14)], duration, choked: false), metrics: metrics) == 0)
+    }
+
     /// Every chord of the first bar, in order, as its notes and stem.
     private static func chords(_ doc: LayoutDocument) -> [(notes: [LayoutChordNote], stem: StemDirection)] {
         (doc.systems.first?.measures.first?.elements ?? []).compactMap {

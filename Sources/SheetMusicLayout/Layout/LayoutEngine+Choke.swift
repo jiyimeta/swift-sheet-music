@@ -86,7 +86,7 @@ extension LayoutEngine {
     static func chokeReach(of chord: Chord, metrics: StaffMetrics) -> CGFloat {
         guard chord.articulations.contains(where: { $0.kind == .chokeCymbal }), !chord.notes.isEmpty else { return 0 }
         let sp = metrics.sp
-        let (base, dots) = DurationInterpretation.splitNote(chord.duration)
+        let (base, dots) = DurationInterpretation.splitNote(chord.drawnDuration)
         let halfHead = StemGeometry.attachDx(sp: sp)
         let displaced = holdsSecond(Array(chord.notes)) ? sp * secondDisplacementSp : 0
         let headRight = wideHeadHalfWidth(base, metrics: metrics) ?? halfHead
