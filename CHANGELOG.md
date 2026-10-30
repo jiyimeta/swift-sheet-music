@@ -45,6 +45,18 @@ and this project adheres to
   file carries the recordings at their strips' mix, on the same solo bus as live, and follows the alignment — a warped
   score or range lasts its warped length. An export's count-in (`countIn: true`) follows it too: under a warp it
   counts at the speed of the measure it counts into, as live.
+- **The cymbal choke (`ChordArticulation.Kind.chokeCymbal`, `ChokeMarker`,
+  `MidiRenderer.render(score:emittingChokes:)`).** The choke mark is modeled, drawn (SMuFL `pictChokeCymbal`, above
+  the staff, as MuseScore places it), read and written in MSCX as `<Articulation><subtype>pictChokeCymbal</subtype>`
+  (a file that already carries it, decoded as `.unknown` until now, becomes the kind with no migration), and read from
+  MusicXML's `<other-articulation smufl="pictChokeCymbal"/>` and `<other-technical smufl="pictChokeCymbal"/>`. It
+  plays as "stop at the end of the written value": the playback render and the audio export put `ChokeMarker` (CC
+  110, value = key) at the note-off of each choked tie chain — on a drum staff for the chord's cymbal keys only
+  (`ChordArticulation.Kind.chokedCymbalKeys`), on a pitched staff for every note — and `SwiftySynthBackend` turns it
+  into `Synthesizer.choke(key:on:)`, so the cymbal stops within 50 ms. The SMF export (`render(score:)`) carries no
+  marker. AUMIDISynth and the Android FluidSynth engine ignore the controller and play the mark as written for now.
+  Splitting a drum chord sends the choke only to the parts holding a cymbal. Requires swiftysynth 0.4.0
+  (`Synthesizer.choke(key:on:)`).
 
 ### Fixed
 
