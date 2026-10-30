@@ -81,7 +81,7 @@ class AudioExporterMetronomeTest {
             context = null,
             synthFactory = synthFactory,
             playerFactory = { _ ->
-                if (playersBuilt++ == 0) scorePlayer else PlayerDriver(0L, metronomeBindings)
+                if (playersBuilt++ == 0) scorePlayer else PlayerDriver(null, metronomeBindings)
             },
             encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
             masterTuningControlChanges = MarkerMasterTuning::invoke,
@@ -158,7 +158,7 @@ class AudioExporterMetronomeTest {
             },
             metronomeSynthFactory = { rate -> metronomeRates += rate; FakeSynthDriver(1) },
             playerFactory = { _ ->
-                if (playersBuilt++ == 0) scorePlayer else PlayerDriver(0L, FakePlayerDriver.RecordingBindings())
+                if (playersBuilt++ == 0) scorePlayer else PlayerDriver(null, FakePlayerDriver.RecordingBindings())
             },
             encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
             masterTuningControlChanges = MarkerMasterTuning::invoke,

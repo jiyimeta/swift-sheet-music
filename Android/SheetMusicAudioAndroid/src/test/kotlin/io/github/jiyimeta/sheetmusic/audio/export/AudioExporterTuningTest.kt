@@ -81,7 +81,7 @@ class AudioExporterTuningTest {
             resolver = StubSoundfontResolver(),
             context = null,
             synthFactory = { _: Int -> synth as SynthDriver },
-            playerFactory = { _: Long -> player },
+            playerFactory = { _: SynthDriver? -> player },
             encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
             masterTuningControlChanges = MarkerMasterTuning::invoke,
         )

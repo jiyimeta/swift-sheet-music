@@ -19,11 +19,11 @@ import io.github.jiyimeta.sheetmusic.audio.AudioBackendException
  * which is why that lock is taken on the audio writer thread every block; it is uncontended in the steady state.
  * (The same discipline `FluidSynthDriver` kept for FluidSynth's pointer, 2.0.1.)
  */
-internal class SwiftySynthDriver private constructor(
+internal class SwiftySynthDriver internal constructor(
     private val handle: Long,
+    private val native: SynthNativeCalls,
 ) : SynthDriver {
 
-    override val nativeHandle: Long get() = handle
     private val lock = Any()
     private var closed = false
 
@@ -42,7 +42,7 @@ internal class SwiftySynthDriver private constructor(
             if (handle == 0L) {
                 throw AudioBackendException.SynthInit("no synthesizer at $sampleRate Hz")
             }
-            return SwiftySynthDriver(handle)
+            return SwiftySynthDriver(handle, SwiftySynthNative)
         }
     }
 
@@ -56,7 +56,7 @@ internal class SwiftySynthDriver private constructor(
         val path = soundFontFilePath(uri.scheme, uri.path)
             ?: context?.let { materializeUriToCache(uri, it) }
             ?: return -1
-        return withHandle(-1) { SwiftySynthNative.synthLoadSoundFont(it, path) }
+        return withHandle(-1) { native.synthLoadSoundFont(it, path) }
     }
 
     /**
@@ -64,17 +64,17 @@ internal class SwiftySynthDriver private constructor(
      * sounds one on the percussion channel (9), which is where the playback renderer puts every drum part.
      */
     override fun programSelect(sfid: Int, channel: Int, bank: Int, program: Int) {
-        withHandle(Unit) { SwiftySynthNative.synthProgramSelect(it, channel, bank, program) }
+        withHandle(Unit) { native.synthProgramSelect(it, channel, bank, program) }
     }
 
-    override fun setGain(value: Float) = withHandle(Unit) { SwiftySynthNative.synthSetGain(it, value) }
+    override fun setGain(value: Float) = withHandle(Unit) { native.synthSetGain(it, value) }
 
     override fun cc(channel: Int, controller: Int, value: Int) {
-        withHandle(Unit) { SwiftySynthNative.synthControlChange(it, channel, controller, value) }
+        withHandle(Unit) { native.synthControlChange(it, channel, controller, value) }
     }
 
     override fun getCC(channel: Int, controller: Int): Int =
-        withHandle(-1) { SwiftySynthNative.synthControllerValue(it, channel, controller) }
+        withHandle(-1) { native.synthControllerValue(it, channel, controller) }
 
     /**
      * A no-op: SwiftySynth's percussion channel is channel 9 and only channel 9, and the playback renderer puts every
@@ -83,29 +83,36 @@ internal class SwiftySynthDriver private constructor(
     override fun setChannelType(channel: Int, isDrum: Boolean) {}
 
     override fun noteOn(channel: Int, pitch: Int, velocity: Int) {
-        withHandle(Unit) { SwiftySynthNative.synthNoteOn(it, channel, pitch, velocity) }
+        withHandle(Unit) { native.synthNoteOn(it, channel, pitch, velocity) }
     }
 
     override fun noteOff(channel: Int, pitch: Int) {
-        withHandle(Unit) { SwiftySynthNative.synthNoteOff(it, channel, pitch) }
+        withHandle(Unit) { native.synthNoteOff(it, channel, pitch) }
     }
 
     override fun allNotesOff(channel: Int) {
-        withHandle(Unit) { SwiftySynthNative.synthAllNotesOff(it, channel) }
+        withHandle(Unit) { native.synthAllNotesOff(it, channel) }
     }
+
+    /**
+     * Attaches [smf] to this synth under the driver's lock. The handle never leaves the driver: a player built for a
+     * synth that a concurrent teardown has already closed gets 0 and stays inert, instead of reaching native code with
+     * a released handle (a prepare on its IO thread against a play on the main thread did exactly that).
+     */
+    override fun attachSequence(smf: ByteArray): Long = withHandle(0L) { native.sequenceCreate(it, smf) }
 
     /**
      * Renders into [left] / [right] through the attached sequence while it plays, else the synth alone; leaves them
      * untouched and reports 0 frames once closed. One JNI crossing, no allocation.
      */
     override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int =
-        withHandle(0) { SwiftySynthNative.nativeRender(it, frameCount, left, right) }
+        withHandle(0) { native.nativeRender(it, frameCount, left, right) }
 
     override fun close() = synchronized(lock) {
         if (closed) return@synchronized
         // Mark first, so nothing that later reads the flag can observe a handle that has already been released.
         closed = true
-        SwiftySynthNative.synthRelease(handle)
+        native.synthRelease(handle)
     }
 
     private fun materializeUriToCache(uri: Uri, context: Context): String? {

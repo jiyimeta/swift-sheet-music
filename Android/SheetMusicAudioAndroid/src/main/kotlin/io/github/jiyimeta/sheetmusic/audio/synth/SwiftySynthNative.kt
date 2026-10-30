@@ -14,7 +14,22 @@ import io.github.jiyimeta.sheetmusic.swiftjava.SheetMusicAndroidJNI as SwiftJava
  * Everything but [nativeRender] goes through the swift-java bindings. [nativeRender] is a hand-written JNI function
  * that renders straight into the two arrays: one crossing per synth per output block, nothing allocated on either side.
  */
-internal object SwiftySynthNative {
+/** The native calls [SwiftySynthDriver] makes, so a test can stand in for the library. */
+internal interface SynthNativeCalls {
+    fun synthRelease(handle: Long)
+    fun synthLoadSoundFont(handle: Long, path: String): Int
+    fun synthProgramSelect(handle: Long, channel: Int, bank: Int, program: Int)
+    fun synthControlChange(handle: Long, channel: Int, controller: Int, value: Int)
+    fun synthControllerValue(handle: Long, channel: Int, controller: Int): Int
+    fun synthSetGain(handle: Long, gain: Float)
+    fun synthNoteOn(handle: Long, channel: Int, key: Int, velocity: Int)
+    fun synthNoteOff(handle: Long, channel: Int, key: Int)
+    fun synthAllNotesOff(handle: Long, channel: Int)
+    fun nativeRender(handle: Long, frames: Int, left: FloatArray, right: FloatArray): Int
+    fun sequenceCreate(synthHandle: Long, smf: ByteArray): Long
+}
+
+internal object SwiftySynthNative : SynthNativeCalls {
     init { System.loadLibrary("SheetMusicAndroidJNI") }
 
     /** Voicing argument of [synthCreate]: 256 voices with reverb and chorus. */
@@ -27,30 +42,30 @@ internal object SwiftySynthNative {
      * Renders [frames] stereo frames of the synth behind [handle] into the start of [left] / [right] and returns
      * [frames], or 0 — arrays untouched — for an unknown handle or arrays shorter than [frames].
      */
-    external fun nativeRender(handle: Long, frames: Int, left: FloatArray, right: FloatArray): Int
+    external override fun nativeRender(handle: Long, frames: Int, left: FloatArray, right: FloatArray): Int
 
     // ── Synth ────────────────────────────────────────────────────────
 
     fun synthCreate(sampleRate: Int, voicing: Int): Long = SwiftJavaJNI.nativeSynthCreate(sampleRate, voicing)
-    fun synthRelease(handle: Long) = SwiftJavaJNI.nativeSynthRelease(handle)
+    override fun synthRelease(handle: Long) = SwiftJavaJNI.nativeSynthRelease(handle)
     /** 0 on success, -1 when the file is missing or does not parse. */
-    fun synthLoadSoundFont(handle: Long, path: String): Int = SwiftJavaJNI.nativeSynthLoadSoundFont(handle, path)
-    fun synthProgramSelect(handle: Long, channel: Int, bank: Int, program: Int) =
+    override fun synthLoadSoundFont(handle: Long, path: String): Int = SwiftJavaJNI.nativeSynthLoadSoundFont(handle, path)
+    override fun synthProgramSelect(handle: Long, channel: Int, bank: Int, program: Int) =
         SwiftJavaJNI.nativeSynthProgramSelect(handle, channel, bank, program)
-    fun synthControlChange(handle: Long, channel: Int, controller: Int, value: Int) =
+    override fun synthControlChange(handle: Long, channel: Int, controller: Int, value: Int) =
         SwiftJavaJNI.nativeSynthControlChange(handle, channel, controller, value)
-    fun synthControllerValue(handle: Long, channel: Int, controller: Int): Int =
+    override fun synthControllerValue(handle: Long, channel: Int, controller: Int): Int =
         SwiftJavaJNI.nativeSynthControllerValue(handle, channel, controller)
-    fun synthSetGain(handle: Long, gain: Float) = SwiftJavaJNI.nativeSynthSetGain(handle, gain.toDouble())
-    fun synthNoteOn(handle: Long, channel: Int, key: Int, velocity: Int) =
+    override fun synthSetGain(handle: Long, gain: Float) = SwiftJavaJNI.nativeSynthSetGain(handle, gain.toDouble())
+    override fun synthNoteOn(handle: Long, channel: Int, key: Int, velocity: Int) =
         SwiftJavaJNI.nativeSynthNoteOn(handle, channel, key, velocity)
-    fun synthNoteOff(handle: Long, channel: Int, key: Int) = SwiftJavaJNI.nativeSynthNoteOff(handle, channel, key)
-    fun synthAllNotesOff(handle: Long, channel: Int) = SwiftJavaJNI.nativeSynthAllNotesOff(handle, channel)
+    override fun synthNoteOff(handle: Long, channel: Int, key: Int) = SwiftJavaJNI.nativeSynthNoteOff(handle, channel, key)
+    override fun synthAllNotesOff(handle: Long, channel: Int) = SwiftJavaJNI.nativeSynthAllNotesOff(handle, channel)
 
     // ── Sequence ─────────────────────────────────────────────────────
 
     /** Attaches [smf] to the synth behind [synthHandle]; 0 when the bytes are not an SMF. */
-    fun sequenceCreate(synthHandle: Long, smf: ByteArray): Long {
+    override fun sequenceCreate(synthHandle: Long, smf: ByteArray): Long {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeSequenceCreate(synthHandle, SwiftData.fromByteArray(smf, arena))
     }

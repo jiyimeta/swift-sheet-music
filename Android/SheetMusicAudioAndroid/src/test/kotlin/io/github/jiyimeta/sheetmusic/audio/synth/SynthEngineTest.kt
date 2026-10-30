@@ -6,6 +6,8 @@ import android.net.Uri
 import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,7 +26,7 @@ private class FakeSynth : SynthDriver {
     /** Per-channel CC values — tests can seed and read these back. */
     private val ccValues = IntArray(16) { 100 }
 
-    override val nativeHandle: Long = 42L
+    override fun attachSequence(smf: ByteArray): Long = 42L
 
     override fun loadSoundFont(uri: Uri?, context: Context?): Int {
         calls += "loadSoundFont"
@@ -164,15 +166,15 @@ class SynthEngineTest {
         assertTrue(synth.calls.contains("programSelect(0,2,0,0)"))
     }
 
-    @Test fun synthHandle_exposesNativeHandle() {
+    @Test fun synthDriver_exposesTheLoadedDriver() {
         val engine = buildEngine()
-        // Before setup: 0L
-        assertEquals(0L, engine.synthHandle)
+        // Before setup: none
+        assertNull(engine.synthDriver)
 
         setupStaves(engine, 1)
 
-        // After setup: matches FakeSynth.nativeHandle = 42L
-        assertEquals(42L, engine.synthHandle)
+        // After setup: the driver the factory built, for a player to attach to
+        assertSame(capturedSynth, engine.synthDriver)
     }
 
     @Test fun setChannelVolume_sendsCC7() {
@@ -279,7 +281,7 @@ class SynthEngineTest {
         engine.teardown()
 
         assertEquals(0, engine.channelCount)
-        assertEquals(0L, engine.synthHandle)
+        assertNull(engine.synthDriver)
         assertTrue("driver should be closed", synth.calls.contains("close"))
     }
 

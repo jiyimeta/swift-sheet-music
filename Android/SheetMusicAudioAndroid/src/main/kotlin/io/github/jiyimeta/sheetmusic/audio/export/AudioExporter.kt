@@ -34,7 +34,7 @@ internal class AudioExporter(
      * test's fake needs.
      */
     private val metronomeSynthFactory: (Int) -> SynthDriver = synthFactory,
-    private val playerFactory: (Long) -> PlayerDriver = { PlayerDriver(it) },
+    private val playerFactory: (SynthDriver?) -> PlayerDriver = { PlayerDriver(it) },
     private val encoderFactory: (AudioFileFormat, Int, ParcelFileDescriptor?) -> AudioFileEncoder =
         { fmt, sr, fd -> AudioFileEncoder.create(fmt, sr, fd!!) },
     /**
@@ -71,7 +71,7 @@ internal class AudioExporter(
         progress: ((Float) -> Unit)?,
     ) {
         val synth = synthFactory(sampleRate)
-        val player = playerFactory(synth.nativeHandle)
+        val player = playerFactory(synth)
         val encoder = encoderFactory(format, sampleRate, outputFd)
         // A count-in needs the click synth even with the metronome off: wanting a count but no click through the
         // piece is a normal combination, and live playback opens the metronome's mix path for the pre-roll alone.
@@ -81,7 +81,7 @@ internal class AudioExporter(
                 MetronomeSf2Loader.load(ms, snapshot.metronomeResolution, resolver, context)
                 ms.setGain(snapshot.metronomeVolume)
                 val mixer = MetronomeMixer(ms) { smf ->
-                    val mp = playerFactory(ms.nativeHandle)
+                    val mp = playerFactory(ms)
                     if (mp.load(smf) == 0) mp else { mp.close(); null }
                 }
                 // The count-in sequence carries the body's clicks too, shifted behind the pre-roll, so it is the

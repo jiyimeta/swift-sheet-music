@@ -12,8 +12,12 @@ import android.net.Uri
  * always provides non-null values; fakes never dereference these params.
  */
 internal interface SynthDriver {
-    /** The native synth handle a [PlayerDriver] attaches its sequence to. 0L for fakes. */
-    val nativeHandle: Long
+    /**
+     * A native sequence over [smf] attached to this synth, made under the driver's own lock; 0 once the driver is
+     * closed or when the bytes are not an SMF. The synth's handle itself is never handed out — see
+     * [SwiftySynthDriver.attachSequence].
+     */
+    fun attachSequence(smf: ByteArray): Long
 
     /**
      * Loads SF2 at [uri], copying to cache if needed. Returns sfid or -1 on failure.

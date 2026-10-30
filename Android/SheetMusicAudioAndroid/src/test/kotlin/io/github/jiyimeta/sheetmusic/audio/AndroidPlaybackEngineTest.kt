@@ -189,7 +189,7 @@ private class RecordingBindings : PlayerDriver.NativeBindings {
     private var hasPlayed = false
     private var stoppedBeforePlaying = false
 
-    override fun newPlayer(synthHandle: Long, bytes: ByteArray): Long {
+    override fun newPlayer(synth: SynthDriver?, bytes: ByteArray): Long {
         hasPlayed = false
         stoppedBeforePlaying = false
         loadCalls += bytes
@@ -236,7 +236,7 @@ private fun newEngineForTests(
     synthFactory = { _ ->
         FakeSynthDriver(fakeSynthDrivers.size).also { fakeSynthDrivers += it }
     },
-    playerFactory = { _ -> PlayerDriver(0L, playerBindings) },
+    playerFactory = { _ -> PlayerDriver(null, playerBindings) },
     oboeFactory = oboeFactory,
     pollDispatcher = pollDispatcher,
 )
@@ -1547,8 +1547,8 @@ class AndroidPlaybackEngineTest {
             metronomeClickProvider = null,
             jniBridge = bridge,
             synthFactory = { _ -> FakeSynthDriver(synthsBuilt++) },
-            playerFactory = { synthHandle ->
-                PlayerDriver(0L, if (synthHandle == 1L) metronomeBindings else scoreBindings)
+            playerFactory = { synth ->
+                PlayerDriver(null, if ((synth as FakeSynthDriver).id == 1) metronomeBindings else scoreBindings)
             },
             oboeFactory = { FakeOboeStream.create() },
             pollDispatcher = kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler),
@@ -1587,16 +1587,16 @@ class AndroidPlaybackEngineTest {
         )
         val scoreSynths = mutableListOf<FakeSynthDriver>()
         val metronomeSynths = mutableListOf<FakeSynthDriver>()
-        val playerSynthHandles = mutableListOf<Long>()
+        val playerSynthIds = mutableListOf<Int>()
         val engine = AndroidPlaybackEngine(
             context = null,
             soundfontResolver = StubSoundfontResolver(),
             metronomeClickProvider = null,
             jniBridge = bridge,
             synthFactory = { _ -> FakeSynthDriver(10).also { scoreSynths += it } },
-            playerFactory = { synthHandle ->
-                playerSynthHandles += synthHandle
-                PlayerDriver(0L, RecordingBindings())
+            playerFactory = { synth ->
+                playerSynthIds += (synth as FakeSynthDriver).id
+                PlayerDriver(null, RecordingBindings())
             },
             oboeFactory = { FakeOboeStream.create() },
             pollDispatcher = kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler),
@@ -1607,8 +1607,8 @@ class AndroidPlaybackEngineTest {
 
         assertEquals("one score synth", 1, scoreSynths.size)
         assertEquals("one metronome synth", 1, metronomeSynths.size)
-        assertTrue("the click transport runs on the metronome synth", 20L in playerSynthHandles)
-        assertTrue("the score transport runs on the score synth", 10L in playerSynthHandles)
+        assertTrue("the click transport runs on the metronome synth", 20 in playerSynthIds)
+        assertTrue("the score transport runs on the score synth", 10 in playerSynthIds)
     }
 
     @Test
@@ -1735,8 +1735,8 @@ class AndroidPlaybackEngineTest {
             metronomeClickProvider = null,
             jniBridge = bridge,
             synthFactory = { _ -> FakeSynthDriver(synthsBuilt++) },
-            playerFactory = { synthHandle ->
-                PlayerDriver(0L, if (synthHandle == 1L) metronomeBindings else scoreBindings)
+            playerFactory = { synth ->
+                PlayerDriver(null, if ((synth as FakeSynthDriver).id == 1) metronomeBindings else scoreBindings)
             },
             oboeFactory = { FakeOboeStream.create() },
             pollDispatcher = kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler),
@@ -2744,7 +2744,7 @@ class AndroidPlaybackEngineTest {
                     }
                 }
             },
-            playerFactory = { _ -> PlayerDriver(0L, if (playersBuilt++ == 0) score else metronome) },
+            playerFactory = { _ -> PlayerDriver(null, if (playersBuilt++ == 0) score else metronome) },
             encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
             masterTuningControlChanges = MarkerMasterTuning::invoke,
         )

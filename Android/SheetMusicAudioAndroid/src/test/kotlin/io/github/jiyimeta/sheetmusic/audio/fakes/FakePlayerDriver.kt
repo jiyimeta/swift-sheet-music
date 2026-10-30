@@ -1,6 +1,7 @@
 package io.github.jiyimeta.sheetmusic.audio.fakes
 
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
+import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
 
 /**
  * Builds a [PlayerDriver] backed by a [RecordingBindings] instance.
@@ -20,7 +21,7 @@ internal object FakePlayerDriver {
         var closeCalled = false
         var tickToReturn: Long = 0L
 
-        override fun newPlayer(synthHandle: Long, bytes: ByteArray): Long {
+        override fun newPlayer(synth: SynthDriver?, bytes: ByteArray): Long {
             loadCalls += bytes
             return 1L
         }
@@ -39,7 +40,7 @@ internal object FakePlayerDriver {
 
     internal fun create(): Pair<PlayerDriver, RecordingBindings> {
         val bindings = RecordingBindings()
-        val driver = PlayerDriver(attachedSynthHandle = 0L, nativeBindings = bindings)
+        val driver = PlayerDriver(attachedSynth = null, nativeBindings = bindings)
         return driver to bindings
     }
 }

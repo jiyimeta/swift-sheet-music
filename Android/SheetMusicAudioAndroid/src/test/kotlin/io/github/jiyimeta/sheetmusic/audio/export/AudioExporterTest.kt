@@ -96,7 +96,7 @@ class AudioExporterTest {
             resolver = resolver,
             context = null,
             synthFactory = { _: Int -> drivers.synth as SynthDriver },
-            playerFactory = { _: Long -> drivers.player },
+            playerFactory = { _: SynthDriver? -> drivers.player },
             encoderFactory = { _, _, _ -> encoder },
             masterTuningControlChanges = MarkerMasterTuning::invoke,
         )

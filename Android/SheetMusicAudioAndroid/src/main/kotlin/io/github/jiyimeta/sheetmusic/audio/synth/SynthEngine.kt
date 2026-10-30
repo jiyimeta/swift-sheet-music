@@ -50,7 +50,7 @@ internal class SynthEngine(
      */
     private data class StaffLoadParams(val effectiveBank: Int, val isDrums: Boolean)
 
-    private var synth: SynthDriver? = null
+    @Volatile private var synth: SynthDriver? = null
     private var channelCountValue: Int = 0
 
     /** sfid returned by [SynthDriver.loadSoundFont] at last [setupStaves]; -1 if none loaded. */
@@ -68,8 +68,11 @@ internal class SynthEngine(
      */
     val channelCount: Int get() = channelCountValue
 
-    /** The native synth handle, or 0L if no synth is loaded. */
-    val synthHandle: Long get() = synth?.nativeHandle ?: 0L
+    /**
+     * The score's synth, for a [PlayerDriver] to attach its sequence to, or null if none is loaded. A player built on
+     * a synth that [teardown] closed meanwhile attaches nothing ([SynthDriver.attachSequence]).
+     */
+    val synthDriver: SynthDriver? get() = synth
 
     // ── CC7 round-trip state (Bug 2) ─────────────────────────────────
 

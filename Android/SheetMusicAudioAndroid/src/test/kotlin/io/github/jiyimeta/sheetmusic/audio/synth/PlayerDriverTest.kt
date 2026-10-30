@@ -1,5 +1,6 @@
 package io.github.jiyimeta.sheetmusic.audio.synth
 
+import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,8 +14,8 @@ class PlayerDriverTest {
     private class FakeBindings(private val handleToReturn: Long = 42L) : PlayerDriver.NativeBindings {
         val calls = mutableListOf<String>()
 
-        override fun newPlayer(synthHandle: Long, bytes: ByteArray): Long {
-            calls += "newPlayer($synthHandle,bytes[${bytes.size}])"
+        override fun newPlayer(synth: SynthDriver?, bytes: ByteArray): Long {
+            calls += "newPlayer(${(synth as FakeSynthDriver?)?.id},bytes[${bytes.size}])"
             return handleToReturn
         }
 
@@ -34,7 +35,7 @@ class PlayerDriverTest {
         override fun playerSetTempo(handle: Long, scale: Double) { calls += "playerSetTempo($handle,$scale)" }
     }
 
-    private val synthHandle = 1L
+    private val synth = FakeSynthDriver(1)
     private val smfBytes = ByteArray(16) { it.toByte() }
 
     // -----------------------------------------------------------------------
@@ -43,16 +44,16 @@ class PlayerDriverTest {
 
     @Test fun load_attachesTheBytesToTheSynth() {
         val fake = FakeBindings()
-        val driver = PlayerDriver(attachedSynthHandle = synthHandle, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = synth, nativeBindings = fake)
 
         assertEquals(0, driver.load(smfBytes))
 
-        assertEquals(listOf("newPlayer($synthHandle,bytes[16])"), fake.calls)
+        assertEquals(listOf("newPlayer(1,bytes[16])"), fake.calls)
     }
 
     @Test fun load_answersMinusOneWhenTheBytesAreNotAnSmf() {
         val fake = FakeBindings(handleToReturn = 0L)
-        val driver = PlayerDriver(attachedSynthHandle = synthHandle, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = synth, nativeBindings = fake)
 
         assertEquals(-1, driver.load(smfBytes))
         assertEquals(-1, driver.play())
@@ -60,18 +61,18 @@ class PlayerDriverTest {
 
     @Test fun load_releasesTheSequenceItReplaces() {
         val fake = FakeBindings()
-        val driver = PlayerDriver(attachedSynthHandle = synthHandle, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = synth, nativeBindings = fake)
         driver.load(smfBytes)
         fake.calls.clear()
 
         driver.load(smfBytes)
 
-        assertEquals(listOf("deletePlayer(42)", "newPlayer($synthHandle,bytes[16])"), fake.calls)
+        assertEquals(listOf("deletePlayer(42)", "newPlayer(1,bytes[16])"), fake.calls)
     }
 
     @Test fun play_forwardsToPlayerPlay() {
         val fake = FakeBindings()
-        val driver = PlayerDriver(attachedSynthHandle = synthHandle, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = synth, nativeBindings = fake)
         driver.load(smfBytes)
         fake.calls.clear()
 
@@ -83,7 +84,7 @@ class PlayerDriverTest {
 
     @Test fun stop_forwardsToPlayerStop() {
         val fake = FakeBindings()
-        val driver = PlayerDriver(attachedSynthHandle = synthHandle, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = synth, nativeBindings = fake)
         driver.load(smfBytes)
         fake.calls.clear()
 
@@ -95,7 +96,7 @@ class PlayerDriverTest {
 
     @Test fun seekTick_forwardsToPlayerSeek() {
         val fake = FakeBindings()
-        val driver = PlayerDriver(attachedSynthHandle = synthHandle, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = synth, nativeBindings = fake)
         driver.load(smfBytes)
         fake.calls.clear()
 
@@ -107,7 +108,7 @@ class PlayerDriverTest {
 
     @Test fun currentTick_forwardsToPlayerGetCurrentTick() {
         val fake = FakeBindings()
-        val driver = PlayerDriver(attachedSynthHandle = synthHandle, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = synth, nativeBindings = fake)
         driver.load(smfBytes)
         fake.calls.clear()
 
@@ -119,7 +120,7 @@ class PlayerDriverTest {
 
     @Test fun close_callsPlayerStopThenDeletePlayer() {
         val fake = FakeBindings()
-        val driver = PlayerDriver(attachedSynthHandle = synthHandle, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = synth, nativeBindings = fake)
         driver.load(smfBytes)
         fake.calls.clear()
 
@@ -130,7 +131,7 @@ class PlayerDriverTest {
 
     @Test fun close_isIdempotent_andLeavesTheDriverInert() {
         val fake = FakeBindings()
-        val driver = PlayerDriver(attachedSynthHandle = synthHandle, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = synth, nativeBindings = fake)
         driver.load(smfBytes)
 
         driver.close()
@@ -147,7 +148,7 @@ class PlayerDriverTest {
 
     @Test fun methodsReturnMinusOne_whenNotLoaded() {
         val fake = FakeBindings()
-        val driver = PlayerDriver(attachedSynthHandle = synthHandle, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = synth, nativeBindings = fake)
         // Do NOT call load — handle stays 0.
 
         assertEquals(-1, driver.play())
@@ -161,7 +162,7 @@ class PlayerDriverTest {
     @Test
     fun setTempoForwardsScaleToNativeBindings() {
         val fake = FakeBindings(handleToReturn = 7L)
-        val driver = PlayerDriver(attachedSynthHandle = 0L, nativeBindings = fake)
+        val driver = PlayerDriver(attachedSynth = null, nativeBindings = fake)
         driver.load(byteArrayOf())
         fake.calls.clear()
 
@@ -169,5 +170,21 @@ class PlayerDriverTest {
 
         assertEquals(0, rc)
         assertEquals(listOf("playerSetTempo(7,1.5)"), fake.calls)
+    }
+
+    /**
+     * A player built for a synth that a concurrent teardown already closed attaches nothing through the production
+     * bindings — the synth's driver answers 0 under its own lock — and every later call stays off native code.
+     */
+    @Test fun aPlayerForAClosedSynthLoadsNothingAndStaysInert() {
+        val closedSynth = FakeSynthDriver(3).apply { close() }
+        val driver = PlayerDriver(closedSynth)
+
+        assertEquals(-1, driver.load(smfBytes))
+        assertEquals(-1, driver.play())
+        assertEquals(-1, driver.seekTick(480L))
+        assertEquals(0L, driver.currentTick)
+        driver.close()
+        assertEquals(listOf("close", "attachSequence(16)"), closedSynth.calls)
     }
 }

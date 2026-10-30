@@ -16,7 +16,8 @@ package io.github.jiyimeta.sheetmusic.audio.synth
  * loop reads [currentTick] from another thread than the one that closes.
  */
 internal class PlayerDriver(
-    private val attachedSynthHandle: Long,
+    /** The synth the sequence plays on; null for a test player with no synth. */
+    private val attachedSynth: SynthDriver?,
     private val nativeBindings: NativeBindings = ProductionBindings,
 ) : AutoCloseable {
 
@@ -25,8 +26,8 @@ internal class PlayerDriver(
      * library.
      */
     interface NativeBindings {
-        /** A sequence over [bytes] attached to the synth behind [synthHandle]; 0 when the bytes are not an SMF. */
-        fun newPlayer(synthHandle: Long, bytes: ByteArray): Long
+        /** A sequence over [bytes] attached to [synth]; 0 when it is closed or the bytes are not an SMF. */
+        fun newPlayer(synth: SynthDriver?, bytes: ByteArray): Long
         fun deletePlayer(handle: Long)
         fun playerPlay(handle: Long)
         fun playerStop(handle: Long)
@@ -38,8 +39,7 @@ internal class PlayerDriver(
 
     /** Production implementation — the Swift `HostedSequence` behind [SwiftySynthNative]. */
     object ProductionBindings : NativeBindings {
-        override fun newPlayer(synthHandle: Long, bytes: ByteArray) =
-            SwiftySynthNative.sequenceCreate(synthHandle, bytes)
+        override fun newPlayer(synth: SynthDriver?, bytes: ByteArray) = synth?.attachSequence(bytes) ?: 0L
         override fun deletePlayer(handle: Long) = SwiftySynthNative.sequenceRelease(handle)
         override fun playerPlay(handle: Long) = SwiftySynthNative.sequencePlay(handle)
         override fun playerStop(handle: Long) = SwiftySynthNative.sequenceStop(handle)
@@ -64,7 +64,7 @@ internal class PlayerDriver(
     fun load(smfBytes: ByteArray): Int = synchronized(lock) {
         if (closed) return@synchronized -1
         if (handle != 0L) nativeBindings.deletePlayer(handle)
-        handle = nativeBindings.newPlayer(attachedSynthHandle, smfBytes)
+        handle = nativeBindings.newPlayer(attachedSynth, smfBytes)
         if (handle == 0L) -1 else 0
     }
 

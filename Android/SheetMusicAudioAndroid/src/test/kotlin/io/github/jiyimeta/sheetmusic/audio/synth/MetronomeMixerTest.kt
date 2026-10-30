@@ -31,7 +31,7 @@ class MetronomeMixerTest {
         val allNotesOffChannels = mutableListOf<Int>()
         var closed = false
 
-        override val nativeHandle: Long = 0L
+        override fun attachSequence(smf: ByteArray): Long = 0L
 
         override fun loadSoundFont(uri: Uri?, context: Context?): Int = 0
         override fun programSelect(sfid: Int, channel: Int, bank: Int, program: Int) {}
@@ -63,7 +63,7 @@ class MetronomeMixerTest {
     ): Pair<MetronomeMixer, FakePlayerDriver.RecordingBindings> {
         val bindings = FakePlayerDriver.RecordingBindings()
         val mixer = MetronomeMixer(synth) { smf ->
-            PlayerDriver(0L, bindings).takeIf { it.load(smf) == 0 }
+            PlayerDriver(null, bindings).takeIf { it.load(smf) == 0 }
         }
         mixer.loadSequence(byteArrayOf(1, 2, 3))
         return mixer to bindings

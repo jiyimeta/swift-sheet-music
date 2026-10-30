@@ -15,9 +15,13 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
     /** Per-channel type: false = melodic, true = drum. */
     val channelTypes = BooleanArray(16) { false }
 
-    // Distinct per instance, like the real thing: callers that build one player per synth (the score's
-    // and the metronome's) tell them apart by the handle they were handed.
-    override val nativeHandle: Long = id.toLong()
+    /** Whether [close] ran; a closed fake attaches no sequence, as the real driver does. */
+    var closed = false
+
+    override fun attachSequence(smf: ByteArray): Long {
+        calls += "attachSequence(${smf.size})"
+        return if (closed) 0L else 1000L + id
+    }
 
     override fun loadSoundFont(uri: Uri?, context: Context?): Int {
         calls += "loadSoundFont"
@@ -82,5 +86,5 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
         return 0
     }
 
-    override fun close() { calls += "close" }
+    override fun close() { calls += "close"; closed = true }
 }

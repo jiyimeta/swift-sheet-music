@@ -103,7 +103,7 @@ class AndroidPlaybackEngine internal constructor(
     private val metronomeClickProvider: MetronomeClickProvider? = null,
     private val jniBridge: JniBridge,
     private val synthFactory: (Int) -> SynthDriver,
-    private val playerFactory: (Long) -> PlayerDriver,
+    private val playerFactory: (SynthDriver?) -> PlayerDriver,
     private val oboeFactory: () -> OboeStream,
     /** Dispatcher used for the poll loop. Injectable for tests. */
     private val pollDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -371,7 +371,7 @@ class AndroidPlaybackEngine internal constructor(
         metronomeClickProvider = metronomeClickProvider,
         jniBridge = defaultBridge,
         synthFactory = { sr -> SwiftySynthDriver.create(sr) },
-        playerFactory = { synthHandle -> PlayerDriver(synthHandle) },
+        playerFactory = { synth -> PlayerDriver(synth) },
         oboeFactory = { OboeStream() },
         pollDispatcher = Dispatchers.Default,
         metronomeSynthFactory = { sr -> SwiftySynthDriver.create(sr, SwiftySynthNative.VOICING_METRONOME) },
@@ -697,7 +697,7 @@ class AndroidPlaybackEngine internal constructor(
             bodyMetronomeSmf = metronomeSmfBytes
             metronomeTickOffset = 0L
             metronomeMixer = MetronomeMixer(metronomeSynth) { smf ->
-                val p = playerFactory(metronomeSynth.nativeHandle)
+                val p = playerFactory(metronomeSynth)
                 if (p.load(smf) == 0) p else { p.close(); null }
             }.also {
                 it.loadSequence(metronomeSmfBytes)
@@ -711,7 +711,7 @@ class AndroidPlaybackEngine internal constructor(
             // `LiveChannelPlan` + `MidiChannelRemap`), which is exactly the
             // channel set `channelLoadParams` above programs, so per-strip
             // routing works without a playback-callback shim.
-            val player = playerFactory(engine.synthHandle)
+            val player = playerFactory(engine.synthDriver)
             player.load(smfBytes)
             // Carry the pending rate into the newly built player so a rate set
             // before prepare (or across a re-prepare) survives.
@@ -844,7 +844,7 @@ class AndroidPlaybackEngine internal constructor(
         installScoreDerivedState(derivation)
 
         playerDriver?.close()
-        val player = playerFactory(synth.synthHandle)
+        val player = playerFactory(synth.synthDriver)
         player.load(derivation.smf)
         if (pendingRate != 1.0f) player.setTempo(pendingRate.toDouble())
         playerDriver = player

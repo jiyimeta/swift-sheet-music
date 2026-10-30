@@ -119,7 +119,7 @@ class AudioExporterCountInTest {
             context = null,
             synthFactory = synthFactory,
             playerFactory = { _ ->
-                if (playersBuilt++ == 0) scorePlayer else PlayerDriver(0L, metronomeBindings)
+                if (playersBuilt++ == 0) scorePlayer else PlayerDriver(null, metronomeBindings)
             },
             encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
             masterTuningControlChanges = MarkerMasterTuning::invoke,
