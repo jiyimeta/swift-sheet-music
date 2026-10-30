@@ -63,8 +63,10 @@ internal class AacM4aEncoder(
         while (true) {
             val inputIndex = codec.dequeueInputBuffer(10_000)
             if (inputIndex < 0) {
-                // Codec has no free input buffers: drain outputs to release them.
-                drainEncoder(endOfStream)
+                // Codec has no free input buffers: drain what is ready to release them. Never the end-of-stream
+                // drain — it waits for an end-of-stream buffer, and this one has not been queued yet, so finish()
+                // with the codec's inputs full would wait forever.
+                drainEncoder(false)
                 continue
             }
             val inputBuffer = codec.getInputBuffer(inputIndex) ?: return
