@@ -1,5 +1,6 @@
 import SheetMusicCore
 import SheetMusicFoundation
+import SheetMusicXMLTools
 
 /// TaskLocal stash that lets decoders find the active
 /// `MSCXDiagnosticCollector` without threading it through every
@@ -39,5 +40,26 @@ enum MSCXParserContext {
               let major = Int(parts[0]), let minor = Int(parts[1])
         else { return nil }
         return major * 100 + minor
+    }
+
+    /// The ids of every legacy note-level `<Tie id="N">` in the file being decoded, bound for the rest of
+    /// `Score.decode(_:)`; nil outside it. MuseScore 2 ends a glissando with the same `<endSpanner id="N"/>` on the
+    /// end note that it ends a tie with, so a note's `<endSpanner>` is a tie end only when its id is one of these —
+    /// read as a tie, a glissando's end found no partner and was reported as `mscx.tie.unpairedSide`.
+    @TaskLocal static var legacyTieIDs: Set<String>?
+
+    /// Collects `legacyTieIDs` from a score subtree.
+    static func legacyTieIDs(in node: XMLTreeNode) -> Set<String> {
+        var ids = Set<String>()
+        var stack = [node]
+        while let current = stack.popLast() {
+            if current.name == "Note" {
+                for tie in current.all("Tie") {
+                    if let id = tie.attributes["id"] { ids.insert(id) }
+                }
+            }
+            stack.append(contentsOf: current.children)
+        }
+        return ids
     }
 }

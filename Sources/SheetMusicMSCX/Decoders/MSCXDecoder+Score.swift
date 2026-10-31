@@ -70,12 +70,14 @@ extension Score {
         return try MSCXParserContext.$version.withValue(version) {
             try MSCXParserContext.$formatRevision.withValue(revision) {
                 try MSCXParserContext.$division.withValue(division) {
-                    try decodeBody(
-                        scoreNode: scoreNode,
-                        division: division,
-                        version: version,
-                        styleFileStyle: styleFileStyle,
-                    )
+                    try MSCXParserContext.$legacyTieIDs.withValue(MSCXParserContext.legacyTieIDs(in: scoreNode)) {
+                        try decodeBody(
+                            scoreNode: scoreNode,
+                            division: division,
+                            version: version,
+                            styleFileStyle: styleFileStyle,
+                        )
+                    }
                 }
             }
         }

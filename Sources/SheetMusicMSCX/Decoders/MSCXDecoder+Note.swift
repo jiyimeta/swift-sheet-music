@@ -13,7 +13,7 @@ extension Note {
     /// instrument transposition, so preserving the source spelling
     /// would collide with the generated value.
     private static let consumedNoteChildren: Set = [
-        "Accidental", "Bend", "ChordLine", "Fingering", "Parenthesis", "Symbol",
+        "Accidental", "Bend", "ChordLine", "Fingering", "Glissando", "Parenthesis", "Symbol",
         "Spanner", "Tie",
         "color", EIDXML.childName, "endSpanner", "fret", "head", "offset", "parentheses", "pitch",
         "autoplace", "placement",
@@ -165,12 +165,22 @@ extension Note {
         }
         // MS2 / MS3 legacy tie encoding: `<Tie id="N">` directly on
         // the start note, `<endSpanner id="N"/>` on the end note.
-        // C++: MuseScore 2 `libmscore/note.cpp` `Note::read`. Only
-        // ties attach to notes at this level in MS2 (slurs sit on
-        // chords / segments, glissandi use their own `<Glissando>`
-        // element), so any note-level `<endSpanner>` is a tie end.
+        // C++: MuseScore 2 `libmscore/note.cpp` `Note::read`. A
+        // MuseScore 2 glissando sits on its start note the same way
+        // (`<Glissando id="N">`) and ends with the same
+        // `<endSpanner id="N"/>`, so an end is a tie's only when its
+        // id names a `<Tie>` (`MSCXParserContext.legacyTieIDs`).
         if node.children.contains(where: { $0.name == "Tie" }) { result.tieForward = 1 }
-        if node.children.contains(where: { $0.name == "endSpanner" }) { result.tieBack = 1 }
+        let tieIDs = MSCXParserContext.legacyTieIDs
+        if node.all("endSpanner").contains(where: { end in
+            guard let tieIDs, let id = end.attributes["id"] else { return true }
+            return tieIDs.contains(id)
+        }) {
+            result.tieBack = 1
+        }
+        if result.glissando == nil, let glissNode = node.first("Glissando") {
+            result.glissando = decodeGlissando(glissNode)
+        }
         return result
     }
 

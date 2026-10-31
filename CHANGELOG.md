@@ -13,6 +13,12 @@ and this project adheres to
   elements rebuilt the first voice without its tuplets, so the triplets in that measure lost their spans, were written
   as `<durationType>measure</durationType>`, and the `.mscx` the import produced failed to read back
   (`mscx.chord.invalidDurationType`). 36 of a 658-PDF corpus failed this way; none do now.
+- **A MuseScore 2 glissando is read, and its end is no longer taken for a tie's.** MuseScore 2 puts a glissando on its
+  start note as `<Glissando id="N">` and ends it with the note-level `<endSpanner id="N"/>` a tie also ends with. Every
+  such end was read as a tie end, found no partner and was reported as `mscx.tie.unpairedSide`, while the glissando
+  itself was kept only as unread markup — neither drawn nor played. An `<endSpanner>` is now a tie end only when its id
+  names a `<Tie>`, and the `<Glissando>` decodes like MuseScore 4's. In a 671-file corpus the warning fell from 253
+  occurrences in 40 files to 60 in 3 (those three are MuseScore 3 ties that jump a rest).
 - **`XMLTreeSerializer` drops the characters XML 1.0 cannot carry** (C0 controls other than tab / LF / CR, U+FFFE,
   U+FFFF). Written raw, a control character from a PDF's text layer made a file `XMLTreeParser` rejected
   (`control character in character data`).
