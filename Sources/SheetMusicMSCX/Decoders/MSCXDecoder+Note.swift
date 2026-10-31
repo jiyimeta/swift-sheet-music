@@ -123,20 +123,25 @@ extension Note {
     /// sides sit on the same note, which is why `guitarBendBack` is read
     /// independently of `guitarBend` rather than as an else-branch.
     ///
-    /// MS2 / MS3 wrote ties differently — a bare `<Tie>` / `<endSpanner>`
-    /// pair — so that legacy form is resolved here too. The other MS3 legacy
+    /// Ties come in more forms than the other two — MuseScore 2's bare
+    /// `<Tie>` / `<endSpanner>` pair and MuseScore 5's end-note `<Tie>` among
+    /// them — so their sides are read by `MSCXTieSide.read`, which is also what
+    /// records each side's partner for the pairing pass. The other MS3 legacy
     /// form, the `<Bend>` pitch curve, is not a connector at all: it lives on
     /// one note, so `Note.decode` reads it straight into `legacyBend`.
     private static func decodeConnectors(_ node: XMLTreeNode) -> Connectors {
         var result = Connectors()
+        // Numbering is positional in MSCX; default to 1 when present.
+        for tie in MSCXTieSide.read(node) {
+            switch tie.side {
+            case .forward: result.tieForward = 1
+            case .back: result.tieBack = 1
+            }
+        }
         for spanner in node.all("Spanner") {
             let hasNext = spanner.children.contains { $0.name == "next" }
             let hasPrev = spanner.children.contains { $0.name == "prev" }
             switch spanner.attributes["type"] {
-            case "Tie":
-                // Numbering is positional in MSCX; default to 1 when present.
-                if hasNext { result.tieForward = 1 }
-                if hasPrev { result.tieBack = 1 }
             case "Glissando":
                 if hasNext, let glissNode = spanner.first("Glissando") {
                     result.glissando = decodeGlissando(glissNode)
@@ -163,21 +168,8 @@ extension Note {
                 continue
             }
         }
-        // MS2 / MS3 legacy tie encoding: `<Tie id="N">` directly on
-        // the start note, `<endSpanner id="N"/>` on the end note.
-        // C++: MuseScore 2 `libmscore/note.cpp` `Note::read`. A
-        // MuseScore 2 glissando sits on its start note the same way
-        // (`<Glissando id="N">`) and ends with the same
-        // `<endSpanner id="N"/>`, so an end is a tie's only when its
-        // id names a `<Tie>` (`MSCXParserContext.legacyTieIDs`).
-        if node.children.contains(where: { $0.name == "Tie" }) { result.tieForward = 1 }
-        let tieIDs = MSCXParserContext.legacyTieIDs
-        if node.all("endSpanner").contains(where: { end in
-            guard let tieIDs, let id = end.attributes["id"] else { return true }
-            return tieIDs.contains(id)
-        }) {
-            result.tieBack = 1
-        }
+        // A MuseScore 2 glissando sits on its start note as `<Glissando id="N">`, the way its tie does
+        // (C++: MuseScore 2 `libmscore/note.cpp` `Note::read`).
         if result.glissando == nil, let glissNode = node.first("Glissando") {
             result.glissando = decodeGlissando(glissNode)
         }

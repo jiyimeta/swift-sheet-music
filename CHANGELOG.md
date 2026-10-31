@@ -7,7 +7,32 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **A tie side the MSCX reader still has to drop is reported under a code naming the shape of its tie**, in place of
+  the single `mscx.tie.unpairedSide`: `mscx.tie.unpairedSide.crossStaff` (its `<location>` names another staff),
+  `.crossVoice` (another voice), `.distant` (a note past the neighbouring chord — over other chords or rests, or more
+  bars on), `.noPartner` (the neighbouring chord, where nothing carries the other half), `.grace` (a grace note's tie),
+  `.noLocation` (MuseScore 2's `<Tie id>` / `<endSpanner>`, or a `<next>` / `<prev>` without a `<location>`) and
+  `.museScore5` (MuseScore 5's `<Tie>` naming its start note by `<eid>`). The message carries the raw `<location>`
+  deltas. A host matching the old code exactly should match the `mscx.tie.unpairedSide` prefix instead.
+
 ### Fixed
+
+- **A tie into another staff of the part, or past the chords in between, is kept, drawn, played and written back.**
+  MuseScore looks for a tie's partner in every track of the part and pairs the two halves it wrote by `<location>`
+  however far apart they are, so piano scores carry ties from one hand into the other (`<staves>±1</staves>`: a note
+  held across, or a broken chord moved to the other staff whose notes each tie into the chord they sustain into —
+  MuseScore's `vtest/scores/tie-4.mscz` and `tie-18.mscz`), and MuseScore 3.02 tied over a hidden rest into the next
+  bar. Everything that paired a tie's ends walked one staff, so the reader dropped both halves and the note was struck
+  again. `DetachedTies` (Core) finds them by one rule that the reader, layout, playback, `TiePlanner`, the dangling-tie
+  pass, accidental visibility and the writer share; the reader takes such a tie only where the file names the same
+  partner, and the writer names it with `<staves>` and its true `<measures>` / `<fractions>`. Playback holds the note
+  from its first strike to the end of the last note of the tie, across the staves' tracks. The dangling-tie pass now
+  looks at every staff of the part, two bars either side of an edit.
+- **A MuseScore 5 tie is read.** MuseScore 5 writes a tie once, as a `<Tie>` on its end note whose `<startElement>`
+  names the start note's `<eid>`; the reader took that `<Tie>` for a MuseScore 2 tie start on the end note, so the tie
+  was lost and the end note's flag dangled.
 
 - **A PDF whose measure changes clef, key or time keeps that measure's tuplets.** Prepending the clef / key / time
   elements rebuilt the first voice without its tuplets, so the triplets in that measure lost their spans, were written
