@@ -123,14 +123,63 @@ struct RhythmSpellingTests {
         #expect(Self.spell(Self.fr(1), at: Self.fr(0), rest: true) == [.measure])
     }
 
-    /// Added with the Task 5 mutation run: dropping the rest dot cap survived every other test, because in 4/4 a rest
-    /// never lands on a double dot. In 2/2 a 7/16 rest from the top of the bar is the case that does (Python port:
-    /// `quarter, eighth.` for the rest, `quarter..` for a note).
-    @Test("a rest carries one dot at most, whatever dotLevel says")
-    func restDotCap() {
-        let dotted = NoteDuration.eighth.dotted(1)
-        #expect(Self.spell(Self.fr(7, 16), at: Self.fr(0), rest: true, meter: (2, 2)) == [.quarter, dotted])
+    /// A rest takes no dot where the beat is an undotted value (the owner's 8th and 16th rests from beat 4 stay two
+    /// rests), and one where units group in threes. MuseScore's reading keeps its one-dot cap everywhere: in 2/2 a 7/16
+    /// rest from the top of the bar is where that cap shows (Python port: `quarter, eighth.` for the rest, `quarter..`
+    /// for a note) — the case the Task 5 mutation run added.
+    @Test("a rest takes no dot where the beat is undotted, and one where units group in threes")
+    func restDots() {
+        let dottedEighth = NoteDuration.eighth.dotted(1)
+        let dottedQuarter = NoteDuration.quarter.dotted(1)
+        #expect(Self.spell(Self.fr(3, 16), at: Self.fr(3, 4), rest: true) == [.eighth, .sixteenth])
+        #expect(Self.spell(Self.fr(3, 16), at: Self.fr(3, 4), rest: true, .museScore) == [dottedEighth])
+        let cutTimeRest = Self.spell(Self.fr(7, 16), at: Self.fr(0), rest: true, meter: (2, 2))
+        #expect(cutTimeRest == [.quarter, .eighth, .sixteenth])
+        let cutTimeRestByMuseScore = Self.spell(Self.fr(7, 16), at: Self.fr(0), rest: true, meter: (2, 2), .museScore)
+        #expect(cutTimeRestByMuseScore == [.quarter, dottedEighth])
+        // The same span as a note keeps its dots, so the rule is the rest's alone.
         #expect(Self.spell(Self.fr(7, 16), at: Self.fr(0), meter: (2, 2)) == [NoteDuration.quarter.dotted(2)])
+        for meter in [(6, 8), (5, 8), (7, 8)] {
+            #expect(Self.spell(Self.fr(3, 8), at: Self.fr(0), rest: true, meter: meter) == [dottedQuarter], "\(meter)")
+        }
+    }
+
+    // MARK: Syncopations across a weaker beat
+
+    /// folino's reading (owner, 2026-10-30): a note that starts and ends off the beat may cross beat 2 or 4 on the
+    /// 8th grid, but not with an end on a 16th — there it splits at the beat, and so a tie written across the beat is
+    /// never merged into one note. MuseScore keeps both. Notes with an end on a beat are left to the dot level.
+    @Test("a syncopation across a weaker beat may cross on the 8th grid, not with an end on a 16th")
+    func weakBeatSyncopations() {
+        let dottedEighth = NoteDuration.eighth.dotted(1)
+        // The owner's bar 14: a 16th~16th tie across beat 4 stays a tie.
+        #expect(Self.spell(Self.fr(1, 8), at: Self.fr(11, 16)) == [.sixteenth, .sixteenth])
+        #expect(Self.spell(Self.fr(1, 8), at: Self.fr(11, 16), .museScore) == [.eighth])
+        // A dotted 8th~16th tie across beat 4 is not merged into a quarter starting on a 16th.
+        #expect(Self.spell(Self.fr(1, 4), at: Self.fr(9, 16)) == [dottedEighth, .sixteenth])
+        #expect(Self.spell(Self.fr(1, 4), at: Self.fr(9, 16), .museScore) == [.quarter])
+        #expect(Self.spell(Self.fr(1, 4), at: Self.fr(3, 16)) == [.sixteenth, dottedEighth])
+        // The same holds for beat 2 of 2/4 and 3/4.
+        for meter in [(2, 4), (3, 4)] {
+            #expect(Self.spell(Self.fr(1, 8), at: Self.fr(3, 16), meter: meter) == [.sixteenth, .sixteenth], "\(meter)")
+        }
+        // On the 8th grid the crossing stays: 8th-quarter-8th.
+        #expect(Self.spell(Self.fr(1, 4), at: Self.fr(1, 8)) == [.quarter])
+        #expect(Self.spell(Self.fr(1, 4), at: Self.fr(5, 8)) == [.quarter])
+        // Compound time is not touched.
+        #expect(Self.spell(Self.fr(1, 8), at: Self.fr(5, 16), meter: (6, 8)) == [.sixteenth, .sixteenth])
+    }
+
+    @Test("a note with an end on a beat is left to the dot level")
+    func weakBeatCrossingsEndingOnABeat() {
+        let doubleDottedQuarter = NoteDuration.quarter.dotted(2)
+        let dottedEighth = NoteDuration.eighth.dotted(1)
+        let singleDots = RhythmSpellingPolicy(dotLevel: .single, midBarSyncopations: .split)
+        // From beat 1 to the last 16th of beat 2, and from the 16th after beat 1 to beat 3.
+        #expect(Self.spell(Self.fr(7, 16), at: Self.fr(0)) == [doubleDottedQuarter])
+        #expect(Self.spell(Self.fr(7, 16), at: Self.fr(1, 16)) == [doubleDottedQuarter])
+        #expect(Self.spell(Self.fr(7, 16), at: Self.fr(0), singleDots) == [.quarter, dottedEighth])
+        #expect(Self.spell(Self.fr(7, 16), at: Self.fr(1, 16), singleDots) == [dottedEighth, .quarter])
     }
 
     @Test("every spec 3.3 row, default knobs")
@@ -176,7 +225,7 @@ struct RhythmSpellingTests {
         #expect(spelled == [NoteDuration.half.dotted(1)])
     }
 
-    @Test("rests are capped at one dot whatever dotLevel says")
+    @Test("a rest never takes more than one dot, whatever dotLevel says")
     func restsCapAtOneDot() {
         #expect(Self.spell(Self.fr(3, 8), at: Self.fr(0), rest: true, Self.tripleDots) == [.quarter, .eighth])
         #expect(
@@ -397,12 +446,13 @@ extension RhythmSpellingTests {
         meterRow(2, 2, true, fr(1, 4), fr(0, 1), [.quarter], [.quarter]),
         meterRow(2, 2, false, fr(1, 4), fr(1, 8), [.quarter], [.quarter]),
         meterRow(2, 2, true, fr(1, 4), fr(1, 8), [.quarter], [.quarter]),
-        meterRow(2, 2, false, fr(1, 4), fr(3, 8), [.quarter], [.quarter]),
+        // 2/2's half-beat grid is the quarter, so a quarter from 3/8 is a "16th-grid" syncopation across beat 2.
+        meterRow(2, 2, false, fr(1, 4), fr(3, 8), [.eighth, .eighth], [.quarter]),
         meterRow(2, 2, true, fr(1, 4), fr(3, 8), [.eighth, .eighth], [.eighth, .eighth]),
         meterRow(2, 2, false, fr(3, 8), fr(0, 1), [NoteDuration.quarter.dotted(1)], [NoteDuration.quarter.dotted(1)]),
-        meterRow(2, 2, true, fr(3, 8), fr(0, 1), [NoteDuration.quarter.dotted(1)], [NoteDuration.quarter.dotted(1)]),
+        meterRow(2, 2, true, fr(3, 8), fr(0, 1), [.quarter, .eighth], [NoteDuration.quarter.dotted(1)]),
         meterRow(2, 2, false, fr(3, 8), fr(1, 8), [NoteDuration.quarter.dotted(1)], [NoteDuration.quarter.dotted(1)]),
-        meterRow(2, 2, true, fr(3, 8), fr(1, 8), [NoteDuration.quarter.dotted(1)], [NoteDuration.quarter.dotted(1)]),
+        meterRow(2, 2, true, fr(3, 8), fr(1, 8), [.eighth, .quarter], [NoteDuration.quarter.dotted(1)]),
         meterRow(2, 2, false, fr(3, 8), fr(3, 8), [.eighth, .quarter], [.eighth, .quarter]),
         meterRow(2, 2, true, fr(3, 8), fr(3, 8), [.eighth, .quarter], [.eighth, .quarter]),
         meterRow(2, 2, false, fr(5, 8), fr(0, 1), [.half, .eighth], [.half, .eighth]),
@@ -414,17 +464,21 @@ extension RhythmSpellingTests {
         ),
         meterRow(
             2, 2, true, fr(5, 8), fr(1, 8),
-            [NoteDuration.quarter.dotted(1), .quarter],
+            [.eighth, .quarter, .quarter],
             [NoteDuration.quarter.dotted(1), .quarter],
         ),
         meterRow(2, 2, false, fr(5, 8), fr(3, 8), [.eighth, .half], [.eighth, .half]),
         meterRow(2, 2, true, fr(5, 8), fr(3, 8), [.eighth, .half], [.eighth, .half]),
         meterRow(2, 2, false, fr(3, 4), fr(0, 1), [NoteDuration.half.dotted(1)], [NoteDuration.half.dotted(1)]),
         meterRow(2, 2, true, fr(3, 4), fr(0, 1), [.half, .quarter], [.half, .quarter]),
-        meterRow(2, 2, false, fr(3, 4), fr(1, 8), [NoteDuration.half.dotted(1)], [NoteDuration.half.dotted(1)]),
+        meterRow(
+            2, 2, false, fr(3, 4), fr(1, 8),
+            [NoteDuration.quarter.dotted(1), NoteDuration.quarter.dotted(1)],
+            [NoteDuration.half.dotted(1)],
+        ),
         meterRow(
             2, 2, true, fr(3, 4), fr(1, 8),
-            [NoteDuration.quarter.dotted(1), NoteDuration.quarter.dotted(1)],
+            [.eighth, .quarter, .quarter, .eighth],
             [NoteDuration.quarter.dotted(1), NoteDuration.quarter.dotted(1)],
         ),
         meterRow(3, 8, false, fr(1, 4), fr(0, 1), [.quarter], [.quarter]),
@@ -670,7 +724,7 @@ extension RhythmSpellingTests {
         ),
         meterRow(5, 4, true, fr(5, 8), fr(3, 8), [.eighth, .quarter, .quarter], [.eighth, .quarter, .quarter]),
         meterRow(5, 4, false, fr(3, 4), fr(0, 1), [NoteDuration.half.dotted(1)], [NoteDuration.half.dotted(1)]),
-        meterRow(5, 4, true, fr(3, 4), fr(0, 1), [NoteDuration.half.dotted(1)], [NoteDuration.half.dotted(1)]),
+        meterRow(5, 4, true, fr(3, 4), fr(0, 1), [.half, .quarter], [NoteDuration.half.dotted(1)]),
         meterRow(5, 4, false, fr(3, 4), fr(1, 8), [.eighth, .half, .eighth], [.eighth, .half, .eighth]),
         meterRow(5, 4, true, fr(3, 4), fr(1, 8), [.eighth, .half, .eighth], [.eighth, .half, .eighth]),
         meterRow(
