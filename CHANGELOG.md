@@ -7,6 +7,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`GraceChord.spanners` and `Spanner.nextGraceIndex`: a slur can begin or end on a grace note.** A grace's slur
+  begins are stored on the grace as an ordinary chord's are on the chord, their offsets measured from the parent
+  chord's tick, which the grace shares; a slur ending on a grace names it by MuseScore's `<location><grace>` index,
+  which `Chord.grace(atMuseScoreGraceIndex:)` and `Chord.museScoreGraceIndex(side:index:)` map to and from a grace
+  slot. Both fields are additive with defaults, so no existing call site changes.
+
 ### Changed
 
 - **A tie side the MSCX reader still has to drop is reported under a code naming the shape of its tie**, in place of
@@ -33,6 +41,27 @@ and this project adheres to
 - **A MuseScore 5 tie is read.** MuseScore 5 writes a tie once, as a `<Tie>` on its end note whose `<startElement>`
   names the start note's `<eid>`; the reader took that `<Tie>` for a MuseScore 2 tie start on the end note, so the tie
   was lost and the end note's flag dangled.
+- **A slur that begins on a grace note is kept, drawn and saved.** The acciaccatura or appoggiatura slurred into its
+  principal note is a slur on the grace chord in MuseScore, and it was dropped with `mscx.chord.spannerDropped`
+  ("grace-note <Spanner type="Slur"> is not modeled"). It now decodes into `GraceChord.spanners`, is drawn from the
+  grace notehead — below the up-stemmed grace, as MuseScore's `SlurTieLayout::computeUp` puts it — and is written back
+  with both halves in the right `<Chord>`s and the `<grace>` indices MuseScore pairs them by. It is drawn but not
+  selectable: no `SlurID` case reaches a slur stored on a grace. A range copy carries it when it ends in its own grace
+  run (the common case) and leaves it behind otherwise; `FormatRhythms` protects its end like a chord's slur. A grace
+  slur that reaches another chord is not re-anchored by the bar-structure edits (insert / delete measure, time
+  signature, re-time), which keep its offsets as written.
+- **A slur that ends on a grace note ends there, not on the grace's chord.** `<next><location><grace>` was dropped with
+  `mscx.slur.locationDropped` and the slur re-homed onto the chord the grace belongs to; it is now read, drawn to the
+  grace and written back. Over a 615-file MuseScore 4 corpus `mscx.chord.spannerDropped` now fires in 7 files instead
+  of 13 (all seven are `HammerOnPullOff`, a different spanner) and `mscx.slur.locationDropped` in 2 instead of 7 (a
+  voice hop and a staff hop); over 672 MuseScore 3 files both fall to none, from 4 and 2.
+- **A chord-anchored slur whose ends share a tick writes `<next><location/></next>`, not a bare `<next/>`.** MuseScore
+  reads a `<next>` without a `<location>` as no begin side at all (`ConnectorInfoReader::readEndpointLocation` keeps
+  `Location::absolute()`), so the grace slurred into its own principal — the shape with no offset — would not have
+  read back.
+- **`SetGraceNotes` keeps the slur on a grace the caller restates.** Graces are matched ignoring their slurs and a
+  matched slot keeps its own, so a host that rebuilds the list from what it shows (the wire form carries no slurs) no
+  longer strips one when it adds a grace.
 
 - **A PDF whose measure changes clef, key or time keeps that measure's tuplets.** Prepending the clef / key / time
   elements rebuilt the first voice without its tuplets, so the triplets in that measure lost their spans, were written

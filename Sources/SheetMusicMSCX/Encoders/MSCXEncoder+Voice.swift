@@ -255,13 +255,22 @@ extension Voice {
             at position: Fraction,
         ) -> [XMLTreeNode] {
             guard case .chord = element else { return [] }
-            let claimed = pendingSlurEnds.filter {
-                $0.measuresAway == 0 && $0.fraction == position
+            return claimSlurEndMarkers(at: position, graceIndex: nil)
+        }
+
+        /// Take the end markers that belong on the grace with MuseScore `<grace>` index `graceIndex` of the chord
+        /// at `position` — a slur that ends on that grace rather than on the chord.
+        mutating func claimSlurEndMarkers(forGraceIndex graceIndex: Int, at position: Fraction) -> [XMLTreeNode] {
+            claimSlurEndMarkers(at: position, graceIndex: graceIndex)
+        }
+
+        private mutating func claimSlurEndMarkers(at position: Fraction, graceIndex: Int?) -> [XMLTreeNode] {
+            func belongsHere(_ end: MSCXPendingSlurEnd) -> Bool {
+                end.measuresAway == 0 && end.fraction == position && end.targetGraceIndex == graceIndex
             }
+            let claimed = pendingSlurEnds.filter(belongsHere)
             guard !claimed.isEmpty else { return [] }
-            pendingSlurEnds.removeAll {
-                $0.measuresAway == 0 && $0.fraction == position
-            }
+            pendingSlurEnds.removeAll(where: belongsHere)
             return claimed.map { $0.marker() }
         }
     }

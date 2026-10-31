@@ -20,8 +20,15 @@ extension Voice {
     /// neighbour-chord delta — the grace shares the parent's tick, so
     /// the two are the same value. The unguarded `…Delta` forms are
     /// used because the parent chord itself need not carry any tie.
+    ///
+    /// A slur ending on a grace gets its `<prev>` marker in that grace's
+    /// `<Chord>`: the ones begun earlier in the voice are claimed from
+    /// `state` at the parent's `position`, and the ones begun within this
+    /// same run come from `runEnds`.
     private func emitGraceChords(
         of chord: Chord,
+        at position: Fraction,
+        runEnds: MSCXRunSlurEnds,
         isLastChord: Bool,
         voiceBarLength: Fraction,
         carryIn: VoiceTieCarry,
@@ -40,16 +47,19 @@ extension Voice {
             previousChordDuration: state.previousChordDuration,
             prevVoiceTotal: carryIn.prevVoiceTotal,
         )
-        for (grace, listIndex) in chord.mscxFileOrderedGracesWithListIndex {
+        for (graceIndex, (grace, listIndex)) in chord.mscxFileOrderedGracesWithListIndex.enumerated() {
             let graceEID = grace.graceType.isAfter
                 ? chord.graceNotesAfter.eid(at: listIndex)
                 : chord.graceNotesBefore.eid(at: listIndex)
+            let slurEndMarkers = state.claimSlurEndMarkers(forGraceIndex: graceIndex, at: position)
+                + (runEnds.onGrace[graceIndex] ?? [])
             state.children.append(grace.encode(
                 eid: graceEID,
                 parentChord: chord,
                 parentForwardTieLocation: forwardDelta,
                 parentBackwardTieLocation: backwardDelta,
                 listIndex: listIndex,
+                slurEndMarkers: slurEndMarkers,
                 options: options,
             ))
         }
@@ -122,9 +132,19 @@ extension Voice {
         let voiceBarLength = plan.voiceBarLength
         let effectiveDuration = plan.effectiveDuration
         let isLastChord = if case .chord = element { index == plan.lastChordIndex } else { false }
+        // The chord's own position within the measure, read before the
+        // cursor advances past it: both halves of the chord-anchored slur
+        // bookkeeping — the end markers landing here and the begin sides
+        // registering their targets — are measured from it, and so are
+        // its graces', which share its tick.
+        let chordPosition = state.voiceTotal
+        var runEnds = MSCXRunSlurEnds()
         if case let .chord(chord) = element {
+            runEnds = chord.runSlurEnds()
             emitGraceChords(
                 of: chord,
+                at: chordPosition,
+                runEnds: runEnds,
                 isLastChord: isLastChord,
                 voiceBarLength: voiceBarLength,
                 carryIn: carryIn,
@@ -135,14 +155,9 @@ extension Voice {
         emitBeamIfNeeded(
             element: element, index: index, state: &state, options: options,
         )
-        // The chord's own position within the measure, read before the
-        // cursor advances past it: both halves of the chord-anchored slur
-        // bookkeeping — the end markers landing here and the begin sides
-        // registering their targets — are measured from it.
-        let chordPosition = state.voiceTotal
         let slurEndMarkers = state.claimSlurEndMarkers(
             forChordRest: element, at: chordPosition,
-        )
+        ) + runEnds.onChord
         try state.children.append(encode(
             element: element,
             eid: elements.eid(at: index),

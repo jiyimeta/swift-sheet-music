@@ -84,12 +84,18 @@ extension GraceChord {
     /// never need it (the tie encoder resolves grace partners from the parent
     /// side instead), so it defaults to `0`, the value that makes a lone grace
     /// behave identically.
+    ///
+    /// `slurEndMarkers` are the `<prev>` sides of slurs that END on this grace, computed by the voice walker. They and
+    /// the begin sides this grace carries (`spanners`) sit after `<durationType>` and before the grace tag — where
+    /// MuseScore writes a grace's slurs, `TWrite::writeProperties(const ChordRest*, …)` being the same for a grace as
+    /// for any chord (`selectionfilter_gracesandslurs.mscx`).
     func encode(
         eid: EID,
         parentChord: Chord? = nil,
         parentForwardTieLocation: TieLocation? = nil,
         parentBackwardTieLocation: TieLocation? = nil,
         listIndex: Int = 0,
+        slurEndMarkers: [XMLTreeNode] = [],
         options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
@@ -101,6 +107,7 @@ extension GraceChord {
         // case rather than the exotic one.
         let chordCarriesSmall = appendChordLevelSmall(for: notes, to: &children)
         duration.appendDurationXML(to: &children)
+        children += slurEndMarkers + slurBeginMarkers(options: options)
         children.append(XMLTreeNode(name: graceType.mscxTag))
         for (noteIndex, note) in notes.enumerated() {
             children.append(note.encode(

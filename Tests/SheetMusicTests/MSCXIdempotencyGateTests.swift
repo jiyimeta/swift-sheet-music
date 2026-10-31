@@ -169,6 +169,8 @@ struct MSCXIdempotencyTests {
     ///   within-measure cursor) reads that cursor's value either. Covering the literal mechanism would need
     ///   the encoder taught to interleave a system element into a non-zero voice too, plus a fixture — not
     ///   just a fixture on its own.
+    /// - `slur_grace_selectionfilter` — slurs begun on a grace and ended on one, whose halves the encoder places in
+    ///   grace `<Chord>`s with `<grace>` indices from the run it is writing.
     /// - `guitarbend_simple` — 6 `<location>` nodes, and the most recently reworked endpoint writer
     ///   (`bb3474ae feat(mscx): encode GuitarBend spanners with real endpoint locations`) had no fixture here at
     ///   all until now.
@@ -201,6 +203,7 @@ struct MSCXIdempotencyTests {
         "multiPartMixedStaves",
         "spanner_offsets_score_end",
         "slur_ms3_exchangevoices",
+        "slur_grace_selectionfilter",
         "guitarbend_simple",
         "tempo-texts",
         "tempo-gradual",

@@ -34,6 +34,14 @@ public struct Spanner: Sendable, Equatable {
     /// spanners only emit `<measures>` (whole-measure offsets); the
     /// non-nil case is spanners that end mid-measure.
     public var nextFractionsOffset: Fraction?
+    /// MuseScore `<next><location><grace>N</grace>` of a chord-anchored slur: the end is not the chord at the
+    /// offsets above but the grace chord at index `N` of that chord's grace run. `nil` = the chord itself.
+    ///
+    /// `N` is MuseScore's `Chord::graceIndex()` — the grace's position in the run as the file lists it before the
+    /// chord (`rw/read460/measureread.cpp`), which `Chord.grace(atMuseScoreGraceIndex:)` maps back to a slot:
+    /// `graceNotesBefore` left to right, then `graceNotesAfter` right to left. `Location::toAbsolute` never offsets
+    /// it, so it names the end grace outright rather than relative to anything.
+    public var nextGraceIndex: Int?
     public var voltaEndings: [Int] // for Volta: the take-numbers (1, 2, …)
     /// Smallest volta ending number, or 0 when `voltaEndings` is
     /// empty. Mirrors `Volta::firstEnding` — the 0 case signals
@@ -146,8 +154,10 @@ public struct Spanner: Sendable, Equatable {
         lineProperties: LineProperties? = nil,
         chordTextLine: ChordTextLine? = nil,
         payloadMarkup: [PreservedXML] = [],
+        nextGraceIndex: Int? = nil,
     ) {
         self.isEndMarker = isEndMarker ?? !visible
+        self.nextGraceIndex = nextGraceIndex
         self.kind = kind
         self.rawType = rawType
         self.nextMeasuresOffset = nextMeasuresOffset

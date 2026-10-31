@@ -344,14 +344,12 @@ struct SlurDecodeTests {
     /// A grace chord can start a slur — MuseScore's own
     /// `selectionfilter_gracesandslurs.mscx` writes
     /// `<Spanner type="Slur">…<next><location><fractions>` inside an
-    /// `<acciaccatura/>` chord. `GraceChord` holds no spanner list, so the
-    /// begin side cannot be modeled; the loss must be *announced* rather than
-    /// disappear, since the matching `<prev>` end marker is consumed silently
-    /// by design and the pair would otherwise vanish without a trace.
+    /// `<acciaccatura/>` chord. The begin side lands in `GraceChord.spanners`,
+    /// silently: nothing is lost. `GraceSlurDecodeTests` covers the shapes.
     ///
     /// The grace note itself must still survive and attach to its parent.
-    @Test("a grace chord's begin-side slur is dropped with a diagnostic")
-    func graceChordSlurWarns() throws {
+    @Test("a grace chord's begin-side slur is kept on the grace")
+    func graceChordSlurIsKept() throws {
         let decoded = try decodeVoice("""
         <voice>
           <Chord>
@@ -386,8 +384,10 @@ struct SlurDecodeTests {
         }
         #expect(parent.graceNotesBefore.count == 1)
         #expect(parent.graceNotesBefore.first?.notes.first?.pitch == 72)
-        #expect(decoded.diagnostics.map(\.code) == ["mscx.chord.spannerDropped"])
-        #expect(decoded.diagnostics.first?.message.contains("grace-note") == true)
+        #expect(parent.graceNotesBefore.first?.spanners == [Spanner(
+            kind: .slur, rawType: "Slur", nextFractionsOffset: Fraction(numerator: 1, denominator: 8),
+        )])
+        #expect(decoded.diagnostics.map(\.code) == [])
     }
 
     /// The diagnostic is scoped to grace chords that actually carry a begin

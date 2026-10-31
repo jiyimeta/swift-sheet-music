@@ -81,7 +81,8 @@ enum MSCXPreservation {
         "OPEN GAP, not a design decision: the identifier lives on the spanner payload "
             + "(<Spanner type=\"Tie\"|\"GuitarBend\"> → <Tie>/<GuitarBend>/<GuitarBendHold> → "
             + "<eid>), confirmed against guitarbend_tied.mscx:169-171 — and likewise on the <HairPin>, <Ottava> and "
-            + "<Pedal> payloads MuseScore 4.7 writes (musicxml/test*_ref.mscx, own/directions-all-*.mscx). "
+            + "<Pedal> payloads MuseScore 4.7 writes (musicxml/test*_ref.mscx, own/directions-all-*.mscx) "
+            + "and on a chord-anchored slur's <Slur> payload (slur_grace_selectionfilter.mscx). "
             + "Spanner.spanner was reverted "
             + "to .invalid in Task 4a of the P4 plan (MSCXEncoder+Spanner.swift's "
             + "encode(options:) comment), so no payload identity is modeled or written at all yet. "
@@ -327,7 +328,7 @@ enum MSCXPreservation {
         allow(["Symbol/eid"], because: noteAttachedSymbolEIDReason, into: &result)
         allow([
             "GradualTempoChange/eid", "GuitarBend/eid", "GuitarBendHold/eid", "HairPin/eid", "Ottava/eid", "Pedal/eid",
-            "Tie/eid",
+            "Slur/eid", "Tie/eid",
         ], because: spannerPayloadEIDReason, into: &result)
         // `LaissezVib/eid` is deliberately NOT here. `<LaissezVib>` is
         // itself preserved whole, and the exclusion list only fires at

@@ -53,6 +53,14 @@ extension FNV1a {
         }
     }
 
+    /// A slur ending on a grace chord (`Spanner.nextGraceIndex`), BY OCCUPANTS: a spanner ending on a chord feeds
+    /// nothing, so it hashes as it always did.
+    mutating func combineOccupied(endGraceIndex: Int?) {
+        guard let endGraceIndex else { return }
+        combine(124)
+        combine(endGraceIndex)
+    }
+
     /// Chord ornaments (`Chord.ornaments`), BY OCCUPANTS for the same reason
     /// `combineOccupied(_ spanners:tag:)` is: a chord that carries none must
     /// feed no bytes, or every committed replay golden moves.

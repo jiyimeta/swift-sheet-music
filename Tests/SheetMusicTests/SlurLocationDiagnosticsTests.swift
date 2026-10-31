@@ -81,7 +81,7 @@ struct SlurLocationDiagnosticsTests {
 
     /// Every unread `<location>` field lands in ONE diagnostic per slur, tags
     /// sorted and deduped — the same shape `mscx.slur.propertiesDropped` uses.
-    /// `<measures>` / `<fractions>` are read by `Spanner.decode` and must not
+    /// `<measures>` / `<fractions>` / `<grace>` are read by `Spanner.decode` and must not
     /// appear.
     @Test("unread <location> fields are announced in one sorted diagnostic")
     func unreadLocationFieldsWarnOnce() throws {
@@ -110,7 +110,8 @@ struct SlurLocationDiagnosticsTests {
         """)
         #expect(decoded.diagnostics.map(\.code) == ["mscx.slur.locationDropped"])
         let message = try #require(decoded.diagnostics.first?.message)
-        #expect(message.hasSuffix("grace, notes, staves, voices"))
+        #expect(message.hasSuffix("notes, staves, voices"))
+        #expect(!message.contains("grace"))
     }
 
     /// A `<location>` holding only what the model reads says nothing, and a
