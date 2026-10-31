@@ -148,6 +148,7 @@ public enum MeasureAccidentals {
                         measureIndex,
                         of: staff.measures,
                         at: address,
+                        in: part,
                         keySig: current.activeKey(staff: address, measureIndex: measureIndex),
                         division: current.division,
                         measureDuration: durations[measureIndex],
@@ -186,6 +187,7 @@ public enum MeasureAccidentals {
                         measureIndex,
                         of: staff.measures,
                         at: address,
+                        in: part,
                         keySig: score.activeKey(staff: address, measureIndex: measureIndex),
                         division: score.division,
                         measureDuration: durations[measureIndex],
@@ -217,14 +219,19 @@ public enum MeasureAccidentals {
         _ measureIndex: Int,
         of measures: [Measure],
         at staff: StaffAddress,
+        in part: Part,
         keySig: Int,
         division: Int,
         measureDuration: Fraction,
     ) -> [any EditCommand] {
         let measure = measures[measureIndex]
+        // A detached tie (`DetachedTies`) landing here leaves at most two bars before.
+        let staves = part.staves.map(\.measures)
+        let detached = DetachedTies.links(in: staves, sourceMeasures: max(measureIndex - 2, 0) ... measureIndex)
         let tieStarts = MeasureAccidentalWalk.tieStartTPCs(
             in: measures, measureIndex: measureIndex,
             crossVoice: CrossVoiceTies.links(in: measures, sourceMeasures: max(measureIndex - 1, 0) ... measureIndex),
+            detached: DetachedTies.StaffEnds(staff: staff.staffIndexInPart, links: detached, staves: staves),
         )
         var voices = measure.voices
         var state: [Line: AccidentalLineState] = [:]

@@ -165,10 +165,14 @@ struct TieEndpoint {
     /// `<voices>`: the partner's voice minus this note's, for a tie MuseScore made into another voice
     /// (`CrossVoiceTies`). `0` for every other tie, and elided at it like `<notes>`.
     var voicesDelta: Int
+    /// `<staves>`: the partner's staff minus this note's, for a tie into another staff of the part (`DetachedTies`).
+    /// `0` for every other tie, and elided at it like `<voices>`.
+    var stavesDelta: Int
 
-    init(_ location: TieLocation, notesDelta: Int = 0, voicesDelta: Int = 0) {
+    init(_ location: TieLocation, notesDelta: Int = 0, voicesDelta: Int = 0, stavesDelta: Int = 0) {
         self.location = location
         self.notesDelta = notesDelta
         self.voicesDelta = voicesDelta
+        self.stavesDelta = stavesDelta
     }
 }

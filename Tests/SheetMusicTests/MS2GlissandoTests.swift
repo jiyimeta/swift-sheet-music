@@ -39,7 +39,7 @@ struct MS2GlissandoTests {
         </museScore>
         """
         let result = try MSCXParser.parseWithDiagnostics(Data(xml.utf8))
-        #expect(!result.diagnostics.contains { $0.code == "mscx.tie.unpairedSide" })
+        #expect(!result.diagnostics.contains { $0.code.hasPrefix("mscx.tie.unpairedSide") })
         let notes = result.score.parts[0].staves[0].measures[0].voices[0].elements.compactMap { element -> Note? in
             guard case let .chord(chord) = element else { return nil }
             return chord.notes.first

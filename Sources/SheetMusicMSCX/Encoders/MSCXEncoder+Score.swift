@@ -133,6 +133,9 @@ extension Score {
             partOptions.writtenFifthsOffset = entry.part.instrument.useDrumset
                 ? 0
                 : entry.part.instrument.writtenFifthsOffset
+            // A tie can reach another staff of the part, so its endpoints are worked out with the whole part in hand.
+            let partMeasures = entry.part.staves.map(\.measures)
+            let detachedTies = DetachedTies.links(in: partMeasures)
             for (staffIndexInPart, pair) in zip(entry.part.staves, entry.ids).enumerated() {
                 let staff = pair.0
                 let id = pair.1
@@ -162,6 +165,10 @@ extension Score {
                         effectiveMeasureDurations: staff.measures.effectiveMeasureDurations(),
                         columnEIDs: columnEIDs,
                         options: partOptions,
+                        tieEndpoints: MSCXCrossVoiceTieEndpoints(
+                            measures: staff.measures, staff: staffIndexInPart, part: partMeasures,
+                            detached: detachedTies,
+                        ),
                     ),
                 )
             }

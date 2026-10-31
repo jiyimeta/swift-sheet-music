@@ -26,10 +26,11 @@ import SheetMusicFoundation
 ///
 /// ## The scan is bounded
 ///
-/// Measures whose bytes moved, widened by one bar on each side. A tie crosses at most one barline (`TiePlanner`
-/// pairs a note with the ADJACENT timed element), so the partner of anything the edit touched is either in a
-/// changed bar or immediately beside one. A surviving partner's own bytes do not move when its opposite number is
-/// deleted, which is exactly why the diff alone is not enough.
+/// Measures whose bytes moved in any staff of the part, widened by two bars on each side. Most ties cross at most
+/// one barline (`TiePlanner` pairs a note with the ADJACENT timed element), but one into another staff of the part
+/// or past the chords in between (`DetachedTies`) lands up to two bars on, in any staff of the part — so the partner
+/// of anything the edit touched is within that reach of a changed bar. A surviving partner's own bytes do not move
+/// when its opposite number is deleted, which is exactly why the diff alone is not enough.
 enum DanglingTies {
     /// One `ReplaceVoiceElement` per chord holding a tie with no partner, addressed in `current` and read against
     /// it, so the commands are independent of each other and may be applied in any order.
@@ -39,10 +40,15 @@ enum DanglingTies {
     static func sealCommands(in current: Score, changedFrom previous: Score) -> [any EditCommand] {
         var commands: [any EditCommand] = []
         for (partIndex, part) in current.parts.enumerated() {
+            var changed: Set<Int> = []
+            for staffIndex in part.staves.indices {
+                let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+                changed.formUnion(changes(in: part.staves[staffIndex].measures, from: previous[address]?.measures))
+            }
+            guard !changed.isEmpty else { continue }
             for (staffIndex, staff) in part.staves.enumerated() {
                 let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
-                let before = previous[address]?.measures
-                for measureIndex in scanned(staff.measures, changedFrom: before) {
+                for measureIndex in scanned(around: changed, in: staff.measures) {
                     commands.append(contentsOf: seals(
                         in: staff.measures[measureIndex], at: address, measureIndex: measureIndex, of: current,
                     ))
@@ -52,14 +58,19 @@ enum DanglingTies {
         return commands
     }
 
-    /// The measure indices worth looking at: every one whose contents differ from `before` (a measure `before` did
-    /// not have at all counts), plus its immediate neighbours on either side.
-    private static func scanned(_ measures: [Measure], changedFrom before: [Measure]?) -> [Int] {
-        var scanned: Set<Int> = []
-        for measureIndex in measures.indices {
+    /// Every measure index whose contents differ from `before` (a measure `before` did not have at all counts).
+    private static func changes(in measures: [Measure], from before: [Measure]?) -> Set<Int> {
+        Set(measures.indices.filter { measureIndex in
             let wasThere = before?.indices.contains(measureIndex) == true
-            guard !wasThere || before?[measureIndex] != measures[measureIndex] else { continue }
-            for neighbor in (measureIndex - 1) ... (measureIndex + 1) where measures.indices.contains(neighbor) {
+            return !wasThere || before?[measureIndex] != measures[measureIndex]
+        })
+    }
+
+    /// The measure indices worth looking at: every changed one, plus its neighbours two bars either side.
+    private static func scanned(around changed: Set<Int>, in measures: [Measure]) -> [Int] {
+        var scanned: Set<Int> = []
+        for measureIndex in changed {
+            for neighbor in (measureIndex - 2) ... (measureIndex + 2) where measures.indices.contains(neighbor) {
                 scanned.insert(neighbor)
             }
         }

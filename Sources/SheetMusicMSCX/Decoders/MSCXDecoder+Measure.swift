@@ -63,6 +63,8 @@ extension Measure {
         /// `Voice.DecodeResult.systemElementEIDs`.
         let systemElementEIDs: [EID]
         let eid: EID
+        /// `Voice.DecodeResult.tieSides` of every voice, addressed by voice too.
+        var tieSides: [MSCXTieSide] = []
     }
 
     /// True when a raw `<Measure>` XML node is MuseScore's mmRest
@@ -164,6 +166,7 @@ extension Measure {
             measure: measure, systemElements: systemElements,
             systemElementEIDs: systemElementEIDs,
             eid: EIDXML.decode(from: node),
+            tieSides: voiceResults.enumerated().flatMap { $1.tieSides.stamped(\.voice, $0) },
         )
     }
 

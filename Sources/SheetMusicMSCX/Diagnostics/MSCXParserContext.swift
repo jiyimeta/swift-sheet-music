@@ -48,18 +48,28 @@ enum MSCXParserContext {
     /// read as a tie, a glissando's end found no partner and was reported as `mscx.tie.unpairedSide`.
     @TaskLocal static var legacyTieIDs: Set<String>?
 
-    /// Collects `legacyTieIDs` from a score subtree.
-    static func legacyTieIDs(in node: XMLTreeNode) -> Set<String> {
+    /// The `<eid>` of every note a MuseScore 5 tie starts on, bound beside `legacyTieIDs`. MuseScore 5 writes a tie
+    /// once, as a `<Tie>` on its END note whose `<startElement>` names the start note (`ties_ref.mscx` in MuseScore's
+    /// MNX tests), so the start note carries nothing of its own to say it is tied.
+    @TaskLocal static var museScore5TieStarts: Set<String>?
+
+    /// Collects `legacyTieIDs` and `museScore5TieStarts` from a score subtree, in one walk.
+    static func tieReferences(in node: XMLTreeNode) -> (legacyIDs: Set<String>, museScore5Starts: Set<String>) {
         var ids = Set<String>()
+        var starts = Set<String>()
         var stack = [node]
         while let current = stack.popLast() {
             if current.name == "Note" {
                 for tie in current.all("Tie") {
-                    if let id = tie.attributes["id"] { ids.insert(id) }
+                    if let start = tie.first("startElement")?.text {
+                        starts.insert(start)
+                    } else if let id = tie.attributes["id"] {
+                        ids.insert(id)
+                    }
                 }
             }
             stack.append(contentsOf: current.children)
         }
-        return ids
+        return (ids, starts)
     }
 }

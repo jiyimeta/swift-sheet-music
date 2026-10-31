@@ -67,16 +67,17 @@ extension Score {
         // because default" apart across wire-format generations.
         let version = detectVersion(root: root, scoreNode: scoreNode)
         let revision = MSCXParserContext.formatRevision(versionAttribute: root.attributes["version"])
+        let tieReferences = MSCXParserContext.tieReferences(in: scoreNode)
         return try MSCXParserContext.$version.withValue(version) {
             try MSCXParserContext.$formatRevision.withValue(revision) {
                 try MSCXParserContext.$division.withValue(division) {
-                    try MSCXParserContext.$legacyTieIDs.withValue(MSCXParserContext.legacyTieIDs(in: scoreNode)) {
-                        try decodeBody(
-                            scoreNode: scoreNode,
-                            division: division,
-                            version: version,
-                            styleFileStyle: styleFileStyle,
-                        )
+                    try MSCXParserContext.$legacyTieIDs.withValue(tieReferences.legacyIDs) {
+                        try MSCXParserContext.$museScore5TieStarts.withValue(tieReferences.museScore5Starts) {
+                            try decodeBody(
+                                scoreNode: scoreNode, division: division, version: version,
+                                styleFileStyle: styleFileStyle,
+                            )
+                        }
                     }
                 }
             }

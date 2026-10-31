@@ -99,7 +99,7 @@ struct CrossVoiceTieTests {
 
     @Test func aTieIntoAnotherVoiceSurvivesImport() throws {
         let result = try Self.museScoreFixture()
-        #expect(!result.diagnostics.contains { $0.code == "mscx.tie.unpairedSide" })
+        #expect(!result.diagnostics.contains { $0.code.hasPrefix("mscx.tie.unpairedSide") })
         let measures = result.score.parts[0].staves[0].measures
         let held = try #require(Self.notes(measures[0], voice: 1).first { $0.pitch == 72 })
         let carried = try #require(Self.notes(measures[1], voice: 0).first { $0.pitch == 72 })
@@ -115,7 +115,7 @@ struct CrossVoiceTieTests {
 
     @Test func aChordKeepsBothItsTieIntoItsOwnVoiceAndItsTieIntoAnother() throws {
         let result = try MSCXParser.parseWithDiagnostics(Data(Self.mixedChord.utf8))
-        #expect(!result.diagnostics.contains { $0.code == "mscx.tie.unpairedSide" })
+        #expect(!result.diagnostics.contains { $0.code.hasPrefix("mscx.tie.unpairedSide") })
         let measures = result.score.parts[0].staves[0].measures
         let first = Self.notes(measures[0], voice: 0)
         #expect(first.map(\.pitch) == [60, 64])
@@ -145,7 +145,7 @@ struct CrossVoiceTieTests {
         #expect(squeezed.contains("<prev><location><voices>1</voices><measures>-1</measures></location></prev>"))
 
         let reread = try MSCXParser.parseWithDiagnostics(Data(xml.utf8))
-        #expect(!reread.diagnostics.contains { $0.code == "mscx.tie.unpairedSide" })
+        #expect(!reread.diagnostics.contains { $0.code.hasPrefix("mscx.tie.unpairedSide") })
         #expect(CrossVoiceTies.links(in: reread.score.parts[0].staves[0].measures).count == 1)
     }
 

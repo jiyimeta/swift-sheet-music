@@ -51,8 +51,9 @@ public enum TiePlanner {
 
     /// The note `noteID`'s `tieForward` lands on, or nil when it carries no tie forward.
     ///
-    /// A tie MuseScore made into another voice (`CrossVoiceTies`) lands there; every other tie lands on the adjacent
-    /// timed element of its own voice, by rank among the ties that stay in the voice.
+    /// A tie MuseScore made into another voice (`CrossVoiceTies`) lands there, and one into another staff of the part
+    /// or past the chords in between (`DetachedTies`) where that finds its partner; every other tie lands on the
+    /// adjacent timed element of its own voice, by rank among the ties that stay in the voice.
     static func tiedNote(after noteID: NoteID, in score: Score) -> NoteID? {
         guard case let .chord(chord)? = score[VoiceElementID(noteID)],
               chord.notes.indices.contains(noteID.noteIndexInChord),
@@ -63,6 +64,9 @@ public enum TiePlanner {
         )
         if let link = crossVoice.links.first(where: { $0.from == CrossVoiceTies.End(noteID) }) {
             return NoteID(link.to, staff: noteID.staff)
+        }
+        if let link = crossVoice.detached.first(where: { $0.from == DetachedTies.End(noteID) }) {
+            return NoteID(link.to, part: noteID.staff.partIndex)
         }
         guard let nextLocation = ElementNavigator.nextTimedElement(after: VoiceElementID(noteID), in: score),
               case let .chord(nextChord)? = score[nextLocation]
@@ -96,6 +100,9 @@ public enum TiePlanner {
         if let link = crossVoice.links.first(where: { $0.to == CrossVoiceTies.End(noteID) }) {
             return NoteID(link.from, staff: noteID.staff)
         }
+        if let link = crossVoice.detached.first(where: { $0.to == DetachedTies.End(noteID) }) {
+            return NoteID(link.from, part: noteID.staff.partIndex)
+        }
         guard let previousLocation = ElementNavigator.previousTimedElement(
             before: VoiceElementID(noteID), in: score,
         ),
@@ -117,17 +124,28 @@ public enum TiePlanner {
         )
     }
 
-    /// The cross-voice ties leaving `sources` on one staff, with each side's ends to hand.
+    /// The cross-voice ties leaving `sources` on one staff, and the detached ties (`DetachedTies`) of its part around
+    /// them, with each side's ends on this staff to hand.
     private struct CrossVoiceLinks {
         var links: [CrossVoiceTies.Link] = []
+        var detached: [DetachedTies.Link] = []
         var forward: Set<CrossVoiceTies.End> = []
         var back: Set<CrossVoiceTies.End> = []
 
         init(around staff: StaffAddress, sources: ClosedRange<Int>, in score: Score) {
             guard let measures = score[staff]?.measures else { return }
             links = CrossVoiceTies.links(in: measures, sourceMeasures: sources)
-            forward = Set(links.map(\.from))
-            back = Set(links.map(\.to))
+            // A detached tie lands up to two bars after the one it leaves, so one touching these bars or the chords
+            // beside them can leave from as far back as three bars before.
+            if score.parts.indices.contains(staff.partIndex) {
+                detached = DetachedTies.links(
+                    in: score.parts[staff.partIndex],
+                    sourceMeasures: (sources.lowerBound - 3) ... (sources.upperBound + 1),
+                )
+            }
+            let index = staff.staffIndexInPart
+            forward = Set(links.map(\.from) + detached.filter { $0.from.staff == index }.map(\.from.inStaff))
+            back = Set(links.map(\.to) + detached.filter { $0.to.staff == index }.map(\.to.inStaff))
         }
     }
 
