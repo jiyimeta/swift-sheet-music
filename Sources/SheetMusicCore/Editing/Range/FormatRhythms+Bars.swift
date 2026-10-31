@@ -71,7 +71,10 @@ enum FormatRhythmsProtectedOnsets {
                     for element in voice.elements {
                         defer { tick += element.cursorAdvance(division: division, in: fractions[measureIndex]) }
                         guard case let .chord(chord) = element else { continue }
-                        for spanner in chord.spanners where spanner.kind == .slur {
+                        // A grace's slurs are measured from its chord's tick, which the grace shares.
+                        let graceSpanners = (chord.graceNotesBefore.values + chord.graceNotesAfter.values)
+                            .flatMap(\.spanners)
+                        for spanner in chord.spanners + graceSpanners where spanner.kind == .slur {
                             // `Spanner+Offsets`: the end sits `nextMeasuresOffset` bars on, at the start's own bar
                             // tick plus the fraction.
                             let fraction = spanner.nextFractionsOffset?.ticks(division: division) ?? 0

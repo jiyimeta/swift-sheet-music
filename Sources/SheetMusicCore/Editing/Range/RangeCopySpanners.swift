@@ -97,6 +97,11 @@ enum RangeCopySpanners {
     ///
     /// Emptying is unconditional for the reason the type's own note gives: a stored offset describes the source
     /// barring, so even a spanner that travels is re-anchored from scratch rather than ridden along.
+    ///
+    /// A grace's slurs ride on the grace, which the copy carries whole, so they are not re-anchored. The ones that
+    /// end inside the grace's own run — an acciaccatura slurred into its principal note, the common case — need
+    /// nothing: their offsets are zero wherever the chord lands. Any other is dropped from the copy, as a chord's
+    /// slur is when it cannot be re-anchored, rather than carried with offsets that describe the source.
     static func take(
         from chord: inout Chord, at anchor: ScoreTickPosition, absoluteTick: Int,
         geometry: RangeCopyGeometry, division: Int, range: Range<Int>,
@@ -108,7 +113,22 @@ enum RangeCopySpanners {
             return Copied(startTick: absoluteTick, endTick: end, spanner: spanner)
         }
         chord.spanners = []
+        chord.graceNotesBefore = keepingRunSlurs(chord.graceNotesBefore)
+        chord.graceNotesAfter = keepingRunSlurs(chord.graceNotesAfter)
         return kept
+    }
+
+    /// `graces` with every slur dropped that leaves its chord's own run (see `take`).
+    private static func keepingRunSlurs(_ graces: IdentifiedArray<GraceChord>) -> IdentifiedArray<GraceChord> {
+        var graces = graces
+        for index in graces.indices where !graces[index].spanners.isEmpty {
+            graces.updateValue(at: index) { grace in
+                grace.spanners.removeAll {
+                    $0.nextMeasuresOffset != 0 || ($0.nextFractionsOffset?.numerator ?? 0) != 0
+                }
+            }
+        }
+        return graces
     }
 
     /// The `.spanner` elements standing among one stream's chords that the copy may take with it.
