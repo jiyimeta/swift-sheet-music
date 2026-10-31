@@ -177,4 +177,11 @@ struct LyricPlacementMetricTests {
         #expect(ScoreSemanticMetrics.firstTempoBPM(withTempo) == 63)
         #expect(ScoreSemanticMetrics.firstTempoBPM(Score(division: 480, parts: [])) == nil)
     }
+
+    @Test func normalizedTitleFoldsWidthWhitespaceAndEdges() {
+        #expect(ScoreSemanticMetrics.normalizedTitle("ＡＢＣ") == ScoreSemanticMetrics.normalizedTitle("ABC"))
+        #expect(ScoreSemanticMetrics.normalizedTitle("曲\n名") == "曲 名")
+        #expect(ScoreSemanticMetrics.normalizedTitle("  曲  名 \n") == "曲 名")
+        #expect(ScoreSemanticMetrics.normalizedTitle("曲名") != ScoreSemanticMetrics.normalizedTitle("曲 名"))
+    }
 }

@@ -73,13 +73,8 @@
             var durPcts: [Double] = []
             var notesTruth = 0
             var notesRead = 0
-            /// Lyric placement summed over the scored files; reported on the `[mscz][LYRICS]` line only.
-            var lyrics = LyricPlacementResult()
-            /// Scored files whose truth has a title / tempo, and how many of those the read score matched.
-            var titleTruth = 0
-            var titleMatch = 0
-            var tempoTruth = 0
-            var tempoMatch = 0
+            /// Lyric / title / tempo tallies; reported on the `[mscz][LYRICS]` line only.
+            var text = TextTotals()
             /// Whether the mode's options carried a text recognizer (never for vector or external).
             var ocrOn = false
             /// Wall time of the mode's whole sweep, from a monotonic clock.

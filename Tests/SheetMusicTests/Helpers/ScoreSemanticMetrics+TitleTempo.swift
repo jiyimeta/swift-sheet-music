@@ -13,6 +13,14 @@ extension ScoreSemanticMetrics {
         return nil
     }
 
+    /// NFKC with every whitespace run (newlines included) collapsed to one space, trimmed: the comparison key for
+    /// "is this the same title, ignoring width forms and line breaks".
+    static func normalizedTitle(_ text: String) -> String {
+        text.precomposedStringWithCompatibilityMapping
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+    }
+
     /// The first tempo marking in score order, as beats per minute rounded to the nearest integer.
     static func firstTempoBPM(_ score: Score) -> Int? {
         for measure in score.systemMeasures {
