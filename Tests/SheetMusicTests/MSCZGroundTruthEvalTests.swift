@@ -79,6 +79,7 @@
             // cannot answer "is the glyph missing, or merely under τ?", which
             // is a different fix each way.
             rasterOptions.omrTileClassifier = try await Self.rasterClassifier()
+            Self.applyTextRecognizer(to: &rasterOptions)
             rasterOptions.omrRenderDPI = Self.doubleEnv("OMR_MSCZ_RENDER_DPI", default: 300)
             if Self.env("OMR_MSCZ_CENSUS") == "1" {
                 for item in cases {
@@ -103,6 +104,15 @@
                 dumpDivergence: dump,
             )
             print(MSCZGroundTruthSweep.summaryLine(mode: .raster, totals: raster))
+            print(MSCZGroundTruthSweep.lyricsLine(mode: .raster, totals: raster))
+        }
+
+        /// One binary measures both sides of the OCR question: `OMR_MSCZ_OCR=0` leaves the recognizer off.
+        static func applyTextRecognizer(to options: inout PDFImportOptions) {
+            if env("OMR_MSCZ_OCR") != "0" {
+                options.omrTextRecognizer = VisionTextRecognizer()
+            }
+            print("[mscz] ocr=\(options.omrTextRecognizer != nil ? "on" : "off")")
         }
 
         /// `OMR_MSCZ_LIST_CASES=1`: print the population an outside engine has
@@ -138,6 +148,7 @@
                     dumpDivergence: dump,
                 )
                 print(MSCZGroundTruthSweep.summaryLine(mode: mode, totals: totals))
+                print(MSCZGroundTruthSweep.lyricsLine(mode: mode, totals: totals))
             }
         }
 

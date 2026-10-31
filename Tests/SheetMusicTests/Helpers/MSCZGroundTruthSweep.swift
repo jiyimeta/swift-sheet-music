@@ -73,6 +73,17 @@
             var durPcts: [Double] = []
             var notesTruth = 0
             var notesRead = 0
+            /// Lyric placement summed over the scored files; reported on the `[mscz][LYRICS]` line only.
+            var lyrics = LyricPlacementResult()
+            /// Scored files whose truth has a title / tempo, and how many of those the read score matched.
+            var titleTruth = 0
+            var titleMatch = 0
+            var tempoTruth = 0
+            var tempoMatch = 0
+            /// Whether the mode's options carried a text recognizer (never for vector or external).
+            var ocrOn = false
+            /// Wall time of the mode's whole sweep, from a monotonic clock.
+            var seconds = 0.0
         }
 
         /// Pair every `*.mscz` under `msczRoot` with the PDF the prep script
@@ -121,6 +132,8 @@
             dumpDivergence: Bool = false,
         ) -> Totals {
             var totals = Totals()
+            totals.ocrOn = mode == .raster && options.omrTextRecognizer != nil
+            let started = ContinuousClock.now
             for item in cases {
                 totals.files += 1
                 guard let truth = loadTruth(item, totals: &totals) else { continue }
@@ -135,6 +148,7 @@
                     print("[mscz-fail] mode=\(mode.tag) file=\(item.name) error=\(error)")
                 }
             }
+            totals.seconds = durationSeconds(ContinuousClock.now - started)
             return totals
         }
 
@@ -191,6 +205,10 @@
             if dur.match.c > 0 {
                 totals.durPcts.append(Double(dur.match.m) / Double(dur.match.c))
             }
+            scoreText(
+                item, aligned: (aligned.scoreA, aligned.scoreB), original: (truth, read),
+                mode: mode, totals: &totals,
+            )
         }
 
         /// What the summary row cannot say: WHERE the two scores stop

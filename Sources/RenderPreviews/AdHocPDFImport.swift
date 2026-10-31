@@ -21,6 +21,8 @@
     ///             also exercise the scanned-page (raster) path. Unset — the
     ///             default — leaves it `nil`, which is specified to mean the
     ///             importer behaves exactly as it always has.
+    ///   SM_PDF_OCR  — optional; `1` assigns `VisionTextRecognizer()` to `options.omrTextRecognizer`, so a
+    ///             scanned page's lyrics are read; the summary then lists each part's lyrics measure by measure.
     ///
     /// Usage:
     ///   SM_PDF=~/Documents/.../foo.pdf swift run render-previews
@@ -55,6 +57,10 @@
                 options.omrTileClassifier = try CoreMLTileClassifier()
             }
 
+            if env["SM_PDF_OCR"] == "1" {
+                options.omrTextRecognizer = VisionTextRecognizer()
+            }
+
             print("parsing \(url.path)")
             let score = try PDFImporter.parse(pdfURL: url, options: options)
             printSummary(of: score)
@@ -68,6 +74,33 @@
                 )
                 try renderScoreToPNG(score, to: outURL, scale: 2)
                 print("wrote \(outURL.path)")
+            }
+        }
+
+        /// Each part's lyrics measure by measure: `m<N>: <verse 0 syllables joined by "|">`, further verses on
+        /// the lines after it.
+        private static func printLyrics(of score: Score) {
+            for (partIndex, part) in score.parts.enumerated() {
+                var verses: [Int: [Int: [String]]] = [:]
+                for staff in part.staves {
+                    for (measureIndex, measure) in staff.measures.enumerated() {
+                        for voice in measure.voices {
+                            for case let .chord(chord) in voice.elements {
+                                for lyric in chord.lyrics {
+                                    verses[lyric.verse, default: [:]][measureIndex, default: []].append(lyric.text)
+                                }
+                            }
+                        }
+                    }
+                }
+                guard !verses.isEmpty else { continue }
+                print("lyrics part \(partIndex):")
+                for verse in verses.keys.sorted() {
+                    if verse > 0 { print("  verse \(verse + 1):") }
+                    for measure in (verses[verse] ?? [:]).keys.sorted() {
+                        print("  m\(measure + 1): \((verses[verse]?[measure] ?? []).joined(separator: "|"))")
+                    }
+                }
             }
         }
 
@@ -112,6 +145,7 @@
                     ?? part.instrument.id
                 print("  part \(index) (\(name)): \(part.staves.count) staves")
             }
+            printLyrics(of: score)
             print("measures: \(measureCount)")
             print("notes: \(noteCount)")
             print("rests: \(restCount)")

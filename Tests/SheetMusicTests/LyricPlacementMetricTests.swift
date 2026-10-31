@@ -157,4 +157,24 @@ struct LyricPlacementMetricTests {
         let r = place(a, b)
         #expect(r.total == LyricPlacementCounts(truthChars: 4, on: 3, missing: 1, edits: 1))
     }
+
+    @Test func titleTextReadsTheTitleFrame() {
+        let frame = ScoreFrame(heightSp: 10, texts: [
+            FrameText(style: .composer, text: "X"),
+            FrameText(style: .title, text: "  曲名 "),
+        ])
+        #expect(ScoreSemanticMetrics.titleText(Score(division: 480, parts: [], titleFrame: frame)) == "曲名")
+        #expect(ScoreSemanticMetrics.titleText(Score(division: 480, parts: [])) == nil)
+    }
+
+    @Test func firstTempoBPMRoundsBeatsPerSecond() {
+        let withTempo = Score(
+            division: 480, parts: [],
+            systemMeasures: [SystemMeasure(elements: [
+                PositionedSystemElement(position: .start, element: .tempo(Tempo(beatsPerSecond: 1.05))),
+            ])],
+        )
+        #expect(ScoreSemanticMetrics.firstTempoBPM(withTempo) == 63)
+        #expect(ScoreSemanticMetrics.firstTempoBPM(Score(division: 480, parts: [])) == nil)
+    }
 }
