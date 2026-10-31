@@ -7,14 +7,6 @@ and this project adheres to
 
 ## [Unreleased]
 
-### Changed
-
-- **swiftysynth 0.4.1.** The SwiftySynth backend renders about 10× faster in a host's unoptimized (Debug) build, so a
-  Debug build plays back in real time, with rendered PCM unchanged. Also fixes `SoundFont(data:)` / `MidiFile(data:)`
-  reading garbage from a `Data` of 14 bytes or fewer in optimized builds.
-
-## [4.23.0] - 2026-10-31
-
 ### Added
 
 - **Android `exportAudioFile(…, masterGain:, masterOutputStage:)`.** The export scales the mix — score and click — by
@@ -22,6 +14,29 @@ and this project adheres to
   and `setMasterOutputStage`, as Apple's export does. Until now an Android export applied no master gain at all. The
   defaults (1, `NONE`) leave the samples exactly as rendered; a host that calibrates its live output passes the same
   gain and stage here.
+
+### Changed
+
+- **swiftysynth 0.4.1.** The SwiftySynth backend renders about 10× faster in a host's unoptimized (Debug) build, so a
+  Debug build plays back in real time, with rendered PCM unchanged. Also fixes `SoundFont(data:)` / `MidiFile(data:)`
+  reading garbage from a `Data` of 14 bytes or fewer in optimized builds.
+- **Android plays through SwiftySynth instead of FluidSynth.** `sheet-music-audio-android` renders score, metronome,
+  count-in, note previews and audio export with the synthesizer the Apple backend uses, built with the same settings
+  (`SwiftySynthVoicing`), so a SoundFont sounds the same on both and a choked cymbal (`ChokeMarker`) stops on Android
+  too. The Kotlin engine's transport, mixer and output are unchanged; the synth and its sequencer live in Swift
+  (`SheetMusicAudioSwiftySynthCore`'s `HostedSynth` / `HostedSequence`) inside `libSheetMusicAndroidJNI.so`, rendered
+  by one JNI call per synth per output block that allocates nothing. A `file:` SoundFont URI is memory-mapped in place
+  rather than copied into the cache. The synth renders at unity gain, as the Apple backend's does; FluidSynth's built-in
+  gain of 2.0 (+6 dB) is gone, so the output is quieter until the host calibrates it the way Apple hosts do — through
+  `setMasterGain` and `exportAudioFile(masterGain:)`, with `MasterOutputStage.SOFT_CLIP`. FluidSynth, its C++ shim and
+  its CMake / Prefab build are gone from the module, and with them the LGPL obligation for apps that ship it.
+  **Breaking for Kotlin hosts:** `AudioBackendException.FluidSynthInit` is now `SynthInit`.
+- **`SoundFontCache` moved to the new `SheetMusicAudioSwiftySynthCore` target**, with the score and metronome synth
+  settings and the choke dispatch the Apple `SwiftySynthBackend` now builds through.
+
+## [4.23.0] - 2026-10-31
+
+### Added
 
 - **`PlayedMeasure`, `PlayedMeasures.make(score:)` and `PreparedPlayback.playedMeasures`.** Every measure as playback
   plays it, repeats and jumps unrolled, with its pass number, its start and end on the transport's seconds at the
@@ -75,18 +90,6 @@ and this project adheres to
 
 ### Changed
 
-- **Android plays through SwiftySynth instead of FluidSynth.** `sheet-music-audio-android` renders score, metronome,
-  count-in, note previews and audio export with the synthesizer the Apple backend uses, built with the same settings
-  (`SwiftySynthVoicing`), so a SoundFont sounds the same on both and a choked cymbal (`ChokeMarker`) stops on Android
-  too. The Kotlin engine's transport, mixer and output are unchanged; the synth and its sequencer live in Swift
-  (`SheetMusicAudioSwiftySynthCore`'s `HostedSynth` / `HostedSequence`) inside `libSheetMusicAndroidJNI.so`, rendered
-  by one JNI call per synth per output block that allocates nothing. A `file:` SoundFont URI is memory-mapped in place
-  rather than copied into the cache. The synth renders at unity gain, as the Apple backend's does; FluidSynth's built-in
-  gain of 2.0 (+6 dB) is gone, so the output is quieter until the host calibrates it the way Apple hosts do — through
-  `setMasterGain` and `exportAudioFile(masterGain:)`, with `MasterOutputStage.SOFT_CLIP`. FluidSynth, its C++ shim and its CMake / Prefab build are gone from the module, and with them the LGPL obligation
-  for apps that ship it. **Breaking for Kotlin hosts:** `AudioBackendException.FluidSynthInit` is now `SynthInit`.
-- **`SoundFontCache` moved to the new `SheetMusicAudioSwiftySynthCore` target**, with the score and metronome synth
-  settings and the choke dispatch the Apple `SwiftySynthBackend` now builds through.
 - **A line break on a score's last bar justifies its last line.** The short line a piece ends on is otherwise left at
   its natural width (`lastSystemFillLimit`); a break on the last bar comes before nothing, so it now asks for the full
   line a break leaves on every other line. Only while the layout honors the break (`LayoutBreakPolicy`): a reflow that
