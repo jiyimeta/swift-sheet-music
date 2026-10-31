@@ -714,6 +714,7 @@ extension LayoutEngine {
             trailingCourtesy: trailingCourtesy,
             followingClefs: followingClefs(after: lastMeasure, staves: staves, plan: context.multiMeasureRestPlan),
             lineAggregates: lineAggregates,
+            barHeadBreathOwners: staves.map { barHeadBreathOwners(measureIdx: measureStart, in: $0) },
         )
     }
 

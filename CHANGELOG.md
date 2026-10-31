@@ -7,6 +7,23 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`SetBreath.current(after:in:)` is public.** It answers the breath `SetBreath(after:)` would replace or remove, so
+  a host that reads a breath before writing it (a clipboard copying the selected one) asks the command rather than
+  re-walking the voice itself.
+
+### Fixed
+
+- **A breath written at the head of a bar can be selected, replaced and deleted.** A file can carry a breath ahead of
+  a bar's first chord, where it follows the previous bar's last chord — MuseScore's element paste re-homes a
+  `<Breath>` by tick and leaves it there, and its reader keeps it. It was drawn, but its glyph had no identity
+  (`LayoutElement.breath`'s `anchor` was `nil`), so it could not be selected, and `SetBreath(after:)` on that chord
+  could not reach it. The glyph now names the chord ending the bar before — the correction MuseScore's range paste
+  makes (`read460.cpp:719`) — and `SetBreath` replaces or removes it through that chord when the chord's own bar has
+  no breath after it. A new breath is still written into the chord's own bar. The breath stays where the file put it,
+  so drawing, playback and MSCX round-trips are unchanged.
+
 ## [4.24.0] - 2026-10-31
 
 ### Added

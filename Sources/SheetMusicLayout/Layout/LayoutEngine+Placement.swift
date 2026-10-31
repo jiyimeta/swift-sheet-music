@@ -77,6 +77,8 @@ extension LayoutEngine {
         followingClef: FollowingClef? = nil,
         // How many staves the part has: a fingering's default side looks at whether this is a grand staff's last.
         staffCountInPart: Int = 1,
+        // The chord in the bar before that a breath at this bar's head follows, per voice (`barHeadBreathOwners`).
+        barHeadBreathOwners: [Int?] = [],
     ) -> MeasurePlacement {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         // Barlines are the one thing here measured against the staff's
@@ -1656,7 +1658,8 @@ extension LayoutEngine {
                     let breathElement = LayoutElement.breath(
                         kind: b.kind,
                         origin: CGPoint(x: originX, y: originY),
-                        anchor: attachmentAnchor(at: elementAddress, in: voice),
+                        anchor: attachmentAnchor(at: elementAddress, in: voice)
+                            ?? barHeadBreathAnchor(at: elementAddress, in: voice, owners: barHeadBreathOwners),
                     )
                     if b.visible {
                         out.append(breathElement)
@@ -2423,6 +2426,40 @@ extension LayoutEngine {
             index += step
         }
         return nil
+    }
+
+    /// The chord a breath at the head of a bar follows — the last chord of the bar before, in the same voice — named
+    /// the way `SetBreath(after:)` names it, or `nil` when the breath is not at the bar's head or that voice of the bar
+    /// before ends on no chord with notes. `owners` is `barHeadBreathOwners(measureIdx:in:)` for this bar.
+    ///
+    /// `attachmentAnchor` answers every breath with a chord before it in its own bar; this answers the ones with none,
+    /// which the command reaches over the barline (`Voice.barHeadBreathIndices`).
+    static func barHeadBreathAnchor(at marking: VoiceElementID, in voice: Voice, owners: [Int?]) -> VoiceElementID? {
+        guard marking.measureIndex > 0, owners.indices.contains(marking.voiceIndex),
+              let owner = owners[marking.voiceIndex],
+              voice.barHeadBreathIndices.contains(marking.elementIndex)
+        else { return nil }
+        return VoiceElementID(
+            staff: marking.staff, measureIndex: marking.measureIndex - 1, voiceIndex: marking.voiceIndex,
+            elementIndex: owner,
+        )
+    }
+
+    /// For each voice of `staff`'s bar `measureIdx` that opens with a breath, the index of the chord in the same voice
+    /// of the bar before that the breath follows (`Voice.barEndBreathOwnerIndex`); `nil` for the other voices.
+    ///
+    /// **Empty when no voice of the bar opens with a breath**, which is nearly every bar: this value is part of the
+    /// placement and system cache keys (the bar before may sit in another system), and an empty one keeps an ordinary
+    /// bar's keys from ever depending on its neighbor.
+    static func barHeadBreathOwners(measureIdx: Int, in staff: Staff) -> [Int?] {
+        guard measureIdx > 0, measureIdx < staff.measures.count else { return [] }
+        let voices = staff.measures[measureIdx].voices
+        guard voices.contains(where: { !$0.barHeadBreathIndices.isEmpty }) else { return [] }
+        let before = staff.measures[measureIdx - 1].voices
+        return voices.indices.map { index in
+            guard !voices[index].barHeadBreathIndices.isEmpty, before.indices.contains(index) else { return nil }
+            return before[index].barEndBreathOwnerIndex
+        }
     }
 
     /// The chord or rest starting at `tick` in `voice`, named the way an edit command names it.

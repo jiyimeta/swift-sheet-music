@@ -259,6 +259,10 @@ public final class LayoutCache: @unchecked Sendable {
         /// The aggregates `buildSystem` places measures by in place of their own, where the next measure on the line
         /// moves their floors (`LayoutEngine.lyricJoinedAggregates`).
         var lineAggregates: [LayoutEngine.TickAggregate?] = []
+        /// Per staff, the chord in the bar BEFORE this range that a breath at the head of its first bar names
+        /// (`LayoutEngine.barHeadBreathOwners`) — the same blind spot `followingClefs` covers at the other end.
+        /// The bars after the first find theirs in `measuresPerStaff`. Empty entries for bars that open with no breath.
+        var barHeadBreathOwners: [[Int?]] = []
     }
 
     /// All inputs to `placeMeasureElements` for one (measure, staff).
@@ -339,5 +343,8 @@ public final class LayoutCache: @unchecked Sendable {
         /// The part's staff count: a fingering's default side depends on whether this staff is a multi-staff part's
         /// last, which removing a staff above it changes without touching `measure`.
         var staffCountInPart = 1
+        /// The chord in the bar before that a breath at this bar's head names (`LayoutEngine.barHeadBreathOwners`),
+        /// which lives in the bar before rather than in `measure`. Empty for a bar that opens with no breath.
+        var barHeadBreathOwners: [Int?] = []
     }
 }

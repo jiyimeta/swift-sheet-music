@@ -304,6 +304,7 @@ extension LayoutEngine {
                 )
                 let staffCountInPart = context.score.parts.indices.contains(address.partIndex)
                     ? context.score.parts[address.partIndex].staves.count : 1
+                let breathOwners = barHeadBreathOwners(measureIdx: measureIdx, in: staff)
                 let placementInputs = LayoutCache.PlacementInputs(
                     measure: m,
                     isPitchedStaff: isPitchedStaff,
@@ -334,6 +335,7 @@ extension LayoutEngine {
                     drawsLeadingClef: drawsLeadingClef,
                     followingClef: followingClefsHere[staffIdx],
                     staffCountInPart: staffCountInPart,
+                    barHeadBreathOwners: breathOwners,
                 )
                 let els: [LayoutElement]
                 let invisibleEls: [LayoutElement]
@@ -382,6 +384,7 @@ extension LayoutEngine {
                         drawsLeadingClef: drawsLeadingClef,
                         followingClef: followingClefsHere[staffIdx],
                         staffCountInPart: staffCountInPart,
+                        barHeadBreathOwners: breathOwners,
                     )
                     els = result.elements
                     invisibleEls = result.invisibleElements

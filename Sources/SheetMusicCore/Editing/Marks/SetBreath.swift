@@ -8,6 +8,10 @@ import SheetMusicFoundation
 /// inserted right after the chord, ahead of a trailing barline. `pause` is written as given: a host that wants
 /// the style's default passes `Breath.defaultPause(for:)`.
 ///
+/// For the chord ending its bar, a breath at the head of the NEXT bar follows it too (`Voice.barHeadBreathIndices`
+/// — a file can carry one there), after any in the chord's own after-run: it is the one replaced or removed when the
+/// after-run has none. A new breath is still written into the chord's own bar.
+///
 /// > Note: This command is sugar over `ReplaceVoiceElement` / `ReplaceVoiceElements`. See `docs/edit-commands.md`.
 public struct SetBreath: EditCommand {
     public let location: VoiceElementID
@@ -33,17 +37,18 @@ public struct SetBreath: EditCommand {
             throw Self.refused(.wrongElementKind(at: location, expected: .chord))
         }
         let ref = VoiceRef(location)
-        let existing = AdjacentElementSlot.find(.after, of: location, in: score, where: Self.isBreath)
+        let existing = Self.existingSlot(after: location, in: score)
         guard let kind else {
-            guard let index = existing,
-                  let removal = AdjacentElementSlot.removing(at: index, in: ref, of: score)
+            guard let slot = existing,
+                  let removal = AdjacentElementSlot.removing(at: slot.elementIndex, in: VoiceRef(slot), of: score)
             else { throw Self.refused(.targetNotFound(location)) }
             return try removal.apply(to: &score, ids: &ids)
         }
-        if let index = existing, case var .breath(breath)? = score[location.withElementIndex(index)] {
+        if let slot = existing, case var .breath(breath)? = score[slot] {
             breath.kind = kind
             breath.pause = pause
-            return try AdjacentElementSlot.replacing(.breath(breath), at: index, in: ref).apply(to: &score, ids: &ids)
+            return try AdjacentElementSlot.replacing(.breath(breath), at: slot.elementIndex, in: VoiceRef(slot))
+                .apply(to: &score, ids: &ids)
         }
         guard let insert = AdjacentElementSlot.inserting(
             .breath(Breath(kind: kind, pause: pause)),
@@ -52,12 +57,28 @@ public struct SetBreath: EditCommand {
         return try insert.apply(to: &score, ids: &ids)
     }
 
-    /// The breath in the attachment run after the chord at `location`, or `nil`.
-    static func current(after location: VoiceElementID, in score: Score) -> Breath? {
-        guard let index = AdjacentElementSlot.find(.after, of: location, in: score, where: isBreath),
-              case let .breath(breath)? = score[location.withElementIndex(index)]
-        else { return nil }
+    /// The breath that follows the chord at `location` — the one this command replaces or removes — or `nil`.
+    public static func current(after location: VoiceElementID, in score: Score) -> Breath? {
+        guard let slot = existingSlot(after: location, in: score), case let .breath(breath)? = score[slot] else {
+            return nil
+        }
         return breath
+    }
+
+    /// Where the breath following the chord at `location` stands: the first breath in the chord's after-run, else —
+    /// for the chord ending its bar (`Voice.barEndBreathOwnerIndex`) — the first breath at the head of the same voice
+    /// in the next bar. `nil` when neither holds one.
+    static func existingSlot(after location: VoiceElementID, in score: Score) -> VoiceElementID? {
+        if let index = AdjacentElementSlot.find(.after, of: location, in: score, where: isBreath) {
+            return location.withElementIndex(index)
+        }
+        guard score[voice: VoiceRef(location)]?.barEndBreathOwnerIndex == location.elementIndex else { return nil }
+        let next = VoiceElementID(
+            staff: location.staff, measureIndex: location.measureIndex + 1, voiceIndex: location.voiceIndex,
+            elementIndex: 0,
+        )
+        guard let index = score[voice: VoiceRef(next)]?.barHeadBreathIndices.first else { return nil }
+        return next.withElementIndex(index)
     }
 
     private static func isBreath(_ element: VoiceElement) -> Bool {

@@ -15,6 +15,8 @@ import SheetMusicFoundation
 ///
 /// A run never crosses a bar line, so a clef MuseScore wrote at the END of a bar — the placement that means "this
 /// applies to the next bar" — belongs to no run: the next bar's first chord cannot see it. A documented v1 limit.
+/// The mirror case, a breath at the HEAD of a bar following the bar before's last chord, is reached by `SetBreath`
+/// itself on top of the run (`Voice.barHeadBreathIndices`).
 ///
 /// Every mutation returns a command: an insert or a remove changes element indices and so is a voice-level
 /// `ReplaceVoiceElements`, whose inverse restores the indices exactly; a replace-in-place is a
