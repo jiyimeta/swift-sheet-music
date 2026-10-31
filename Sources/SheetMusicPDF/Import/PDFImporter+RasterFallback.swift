@@ -101,6 +101,7 @@ extension PDFImporter {
                 let bitmap = try PDFPageRasterizer.bitmap(page: page, dpi: dpi)
                 result = try RasterFrontEnd.page(
                     bitmap: bitmap, pageIndex: index, detector: detector,
+                    textRecognizer: options.omrTextRecognizer,
                     diagnostics: options.diagnostics,
                 )
             } catch {
@@ -124,8 +125,14 @@ extension PDFImporter {
             rasterPages.insert(index)
             walked.paths.removeAll { $0.pageIndex == index }
             walked.curves.removeAll { $0.pageIndex == index }
+            // Only when a recognizer is set: with none, the walker's texts stay exactly as they are today. With one,
+            // the OCR texts replace them for the same reason as the paths — same ink, another frame.
+            if options.omrTextRecognizer != nil {
+                walked.texts.removeAll { $0.pageIndex == index }
+            }
             walked.glyphs += result.walked.glyphs
             walked.paths += result.walked.paths
+            walked.texts += result.walked.texts
             // The analysis's own frame, never the mediaBox: on a resampled page
             // they differ, and mixing them shifts paths relative to glyphs.
             pageSizes[index] = result.pageSize

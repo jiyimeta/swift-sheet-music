@@ -12,6 +12,7 @@ import SheetMusicCore
 enum RasterFrontEnd {
     static func page(
         bitmap: GrayBitmap, pageIndex: Int, detector: any OMRGlyphDetecting,
+        textRecognizer: (any OMRTextRecognizer)? = nil,
         diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?,
     ) throws -> (walked: WalkedContent, pageSize: CGSize) {
         // keepDeskewed: the detector consumes the deskewed grayscale. It is
@@ -21,7 +22,7 @@ enum RasterFrontEnd {
         let analysis = RasterPage.analyze(bitmap, pageIndex: pageIndex, keepDeskewed: true)
         return try assembled(
             analysis: analysis, pageIndex: pageIndex, detector: detector,
-            diagnostics: diagnostics,
+            textRecognizer: textRecognizer, diagnostics: diagnostics,
         )
     }
 
@@ -50,9 +51,10 @@ enum RasterFrontEnd {
     /// call site.
     static func assembled(
         analysis: RasterPageAnalysis, pageIndex: Int, detector: any OMRGlyphDetecting,
+        textRecognizer: (any OMRTextRecognizer)? = nil,
         diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?,
     ) throws -> (walked: WalkedContent, pageSize: CGSize) {
-        guard analysis.deskewed != nil else {
+        guard let deskewed = analysis.deskewed else {
             throw SheetMusicError.malformedScore(ScoreFault(
                 code: "omr.rasterFrontEnd.missingDeskewed",
                 message: "RasterFrontEnd.assembled: analysis for page \(pageIndex) has no "
@@ -64,9 +66,25 @@ enum RasterFrontEnd {
         let glyphs = try detector.glyphs(
             pageIndex: pageIndex, analysis: analysis, diagnostics: diagnostics,
         )
-        // texts and curves stay empty: no OCR, no curve detector. A raster page
-        // therefore carries no title, lyrics, tempo text or ties.
-        let walked = WalkedContent(glyphs: glyphs, texts: [], paths: analysis.paths, curves: [])
+        // Text comes from the recognizer when one is set, and is empty otherwise. Curves stay empty either way:
+        // there is no curve detector, so a raster page carries no ties.
+        var texts: [TextGlyph] = []
+        if let textRecognizer {
+            let lines = RasterTextReader.lines(
+                in: deskewed, recognizer: textRecognizer,
+                onStripFailure: { strip, error in
+                    // A failed strip loses only the text in that band; the page's notes are unaffected.
+                    diagnostics?(PDFImportDiagnostic(
+                        severity: .warning, location: "page \(pageIndex)",
+                        message: "OMR: OCR text recognition failed on strip \(strip) of this page; "
+                            + "the text in that band was not read",
+                        context: "\(error)",
+                    ))
+                },
+            )
+            texts = OCRTextGlyphs.textGlyphs(from: lines, transform: analysis.transform, pageIndex: pageIndex)
+        }
+        let walked = WalkedContent(glyphs: glyphs, texts: texts, paths: analysis.paths, curves: [])
         return (walked, analysis.pageSizePt)
     }
 }
