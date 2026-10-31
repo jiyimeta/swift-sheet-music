@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.24.0] - 2026-10-31
+
 ### Added
 
 - **Android `exportAudioFile(…, masterGain:, masterOutputStage:)`.** The export scales the mix — score and click — by
