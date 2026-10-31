@@ -33,6 +33,22 @@ struct XMLTreeSerializerTests {
         #expect(xml.contains("a &lt; b &amp; c &gt; d"))
     }
 
+    /// XML 1.0 has no spelling at all for most C0 controls — not even a character reference — so the parser rejects
+    /// them, and a score whose text carries one (a PDF's text layer can) was written as a file nothing could reopen.
+    @Test("drops characters XML 1.0 cannot carry, so the output parses back")
+    func dropsCharactersXMLCannotCarry() throws {
+        let node = XMLTreeNode(name: "root", children: [
+            XMLTreeNode(name: "text", text: "A\u{01}B\u{1F}C\u{FFFE}D\tE"),
+            XMLTreeNode(name: "attr", attributes: ["v": "x\u{0B}y\u{FFFF}z"]),
+            XMLTreeNode(name: "mixed", mixedContent: [.characters("m\u{08}n")]),
+        ])
+        let data = XMLTreeSerializer.serialize(node)
+        let parsed = try XMLTreeParser.parse(data)
+        #expect(parsed.first("text")?.text == "ABCD\tE")
+        #expect(parsed.first("attr")?.attributes["v"] == "xyz")
+        #expect(parsed.first("mixed")?.text == "mn")
+    }
+
     @Test("escapes quote in attribute values")
     func escapesAttrQuote() {
         let node = XMLTreeNode(
