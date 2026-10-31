@@ -373,6 +373,7 @@ extension FNV1a {
         // The side matters only for a hidden begin side (hidden and an end marker used to be one state); every other
         // spanner hashes exactly as before.
         if !spanner.visible, !spanner.isEndMarker { combine(true) }
+        combineOccupied(endGraceIndex: spanner.nextGraceIndex)
     }
 
     /// Explicit 0/1 presence byte for an unbounded `Int?` — the `combine(_ fraction:)` / `combine(_ address:)`

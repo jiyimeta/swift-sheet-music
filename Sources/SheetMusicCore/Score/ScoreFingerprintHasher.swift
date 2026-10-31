@@ -214,6 +214,9 @@ struct FNV1a {
         for note in graceChord.notes {
             combine(note)
         }
+        // By occupants, like `Chord.spanners`: a grace that begins no slur feeds nothing, so every committed
+        // fingerprint of a score without one stays put.
+        combineOccupied(graceChord.spanners, tag: 123)
     }
 
     mutating func combine(_ articulation: ChordArticulation) {
