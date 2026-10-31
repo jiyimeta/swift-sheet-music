@@ -32,7 +32,8 @@
                 ]
                 context.setFillColor(gray: 0, alpha: 1)
                 let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
-                context.textPosition = CGPoint(x: 20, y: 40)
+                // Near the bottom of the (y-up) canvas, so a missing y-flip puts the boxes in the top half instead.
+                context.textPosition = CGPoint(x: 20, y: 14)
                 CTLineDraw(line, context)
                 return true
             }
@@ -49,8 +50,14 @@
             let chars = lines.flatMap(\.characters)
             #expect(chars.count >= 6)
             #expect(Set(chars.map { Int($0.x) }).count == chars.count)
-            #expect(chars.allSatisfy { $0.x >= 0 && $0.x + $0.width <= 600 && $0.y >= 0 && $0.y + $0.height <= 120 })
-            #expect(lines.allSatisfy { $0.width > 0 && $0.height > 0 && $0.y >= 0 && $0.y + $0.height <= 120 })
+            #expect(chars.allSatisfy {
+                $0.x >= 0 && $0.x + $0.width <= 600.5 && $0.y >= 0 && $0.y + $0.height <= 120.5
+            })
+            #expect(lines.allSatisfy { $0.width > 0 && $0.height > 0 && $0.y >= 0 && $0.y + $0.height <= 120.5 })
+            // The text sits at the bottom of the image (baseline 14 pt above the bottom edge, 48 pt font), so the
+            // top-left-origin boxes must be in the lower half. Without the y-flip they would land in the top half.
+            #expect(lines.allSatisfy { $0.y > 60 })
+            #expect(chars.allSatisfy { $0.y > 40 })
         }
     }
 #endif
