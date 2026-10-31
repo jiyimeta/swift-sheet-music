@@ -72,7 +72,7 @@ extension Chord {
     /// (`rw/read460/measureread.cpp:275-279`). Before-graces lead
     /// `mscxFileOrderedGraces`, so the ordinal is the index itself.
     func mscxGraceIndex(ofBeforeGraceAt index: Int) -> Int {
-        index
+        museScoreGraceIndex(side: .before, index: index)
     }
 
     /// The `<grace>N</grace>` ordinal of `graceNotesAfter[index]`.
@@ -80,6 +80,6 @@ extension Chord {
     /// and are written in reverse sounding order, so the ordinal counts
     /// back from the end of the run.
     func mscxGraceIndex(ofAfterGraceAt index: Int) -> Int {
-        graceNotesBefore.count + (graceNotesAfter.count - 1 - index)
+        museScoreGraceIndex(side: .after, index: index)
     }
 }

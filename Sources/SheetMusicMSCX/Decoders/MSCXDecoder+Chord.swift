@@ -226,10 +226,12 @@ extension Chord {
     /// `staves, voices, measures, fractions, grace, notes` (3.6.2
     /// `Location::write`, `libmscore/location.cpp:52-63`; master
     /// `TWrite::write(const Location*, …)`, `rw/write/twrite.cpp:2229-2243`,
-    /// which adds `timeTick`). This model holds two of them.
+    /// which adds `timeTick`). This model holds three of them: `<grace>`, a
+    /// slur ending on a grace chord, is `Spanner.nextGraceIndex`.
     private static let slurKnownLocationChildren: Set = [
         "measures",
         "fractions",
+        "grace",
     ]
 
     /// Announce, in one diagnostic per slur, every `<next><location>` child
@@ -240,8 +242,8 @@ extension Chord {
     /// `slur_ms3_exchangevoices.mscx:221-230` is exactly that. Dropping it
     /// moves the slur's end — the encoder can only re-home the `<prev>` within
     /// the begin side's own voice — so it is real data loss and must be said
-    /// out loud rather than passed over. `<staves>` (cross-staff slur),
-    /// `<grace>`, `<notes>` and `<timeTick>` are the same story, less common.
+    /// out loud rather than passed over. `<staves>` (cross-staff slur), `<notes>`
+    /// and `<timeTick>` are the same story, less common.
     ///
     /// This deliberately does *not* touch `Spanner.decode`: voice-level
     /// spanners share that reader and are out of scope here.

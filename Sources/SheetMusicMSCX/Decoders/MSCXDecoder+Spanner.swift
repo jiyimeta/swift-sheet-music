@@ -35,6 +35,8 @@ extension Spanner {
         let nextMeasures = Int(nextLocation?.first("measures")?.text ?? "0") ?? 0
         let nextFractions = nextLocation?.first("fractions")
             .flatMap { Fraction(mscxString: $0.text) }
+        // A slur ending on a grace chord names it by its index in that chord's grace run (`Location::graceIndex`).
+        let nextGrace = nextLocation?.first("grace").flatMap { Int($0.text) }
 
         let hairpin = kind == .hairpin ? node.first("HairPin").map(decodeHairpin) : nil
 
@@ -81,6 +83,7 @@ extension Spanner {
             lineProperties: lineProperties,
             chordTextLine: chordTextLine,
             payloadMarkup: payloadMarkup,
+            nextGraceIndex: nextGrace,
         )
         spanner.elementProperties = elementProperties
         return spanner

@@ -9,19 +9,24 @@ import SheetMusicXMLTools
 /// MuseScore stores a slur as a *pair* of `<Spanner type="Slur">` children —
 /// the begin side on the start chord/rest carrying the payload plus a
 /// `<next><location>` offset, a `<prev><location>` marker on the end one.
-/// Only the begin side is modeled (`Chord.spanners`); this is how the end
-/// side is put back.
+/// Only the begin side is modeled (`Chord.spanners`, `GraceChord.spanners`);
+/// this is how the end side is put back.
 ///
 /// The target is expressed the way the encoder actually walks: `measuresAway`
 /// counts measure boundaries still to cross in this voice, `fraction` is the
-/// position within the target measure. `prevMeasures` / `prevFractions` are
-/// the marker's own payload, already negated from the begin side's `<next>`.
+/// position within the target measure, and `targetGraceIndex` picks one of
+/// the target chord's graces (its MuseScore `<grace>` index) instead of the
+/// chord itself. `prevMeasures` / `prevFractions` are the marker's own
+/// payload, already negated from the begin side's `<next>`, and
+/// `prevGraceIndex` is the begin side's grace index when it starts on one.
 struct MSCXPendingSlurEnd: Sendable, Equatable {
     var measuresAway: Int
     var fraction: Fraction
+    var targetGraceIndex: Int?
     var rawType: String
     var prevMeasures: Int
     var prevFractions: Fraction?
+    var prevGraceIndex: Int?
 
     /// The marker element for this record. Version-independent: MuseScore's
     /// single `Location` writer has emitted `<measures>` before `<fractions>`
@@ -31,6 +36,7 @@ struct MSCXPendingSlurEnd: Sendable, Equatable {
             rawType: rawType,
             measures: prevMeasures,
             fractions: prevFractions,
+            grace: prevGraceIndex,
         )
     }
 
@@ -58,19 +64,75 @@ struct MSCXPendingSlurEnd: Sendable, Equatable {
     }
 }
 
+/// The end markers that land on one chord's own run — its graces and the chord itself — because a slur begun in
+/// that same run ends there: an acciaccatura slurred into its principal note, or a chord slurred into its own
+/// after-grace. The forward walk cannot leave these for later, since MuseScore writes every grace of a run ahead of
+/// its chord, so the run is resolved as a unit before any of it is written.
+struct MSCXRunSlurEnds {
+    /// Markers for the chord itself.
+    var onChord: [XMLTreeNode] = []
+    /// Markers keyed by the MuseScore `<grace>` index of the grace they belong in.
+    var onGrace: [Int: [XMLTreeNode]] = [:]
+}
+
 extension Chord {
     /// The begin-side `<Spanner>` markers this chord/rest carries.
     func slurBeginMarkers(options: MSCXEncoderOptions) -> [XMLTreeNode] {
         spanners.map { $0.encodeChordAnchoredBegin(options: options) }
     }
 
+    /// Every begin side this chord's run carries, each with the MuseScore `<grace>` index of the grace it starts on
+    /// (`nil` for the chord itself).
+    private var runSlurBegins: [(spanner: Spanner, beginGrace: Int?)] {
+        var begins = spanners.map { (spanner: $0, beginGrace: Int?.none) }
+        for (index, grace) in graceNotesBefore.enumerated() {
+            let beginGrace = museScoreGraceIndex(side: .before, index: index)
+            begins += grace.spanners.map { (spanner: $0, beginGrace: beginGrace) }
+        }
+        for (index, grace) in graceNotesAfter.enumerated() {
+            let beginGrace = museScoreGraceIndex(side: .after, index: index)
+            begins += grace.spanners.map { (spanner: $0, beginGrace: beginGrace) }
+        }
+        return begins
+    }
+
+    /// Whether `spanner`'s end lies in the same chord's run as its begin: no measure and no fraction offset. Only the
+    /// grace index can then tell the two ends apart.
+    private static func endsInOwnRun(_ spanner: Spanner) -> Bool {
+        spanner.nextMeasuresOffset == 0 && (spanner.nextFractionsOffset?.numerator ?? 0) == 0
+    }
+
+    /// The end markers for slurs that begin and end within this chord's own run — see `MSCXRunSlurEnds`.
+    ///
+    /// An end naming no grace of this chord, or naming the very element the slur begins on, is a slur MuseScore
+    /// could not draw either; it gets no marker, and its begin side still round-trips.
+    func runSlurEnds() -> MSCXRunSlurEnds {
+        var ends = MSCXRunSlurEnds()
+        for (spanner, beginGrace) in runSlurBegins where Self.endsInOwnRun(spanner) {
+            guard spanner.nextGraceIndex != beginGrace else { continue }
+            let marker = Spanner.chordAnchoredEndMarker(
+                rawType: spanner.rawType, measures: 0, fractions: spanner.nextFractionsOffset, grace: beginGrace,
+            )
+            if let target = spanner.nextGraceIndex {
+                guard grace(atMuseScoreGraceIndex: target) != nil else { continue }
+                ends.onGrace[target, default: []].append(marker)
+            } else {
+                ends.onChord.append(marker)
+            }
+        }
+        return ends
+    }
+
     /// The end markers this chord's begin sides ask for, given the chord's
-    /// own position within its measure.
+    /// own position within its measure — its graces' begin sides included,
+    /// since a grace shares the chord's tick.
     ///
     /// The target follows the same `<location>` semantics every other writer
     /// in this module uses: `measures` counts measure boundaries, `fractions`
     /// is added to the source's position within its own bar. So the end sits
     /// `nextMeasuresOffset` measures on, at `position + nextFractionsOffset`.
+    /// A slur ending within this chord's own run is not pending at all — see
+    /// `runSlurEnds()`.
     ///
     /// **Cross-voice slurs are not placed.** MuseScore's `<location>` can
     /// also carry `<voices>`, and `slur_ms3_exchangevoices.mscx:221-230`
@@ -81,11 +143,12 @@ extension Chord {
     /// offsets; the `<prev>` lands on whatever chord sits at the target
     /// position *in the same voice*, or is dropped when none does.
     ///
-    /// A target at or before the chord's own position within the same
-    /// measure is unreachable by a forward-only walk and is dropped rather
-    /// than mis-placed.
+    /// A target before the chord's own position within the same measure is
+    /// unreachable by a forward-only walk and is dropped rather than
+    /// mis-placed.
     func pendingSlurEnds(at position: Fraction) -> [MSCXPendingSlurEnd] {
-        spanners.compactMap { spanner in
+        runSlurBegins.compactMap { spanner, beginGrace in
+            if Self.endsInOwnRun(spanner) { return nil }
             let fractions = spanner.nextFractionsOffset
                 ?? Fraction(numerator: 0, denominator: 1)
             let target = position + fractions
@@ -95,11 +158,13 @@ extension Chord {
             return MSCXPendingSlurEnd(
                 measuresAway: spanner.nextMeasuresOffset,
                 fraction: target,
+                targetGraceIndex: spanner.nextGraceIndex,
                 rawType: spanner.rawType,
                 prevMeasures: -spanner.nextMeasuresOffset,
                 prevFractions: spanner.nextFractionsOffset.map {
                     Fraction(numerator: -$0.numerator, denominator: $0.denominator)
                 },
+                prevGraceIndex: beginGrace,
             )
         }
     }
@@ -108,5 +173,12 @@ extension Chord {
     /// safe because denominators are always positive.
     private static func isStrictlyAfter(_ lhs: Fraction, _ rhs: Fraction) -> Bool {
         lhs.numerator * rhs.denominator > rhs.numerator * lhs.denominator
+    }
+}
+
+extension GraceChord {
+    /// The begin-side `<Spanner>` markers this grace carries — the same form an ordinary chord writes.
+    func slurBeginMarkers(options: MSCXEncoderOptions) -> [XMLTreeNode] {
+        spanners.map { $0.encodeChordAnchoredBegin(options: options) }
     }
 }

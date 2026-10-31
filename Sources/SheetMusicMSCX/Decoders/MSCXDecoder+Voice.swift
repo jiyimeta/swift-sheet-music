@@ -157,25 +157,13 @@ extension Voice {
                     // Decode shape but do NOT scale by tuplet ratios:
                     // graces don't consume tuplet time — see
                     // CompatMidiRender::renderGraceNotesBefore.
+                    // A slur begun on the grace — most often an acciaccatura
+                    // slurred into its own principal note — stays on it:
+                    // `Chord.decode` has already read its begin sides (and
+                    // announced any non-slur chord-level spanner, exactly as
+                    // for an ordinary chord), and `GraceChord.spanners` holds
+                    // them with the same meaning `Chord.spanners` has.
                     let inner = try Chord.decode(child)
-                    // `GraceChord` carries no spanner list, so a slur that
-                    // *begins* on a grace note cannot be modeled. Its `<prev>`
-                    // end marker is consumed in silence by design, so without
-                    // this the whole pair would vanish untraced — MuseScore's
-                    // own `selectionfilter_gracesandslurs.mscx` writes exactly
-                    // this shape. One diagnostic per grace chord, naming the
-                    // types it carried.
-                    if !inner.spanners.isEmpty {
-                        let types = Set(inner.spanners.map(\.rawType))
-                            .sorted()
-                            .joined(separator: "/")
-                        mscxDecoderWarn(
-                            code: "mscx.chord.spannerDropped",
-                            message: "grace-note <Spanner type=\"\(types)\"> "
-                                + "is not modeled — dropped",
-                            location: "Chord[grace]/Spanner",
-                        )
-                    }
                     // `GraceChord` carries no bracket either, and unlike a
                     // spanner a `<ChordBracket>` is *consumable*: `Chord.decode`
                     // lifts it out of `inner.preservedMarkup` into
@@ -195,6 +183,7 @@ extension Voice {
                         duration: inner.duration,
                         notes: inner.notes,
                         preservedMarkup: graceMarkup,
+                        spanners: inner.spanners,
                     )))
                     continue
                 }
