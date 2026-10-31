@@ -124,8 +124,37 @@ struct LyricPlacementMetricTests {
     }
 
     @Test func versesAreScoredSeparately() {
-        let puts = [Put(measure: 0, chord: 3, text: "あ", verse: 0), Put(measure: 0, chord: 0, text: "い", verse: 1)]
-        let r = place(puts, puts)
-        #expect(r.total == LyricPlacementCounts(truthChars: 2, on: 2))
+        // Merged into one stream these would be identical (all on); per verse each is a one-off substitution.
+        let a = [Put(measure: 0, chord: 0, text: "あ", verse: 0), Put(measure: 0, chord: 1, text: "い", verse: 1)]
+        let b = [Put(measure: 0, chord: 1, text: "い", verse: 0), Put(measure: 0, chord: 0, text: "あ", verse: 1)]
+        let r = place(a, b)
+        #expect(r.total == LyricPlacementCounts(truthChars: 2, oneOff: 2, edits: 2))
+    }
+
+    @Test func aVerseOnlyInTheTruthIsAllMissing() {
+        let a = [Put(measure: 0, chord: 0, text: "あ", verse: 1), Put(measure: 0, chord: 1, text: "い", verse: 1)]
+        let r = place(a, [])
+        #expect(r.total == LyricPlacementCounts(truthChars: 2, missing: 2, edits: 2))
+    }
+
+    @Test func aVerseOnlyInTheReadIsAllExtra() {
+        let b = [Put(measure: 0, chord: 0, text: "x", verse: 1), Put(measure: 0, chord: 1, text: "y", verse: 1)]
+        let r = place([], b)
+        #expect(r.total == LyricPlacementCounts(extra: 2, edits: 2))
+        #expect(r.latin.extra == 2)
+    }
+
+    @Test func aDroppedLastSyllableDoesNotShiftTheOthers() {
+        let a = (0 ..< 4).map { Put(measure: 0, chord: $0, text: "あ") }
+        let b = (0 ..< 3).map { Put(measure: 0, chord: $0, text: "あ") }
+        let r = place(a, b)
+        #expect(r.total == LyricPlacementCounts(truthChars: 4, on: 3, missing: 1, edits: 1))
+    }
+
+    @Test func aDroppedFirstSyllableDoesNotShiftTheOthers() {
+        let a = (0 ..< 4).map { Put(measure: 0, chord: $0, text: "ら") }
+        let b = (1 ..< 4).map { Put(measure: 0, chord: $0, text: "ら") }
+        let r = place(a, b)
+        #expect(r.total == LyricPlacementCounts(truthChars: 4, on: 3, missing: 1, edits: 1))
     }
 }

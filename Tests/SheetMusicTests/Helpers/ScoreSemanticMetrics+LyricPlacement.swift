@@ -118,18 +118,31 @@ extension ScoreSemanticMetrics {
     ) {
         let n = truth.count, m = read.count
         let width = m + 1
-        var dp = [Int32](repeating: 0, count: (n + 1) * width)
+        // Lexicographic cost packed into one Int: unit edit count first (`editWeight` per edit), then the summed
+        // placement distance of aligned pairs (each capped at `distanceCap`) as the tie-break. The cap keeps the
+        // secondary part far below one edit, so it never overrides the Levenshtein distance.
+        let editWeight = 1_000_000
+        let distanceCap = 2
+        func pairCost(_ i: Int, _ j: Int) -> Int {
+            let same = truth[i - 1].char == read[j - 1].char
+            let d = placementDistance(truth: truth[i - 1], read: read[j - 1], countA: countA, startA: startA)
+            return (same ? 0 : editWeight) + min(d, distanceCap)
+        }
+        var dp = [Int](repeating: 0, count: (n + 1) * width)
         for i in 0 ... n {
-            dp[i * width] = Int32(i)
+            dp[i * width] = i * editWeight
         }
         for j in 0 ... m {
-            dp[j] = Int32(j)
+            dp[j] = j * editWeight
         }
         if n > 0, m > 0 {
             for i in 1 ... n {
                 for j in 1 ... m {
-                    let sub = dp[(i - 1) * width + j - 1] + (truth[i - 1].char == read[j - 1].char ? 0 : 1)
-                    dp[i * width + j] = min(sub, dp[(i - 1) * width + j] + 1, dp[i * width + j - 1] + 1)
+                    dp[i * width + j] = min(
+                        dp[(i - 1) * width + j - 1] + pairCost(i, j),
+                        dp[(i - 1) * width + j] + editWeight,
+                        dp[i * width + j - 1] + editWeight,
+                    )
                 }
             }
         }
@@ -143,7 +156,7 @@ extension ScoreSemanticMetrics {
             let here = dp[i * width + j]
             if i > 0, j > 0 {
                 let same = truth[i - 1].char == read[j - 1].char
-                if here == dp[(i - 1) * width + j - 1] + (same ? 0 : 1) {
+                if here == dp[(i - 1) * width + j - 1] + pairCost(i, j) {
                     let distance = placementDistance(
                         truth: truth[i - 1], read: read[j - 1], countA: countA, startA: startA,
                     )
@@ -159,7 +172,7 @@ extension ScoreSemanticMetrics {
                     continue
                 }
             }
-            if i > 0, here == dp[(i - 1) * width + j] + 1 {
+            if i > 0, here == dp[(i - 1) * width + j] + editWeight {
                 update(&result, lyricScript(truth[i - 1].char)) { $0.missing += 1; $0.edits += 1 }
                 i -= 1
             } else {
