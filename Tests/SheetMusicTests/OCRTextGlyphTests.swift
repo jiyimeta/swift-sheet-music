@@ -59,6 +59,39 @@
             #expect(lyricTexts(out) == ["a"])
         }
 
+        /// Line spacing 5, so the walker's band ends 8 spatia (40 pt) under the bottom line at y 450 and an OCR glyph's
+        /// at 10 spatia (y 440): a glyph at 9 spatia (y 445) is a lyric only when OCR read it, one at 11 (y 435) never.
+        @Test func anOCRGlyphIsALyricDeeperUnderTheStaffThanAWalkerGlyph() {
+            func glyph(y: CGFloat, ocr: Bool) -> TextGlyph {
+                TextGlyph(
+                    text: "a", fontName: ocr ? "OCR" : "F1", fontSize: 10, renderedSize: 10,
+                    origin: CGPoint(x: 98, y: y), bbox: .zero, pageIndex: 0,
+                    ocr: ocr ? OCRTextInfo(inkCenterX: 103, lyricEligible: true) : nil,
+                )
+            }
+            func attached(_ text: TextGlyph) -> [String] {
+                lyricTexts(PDFImporter.attachLyrics(
+                    elements: [chordElement(x: 100)], texts: [text], staffYLines: staffYLines, pageIndex: 0,
+                ))
+            }
+            #expect(attached(glyph(y: 445, ocr: true)) == ["a"])
+            #expect(attached(glyph(y: 445, ocr: false)).isEmpty)
+            #expect(attached(glyph(y: 435, ocr: true)).isEmpty)
+        }
+
+        @Test func chordSymbolsAndRepeatMarksAreIneligible() {
+            let ineligible = [
+                "Fm", "Cm/G", "D♭M7", "Eb7", "B♭m7/E♭", "C", "Esus4", "Gm/F", "/F", "A♭add9",
+                "D，", "Cm7,", "D.S.", "Coda",
+            ]
+            for token in ineligible {
+                #expect(!OCRTextGlyphs.isLyricEligible(token), "\(token)")
+            }
+            for token in ["Be", "Ado", "am", "a", "dance", "Day", "Go"] {
+                #expect(OCRTextGlyphs.isLyricEligible(token), "\(token)")
+            }
+        }
+
         @Test func ocrIsOffByDefault() {
             #expect(PDFImportOptions().omrTextRecognizer == nil)
         }

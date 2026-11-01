@@ -36,6 +36,11 @@ extension PDFImporter {
     /// bounds the band instead (a staff's lyrics sit entirely in the gap
     /// above the next staff), and this only caps a runaway inter-system gap.
     static let lyricBandDepthSpatia: CGFloat = 8
+    /// The same cap for a glyph OCR read on a raster page. A recognizer's line box reaches below the ink, and a
+    /// printed sheet with three verses puts the third row's ink ≈ 7.6 spatia under the bottom line (at-elise), so at
+    /// `lyricBandDepthSpatia` that row was lost. Walker glyphs keep the shallower cap, which leaves vector imports as
+    /// they were.
+    static let ocrLyricBandDepthSpatia: CGFloat = 10
 
     /// `excludingOrigins`: text-glyph origins already claimed by another
     /// pass (e.g. a tuplet-number digit) and therefore ineligible to also
@@ -272,16 +277,18 @@ extension PDFImporter {
         nextStaffTopY: CGFloat?,
         excludingOrigins: [CGPoint] = [],
     ) -> [TextGlyph] {
-        // The band reaches `lyricBandDepthSpatia` spatia below the bottom
-        // line, but never PAST the next staff below — a staff's lyrics live
-        // entirely in the gap above the staff under it, so the next staff's
-        // top line is the natural floor. `max(depthFloor, nextTop)` keeps the
-        // depth cap active for a large inter-system gap (don't vacuum a far
-        // staff's text) while letting the next-staff bound win for normal
-        // spacing. Without a staff below (lowest staff of the last system on
-        // a page) the depth cap alone applies.
-        let depthFloor = bottomY - Self.lyricBandDepthSpatia * lineSpacing
-        let lyricWindowLo = nextStaffTopY.map { max(depthFloor, $0) } ?? depthFloor
+        /// The band reaches `depthSpatia` spatia below the bottom line, but never PAST the next staff below — a staff's
+        /// lyrics live entirely in the gap above the staff under it, so the next staff's top line is the natural floor.
+        /// `max(depthFloor, nextTop)` keeps the depth cap active for a large inter-system gap (don't vacuum a far
+        /// staff's text) while letting the next-staff bound win for normal spacing. Without a staff below (lowest staff
+        /// of the last system on a page) the depth cap alone applies. Walker glyphs use `lyricBandDepthSpatia`, OCR
+        /// glyphs `ocrLyricBandDepthSpatia`.
+        func lyricWindowLo(_ depthSpatia: CGFloat) -> CGFloat {
+            let depthFloor = bottomY - depthSpatia * lineSpacing
+            return nextStaffTopY.map { max(depthFloor, $0) } ?? depthFloor
+        }
+        let walkerWindowLo = lyricWindowLo(Self.lyricBandDepthSpatia)
+        let ocrWindowLo = lyricWindowLo(Self.ocrLyricBandDepthSpatia)
         let lyricWindowHi = bottomY
         // Constrain to this measure's x cell (padded by half a note step)
         // so a measure only claims the lyrics under its own notes — without
@@ -310,7 +317,7 @@ extension PDFImporter {
         return texts.filter { t in
             let cx = centerX(t)
             return t.pageIndex == pageIndex
-                && lyricWindowLo <= t.origin.y
+                && (t.ocr == nil ? walkerWindowLo : ocrWindowLo) <= t.origin.y
                 && t.origin.y <= lyricWindowHi
                 && cx >= xLo
                 && cx <= xHi

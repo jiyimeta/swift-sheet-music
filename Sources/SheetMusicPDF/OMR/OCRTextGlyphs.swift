@@ -21,7 +21,7 @@ enum OCRTextGlyphs {
         "sf", "sfz", "sffz", "fz", "fp", "rf", "rfz", "sfp",
     ]
     private static let directionWords: Set = [
-        "cresc", "decresc", "dim", "rit", "ritard", "rall", "accel", "ped", "simile",
+        "cresc", "decresc", "dim", "rit", "ritard", "rall", "accel", "ped", "simile", "d.s", "d.c", "coda",
     ]
 
     /// One glyph per non-whitespace character of every line.
@@ -61,12 +61,52 @@ enum OCRTextGlyphs {
     /// `tokenGapLineHeights` × the line height) may become a lyric.
     ///
     /// False when the token has no letter (digits, punctuation, symbols), when it is a dynamic or a direction word
-    /// (compared lowercased, with leading and trailing non-letters removed), or when it is the two-word `a tempo`.
+    /// (compared lowercased, with leading and trailing non-letters removed), when it is the two-word `a tempo`, or when
+    /// it is spelled like a chord symbol (`isChordSymbol`): chord names are not read as such yet, so they are dropped.
     static func isLyricEligible(_ token: String) -> Bool {
         guard token.contains(where: \.isLetter) else { return false }
         let normalized = strippedOfOuterNonLetters(token)
         if normalized == "a tempo" { return false }
-        return !dynamics.contains(normalized) && !directionWords.contains(normalized)
+        return !dynamics.contains(normalized) && !directionWords.contains(normalized) && !isChordSymbol(token)
+    }
+
+    /// Whether `token` reads as a chord symbol: an optional leading `/` (a bass note split off its chord), a root
+    /// `A`–`G` with an optional accidental, then only quality and extension marks (`m`, `M`, `maj`, `min`, `dim`,
+    /// `aug`, `sus`, `add`, `omit`, digits, `°`, `ø`, `+`, `-`, parentheses), and an optional `/` bass note. Trailing
+    /// punctuation is ignored.
+    ///
+    /// A lone capital `A`–`G` counts too: a printed chord name is far more often one than an English lyric is.
+    static func isChordSymbol(_ token: String) -> Bool {
+        var rest = Substring(token)
+        while let last = rest.last, ",，.、。:;".contains(last) {
+            rest = rest.dropLast()
+        }
+        if rest.first == "/" { rest = rest.dropFirst() }
+        guard consumeNote(&rest) else { return false }
+        let words = ["maj", "min", "dim", "aug", "sus", "add", "omit"]
+        let marks = Set("mM°ø+-()0123456789")
+        while let next = rest.first, next != "/" {
+            if let word = words.first(where: { rest.hasPrefix($0) }) {
+                rest = rest.dropFirst(word.count)
+            } else if marks.contains(next) {
+                rest = rest.dropFirst()
+            } else {
+                return false
+            }
+        }
+        if rest.first == "/" {
+            rest = rest.dropFirst()
+            guard consumeNote(&rest) else { return false }
+        }
+        return rest.isEmpty
+    }
+
+    /// Consumes a note name `A`–`G` and an optional accidental from the front of `rest`; false when there is none.
+    private static func consumeNote(_ rest: inout Substring) -> Bool {
+        guard let root = rest.first, "ABCDEFG".contains(root) else { return false }
+        rest = rest.dropFirst()
+        if let accidental = rest.first, "#b♭♯".contains(accidental) { rest = rest.dropFirst() }
+        return true
     }
 
     /// `token` lowercased with the non-letters at both ends removed, so `Ped.*`, `(p)` and `mf,` match their words.
