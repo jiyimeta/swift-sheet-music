@@ -2,7 +2,7 @@
     import CoreGraphics
     import CoreText
     import Foundation
-    import SheetMusicOMRModel
+    @testable import SheetMusicOMRModel
     import SheetMusicPDF
     import Testing
 
@@ -58,6 +58,46 @@
             // top-left-origin boxes must be in the lower half. Without the y-flip they would land in the top half.
             #expect(lines.allSatisfy { $0.y > 60 })
             #expect(chars.allSatisfy { $0.y > 40 })
+        }
+
+        private struct EngineFailure: Error {}
+
+        @Test func aFailureOnTheDefaultDevicesIsRetriedOnceOnTheCPU() throws {
+            var attempts: [Bool] = []
+            let result = try VisionTextRecognizer.withCPUFallback { onCPU in
+                attempts.append(onCPU)
+                if !onCPU { throw EngineFailure() }
+                return 7
+            }
+            #expect(result == 7)
+            #expect(attempts == [false, true])
+        }
+
+        @Test func aSuccessOnTheDefaultDevicesIsNotRetried() throws {
+            var attempts: [Bool] = []
+            let result = try VisionTextRecognizer.withCPUFallback { onCPU in
+                attempts.append(onCPU)
+                return 3
+            }
+            #expect(result == 3)
+            #expect(attempts == [false])
+        }
+
+        @Test func aFailureOnTheCPUTooIsThrown() {
+            var attempts: [Bool] = []
+            #expect(throws: EngineFailure.self) {
+                try VisionTextRecognizer.withCPUFallback { onCPU -> Int in
+                    attempts.append(onCPU)
+                    throw EngineFailure()
+                }
+            }
+            #expect(attempts == [false, true])
+        }
+
+        @Test func theCPURetryReadsTheSameText() throws {
+            let image = try Self.render("あいう abc")
+            let lines = try VisionTextRecognizer().recognize(image, onCPU: true)
+            #expect(lines.contains { $0.text.contains("あいう") })
         }
     }
 #endif

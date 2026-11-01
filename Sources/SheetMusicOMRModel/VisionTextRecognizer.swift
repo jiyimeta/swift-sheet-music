@@ -17,7 +17,26 @@ public struct VisionTextRecognizer: OMRTextRecognizer {
         self.languages = languages
     }
 
+    /// Reads `image` on the devices Vision picks, and once more on the CPU alone if that fails.
+    ///
+    /// Vision's Neural Engine path sometimes fails with an `e5rtError` and keeps failing for the rest of the process
+    /// (measured: every strip after the first of a two-page import, in one run of two identical ones). The CPU path
+    /// reads the same text, so a failure there costs one extra attempt instead of the page's lyrics.
     public func recognize(_ image: OMRTextImage) throws -> [OMRRecognizedLine] {
+        try Self.withCPUFallback { onCPU in try recognize(image, onCPU: onCPU) }
+    }
+
+    /// Runs `attempt(false)`; if it throws, runs `attempt(true)` and returns or throws whatever that does.
+    static func withCPUFallback<T>(_ attempt: (_ onCPU: Bool) throws -> T) throws -> T {
+        do {
+            return try attempt(false)
+        } catch {
+            return try attempt(true)
+        }
+    }
+
+    /// One recognition pass; `onCPU` pins every compute stage of the request to the CPU.
+    func recognize(_ image: OMRTextImage, onCPU: Bool) throws -> [OMRRecognizedLine] {
         try autoreleasepool {
             guard image.width > 0, image.height > 0, image.pixels.count >= image.width * image.height,
                   let cgImage = Self.makeCGImage(image)
@@ -29,6 +48,7 @@ public struct VisionTextRecognizer: OMRTextRecognizer {
             request.recognitionLanguages = languages
             // Lyrics are not prose: a language model would "correct" syllables into words.
             request.usesLanguageCorrection = false
+            if onCPU { try Self.pinToCPU(request) }
 
             try VNImageRequestHandler(cgImage: cgImage, options: [:]).perform([request])
 
@@ -47,6 +67,13 @@ public struct VisionTextRecognizer: OMRTextRecognizer {
                     characters: Self.characters(of: candidate, width: width, height: height),
                 )
             }
+        }
+    }
+
+    private static func pinToCPU(_ request: VNRequest) throws {
+        for (stage, devices) in try request.supportedComputeStageDevices {
+            guard let cpu = devices.first(where: { if case .cpu = $0 { true } else { false } }) else { continue }
+            request.setComputeDevice(cpu, for: stage)
         }
     }
 
