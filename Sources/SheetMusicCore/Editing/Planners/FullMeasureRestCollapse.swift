@@ -38,13 +38,23 @@ public enum FullMeasureRestCollapse {
     /// order; only the timed run collapses. Tuplets go with it: their bracket spans element indices that no longer
     /// exist once the run is one slot long.
     public static func plan(clearing covered: Set<Int>, in ref: VoiceRef, of score: Score) -> Plan? {
+        plan(clearing: covered, dropping: [], in: ref, of: score)
+    }
+
+    /// `plan(clearing:in:of:)` that also leaves out the non-timed elements at `dropped` — the breaths a range delete
+    /// takes along with the slots they follow (`DeleteRange`).
+    static func plan(
+        clearing covered: Set<Int>, dropping dropped: Set<Int>, in ref: VoiceRef, of score: Score,
+    ) -> Plan? {
         guard let voice = score[voice: ref] else { return nil }
 
         var elements: [VoiceSlot] = []
         var restElementIndex: Int?
         for (index, element) in voice.elements.enumerated() {
             guard case .chord = element else {
-                elements.append(VoiceSlot(identity: .keep(voice.elements.eid(at: index)), element: element))
+                if !dropped.contains(index) {
+                    elements.append(VoiceSlot(identity: .keep(voice.elements.eid(at: index)), element: element))
+                }
                 continue
             }
             // A timed slot the caller is NOT clearing keeps the bar's rhythm, whether it holds notes or not.

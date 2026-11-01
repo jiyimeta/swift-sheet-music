@@ -100,13 +100,19 @@ struct SetBreathBarHeadTests {
         #expect(throws: SheetMusicError.self) {
             _ = try SetBreath(after: Self.slot(0, 1), kind: nil, pause: 0).apply(to: &score)
         }
-        // A rest ending the bar owns nothing, so the chord before it does not reach past it either.
-        let restEnded = Self.score(
+        #expect(score == before)
+    }
+
+    @Test("a bar ending on a rest: the rest owns it, and the chord before the rest does not reach past it")
+    func restEndedBar() throws {
+        var score = Self.score(
             [Self.chord(60, .half), .rest(duration: .half)],
             [.breath(Self.comma), Self.chord(65, .whole)],
         )
-        #expect(SetBreath.current(after: Self.slot(0, 0), in: restEnded) == nil)
-        #expect(score == before)
+        #expect(SetBreath.current(after: Self.slot(0, 0), in: score) == nil)
+        #expect(SetBreath.current(after: Self.slot(0, 1), in: score) == Self.comma)
+        _ = try SetBreath(after: Self.slot(0, 1), kind: nil, pause: 0).apply(to: &score)
+        #expect(Self.elements(score, 1) == [Self.chord(65, .whole)])
     }
 
     @Test("a breath in the middle of the next bar is not at its head")

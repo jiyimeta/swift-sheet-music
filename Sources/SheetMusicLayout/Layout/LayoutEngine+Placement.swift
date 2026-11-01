@@ -2389,8 +2389,8 @@ extension LayoutEngine {
     /// Dynamics, expressions and fermatas look forward through annotations and signatures to their timed owner;
     /// breaths look backward only through breaths. A location shift, barline, or other run boundary
     /// ends the search even when geometry happens to put a chord at the same tick. Rest owners are
-    /// accepted only for fermatas, matching the commands' element-kind guards. An expression's owner is what pairs it
-    /// with the dynamic of its beat (`snapExpressions`).
+    /// accepted for fermatas and breaths, matching the commands' element-kind guards. An expression's owner is what
+    /// pairs it with the dynamic of its beat (`snapExpressions`).
     static func attachmentAnchor(at marking: VoiceElementID, in voice: Voice) -> VoiceElementID? {
         guard voice.elements.indices.contains(marking.elementIndex) else { return nil }
         let backwards: Bool
@@ -2398,7 +2398,7 @@ extension LayoutEngine {
         switch voice.elements[marking.elementIndex] {
         case .dynamic, .expression: backwards = false; permitsRest = false
         case .fermata: backwards = false; permitsRest = true
-        case .breath: backwards = true; permitsRest = false
+        case .breath: backwards = true; permitsRest = true
         default: return nil
         }
         let step = backwards ? -1 : 1
@@ -2428,9 +2428,10 @@ extension LayoutEngine {
         return nil
     }
 
-    /// The chord a breath at the head of a bar follows — the last chord of the bar before, in the same voice — named
-    /// the way `SetBreath(after:)` names it, or `nil` when the breath is not at the bar's head or that voice of the bar
-    /// before ends on no chord with notes. `owners` is `barHeadBreathOwners(measureIdx:in:)` for this bar.
+    /// The chord or rest a breath at the head of a bar follows — the last timed element of the bar before, in the same
+    /// voice — named the way `SetBreath(after:)` names it, or `nil` when the breath is not at the bar's head or that
+    /// voice of the bar before ends on no chord or rest of its own. `owners` is `barHeadBreathOwners(measureIdx:in:)`
+    /// for this bar.
     ///
     /// `attachmentAnchor` answers every breath with a chord before it in its own bar; this answers the ones with none,
     /// which the command reaches over the barline (`Voice.barHeadBreathIndices`).
@@ -2445,8 +2446,9 @@ extension LayoutEngine {
         )
     }
 
-    /// For each voice of `staff`'s bar `measureIdx` that opens with a breath, the index of the chord in the same voice
-    /// of the bar before that the breath follows (`Voice.barEndBreathOwnerIndex`); `nil` for the other voices.
+    /// For each voice of `staff`'s bar `measureIdx` that opens with a breath, the index of the chord or rest in the
+    /// same voice of the bar before that the breath follows (`Voice.barEndBreathOwnerIndex`); `nil` for the other
+    /// voices.
     ///
     /// **Empty when no voice of the bar opens with a breath**, which is nearly every bar: this value is part of the
     /// placement and system cache keys (the bar before may sit in another system), and an empty one keeps an ordinary

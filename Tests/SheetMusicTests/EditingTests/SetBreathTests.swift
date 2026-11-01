@@ -73,17 +73,44 @@ struct SetBreathTests {
         #expect(score == before)
     }
 
-    @Test("a rest, a non-timed element, a missing element and a clear with nothing to clear are refused")
+    @Test("a rest takes one as a chord does: written after it, replaced, removed, and undone")
+    func afterARest() throws {
+        var score = EditingFixtures.parityFixture() // m0: [ts, C4, D4, r, r]
+        let before = score
+        let writeInverse = try SetBreath(after: Self.slot(0, 3), kind: .breathMark(.comma), pause: 0)
+            .apply(to: &score)
+        #expect(Self.elements(score, 0)[4] == .breath(Breath(kind: .breathMark(.comma), pause: 0)))
+        #expect(SetBreath.current(after: Self.slot(0, 3), in: score)?.kind == .breathMark(.comma))
+        _ = try SetBreath(after: Self.slot(0, 3), kind: .caesura(.normal), pause: 0.5).apply(to: &score)
+        #expect(Self.elements(score, 0).count == 6)
+        #expect(SetBreath.current(after: Self.slot(0, 3), in: score)?.kind == .caesura(.normal))
+        _ = try SetBreath(after: Self.slot(0, 3), kind: nil, pause: 0).apply(to: &score)
+        #expect(score == before)
+        _ = try writeInverse.apply(to: &score)
+        #expect(score == before)
+    }
+
+    @Test("a breath a cleared bar left behind its measure rest is removed through that rest")
+    func afterAMeasureRest() throws {
+        // The shape a range delete over a bar with a breath in it leaves (`FullMeasureRestCollapse` carries the
+        // breath over): the bar's chords are one measure rest, and the breath that followed one of them follows it.
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [.rest(duration: .measure), .breath(Breath(kind: .breathMark(.comma)))])]),
+        ])
+        var score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "flute"), staves: [staff])])
+        #expect(SetBreath.current(after: Self.slot(0, 0), in: score)?.kind == .breathMark(.comma))
+        _ = try SetBreath(after: Self.slot(0, 0), kind: nil, pause: 0).apply(to: &score)
+        #expect(Self.elements(score, 0) == [.rest(duration: .measure)])
+    }
+
+    @Test("a non-timed element, a missing element and a clear with nothing to clear are refused")
     func refusals() {
         var score = EditingFixtures.parityFixture()
         let before = score
-        let rest = #expect(throws: SheetMusicError.self) {
-            _ = try SetBreath(after: Self.slot(0, 3), kind: .breathMark(.comma), pause: 0).apply(to: &score)
-        }
-        #expect(Self.reason(of: rest) == .wrongElementKind(at: Self.slot(0, 3), expected: .chord))
-        #expect(throws: SheetMusicError.self) {
+        let signature = #expect(throws: SheetMusicError.self) {
             _ = try SetBreath(after: Self.slot(0, 0), kind: .breathMark(.comma), pause: 0).apply(to: &score)
         }
+        #expect(Self.reason(of: signature) == .wrongElementKind(at: Self.slot(0, 0), expected: .chord))
         #expect(throws: SheetMusicError.self) {
             _ = try SetBreath(after: Self.slot(0, 9), kind: .breathMark(.comma), pause: 0).apply(to: &score)
         }

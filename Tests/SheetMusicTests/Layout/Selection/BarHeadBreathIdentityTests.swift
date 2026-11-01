@@ -60,11 +60,22 @@ struct BarHeadBreathIdentityTests {
         #expect(Self.breathIDs(score, width: 120) == [.breath(anchor: Self.slot(0, 0))])
     }
 
-    @Test("a bar ending on a rest leaves it unnamed, as a breath after a rest is")
+    @Test("a bar ending on a rest names that rest, as a breath after a rest within a bar does")
     func restEndedBar() {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let score = Self.score(
             [Self.chord(60, .half), .rest(duration: .half)],
+            [.breath(Self.comma), Self.chord(65, .whole)],
+        )
+        #expect(Self.breathIDs(score) == [.breath(anchor: Self.slot(0, 1))])
+    }
+
+    @Test("a bar ending on a measure repeat leaves it unnamed: no timed element of its own ends the bar")
+    func measureRepeatEndedBar() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let score = Self.score(
+            [Self.chord(60, .whole)],
+            [.measureRepeat(MeasureRepeat(numMeasures: 1, duration: .measure))],
             [.breath(Self.comma), Self.chord(65, .whole)],
         )
         #expect(Self.breathIDs(score) == [nil])
@@ -83,10 +94,10 @@ struct BarHeadBreathIdentityTests {
             var edited = score
             edited.parts.updateValue(at: 0) { part in
                 part.staves.updateValue(at: 0) { staff in
-                    staff.measures[0].voices[0].elements = [Self.chord(60, .half), .rest(duration: .half)]
+                    staff.measures[0].voices[0].elements = [Self.chord(60, .whole)]
                 }
             }
-            #expect(Self.breathIDs(edited, cache: cache, width: width) == [nil])
+            #expect(Self.breathIDs(edited, cache: cache, width: width) == [.breath(anchor: Self.slot(0, 0))])
             edited.parts.updateValue(at: 0) { part in
                 part.staves.updateValue(at: 0) { staff in
                     staff.measures[0].voices[0].elements = [

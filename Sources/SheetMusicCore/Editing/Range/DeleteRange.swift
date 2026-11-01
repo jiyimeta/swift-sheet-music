@@ -33,6 +33,12 @@ import SheetMusicFoundation
 ///
 /// A measure repeat the range covers dissolves first, its whole group, as `.delete` takes one.
 ///
+/// A breath goes with the chord or rest it follows (`SetBreath`'s owner): the range takes every breath whose owner it
+/// covers — the one after its last slot too, and the one at the head of the next bar when it covers the slot ending
+/// the bar before, even where it does not reach that bar — and keeps one whose owner lies outside it. A range of
+/// nothing but rests still takes its breaths. (Owner, 2026-11-01. MuseScore's `deleteRangeAtTrack` keys on ticks
+/// instead and keeps the breath at the range's end tick; carried over, that breath was left behind a rest.)
+///
 /// A tie running into a deleted chord is left dangling exactly as `.delete` leaves it — no chain repair here, so the
 /// two paths produce the same score.
 ///
@@ -90,12 +96,13 @@ public struct DeleteRange: EditCommand {
             targets = working.voiceElements(in: range)
         }
         let groups = Self.grouped(targets)
-        let removedFrom = Self.removableUpperVoices(of: groups, in: working)
+        let breaths = Self.ownedBreaths(of: groups, in: working)
+        let removedFrom = Self.removableUpperVoices(of: groups, dropping: breaths, in: working)
         for (ref, covered) in groups {
             let bar = BarKey(ref)
             // An emptied bar's removable upper voices are dropped by its voice-1 pass below, not rewritten.
             if let first = removedFrom[bar], ref.voiceIndex >= first { continue }
-            if let rewrite = Self.rewrite(voice: ref, clearing: covered, in: working) {
+            if let rewrite = Self.rewrite(voice: ref, clearing: covered, dropping: breaths[ref] ?? [], in: working) {
                 _ = try rewrite.command.apply(to: &working, ids: &scratch)
                 commands.append(rewrite.command)
                 location = location ?? VoiceElementID(
@@ -119,7 +126,8 @@ public struct DeleteRange: EditCommand {
                 VoiceElementID(staff: ref.staff, measureIndex: ref.measureIndex, voiceIndex: 0, elementIndex: index)
             }
         }
-        guard let location, !commands.isEmpty else { return nil }
+        let beyond = try Self.removeBreathsBeyond(groups, breaths, in: &working, ids: &scratch, into: &commands)
+        guard let location = location ?? beyond, !commands.isEmpty else { return nil }
         return RangeEditPlanner.Plan(
             commands: commands, location: location, result: working, idAllocator: scratch,
         )
@@ -152,9 +160,9 @@ public struct DeleteRange: EditCommand {
 
     /// For each bar the range empties — every timed slot of every voice covered, and more than one voice — the
     /// lowest voice index from which the upper voices go: the top run of voices above the first that hold nothing
-    /// but notes and rests. A bar with no such run is absent.
+    /// but notes, rests and the breaths the range takes (`dropped`). A bar with no such run is absent.
     private static func removableUpperVoices(
-        of groups: [(ref: VoiceRef, covered: Set<Int>)], in score: Score,
+        of groups: [(ref: VoiceRef, covered: Set<Int>)], dropping dropped: [VoiceRef: Set<Int>], in score: Score,
     ) -> [BarKey: Int] {
         var covered: [VoiceRef: Set<Int>] = [:]
         for group in groups {
@@ -175,7 +183,10 @@ public struct DeleteRange: EditCommand {
             }
             guard emptied else { continue }
             var first = bar.voices.count
-            while first > 1, bar.voices[first - 1].elements.values.allSatisfy(isTimed) {
+            while first > 1 {
+                let upper = bar.voices[first - 1].elements.values
+                let gone = dropped[VoiceRef(staff: ref.staff, measureIndex: ref.measureIndex, voiceIndex: first - 1)]
+                guard upper.indices.allSatisfy({ isTimed(upper[$0]) || gone?.contains($0) == true }) else { break }
                 first -= 1
             }
             if first < bar.voices.count {
@@ -195,9 +206,12 @@ public struct DeleteRange: EditCommand {
         let restElementIndex: Int
     }
 
-    /// One bar-voice rewritten, or `nil` when clearing `covered` there would change nothing.
-    private static func rewrite(voice ref: VoiceRef, clearing covered: Set<Int>, in score: Score) -> Rewrite? {
-        if let collapse = FullMeasureRestCollapse.plan(clearing: covered, in: ref, of: score) {
+    /// One bar-voice rewritten, or `nil` when clearing `covered` and taking the breaths at `dropped` there would
+    /// change nothing. A taken breath leaves no seam: the covered slots on either side of it fill as one run.
+    private static func rewrite(
+        voice ref: VoiceRef, clearing covered: Set<Int>, dropping dropped: Set<Int>, in score: Score,
+    ) -> Rewrite? {
+        if let collapse = FullMeasureRestCollapse.plan(clearing: covered, dropping: dropped, in: ref, of: score) {
             return Rewrite(command: collapse.command, restElementIndex: collapse.restElementIndex)
         }
         guard let voice = score[voice: ref] else { return nil }
@@ -220,6 +234,7 @@ public struct DeleteRange: EditCommand {
         for (index, element) in voice.elements.enumerated() {
             let kept = SlotIdentity.keep(voice.elements.eid(at: index))
             defer { rtick += element.cursorAdvance(division: division, in: measureDuration) }
+            if dropped.contains(index) { continue }
             guard case let .chord(chord) = element, covered.contains(index) else {
                 builder.carryOver(at: index, identity: kept, element: element)
                 continue

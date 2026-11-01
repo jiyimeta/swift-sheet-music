@@ -13,6 +13,18 @@ and this project adheres to
   a host that reads a breath before writing it (a clipboard copying the selected one) asks the command rather than
   re-walking the voice itself.
 
+### Changed
+
+- **`SetBreath` takes a rest as it takes a chord.** It writes, replaces and removes the breath after a rest, as
+  MuseScore drops one on any chord or rest (`Rest::acceptDrop` → `ChordRest::acceptDrop`); it used to refuse a rest
+  with `wrongElementKind`. A host that offers breaths on notes only keeps gating on its own selection.
+- **`DeleteRange` takes the breaths of the slots it deletes.** A breath goes with the chord or rest it follows: every
+  breath whose owner the range covers goes — the one after the range's last slot too, and the one at the head of the
+  next bar when the range covers the slot ending the bar before — and one whose owner lies outside the range stays.
+  A range of nothing but rests still takes its breaths, and the covered slots either side of a taken breath fill as
+  one run of rests. Until now every breath was carried over, so a deleted bar kept its breath behind the measure
+  rest.
+
 ### Fixed
 
 - **A breath written at the head of a bar can be selected, replaced and deleted.** A file can carry a breath ahead of
@@ -23,6 +35,10 @@ and this project adheres to
   makes (`read460.cpp:719`) — and `SetBreath` replaces or removes it through that chord when the chord's own bar has
   no breath after it. A new breath is still written into the chord's own bar. The breath stays where the file put it,
   so drawing, playback and MSCX round-trips are unchanged.
+- **A breath after a rest can be selected and deleted.** Its glyph had no identity either — the layout named a breath's
+  owner only when it was a chord with notes — so a breath left behind a rest (a cleared bar's, before `DeleteRange`
+  took them) could not be selected or removed. It now names the rest, within a bar and across the barline, and a
+  bar-head breath after a bar ending on a rest is that rest's.
 
 ## [4.24.0] - 2026-10-31
 

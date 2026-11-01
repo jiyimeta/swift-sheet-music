@@ -28,14 +28,14 @@ extension Voice {
         return indices
     }
 
-    /// The index of the chord a breath at the head of the NEXT bar's same voice follows: this voice's last timed
-    /// element, when that is a chord with notes. `nil` when the voice ends on a rest — a breath after a rest has no
-    /// owner, as within a bar — on a measure repeat or a location shift, or holds no chord at all.
+    /// The index of the chord or rest a breath at the head of the NEXT bar's same voice follows: this voice's last
+    /// timed element — a rest owns a breath as a chord does, within a bar and across it (`SetBreath`). `nil` when the
+    /// voice ends on a measure repeat or a location shift, or holds no chord or rest at all.
     package var barEndBreathOwnerIndex: Int? {
         for index in elements.indices.reversed() {
             switch elements[index] {
-            case let .chord(chord):
-                return chord.notes.isEmpty ? nil : index
+            case .chord:
+                return index
             case .measureRepeat, .locationShift:
                 return nil
             default:

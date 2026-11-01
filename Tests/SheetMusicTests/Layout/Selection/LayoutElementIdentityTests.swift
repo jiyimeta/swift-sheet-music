@@ -72,7 +72,7 @@ struct LayoutElementIdentityTests {
         #expect(Self.elements(score).compactMap(\.elementID) == ids)
     }
 
-    @Test("Fermata accepts a rest, while dynamic and breath require notes")
+    @Test("Fermata and breath accept a rest, while dynamic requires notes")
     func restEligibility() {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let score = Self.score([
@@ -80,7 +80,9 @@ struct LayoutElementIdentityTests {
             .fermata(Fermata(subtype: "fermataAbove")), .rest(duration: .whole),
             .breath(Breath(kind: .breathMark(.comma), pause: 0)),
         ])
-        #expect(Self.elements(score).compactMap(\.elementID) == [.fermata(anchor: Self.address(2))])
+        #expect(Self.elements(score).compactMap(\.elementID) == [
+            .fermata(anchor: Self.address(2)), .breath(anchor: Self.address(2)),
+        ])
     }
 
     @Test("Attachment boundaries cannot be crossed to find a visually nearby owner")
