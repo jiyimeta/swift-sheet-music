@@ -1,9 +1,73 @@
+import SheetMusicAudioApple
 import SheetMusicAudioCore
 
-/// The main actor's side of the stretcher groups: making the pairs a group needs, the scratch they read through, and
-/// the groups left draining after the track list dropped them. All of it is built before a lock section and handed over
-/// inside it (`setRecordingTracks`, `setRate`).
+/// The main actor's side of the stretcher groups: grouping the tracks, making the pairs a group needs, the scratch they
+/// read through, and the groups left draining after the track list dropped them. All of it is built before a lock
+/// section and handed over inside it (`setRecordingTracks`, `setPlaybackAlignment`, `setRate`).
 extension SwiftySynthBackend {
+    /// Groups `recordingTracks` by transposition and by the table each has of its own in `recordingTrackSegments`,
+    /// and hands the tracks and the groups over in one lock section, with `tables` too when a new alignment brought
+    /// them (`setRecordingTracks` has the rules a group follows across a call).
+    func installRecordingTracks(tables: AlignmentTables?) {
+        let reading = recordingTracksAsRead()
+        let tracks = reading.tracks
+        var incoming = tracks.map { RenderedRecording($0) }
+        let plan = RecordingGroupPlan.make(tracks: tracks, tables: reading.tables, previous: recordingGroupLayout)
+        var layouts = plan.map { group in
+            RecordingGroupLayout(
+                transposeSemitones: group.transposeSemitones, segments: group.segments,
+                tracks: group.trackIndices.map { tracks[$0] },
+                pair: group.continues.flatMap { recordingGroupLayout[$0].pair },
+            )
+        }
+        var scratch = stretchScratchIfNeeded(capacity: makeMissingPairs(in: &layouts))
+        let draining = drainingGroups(continued: Set(plan.compactMap(\.continues)))
+        var groups = plan.indices.map { index in
+            RecordingStretchGroup(layout: layouts[index], trackIndices: plan[index].trackIndices)
+        } + draining.map { drain in
+            RecordingStretchGroup(
+                layout: drain.layout, trackIndices: Array(drain.layout.tracks.indices),
+                drainTracks: drain.layout.tracks.map { RenderedRecording($0) },
+            )
+        }
+        // Where each new group's render state comes from in the array being replaced, and whether it restarts.
+        let sources = plan.map(\.continues) + draining.map(\.source)
+        let restarts = plan.map(\.restarts) + draining.map { _ in false }
+        var tables = tables
+        lock.withLockUnchecked { shared in
+            for index in incoming.indices {
+                let id = incoming[index].id
+                if let playing = shared.alignment.tracks.first(where: { $0.id == id }) {
+                    incoming[index].playhead = playing.playhead
+                    incoming[index].gainRamp = playing.gainRamp
+                }
+            }
+            for index in groups.indices {
+                guard let source = sources[index], shared.alignment.groups.indices.contains(source) else { continue }
+                groups[index].state = shared.alignment.groups[source].state
+                if restarts[index] { groups[index].state.needsRestart = true }
+            }
+            swap(&shared.alignment.tracks, &incoming)
+            swap(&shared.alignment.groups, &groups)
+            if scratch != nil { swap(&shared.alignment.stretchScratch, &scratch) }
+            tables?.swap(into: &shared.alignment)
+        }
+        recordingGroupLayout = layouts
+        drainingGroupLayout = draining.map(\.layout)
+    }
+
+    /// The track list as the render reads it, with each track's table of its own (nil: the shared one). A track with
+    /// one reads its file at that table's seconds, which are the file's own, so it is handed over at offset 0.
+    func recordingTracksAsRead() -> (tracks: [RecordingTrackRender], tables: [[RecordingSegment]?]) {
+        let tables = recordingTracks.map { recordingTrackSegments[$0.id] }
+        let tracks = zip(recordingTracks, tables).map { track, table in
+            var read = track
+            if table != nil { read.offsetSeconds = 0 }
+            return read
+        }
+        return (tracks, tables)
+    }
+
     /// The groups to keep fading out, with where their state is in the render's array: every previous group with a
     /// pair that no new group carries on, and every group already draining whose fade-out is not over.
     ///

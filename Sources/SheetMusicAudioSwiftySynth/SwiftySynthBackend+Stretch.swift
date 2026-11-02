@@ -10,6 +10,9 @@ import SheetMusicAudioCore
 // discontinuity in the target — a cut between segments, a seek or loop wrap, silence beginning or ending, a retune —
 // is a jump, handled as `RecordingPlayhead` handles one: the idle stretcher is primed at the new position and the
 // output crossfades to it, while the one fading out is fed its continuation. Silence fades out and then nothing is fed.
+//
+// A group whose tracks have a table of their own reads that table instead of the shared one. Its source seconds are
+// the tracks' file seconds, so there the reference is the tracks' own time and each is read at offset 0.
 
 /// One render call's view of a group's stretched reading: what it reads and the constants it reads them with.
 struct StretchReader {
@@ -200,7 +203,8 @@ extension SwiftySynthBackend {
             rate: alignment.userSpeed, sampleRate: sampleRate,
         )
         let table = alignment.speedTable
-        let schedule = alignment.schedule
+        // The group's own table, in its tracks' file seconds, or the shared one (`RecordingStretchGroup.schedule`).
+        let schedule = if let own = alignment.groups[index].schedule { own } else { alignment.schedule }
         var frame = 0
         var fed = 0
         var output = clock.outputSeconds(atFrame: 0, table: table)

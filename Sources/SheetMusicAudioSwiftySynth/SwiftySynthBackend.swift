@@ -153,6 +153,11 @@ public final class SwiftySynthBackend: SynthBackend {
     var drainingGroupLayout: [RecordingGroupLayout] = []
     /// The input capacity of the stretch scratch handed to the render thread, 0 before the first.
     var stretchScratchCapacity = 0
+    /// The track list (`setRecordingTracks`) and the tables of a track's own
+    /// (`setPlaybackAlignment(warp:segments:trackSegments:)`) last handed over. A track's table decides its group, so
+    /// either call groups the tracks again with the other's latest (`installRecordingTracks`).
+    var recordingTracks: [RecordingTrackRender] = []
+    var recordingTrackSegments: [String: [RecordingSegment]] = [:]
 
     public init(sampleRate: Double = 44100, stretcherFactory: RecordingStretcherFactory? = nil) {
         self.sampleRate = sampleRate

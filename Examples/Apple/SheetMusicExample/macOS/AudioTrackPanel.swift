@@ -46,6 +46,9 @@
         /// Seconds each played measure's downbeat is moved from the steady grid, by playback-order position.
         var nudgesSeconds: [Int: Double] = [:]
         private(set) var playedMeasures: [PlayedMeasure] = []
+        /// Gives the second strip a segment table of its own: the shared one moved 1 s later
+        /// (`PlaybackEngine.setAlignment(warp:segments:trackSegments:)`), so one track can be heard moving alone.
+        var secondTrackOwnTable = false
 
         // Export
         var includesCountIn = true
@@ -175,19 +178,35 @@
                 engine.setAlignment(warp: nil, segments: [])
                 return
             }
+            let warp: PlaybackTimeWarp?
+            let segments: [RecordingSegment]
             if usesGrid, bpm > 0, let result = Self.alignment(
                 for: playedMeasures, nominalFirstMeasureBeats: nominalFirstMeasureBeats, bpm: bpm,
                 firstDownbeat: firstDownbeatSeconds, nudges: nudgesSeconds,
             ) {
                 isAligned = true
-                engine.setAlignment(warp: result.warp, segments: result.segments)
+                warp = result.warp
+                segments = result.segments
             } else {
                 isAligned = false
                 let longest = strips.map(\.durationSeconds).max() ?? 0
-                engine.setAlignment(
-                    warp: nil, segments: [RecordingSegment(sourceStart: 0, sourceEnd: longest, outputStart: 0)],
+                warp = nil
+                segments = [RecordingSegment(sourceStart: 0, sourceEnd: longest, outputStart: 0)]
+            }
+            engine.setAlignment(warp: warp, segments: segments, trackSegments: ownTables(from: segments))
+        }
+
+        /// With `secondTrackOwnTable` on, the second strip's own table: `segments` with every source second 1 s
+        /// earlier, so that strip alone sounds 1 s later than it would on the shared table. A table of a track's own
+        /// is in the track's file seconds and its offset is not applied.
+        private func ownTables(from segments: [RecordingSegment]) -> [String: [RecordingSegment]] {
+            guard secondTrackOwnTable, strips.count > 1 else { return [:] }
+            let shifted = segments.map {
+                RecordingSegment(
+                    sourceStart: $0.sourceStart - 1, sourceEnd: $0.sourceEnd - 1, outputStart: $0.outputStart,
                 )
             }
+            return [strips[1].id: shifted]
         }
 
         /// Pure mapping, so it reads top to bottom: one span per click beat lasting that beat's duration on the
@@ -347,6 +366,10 @@
                     AudioTrackStripView(strip: $strip) { model.remove(strip.id) }
                         .onChange(of: strip) { _, new in model.stripChanged(new) }
                 }
+                Toggle("Second track: own table (+1 s)", isOn: $model.secondTrackOwnTable)
+                    .disabled(model.strips.count < 2)
+                    .accessibilityLabel("Second track: own table, one second later")
+                    .onChange(of: model.secondTrackOwnTable) { _, _ in model.applyAlignment() }
                 Text("Tempo and Transpose follow the sidebar's Speed and Transpose controls.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

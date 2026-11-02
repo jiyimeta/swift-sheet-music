@@ -39,12 +39,13 @@ extension RenderedRecording {
 /// actor and swapped in whole, so the render thread allocates nothing.
 struct PlaybackAlignmentState {
     var tracks: [RenderedRecording] = []
-    /// The tracks grouped by transposition, each with the stretcher pair it is read through when the rate is not 100 %
-    /// or its transposition is not 0 (`SwiftySynthBackend+Stretch.swift`).
+    /// The tracks grouped by transposition and table, each with the stretcher pair it is read through when the rate is
+    /// not 100 % or its transposition is not 0 (`SwiftySynthBackend+Stretch.swift`).
     var groups: [RecordingStretchGroup] = []
     /// The stretched reading's buffers, sized on the main actor for every pair in `groups`.
     var stretchScratch: StretchScratch?
     var speedTable = TransportSpeedTable(warp: nil)
+    /// The shared table: what every group without a table of its own plays (`RecordingStretchGroup.schedule`).
     var schedule = RecordingSchedule(segments: [])
     /// The host's rate (`setRate`). The render sets both transports to it × the table's stretch at every block start.
     var userSpeed: Double = 1
@@ -125,6 +126,18 @@ struct PlaybackAlignmentState {
     }
 }
 
+/// The speed table and the shared schedule a new alignment brings, laid out on the main actor.
+struct AlignmentTables {
+    var speedTable: TransportSpeedTable
+    var schedule: RecordingSchedule
+
+    /// Inside the lock: trades these for the ones `alignment` holds, which come back here to be released after it.
+    mutating func swap(into alignment: inout PlaybackAlignmentState) {
+        Swift.swap(&speedTable, &alignment.speedTable)
+        Swift.swap(&schedule, &alignment.schedule)
+    }
+}
+
 /// Where one chunk of the body sits on the warped clock. Inside one stretch the warped second is linear in the frame;
 /// a chunk that crosses a span boundary is looked up per frame, because there the transport moves at its block's one
 /// speed while the table's stretch changes mid-block — a linear guess would land the next chunk a few frames off,
@@ -165,9 +178,9 @@ extension SwiftySynthBackend {
 
     /// Add every recording to one chunk of the body, whose first frame is at transport second `transportStart` and
     /// whose frames each advance the transport by `transportPerFrame`. The speed table turns each frame's transport
-    /// second into a warped one, where the schedule says what each track plays. A group at 100 % and no transposition
-    /// is read directly, track by track; any other is read through its stretcher. A switch between the two is a jump:
-    /// the reading switched from fades out while the other fades in.
+    /// second into a warped one, where the group's schedule — its own, or the shared one — says what each track plays.
+    /// A group at 100 % and no transposition is read directly, track by track; any other is read through its
+    /// stretcher. A switch between the two is a jump: the reading switched from fades out while the other fades in.
     ///
     /// A track handed a new gain heads for it over the fade (`RecordingGainRamp`): per output frame when read
     /// directly, per input frame when read through a stretcher, whose input carries the gain. A track nothing is heard
@@ -195,6 +208,8 @@ extension SwiftySynthBackend {
         }
         for group in alignment.groups.indices {
             let stretched = alignment.readsThroughStretcher(group: group)
+            // A track with a table of its own is in a group of that table, and was handed over at offset 0.
+            let schedule = if let own = alignment.groups[group].schedule { own } else { alignment.schedule }
             // A draining group's track indices are into its own tracks: only its stretcher finishes fading out.
             let liveTracks = alignment.groups[group].drainTracks == nil
             // A track heard from nowhere steps to its gain: its direct reading is silent, and so is the stretcher when
@@ -216,7 +231,7 @@ extension SwiftySynthBackend {
                 } else {
                     mixTrack(
                         &alignment.tracks[index], into: left, right, clock: clock,
-                        table: alignment.speedTable, schedule: alignment.schedule, fadeFrames: fadeFrames,
+                        table: alignment.speedTable, schedule: schedule, fadeFrames: fadeFrames,
                     )
                 }
             }
@@ -302,68 +317,46 @@ extension SwiftySynthBackend {
         true
     }
 
-    /// Replaces the recordings in one lock section. A track whose `id` was already playing keeps its playhead and its
-    /// gain ramp, so a new gain neither fades nor jumps it: the render ramps to it over the fade. A group carries on
-    /// the stretchers of the previous group that held most of its tracks (`RecordingGroupPlan`); when its
-    /// transposition or its tracks changed, or a track's file or offset, the render restarts it, primed and retuned,
-    /// and crossfades. A previous group nobody carries on is kept draining until its fade-out is over, and dropped by
-    /// the first call after that. Stretchers a group now needs are made here, on the main actor. The previous arrays,
-    /// stretchers and scratch are released after the lock, never on the render thread.
+    /// Replaces the recordings in one lock section, grouped by transposition and table with the tables of a track's
+    /// own last set (`setPlaybackAlignment(warp:segments:trackSegments:)`). A track whose `id` was already playing
+    /// keeps its playhead and its gain ramp, so a new gain neither fades nor jumps it: the render ramps to it over the
+    /// fade. A group carries on the stretchers of the previous group that held most of its tracks
+    /// (`RecordingGroupPlan`); when its transposition, its table or its tracks changed, or a track's file or offset,
+    /// the render restarts it, primed and retuned, and crossfades. A previous group nobody carries on is kept draining
+    /// until its fade-out is over, and dropped by the first call after that. Stretchers a group now needs are made
+    /// here, on the main actor. The previous arrays, stretchers and scratch are released after the lock, never on the
+    /// render thread.
     public func setRecordingTracks(_ tracks: [RecordingTrackRender]) {
-        var incoming = tracks.map { RenderedRecording($0) }
-        let plan = RecordingGroupPlan.make(tracks: tracks, previous: recordingGroupLayout)
-        var layouts = plan.map { group in
-            RecordingGroupLayout(
-                transposeSemitones: group.transposeSemitones, tracks: group.trackIndices.map { tracks[$0] },
-                pair: group.continues.flatMap { recordingGroupLayout[$0].pair },
-            )
-        }
-        var scratch = stretchScratchIfNeeded(capacity: makeMissingPairs(in: &layouts))
-        let draining = drainingGroups(continued: Set(plan.compactMap(\.continues)))
-        var groups = plan.indices.map { index in
-            RecordingStretchGroup(
-                transposeSemitones: plan[index].transposeSemitones, trackIndices: plan[index].trackIndices,
-                pair: layouts[index].pair,
-            )
-        } + draining.map { drain in
-            RecordingStretchGroup(
-                transposeSemitones: drain.layout.transposeSemitones, trackIndices: Array(drain.layout.tracks.indices),
-                pair: drain.layout.pair, drainTracks: drain.layout.tracks.map { RenderedRecording($0) },
-            )
-        }
-        // Where each new group's render state comes from in the array being replaced, and whether it restarts.
-        let sources = plan.map(\.continues) + draining.map(\.source)
-        let restarts = plan.map(\.restarts) + draining.map { _ in false }
-        lock.withLockUnchecked { shared in
-            for index in incoming.indices {
-                let id = incoming[index].id
-                if let playing = shared.alignment.tracks.first(where: { $0.id == id }) {
-                    incoming[index].playhead = playing.playhead
-                    incoming[index].gainRamp = playing.gainRamp
-                }
-            }
-            for index in groups.indices {
-                guard let source = sources[index], shared.alignment.groups.indices.contains(source) else { continue }
-                groups[index].state = shared.alignment.groups[source].state
-                if restarts[index] { groups[index].state.needsRestart = true }
-            }
-            swap(&shared.alignment.tracks, &incoming)
-            swap(&shared.alignment.groups, &groups)
-            if scratch != nil { swap(&shared.alignment.stretchScratch, &scratch) }
-        }
-        recordingGroupLayout = layouts
-        drainingGroupLayout = draining.map(\.layout)
+        recordingTracks = tracks
+        installRecordingTracks(tables: nil)
     }
 
     /// Swaps the speed table and the schedule together in one lock section: the next render call sees either the old
     /// pair or the new one, and the transport takes the new speed from its next block — no stop, seek or reload. The
-    /// previous table and schedule are released after the lock, never on the render thread.
+    /// previous table and schedule are released after the lock, never on the render thread. Every track plays from
+    /// `segments`: this is `setPlaybackAlignment(warp:segments:trackSegments:)` with no table of a track's own.
     public func setPlaybackAlignment(warp: PlaybackTimeWarp?, segments: [RecordingSegment]) {
-        var table = TransportSpeedTable(warp: warp)
-        var schedule = RecordingSchedule(segments: segments)
+        setPlaybackAlignment(warp: warp, segments: segments, trackSegments: [:])
+    }
+
+    /// As `setPlaybackAlignment(warp:segments:)`, with tables of a track's own: a track keyed in `trackSegments` plays
+    /// its table at offset 0, every other track `segments` at its offset. A track's table decides its group, so tables
+    /// other than the last ones group the tracks again (`setRecordingTracks`) and hand the groups over in the same
+    /// lock section as the speed table and the schedule. Each group's table is laid out here, on the main actor, and
+    /// the render reads it from the group without looking anything up.
+    public func setPlaybackAlignment(
+        warp: PlaybackTimeWarp?, segments: [RecordingSegment], trackSegments: [String: [RecordingSegment]],
+    ) {
+        var tables = AlignmentTables(
+            speedTable: TransportSpeedTable(warp: warp), schedule: RecordingSchedule(segments: segments),
+        )
+        guard trackSegments == recordingTrackSegments else {
+            recordingTrackSegments = trackSegments
+            installRecordingTracks(tables: tables)
+            return
+        }
         lock.withLockUnchecked { shared in
-            swap(&shared.alignment.speedTable, &table)
-            swap(&shared.alignment.schedule, &schedule)
+            tables.swap(into: &shared.alignment)
         }
     }
 }

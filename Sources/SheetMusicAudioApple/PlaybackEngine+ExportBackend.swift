@@ -191,12 +191,17 @@ extension PlaybackEngine {
         }
     }
 
-    /// Hand the offline instance the live recordings and alignment, after the rate (`loadTransports`), so the
-    /// stretchers a rate away from 100 % needs are made with the tracks. With neither, nothing is sent: an export
-    /// without recordings drives the backend exactly as it always did.
+    /// Hand the offline instance the live recordings and alignment, the tables of a track's own with it, after the
+    /// rate (`loadTransports`), so the stretchers a rate away from 100 % needs are made with the tracks. With neither,
+    /// nothing is sent: an export without recordings drives the backend exactly as it always did.
     private static func loadRecordings(backend: any SynthBackend, snapshot: ExportEngineSnapshot) {
-        if snapshot.alignmentWarp != nil || !snapshot.alignmentSegments.isEmpty {
-            backend.setPlaybackAlignment(warp: snapshot.alignmentWarp, segments: snapshot.alignmentSegments)
+        let aligned = snapshot.alignmentWarp != nil || !snapshot.alignmentSegments.isEmpty
+            || !snapshot.alignmentTrackSegments.isEmpty
+        if aligned {
+            backend.setPlaybackAlignment(
+                warp: snapshot.alignmentWarp, segments: snapshot.alignmentSegments,
+                trackSegments: snapshot.alignmentTrackSegments,
+            )
         }
         if !snapshot.recordings.isEmpty {
             backend.setRecordingTracks(snapshot.recordings)

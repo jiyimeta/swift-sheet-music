@@ -215,7 +215,7 @@ public protocol SynthBackend: AnyObject {
     // MARK: Recordings
 
     /// Whether this backend mixes recordings into its own render, locked to its transport
-    /// (`setRecordingTracks`, `setPlaybackAlignment`). Defaults to `false`, and the other two then do nothing.
+    /// (`setRecordingTracks`, `setPlaybackAlignment`). Defaults to `false`, and those then do nothing.
     var canPlayRecordings: Bool { get }
 
     /// The recordings to mix, replacing the previous set. Callable while playing: a track whose `id` was already
@@ -227,6 +227,15 @@ public protocol SynthBackend: AnyObject {
     /// warped second. Callable while playing — the new speed applies from the next synthesizer block, without a stop,
     /// a seek or a reload. A recording plays only inside a segment. Defaults to a no-op.
     func setPlaybackAlignment(warp: PlaybackTimeWarp?, segments: [RecordingSegment])
+
+    /// The alignment with segment tables of a track's own. A track whose `id` is a key of `trackSegments` plays from
+    /// that table, whose source seconds are the track's own file seconds, so its `offsetSeconds` is not applied; every
+    /// other track plays from `segments` at its offset, as `setPlaybackAlignment(warp:segments:)` has it. Callable
+    /// while playing, as that one is. Defaults to `setPlaybackAlignment(warp:segments:)`, so a backend without tables
+    /// of a track's own plays every track from `segments`.
+    func setPlaybackAlignment(
+        warp: PlaybackTimeWarp?, segments: [RecordingSegment], trackSegments: [String: [RecordingSegment]],
+    )
 }
 
 /// One recording as a backend mixes it: the mapped PCM and how it sits against the reference timing, with the gain and
@@ -294,4 +303,11 @@ extension SynthBackend {
 
     /// Default: ignored (see `canPlayRecordings`).
     public func setPlaybackAlignment(warp _: PlaybackTimeWarp?, segments _: [RecordingSegment]) {}
+
+    /// Default: the tables of a track's own are dropped, and every track plays from `segments` at its offset.
+    public func setPlaybackAlignment(
+        warp: PlaybackTimeWarp?, segments: [RecordingSegment], trackSegments _: [String: [RecordingSegment]],
+    ) {
+        setPlaybackAlignment(warp: warp, segments: segments)
+    }
 }

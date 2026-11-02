@@ -144,20 +144,38 @@ extension PlaybackEngine {
     /// The alignment belongs to the host, not to the score: it survives `prepare(score:)` and `teardown()`, as the
     /// recordings do (`setRecordingTracks(_:)`). A host that switches to another score clears both, or sets the new
     /// score's, before it plays.
+    ///
+    /// Every track plays from `segments` at its offset: this is `setAlignment(warp:segments:trackSegments:)` with no
+    /// table of a track's own, and clears any such table set before.
     public func setAlignment(warp: PlaybackTimeWarp?, segments: [RecordingSegment]) {
+        setAlignment(warp: warp, segments: segments, trackSegments: [:])
+    }
+
+    /// The alignment with segment tables of a track's own, for tracks placed on the timeline each on its own: a track
+    /// whose `id` is a key of `trackSegments` plays from that table, whose source seconds are the track's own file
+    /// seconds, so its `offsetSeconds` is not applied. Every other track plays from `segments` at its offset, as
+    /// `setAlignment(warp:segments:)` has it. Callable while playing, as that one is: a table change is a table swap
+    /// too, and a track read through a stretcher is restarted on its new table and crossfaded.
+    public func setAlignment(
+        warp: PlaybackTimeWarp?, segments: [RecordingSegment], trackSegments: [String: [RecordingSegment]],
+    ) {
         alignmentWarp = warp
         alignmentSegments = segments
+        alignmentTrackSegments = trackSegments
         alignmentSpeedTable = TransportSpeedTable(warp: warp)
         alignmentSchedule = RecordingSchedule(segments: segments)
-        backend?.setPlaybackAlignment(warp: warp, segments: segments)
+        alignmentTrackSchedules = trackSegments.mapValues { RecordingSchedule(segments: $0) }
+        backend?.setPlaybackAlignment(warp: warp, segments: segments, trackSegments: trackSegments)
         prefetchRecordings()
     }
 
-    /// Whether the transport follows an alignment: one with a span or a segment is set, on a backend that plays
-    /// recordings. Time is then reported on the warped clock (`setAlignment(warp:segments:)`).
+    /// Whether the transport follows an alignment: one with a span, a shared segment or a segment of a track's own
+    /// table is set, on a backend that plays recordings. Time is then reported on the warped clock
+    /// (`setAlignment(warp:segments:)`).
     public var hasAlignment: Bool {
         guard backend?.canPlayRecordings == true else { return false }
         return !(alignmentWarp?.spans.isEmpty ?? true) || !alignmentSegments.isEmpty
+            || alignmentTrackSegments.values.contains { !$0.isEmpty }
     }
 
     // MARK: Reading ahead
@@ -173,23 +191,39 @@ extension PlaybackEngine {
     /// does not fault on them (`MappedRecording.prefetch(seconds:)`): from where the transport is, and while a loop is
     /// set also from its start, where the wrap lands. Called on the main actor after a play, a seek, a loop wrap, a new
     /// alignment or track list, and every `recordingPrefetchTickInterval` cursor polls while playing. The position is
-    /// the transport's, turned into each track's file seconds by the warp and the segments; nothing of the render
-    /// thread's own state is read.
+    /// the transport's, turned into each track's file seconds by the warp and the track's table
+    /// (`recordingSchedule(for:shared:own:)`); nothing of the render thread's own state is read.
     func prefetchRecordings() {
         recordingPrefetchCountdown = Self.recordingPrefetchTickInterval
         guard let backend, backend.canPlayRecordings, !recordings.isEmpty else { return }
         var origins = [backend.currentPositionSeconds]
         if let loop = transportLoop { origins.append(loop.startSeconds) }
         for loaded in recordings {
+            let reading = Self.recordingSchedule(
+                for: loaded.track, shared: alignmentSchedule, own: alignmentTrackSchedules,
+            )
             for origin in origins {
                 let ranges = Self.recordingPrefetchRanges(
                     transportSeconds: origin, rate: Double(pendingRate), table: alignmentSpeedTable,
-                    schedule: alignmentSchedule, offset: loaded.track.offsetSeconds,
+                    schedule: reading.schedule, offset: reading.offset,
                 )
                 for seconds in ranges {
                     loaded.recording.prefetch(seconds: seconds)
                 }
             }
+        }
+    }
+
+    /// The table a track's file seconds come from, and the offset they are read at: its own table at offset 0 when
+    /// `setAlignment(warp:segments:trackSegments:)` gave it one, since that table is in the file's seconds already;
+    /// the shared table at the track's `offsetSeconds` otherwise.
+    nonisolated static func recordingSchedule(
+        for track: RecordingTrack, shared: RecordingSchedule, own: [String: RecordingSchedule],
+    ) -> (schedule: RecordingSchedule, offset: TimeInterval) {
+        if let schedule = own[track.id] {
+            (schedule: schedule, offset: 0)
+        } else {
+            (schedule: shared, offset: track.offsetSeconds)
         }
     }
 

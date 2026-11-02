@@ -297,11 +297,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// the reference recording. `internal` for `+Recordings`.
     var alignmentWarp: PlaybackTimeWarp?
     var alignmentSegments: [RecordingSegment] = []
+    /// The tables of a track's own, keyed by track id (`setAlignment(warp:segments:trackSegments:)`).
+    var alignmentTrackSegments: [String: [RecordingSegment]] = [:]
     /// `alignmentWarp` laid out for time reporting: transport seconds to the warped seconds the seek bar shows.
     @ObservationIgnored var alignmentSpeedTable = TransportSpeedTable(warp: nil)
     /// `alignmentSegments` laid out for reading ahead: which file seconds each warped second plays
     /// (`prefetchRecordings()`).
     @ObservationIgnored var alignmentSchedule = RecordingSchedule(segments: [])
+    /// `alignmentTrackSegments` laid out for reading ahead, keyed by track id.
+    @ObservationIgnored var alignmentTrackSchedules: [String: RecordingSchedule] = [:]
     /// Cursor polls left until the next read-ahead of the recordings (`prefetchRecordings()`).
     @ObservationIgnored var recordingPrefetchCountdown = 0
 
@@ -532,9 +536,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         /// solo bus, each transposition the reader's plus the track's own — by the same `recordingRenders(soloing:)`.
         /// The mapped files are shared with the live backend; they are read-only.
         let recordings: [RecordingTrackRender]
-        /// The live alignment (`setAlignment(warp:segments:)`).
+        /// The live alignment (`setAlignment(warp:segments:trackSegments:)`), the tables of a track's own with it.
         let alignmentWarp: PlaybackTimeWarp?
         let alignmentSegments: [RecordingSegment]
+        let alignmentTrackSegments: [String: [RecordingSegment]]
     }
 
     func exportEngineSnapshot() -> ExportEngineSnapshot {
@@ -555,6 +560,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             recordings: recordingRenders(soloing: soloing),
             alignmentWarp: alignmentWarp,
             alignmentSegments: alignmentSegments,
+            alignmentTrackSegments: alignmentTrackSegments,
         )
     }
 
