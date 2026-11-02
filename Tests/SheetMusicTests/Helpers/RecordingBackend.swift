@@ -229,6 +229,12 @@
             recordingTrackCalls.append(tracks)
         }
 
+        /// Recorded as the three-argument call with no tables, so a path that still calls this one is seen too rather
+        /// than falling to the protocol's no-op default.
+        func setPlaybackAlignment(warp: PlaybackTimeWarp?, segments: [RecordingSegment]) {
+            setPlaybackAlignment(warp: warp, segments: segments, trackSegments: [:])
+        }
+
         func setPlaybackAlignment(
             warp: PlaybackTimeWarp?, segments: [RecordingSegment], trackSegments: [String: [RecordingSegment]],
         ) {
