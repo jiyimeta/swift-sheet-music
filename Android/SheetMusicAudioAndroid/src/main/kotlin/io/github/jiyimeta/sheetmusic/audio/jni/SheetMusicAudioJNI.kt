@@ -28,6 +28,7 @@ internal object SheetMusicAudioJNI {
         preparedScoreHandle: Long,
         noteIdBytes: ByteArray,
         pitch: Int,
+        cents: Double,
     ): LongArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativePreviewRoute(
@@ -35,6 +36,7 @@ internal object SheetMusicAudioJNI {
             preparedScoreHandle,
             SwiftData.fromByteArray(noteIdBytes, arena),
             pitch,
+            cents,
         )
     }
 
@@ -186,6 +188,7 @@ internal object SheetMusicAudioJNI {
     fun nativePreviewPolicyBegin(
         policyHandle: Long,
         voices: ByteArray,
+        bends: ByteArray,
         velocity: Int,
         isDrum: Boolean,
         ringMilliseconds: Int,
@@ -194,6 +197,7 @@ internal object SheetMusicAudioJNI {
         return SwiftJavaJNI.nativePreviewPolicyBegin(
             policyHandle,
             SwiftData.fromByteArray(voices, arena),
+            SwiftData.fromByteArray(bends, arena),
             velocity,
             isDrum,
             ringMilliseconds,

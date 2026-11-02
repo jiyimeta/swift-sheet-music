@@ -45,6 +45,7 @@ class MetronomeMixerTest {
         override fun noteOff(channel: Int, pitch: Int) {
             noteOffs += NoteOffCall(channel, pitch)
         }
+        override fun pitchBend(channel: Int, value: Int) {}
         override fun allNotesOff(channel: Int) { allNotesOffChannels += channel }
         override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int = 0
         override fun close() { closed = true }

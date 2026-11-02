@@ -2,6 +2,7 @@ package io.github.jiyimeta.sheetmusic.audio.fakes
 
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewPitchBend
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewPlan
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewVoice
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
@@ -122,16 +123,20 @@ internal open class FakeJniBridge(
     var previewRouteResult: ((pitch: Int) -> LongArray)? = null
     /** `(scoreHandle, preparedScoreHandle, pitch)` for every [previewRoute] call. */
     val previewRouteCalls = mutableListOf<Triple<Long, Long, Int>>()
+    /** The `cents` of every [previewRoute] call, in the same order as [previewRouteCalls]. */
+    val previewRouteCents = mutableListOf<Double>()
 
     override fun previewRoute(
         scoreHandle: Long,
         preparedScoreHandle: Long,
         noteIdBytes: ByteArray,
         pitch: Int,
+        cents: Double,
     ): LongArray {
         previewRouteCalls += Triple(scoreHandle, preparedScoreHandle, pitch)
+        previewRouteCents += cents
         val scripted = previewRouteResult
-            ?: return super.previewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch)
+            ?: return super.previewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch, cents)
         return scripted(pitch)
     }
     override fun earliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray {
@@ -213,9 +218,20 @@ internal open class FakeJniBridge(
         previewPolicyReleaseCalls += policyHandle
     }
 
+    /** The wheels each [previewPolicyBegin] was handed, unpacked, in the order of [previewPolicyBeginCalls]. */
+    val previewPolicyBeginBends = mutableListOf<List<Int>>()
+
+    /**
+     * The wheel moves each plan carries, given the notes and the wheels they were begun with. The default moves none —
+     * a plain audition; script it to hand the engine a plan that bends.
+     */
+    var previewPitchBendsFor: (voices: List<PreviewVoice>, bends: List<Int>) -> List<PreviewPitchBend> =
+        { _, _ -> emptyList() }
+
     override fun previewPolicyBegin(
         policyHandle: Long,
         voices: ByteArray,
+        bends: ByteArray,
         velocity: Int,
         isDrum: Boolean,
         ringMilliseconds: Int,
@@ -224,7 +240,12 @@ internal open class FakeJniBridge(
             PreviewVoice(channel = voices[it * 2].toInt() and 0xFF, pitch = voices[it * 2 + 1].toInt() and 0xFF)
         }
         if (notes.isEmpty()) return ByteArray(0)
+        val wheels = (0 until bends.size / 2).map {
+            (bends[it * 2].toInt() and 0xFF) or ((bends[it * 2 + 1].toInt() and 0xFF) shl 8)
+        }
+        previewPolicyBeginBends += wheels
         val plan = previewPlanFor(notes, velocity, isDrum, ringMilliseconds)
+            .copy(pitchBends = previewPitchBendsFor(notes, wheels))
         previewPolicyBeginCalls += plan
         return PreviewPlanCodec.encode(plan)
     }

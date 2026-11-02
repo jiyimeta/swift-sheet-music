@@ -19,6 +19,8 @@ import io.github.jiyimeta.sheetmusic.audio.model.MixLevel
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewNote
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewPitchBend
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewVoice
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
@@ -219,21 +221,30 @@ class AndroidPlaybackEngine internal constructor(
         fun pitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long
 
         /**
-         * Where an audition of [noteIdBytes] sounds: `[pitch, staffIndex, channel, isDrum]`, or empty when the note
-         * does not resolve in [scoreHandle]'s score. Routed as the Apple engine routes one — on the channel the note's
-         * staff plays at the note's tick, after any instrument change — through the instrument changes of
+         * Where an audition of [noteIdBytes] sounds: `[pitch, staffIndex, channel, isDrum, bend]`, or empty when the
+         * note does not resolve in [scoreHandle]'s score. Routed as the Apple engine routes one — on the channel the
+         * note's staff plays at the note's tick, after any instrument change — through the instrument changes of
          * [preparedScoreHandle]'s score, the engine's copy of the score it prepared (0 for none: [scoreHandle]'s). A
-         * negative [pitch] sounds the note's own.
+         * negative [pitch] sounds the note's own, bent by the note's own microtonal offset; an explicit one is bent by
+         * [cents]. `bend` is the 14-bit pitch-wheel value (8192 the center) — the cents-to-wheel arithmetic is Swift's.
          *
-         * The default answers from [pitchAndStaffOfNote] without routing — `channel` and `isDrum` are -1, and the
-         * engine sounds the staff's opening channel, as it did before the routing existed.
+         * The default answers from [pitchAndStaffOfNote] without routing — `channel` and `isDrum` are -1, the wheel
+         * centered, and the engine sounds the staff's opening channel, as it did before the routing existed.
          */
-        fun previewRoute(scoreHandle: Long, preparedScoreHandle: Long, noteIdBytes: ByteArray, pitch: Int): LongArray {
+        fun previewRoute(
+            scoreHandle: Long,
+            preparedScoreHandle: Long,
+            noteIdBytes: ByteArray,
+            pitch: Int,
+            cents: Double,
+        ): LongArray {
             val packed = pitchAndStaffOfNote(scoreHandle, noteIdBytes)
             if (packed == -1L) return LongArray(0)
             val ownPitch = ((packed.toULong() shr 32) and 0xFFFF_FFFFu).toLong()
             val staffIndex = (packed.toULong() and 0xFFFF_FFFFu).toLong()
-            return longArrayOf(if (pitch < 0) ownPitch else pitch.toLong(), staffIndex, -1L, -1L)
+            return longArrayOf(
+                if (pitch < 0) ownPitch else pitch.toLong(), staffIndex, -1L, -1L, PreviewPitchBend.CENTER.toLong(),
+            )
         }
 
         /**
@@ -270,13 +281,15 @@ class AndroidPlaybackEngine internal constructor(
 
         /**
          * Plans one audition of the notes [voices] packs — `channel, pitch`, a byte each — struck together,
-         * superseding whatever was sounding. Returns an encoded [PreviewPlan], or an empty array for an unknown
-         * handle or no notes — for which the only sane response is to sound nothing, there being no generation
-         * to end the notes by.
+         * superseding whatever was sounding, each at the pitch wheel [bends] packs for it (two bytes each,
+         * little-endian, in [voices]' order; empty for all centered). Returns an encoded [PreviewPlan], or an empty
+         * array for an unknown handle or no notes — for which the only sane response is to sound nothing, there being
+         * no generation to end the notes by. Which wheel moves where is the plan's [PreviewPlan.pitchBends].
          */
         fun previewPolicyBegin(
             policyHandle: Long,
             voices: ByteArray,
+            bends: ByteArray,
             velocity: Int,
             isDrum: Boolean,
             ringMilliseconds: Int,
@@ -339,8 +352,13 @@ class AndroidPlaybackEngine internal constructor(
             override fun instrumentParams(h: Long) = SheetMusicAudioJNI.nativeInstrumentParams(h)
             override fun pitchAndStaffOfNote(h: Long, n: ByteArray) =
                 SheetMusicAudioJNI.nativePitchAndStaffOfNote(h, n)
-            override fun previewRoute(scoreHandle: Long, preparedScoreHandle: Long, noteIdBytes: ByteArray, pitch: Int) =
-                SheetMusicAudioJNI.nativePreviewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch)
+            override fun previewRoute(
+                scoreHandle: Long,
+                preparedScoreHandle: Long,
+                noteIdBytes: ByteArray,
+                pitch: Int,
+                cents: Double,
+            ) = SheetMusicAudioJNI.nativePreviewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch, cents)
             override fun earliestOf(h: Long, i: ByteArray) = SheetMusicAudioJNI.nativeEarliestOf(h, i)
             override fun itemEndTick(h: Long, i: ByteArray) =
                 SheetMusicAudioJNI.nativeItemEndTick(h, i)
@@ -354,11 +372,12 @@ class AndroidPlaybackEngine internal constructor(
             override fun previewPolicyBegin(
                 policyHandle: Long,
                 voices: ByteArray,
+                bends: ByteArray,
                 velocity: Int,
                 isDrum: Boolean,
                 ringMilliseconds: Int,
             ) = SheetMusicAudioJNI.nativePreviewPolicyBegin(
-                policyHandle, voices, velocity, isDrum, ringMilliseconds,
+                policyHandle, voices, bends, velocity, isDrum, ringMilliseconds,
             )
             override fun previewPolicyEnd(policyHandle: Long, generation: Long) =
                 SheetMusicAudioJNI.nativePreviewPolicyEnd(policyHandle, generation)
@@ -1560,12 +1579,27 @@ class AndroidPlaybackEngine internal constructor(
      * [PlaybackState.EXPORTING] or no engine is ready.
      *
      * The shape a host hands over when it auditions a tap: every note starting on the tapped beat
-     * ([onsetNoteIds]), so the kick of a drum part written in two voices sounds with the cymbal above it.
+     * ([onsetNoteIds]), so the kick of a drum part written in two voices sounds with the cymbal above it. A note
+     * sounding its own pitch is bent by its own microtonal offset; an explicit pitch sounds unbent — a host that has a
+     * grace note's offset to give passes [PreviewNote]s instead.
      */
-    fun playPreview(notes: List<Pair<NoteID, Int>>, durationMillis: Long = 300L, velocity: Int = 96) {
+    fun playPreview(notes: List<Pair<NoteID, Int>>, durationMillis: Long = 300L, velocity: Int = 96) =
+        playPreviewNotes(
+            notes.map { (noteId, pitch) -> PreviewNote(noteId, pitch) },
+            durationMillis = durationMillis,
+            velocity = velocity,
+        )
+
+    /**
+     * Plays [notes] struck together as one audition — [playPreview]'s rule — each at its [PreviewNote.pitch] and, with
+     * an explicit pitch, bent by its [PreviewNote.cents]: a microtonal note is heard where it plays, as on the Apple
+     * engine. One channel carries one wheel, so a beat whose notes want different offsets sounds under the last one's,
+     * as playback does (the shared `NotePreviewPolicy` decides which wheel moves).
+     */
+    fun playPreviewNotes(notes: List<PreviewNote>, durationMillis: Long = 300L, velocity: Int = 96) {
         if (_state.value == PlaybackState.EXPORTING) return
         if (synthEngine == null) return
-        val routed = notes.mapNotNull { (noteId, pitch) -> routePreview(noteId, pitch) }
+        val routed = notes.mapNotNull(::routePreview)
         if (routed.isEmpty()) return
         soundPreview(routed, durationMillis = durationMillis, velocity = velocity)
     }
@@ -1589,25 +1623,29 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Sounds every note starting on the beat [item] sits on ([onsetNoteIds]) — a tap's audition. Silent for a beat
-     * where nothing starts.
+     * Sounds every note starting on the beat [item] sits on ([onsetNoteIds]) — a tap's audition, each note at its own
+     * pitch and microtonal offset. Silent for a beat where nothing starts.
      */
     fun playOnsetPreview(item: ScoreItemID, durationMillis: Long = 300L, velocity: Int = 96) {
-        playPreview(onsetNoteIds(item).map { it to -1 }, durationMillis = durationMillis, velocity = velocity)
+        playPreviewNotes(onsetNoteIds(item).map { PreviewNote(it) }, durationMillis = durationMillis, velocity = velocity)
     }
 
-    /** One note of an audition, routed: the channel and pitch it strikes, and whether its staff is a drum staff. */
-    private data class RoutedPreview(val channel: Int, val pitch: Int, val isDrum: Boolean)
+    /**
+     * One note of an audition, routed: the channel and pitch it strikes, whether its staff is a drum staff, and the
+     * pitch wheel (14-bit) it wants on that channel.
+     */
+    private data class RoutedPreview(val channel: Int, val pitch: Int, val isDrum: Boolean, val bend: Int)
 
-    /** Routes [noteId] (a negative [pitch] keeps the note's own) to what it strikes, or `null` when it does not resolve. */
-    private fun routePreview(noteId: NoteID, pitch: Int): RoutedPreview? {
+    /** Routes [note] to what it strikes, or `null` when it does not resolve. */
+    private fun routePreview(note: PreviewNote): RoutedPreview? {
         // The note is addressed in the score as it stands; the instrument changes that route it are the prepared
         // copy's, whose channels are the ones programmed on the synth.
         val route = jniBridge.previewRoute(
             scoreHandle = scoreHandle,
             preparedScoreHandle = preparedScoreSnapshot.get(),
-            noteIdBytes = NoteIDCodec.encode(noteId),
-            pitch = pitch,
+            noteIdBytes = NoteIDCodec.encode(note.noteId),
+            pitch = note.pitch,
+            cents = note.cents,
         )
         if (route.size < 4) return null
         val staffIndex = route[1].toInt()
@@ -1616,7 +1654,9 @@ class AndroidPlaybackEngine internal constructor(
         // (`staffLiveChannel`, populated in `prepare`).
         val channel = if (route[2] >= 0) route[2].toInt() else staffLiveChannel.getOrElse(staffIndex) { staffIndex }
         val isDrum = if (route[3] >= 0) route[3] == 1L else staffIsDrums.getOrElse(staffIndex) { false }
-        return RoutedPreview(channel = channel, pitch = route[0].toInt(), isDrum = isDrum)
+        // A bridge from before the wheel answers four: such a note sounds unbent, as every note did then.
+        val bend = route.getOrNull(4)?.toInt() ?: PreviewPitchBend.CENTER
+        return RoutedPreview(channel = channel, pitch = route[0].toInt(), isDrum = isDrum, bend = bend)
     }
 
     /** Packs audition notes the way the policy's JNI entry points take them: `channel, pitch`, a byte each. */
@@ -1625,6 +1665,16 @@ class AndroidPlaybackEngine internal constructor(
         notes.forEachIndexed { index, note ->
             bytes[index * 2] = note.channel.toByte()
             bytes[index * 2 + 1] = note.pitch.toByte()
+        }
+        return bytes
+    }
+
+    /** Packs the notes' pitch wheels the way `previewPolicyBegin` takes them: two bytes each, little-endian. */
+    private fun packedBends(notes: List<RoutedPreview>): ByteArray {
+        val bytes = ByteArray(notes.size * 2)
+        notes.forEachIndexed { index, note ->
+            bytes[index * 2] = (note.bend and 0xFF).toByte()
+            bytes[index * 2 + 1] = ((note.bend shr 8) and 0xFF).toByte()
         }
         return bytes
     }
@@ -1647,6 +1697,7 @@ class AndroidPlaybackEngine internal constructor(
         val planBytes = jniBridge.previewPolicyBegin(
             policyHandle = previewPolicyHandle,
             voices = packedVoices(notes),
+            bends = packedBends(notes),
             velocity = velocity,
             isDrum = notes.any { it.isDrum },
             ringMilliseconds = durationMillis.toInt(),
@@ -1678,6 +1729,12 @@ class AndroidPlaybackEngine internal constructor(
         previewSilentAtNanos = System.nanoTime() +
             (plan.ringMilliseconds + plan.releaseTailMilliseconds).toLong() * 1_000_000L
 
+        // The wheels before the keys, so a microtonal note starts where it plays: the policy's moves, the same ones the
+        // Apple engine makes. Nothing puts them back at the note-off — that would bend the release — and nothing has to
+        // before playback: SwiftySynth's sequencer resets every channel, wheel included, when it starts.
+        for (bend in plan.pitchBends) {
+            engine.previewPitchBend(bend.channel, bend.value)
+        }
         for (voice in plan.voices) {
             engine.previewNoteOn(voice.channel, voice.pitch, plan.velocity)
         }

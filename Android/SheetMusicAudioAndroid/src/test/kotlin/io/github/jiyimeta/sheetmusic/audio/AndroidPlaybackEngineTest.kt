@@ -21,6 +21,8 @@ import io.github.jiyimeta.sheetmusic.audio.model.MasterOutputStage
 import io.github.jiyimeta.sheetmusic.audio.model.MixAudibilityTable
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewNote
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewPitchBend
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewPlan
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewVoice
 import io.github.jiyimeta.sheetmusic.audio.model.RestID
@@ -3105,6 +3107,7 @@ class AndroidPlaybackEngineTest {
             preparedScoreHandle: Long,
             noteIdBytes: ByteArray,
             pitch: Int,
+            cents: Double,
         ): LongArray {
             val id = NoteIDCodec.decode(noteIdBytes)
             return longArrayOf(60L + 10L * id.voiceIndex + id.noteIndexInChord, 0L, 0L, 0L)
@@ -3152,6 +3155,75 @@ class AndroidPlaybackEngineTest {
         engine.playOnsetPreview(ScoreItemID.Rest(RestID(StaffAddress(0, 0), 0, 0, 0)), durationMillis = 500L)
 
         assertTrue("nothing starts there, got ${synth.calls}", synth.calls.isEmpty())
+    }
+
+    // ── Microtonal auditions ────────────────────────────────────────────
+    //
+    // A quarter-tone flat B is heard a quarter tone low when it is clicked, as it plays — the Apple engine did this
+    // and Android sounded the plain semitone. Which wheel moves where is the shared policy's (`NotePreviewPolicy`);
+    // these pin that the engine hands it each note's wheel and moves the wheels it answers before the keys.
+
+    /** `MidiEvent.pitchBendValue(cents: -50)` — a quarter-tone flat at the renderer's 12-semitone sensitivity. */
+    private val quarterToneFlatWheel = 7851
+
+    /** A bridge that routes every note to B4 on channel 0 with the wheel of a quarter-tone flat, and plans the wheel
+     * move the shared policy would: the last note's. */
+    private fun quarterToneFlatBridge() = object : FakeJniBridge(
+        timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+        staffParamsResult = encodeStaffParamsArray(listOf(StaffParams(0, 0, 0, false, 0L))),
+        renderMidiResult = minimalSmf,
+    ) {
+        override fun previewRoute(
+            scoreHandle: Long,
+            preparedScoreHandle: Long,
+            noteIdBytes: ByteArray,
+            pitch: Int,
+            cents: Double,
+        ): LongArray {
+            super.previewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch, cents)
+            return longArrayOf(71L, 0L, 0L, 0L, quarterToneFlatWheel.toLong())
+        }
+    }.apply {
+        previewPitchBendsFor = { voices, bends -> listOf(PreviewPitchBend(voices.last().channel, bends.last())) }
+    }
+
+    @Test
+    fun `a microtonal audition moves the wheel before its key`() = runTest(testDispatcher) {
+        val bridge = quarterToneFlatBridge()
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = previewEngine(synths, pitch = 0, bridge = bridge)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        engine.playPreview(note(0), durationMillis = 500L)
+
+        assertEquals(listOf(listOf(quarterToneFlatWheel)), bridge.previewPolicyBeginBends)
+        assertEquals(listOf("pitchBend(0,$quarterToneFlatWheel)", "noteOn(0,71,96)"), synth.calls)
+    }
+
+    /** A grace note is auditioned through its parent's `NoteID` at its own pitch, so its offset travels as cents. */
+    @Test
+    fun `an explicit pitch reaches the route with its cents`() = runTest(testDispatcher) {
+        val bridge = quarterToneFlatBridge()
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = previewEngine(synths, pitch = 0, bridge = bridge)
+
+        engine.playPreviewNotes(listOf(PreviewNote(note(0), pitch = 74, cents = 50.0)), durationMillis = 500L)
+
+        assertEquals(listOf(50.0), bridge.previewRouteCents)
+        assertEquals(74, bridge.previewRouteCalls.single().third)
+    }
+
+    /** A route without a wheel — a bridge from before it — sounds the note unbent, as every note did then. */
+    @Test
+    fun `a route without a wheel hands the policy the center`() = runTest(testDispatcher) {
+        val bridge = chordJniBridge()
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = previewEngine(synths, pitch = 0, bridge = bridge)
+
+        engine.playPreview(listOf(note(0) to -1, note(1) to -1), durationMillis = 500L)
+
+        assertEquals(listOf(listOf(PreviewPitchBend.CENTER, PreviewPitchBend.CENTER)), bridge.previewPolicyBeginBends)
     }
 
     // ── Preview release tail ────────────────────────────────────────────

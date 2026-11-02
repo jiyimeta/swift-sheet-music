@@ -29,6 +29,7 @@ class SwiftySynthDriverTest {
         override fun synthSetGain(handle: Long, gain: Float) { calls += "gain($handle)" }
         override fun synthNoteOn(handle: Long, channel: Int, key: Int, velocity: Int) { calls += "noteOn($handle)" }
         override fun synthNoteOff(handle: Long, channel: Int, key: Int) { calls += "noteOff($handle)" }
+        override fun synthPitchBend(handle: Long, channel: Int, value: Int) { calls += "pitchBend($handle)" }
         override fun synthAllNotesOff(handle: Long, channel: Int) { calls += "allNotesOff($handle)" }
         override fun nativeRender(handle: Long, frames: Int, left: FloatArray, right: FloatArray): Int {
             calls += "render($handle)"

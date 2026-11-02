@@ -62,6 +62,7 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
         calls += "noteOff($channel,$pitch)"
     }
 
+    override fun pitchBend(channel: Int, value: Int) { calls += "pitchBend($channel,$value)" }
     override fun allNotesOff(channel: Int) { calls += "allNotesOff($channel)" }
 
     /**

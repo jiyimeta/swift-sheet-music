@@ -189,10 +189,6 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         !previewPolicy.soundingVoices.isEmpty || activeSustainedPreview != nil
     }
 
-    /// The channel whose pitch wheel an audition of a microtonal note moved off center, if one did
-    /// (`bendForPreview(channel:value:)`).
-    private var previewBentChannel: UInt8?
-
     /// Sequencer used for full-score playback. Lazily built the
     /// first time `play(...)` is called for a given score.
     private var sequencer: AVAudioSequencer?
@@ -1334,22 +1330,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         )
     }
 
-    /// Sets the wheel for an audition about to strike `notes`, in the order it strikes them. One channel carries one
-    /// wheel, so a beat whose keys want different offsets sounds every key under the LAST one's — what playback does
-    /// (`MicrotonalPitchWheel`: each note-on moves the channel's base to its own offset, and the score strikes a beat
-    /// voice by voice, chord order within each), so a tapped chord is the chord the user then hears played. A single
-    /// note, the overwhelmingly common case, gets exactly its own bend.
-    private func bendForPreview(_ notes: [PreviewNote]) {
-        guard let last = notes.last else { return }
-        bendForPreview(channel: last.voice.channel, value: last.bend)
-    }
-
     /// SwiftySynth tap-preview: start the notes, schedule their note-offs after the melodic `duration` (or the
     /// longer drum tail), and restore a host-parked engine once they drain. Simpler than the AUMIDISynth path —
     /// SwiftySynth has none of the CC120 / same-channel note-swallowing quirks.
     private func backendPlayPreview(_ notes: [PreviewNote], duration: TimeInterval, velocity: UInt8) {
         guard let backend, let plan = previewPolicy.begin(
             voices: notes.map(\.voice),
+            bends: notes.map(\.bend),
             velocity: velocity,
             isDrum: notes.contains(where: \.isDrum),
             ringMilliseconds: Int(duration * 1000),
@@ -1358,7 +1345,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             backend.stopNote(channel: previous.channel, pitch: previous.pitch)
         }
         wakeGraphForPreview()
-        bendForPreview(notes)
+        applyPreviewBends(plan.pitchBends)
         for voice in plan.voices {
             backend.startNote(channel: voice.channel, pitch: voice.pitch, velocity: velocity)
         }
@@ -1437,6 +1424,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
         guard let plan = previewPolicy.begin(
             voices: struck.map(\.note.voice),
+            bends: struck.map(\.note.bend),
             velocity: velocity,
             isDrum: struck.contains { $0.note.isDrum },
             ringMilliseconds: Int(duration * 1000),
@@ -1457,7 +1445,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // preview ends with no follow-up tap.
         wakeGraphForPreview()
 
-        bendForPreview(struck.map(\.note))
+        applyPreviewBends(plan.pitchBends)
         for (note, instrument) in struck {
             instrument.startNote(note.voice.pitch, withVelocity: velocity, onChannel: note.voice.channel)
         }
@@ -1543,10 +1531,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // playback reset the synth's channel state to GM defaults (see
             // `reassertBackendChannelState`).
             reassertBackendChannelState()
-            bendForPreview(channel: midiChannel, value: Self.unbent)
+            applyPreviewBends(previewPolicy.moveWheel(to: PreviewPitchBend(channel: midiChannel, value: Self.unbent)))
             backend.startNote(channel: midiChannel, pitch: pitch, velocity: velocity)
         } else if let instrument {
-            bendForPreview(channel: midiChannel, value: Self.unbent)
+            applyPreviewBends(previewPolicy.moveWheel(to: PreviewPitchBend(channel: midiChannel, value: Self.unbent)))
             instrument.startNote(pitch, withVelocity: velocity, onChannel: midiChannel)
         }
         activeSustainedPreview = (flatStaffIndex, midiChannel, pitch)
@@ -1574,27 +1562,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     }
 
     /// The centered wheel — what a plain note, a drum and the score's own start want.
-    private static let unbent = UInt16(MidiEvent.pitchBendCenter)
+    private static let unbent = NotePreviewPolicy.centeredWheel
 
-    /// Puts `channel`'s wheel at `value` for the audition about to strike on it: a microtonal note's offset, or the
-    /// center for a plain one on a channel an earlier audition bent. The wheel stays where the note left it when the
-    /// note ends — recentring at the note-off would bend its release tail — and moves again only at the next
-    /// audition or when playback starts (`releasePreviewBend`).
-    private func bendForPreview(channel: UInt8, value: UInt16) {
-        if let bent = previewBentChannel, bent != channel || value == Self.unbent {
-            sendPreviewBend(channel: bent, value: Self.unbent)
-            previewBentChannel = nil
+    /// Moves the wheels the shared policy decided on (`PreviewPlan.pitchBends`, `NotePreviewPolicy.moveWheel(to:)`,
+    /// `releaseWheel()`) — which channel keeps which offset, and when one goes back to the center, is the policy's, the
+    /// same rule Android's engine runs.
+    private func applyPreviewBends(_ bends: [PreviewPitchBend]) {
+        for bend in bends {
+            sendPreviewBend(channel: bend.channel, value: bend.value)
         }
-        guard value != Self.unbent else { return }
-        sendPreviewBend(channel: channel, value: value)
-        previewBentChannel = channel
-    }
-
-    /// Recentres the channel an audition bent, if one did.
-    private func releasePreviewBend() {
-        guard let bent = previewBentChannel else { return }
-        sendPreviewBend(channel: bent, value: Self.unbent)
-        previewBentChannel = nil
     }
 
     /// Every pitched channel sounds through the backend or, on the AUMIDISynth path, through `melodicSynth` (the
@@ -1659,10 +1635,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     ) {
         guard state != .exporting else { return }
         guard let timeline else { return }
-        // An audition leaves its channel's wheel where the note needed it (`bendForPreview`), and a channel with no
-        // microtonal note carries no wheel event of its own to put it back — so the score would play a quarter tone
-        // out on it. Recentre before either transport starts.
-        releasePreviewBend()
+        // An audition leaves its channel's wheel where the note needed it (`NotePreviewPolicy.bentChannel`), and a
+        // channel with no microtonal note carries no wheel event of its own to put it back — so the score would play a
+        // quarter tone out on it. Recentre before either transport starts.
+        applyPreviewBends(previewPolicy.releaseWheel())
         // A `.mixUntilPlay` host has been sharing output with whatever else was playing since `prepare(score:)`; this
         // is the moment it asked for playback, so take the session exclusively. Ahead of both transport paths and of
         // the not-ready deferral below, so the claim lands on the user's press rather than on the SoundFont finishing

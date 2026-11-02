@@ -24,6 +24,7 @@ internal interface SynthNativeCalls {
     fun synthSetGain(handle: Long, gain: Float)
     fun synthNoteOn(handle: Long, channel: Int, key: Int, velocity: Int)
     fun synthNoteOff(handle: Long, channel: Int, key: Int)
+    fun synthPitchBend(handle: Long, channel: Int, value: Int)
     fun synthAllNotesOff(handle: Long, channel: Int)
     fun nativeRender(handle: Long, frames: Int, left: FloatArray, right: FloatArray): Int
     fun sequenceCreate(synthHandle: Long, smf: ByteArray): Long
@@ -60,6 +61,8 @@ internal object SwiftySynthNative : SynthNativeCalls {
     override fun synthNoteOn(handle: Long, channel: Int, key: Int, velocity: Int) =
         SwiftJavaJNI.nativeSynthNoteOn(handle, channel, key, velocity)
     override fun synthNoteOff(handle: Long, channel: Int, key: Int) = SwiftJavaJNI.nativeSynthNoteOff(handle, channel, key)
+    override fun synthPitchBend(handle: Long, channel: Int, value: Int) =
+        SwiftJavaJNI.nativeSynthPitchBend(handle, channel, value)
     override fun synthAllNotesOff(handle: Long, channel: Int) = SwiftJavaJNI.nativeSynthAllNotesOff(handle, channel)
 
     // ── Sequence ─────────────────────────────────────────────────────

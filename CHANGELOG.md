@@ -7,6 +7,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **The Android engine bends an audition by the note's microtonal offset**, as the Apple engine does: a clicked
+  quarter-tone flat is heard a quarter tone low rather than on the plain semitone.
+  `AndroidPlaybackEngine.playPreviewNotes` takes `PreviewNote`s — a note sounding its own pitch is bent by its own
+  accidental, read from the score; an explicit pitch (a grace note auditioned through its parent's `NoteID`) by the
+  `cents` given with it. `playPreview(notes)` and `playOnsetPreview` bend each note by its own offset. The Windows
+  engine still sounds the plain semitone.
+- **`NotePreviewPolicy` decides the pitch wheel too** (`begin(voices:bends:…)`, `PreviewPlan.pitchBends`,
+  `moveWheel(to:)`, `releaseWheel()`): which channel keeps which offset — one channel carries one wheel, so a beat sounds
+  under its last key's, as playback does — and when a bent channel goes back to the center. The Apple engine's own copy
+  of that rule moved into it, so both engines run one. `Synthesizer.sendAuditionPitchBend(channel:value:)`
+  (`SheetMusicAudioSwiftySynthCore`) sends the bend sensitivity and the wheel for both SwiftySynth hosts.
+
+### Changed
+
+- **JNI:** `nativePreviewRoute` takes `cents` and answers the wheel as a fifth element; `nativePreviewPolicyBegin`
+  takes the struck notes' wheels (`PreviewBendPairs`), and its plan carries `pitchBends`; `nativeSynthPitchBend` is new.
+  The Kotlin `JniBridge.previewRoute` / `previewPolicyBegin` and `SynthDriver` grow the matching parameters.
+
 ## [4.26.0] - 2026-11-03
 
 ### Added
