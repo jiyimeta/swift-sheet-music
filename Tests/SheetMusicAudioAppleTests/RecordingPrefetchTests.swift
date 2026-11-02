@@ -1,3 +1,4 @@
+import Foundation
 @testable import SheetMusicAudioApple
 import SheetMusicAudioCore
 import Testing
@@ -50,6 +51,17 @@ struct RecordingPrefetchTests {
         ])
         #expect(Self.ranges(at: 3, schedule: cut) == [2.5 ..< 4, 9.5 ..< 10.5])
         #expect(Self.ranges(at: 3, schedule: RecordingSchedule(segments: [])).isEmpty)
+    }
+
+    @Test func `prefetch reads a track's own table without its offset`() {
+        // Track B's own table plays its file from second 20 at warped second 0; its 1.5 s offset is not applied.
+        let own = RecordingSchedule(segments: [RecordingSegment(sourceStart: 20, sourceEnd: 30, outputStart: 0)])
+        let track = RecordingTrack(id: "B", pcmFile: URL(fileURLWithPath: "/dev/null"), offsetSeconds: 1.5)
+        let reading = PlaybackEngine.recordingSchedule(for: track, shared: Self.wholeRecording, own: ["B": own])
+        #expect(Self.ranges(at: 3, schedule: reading.schedule, offset: reading.offset) == [22.5 ..< 25])
+        // A track the tables do not name reads the shared table at its offset, as every track did before.
+        let shared = PlaybackEngine.recordingSchedule(for: track, shared: Self.wholeRecording, own: ["A": own])
+        #expect(Self.ranges(at: 3, schedule: shared.schedule, offset: shared.offset) == [1 ..< 3.5])
     }
 
     // MARK: Bytes

@@ -179,6 +179,29 @@
                     #expect(samples.count - 1 - last <= 2 * Self.millisecond, "\(last) of \(samples.count)")
                     #expect(abs(samples[samples.count / 2] - 0.5) < 1e-3, "the range plays the recording")
                 }
+
+                /// The recording's own table starts its file at warped second 1 and its 5 s offset is not applied, so
+                /// the file opens 1 s into the body and each impulse lands 1 s after its reference second. On the
+                /// shared table at that offset the file would not start before warped second 5.
+                @Test("an export follows per-track tables")
+                func exportFollowsPerTrackTables() async throws {
+                    let engine = try Self.makeEngine(font: font, score: score)
+                    try engine.setRecordingTracks([RecordingTrack(id: "rec", pcmFile: recordingFile, offsetSeconds: 5)])
+                    let own = [RecordingSegment(sourceStart: 0, sourceEnd: 10.5, outputStart: 1)]
+                    try engine.setAlignment(warp: Self.warp(), segments: Self.segments, trackSegments: ["rec": own])
+                    let samples = try await Self.export(engine, score, countIn: false)
+
+                    let first = try #require(Self.firstAudible(in: samples))
+                    #expect(abs(first - Self.frame(1)) <= Self.millisecond, "first audible frame \(first)")
+                    // The last impulse, 1 s late, falls past the body's end.
+                    for seconds in Self.impulseSeconds.dropLast() {
+                        let offset = Self.impulseOffset(in: samples, expected: Self.frame(1 + seconds))
+                        #expect(
+                            offset.map { abs($0) <= Self.millisecond } == true,
+                            "impulse at \(seconds) s: \(offset.map(String.init) ?? "missing") frames off",
+                        )
+                    }
+                }
             }
         }
     #endif

@@ -51,8 +51,15 @@
         var canPlayRecordings = true
         /// Every track list the engine handed over, in order.
         private(set) var recordingTrackCalls: [[RecordingTrackRender]] = []
+        /// One alignment as the engine handed it over: the warp, the shared table and the tables of a track's own.
+        struct AlignmentCall {
+            let warp: PlaybackTimeWarp?
+            let segments: [RecordingSegment]
+            let trackSegments: [String: [RecordingSegment]]
+        }
+
         /// Every alignment the engine handed over, in order.
-        private(set) var alignmentCalls: [(warp: PlaybackTimeWarp?, segments: [RecordingSegment])] = []
+        private(set) var alignmentCalls: [AlignmentCall] = []
 
         /// A transport call whose place in the order decides what a start sounds like.
         enum TransportEvent: Equatable {
@@ -222,8 +229,10 @@
             recordingTrackCalls.append(tracks)
         }
 
-        func setPlaybackAlignment(warp: PlaybackTimeWarp?, segments: [RecordingSegment]) {
-            alignmentCalls.append((warp, segments))
+        func setPlaybackAlignment(
+            warp: PlaybackTimeWarp?, segments: [RecordingSegment], trackSegments: [String: [RecordingSegment]],
+        ) {
+            alignmentCalls.append(AlignmentCall(warp: warp, segments: segments, trackSegments: trackSegments))
         }
     }
 #endif

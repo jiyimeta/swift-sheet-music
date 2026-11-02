@@ -313,6 +313,24 @@
                 #expect(!engine.hasAlignment)
                 #expect(abs(engine.currentTimeSecondsContinuous - 1.2) < 1e-9)
             }
+
+            @Test("per-track tables alone count as an alignment")
+            func perTrackTablesAloneCountAsAnAlignment() throws {
+                try engine.setRecordingTracks([track("A", fileA, offset: 1.5)])
+                let own = [RecordingSegment(sourceStart: 0, sourceEnd: 2, outputStart: 1)]
+
+                engine.setAlignment(warp: nil, segments: [], trackSegments: ["A": own])
+
+                #expect(engine.hasAlignment)
+                #expect(backend.alignmentCalls.last?.trackSegments == ["A": own], "the tables reach the backend")
+                // An empty table is no alignment, and the two-argument call sets none.
+                engine.setAlignment(warp: nil, segments: [], trackSegments: ["A": []])
+                #expect(!engine.hasAlignment)
+                engine.setAlignment(warp: nil, segments: Self.wholeRecording, trackSegments: ["A": own])
+                engine.setAlignment(warp: nil, segments: [])
+                #expect(!engine.hasAlignment)
+                #expect(backend.alignmentCalls.last?.trackSegments == [:])
+            }
         }
     }
 #endif

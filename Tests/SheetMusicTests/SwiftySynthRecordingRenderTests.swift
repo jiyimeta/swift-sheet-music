@@ -288,6 +288,107 @@
                     let difference = zip(rendered, left).map { abs($0 - $1) }.max() ?? 1
                     #expect(difference == 0, "largest difference from the bare sequencer: \(difference)")
                 }
+
+                // MARK: Tables of a track's own
+
+                /// The take's own table plays file seconds 0–1 from warped second 0. On the shared table at its 5 s
+                /// offset the file would not start before warped second 5, so the first second would be silent.
+                @Test("a track with its own table plays its own source seconds and ignores its offset")
+                func ownTablePlaysItsSourceSecondsWithoutTheOffset() async throws {
+                    let font = try Self.writeClickSoundFont()
+                    defer { try? FileManager.default.removeItem(at: font) }
+                    let rig = try await Rig.make(score: Self.silentScore(), font: font)
+                    defer { rig.finish() }
+                    let beats = [0.25, 0.5, 0.75]
+                    let recording = try Self.impulses(at: beats + [1.5], rate: 44100, length: 3)
+                    rig.backend.setRecordingTracks([
+                        RecordingTrackRender(id: "take", recording: recording, offsetSeconds: 5),
+                    ])
+                    rig.backend.setPlaybackAlignment(
+                        warp: nil, segments: Self.wholeRecording(3),
+                        trackSegments: ["take": [RecordingSegment(sourceStart: 0, sourceEnd: 1, outputStart: 0)]],
+                    )
+                    rig.backend.play()
+                    let samples = try rig.render(seconds: 2)
+
+                    for beat in beats {
+                        let offset = Self.onsetOffset(
+                            in: samples, expected: Self.frame(beat), window: 2000, threshold: 0.3,
+                        )
+                        let message = "impulse at file second \(beat): offset \(String(describing: offset))"
+                        #expect(offset.map { abs($0) <= 64 } == true, Comment(rawValue: message))
+                    }
+                    // The table ends at file second 1, so the impulse at 1.5 never sounds.
+                    let tail = samples[Self.frame(1.1)...].map(abs).max() ?? 1
+                    #expect(tail < 1e-6, "after the table's end the take peaks at \(tail)")
+                }
+
+                /// A's table plays its file from warped second 0 and B's from warped second 1: A's impulse at file
+                /// second 0.5 sounds at 0.5, and B's at file second 0.25 at 1.25 — not where the other's table would
+                /// put it (A's at 1.5, B's at 0.25).
+                @Test("two tracks with different tables sound independently")
+                func twoTablesSoundIndependently() async throws {
+                    let font = try Self.writeClickSoundFont()
+                    defer { try? FileManager.default.removeItem(at: font) }
+                    let rig = try await Rig.make(score: Self.silentScore(), font: font)
+                    defer { rig.finish() }
+                    let a = try Self.impulses(at: [0.5], rate: 44100, length: 3)
+                    let b = try Self.impulses(at: [0.25], rate: 44100, length: 3)
+                    rig.backend.setRecordingTracks([
+                        RecordingTrackRender(id: "a", recording: a), RecordingTrackRender(id: "b", recording: b),
+                    ])
+                    rig.backend.setPlaybackAlignment(warp: nil, segments: Self.wholeRecording(3), trackSegments: [
+                        "a": Self.wholeRecording(3),
+                        "b": [RecordingSegment(sourceStart: 0, sourceEnd: 3, outputStart: 1)],
+                    ])
+                    rig.backend.play()
+                    let samples = try rig.render(seconds: 2)
+
+                    for (track, heard, notHeard) in [("A", 0.5, 1.5), ("B", 1.25, 0.25)] {
+                        let onset = Self.onsetOffset(
+                            in: samples, expected: Self.frame(heard), window: 2000, threshold: 0.3,
+                        )
+                        let stray = Self.onsetOffset(
+                            in: samples, expected: Self.frame(notHeard), window: 2000, threshold: 0.3,
+                        )
+                        let message = "\(track): at \(heard) s \(String(describing: onset)), "
+                            + "at \(notHeard) s \(String(describing: stray))"
+                        #expect(onset.map { abs($0) <= 64 } == true, Comment(rawValue: message))
+                        #expect(stray == nil, Comment(rawValue: message))
+                    }
+                }
+
+                /// A has a table of its own, its 3 s offset ignored. B has none, so it plays the shared table at its
+                /// 1 s offset, as every track did before: its impulse at file second 0.5 sounds at warped second 1.5.
+                @Test("a track without a table still follows the shared table and its offset")
+                func trackWithoutATableFollowsTheSharedOne() async throws {
+                    let font = try Self.writeClickSoundFont()
+                    defer { try? FileManager.default.removeItem(at: font) }
+                    let rig = try await Rig.make(score: Self.silentScore(), font: font)
+                    defer { rig.finish() }
+                    let a = try Self.impulses(at: [0.25], rate: 44100, length: 3)
+                    let b = try Self.impulses(at: [0.5], rate: 44100, length: 3)
+                    rig.backend.setRecordingTracks([
+                        RecordingTrackRender(id: "a", recording: a, offsetSeconds: 3),
+                        RecordingTrackRender(id: "b", recording: b, offsetSeconds: 1),
+                    ])
+                    rig.backend.setPlaybackAlignment(
+                        warp: nil, segments: Self.wholeRecording(4), trackSegments: ["a": Self.wholeRecording(3)],
+                    )
+                    rig.backend.play()
+                    let samples = try rig.render(seconds: 2)
+
+                    for (track, heard) in [("A", 0.25), ("B", 1.5)] {
+                        let onset = Self.onsetOffset(
+                            in: samples, expected: Self.frame(heard), window: 2000, threshold: 0.3,
+                        )
+                        let message = "\(track) at \(heard) s: offset \(String(describing: onset))"
+                        #expect(onset.map { abs($0) <= 64 } == true, Comment(rawValue: message))
+                    }
+                    // B read without its offset would sound at its file second, 0.5.
+                    let stray = Self.onsetOffset(in: samples, expected: Self.frame(0.5), window: 2000, threshold: 0.3)
+                    #expect(stray == nil, "B at 0.5 s: \(String(describing: stray))")
+                }
             }
         }
     #endif
