@@ -321,8 +321,9 @@ extension SwiftySynthBackend {
     /// own last set (`setPlaybackAlignment(warp:segments:trackSegments:)`). A track whose `id` was already playing
     /// keeps its playhead and its gain ramp, so a new gain neither fades nor jumps it: the render ramps to it over the
     /// fade. A group carries on the stretchers of the previous group that held most of its tracks
-    /// (`RecordingGroupPlan`); when its transposition, its table or its tracks changed, or a track's file or offset,
-    /// the render restarts it, primed and retuned, and crossfades. A previous group nobody carries on is kept draining
+    /// (`RecordingGroupPlan`); when its transposition or its tracks changed, or a track's file or offset, the render
+    /// restarts it, primed and retuned, and crossfades. A new table alone does not restart it: the render follows the
+    /// table, jumping only where the group's target moves. A previous group nobody carries on is kept draining
     /// until its fade-out is over, and dropped by the first call after that. Stretchers a group now needs are made
     /// here, on the main actor. The previous arrays, stretchers and scratch are released after the lock, never on the
     /// render thread.
@@ -340,10 +341,15 @@ extension SwiftySynthBackend {
     }
 
     /// As `setPlaybackAlignment(warp:segments:)`, with tables of a track's own: a track keyed in `trackSegments` plays
-    /// its table at offset 0, every other track `segments` at its offset. A track's table decides its group, so tables
-    /// other than the last ones group the tracks again (`setRecordingTracks`) and hand the groups over in the same
-    /// lock section as the speed table and the schedule. Each group's table is laid out here, on the main actor, and
-    /// the render reads it from the group without looking anything up.
+    /// its table at offset 0, every other track `segments` at its offset. Each group's table is laid out here, on the
+    /// main actor, and the render reads it from the group without looking anything up.
+    ///
+    /// New tables that keep the grouping — a host dragging a track's placement pushes one per pointer event — are
+    /// swapped into their groups in place, in the lock section that swaps the speed table and the schedule, and
+    /// restart nothing: a group's stretcher jumps only where its target moves, as under a new shared table
+    /// (`swapTablesInPlace`). A track's table decides its group, so tables that regroup the tracks group them again
+    /// (`setRecordingTracks`) and hand the groups over in that one lock section instead; a group whose tracks changed
+    /// restarts.
     public func setPlaybackAlignment(
         warp: PlaybackTimeWarp?, segments: [RecordingSegment], trackSegments: [String: [RecordingSegment]],
     ) {
@@ -351,8 +357,9 @@ extension SwiftySynthBackend {
             speedTable: TransportSpeedTable(warp: warp), schedule: RecordingSchedule(segments: segments),
         )
         guard trackSegments == recordingTrackSegments else {
+            let swapped = swapTablesInPlace(trackSegments, tables: tables)
             recordingTrackSegments = trackSegments
-            installRecordingTracks(tables: tables)
+            if !swapped { installRecordingTracks(tables: tables) }
             return
         }
         lock.withLockUnchecked { shared in

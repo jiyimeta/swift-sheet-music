@@ -56,6 +56,38 @@ extension SwiftySynthBackend {
         drainingGroupLayout = draining.map(\.layout)
     }
 
+    /// Swaps each group's table for the one `trackSegments` gives it, when that keeps the grouping as it is: the same
+    /// groups of the same tracks at the same transpositions, each still on a table of its own or still on the shared
+    /// one, so no track's offset changes either. In one lock section with `tables`, and without a restart: the render
+    /// follows the new tables as it follows a new shared one, jumping only where a group's target moves. Returns false,
+    /// having changed nothing, when the tracks must be grouped again instead (`installRecordingTracks`). Draining
+    /// groups are left as they are: they no longer play.
+    func swapTablesInPlace(_ trackSegments: [String: [RecordingSegment]], tables: AlignmentTables) -> Bool {
+        let parts = RecordingGroupPlan.partition(
+            tracks: recordingTracks, tables: recordingTracks.map { trackSegments[$0.id] },
+        )
+        guard parts.count == recordingGroupLayout.count else { return false }
+        for (layout, part) in zip(recordingGroupLayout, parts) {
+            guard layout.transposeSemitones == part.transposeSemitones,
+                  layout.trackIDs == part.trackIndices.map({ recordingTracks[$0].id }),
+                  (layout.segments == nil) == (part.segments == nil)
+            else { return false }
+        }
+        var schedules = parts.map { part in part.segments.map { RecordingSchedule(segments: $0) } }
+        var tables = tables
+        lock.withLockUnchecked { shared in
+            // The live groups come first in the render's array, in `recordingGroupLayout`'s order.
+            for index in schedules.indices where shared.alignment.groups.indices.contains(index) {
+                swap(&shared.alignment.groups[index].schedule, &schedules[index])
+            }
+            tables.swap(into: &shared.alignment)
+        }
+        for index in recordingGroupLayout.indices {
+            recordingGroupLayout[index].segments = parts[index].segments
+        }
+        return true
+    }
+
     /// The track list as the render reads it, with each track's table of its own (nil: the shared one). A track with
     /// one reads its file at that table's seconds, which are the file's own, so it is handed over at offset 0.
     func recordingTracksAsRead() -> (tracks: [RecordingTrackRender], tables: [[RecordingSegment]?]) {

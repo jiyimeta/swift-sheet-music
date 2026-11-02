@@ -155,7 +155,9 @@ extension PlaybackEngine {
     /// whose `id` is a key of `trackSegments` plays from that table, whose source seconds are the track's own file
     /// seconds, so its `offsetSeconds` is not applied. Every other track plays from `segments` at its offset, as
     /// `setAlignment(warp:segments:)` has it. Callable while playing, as that one is: a table change is a table swap
-    /// too, and a track read through a stretcher is restarted on its new table and crossfaded.
+    /// too, and a track read through a stretcher jumps, crossfaded, only where its new table moves what it plays. A
+    /// change that regroups the stretched tracks (two tracks that shared a table no longer do) restarts the groups it
+    /// changes, with the same crossfade.
     public func setAlignment(
         warp: PlaybackTimeWarp?, segments: [RecordingSegment], trackSegments: [String: [RecordingSegment]],
     ) {

@@ -14,10 +14,13 @@ and this project adheres to
   plays from that table, whose source seconds are the track's own file seconds, so its `offsetSeconds` is not applied;
   every other track plays from the shared `segments` at its offset, as before. `setAlignment(warp:segments:)` is the
   call with no tables, so a host that places each track on the timeline on its own can move one track without the
-  others. `hasAlignment` counts a non-empty table of a track's own, the read-ahead and the audio export follow the
-  tables, and on `SwiftySynthBackend` tracks read through a stretcher group by transposition and table: equal tables
-  share a stretcher pair, and a table changed while playing restarts its group with the crossfade a new offset gets. A
-  backend that does not implement the new requirement plays every track from the shared table.
+  others. `hasAlignment` counts a non-empty table of a track's own, and the read-ahead and the audio export follow the
+  tables. On `SwiftySynthBackend` tracks read through a stretcher group by transposition and table, so equal tables
+  share a stretcher pair. A table changed while playing is swapped into its group in place, as the shared table is:
+  the stretcher jumps, with its usual crossfade, only where the new table moves what it plays, so a host can push a
+  table per pointer event while the user drags a track. Only a change that regroups the tracks — two tracks that
+  shared a table no longer do, or a track joins another's — restarts the groups it changes. A backend that does not
+  implement the new requirement plays every track from the shared table.
 
 ## [4.26.0] - 2026-11-03
 

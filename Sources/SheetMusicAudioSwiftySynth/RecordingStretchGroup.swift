@@ -38,9 +38,9 @@ struct StretchGroupState {
     var fadingVoice = -1
     /// Input the fading stretcher is owed but was not fed, under a frame.
     var fadingRemainder: Double = 0
-    /// The group's transposition, table or tracks changed, or a track's file or offset: the next frame that plays is a
-    /// jump to a stretcher primed with the new input and retuned, so the change is heard after the 5 ms fade rather
-    /// than after the stretcher's lead.
+    /// The group's transposition or tracks changed, or a track's file or offset: the next frame that plays is a jump to
+    /// a stretcher primed with the new input and retuned, so the change is heard after the 5 ms fade rather than after
+    /// the stretcher's lead. A new table is not a restart: the target follows it, and jumps only where it moves.
     var needsRestart = false
 
     /// Nothing sounds and nothing fades. A group that is not playing stays so.
@@ -71,8 +71,9 @@ struct RecordingStretchGroup {
     /// The table its tracks have of their own (`SynthBackend.setPlaybackAlignment(warp:segments:trackSegments:)`),
     /// laid out on the main actor. Its source seconds are the tracks' file seconds, so each was handed over with its
     /// offset at 0. Nil for tracks without one, which play the shared table (`PlaybackAlignmentState.schedule`) at
-    /// their offsets.
-    let schedule: RecordingSchedule?
+    /// their offsets. A new table that keeps the grouping is swapped in here, in place, as the shared one is swapped
+    /// (`SwiftySynthBackend.swapTablesInPlace`).
+    var schedule: RecordingSchedule?
     /// Indices into the tracks it reads: `PlaybackAlignmentState.tracks`, or `drainTracks` while draining.
     let trackIndices: [Int]
     /// Nil until a stretcher is needed and the backend has a factory; the group is then read directly.
@@ -99,7 +100,7 @@ extension RecordingStretchGroup {
 struct RecordingGroupLayout {
     let transposeSemitones: Double
     /// The table its tracks have of their own, or nil for the shared one (`RecordingStretchGroup.schedule`).
-    let segments: [RecordingSegment]?
+    var segments: [RecordingSegment]?
     let tracks: [RecordingTrackRender]
     var pair: StretcherPair?
 
@@ -117,43 +118,55 @@ enum RecordingGroupPlan {
         let trackIndices: [Int]
         /// The previous group whose pair and reading this one takes over, if any.
         let continues: Int?
-        /// The group it carries on from had another transposition, table or tracks, or one of its tracks now reads
-        /// another file or at another offset: the render restarts it, primed and retuned, and crossfades.
+        /// The group it carries on from had another transposition or other tracks, or one of its tracks now reads
+        /// another file or at another offset: the render restarts it, primed and retuned, and crossfades. Its table
+        /// does not count: the render follows a new table as it follows a new shared one.
         let restarts: Bool
     }
 
-    /// What tracks must share to share a group: a stretcher is fed one input against one target timeline, so tracks
-    /// group by transposition and by table — equal tables of their own together, and the shared table's apart from
-    /// them.
-    private struct Key: Equatable {
+    /// One group of a track list before it is matched to the previous groups. A stretcher is fed one input against
+    /// one target timeline, so tracks share a group when they share the transposition and the table: equal tables of
+    /// their own together, and the shared table's apart from them.
+    struct Part {
         let transposeSemitones: Double
+        /// The table of the part's own, or nil for the shared one.
         let segments: [RecordingSegment]?
+        var trackIndices: [Int]
     }
 
-    /// Groups in the order their transposition and table first appear, `tables[i]` being track `i`'s own table (nil:
-    /// the shared one). A group carries on from the previous group that held the most of its tracks (on a tie, the one
-    /// that held its first track): a stem keeps its stretcher when the reader's transposition moves every stem, rather
-    /// than handing it to whichever stem now has its old value. Failing that, it takes a previous group of its
-    /// transposition whose tracks have all gone. Each previous group is carried on by one group at most.
+    /// The groups `tracks` fall into, in the order their transposition and table first appear, `tables[i]` being track
+    /// `i`'s own table (nil: the shared one).
+    static func partition(tracks: [RecordingTrackRender], tables: [[RecordingSegment]?]) -> [Part] {
+        var parts: [Part] = []
+        for (index, track) in tracks.enumerated() {
+            let match = parts.firstIndex {
+                $0.transposeSemitones == track.transposeSemitones && $0.segments == tables[index]
+            }
+            if let match {
+                parts[match].trackIndices.append(index)
+            } else {
+                parts.append(Part(
+                    transposeSemitones: track.transposeSemitones, segments: tables[index], trackIndices: [index],
+                ))
+            }
+        }
+        return parts
+    }
+
+    /// Groups in the order `partition(tracks:tables:)` gives them. A group carries on from the previous group that
+    /// held the most of its tracks (on a tie, the one that held its first track): a stem keeps its stretcher when the
+    /// reader's transposition moves every stem, rather than handing it to whichever stem now has its old value. Failing
+    /// that, it takes a previous group of its transposition whose tracks have all gone. Each previous group is carried
+    /// on by one group at most.
     static func make(
         tracks: [RecordingTrackRender], tables: [[RecordingSegment]?], previous: [RecordingGroupLayout],
     ) -> [Group] {
-        var keys: [Key] = []
-        var members: [[Int]] = []
-        for (index, track) in tracks.enumerated() {
-            let key = Key(transposeSemitones: track.transposeSemitones, segments: tables[index])
-            if let group = keys.firstIndex(of: key) {
-                members[group].append(index)
-            } else {
-                keys.append(key)
-                members.append([index])
-            }
-        }
-        let memberIDs = members.map { $0.map { tracks[$0].id } }
+        let parts = partition(tracks: tracks, tables: tables)
+        let memberIDs = parts.map { $0.trackIndices.map { tracks[$0].id } }
         let previousIDs = previous.map(\.trackIDs)
         var taken = Set<Int>()
-        var continues = [Int?](repeating: nil, count: keys.count)
-        for group in keys.indices {
+        var continues = [Int?](repeating: nil, count: parts.count)
+        for group in parts.indices {
             var best: (index: Int, rank: (shared: Int, holdsFirst: Int))?
             for candidate in previous.indices where !taken.contains(candidate) {
                 let shared = memberIDs[group].count(where: { previousIDs[candidate].contains($0) })
@@ -170,7 +183,7 @@ enum RecordingGroupPlan {
         let present = Set(tracks.map(\.id))
         for group in continues.indices where continues[group] == nil {
             let match = previous.indices.first { candidate in
-                !taken.contains(candidate) && previous[candidate].transposeSemitones == keys[group].transposeSemitones
+                !taken.contains(candidate) && previous[candidate].transposeSemitones == parts[group].transposeSemitones
                     && !previousIDs[candidate].contains(where: present.contains)
             }
             if let match {
@@ -178,30 +191,25 @@ enum RecordingGroupPlan {
                 continues[group] = match
             }
         }
-        return keys.indices.map { group in
+        return parts.indices.map { group in
+            let part = parts[group]
             let restarts = continues[group].map { index in
-                previous[index].transposeSemitones != keys[group].transposeSemitones
+                previous[index].transposeSemitones != part.transposeSemitones
                     || Set(previousIDs[index]) != Set(memberIDs[group])
-                    || !readsTheSameInput(
-                        previous[index], members[group].map { tracks[$0] }, segments: keys[group].segments,
-                    )
+                    || !readsTheSameInput(previous[index], part.trackIndices.map { tracks[$0] })
             } ?? false
             return Group(
-                transposeSemitones: keys[group].transposeSemitones, segments: keys[group].segments,
-                trackIndices: members[group], continues: continues[group], restarts: restarts,
+                transposeSemitones: part.transposeSemitones, segments: part.segments,
+                trackIndices: part.trackIndices, continues: continues[group], restarts: restarts,
             )
         }
     }
 
-    /// Whether the group reads what `layout` read: the same table, and every track in `tracks` that `layout` already
-    /// held the same file at the same offset. What the stretcher is fed is each track's file read at its offset, so a
-    /// change to either is a jump in its input; and a new table restarts it too, so the change is heard through the
-    /// crossfade rather than as whatever the stretcher had already been fed.
-    private static func readsTheSameInput(
-        _ layout: RecordingGroupLayout, _ tracks: [RecordingTrackRender], segments: [RecordingSegment]?,
-    ) -> Bool {
-        guard layout.segments == segments else { return false }
-        return tracks.allSatisfy { track in
+    /// Whether every track in `tracks` that `layout` already held reads the same file at the same offset: what the
+    /// stretcher is fed is each track's file read at its offset, so a change to either is a jump in its input. The
+    /// table is not compared: it moves the target, not the input, and the render jumps where the target moves.
+    private static func readsTheSameInput(_ layout: RecordingGroupLayout, _ tracks: [RecordingTrackRender]) -> Bool {
+        tracks.allSatisfy { track in
             guard let held = layout.tracks.first(where: { $0.id == track.id }) else { return true }
             return held.recording === track.recording && held.offsetSeconds == track.offsetSeconds
         }
