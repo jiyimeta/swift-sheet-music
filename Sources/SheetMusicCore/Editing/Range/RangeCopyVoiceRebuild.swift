@@ -184,10 +184,11 @@ extension RangeCopyVoiceRebuild {
         // same condition on a chord symbol (`656-661`, `cmd.cpp:1502`). Every kept kind the copy does not carry
         // has nothing to lose its place to, so this is the only filter `cut.preserved` needs.
         let superseded = pieceSupersededSlots(in: piece.elements, from: spanStart, in: context)
-        var pending = cut.preserved.filter { entry in
+        let survives = { (entry: Entry) -> Bool in
             guard let kind = SupersededKind(entry.element) else { return true }
             return !superseded.contains(SupersededSlot(kind: kind, tick: entry.start))
         }
+        var pending = cut.preserved.filter(survives)
         var cursor = gap.lowerBound
         for (offset, element) in (head + piece.elements + tail).enumerated() {
             while let next = pending.first, next.start <= cursor {
@@ -208,7 +209,9 @@ extension RangeCopyVoiceRebuild {
         if let trailing = cut.trailing {
             rebuilt.slots += trailingTrim(of: trailing, from: gap.upperBound, in: context)
         }
-        for entry in cut.after {
+        // The breath closing the piece's last chord stands ON `spanEnd`, where `cut` files the destination's own
+        // breath into `after` rather than `preserved` — and it takes that one's place by the same rule.
+        for entry in cut.after where survives(entry) {
             rebuilt.keep(entry)
         }
         return rebuilt

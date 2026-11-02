@@ -27,6 +27,12 @@ and this project adheres to
   leaves it at the last key struck (voice by voice, chord order within each) — so a tapped chord could sound a quarter
   tone away from the same chord played. The preview now takes the last key's offset too, a plain key's center
   included. Sounding each key at its own offset would need a channel per key, in playback as well as in the preview.
+- **A range copy carries the breath after its last chord** (`R`, ⌘C / ⌘V). It was dropped, and since a range delete
+  takes that breath, cutting a selection that ended on a breath and pasting it lost the breath altogether.
+  Copy, paste and `R` now carry it, as MuseScore does, so a cut and paste moves it. A pasted breath that lands on a
+  barline closes the bar before it rather than opening the next one, and replaces the breath already at that tick
+  instead of standing beside it. The breath on the range's first tick still stays behind: it closes the chord before
+  the range.
 
 ## [4.25.0] - 2026-11-02
 

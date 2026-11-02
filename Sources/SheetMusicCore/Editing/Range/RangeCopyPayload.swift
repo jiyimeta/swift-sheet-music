@@ -177,7 +177,7 @@ enum RangeCopyPayload {
     }
 
     /// One voice at the boundary: drops the chords, rests, measure-repeat signs and `.spanner`s whose own tick falls
-    /// outside `low ..< high`, and the `.locationShift` kind outright.
+    /// outside `low ..< high`, the breaths following a chord or rest it drops, and the `.locationShift` kind outright.
     ///
     /// A sign is a rest of its bar's length, so it is kept or dropped by its tick exactly as a rest is — which keeps
     /// it whenever the range reaches its bar at all, since it opens the bar. A jog is the one kind a cut boundary
@@ -193,6 +193,10 @@ enum RangeCopyPayload {
     /// survived and made the loss look arbitrary. A spanner reaching PAST the payload is not this function's
     /// problem: `RangeCopySpanners.lineSpanners(for:…)` is all-or-nothing against the payload's own extent and
     /// drops it there, exactly as it does for a duplicate.
+    ///
+    /// A breath goes with the chord or rest it follows (`SetBreath`'s owner, the one `DeleteRange` takes it by). Left
+    /// behind an owner trimmed off the END, it would slide back onto the range's end tick — exactly where the paste
+    /// carries a breath as the last copied chord's own (`RangeCopySource.standsInRange(_:at:range:)`).
     ///
     /// Every other non-timed element — clef, key/time signature, annotations — is kept regardless of its tick,
     /// which is what "leaving everything else" means.
@@ -211,6 +215,8 @@ enum RangeCopyPayload {
     ) -> Voice {
         var tick = 0
         var removed: Set<Int> = []
+        // The chord or rest a breath standing here follows, looking back through breaths only (`SetBreath`).
+        var owner: Int?
         for index in voice.elements.indices {
             let element = voice.elements[index]
             defer { tick += element.cursorAdvance(division: division, in: measureDuration) }
@@ -218,10 +224,14 @@ enum RangeCopyPayload {
             case .chord, .measureRepeat, .spanner:
                 let position = ScoreTickPosition(measure: measureIndex, tick: tick)
                 if !(position >= low && position < high) { removed.insert(index) }
+                owner = if case .chord = element { index } else { nil }
             case .locationShift:
                 removed.insert(index)
+                owner = nil
+            case .breath:
+                if let owner, removed.contains(owner) { removed.insert(index) }
             default:
-                break
+                owner = nil
             }
         }
 

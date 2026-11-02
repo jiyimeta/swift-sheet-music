@@ -43,8 +43,8 @@ struct RangeCopySource {
     struct Stream {
         let staff: StaffAddress
         let voiceIndex: Int
-        /// The copied material, ascending by tick. A non-timed element carries `lengthTicks == 0` and precedes
-        /// a chord at the same tick, which is where it stands in the source voice.
+        /// The copied material, ascending by tick. A non-timed element carries `lengthTicks == 0` and stands where
+        /// it stood in the source voice: ahead of the chord at its tick, or — the breath closing the last chord — last.
         let elements: [CopiedElement]
         /// Source tuplets whose members are entirely inside this stream, as absolute tick bounds.
         let tuplets: [CopiedTuplet]
@@ -277,9 +277,7 @@ extension RangeCopySource {
             var tick = geometry.measureStarts[measureIndex]
             for index in voice.elements.indices {
                 let element = voice.elements[index]
-                if isCopyable(element), tick >= rangeStart, tick < rangeEnd,
-                   !(tick == rangeStart && standsAheadOfTheRange(element))
-                {
+                if isCopyable(element), standsInRange(element, at: tick, range: rangeStart ..< rangeEnd) {
                     collected.append((
                         location: MeasureElementLocation(measureIndex: measureIndex, elementIndex: index),
                         copied: (absoluteTick: tick, lengthTicks: 0, element: element),
@@ -319,20 +317,27 @@ extension RangeCopySource {
         }
     }
 
-    /// Whether a copyable element standing exactly on the range's START tick is context the range opens under
-    /// rather than material inside it: a clef or a breath.
+    /// Whether a copyable element standing at `tick` is material of `range` rather than context around it. Every one
+    /// strictly inside is; on the two edges a clef and a breath are decided by where their own segments sort.
     ///
-    /// MuseScore starts a range at its first ChordRest SEGMENT (`Score::selectRange`, `dom/score.cpp:2893, 2943`)
-    /// and writes the clipboard from that segment on (`TWrite::writeSegments`, `rw/write/twrite.cpp:3598`). A clef
-    /// and a breath each live in a segment of their own that sorts AHEAD of the ChordRest segment at the same
-    /// tick, so they are never written — which is why copying the first note of a score does not paste the
-    /// score's opening clef as a clef change, and a bar opening with a clef change pastes under the destination's
-    /// clef. The segment annotations at that tick (a dynamic, a chord symbol, a fermata) belong to the ChordRest
-    /// segment itself, so they stay.
-    private static func standsAheadOfTheRange(_ element: VoiceElement) -> Bool {
+    /// MuseScore starts a range at its first ChordRest SEGMENT (`Score::selectRange`, `dom/score.cpp:3549, 3599`) and
+    /// writes the clipboard from that segment up to, not including, the segment after the last chord
+    /// (`TWrite::writeSegments`, `rw/write/twrite.cpp:3501`). A clef and a breath each live in a segment of their own
+    /// that sorts AHEAD of the ChordRest segment at the same tick (`dom/segment.h:41-66`). On the START tick that
+    /// leaves them out — which is why copying the first note of a score does not paste the score's opening clef as a
+    /// clef change, and a bar opening with a clef change pastes under the destination's clef. The segment annotations
+    /// at that tick (a dynamic, a chord symbol, a fermata) belong to the ChordRest segment itself, so they stay.
+    ///
+    /// On the END tick the same order lets the breath IN. The segment after the last chord is the next ChordRest, Clef
+    /// or EndBarLine one (`ChordRest::nextSegmentAfterCR`, `dom/chordrest.cpp:811-820`, with `selectRange`'s mask at
+    /// `dom/score.cpp:3496, 3598`), and the breath closing that chord sorts ahead of all three — at a bar's end too,
+    /// where it lives in that bar ahead of the end barline (`editing/edit.cpp:7319-7324`). A clef on that tick IS the
+    /// end segment, and an annotation there belongs to the next chord's, so neither comes along.
+    private static func standsInRange(_ element: VoiceElement, at tick: Int, range: Range<Int>) -> Bool {
         switch element {
-        case .clef, .breath: true
-        default: false
+        case .breath: range.lowerBound < tick && tick <= range.upperBound
+        case .clef: range.lowerBound < tick && tick < range.upperBound
+        default: range.contains(tick)
         }
     }
 

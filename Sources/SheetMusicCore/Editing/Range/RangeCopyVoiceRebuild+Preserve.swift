@@ -89,7 +89,8 @@ extension RangeCopyVoiceRebuild {
     /// MuseScore pass destroys. A `.spanner` is decided by `spannerFate(of:anchoredAt:spanStart:spanEnd:in:)`.
     /// Every kind kept here is kept UNCONDITIONALLY; `rebuild(_:cut:gap:spanStart:spanEnd:in:)` drops a clef,
     /// breath or harmony afterward when the piece brings one of the same kind to the same tick, via
-    /// `pieceSupersededSlots(in:from:in:)`.
+    /// `pieceSupersededSlots(in:from:in:)` — and a breath on `spanEnd`, filed into `after` here, the same way, since
+    /// the piece can end on the breath closing its last chord.
     ///
     /// > Important: `SupersededKind` must stay EXACTLY the intersection of `RangeCopySource.isCopyable(_:)` and
     /// > the kinds this function preserves. Three exhaustive switches encode that invariant with no compiler
