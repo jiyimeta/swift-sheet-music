@@ -14,6 +14,11 @@ and this project adheres to
   (user report). Playing, a seek outside the loop still snaps to its start, and playback started from a cursor parked
   outside the loop still begins at the loop's start, so the section keeps looping. The Android engine already left the
   reported cursor where it was sent; the Windows engine still snaps.
+- **A previewed beat whose keys want different microtonal offsets sounds the way playback does** (Apple engine). One
+  channel carries one pitch wheel, and the preview bent it to the first microtonal key of the beat, while playback
+  leaves it at the last key struck (voice by voice, chord order within each) — so a tapped chord could sound a quarter
+  tone away from the same chord played. The preview now takes the last key's offset too, a plain key's center
+  included. Sounding each key at its own offset would need a channel per key, in playback as well as in the preview.
 
 ## [4.25.0] - 2026-11-02
 

@@ -1334,13 +1334,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         )
     }
 
-    /// Sets the wheel for an audition about to strike `notes`. One channel carries one wheel, so a chord bends the
-    /// channel of its first microtonal note and leaves the rest where they are — a single note, the overwhelmingly
-    /// common case, gets exactly its own bend.
+    /// Sets the wheel for an audition about to strike `notes`, in the order it strikes them. One channel carries one
+    /// wheel, so a beat whose keys want different offsets sounds every key under the LAST one's — what playback does
+    /// (`MicrotonalPitchWheel`: each note-on moves the channel's base to its own offset, and the score strikes a beat
+    /// voice by voice, chord order within each), so a tapped chord is the chord the user then hears played. A single
+    /// note, the overwhelmingly common case, gets exactly its own bend.
     private func bendForPreview(_ notes: [PreviewNote]) {
-        guard let first = notes.first else { return }
-        let bent = notes.first { $0.bend != Self.unbent } ?? first
-        bendForPreview(channel: bent.voice.channel, value: bent.bend)
+        guard let last = notes.last else { return }
+        bendForPreview(channel: last.voice.channel, value: last.bend)
     }
 
     /// SwiftySynth tap-preview: start the notes, schedule their note-offs after the melodic `duration` (or the
