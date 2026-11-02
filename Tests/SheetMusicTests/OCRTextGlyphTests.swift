@@ -92,6 +92,27 @@
             }
         }
 
+        /// OCR glyphs are one per character, so the title pass's run merge cannot join them and would pick a single
+        /// character as the title; until OCR lines feed the title block, they stay out of it.
+        @Test func ocrGlyphsDoNotFormATitleFrame() {
+            func glyph(_ text: String, x: CGFloat, ocr: Bool) -> TextGlyph {
+                TextGlyph(
+                    text: text, fontName: ocr ? "OCR" : "F1", fontSize: 20, renderedSize: 20,
+                    origin: CGPoint(x: x, y: 900), bbox: .zero, pageIndex: 0,
+                    ocr: ocr ? OCRTextInfo(inkCenterX: x + 10, lyricEligible: true) : nil,
+                )
+            }
+            func frame(ocr: Bool) -> ScoreFrame? {
+                PDFImporter.extractTitleFrame(
+                    texts: [glyph("A", x: 100, ocr: ocr), glyph("B", x: 122, ocr: ocr)],
+                    pageSize: CGSize(width: 1000, height: 1000), documentAttributes: nil,
+                    options: PDFImportOptions(),
+                )
+            }
+            #expect(frame(ocr: true) == nil)
+            #expect(frame(ocr: false) != nil)
+        }
+
         @Test func ocrIsOffByDefault() {
             #expect(PDFImportOptions().omrTextRecognizer == nil)
         }

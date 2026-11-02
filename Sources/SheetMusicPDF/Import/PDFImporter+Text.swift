@@ -15,7 +15,7 @@ extension PDFImporter {
     ///
     ///  1. Filter to page 0, top of the page (PDF y-up, `y > 0.5 ×
     ///     height` — wide enough to also reach a sub-title credit block
-    ///     that sits below the masthead). Empty glyphs dropped.
+    ///     that sits below the masthead). Empty glyphs and OCR glyphs dropped.
     ///  2. Merge into runs; the largest-font run is `.title`.
     ///  3. The lowest run on the right half (a credit line such as
     ///     "Arranged by …") is `.composer` — claimed *before* the subtitle
@@ -34,8 +34,11 @@ extension PDFImporter {
         documentAttributes: [String: Any]?,
         options: PDFImportOptions,
     ) -> ScoreFrame? {
+        // OCR glyphs are one per character with the line height as their size, so the run merge below cannot join
+        // them and the largest run would be a single character; they stay out until OCR lines feed this block.
         let topBand = texts.filter {
-            $0.pageIndex == 0
+            $0.ocr == nil
+                && $0.pageIndex == 0
                 && $0.origin.y > pageSize.height * 0.6
                 && !$0.text.trimmingCharacters(in: .whitespaces).isEmpty
         }
