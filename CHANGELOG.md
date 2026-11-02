@@ -7,6 +7,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A seek past an A–B loop while stopped or paused stays where it was sent** (Apple engine). It snapped to the loop's
+  start, so a tap past the section — to set a new B there — sent the cursor back to A, and only a second tap stuck
+  (user report). Playing, a seek outside the loop still snaps to its start, and playback started from a cursor parked
+  outside the loop still begins at the loop's start, so the section keeps looping. The Android engine already left the
+  reported cursor where it was sent; the Windows engine still snaps.
+
 ## [4.25.0] - 2026-11-02
 
 ### Added

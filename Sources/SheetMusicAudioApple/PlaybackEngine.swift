@@ -2035,13 +2035,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// a note and audio jumps to that note while continuing to play.
     /// No-op when there is no sequencer yet (call `prepare(score:)`
     /// first) or when `cursor` doesn't resolve into the timeline.
+    ///
+    /// With a loop set, see `seekTick(forFrameTick:)` for where it lands.
     public func seek(to cursor: ScoreCursor) {
         guard state != .exporting else { return }
         guard let timeline, let frame = timeline.frame(forCursor: cursor) else { return }
         // Keep a play that's waiting on the SoundFont load anchored at the latest
         // seek, so the deferred play doesn't start at a now-stale cursor.
         if pendingBackendPlay != nil { pendingBackendPlay?.cursor = cursor }
-        let tick = snapTickToLoop(frame.tick)
+        let tick = seekTick(forFrameTick: frame.tick)
         if let backend {
             // The score transport is never shifted on this path, so a seek is a
             // plain score-tick seek (which also ends any count-in still owed —
@@ -2167,6 +2169,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// JNI (`nativeUnrolledTickForNotated`) instead of restating it in Kotlin.
     private func unrolledTick(forNotated tick: Int) -> Int {
         unroll.firstUnrolledTick(forNotated: tick)
+    }
+
+    /// Where a seek to `tick` lands with a loop set. Playing, inside the loop — snapped to its start when `tick` is
+    /// outside it — so playback never leaves the section. Stopped or paused, at `tick` itself: the user is parking the
+    /// cursor, typically past the section to set a new B there, and snapping it back to A undid the tap (user report,
+    /// 2026-11-02 — only a second tap stuck, because the cursor no longer changed and nothing moved the reader's).
+    /// The loop takes over when playback starts: `play` begins a start outside the loop at the loop's start.
+    private func seekTick(forFrameTick tick: Int) -> Int {
+        state == .playing ? snapTickToLoop(tick) : tick
     }
 
     /// Clamp `tick` into the active loop region. Returns `tick`
@@ -2383,7 +2394,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // halts it and freezes the cursor timer on its next tick.
             play(from: frame.cursor, in: score)
         } else {
-            let tick = snapTickToLoop(frame.tick)
+            let tick = seekTick(forFrameTick: frame.tick)
             sequencer.currentPositionInBeats =
                 Double(sequenceMap.sequencerTick(fromScore: unrolledTick(forNotated: tick)))
                 / Double(timeline.division)
