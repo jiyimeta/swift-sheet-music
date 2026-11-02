@@ -10,8 +10,9 @@ extension Score {
     /// Works for a `.rest` as well as a `.note`, since a rest in one voice can sit on an onset another voice fills.
     /// Empty for an item that names no slot (a tuplet bracket, text, a clef) or for an address that does not resolve.
     ///
-    /// Onsets are measured the way ``resolveTickInMeasure(for:)`` measures them, so the answer agrees with the tick
-    /// a cursor on `item` reports.
+    /// Onsets are measured the way ``resolveTickInMeasure(for:)`` measures them — the voice's running tick, a
+    /// `.locationShift` jog included — so the answer agrees with the tick a cursor on `item` reports, and a voice the
+    /// file jogs to a later beat is heard on that beat.
     public func onsetNoteIDs(of item: ScoreItemID) -> [NoteID] {
         switch item {
         case .note, .rest: break
@@ -24,11 +25,10 @@ extension Score {
         let measureDuration = staff.measures.effectiveMeasureDurations()[item.measureIndex]
         var noteIDs: [NoteID] = []
         for (voiceIndex, voice) in staff.measures[item.measureIndex].voices.enumerated() {
+            // The whole voice, not up to the target: a jog can move the cursor backwards.
             var tick = 0
             for (elementIndex, element) in voice.elements.enumerated() {
-                guard tick <= target else { break }
-                guard case let .chord(chord) = element else { continue }
-                if tick == target {
+                if tick == target, case let .chord(chord) = element {
                     for noteIndex in chord.notes.indices {
                         noteIDs.append(NoteID(
                             staff: item.staff, measureIndex: item.measureIndex, voiceIndex: voiceIndex,
@@ -36,7 +36,7 @@ extension Score {
                         ))
                     }
                 }
-                tick += chord.duration.resolved(in: measureDuration).ticks(division: division)
+                tick += element.cursorAdvance(division: division, in: measureDuration)
             }
         }
         return noteIDs

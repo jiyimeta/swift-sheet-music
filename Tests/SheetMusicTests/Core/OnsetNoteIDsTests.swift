@@ -70,6 +70,36 @@ struct OnsetNoteIDsTests {
         #expect(score.onsetNoteIDs(of: .rest(rest)) == [Self.note(voice: 1, element: 1)])
     }
 
+    /// A voice the file jogs to a later beat (MuseScore's `<location>`): voice 2 starts on beat 2, so a tap on voice
+    /// 1's beat-2 rest sounds it, and the cursor on it reports beat 2.
+    private static func jogged() -> Score {
+        let hands = Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 2, denominator: 4)),
+            chord(.quarter, [49]),
+            rest(.quarter),
+        ])
+        let feet = Voice(elements: [
+            .locationShift(delta: Fraction(numerator: 1, denominator: 4)),
+            chord(.quarter, [36]),
+        ])
+        let staff = Staff(measures: [Measure(voices: [hands, feet])])
+        return Score(division: 480, parts: [Part(id: "p0", instrument: Instrument(id: "drums"), staves: [staff])])
+    }
+
+    @Test("a jogged voice is heard on the beat the jog moves it to")
+    func locationShiftedVoice() {
+        let rest = RestID(staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 2)
+        #expect(Self.jogged().onsetNoteIDs(of: .rest(rest)) == [Self.note(voice: 1, element: 1)])
+        #expect(Self.jogged().onsetNoteIDs(of: .note(Self.note(voice: 0, element: 1))) == [
+            Self.note(voice: 0, element: 1),
+        ])
+    }
+
+    @Test("a cursor on a jogged element reports the beat the jog moves it to")
+    func locationShiftedTick() {
+        #expect(Self.jogged().resolveTickInMeasure(for: .note(Self.note(voice: 1, element: 1))) == 480)
+    }
+
     @Test("an item that names no slot sounds nothing")
     func nonSlotItem() {
         let tuplet = TupletID(staff: Self.staff, measureIndex: 0, voiceIndex: 0, startElementIndex: 1)

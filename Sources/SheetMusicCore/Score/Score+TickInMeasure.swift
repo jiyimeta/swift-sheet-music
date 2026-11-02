@@ -1,5 +1,9 @@
 extension Score {
     /// In-measure tick offset of the voice element identified by `itemID`. Returns `nil` when the path doesn't resolve.
+    ///
+    /// The voice's running tick, as every walker in the package measures it (`VoiceElement.cursorAdvance`): the
+    /// chords, rests and measure repeats before the element, plus any `.locationShift` jogs among them. It used to
+    /// sum chords alone, so a cursor on an element after a jog reported a beat the file is not positioned at.
     public func resolveTickInMeasure(for itemID: ScoreItemID) -> Int? {
         guard let staff = self[itemID.staff] else { return nil }
         guard staff.measures.indices.contains(itemID.measureIndex) else { return nil }
@@ -11,9 +15,7 @@ extension Score {
         let measureDuration = staff.measures.effectiveMeasureDurations()[itemID.measureIndex]
         var tick = 0
         for i in 0 ..< itemID.elementIndex {
-            if case let .chord(chord) = elements[i] {
-                tick += chord.duration.resolved(in: measureDuration).ticks(division: division)
-            }
+            tick += elements[i].cursorAdvance(division: division, in: measureDuration)
         }
         return tick
     }

@@ -30,7 +30,6 @@ and this project adheres to
   `supersedes` / `voice`, `sounding`, `end(generation:)` and `silence()`, which are deprecated and answer the first
   note. The Android JNI preview-policy entry points take and answer notes packed `channel, pitch` a byte each
   (`PreviewVoicePairs`), and `PreviewPlan`'s wire carries the two lists.
-
 - **`SetBreath` takes a rest as it takes a chord.** It writes, replaces and removes the breath after a rest, as
   MuseScore drops one on any chord or rest (`Rest::acceptDrop` → `ChordRest::acceptDrop`); it used to refuse a rest
   with `wrongElementKind`. A host that offers breaths on notes only keeps gating on its own selection.
@@ -43,6 +42,10 @@ and this project adheres to
 
 ### Fixed
 
+- **`Score.resolveTickInMeasure(for:)` counts a voice's `.locationShift` jogs and measure repeats**, as every other
+  walker in the package does (`VoiceElement.cursorAdvance`). It summed chords alone, so a cursor on an element after a
+  jog reported a beat the file is not positioned at — and a preview routed by that tick could pick the wrong
+  instrument after a mid-score change. `Score.onsetNoteIDs(of:)` measures onsets the same way.
 - **A breath written at the head of a bar can be selected, replaced and deleted.** A file can carry a breath ahead of
   a bar's first chord, where it follows the previous bar's last chord — MuseScore's element paste re-homes a
   `<Breath>` by tick and leaves it there, and its reader keeps it. It was drawn, but its glyph had no identity
