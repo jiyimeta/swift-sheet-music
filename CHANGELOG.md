@@ -7,6 +7,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`SetElementVisible.slot(of:in:)` resolves the slot that shows or hides a selected mark.** A dynamic, a fermata
+  and a breath are addressed by the chord they belong to (`ScoreElementID.anchor`), so a host that wrote
+  `SetElementVisible` at the anchor hid the chord and left the mark standing. This answers the mark's own slot — and
+  `nil` for a mark written on its chord or note (an articulation, an arpeggio, a tie, …), which carries no flag the
+  command writes.
+
 ### Fixed
 
 - **A seek past an A–B loop while stopped or paused stays where it was sent** (Apple engine). It snapped to the loop's
