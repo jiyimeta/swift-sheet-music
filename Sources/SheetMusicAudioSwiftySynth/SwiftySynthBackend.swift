@@ -155,7 +155,9 @@ public final class SwiftySynthBackend: SynthBackend {
     var stretchScratchCapacity = 0
     /// The track list (`setRecordingTracks`) and the tables of a track's own
     /// (`setPlaybackAlignment(warp:segments:trackSegments:)`) last handed over. A track's table decides its group, so
-    /// either call groups the tracks again with the other's latest (`installRecordingTracks`).
+    /// each call reads the other's latest. A new track list groups the tracks again (`installRecordingTracks`); new
+    /// tables that keep the grouping are swapped into their groups in place (`swapTablesInPlace`), and only tables that
+    /// regroup the tracks group them again.
     var recordingTracks: [RecordingTrackRender] = []
     var recordingTrackSegments: [String: [RecordingSegment]] = [:]
 

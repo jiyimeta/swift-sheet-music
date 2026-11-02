@@ -191,6 +191,52 @@
                 let alone = Self.range(Array(after[Fixtures.frame(0.45)...]))
                 #expect(alone.lowest > 0.095 && alone.highest < 0.105, "A alone past B's new end: \(alone)")
             }
+
+            /// Which path a push takes, read off the backend rather than the sound. A full install that keeps the
+            /// grouping restarts nothing either and sounds the same, so only this pins that the pushes of a drag skip
+            /// it. No stretcher factory and nothing rendered: the grouping is all there is to compare.
+            @Test("a push that keeps the grouping swaps in place, and one that splits a group does not")
+            func keptGroupingTakesTheInPlaceSwap() throws {
+                let stems = try Self.stems(a: 0, b: 0)
+                let later = [RecordingSegment(sourceStart: 0, sourceEnd: 3, outputStart: 0.5)]
+                let shorter = AlignmentTables(
+                    speedTable: TransportSpeedTable(warp: nil),
+                    schedule: RecordingSchedule(segments: Fixtures.wholeRecording(2)),
+                )
+                /// What the render would read: each group's file second at warped second 1 (1 on `wholeRecording(4)`,
+                /// 0.5 on `later`, nil on the shared table), and the shared table's at 3 (nil on `shorter`'s).
+                func reading(_ backend: SwiftySynthBackend) -> (groups: [Double?], shared: Double?) {
+                    backend.lock.withLockUnchecked { state in
+                        let groups = state.alignment.groups.map { $0.schedule?.sourceSeconds(atOutput: 1, offset: 0) }
+                        return (groups: groups, shared: state.alignment.schedule.sourceSeconds(atOutput: 3, offset: 0))
+                    }
+                }
+
+                // A on the shared table and B on its own: two groups, and a new table for B keeps them.
+                let kept = SwiftySynthBackend(sampleRate: Self.sampleRate)
+                kept.setRecordingTracks(stems.tracks)
+                kept.setPlaybackAlignment(
+                    warp: nil, segments: Fixtures.wholeRecording(4), trackSegments: ["b": Fixtures.wholeRecording(4)],
+                )
+                #expect(kept.swapTablesInPlace(["b": later], tables: shorter), "the grouping is kept")
+                #expect(kept.recordingGroupLayout.map(\.segments) == [nil, later])
+                let swapped = reading(kept)
+                #expect(swapped.groups == [nil, 0.5], "B's group reads its new table: \(swapped.groups)")
+                #expect(swapped.shared == nil, "the shared table was swapped with it: \(String(describing: swapped))")
+
+                // A and B on one table: one group, and another table for B splits it.
+                let split = SwiftySynthBackend(sampleRate: Self.sampleRate)
+                split.setRecordingTracks(stems.tracks)
+                split.setPlaybackAlignment(warp: nil, segments: Fixtures.wholeRecording(4), trackSegments: [
+                    "a": Fixtures.wholeRecording(4), "b": Fixtures.wholeRecording(4),
+                ])
+                let splitting = ["a": Fixtures.wholeRecording(4), "b": later]
+                #expect(!split.swapTablesInPlace(splitting, tables: shorter), "the group splits")
+                #expect(split.recordingGroupLayout.map(\.segments) == [Fixtures.wholeRecording(4)], "nothing changed")
+                let untouched = reading(split)
+                #expect(untouched.groups == [1], "the group still reads its table: \(untouched.groups)")
+                #expect(untouched.shared == 3, "nor was the shared table swapped: \(String(describing: untouched))")
+            }
         }
     #endif
 #endif
