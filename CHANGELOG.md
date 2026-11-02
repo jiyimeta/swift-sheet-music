@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.26.0] - 2026-11-03
+
 ### Added
 
 - **`SetElementVisible.slot(of:in:)` resolves the slot that shows or hides a selected mark.** A dynamic, a fermata
