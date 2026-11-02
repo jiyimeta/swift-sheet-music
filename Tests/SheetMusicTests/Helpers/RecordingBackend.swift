@@ -202,7 +202,13 @@
             liveEvents.append(.noteOn(channel: channel, pitch: pitch))
         }
 
-        func stopNote(channel _: UInt8, pitch _: UInt8) {}
+        /// Every note-off the engine sent live, in order. Kept apart from `liveEvents` so the sequences tests pin there
+        /// stay about what strikes.
+        private(set) var stoppedNotes: [(channel: UInt8, pitch: UInt8)] = []
+
+        func stopNote(channel: UInt8, pitch: UInt8) {
+            stoppedNotes.append((channel, pitch))
+        }
 
         func sendPitchBend(channel: UInt8, value: UInt16) {
             liveEvents.append(.bend(channel: channel, value: value))

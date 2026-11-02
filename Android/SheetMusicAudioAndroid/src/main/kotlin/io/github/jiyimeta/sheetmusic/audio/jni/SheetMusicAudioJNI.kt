@@ -185,8 +185,7 @@ internal object SheetMusicAudioJNI {
 
     fun nativePreviewPolicyBegin(
         policyHandle: Long,
-        channel: Int,
-        pitch: Int,
+        voices: ByteArray,
         velocity: Int,
         isDrum: Boolean,
         ringMilliseconds: Int,
@@ -194,8 +193,7 @@ internal object SheetMusicAudioJNI {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativePreviewPolicyBegin(
             policyHandle,
-            channel,
-            pitch,
+            SwiftData.fromByteArray(voices, arena),
             velocity,
             isDrum,
             ringMilliseconds,
@@ -203,11 +201,24 @@ internal object SheetMusicAudioJNI {
         ).toByteArray()
     }
 
-    fun nativePreviewPolicyEnd(policyHandle: Long, generation: Long): Long =
-        SwiftJavaJNI.nativePreviewPolicyEnd(policyHandle, generation)
+    fun nativePreviewPolicyEnd(policyHandle: Long, generation: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePreviewPolicyEnd(policyHandle, generation, arena).toByteArray()
+    }
 
-    fun nativePreviewPolicySilence(policyHandle: Long): Long =
-        SwiftJavaJNI.nativePreviewPolicySilence(policyHandle)
+    fun nativePreviewPolicySilence(policyHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePreviewPolicySilence(policyHandle, arena).toByteArray()
+    }
+
+    fun nativeOnsetNoteItems(scoreHandle: Long, itemBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeOnsetNoteItems(
+            scoreHandle,
+            SwiftData.fromByteArray(itemBytes, arena),
+            arena,
+        ).toByteArray()
+    }
 
     fun nativeMasterTuningControlChanges(cents: Double): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA

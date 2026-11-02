@@ -19,6 +19,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.MixLevel
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewVoice
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreReplacementOutcome
@@ -268,27 +269,36 @@ class AndroidPlaybackEngine internal constructor(
         fun previewPolicyRelease(policyHandle: Long)
 
         /**
-         * Plans one audition, superseding whatever was sounding. Returns an encoded [PreviewPlan], or an
-         * empty array for an unknown handle — for which the only sane response is to sound nothing, there
-         * being no generation to end the note by.
+         * Plans one audition of the notes [voices] packs — `channel, pitch`, a byte each — struck together,
+         * superseding whatever was sounding. Returns an encoded [PreviewPlan], or an empty array for an unknown
+         * handle or no notes — for which the only sane response is to sound nothing, there being no generation
+         * to end the notes by.
          */
         fun previewPolicyBegin(
             policyHandle: Long,
-            channel: Int,
-            pitch: Int,
+            voices: ByteArray,
             velocity: Int,
             isDrum: Boolean,
             ringMilliseconds: Int,
         ): ByteArray
 
         /**
-         * The note to silence now that [generation]'s ring time is up, packed as `channel shl 8 or pitch`,
-         * or -1 when a newer audition superseded it and silencing anything would silence THAT note.
+         * The notes to silence now that [generation]'s ring time is up, packed `channel, pitch` a byte each, or
+         * empty when a newer audition superseded it and silencing anything would silence THOSE notes.
          */
-        fun previewPolicyEnd(policyHandle: Long, generation: Long): Long
+        fun previewPolicyEnd(policyHandle: Long, generation: Long): ByteArray
 
-        /** Abandons any audition in progress, answering the note to silence, packed as above, or -1. */
-        fun previewPolicySilence(policyHandle: Long): Long
+        /** Abandons any audition in progress, answering the notes to silence, packed as above, or empty. */
+        fun previewPolicySilence(policyHandle: Long): ByteArray
+
+        /**
+         * Every note starting on the beat the item [itemBytes] names, in every voice of its staff — what a tap on
+         * that item sounds — as `ScoreItemID.Note`s in a length-prefixed array; empty when nothing starts there.
+         * Shared Swift (`Score.onsetNoteIDs(of:)`), which the Apple hosts call too.
+         *
+         * The default answers nothing, and [playOnsetPreview] then sounds the item itself when it is a note.
+         */
+        fun onsetNoteItems(scoreHandle: Long, itemBytes: ByteArray): ByteArray = ByteArray(0)
 
         /**
          * The MIDI Master Tuning RPN messages retuning one channel by [cents] off A4=440, as consecutive
@@ -343,18 +353,19 @@ class AndroidPlaybackEngine internal constructor(
                 SheetMusicAudioJNI.nativePreviewPolicyRelease(policyHandle)
             override fun previewPolicyBegin(
                 policyHandle: Long,
-                channel: Int,
-                pitch: Int,
+                voices: ByteArray,
                 velocity: Int,
                 isDrum: Boolean,
                 ringMilliseconds: Int,
             ) = SheetMusicAudioJNI.nativePreviewPolicyBegin(
-                policyHandle, channel, pitch, velocity, isDrum, ringMilliseconds,
+                policyHandle, voices, velocity, isDrum, ringMilliseconds,
             )
             override fun previewPolicyEnd(policyHandle: Long, generation: Long) =
                 SheetMusicAudioJNI.nativePreviewPolicyEnd(policyHandle, generation)
             override fun previewPolicySilence(policyHandle: Long) =
                 SheetMusicAudioJNI.nativePreviewPolicySilence(policyHandle)
+            override fun onsetNoteItems(scoreHandle: Long, itemBytes: ByteArray) =
+                SheetMusicAudioJNI.nativeOnsetNoteItems(scoreHandle, itemBytes)
             override fun masterTuningControlChanges(cents: Double) =
                 SheetMusicAudioJNI.nativeMasterTuningControlChanges(cents)
         }
@@ -1530,7 +1541,7 @@ class AndroidPlaybackEngine internal constructor(
      * new one — as the Apple and Windows engines route an audition (`JniBridge.previewRoute`).
      */
     fun playPreview(noteId: NoteID, durationMillis: Long = 300L, velocity: Int = 96) =
-        playRoutedPreview(noteId, pitch = -1, durationMillis = durationMillis, velocity = velocity)
+        playPreview(listOf(noteId to -1), durationMillis = durationMillis, velocity = velocity)
 
     /**
      * Plays [pitch] as a single-note preview in [noteId]'s place: on the instrument the note's staff plays at the
@@ -1539,12 +1550,57 @@ class AndroidPlaybackEngine internal constructor(
      * No-op when [state] is [PlaybackState.EXPORTING] or no engine is ready.
      */
     fun playPreview(noteId: NoteID, pitch: Int, durationMillis: Long = 300L, velocity: Int = 96) =
-        playRoutedPreview(noteId, pitch = pitch, durationMillis = durationMillis, velocity = velocity)
+        playPreview(listOf(noteId to pitch), durationMillis = durationMillis, velocity = velocity)
 
-    /** Both [playPreview]s: routes [noteId] (a negative [pitch] keeps the note's own) and sounds it. */
-    private fun playRoutedPreview(noteId: NoteID, pitch: Int, durationMillis: Long, velocity: Int) {
+    /**
+     * Plays the notes [notes] names, struck together as one audition: each `NoteID` routed to the instrument its
+     * staff plays at its tick, at the paired pitch — or the note's own for a negative one. The next preview cuts every
+     * one of them, and they ring for one length (a drum's decay when any of them is a drum). A note that does not
+     * resolve is skipped; with none left nothing sounds and whatever is ringing is left alone. No-op when [state] is
+     * [PlaybackState.EXPORTING] or no engine is ready.
+     *
+     * The shape a host hands over when it auditions a tap: every note starting on the tapped beat
+     * ([onsetNoteIds]), so the kick of a drum part written in two voices sounds with the cymbal above it.
+     */
+    fun playPreview(notes: List<Pair<NoteID, Int>>, durationMillis: Long = 300L, velocity: Int = 96) {
         if (_state.value == PlaybackState.EXPORTING) return
         if (synthEngine == null) return
+        val routed = notes.mapNotNull { (noteId, pitch) -> routePreview(noteId, pitch) }
+        if (routed.isEmpty()) return
+        soundPreview(routed, durationMillis = durationMillis, velocity = velocity)
+    }
+
+    /**
+     * Every note starting on the beat [item] sits on, in every voice of its staff — what a tap on [item] sounds.
+     * Answered by shared Swift (`Score.onsetNoteIDs(of:)`), the same rule the Apple hosts apply. Works for a rest as
+     * well as a note: a drum part's voice 1 can rest where its voice 2 kicks. Empty when nothing starts there.
+     */
+    fun onsetNoteIds(item: ScoreItemID): List<NoteID> {
+        val bytes = jniBridge.onsetNoteItems(scoreHandle, ScoreItemIDCodec.encode(item))
+        if (bytes.isEmpty()) return (item as? ScoreItemID.Note)?.let { listOf(it.arg0) } ?: emptyList()
+        val decoded = mutableListOf<NoteID>()
+        BinaryReader(bytes).readLengthPrefixed { inner ->
+            while (inner.remaining > 0) {
+                val id = inner.readLengthPrefixed { ScoreItemIDCodec.decodePayload(it) }
+                (id as? ScoreItemID.Note)?.let { decoded.add(it.arg0) }
+            }
+        }
+        return decoded
+    }
+
+    /**
+     * Sounds every note starting on the beat [item] sits on ([onsetNoteIds]) — a tap's audition. Silent for a beat
+     * where nothing starts.
+     */
+    fun playOnsetPreview(item: ScoreItemID, durationMillis: Long = 300L, velocity: Int = 96) {
+        playPreview(onsetNoteIds(item).map { it to -1 }, durationMillis = durationMillis, velocity = velocity)
+    }
+
+    /** One note of an audition, routed: the channel and pitch it strikes, and whether its staff is a drum staff. */
+    private data class RoutedPreview(val channel: Int, val pitch: Int, val isDrum: Boolean)
+
+    /** Routes [noteId] (a negative [pitch] keeps the note's own) to what it strikes, or `null` when it does not resolve. */
+    private fun routePreview(noteId: NoteID, pitch: Int): RoutedPreview? {
         // The note is addressed in the score as it stands; the instrument changes that route it are the prepared
         // copy's, whose channels are the ones programmed on the synth.
         val route = jniBridge.previewRoute(
@@ -1553,34 +1609,46 @@ class AndroidPlaybackEngine internal constructor(
             noteIdBytes = NoteIDCodec.encode(noteId),
             pitch = pitch,
         )
-        if (route.size < 4) return
+        if (route.size < 4) return null
         val staffIndex = route[1].toInt()
         // A bridge that does not route answers -1 for both: the staff's opening (ordinal-0) live channel, not the raw
         // staffIndex, which is no longer a channel number once a score has a drum part or a grand staff
         // (`staffLiveChannel`, populated in `prepare`).
         val channel = if (route[2] >= 0) route[2].toInt() else staffLiveChannel.getOrElse(staffIndex) { staffIndex }
         val isDrum = if (route[3] >= 0) route[3] == 1L else staffIsDrums.getOrElse(staffIndex) { false }
-        soundPreview(
-            channel = channel,
-            pitch = route[0].toInt(),
-            isDrum = isDrum,
-            durationMillis = durationMillis,
-            velocity = velocity,
-        )
+        return RoutedPreview(channel = channel, pitch = route[0].toInt(), isDrum = isDrum)
     }
 
-    /** Sounds one routed audition: the shared policy's ring, supersede and release on [channel]. */
-    private fun soundPreview(channel: Int, pitch: Int, isDrum: Boolean, durationMillis: Long, velocity: Int) {
+    /** Packs audition notes the way the policy's JNI entry points take them: `channel, pitch`, a byte each. */
+    private fun packedVoices(notes: List<RoutedPreview>): ByteArray {
+        val bytes = ByteArray(notes.size * 2)
+        notes.forEachIndexed { index, note ->
+            bytes[index * 2] = note.channel.toByte()
+            bytes[index * 2 + 1] = note.pitch.toByte()
+        }
+        return bytes
+    }
+
+    /** The notes the policy's JNI entry points answer, packed `channel, pitch` a byte each; empty for none. */
+    private fun previewVoices(bytes: ByteArray): List<PreviewVoice> =
+        (0 until bytes.size / 2).map { index ->
+            PreviewVoice(
+                channel = bytes[index * 2].toInt() and 0xFF,
+                pitch = bytes[index * 2 + 1].toInt() and 0xFF,
+            )
+        }
+
+    /** Sounds one routed audition: the shared policy's ring, supersede and release over every one of [notes]. */
+    private fun soundPreview(notes: List<RoutedPreview>, durationMillis: Long, velocity: Int) {
         val engine = synthEngine ?: return
 
         // What this audition does — whether it supersedes one already sounding, how long it rings, how long
         // the graph has to stay alive after it — is decided by the shared policy. See `JniBridge`.
         val planBytes = jniBridge.previewPolicyBegin(
             policyHandle = previewPolicyHandle,
-            channel = channel,
-            pitch = pitch,
+            voices = packedVoices(notes),
             velocity = velocity,
-            isDrum = isDrum,
+            isDrum = notes.any { it.isDrum },
             ringMilliseconds = durationMillis.toInt(),
         )
         if (planBytes.isEmpty()) return
@@ -1599,26 +1667,27 @@ class AndroidPlaybackEngine internal constructor(
             oboeStream?.play()
         }
 
-        // Silencing the superseded note by its own (channel, pitch) rather than Apple's CC 120 on a foreign
+        // Silencing the superseded notes by their own (channel, pitch) rather than Apple's CC 120 on a foreign
         // channel is a deliberate difference in the MESSAGE, not in the behaviour the policy describes. Apple's
         // branch works around AUMIDISynth swallowing a CC 120 sent immediately before a note-on on the same
         // channel; SwiftySynth needs no such workaround, and a plain note-off is both more precise — it silences
-        // exactly the note this engine started — and gentler, since it lets the release envelope run.
-        if (plan.supersedesChannel >= 0) {
-            engine.previewNoteOff(plan.supersedesChannel, plan.supersedesPitch)
+        // exactly the notes this engine started — and gentler, since it lets the release envelope run.
+        for (previous in plan.supersededVoices) {
+            engine.previewNoteOff(previous.channel, previous.pitch)
         }
         previewSilentAtNanos = System.nanoTime() +
             (plan.ringMilliseconds + plan.releaseTailMilliseconds).toLong() * 1_000_000L
 
-        engine.previewNoteOn(plan.channel, plan.pitch, plan.velocity)
+        for (voice in plan.voices) {
+            engine.previewNoteOn(voice.channel, voice.pitch, plan.velocity)
+        }
         previewScope.launch {
             delay(plan.ringMilliseconds.toLong())
-            // -1 means a newer audition has taken this one's place and already silenced it; ending it again
-            // would silence the NEWER note instead. The stream hold is still released below, because this
+            // Empty means a newer audition has taken this one's place and already silenced it; ending it again
+            // would silence the NEWER notes instead. The stream hold is still released below, because this
             // call took one out.
-            val ending = jniBridge.previewPolicyEnd(previewPolicyHandle, plan.generation)
-            if (ending >= 0) {
-                engine.previewNoteOff((ending shr 8).toInt(), (ending and 0xFF).toInt())
+            for (ending in previewVoices(jniBridge.previewPolicyEnd(previewPolicyHandle, plan.generation))) {
+                engine.previewNoteOff(ending.channel, ending.pitch)
             }
             if (!startedStreamForPreview) return@launch
             // Keep the output stream open for the note's release before parking it again. That stream is what
@@ -1690,9 +1759,8 @@ class AndroidPlaybackEngine internal constructor(
         // A pending fixed-duration audition must not be cut by this note's own start, and must not
         // pause the stream underneath a held note. Silencing it through the shared policy is what
         // transfers the stream hold rather than double-counting it.
-        val silenced = jniBridge.previewPolicySilence(previewPolicyHandle)
-        if (silenced >= 0) {
-            engine.previewNoteOff((silenced shr 8).toInt(), (silenced and 0xFF).toInt())
+        for (voice in previewVoices(jniBridge.previewPolicySilence(previewPolicyHandle))) {
+            engine.previewNoteOff(voice.channel, voice.pitch)
         }
 
         // Only one sustained note at a time — cut the previous one first.

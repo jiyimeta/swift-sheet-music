@@ -22,6 +22,8 @@ import io.github.jiyimeta.sheetmusic.audio.model.MixAudibilityTable
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewPlan
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewVoice
+import io.github.jiyimeta.sheetmusic.audio.model.RestID
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreReplacementOutcome
@@ -3012,10 +3014,10 @@ class AndroidPlaybackEngineTest {
     fun `the note a plan supersedes is released before the new one starts`() = runTest(testDispatcher) {
         val bridge = previewJniBridge(pitch = 60)
         // A plan that supersedes an E already sounding on the same channel.
-        bridge.previewPlanFor = { channel, pitch, velocity, isDrum, ring ->
+        bridge.previewPlanFor = { voices, velocity, isDrum, ring ->
             PreviewPlan(
-                generation = 1L, supersedesChannel = 0, supersedesPitch = 64,
-                channel = channel, pitch = pitch, velocity = velocity, isDrum = isDrum,
+                generation = 1L, supersededVoices = listOf(PreviewVoice(channel = 0, pitch = 64)),
+                voices = voices, velocity = velocity, isDrum = isDrum,
                 ringMilliseconds = ring, releaseTailMilliseconds = 800,
             )
         }
@@ -3034,7 +3036,7 @@ class AndroidPlaybackEngineTest {
     @Test
     fun `an audition the policy has superseded is not ended`() = runTest(testDispatcher) {
         val bridge = previewJniBridge(pitch = 60)
-        bridge.previewPolicyEndResult = { -1L } // "superseded — silencing anything would silence the new note"
+        bridge.previewPolicyEndResult = { emptyList() } // "superseded — silencing anything would silence the new note"
         val synths = mutableListOf<FakeSynthDriver>()
         val engine = previewEngine(synths, pitch = 60, bridge = bridge)
 
@@ -3067,10 +3069,10 @@ class AndroidPlaybackEngineTest {
     fun `the plan's ring time wins over the duration asked for`() = runTest(testDispatcher) {
         val bridge = previewJniBridge(pitch = 38)
         // What a drum plan looks like: the caller still asks for 500 ms, and the policy answers with the decay.
-        bridge.previewPlanFor = { channel, pitch, velocity, _, _ ->
+        bridge.previewPlanFor = { voices, velocity, _, _ ->
             PreviewPlan(
-                generation = 1L, supersedesChannel = -1, supersedesPitch = 0,
-                channel = channel, pitch = pitch, velocity = velocity, isDrum = true,
+                generation = 1L, supersededVoices = emptyList(),
+                voices = voices, velocity = velocity, isDrum = true,
                 ringMilliseconds = 2_000, releaseTailMilliseconds = 800,
             )
         }
@@ -3085,6 +3087,71 @@ class AndroidPlaybackEngineTest {
 
         advanceTimeBy(501)
         assertEquals(listOf("noteOn(0,38,96)", "noteOff(0,38)"), synth.calls)
+    }
+
+    // ── Several notes struck together ───────────────────────────────────
+    //
+    // A tap sounds every note starting on its beat — a drum part written as hands over feet sounds the kick with
+    // the cymbal. The notes are one audition: struck together, ended together, superseded together.
+
+    /** A bridge that resolves each note to `60 + 10 × voice + noteInChord` on staff 0. */
+    private fun chordJniBridge() = object : FakeJniBridge(
+        timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+        staffParamsResult = encodeStaffParamsArray(listOf(StaffParams(0, 0, 0, false, 0L))),
+        renderMidiResult = minimalSmf,
+    ) {
+        override fun previewRoute(
+            scoreHandle: Long,
+            preparedScoreHandle: Long,
+            noteIdBytes: ByteArray,
+            pitch: Int,
+        ): LongArray {
+            val id = NoteIDCodec.decode(noteIdBytes)
+            return longArrayOf(60L + 10L * id.voiceIndex + id.noteIndexInChord, 0L, 0L, 0L)
+        }
+    }
+
+    private fun note(voice: Int, inChord: Int = 0) = NoteID(StaffAddress(0, 0), 0, voice, 0, inChord)
+
+    @Test
+    fun `every note of an audition strikes and ends together`() = runTest(testDispatcher) {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = previewEngine(synths, pitch = 0, bridge = chordJniBridge())
+        val synth = synths.first()
+        synth.calls.clear()
+
+        engine.playPreview(listOf(note(0) to -1, note(0, inChord = 1) to -1, note(1) to -1), durationMillis = 500L)
+        assertEquals(listOf("noteOn(0,60,96)", "noteOn(0,61,96)", "noteOn(0,70,96)"), synth.calls)
+
+        synth.calls.clear()
+        advanceTimeBy(501)
+        assertEquals(listOf("noteOff(0,60)", "noteOff(0,61)", "noteOff(0,70)"), synth.calls)
+    }
+
+    @Test
+    fun `a tap sounds the notes the shared onset rule names`() = runTest(testDispatcher) {
+        val bridge = chordJniBridge()
+        bridge.onsetNoteItemsResult = listOf(note(0), note(1))
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = previewEngine(synths, pitch = 0, bridge = bridge)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        engine.playOnsetPreview(ScoreItemID.Rest(RestID(StaffAddress(0, 0), 0, 0, 0)), durationMillis = 500L)
+
+        assertEquals(listOf("noteOn(0,60,96)", "noteOn(0,70,96)"), synth.calls)
+    }
+
+    @Test
+    fun `a tap on a beat where nothing starts sounds nothing`() = runTest(testDispatcher) {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = previewEngine(synths, pitch = 0, bridge = chordJniBridge())
+        val synth = synths.first()
+        synth.calls.clear()
+
+        engine.playOnsetPreview(ScoreItemID.Rest(RestID(StaffAddress(0, 0), 0, 0, 0)), durationMillis = 500L)
+
+        assertTrue("nothing starts there, got ${synth.calls}", synth.calls.isEmpty())
     }
 
     // ── Preview release tail ────────────────────────────────────────────

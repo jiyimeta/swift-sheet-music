@@ -12,8 +12,24 @@ and this project adheres to
 - **`SetBreath.current(after:in:)` is public.** It answers the breath `SetBreath(after:)` would replace or remove, so
   a host that reads a breath before writing it (a clipboard copying the selected one) asks the command rather than
   re-walking the voice itself.
+- **A preview can strike several notes together.** `PlaybackEngine.playPreview(noteIDs:in:duration:velocity:)` (Apple)
+  and `AndroidPlaybackEngine.playPreview(notes:)` sound their notes as one audition: struck together, ended together,
+  and cut together by the next preview. The single-note `playPreview`s are that call with one note. The Windows engine
+  still strikes one note per preview.
+  `NotePreviewPolicy.begin(voices:velocity:isDrum:ringMilliseconds:)` plans it; a `(channel, pitch)` named twice is
+  struck once, and an empty list plans nothing and leaves the ringing audition alone.
+- **`Score.onsetNoteIDs(of:)`** answers every note starting on the beat a note or rest sits on, in every voice of its
+  staff — what a tap on a beat should sound, so a drum part written as hands in voice 1 and feet in voice 2 sounds the
+  kick with the cymbal, and a tap on voice 1's rest still sounds voice 2. `AndroidPlaybackEngine.playOnsetPreview(item)`
+  sounds it from Kotlin through the same Swift.
 
 ### Changed
+
+- **`NotePreviewPolicy` tracks an audition's notes as a list.** `PreviewPlan.supersededVoices` / `voices`,
+  `NotePreviewPolicy.soundingVoices`, `endVoices(generation:)` and `silenceVoices()` replace the single-note
+  `supersedes` / `voice`, `sounding`, `end(generation:)` and `silence()`, which are deprecated and answer the first
+  note. The Android JNI preview-policy entry points take and answer notes packed `channel, pitch` a byte each
+  (`PreviewVoicePairs`), and `PreviewPlan`'s wire carries the two lists.
 
 - **`SetBreath` takes a rest as it takes a chord.** It writes, replaces and removes the breath after a rest, as
   MuseScore drops one on any chord or rest (`Rest::acceptDrop` → `ChordRest::acceptDrop`); it used to refuse a rest

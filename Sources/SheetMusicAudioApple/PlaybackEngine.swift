@@ -186,7 +186,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Whether a tap or a held preview is still sounding — an idle park must not cut either. `internal` for the
     /// `+IdlePark` extension, which cannot see the preview state itself.
     var isPreviewSounding: Bool {
-        previewPolicy.sounding != nil || activeSustainedPreview != nil
+        !previewPolicy.soundingVoices.isEmpty || activeSustainedPreview != nil
     }
 
     /// The channel whose pitch wheel an audition of a microtonal note moved off center, if one did
@@ -1253,9 +1253,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// channel, and clear tracking. Called on teardown so a ringing preview
     /// can't outlive the synth it played on.
     private func cancelActivePreview() {
-        // `silence()` both reports the note to cut and invalidates the end action already scheduled for it.
-        // No note-on follows, so All Sound Off (`nextChannel: nil`) is safe.
-        cutPreviewNote(previewPolicy.silence(), nextChannel: nil)
+        // `silenceVoices()` both reports the notes to cut and invalidates the end action already scheduled for them.
+        // No note-on follows, so All Sound Off (no `nextChannels`) is safe.
+        cutPreviewNotes(previewPolicy.silenceVoices(), nextChannels: [])
         // Also force-stop a held sustained preview so it can't outlive the
         // synth on teardown / reload.
         if let sustained = activeSustainedPreview {
@@ -1267,28 +1267,34 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // once they have stopped the engine outright.
     }
 
-    /// Silence `voice` — the fixed-duration tap preview the policy just gave up, if there was one.
+    /// Silence `voices` — the fixed-duration tap preview the policy just gave up, if there was one.
     ///
-    /// Shared by `cancelActivePreview()` (full teardown, `nextChannel: nil`) and `previewNoteOn(...)` (a
-    /// still-pending tap preview must not survive into a sustained hold). Uses backend `stopNote` when
-    /// delegated. Otherwise: when `nextChannel` matches the preview's channel, a plain note-off is used instead
-    /// of All Sound Off — CC 120 immediately before a same-channel note-on is swallowed by AUMIDISynth, exactly
-    /// the pitfall `playPreview`'s same-channel branch avoids. A different (or `nil`) `nextChannel` uses CC 120
-    /// on every attached AU unit, since we don't know here which unit the preview sounded on.
-    private func cutPreviewNote(_ voice: PreviewVoice?, nextChannel: UInt8?) {
-        guard let voice else { return }
+    /// Shared by `cancelActivePreview()` (full teardown, no `nextChannels`), `playPreview(noteIDs:...)` (the
+    /// audition a new one replaces) and `previewNoteOn(...)` (a still-pending tap preview must not survive into a
+    /// sustained hold). Uses backend `stopNote` when delegated. Otherwise: on a channel in `nextChannels` a plain
+    /// note-off is used instead of All Sound Off — CC 120 immediately before a same-channel note-on is swallowed by
+    /// AUMIDISynth. Any other channel gets CC 120, once, on every attached AU unit, since we don't know here which
+    /// unit the preview sounded on.
+    private func cutPreviewNotes(_ voices: [PreviewVoice], nextChannels: Set<UInt8>) {
         if let backend {
-            backend.stopNote(channel: voice.channel, pitch: voice.pitch)
-        } else if voice.channel == nextChannel {
-            for unit in attachedSynths {
-                unit.stopNote(voice.pitch, onChannel: voice.channel)
+            for voice in voices {
+                backend.stopNote(channel: voice.channel, pitch: voice.pitch)
             }
-        } else {
-            for unit in attachedSynths {
-                MIDISynthBuilder.sendControlChange(
-                    into: unit, controller: 120, value: 0,
-                    onChannel: voice.channel,
-                )
+            return
+        }
+        var soundedOff: Set<UInt8> = []
+        for voice in voices {
+            if nextChannels.contains(voice.channel) {
+                for unit in attachedSynths {
+                    unit.stopNote(voice.pitch, onChannel: voice.channel)
+                }
+            } else if soundedOff.insert(voice.channel).inserted {
+                for unit in attachedSynths {
+                    MIDISynthBuilder.sendControlChange(
+                        into: unit, controller: 120, value: 0,
+                        onChannel: voice.channel,
+                    )
+                }
             }
         }
     }
@@ -1302,31 +1308,67 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
     }
 
-    /// SwiftySynth tap-preview: start the note, schedule its note-off after the
-    /// melodic `duration` (or the longer drum tail), and restore a host-parked
-    /// engine once it drains. Simpler than the AUMIDISynth path — SwiftySynth has
-    /// none of the CC120 / same-channel note-swallowing quirks.
-    private func backendPlayPreview(
-        pitch: UInt8, channel: UInt8, isDrum: Bool,
-        duration: TimeInterval, velocity: UInt8, bend: UInt16,
-    ) {
-        guard let backend else { return }
-        let plan = previewPolicy.begin(
+    /// One note of an audition, resolved against the score and the engine's channel layout.
+    private struct PreviewNote {
+        let voice: PreviewVoice
+        let flatStaffIndex: Int
+        let isDrum: Bool
+        /// The pitch wheel the note wants: its microtonal offset, or the center for a plain note and every drum.
+        let bend: UInt16
+    }
+
+    /// `noteID` in `score` as something to strike, or `nil` when it does not resolve to a pitch and a channel.
+    private func previewNote(_ noteID: NoteID, in score: Score) -> PreviewNote? {
+        guard let pitch = pitch(for: noteID, in: score) else { return nil }
+        let flatIdx = score.allStaves.firstIndex(where: {
+            $0.address == noteID.staff
+        }) ?? -1
+        let tick = absoluteTick(of: noteID, in: score)
+        guard let channel = midiChannel(forStaff: flatIdx, atTick: tick) else { return nil }
+        let isDrum = isDrumStaff(flatIdx)
+        return PreviewNote(
             voice: PreviewVoice(channel: channel, pitch: pitch),
-            velocity: velocity,
+            flatStaffIndex: flatIdx,
             isDrum: isDrum,
-            ringMilliseconds: Int(duration * 1000),
+            bend: isDrum ? Self.unbent : PreviewRouting.pitchBend(of: noteID, in: score),
         )
-        if let previous = plan.supersedes {
+    }
+
+    /// Sets the wheel for an audition about to strike `notes`. One channel carries one wheel, so a chord bends the
+    /// channel of its first microtonal note and leaves the rest where they are — a single note, the overwhelmingly
+    /// common case, gets exactly its own bend.
+    private func bendForPreview(_ notes: [PreviewNote]) {
+        guard let first = notes.first else { return }
+        let bent = notes.first { $0.bend != Self.unbent } ?? first
+        bendForPreview(channel: bent.voice.channel, value: bent.bend)
+    }
+
+    /// SwiftySynth tap-preview: start the notes, schedule their note-offs after the melodic `duration` (or the
+    /// longer drum tail), and restore a host-parked engine once they drain. Simpler than the AUMIDISynth path —
+    /// SwiftySynth has none of the CC120 / same-channel note-swallowing quirks.
+    private func backendPlayPreview(_ notes: [PreviewNote], duration: TimeInterval, velocity: UInt8) {
+        guard let backend, let plan = previewPolicy.begin(
+            voices: notes.map(\.voice),
+            velocity: velocity,
+            isDrum: notes.contains(where: \.isDrum),
+            ringMilliseconds: Int(duration * 1000),
+        ) else { return }
+        for previous in plan.supersededVoices {
             backend.stopNote(channel: previous.channel, pitch: previous.pitch)
         }
         wakeGraphForPreview()
-        bendForPreview(channel: channel, value: isDrum ? Self.unbent : bend)
-        backend.startNote(channel: channel, pitch: pitch, velocity: velocity)
+        bendForPreview(notes)
+        for voice in plan.voices {
+            backend.startNote(channel: voice.channel, pitch: voice.pitch, velocity: velocity)
+        }
         previewQueue.asyncAfter(deadline: .now() + plan.ringSeconds) { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self, let ending = previewPolicy.end(generation: plan.generation) else { return }
-                self.backend?.stopNote(channel: ending.channel, pitch: ending.pitch)
+                guard let self else { return }
+                let ending = previewPolicy.endVoices(generation: plan.generation)
+                guard !ending.isEmpty else { return }
+                for voice in ending {
+                    self.backend?.stopNote(channel: voice.channel, pitch: voice.pitch)
+                }
                 // A sustained hold started after this tap owns the park now (see `previewNoteOff`) — don't park out
                 // from under the still-ringing hold.
                 guard activeSustainedPreview == nil else { return }
@@ -1339,9 +1381,28 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
     }
 
-    // swiftlint:disable:next function_body_length
+    /// Briefly plays the note `noteID` names, on its staff's own channel. See
+    /// ``playPreview(noteIDs:in:duration:velocity:)``.
     public func playPreview(
         noteID: NoteID,
+        in score: Score,
+        duration: TimeInterval = 0.3,
+        velocity: UInt8 = 96,
+    ) {
+        playPreview(noteIDs: [noteID], in: score, duration: duration, velocity: velocity)
+    }
+
+    /// Briefly plays the notes `noteIDs` name, struck together, each on its staff's own channel — what the host
+    /// sounds when the user clicks or taps the score, mirroring MuseScore's "preview on selection". A tap on a beat
+    /// passes everything that starts there (`Score.onsetNoteIDs(of:)`), so the kick of a drum part written in two
+    /// voices sounds with the cymbal above it.
+    ///
+    /// The notes are one audition: the next preview cuts all of them, and they ring for one length — a drum for its
+    /// decay when any of them is a drum. Calls are non-blocking; the matching note-offs are scheduled on a high-QoS
+    /// background queue. A note that does not resolve is skipped, and when none does nothing sounds and whatever is
+    /// ringing is left alone.
+    public func playPreview( // swiftlint:disable:this function_body_length
+        noteIDs: [NoteID],
         in score: Score,
         duration: TimeInterval = 0.3,
         velocity: UInt8 = 96,
@@ -1351,14 +1412,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // `engine.start()` below re-activate an exclusive one a previous `play(...)` took. No-op when the session is
         // already mixing. See `PlaybackEngine+AudioSession`.
         prepareAudioSessionForPreview()
-        guard let pitch = pitch(for: noteID, in: score) else { return }
-        let bend = PreviewRouting.pitchBend(of: noteID, in: score)
-        let flatIdx = score.allStaves.firstIndex(where: {
-            $0.address == noteID.staff
-        }) ?? -1
-        let tick = absoluteTick(of: noteID, in: score)
-        guard let midiChannel = midiChannel(forStaff: flatIdx, atTick: tick) else { return }
+        let resolved = noteIDs.compactMap { previewNote($0, in: score) }
         if backend != nil {
+            guard !resolved.isEmpty else { return }
             // Re-assert EVERY strip's program + volume on the backend synth
             // before the note-on: a prior playback's sequencer resets the
             // synth's channel state to GM defaults, so without this the
@@ -1367,72 +1423,68 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // OTHER instrument channel stuck at those GM defaults until its
             // own preview happened to fire. See `reassertBackendChannelState`.
             reassertBackendChannelState()
-            backendPlayPreview(
-                pitch: pitch, channel: midiChannel,
-                isDrum: isDrumStaff(flatIdx),
-                duration: duration, velocity: velocity, bend: bend,
-            )
+            backendPlayPreview(resolved, duration: duration, velocity: velocity)
             return
         }
-        guard let instrument = synth(forStaff: flatIdx) else { return }
+        // Resolve every AU instrument BEFORE any side effect below, so a note on a staff with no unit drops out
+        // cleanly instead of leaving the engine resumed and the prior preview cut with nothing to sound.
+        var struck: [(note: PreviewNote, instrument: AVAudioUnitMIDIInstrument)] = []
+        for note in resolved where !struck.contains(where: { $0.note.voice == note.voice }) {
+            if let instrument = synth(forStaff: note.flatStaffIndex) {
+                struck.append((note, instrument))
+            }
+        }
+        guard let plan = previewPolicy.begin(
+            voices: struck.map(\.note.voice),
+            velocity: velocity,
+            isDrum: struck.contains { $0.note.isDrum },
+            ringMilliseconds: Int(duration * 1000),
+        ) else { return }
 
         // Cut the previous preview before starting the new one. Bumping the
         // generation invalidates its pending end action so it can't fire late
-        // and cut this new note. On a *different* channel use All Sound Off
-        // (CC 120) — immediate and ignores release, so it also truncates a
-        // ringing cymbal. On the *same* channel use a plain note-off: CC 120
-        // right before a note-on on the same channel is swallowed by AUMIDISynth
-        // (the next drum tap would be silent), and a drum re-hit overlapping its
-        // own decay is natural.
-        let isDrum = isDrumStaff(flatIdx)
-        let plan = previewPolicy.begin(
-            voice: PreviewVoice(channel: midiChannel, pitch: pitch),
-            velocity: velocity,
-            isDrum: isDrum,
-            ringMilliseconds: Int(duration * 1000),
-        )
-        if let previous = plan.supersedes {
-            if previous.channel == midiChannel {
-                instrument.stopNote(previous.pitch, onChannel: previous.channel)
-            } else {
-                MIDISynthBuilder.sendControlChange(
-                    into: instrument, controller: 120, value: 0,
-                    onChannel: previous.channel,
-                )
-            }
-        }
+        // and cut these new notes. On a channel none of the new notes uses, All
+        // Sound Off (CC 120) — immediate and ignores release, so it also
+        // truncates a ringing cymbal. On a channel a new note is about to strike,
+        // a plain note-off: CC 120 right before a note-on on the same channel is
+        // swallowed by AUMIDISynth (the next drum tap would be silent), and a
+        // drum re-hit overlapping its own decay is natural.
+        cutPreviewNotes(plan.supersededVoices, nextChannels: Set(plan.voices.map(\.channel)))
 
         // A paused `AVAudioEngine` renders nothing, so resume the graph for the
         // preview; the drain below restores the host-parked state once the
         // preview ends with no follow-up tap.
         wakeGraphForPreview()
 
-        bendForPreview(channel: midiChannel, value: isDrum ? Self.unbent : bend)
-        instrument.startNote(
-            pitch, withVelocity: velocity, onChannel: midiChannel,
-        )
+        bendForPreview(struck.map(\.note))
+        for (note, instrument) in struck {
+            instrument.startNote(note.voice.pitch, withVelocity: velocity, onChannel: note.voice.channel)
+        }
 
         // The policy sets how long it rings — a drum for its decay (the decay is the point), a melodic note for
-        // the caller's `duration`. End melodic with a note-off and drums with CC 120 (note-off won't stop a
+        // the caller's `duration`. End melodic notes with a note-off and drums with CC 120 (note-off won't stop a
         // one-shot's decay). The timer fires a plain `@convention(block)` closure (no actor-executor assertion
-        // off the main queue); the actual end + drain run on the main actor, and answer `nil` if a newer tap has
+        // off the main queue); the actual end + drain run on the main actor, and answer nothing if a newer tap has
         // superseded this one.
         //
         // No `releaseTailSeconds` deferral on this path, unlike the backend's: an AU instrument released cleanly
         // through an engine pause. The plan still carries the number — whether parking the graph would cut a
         // release is a property of the graph, and that is each engine's own to know.
+        let ended = struck.map(\.note)
         previewQueue.asyncAfter(deadline: .now() + plan.ringSeconds) { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self, previewPolicy.end(generation: plan.generation) != nil else { return }
-                let endInstrument = synth(forStaff: flatIdx)
-                if let endInstrument {
-                    if isDrum {
+                guard let self, !previewPolicy.endVoices(generation: plan.generation).isEmpty else { return }
+                var choked: Set<UInt8> = []
+                for note in ended {
+                    guard let endInstrument = synth(forStaff: note.flatStaffIndex) else { continue }
+                    if note.isDrum {
+                        guard choked.insert(note.voice.channel).inserted else { continue }
                         MIDISynthBuilder.sendControlChange(
                             into: endInstrument, controller: 120, value: 0,
-                            onChannel: midiChannel,
+                            onChannel: note.voice.channel,
                         )
                     } else {
-                        endInstrument.stopNote(pitch, onChannel: midiChannel)
+                        endInstrument.stopNote(note.voice.pitch, onChannel: note.voice.channel)
                     }
                 }
                 // A sustained hold started after this tap owns the park now (see `previewNoteOff`) — don't park out
@@ -1474,7 +1526,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // 120 immediately before a same-channel note-on is swallowed by
         // AUMIDISynth. The park it owed (`graphOwesIdlePark`) transfers to our
         // own previewNoteOff below.
-        cutPreviewNote(previewPolicy.silence(), nextChannel: midiChannel)
+        cutPreviewNotes(previewPolicy.silenceVoices(), nextChannels: [midiChannel])
 
         // Cut any prior sustained note first — only one sustained preview is
         // active at a time.
@@ -1513,7 +1565,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // The software synth's release has to render out first, as in `backendPlayPreview`'s drain: parked right
         // after `stopNote`, it froze mid-release and resumed the tail on the next preview. An AU instrument releases
         // cleanly through a pause, so that path parks at once.
-        if previewPolicy.sounding == nil {
+        if previewPolicy.soundingVoices.isEmpty {
             let releaseTail: Duration = backend == nil
                 ? .zero : .milliseconds(NotePreviewPolicy.releaseTailMilliseconds)
             requestIdlePark(minimumDelay: releaseTail)

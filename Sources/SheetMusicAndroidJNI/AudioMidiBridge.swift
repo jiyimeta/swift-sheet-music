@@ -36,6 +36,20 @@ public func nativePreviewRoute(
     return AudioMidiBridge.previewRouteWire(score: score, prepared: prepared, noteID: noteID, pitch: Int(pitch))
 }
 
+/// JNI entry point for `SheetMusicAudioJNI.nativeOnsetNoteItems(...)`: every note starting on the beat the item
+/// `itemBytes` names, in every voice of its staff (`Score.onsetNoteIDs(of:)`), as `ScoreItemID.note`s encoded with
+/// `ScoreItemIDCodec.encodeArray`. What a tap on that item sounds. Empty when the handle is unknown, the item does
+/// not decode, or nothing starts there.
+public func nativeOnsetNoteItems(scoreHandle: Int64, itemBytes: Data) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle),
+          !itemBytes.isEmpty,
+          let item = try? ScoreItemIDCodec.decode(itemBytes)
+    else { return Data() }
+    let beat = score.onsetNoteIDs(of: item)
+    guard !beat.isEmpty else { return Data() }
+    return ScoreItemIDCodec.encodeArray(beat.map(ScoreItemID.note))
+}
+
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicAudioJNI.nativeEarliestOf(...)` call site. Returns an empty
 /// `Data` when the score handle is unknown, the ids payload is empty /
