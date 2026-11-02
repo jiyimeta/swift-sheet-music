@@ -33,6 +33,10 @@ and this project adheres to
   barline closes the bar before it rather than opening the next one, and replaces the breath already at that tick
   instead of standing beside it. The breath on the range's first tick still stays behind: it closes the chord before
   the range.
+- **Copying a passage no longer gives its first note the marks of the note before it** (⌘C / ⌘V). A dynamic, fermata,
+  chord symbol, sticking, expression text, capo, string tuning, figured bass, symbol or fret diagram on the note just
+  ahead of the selection was pasted onto the passage's first note. A mark on the passage's own first note still comes
+  along, and `R` was never affected.
 
 ## [4.25.0] - 2026-11-02
 
