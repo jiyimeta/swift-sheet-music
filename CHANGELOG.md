@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.25.0] - 2026-11-02
+
 ### Added
 
 - **`SetBreath.current(after:in:)` is public.** It answers the breath `SetBreath(after:)` would replace or remove, so
