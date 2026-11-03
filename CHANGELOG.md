@@ -76,6 +76,18 @@ and this project adheres to
 - **`XMLTreeSerializer` drops the characters XML 1.0 cannot carry** (C0 controls other than tab / LF / CR, U+FFFE,
   U+FFFF). Written raw, a control character from a PDF's text layer made a file `XMLTreeParser` rejected
   (`control character in character data`).
+- **Windows: a zoomed-out page keeps its staff lines apart.** The Direct2D walk floored every stroke at 1.5 px, wider
+  than a quarter of a staff space below ~3.75 px/mm, so at zoom 25% on a 100% display the five lines merged into a
+  gray band and every line read as bold. The floor is now 1.5 px or 0.4 mm, whichever is thinner; at reading sizes
+  nothing changes. Android, the web and the RenderPreviews walk keep their fixed floor.
+- Windows playback: the FluidSynth reverb now matches SwiftySynth's (the Apple and Android engines) — explicit
+  `synth.reverb.*` settings in place of FluidSynth 2.6.1's defaults, whose tail rang about half as long again; every
+  0.35–2.5 s window of a measured tail is within 3 dB of SwiftySynth's.
+- Windows playback: the metronome and count-in play dry (no reverb or chorus on the click synth), as SwiftySynth's
+  click synth does.
+- Windows playback: a choked cymbal stops. FluidSynth ignored the render's choke marker and a note-off does not end
+  a crash (it releases over ~48 s), so a choked crash rang on; the marker now cuts the channel's voices at that key to
+  SwiftySynth's 0.05 s release, in live playback, after a seek, in the count-in and in export.
 
 ## [4.27.0] - 2026-11-03
 
