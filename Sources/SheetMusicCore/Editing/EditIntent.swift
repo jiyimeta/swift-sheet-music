@@ -49,6 +49,9 @@ public enum EditIntent: Sendable, Equatable {
     /// barline: when `duration` outruns the bar this spells the note as a tied chain carrying the NEW pitch, which
     /// `.setChordDuration` followed by `.setNotePitch` cannot express. The chain is planned by cloning a chord, so
     /// the second intent would retune only the chain's head and leave its tail tied to it at the old pitch.
+    ///
+    /// The note written is a NEW note: any tie the slot's notehead 0 carried, forward or back, is removed at both
+    /// ends in the same undo step, whatever the new pitch (MuseScore's replace-the-chord behaviour).
     case writeNote(at: VoiceElementID, pitch: Int, tpc: Int, duration: NoteDuration?)
 
     /// Make the timed slot at `at` a rest of `duration`, whatever is in it now — the rest key's own meaning, over a

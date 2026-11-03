@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **`.writeNote` unties the note it writes over.** Typing a pitch over a tied note used to re-pitch it with a bare
+  `SetNotePitch`, which kept `tieForward` / `tieBack`; `TiePlanner` pairs ties by rank rather than by pitch, so
+  `DanglingTies` saw nothing to seal. The neighbour then never sounded (its `tieBack` suppresses the note-on), and the
+  next `.setNotePitch` on either note walked the leftover chain and moved both. The write now removes notehead 0's ties
+  at both ends first, in the same undo step and whatever the new pitch — the written note is a new note, as in
+  MuseScore. An untied write still plans to the bare command it always did.
+
 ## [4.29.2] - 2026-11-06
 
 ### Fixed
