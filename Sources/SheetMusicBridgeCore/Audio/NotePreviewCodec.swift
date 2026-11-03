@@ -14,6 +14,7 @@ import Wirelet
 /// u8  isDrum                            ← 0 = false, 1 = true
 /// i32 ringMilliseconds
 /// i32 releaseTailMilliseconds
+/// [PreviewPitchBendWire] pitchBends     ← empty = no wheel to move
 /// ```
 public enum PreviewPlanCodec {
     public static func encode(_ plan: PreviewPlan) -> Data {
@@ -33,6 +34,18 @@ package struct PreviewVoiceWire {
     }
 }
 
+/// One pitch-wheel move on the wire: `i32 channel, i32 value` (14-bit, 8192 the center).
+@WireFormat
+package struct PreviewPitchBendWire {
+    var channel: Int32
+    var value: Int32
+
+    init(from bend: PreviewPitchBend) {
+        channel = Int32(bend.channel)
+        value = Int32(bend.value)
+    }
+}
+
 @WireFormat
 package struct PreviewPlanWire {
     var generation: Int64
@@ -42,6 +55,7 @@ package struct PreviewPlanWire {
     var isDrum: Bool
     var ringMilliseconds: Int32
     var releaseTailMilliseconds: Int32
+    var pitchBends: [PreviewPitchBendWire]
 
     init(from plan: PreviewPlan) {
         generation = Int64(bitPattern: plan.generation)
@@ -51,6 +65,26 @@ package struct PreviewPlanWire {
         isDrum = plan.isDrum
         ringMilliseconds = Int32(plan.ringMilliseconds)
         releaseTailMilliseconds = Int32(plan.releaseTailMilliseconds)
+        pitchBends = plan.pitchBends.map(PreviewPitchBendWire.init(from:))
+    }
+}
+
+/// Audition pitch wheels packed two bytes each, little-endian — each struck note's wheel, in the order of the
+/// `PreviewVoicePairs` they go with. Empty for "all centered". 14 bits a note do not earn a wire type of their own.
+public enum PreviewBendPairs {
+    public static func encode(_ bends: [UInt16]) -> Data {
+        var bytes = Data(capacity: bends.count * 2)
+        for bend in bends {
+            bytes.append(UInt8(bend & 0xFF))
+            bytes.append(UInt8(bend >> 8))
+        }
+        return bytes
+    }
+
+    /// The wheels `bytes` packs; a trailing odd byte is ignored.
+    public static func decode(_ bytes: Data) -> [UInt16] {
+        let raw = [UInt8](bytes)
+        return stride(from: 0, to: raw.count - 1, by: 2).map { UInt16(raw[$0]) | UInt16(raw[$0 + 1]) << 8 }
     }
 }
 
@@ -86,15 +120,19 @@ public final class NotePreviewCoordinator: @unchecked Sendable {
 
     public init() {}
 
-    /// Plans one audition of `voices` struck together; `nil` for none, leaving whatever is sounding alone.
+    /// Plans one audition of `voices` struck together, each at its wheel in `bends` (empty: all centered); `nil` for
+    /// none, leaving whatever is sounding alone.
     public func begin(
         voices: [PreviewVoice],
+        bends: [UInt16] = [],
         velocity: UInt8,
         isDrum: Bool,
         ringMilliseconds: Int,
     ) -> PreviewPlan? {
         lock.withLock {
-            policy.begin(voices: voices, velocity: velocity, isDrum: isDrum, ringMilliseconds: ringMilliseconds)
+            policy.begin(
+                voices: voices, bends: bends, velocity: velocity, isDrum: isDrum, ringMilliseconds: ringMilliseconds,
+            )
         }
     }
 

@@ -22,6 +22,28 @@ and this project adheres to
   shared a table no longer do, or a track joins another's — restarts the groups it changes. A backend that does not
   implement the new requirement plays every track from the shared table.
 
+## [4.27.0] - 2026-11-03
+
+### Added
+
+- **The Android engine bends an audition by the note's microtonal offset**, as the Apple engine does: a clicked
+  quarter-tone flat is heard a quarter tone low rather than on the plain semitone.
+  `AndroidPlaybackEngine.playPreviewNotes` takes `PreviewNote`s — a note sounding its own pitch is bent by its own
+  accidental, read from the score; an explicit pitch (a grace note auditioned through its parent's `NoteID`) by the
+  `cents` given with it. `playPreview(notes)` and `playOnsetPreview` bend each note by its own offset. The Windows
+  engine still sounds the plain semitone.
+- **`NotePreviewPolicy` decides the pitch wheel too** (`begin(voices:bends:…)`, `PreviewPlan.pitchBends`,
+  `moveWheel(to:)`, `releaseWheel()`): which channel keeps which offset — one channel carries one wheel, so a beat sounds
+  under its last key's, as playback does — and when a bent channel goes back to the center. The Apple engine's own copy
+  of that rule moved into it, so both engines run one. `Synthesizer.sendAuditionPitchBend(channel:value:)`
+  (`SheetMusicAudioSwiftySynthCore`) sends the bend sensitivity and the wheel for both SwiftySynth hosts.
+- **`AndroidPlaybackEngine.JniBridge` gains `previewRoute(…, pitch, cents)` and `previewPolicyBegin(…, voices, bends,
+  …)`**, which carry the wheel: the route answers it as a fifth element, and the plan's `pitchBends` say which wheel
+  moves where. Their defaults fall to the existing `previewRoute(…, pitch)` and `previewPolicyBegin(…, voices, …)`, so
+  a bridge that does not implement them still auditions every note, routed, on the plain semitone. Under them, the JNI
+  pair moves together: `nativePreviewRoute` takes `cents`, `nativePreviewPolicyBegin` takes the struck notes' wheels
+  (`PreviewBendPairs`), and `nativeSynthPitchBend` is new.
+
 ## [4.26.0] - 2026-11-03
 
 ### Added

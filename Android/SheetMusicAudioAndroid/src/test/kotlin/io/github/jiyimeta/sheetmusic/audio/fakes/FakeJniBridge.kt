@@ -2,6 +2,7 @@ package io.github.jiyimeta.sheetmusic.audio.fakes
 
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewPitchBend
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewPlan
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewVoice
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
@@ -122,16 +123,20 @@ internal open class FakeJniBridge(
     var previewRouteResult: ((pitch: Int) -> LongArray)? = null
     /** `(scoreHandle, preparedScoreHandle, pitch)` for every [previewRoute] call. */
     val previewRouteCalls = mutableListOf<Triple<Long, Long, Int>>()
+    /** The `cents` of every [previewRoute] call, in the same order as [previewRouteCalls]. */
+    val previewRouteCents = mutableListOf<Double>()
 
     override fun previewRoute(
         scoreHandle: Long,
         preparedScoreHandle: Long,
         noteIdBytes: ByteArray,
         pitch: Int,
+        cents: Double,
     ): LongArray {
         previewRouteCalls += Triple(scoreHandle, preparedScoreHandle, pitch)
+        previewRouteCents += cents
         val scripted = previewRouteResult
-            ?: return super.previewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch)
+            ?: return super.previewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch, cents)
         return scripted(pitch)
     }
     override fun earliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray {
@@ -213,9 +218,51 @@ internal open class FakeJniBridge(
         previewPolicyReleaseCalls += policyHandle
     }
 
+    /** The wheels each [previewPolicyBegin] was handed, unpacked, in the order of [previewPolicyBeginCalls]. */
+    val previewPolicyBeginBends = mutableListOf<List<Int>>()
+
+    /**
+     * The wheel moves each plan carries, given the notes and the wheels they were begun with. The default moves none —
+     * a plain audition; script it to hand the engine a plan that bends.
+     */
+    var previewPitchBendsFor: (voices: List<PreviewVoice>, bends: List<Int>) -> List<PreviewPitchBend> =
+        { _, _ -> emptyList() }
+
+    /**
+     * `false` plays a bridge written before the pitch wheel: the [previewPolicyBegin] that takes the wheels falls to
+     * the interface's default, which plans through the one without them.
+     */
+    var answersWheels = true
+
     override fun previewPolicyBegin(
         policyHandle: Long,
         voices: ByteArray,
+        velocity: Int,
+        isDrum: Boolean,
+        ringMilliseconds: Int,
+    ): ByteArray = planPreview(voices, wheels = null, velocity, isDrum, ringMilliseconds)
+
+    override fun previewPolicyBegin(
+        policyHandle: Long,
+        voices: ByteArray,
+        bends: ByteArray,
+        velocity: Int,
+        isDrum: Boolean,
+        ringMilliseconds: Int,
+    ): ByteArray {
+        if (!answersWheels) {
+            return super.previewPolicyBegin(policyHandle, voices, bends, velocity, isDrum, ringMilliseconds)
+        }
+        val wheels = (0 until bends.size / 2).map {
+            (bends[it * 2].toInt() and 0xFF) or ((bends[it * 2 + 1].toInt() and 0xFF) shl 8)
+        }
+        return planPreview(voices, wheels, velocity, isDrum, ringMilliseconds)
+    }
+
+    /** Both [previewPolicyBegin]s; `null` [wheels] for the one that takes none, which records none. */
+    private fun planPreview(
+        voices: ByteArray,
+        wheels: List<Int>?,
         velocity: Int,
         isDrum: Boolean,
         ringMilliseconds: Int,
@@ -224,7 +271,9 @@ internal open class FakeJniBridge(
             PreviewVoice(channel = voices[it * 2].toInt() and 0xFF, pitch = voices[it * 2 + 1].toInt() and 0xFF)
         }
         if (notes.isEmpty()) return ByteArray(0)
+        wheels?.let { previewPolicyBeginBends += it }
         val plan = previewPlanFor(notes, velocity, isDrum, ringMilliseconds)
+            .copy(pitchBends = previewPitchBendsFor(notes, wheels.orEmpty()))
         previewPolicyBeginCalls += plan
         return PreviewPlanCodec.encode(plan)
     }

@@ -20,20 +20,23 @@ public func nativePitchAndStaffOfNote(scoreHandle: Int64, noteIdBytes: Data) -> 
 }
 
 /// JNI entry point for `SheetMusicAudioJNI.nativePreviewRoute(...)`: where an audition of a note sounds —
-/// `[pitch, staffIndex, channel, isDrum]`, routed through the instrument changes of the score behind
+/// `[pitch, staffIndex, channel, isDrum, bend]`, routed through the instrument changes of the score behind
 /// `preparedScoreHandle` (the engine's copy of the score it prepared) at the note's tick in the score behind
-/// `scoreHandle`. A negative `pitch` sounds the note's own. An unknown `preparedScoreHandle` routes through the score
-/// itself; empty when the score handle is unknown or the note does not resolve. See
-/// `AudioMidiBridge.previewRoute(score:prepared:noteID:pitch:)`.
+/// `scoreHandle`. A negative `pitch` sounds the note's own, bent by the note's own microtonal offset; an explicit one
+/// sounds bent by `cents` (a grace note's accidental, which its parent's `NoteID` cannot reach). An unknown
+/// `preparedScoreHandle` routes through the score itself; empty when the score handle is unknown or the note does not
+/// resolve. See `AudioMidiBridge.previewRoute(score:prepared:noteID:pitch:cents:)`.
 public func nativePreviewRoute(
-    scoreHandle: Int64, preparedScoreHandle: Int64, noteIdBytes: Data, pitch: Int32,
+    scoreHandle: Int64, preparedScoreHandle: Int64, noteIdBytes: Data, pitch: Int32, cents: Double,
 ) -> [Int64] {
     guard let score = scoreTable.value(for: scoreHandle),
           !noteIdBytes.isEmpty,
           let noteID = try? PathIDCodecs.decode(noteIdBytes)
     else { return [] }
     let prepared = scoreTable.value(for: preparedScoreHandle) ?? score
-    return AudioMidiBridge.previewRouteWire(score: score, prepared: prepared, noteID: noteID, pitch: Int(pitch))
+    return AudioMidiBridge.previewRouteWire(
+        score: score, prepared: prepared, noteID: noteID, pitch: Int(pitch), cents: cents,
+    )
 }
 
 /// JNI entry point for `SheetMusicAudioJNI.nativeOnsetNoteItems(...)`: every note starting on the beat the item

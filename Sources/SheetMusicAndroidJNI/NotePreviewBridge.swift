@@ -31,15 +31,19 @@ public func nativePreviewPolicyRelease(policyHandle: Int64) {
 
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicAudioJNI.nativePreviewPolicyBegin(...)` call site. Plans one audition of the notes `voices` packs
-/// (`PreviewVoicePairs`: `channel, pitch` a byte each), struck together. Returns an encoded `PreviewPlan`, or empty
-/// `Data` when the handle is unknown or `voices` names no note — for which the engine's only sane response is to
-/// sound nothing, since it would otherwise have no generation to end the notes by.
+/// (`PreviewVoicePairs`: `channel, pitch` a byte each), struck together, each at the pitch wheel `bends` packs for it
+/// (`PreviewBendPairs`; empty for all centered) — the plan's `pitchBends` say which wheels to move before the notes
+/// start. Returns an encoded `PreviewPlan`, or empty `Data` when the handle is unknown or `voices` names no note — for
+/// which the engine's only sane response is to sound nothing, since it would otherwise have no generation to end the
+/// notes by.
 ///
 /// The channels, pitches and drum flag are the engine's own resolved values (`staffLiveChannel`,
-/// `StaffParams.isDrums`) rather than something re-derived here: the engine assigned those channels.
+/// `StaffParams.isDrums`) rather than something re-derived here: the engine assigned those channels. The wheels are
+/// the routes' (`nativePreviewRoute`), so the cents-to-wheel arithmetic stays in Swift.
 public func nativePreviewPolicyBegin(
     policyHandle: Int64,
     voices: Data,
+    bends: Data,
     velocity: Int32,
     isDrum: Bool,
     ringMilliseconds: Int32,
@@ -47,6 +51,7 @@ public func nativePreviewPolicyBegin(
     guard let coordinator = previewPolicyTable.value(for: policyHandle),
           let plan = coordinator.begin(
               voices: PreviewVoicePairs.decode(voices),
+              bends: PreviewBendPairs.decode(bends),
               velocity: UInt8(clamping: velocity),
               isDrum: isDrum,
               ringMilliseconds: Int(ringMilliseconds),

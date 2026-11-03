@@ -71,7 +71,7 @@
             let kick = PreviewVoice(channel: 9, pitch: 36)
 
             let first = nativePreviewPolicyBegin(
-                policyHandle: policy, voices: PreviewVoicePairs.encode([crash, kick]),
+                policyHandle: policy, voices: PreviewVoicePairs.encode([crash, kick]), bends: Data(),
                 velocity: 96, isDrum: true, ringMilliseconds: 500,
             )
             #expect(!first.isEmpty)
@@ -84,7 +84,8 @@
             let policy = nativePreviewPolicyCreate()
             defer { nativePreviewPolicyRelease(policyHandle: policy) }
             let plan = nativePreviewPolicyBegin(
-                policyHandle: policy, voices: Data(), velocity: 96, isDrum: false, ringMilliseconds: 500,
+                policyHandle: policy, voices: Data(), bends: Data(), velocity: 96, isDrum: false,
+                ringMilliseconds: 500,
             )
             #expect(plan.isEmpty)
         }
@@ -93,6 +94,33 @@
         func pairsRoundTrip() {
             let voices = [PreviewVoice(channel: 0, pitch: 60), PreviewVoice(channel: 9, pitch: 36)]
             #expect(PreviewVoicePairs.decode(PreviewVoicePairs.encode(voices)) == voices)
+        }
+
+        @Test("bend pairs round-trip the whole 14-bit range")
+        func bendPairsRoundTrip() {
+            let bends: [UInt16] = [0, 7851, 8192, 16383]
+            #expect(PreviewBendPairs.decode(PreviewBendPairs.encode(bends)) == bends)
+        }
+
+        /// The wheel crosses into the plan, so the Android engine moves it before the key — what the Apple engine does.
+        @Test("a microtonal audition's plan carries the wheel to move")
+        func planCarriesTheWheel() throws {
+            let policy = nativePreviewPolicyCreate()
+            defer { nativePreviewPolicyRelease(policyHandle: policy) }
+            let voice = PreviewVoice(channel: 0, pitch: 71)
+
+            let encoded = nativePreviewPolicyBegin(
+                policyHandle: policy, voices: PreviewVoicePairs.encode([voice]),
+                bends: PreviewBendPairs.encode([7851]), velocity: 96, isDrum: false, ringMilliseconds: 500,
+            )
+
+            var shared = NotePreviewPolicy()
+            let planned = shared.begin(
+                voices: [voice], bends: [7851], velocity: 96, isDrum: false, ringMilliseconds: 500,
+            )
+            let expected = try #require(planned)
+            #expect(expected.pitchBends == [PreviewPitchBend(channel: 0, value: 7851)])
+            #expect(encoded == PreviewPlanCodec.encode(expected))
         }
     }
 #endif

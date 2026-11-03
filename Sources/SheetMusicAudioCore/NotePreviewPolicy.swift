@@ -1,3 +1,5 @@
+import SheetMusicMIDI
+
 /// One sounding audition note, as the pair of MIDI coordinates that identify it.
 public struct PreviewVoice: Equatable, Sendable {
     public let channel: UInt8
@@ -9,10 +11,23 @@ public struct PreviewVoice: Equatable, Sendable {
     }
 }
 
+/// One move of a channel's pitch wheel an audition makes: `value` (14-bit, ``NotePreviewPolicy/centeredWheel`` for
+/// none) on `channel`. How the synth is told — with or without the bend sensitivity in front — is the engine's.
+public struct PreviewPitchBend: Equatable, Sendable {
+    public let channel: UInt8
+    public let value: UInt16
+
+    public init(channel: UInt8, value: UInt16) {
+        self.channel = channel
+        self.value = value
+    }
+}
+
 /// Everything an engine has to do to sound one audition, decided in one place for both platforms.
 ///
 /// An audition is one or more notes struck together — a single note, or everything that starts on a tapped beat. A
-/// plan is spent by executing it: silence every note in ``supersededVoices``, start every note in ``voices``, then
+/// plan is spent by executing it: silence every note in ``supersededVoices``, move every wheel in ``pitchBends``, start
+/// every note in ``voices``, then
 /// come back to ``NotePreviewPolicy/endVoices(generation:)`` after ``ringMilliseconds`` and keep the audio graph
 /// rendering for a further ``releaseTailMilliseconds``. How each of those is said in MIDI, and what "keep the graph
 /// rendering" means, stays with the engine — that part is genuinely different on each platform.
@@ -37,6 +52,10 @@ public struct PreviewPlan: Equatable, Sendable {
     /// driving an AU instrument releases cleanly through a pause, where a software synth freezes mid-release.
     /// The number is the same either way; only who acts on it differs.
     public let releaseTailMilliseconds: Int
+    /// The pitch wheels to move before the notes start, in order: the center back on a channel an earlier audition
+    /// bent, then the struck notes' microtonal offset. Empty for a plain audition on unbent channels. See
+    /// ``NotePreviewPolicy/begin(voices:bends:velocity:isDrum:ringMilliseconds:)`` for which offset one channel gets.
+    public let pitchBends: [PreviewPitchBend]
 
     /// The first of ``supersededVoices``. An audition can sound several notes, so this can miss some of them.
     @available(*, deprecated, message: "An audition can sound several notes: silence every one of `supersededVoices`.")
@@ -97,8 +116,18 @@ public struct NotePreviewPolicy: Equatable, Sendable {
     /// The notes of the audition currently sounding; empty when none is.
     public private(set) var soundingVoices: [PreviewVoice] = []
 
-    /// The generation of the most recent ``begin(voices:velocity:isDrum:ringMilliseconds:)``.
+    /// The generation of the most recent ``begin(voices:bends:velocity:isDrum:ringMilliseconds:)``.
     public private(set) var generation: UInt64 = 0
+
+    /// The pitch wheel's resting value — what a plain note, a drum and the score's own start want.
+    public static let centeredWheel = UInt16(MidiEvent.pitchBendCenter)
+
+    /// The channel an audition left bent, which the next audition — or playback, through ``releaseWheel()`` — has to
+    /// put back to the center; `nil` when every channel an audition touched is centered.
+    ///
+    /// The wheel stays where the note left it when the note ends: recentring at the note-off would bend its release
+    /// tail.
+    public private(set) var bentChannel: UInt8?
 
     public init() {}
 
@@ -120,8 +149,16 @@ public struct NotePreviewPolicy: Equatable, Sendable {
     /// A `(channel, pitch)` pair named twice is struck once: a second note-on for a key already down retriggers it
     /// on some synths and is dropped by others, and one note-off ends both either way. Answers `nil` for an empty
     /// `voices`, leaving whatever is sounding alone — nothing was asked to sound.
+    ///
+    /// `bends` is each voice's pitch wheel, in the same order — its microtonal offset
+    /// (`MidiEvent.pitchBendValue(cents:)`), ``centeredWheel`` for a plain note and every drum; empty (or short) reads
+    /// as centered. **One channel carries one wheel**, so a beat whose keys want different offsets sounds every key
+    /// under the LAST one's — what playback does (`MicrotonalPitchWheel`: each note-on moves the channel's base to its
+    /// own offset, and the score strikes a beat voice by voice, chord order within each), so a tapped chord is the
+    /// chord the user then hears played. A single note, the overwhelmingly common case, gets exactly its own bend.
     public mutating func begin(
         voices: [PreviewVoice],
+        bends: [UInt16] = [],
         velocity: UInt8,
         isDrum: Bool,
         ringMilliseconds: Int,
@@ -130,24 +167,39 @@ public struct NotePreviewPolicy: Equatable, Sendable {
         for voice in voices where !distinct.contains(voice) {
             distinct.append(voice)
         }
-        guard !distinct.isEmpty else { return nil }
-        return plan(distinct, velocity: velocity, isDrum: isDrum, ringMilliseconds: ringMilliseconds)
+        guard let last = voices.last, !distinct.isEmpty else { return nil }
+        let lastBend = bends.count == voices.count ? bends[bends.count - 1] : Self.centeredWheel
+        return plan(
+            distinct,
+            wheel: PreviewPitchBend(channel: last.channel, value: lastBend),
+            velocity: velocity,
+            isDrum: isDrum,
+            ringMilliseconds: ringMilliseconds,
+        )
     }
 
     /// Plans one audition of a single note, superseding whatever was sounding. See
-    /// ``begin(voices:velocity:isDrum:ringMilliseconds:)``.
+    /// ``begin(voices:bends:velocity:isDrum:ringMilliseconds:)``.
     public mutating func begin(
         voice: PreviewVoice,
+        bend: UInt16 = NotePreviewPolicy.centeredWheel,
         velocity: UInt8,
         isDrum: Bool,
         ringMilliseconds: Int,
     ) -> PreviewPlan {
-        plan([voice], velocity: velocity, isDrum: isDrum, ringMilliseconds: ringMilliseconds)
+        plan(
+            [voice],
+            wheel: PreviewPitchBend(channel: voice.channel, value: bend),
+            velocity: velocity,
+            isDrum: isDrum,
+            ringMilliseconds: ringMilliseconds,
+        )
     }
 
     /// Both `begin`s, once `voices` is known to be non-empty and free of repeats.
     private mutating func plan(
         _ voices: [PreviewVoice],
+        wheel: PreviewPitchBend,
         velocity: UInt8,
         isDrum: Bool,
         ringMilliseconds: Int,
@@ -163,7 +215,31 @@ public struct NotePreviewPolicy: Equatable, Sendable {
             isDrum: isDrum,
             ringMilliseconds: isDrum ? Self.drumRingMilliseconds : ringMilliseconds,
             releaseTailMilliseconds: Self.releaseTailMilliseconds,
+            pitchBends: moveWheel(to: wheel),
         )
+    }
+
+    /// The wheel moves that put `target.channel` at `target.value`: the channel an earlier audition bent back to the
+    /// center first when it is another channel (or when the new value is the center), then the new bend — none for a
+    /// centered value, since an unbent channel is already there.
+    public mutating func moveWheel(to target: PreviewPitchBend) -> [PreviewPitchBend] {
+        var moves: [PreviewPitchBend] = []
+        if let bent = bentChannel, bent != target.channel || target.value == Self.centeredWheel {
+            moves.append(PreviewPitchBend(channel: bent, value: Self.centeredWheel))
+            bentChannel = nil
+        }
+        guard target.value != Self.centeredWheel else { return moves }
+        moves.append(target)
+        bentChannel = target.channel
+        return moves
+    }
+
+    /// The move that puts the channel an audition bent back to the center — for playback about to start, which plays
+    /// from a centered wheel — or none when no channel is bent.
+    public mutating func releaseWheel() -> [PreviewPitchBend] {
+        guard let bent = bentChannel else { return [] }
+        bentChannel = nil
+        return [PreviewPitchBend(channel: bent, value: Self.centeredWheel)]
     }
 
     /// The notes to silence now that `generation`'s ring time is up, or empty if that audition was superseded.

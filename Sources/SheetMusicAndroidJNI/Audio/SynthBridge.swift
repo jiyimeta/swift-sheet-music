@@ -119,6 +119,11 @@ public func nativeSynthNoteOff(handle: Int64, channel: Int32, key: Int32) {
     SynthBridge.synth(handle)?.noteOff(channel: Int(channel), key: Int(key))
 }
 
+/// Puts `channel`'s pitch wheel at `value` (14-bit, 8192 the center) for an audition — `HostedSynth.pitchBend`.
+public func nativeSynthPitchBend(handle: Int64, channel: Int32, value: Int32) {
+    SynthBridge.synth(handle)?.pitchBend(channel: Int(channel), value: Int(value))
+}
+
 public func nativeSynthAllNotesOff(handle: Int64, channel: Int32) {
     SynthBridge.synth(handle)?.allNotesOff(channel: Int(channel))
 }

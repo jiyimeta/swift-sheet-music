@@ -140,4 +140,100 @@ struct NotePreviewPolicyTests {
         #expect(policy.soundingVoices == [middleC])
         #expect(policy.isCurrent(generation: ringing.generation))
     }
+
+    // MARK: - The pitch wheel (microtonal auditions)
+    //
+    // One rule, run by the Apple engine and — over JNI — Android's: before 2026-11 only the Apple engine bent an
+    // audition, and Android sounded every microtonal note a semitone step off where it plays.
+
+    /// `MidiEvent.pitchBendValue(cents: ∓50)` at the renderer's 12-semitone sensitivity.
+    private let quarterFlat: UInt16 = 7851
+    private let quarterSharp: UInt16 = 8533
+    private var center: UInt16 {
+        NotePreviewPolicy.centeredWheel
+    }
+
+    private func plan(
+        _ policy: inout NotePreviewPolicy,
+        _ voices: [PreviewVoice],
+        bends: [UInt16],
+    ) throws -> PreviewPlan {
+        let planned = policy.begin(voices: voices, bends: bends, velocity: 96, isDrum: false, ringMilliseconds: 500)
+        return try #require(planned)
+    }
+
+    @Test func aPlainAuditionOnUnbentChannelsMovesNoWheel() throws {
+        var policy = NotePreviewPolicy()
+        #expect(try plan(&policy, [middleC], bends: [center]).pitchBends.isEmpty)
+        #expect(try plan(&policy, [g], bends: []).pitchBends.isEmpty)
+        #expect(policy.bentChannel == nil)
+    }
+
+    @Test func aMicrotonalAuditionBendsItsChannelAndAPlainOneRecentresIt() throws {
+        var policy = NotePreviewPolicy()
+
+        let bent = try plan(&policy, [middleC], bends: [quarterFlat])
+        #expect(bent.pitchBends == [PreviewPitchBend(channel: 0, value: quarterFlat)])
+        #expect(policy.bentChannel == 0)
+
+        let plain = try plan(&policy, [g], bends: [center])
+        #expect(plain.pitchBends == [PreviewPitchBend(channel: 0, value: center)])
+        #expect(policy.bentChannel == nil)
+    }
+
+    /// The same offset again is sent again: a sequencer reset between the two (playback, a seek) may have centred the
+    /// wheel without the policy hearing of it.
+    @Test func aRepeatedOffsetIsSentAgain() throws {
+        var policy = NotePreviewPolicy()
+        _ = try plan(&policy, [middleC], bends: [quarterFlat])
+        let again = try plan(&policy, [middleC], bends: [quarterFlat])
+        #expect(again.pitchBends == [PreviewPitchBend(channel: 0, value: quarterFlat)])
+    }
+
+    @Test func movingToAnotherChannelRecentresTheOneLeftBent() throws {
+        var policy = NotePreviewPolicy()
+        let violin = PreviewVoice(channel: 1, pitch: 69)
+        _ = try plan(&policy, [middleC], bends: [quarterFlat])
+
+        let other = try plan(&policy, [violin], bends: [quarterSharp])
+
+        #expect(other.pitchBends == [
+            PreviewPitchBend(channel: 0, value: center),
+            PreviewPitchBend(channel: 1, value: quarterSharp),
+        ])
+        #expect(policy.bentChannel == 1)
+    }
+
+    /// One channel carries one wheel: a struck beat sounds under the LAST note's offset, as playback does.
+    @Test func aBeatWithMixedOffsetsSoundsUnderTheLastNotes() throws {
+        var policy = NotePreviewPolicy()
+        let chord = try plan(&policy, [middleC, g], bends: [quarterFlat, quarterSharp])
+        #expect(chord.pitchBends == [PreviewPitchBend(channel: 0, value: quarterSharp)])
+
+        let lastPlain = try plan(&policy, [middleC, g], bends: [quarterFlat, center])
+        #expect(lastPlain.pitchBends == [PreviewPitchBend(channel: 0, value: center)])
+    }
+
+    /// Bends that do not line up with the voices read as centered, rather than as some other note's offset.
+    @Test func misalignedBendsReadAsCentered() throws {
+        var policy = NotePreviewPolicy()
+        #expect(try plan(&policy, [middleC, g], bends: [quarterFlat]).pitchBends.isEmpty)
+    }
+
+    @Test func releasingTheWheelRecentresTheBentChannelOnce() throws {
+        var policy = NotePreviewPolicy()
+        _ = try plan(&policy, [middleC], bends: [quarterFlat])
+
+        #expect(policy.releaseWheel() == [PreviewPitchBend(channel: 0, value: center)])
+        #expect(policy.releaseWheel().isEmpty)
+    }
+
+    /// Ending or abandoning the notes leaves the wheel alone: recentring at the note-off would bend the release tail.
+    @Test func endingTheNotesLeavesTheWheelBent() throws {
+        var policy = NotePreviewPolicy()
+        let bent = try plan(&policy, [middleC], bends: [quarterFlat])
+        _ = policy.endVoices(generation: bent.generation)
+        _ = policy.silenceVoices()
+        #expect(policy.bentChannel == 0)
+    }
 }
