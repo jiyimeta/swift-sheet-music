@@ -211,6 +211,9 @@ struct PlayerHandle: @unchecked Sendable {
             delete_fluid_player(player)
             throw WindowsAudioError.synth("the player refused the MIDI")
         }
+        // Every event the player sends — live, after a seek's chase, and in an export, all of which play through a
+        // player made here — goes through the choke handler on its way to the synth.
+        fluid_player_set_playback_callback(player, FluidChoke.playbackHandler, UnsafeMutableRawPointer(synth.synth))
         let handle = PlayerHandle(player: player)
         handle.setTempo(rate)
         return handle
