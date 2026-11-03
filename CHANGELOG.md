@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.27.0] - 2026-11-03
+
 ### Added
 
 - **The Android engine bends an audition by the note's microtonal offset**, as the Apple engine does: a clicked
