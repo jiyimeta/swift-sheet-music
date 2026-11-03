@@ -22,12 +22,12 @@ and this project adheres to
   under its last key's, as playback does — and when a bent channel goes back to the center. The Apple engine's own copy
   of that rule moved into it, so both engines run one. `Synthesizer.sendAuditionPitchBend(channel:value:)`
   (`SheetMusicAudioSwiftySynthCore`) sends the bend sensitivity and the wheel for both SwiftySynth hosts.
-
-### Changed
-
-- **JNI:** `nativePreviewRoute` takes `cents` and answers the wheel as a fifth element; `nativePreviewPolicyBegin`
-  takes the struck notes' wheels (`PreviewBendPairs`), and its plan carries `pitchBends`; `nativeSynthPitchBend` is new.
-  The Kotlin `JniBridge.previewRoute` / `previewPolicyBegin` and `SynthDriver` grow the matching parameters.
+- **`AndroidPlaybackEngine.JniBridge` gains `previewRoute(…, pitch, cents)` and `previewPolicyBegin(…, voices, bends,
+  …)`**, which carry the wheel: the route answers it as a fifth element, and the plan's `pitchBends` say which wheel
+  moves where. Their defaults fall to the existing `previewRoute(…, pitch)` and `previewPolicyBegin(…, voices, …)`, so
+  a bridge that does not implement them still auditions every note, routed, on the plain semitone. Under them, the JNI
+  pair moves together: `nativePreviewRoute` takes `cents`, `nativePreviewPolicyBegin` takes the struck notes' wheels
+  (`PreviewBendPairs`), and `nativeSynthPitchBend` is new.
 
 ## [4.26.0] - 2026-11-03
 

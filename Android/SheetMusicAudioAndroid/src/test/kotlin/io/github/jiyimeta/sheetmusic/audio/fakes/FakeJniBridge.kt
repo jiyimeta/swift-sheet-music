@@ -228,6 +228,20 @@ internal open class FakeJniBridge(
     var previewPitchBendsFor: (voices: List<PreviewVoice>, bends: List<Int>) -> List<PreviewPitchBend> =
         { _, _ -> emptyList() }
 
+    /**
+     * `false` plays a bridge written before the pitch wheel: the [previewPolicyBegin] that takes the wheels falls to
+     * the interface's default, which plans through the one without them.
+     */
+    var answersWheels = true
+
+    override fun previewPolicyBegin(
+        policyHandle: Long,
+        voices: ByteArray,
+        velocity: Int,
+        isDrum: Boolean,
+        ringMilliseconds: Int,
+    ): ByteArray = planPreview(voices, wheels = null, velocity, isDrum, ringMilliseconds)
+
     override fun previewPolicyBegin(
         policyHandle: Long,
         voices: ByteArray,
@@ -236,16 +250,30 @@ internal open class FakeJniBridge(
         isDrum: Boolean,
         ringMilliseconds: Int,
     ): ByteArray {
+        if (!answersWheels) {
+            return super.previewPolicyBegin(policyHandle, voices, bends, velocity, isDrum, ringMilliseconds)
+        }
+        val wheels = (0 until bends.size / 2).map {
+            (bends[it * 2].toInt() and 0xFF) or ((bends[it * 2 + 1].toInt() and 0xFF) shl 8)
+        }
+        return planPreview(voices, wheels, velocity, isDrum, ringMilliseconds)
+    }
+
+    /** Both [previewPolicyBegin]s; `null` [wheels] for the one that takes none, which records none. */
+    private fun planPreview(
+        voices: ByteArray,
+        wheels: List<Int>?,
+        velocity: Int,
+        isDrum: Boolean,
+        ringMilliseconds: Int,
+    ): ByteArray {
         val notes = (0 until voices.size / 2).map {
             PreviewVoice(channel = voices[it * 2].toInt() and 0xFF, pitch = voices[it * 2 + 1].toInt() and 0xFF)
         }
         if (notes.isEmpty()) return ByteArray(0)
-        val wheels = (0 until bends.size / 2).map {
-            (bends[it * 2].toInt() and 0xFF) or ((bends[it * 2 + 1].toInt() and 0xFF) shl 8)
-        }
-        previewPolicyBeginBends += wheels
+        wheels?.let { previewPolicyBeginBends += it }
         val plan = previewPlanFor(notes, velocity, isDrum, ringMilliseconds)
-            .copy(pitchBends = previewPitchBendsFor(notes, wheels))
+            .copy(pitchBends = previewPitchBendsFor(notes, wheels.orEmpty()))
         previewPolicyBeginCalls += plan
         return PreviewPlanCodec.encode(plan)
     }

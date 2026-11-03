@@ -3096,7 +3096,10 @@ class AndroidPlaybackEngineTest {
     // A tap sounds every note starting on its beat — a drum part written as hands over feet sounds the kick with
     // the cymbal. The notes are one audition: struck together, ended together, superseded together.
 
-    /** A bridge that resolves each note to `60 + 10 × voice + noteInChord` on staff 0. */
+    /**
+     * A bridge that resolves each note to `60 + 10 × voice + noteInChord` on staff 0 — through the four-element
+     * [AndroidPlaybackEngine.JniBridge.previewRoute], the shape a bridge written before the pitch wheel implements.
+     */
     private fun chordJniBridge() = object : FakeJniBridge(
         timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
         staffParamsResult = encodeStaffParamsArray(listOf(StaffParams(0, 0, 0, false, 0L))),
@@ -3107,7 +3110,6 @@ class AndroidPlaybackEngineTest {
             preparedScoreHandle: Long,
             noteIdBytes: ByteArray,
             pitch: Int,
-            cents: Double,
         ): LongArray {
             val id = NoteIDCodec.decode(noteIdBytes)
             return longArrayOf(60L + 10L * id.voiceIndex + id.noteIndexInChord, 0L, 0L, 0L)
@@ -3224,6 +3226,25 @@ class AndroidPlaybackEngineTest {
         engine.playPreview(listOf(note(0) to -1, note(1) to -1), durationMillis = 500L)
 
         assertEquals(listOf(listOf(PreviewPitchBend.CENTER, PreviewPitchBend.CENTER)), bridge.previewPolicyBeginBends)
+    }
+
+    /**
+     * A bridge written against 4.26 implements neither entry point that carries the wheel. Their defaults fall to the
+     * four-element route and the wheel-less plan, so it still auditions every note — routed, on the plain semitone.
+     */
+    @Test
+    fun `a bridge without the wheel entry points still auditions, unbent`() = runTest(testDispatcher) {
+        val bridge = chordJniBridge().apply { answersWheels = false }
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = previewEngine(synths, pitch = 0, bridge = bridge)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        engine.playPreviewNotes(listOf(PreviewNote(note(1), cents = -50.0)), durationMillis = 500L)
+
+        assertEquals(listOf("noteOn(0,70,96)"), synth.calls)
+        assertEquals(1, bridge.previewPolicyBeginCalls.size)
+        assertTrue("the wheel-less begin records no wheels", bridge.previewPolicyBeginBends.isEmpty())
     }
 
     // ── Preview release tail ────────────────────────────────────────────
