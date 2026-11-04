@@ -132,6 +132,35 @@
             #expect(second.currentTick == 0)
         }
 
+        /// The length and the end a host reads to finish playback (the Windows engine's `isDone` / `totalTicks`), known
+        /// from the attach on.
+        @Test func `the transport knows its length and when it has run past it`() throws {
+            let synth = try clickSynth()
+            let sequence = try #require(synth.attachSequence(smf: clickTrack(quarters: 2)))
+            // The second click's note-off, at 480 + 240, or a later end-of-track.
+            #expect(sequence.totalTicks >= 720)
+            #expect(!sequence.isAtEnd)
+            #expect(!sequence.isPlaying)
+            sequence.play()
+            #expect(sequence.isPlaying)
+            render(synth, seconds: 0.5)
+            #expect(!sequence.isAtEnd, "half-way through two quarters at 120 bpm")
+            render(synth, seconds: 1.0)
+            #expect(sequence.isAtEnd)
+            sequence.stop()
+            #expect(!sequence.isPlaying)
+        }
+
+        @Test func `an inert transport reads as ended and empty`() throws {
+            let synth = try clickSynth()
+            let first = try #require(synth.attachSequence(smf: clickTrack()))
+            first.play()
+            _ = try #require(synth.attachSequence(smf: clickTrack()))
+            #expect(first.totalTicks == 0)
+            #expect(first.isAtEnd)
+            #expect(!first.isPlaying)
+        }
+
         @Test func `bytes that are not an SMF attach nothing`() throws {
             let synth = try clickSynth()
             #expect(synth.attachSequence(smf: Data([0, 1, 2])) == nil)

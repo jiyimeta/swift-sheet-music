@@ -61,6 +61,23 @@ public final class HostedSequence: @unchecked Sendable {
         }
     }
 
+    /// The SMF's length in its ticks: its last event's, end-of-track included. 0 once inert. Known from the attach on,
+    /// where a FluidSynth player knew it only once it had played a block.
+    public var totalTicks: Int {
+        synth.withSequence(id, fallback: 0) { attached, _ in attached.totalTicks }
+    }
+
+    /// Whether the transport has played past the sequence's last sounding event — what a host reads to end playback.
+    /// True once inert, so a host waiting on it never waits on a sequence that is gone.
+    public var isAtEnd: Bool {
+        synth.withSequence(id, fallback: true) { attached, _ in attached.sequencer.position >= attached.midi.length }
+    }
+
+    /// Whether the transport runs (`play` until `stop`); false once inert.
+    public var isPlaying: Bool {
+        synth.withSequence(id, fallback: false) { attached, _ in attached.isPlaying }
+    }
+
     /// Scales the tempo: 1 is the SMF's own, 2 twice as fast. Clamped to 0.01 and up.
     public func setSpeed(_ speed: Double) {
         synth.withSequence(id, fallback: ()) { attached, _ in

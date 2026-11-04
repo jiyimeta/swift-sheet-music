@@ -1,5 +1,6 @@
 import SheetMusicAudioCore
 import SheetMusicFoundation
+import SheetMusicMIDI
 import SwiftySynth
 
 /// One SwiftySynth synthesizer, with an optional sequence playing on it, shaped for a host that drives it the way
@@ -26,6 +27,8 @@ public final class HostedSynth: @unchecked Sendable {
         let id: Int
         let midi: SwiftySynth.MidiFile
         let tempoMap: SequenceTempoMap
+        /// The SMF's last event tick, end-of-track included — the length a FluidSynth player reported.
+        let totalTicks: Int
         var sequencer: MidiFileSequencer
         var isPlaying = false
     }
@@ -204,16 +207,21 @@ public final class HostedSynth: @unchecked Sendable {
     ///
     /// Attaching resets the synthesizer — notes still sounding stop — and sends the host's state again.
     public func attachSequence(smf: Data) -> HostedSequence? {
-        guard let midi = try? SwiftySynth.MidiFile(data: smf), let tempoMap = SequenceTempoMap(smf: smf) else {
+        guard let midi = try? SwiftySynth.MidiFile(data: smf), let tempoMap = SequenceTempoMap(smf: smf),
+              let file = try? MidiReader.read(smf)
+        else {
             return nil
         }
+        let totalTicks = file.tracks.compactMap { $0.events.last?.tick }.max() ?? 0
         let id: Int? = lock.withLock {
             guard !isClosed else { return nil }
             let id = nextSequenceID
             nextSequenceID += 1
             let sequencer = SwiftySynthVoicing.makeSequencer(driving: synthesizer)
             sequencer.play(midi, loop: false)
-            attached = Attached(id: id, midi: midi, tempoMap: tempoMap, sequencer: sequencer)
+            attached = Attached(
+                id: id, midi: midi, tempoMap: tempoMap, totalTicks: totalTicks, sequencer: sequencer,
+            )
             replayHostState()
             return id
         }
