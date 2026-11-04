@@ -74,9 +74,10 @@ extension Shared {
 
         if let deadline = previewDeadline, renderedFrames >= deadline.frame {
             previewDeadline = nil
-            if let voice = previewPolicy.end(generation: deadline.generation) {
-                // A note-off, as Android ends its previews: FluidSynth needs none of the CC 120 workarounds the
-                // AUMIDISynth path has, and the release rings out on a stream that never parks.
+            for voice in previewPolicy.endVoices(generation: deadline.generation) {
+                // Note-offs, as Android ends its previews: the synth needs none of the CC 120 workarounds the
+                // AUMIDISynth path has, and the release rings out on a stream that never parks. Allocates nothing
+                // beyond the policy's own array (a handful of voices, one tap's).
                 sendPreviewNoteOff(channel: Int32(voice.channel), pitch: Int32(voice.pitch))
             }
         }

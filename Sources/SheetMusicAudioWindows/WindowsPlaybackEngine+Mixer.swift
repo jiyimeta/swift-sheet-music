@@ -78,26 +78,51 @@ extension WindowsPlaybackEngine {
 
     // MARK: Previews
 
-    /// Briefly sounds the note `noteID` names, on the channel its staff plays at the note's tick (after an instrument
-    /// change, the new instrument's). Which preview supersedes which and how long each rings is the shared
-    /// `NotePreviewPolicy`'s (a drum rings 2 s); the note-off is timed in rendered frames on the render thread.
+    /// Briefly sounds the note `noteID` names. See `playPreview(noteIDs:in:duration:velocity:)`.
     public func playPreview(noteID: NoteID, in score: Score, duration: TimeInterval = 0.3, velocity: UInt8 = 96) {
-        guard let loaded, let resolved = AudioMidiBridge.pitchAndStaff(score: score, noteID: noteID) else { return }
-        let tick = PreviewRouting.tick(of: noteID, in: score)
-        guard let channel = midiChannel(forStaff: resolved.staffIndex, atTick: tick) else { return }
-        let isDrum = loaded.derivation.channelLayout.staffIsDrum[resolved.staffIndex] ?? false
-        let pitch = UInt8(clamping: resolved.pitch)
+        playPreview(noteIDs: [noteID], in: score, duration: duration, velocity: velocity)
+    }
+
+    /// Briefly sounds the notes `noteIDs` name, struck together, each on the channel its staff plays at the note's
+    /// tick (after an instrument change, the new instrument's) — what the host sounds for a tap on the score, the
+    /// Apple engine's `playPreview(noteIDs:)`. A tap on a beat passes everything that starts there
+    /// (`Score.onsetNoteIDs(of:)`): a chord's every key, and a second voice's notes with the first's, so the kick of a
+    /// drum part written in two voices sounds with the cymbal above it.
+    ///
+    /// The notes are one audition (`NotePreviewPolicy.begin(voices:)`): the next preview cuts all of them, and they
+    /// ring for one length — a drum's 2 s when any of them is a drum. The note-offs are timed in rendered frames on
+    /// the render thread. A note that does not resolve is skipped; when none does, nothing sounds and whatever is
+    /// ringing is left alone.
+    public func playPreview(
+        noteIDs: [NoteID], in score: Score, duration: TimeInterval = 0.3, velocity: UInt8 = 96,
+    ) {
+        guard let loaded else { return }
+        var voices: [PreviewVoice] = []
+        var isDrum = false
+        for noteID in noteIDs {
+            guard let resolved = AudioMidiBridge.pitchAndStaff(score: score, noteID: noteID),
+                  let channel = midiChannel(
+                      forStaff: resolved.staffIndex, atTick: PreviewRouting.tick(of: noteID, in: score),
+                  )
+            else { continue }
+            voices.append(PreviewVoice(channel: channel, pitch: UInt8(clamping: resolved.pitch)))
+            isDrum = isDrum || (loaded.derivation.channelLayout.staffIsDrum[resolved.staffIndex] ?? false)
+        }
         core.shared.withLock { shared in
-            guard shared.session != nil else { return }
-            let plan = shared.previewPolicy.begin(
-                voice: PreviewVoice(channel: channel, pitch: pitch), velocity: velocity, isDrum: isDrum,
-                ringMilliseconds: Int(duration * 1000),
-            )
-            // The superseded note by its own note-off, as Android does: FluidSynth needs no CC 120 workaround.
-            if let previous = plan.supersedes {
+            guard shared.session != nil,
+                  let plan = shared.previewPolicy.begin(
+                      voices: voices, velocity: velocity, isDrum: isDrum, ringMilliseconds: Int(duration * 1000),
+                  )
+            else { return }
+            // The superseded notes by their own note-offs, as Android does: the synth needs no CC 120 workaround.
+            for previous in plan.supersededVoices {
                 shared.sendPreviewNoteOff(channel: Int32(previous.channel), pitch: Int32(previous.pitch))
             }
-            shared.sendPreviewNoteOn(channel: Int32(channel), pitch: Int32(pitch), velocity: Int32(velocity))
+            for voice in plan.voices {
+                shared.sendPreviewNoteOn(
+                    channel: Int32(voice.channel), pitch: Int32(voice.pitch), velocity: Int32(velocity),
+                )
+            }
             let ringFrames = Int64((Double(plan.ringMilliseconds) * shared.sampleRate / 1000).rounded())
             shared.previewDeadline = PreviewDeadline(
                 generation: plan.generation, frame: shared.renderedFrames + ringFrames,
@@ -113,7 +138,7 @@ extension WindowsPlaybackEngine {
         guard let channel = midiChannel(forStaff: flatStaffIndex, atTick: tick) else { return }
         core.shared.withLock { shared in
             guard shared.session != nil else { return }
-            if let tap = shared.previewPolicy.silence() {
+            for tap in shared.previewPolicy.silenceVoices() {
                 shared.sendPreviewNoteOff(channel: Int32(tap.channel), pitch: Int32(tap.pitch))
             }
             shared.previewDeadline = nil

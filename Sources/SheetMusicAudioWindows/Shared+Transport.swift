@@ -153,7 +153,7 @@ extension Shared {
         deferredSeek = nil
         awaitingWrapLanding = false
         // Previews sounded on the old synth, and what is held back was meant for it.
-        _ = previewPolicy.silence()
+        _ = previewPolicy.silenceVoices()
         previewDeadline = nil
         sustainedPreview = nil
         heldPreviewMessages.removeAll(keepingCapacity: true)
@@ -274,13 +274,13 @@ extension Shared {
         // is coming to wait for either.
         heldPreviewMessages.removeAll(keepingCapacity: true)
         scoreStopUnrendered = false
-        let voice = previewPolicy.silence()
+        let voices = previewPolicy.silenceVoices()
         previewDeadline = nil
         guard let synth = session?.score else {
             sustainedPreview = nil
             return
         }
-        if let voice {
+        for voice in voices {
             synth.noteOff(channel: Int32(voice.channel), pitch: Int32(voice.pitch))
         }
         if let held = sustainedPreview {
