@@ -3,6 +3,7 @@
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicCore
     import SheetMusicEditWire
+    import SheetMusicMSCX
     import Testing
 
     /// Drives the JNI entry points as plain Swift functions on the host — the same code the device calls, minus the
@@ -155,6 +156,35 @@
         /// `chordSlot` comment above), so `.delete` at `chordSlot` first — which leaves a same-duration rest
         /// (`DeleteVoiceElement`) — then `.inputNote` at that rest with `duration: nil` (keep the slot's length),
         /// exercising the `hasDuration == 0` branch specifically.
+        /// A relayed `.pasteRange` carries the copied range as MSCX text, which only a session built with a payload
+        /// reader can read. Without one every Android paste (and its undo) is refused and falls into a full resync.
+        @Test("a relayed range paste applies on the mirror session")
+        func relayedRangePasteApplies() throws {
+            let url = try #require(TestResources.url(forResource: "midi01", withExtension: "mscx"))
+            let data = try Data(contentsOf: url)
+            let parsed = try MSCXParser.parse(data)
+            let range = VoiceElementRange(
+                start: Self.slot(element: 2), end: Self.slot(element: 3),
+            )
+            let carved = try #require(parsed.clipboardDocument(for: range))
+            let payload = try #require(String(data: MSCXEncoder.encode(carved), encoding: .utf8))
+
+            let handle = nativeLoadScore(bytes: data)
+            defer { nativeReleaseScore(handle: handle) }
+            #expect(nativeBeginEditSession(scoreHandle: handle))
+            let before = nativeScoreFingerprint(scoreHandle: handle)
+            let intent = EditIntent.pasteRange(at: Self.slot(element: 4), payload: payload)
+            #expect(nativeApplyEditIntent(scoreHandle: handle, intentBytes: EditIntentCodec.encode(intent)))
+            #expect(nativeScoreFingerprint(scoreHandle: handle) != before)
+            #expect(nativeEditUndo(scoreHandle: handle))
+            #expect(nativeScoreFingerprint(scoreHandle: handle) == before)
+            nativeEndEditSession(scoreHandle: handle)
+        }
+
+        private static func slot(element: Int) -> VoiceElementID {
+            VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: element)
+        }
+
         @Test("inputNote applies through the bridge after a delete clears a rest")
         func inputNoteAfterDelete() throws {
             let handle = try Self.loadedHandle()

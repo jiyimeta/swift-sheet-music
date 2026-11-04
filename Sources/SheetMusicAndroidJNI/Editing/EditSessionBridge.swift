@@ -2,6 +2,7 @@ import Foundation
 import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicEditWire
+import SheetMusicMSCX
 
 /// Edit-session JNI bridge. A host that is editing keeps the authoritative score in its own image and relays each
 /// applied intent here, so the score behind this handle stays byte-identical and only the layout has to be recomputed
@@ -55,10 +56,13 @@ private func withLock<T>(_ body: () -> T) -> T {
 
 /// Opens a mirror edit session over the score behind `scoreHandle`. Returns `false` for an unknown handle.
 /// Idempotent: opening twice replaces the session, which is what a host restarting a session wants.
+///
+/// The session reads `.pasteRange` payloads with `MSCXParser.parse`, the same reader the authoritative side uses.
+/// Without one every relayed range paste (and the undo that follows it) is refused and falls into a full resync.
 public func nativeBeginEditSession(scoreHandle: Int64) -> Bool {
     withLock {
         guard let score = scoreTable.value(for: scoreHandle) else { return false }
-        editSessions[scoreHandle] = ScoreEditSession(score: score)
+        editSessions[scoreHandle] = ScoreEditSession(score: score, payloadReader: MSCXParser.parse)
         return true
     }
 }

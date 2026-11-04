@@ -22,6 +22,9 @@ and this project adheres to
 
 ### Fixed
 
+- **The Android mirror edit session reads a pasted range.** `nativeBeginEditSession` built its `ScoreEditSession` with
+  the refusing payload reader, so a relayed `.pasteRange` (and the undo after it) was refused with `.noPayloadReader`
+  and every Android paste fell into a full resync. The session now reads payloads with `MSCXParser.parse`.
 - **`.writeNote` unties the note it writes over.** Typing a pitch over a tied note used to re-pitch it with a bare
   `SetNotePitch`, which kept `tieForward` / `tieBack`; `TiePlanner` pairs ties by rank rather than by pitch, so
   `DanglingTies` saw nothing to seal. The neighbour then never sounded (its `tieBack` suppresses the note-on), and the
