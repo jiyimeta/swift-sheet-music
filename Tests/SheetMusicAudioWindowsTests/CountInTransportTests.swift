@@ -10,11 +10,12 @@ struct CountInTransportTests {
     /// Two chunks: a jump is carried out by the block after the one it was decided in.
     static let slack = 44
 
-    /// Four bars of 4/4 quarters, so every beat is a frame a count can count into.
-    static func score() -> Score {
+    /// Four bars of 4/4 quarters, so every beat is a frame a count can count into. `pitch` makes an edited copy
+    /// (`ReplaceScoreTransportTests`) with the same layout.
+    static func score(pitch: Int = 60) -> Score {
         let measures = (0 ..< 4).map { _ in
             Measure(voices: [Voice(elements: (0 ..< 4).map { _ in
-                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: pitch, tpc: 14)]))
             })])
         }
         let part = Part(

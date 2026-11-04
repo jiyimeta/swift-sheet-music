@@ -212,7 +212,7 @@ extension WindowsPlaybackEngine {
 
     /// Keeps the loop notated (what the host reads back) and its projection onto the unrolled transport, which is
     /// what the render thread compares the player's tick against (`TransportLoop`, shared with the Apple engine).
-    private func apply(loop: LoopRange) {
+    func apply(loop: LoopRange) {
         guard let derivation = loaded?.derivation else { return }
         let projected = TransportLoop.project(
             loop, timeline: derivation.timeline, unroll: derivation.unroll, unrolledTimeMap: derivation.unrolledTimeMap,
