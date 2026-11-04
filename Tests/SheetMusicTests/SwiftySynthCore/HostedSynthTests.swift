@@ -184,7 +184,8 @@
             #expect(!bare.hasSoundFont)
             let synth = try clickSynth()
             #expect(synth.hasSoundFont)
-            #expect(synth.recordedProgram(channel: 9) == (128, 0))
+            let drumKit = try #require(synth.recordedProgram(channel: 9))
+            #expect(drumKit.bank == 128 && drumKit.program == 0)
             #expect(synth.recordedProgram(channel: 0) == nil)
             for message in MasterTuning.rpnControlChanges(cents: 168.23) {
                 synth.controlChange(channel: 0, controller: Int(message.controller), value: Int(message.value))
