@@ -57,6 +57,12 @@ void cd2d_stroke(cd2d_canvas *canvas, float width, float dash_on, float dash_off
 void cd2d_fill_path(cd2d_canvas *canvas);
 void cd2d_fill_rect(cd2d_canvas *canvas, float x, float y, float width, float height);
 
+/// Draws an encoded picture (PNG, JPEG, … anything WIC decodes) stretched over the rectangle, as the Apple renderer
+/// does: the draw program's `drawImage`, a frame's picture. The bytes are decoded once per canvas resources and cached
+/// by their content; they need not outlive the call. Returns the HRESULT; a picture WIC cannot read draws nothing.
+int32_t cd2d_draw_image(
+    cd2d_canvas *canvas, const uint8_t *data, uint32_t length, float x, float y, float width, float height);
+
 /// A filled shape built once and filled every frame — an ink stroke's outline: closed figures in millimetres, nonzero
 /// winding. A path geometry of the canvas's factory, which a device loss does not invalidate.
 typedef struct cd2d_shape cd2d_shape;

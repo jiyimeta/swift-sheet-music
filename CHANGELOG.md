@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **Windows draws a frame's picture.** `DrawCommandWalker` skipped `drawImage`; it now decodes the bytes with WIC
+  once per canvas resources (`cd2d_draw_image`, cached by content) and stretches them over the rectangle with
+  Direct2D, as `DrawProgramCGRenderer` does on the Mac. Bytes WIC cannot read draw nothing.
+- **An edited frame's tiles are redrawn on Windows.** `ScoreSurface.replaceCommands` keyed spans by system index
+  alone, so the title block and every frame shared one key and only the first was compared; spans without a system
+  are now told apart by their place on the page (`SpanKey`).
+
 ## [4.28.0] - 2026-11-04
 
 ### Added
