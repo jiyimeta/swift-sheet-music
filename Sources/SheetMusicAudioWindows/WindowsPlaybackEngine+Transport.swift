@@ -23,8 +23,10 @@ extension WindowsPlaybackEngine {
     public func play(from cursor: ScoreCursor? = nil, in score: Score, countIn: Bool = false) {
         guard let current = loaded else { return }
         if score != current.score {
+            // The swap alone: this play positions the transport itself, and a replaceScore would first play on from
+            // the old position (and, with countIn, play before counting again).
             do {
-                try replaceScore(with: PreparedPlayback.make(score: score))
+                try swapScore(with: PreparedPlayback.make(score: score), seating: nil)
             } catch {
                 return
             }

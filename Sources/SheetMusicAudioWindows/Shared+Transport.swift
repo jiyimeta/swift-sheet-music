@@ -141,6 +141,34 @@ extension Shared {
         awaitingWrapLanding = false
     }
 
+    /// Seats a transport recorded before a score swap (`WindowsPlaybackEngine.replaceScore`), right after `install`
+    /// in the same critical section: the loop, then the players parked at the seat's tick and started when it was
+    /// playing. A playing seat whose cursor no longer resolves plays from the top, as the Apple engine's
+    /// `play(from: nil)` does; a paused or stopped one stays stopped at the top.
+    mutating func seat(_ seat: WindowsPlaybackEngine.TransportSeat) {
+        if let loop = seat.loop {
+            loopRange = loop.notated
+            transportLoop = loop.projected
+        }
+        switch seat.state {
+        case .playing:
+            rewind(to: seat.tick ?? 0)
+            startPlayers()
+            state = .playing
+            hasCursor = true
+            reassertPending = true
+        case .paused:
+            guard let tick = seat.tick else { return }
+            rewind(to: tick)
+            state = .paused
+            hasCursor = true
+        case .stopped, .exporting:
+            guard let tick = seat.tick else { return }
+            rewind(to: tick)
+            hasCursor = true
+        }
+    }
+
     /// Moves the transport onto `new` synths and players (a SoundFont reload), at the same position and in the same
     /// play / pause state. A count-in in progress becomes a plain play from the start it was counting into. The old
     /// session stops rendering with the swap; the caller deletes it.

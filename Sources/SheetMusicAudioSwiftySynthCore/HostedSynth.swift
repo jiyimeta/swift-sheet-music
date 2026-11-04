@@ -41,6 +41,13 @@ public final class HostedSynth: @unchecked Sendable {
     private var isClosed = false
     private var attached: Attached?
     private var nextSequenceID = 1
+    /// Prefetches `programSelect` has started, for the test that a repeated selection starts none.
+    private var prefetchesStarted = 0
+
+    /// Prefetches `programSelect` has started (tests).
+    var prefetchCount: Int {
+        lock.withLock { prefetchesStarted }
+    }
 
     /// A synth of `voicing` rendering at `sampleRate` (16–192 kHz), silent until `loadSoundFont`. Nil for a sample rate
     /// SwiftySynth refuses.
@@ -93,7 +100,9 @@ public final class HostedSynth: @unchecked Sendable {
     /// Selects `program` in `bank` on `channel` — 128 and up for a drum kit, which SwiftySynth sounds on the percussion
     /// channel only (`HostChannelState.replay`). Kept across resets. Reads the preset's samples in on a utility thread,
     /// so its first notes do not fault the font's pages in on the render thread — only when the selection changes, so
-    /// a host that sends the same program again from its render thread (Windows' reassert) starts no task there.
+    /// a host that sends the same program again from its render thread (Windows' reassert) starts no task there. (A
+    /// new font through `loadSoundFont` keeps the record, so the same program selected again after it is not
+    /// prefetched either; its first notes read the samples in as they sound.)
     public func programSelect(channel: Int, bank: Int, program: Int) {
         let bankSelect = HostChannelState.bankSelect(channel: channel, bank: bank)
         let program = min(max(0, program), 127)
@@ -104,9 +113,11 @@ public final class HostedSynth: @unchecked Sendable {
             synthesizer.processMidiMessage(channel: channel, command: 0xB0, data1: 0, data2: bankSelect)
             synthesizer.processMidiMessage(channel: channel, command: 0xC0, data1: program, data2: 0)
             if let previous, let now = hostState.program(channel: channel), previous == now { return nil }
+            guard synthesizer.soundFont !== Self.silentFont else { return nil }
+            prefetchesStarted += 1
             return synthesizer.soundFont
         }
-        guard let font, font !== Self.silentFont else { return }
+        guard let font else { return }
         let prefetch = PrefetchRequest(
             font: font, bank: HostChannelState.effectiveBank(channel: channel, bankSelect: bankSelect), patch: program,
         )
@@ -263,13 +274,17 @@ public final class HostedSynth: @unchecked Sendable {
     }
 
     /// Parses `smf`; nil when the bytes are not an SMF SwiftySynth reads.
+    ///
+    /// Only SwiftySynth and the tempo map decide whether the bytes attach, as before `totalTicks` existed; an SMF the
+    /// shared reader cannot read attaches with a length of 0 rather than failing, so Android's `attachSequence` gained
+    /// no new way to fail.
     public static func prepareSequence(smf: Data) -> PreparedSequence? {
-        guard let midi = try? SwiftySynth.MidiFile(data: smf), let tempoMap = SequenceTempoMap(smf: smf),
-              let file = try? MidiReader.read(smf)
-        else {
+        guard let midi = try? SwiftySynth.MidiFile(data: smf), let tempoMap = SequenceTempoMap(smf: smf) else {
             return nil
         }
-        let totalTicks = file.tracks.compactMap { $0.events.last?.tick }.max() ?? 0
+        let totalTicks = (try? MidiReader.read(smf)).map { file in
+            file.tracks.compactMap { $0.events.last?.tick }.max() ?? 0
+        } ?? 0
         return PreparedSequence(midi: midi, tempoMap: tempoMap, totalTicks: totalTicks)
     }
 

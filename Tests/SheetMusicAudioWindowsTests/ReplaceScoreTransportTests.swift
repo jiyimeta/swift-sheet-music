@@ -1,5 +1,5 @@
 @testable import SheetMusicAudioCore
-@testable import SheetMusicAudioWindows
+@_spi(PlaybackProbe) @testable import SheetMusicAudioWindows
 import SheetMusicCore
 import Testing
 
@@ -44,6 +44,58 @@ struct ReplaceScoreTransportTests {
         #expect(engine.state == .paused)
         let after = try #require(engine.currentCursor)
         #expect(after == before)
+    }
+
+    /// An edit that removes the measures the cursor stood in: the cursor clamps into the last measure, still playing
+    /// (`PlaybackTimeline.tick(at:)`), and a loop whose ends now meet is dropped.
+    @Test func aShorterScoreClampsTheCursorAndDropsAnEmptyLoop() throws {
+        let original = Self.score()
+        let engine = try Self.engine(original)
+        defer { engine.teardown() }
+        engine.setLoop(from: .beat(measureIndex: 2, tickInMeasure: 0), to: .beat(measureIndex: 3, tickInMeasure: 0))
+        engine.play(from: .beat(measureIndex: 2, tickInMeasure: 480), in: original)
+        CountInTransportTests.pull(engine, seconds: 0.1)
+
+        let shorter = CountInTransportTests.score(measures: 2)
+        try engine.replaceScore(with: PreparedPlayback.make(score: shorter))
+        #expect(engine.state == .playing)
+        #expect(engine.loopRange == nil)
+        let cursor = try #require(engine.currentCursor)
+        #expect(cursor.measureIndex == 1, "\(cursor)")
+    }
+
+    /// As on the Apple engine (`restore` plays on without `countIn`): a swap while the count is still sounding plays
+    /// on from the count's start without counting again.
+    @Test func aSwapDuringACountInPlaysOnFromItsStart() throws {
+        let original = Self.score()
+        let engine = try Self.engine(original)
+        defer { engine.teardown() }
+        engine.play(from: .beat(measureIndex: 2, tickInMeasure: 0), in: original, countIn: true)
+        CountInTransportTests.pull(engine, seconds: 0.5)
+        #expect(try #require(engine.probeTransport).countingIn)
+
+        try engine.replaceScore(with: PreparedPlayback.make(score: Self.score(pitch: 62)))
+        let transport = try #require(engine.probeTransport)
+        #expect(engine.state == .playing)
+        #expect(!transport.countingIn)
+        #expect(transport.scoreRunning)
+        #expect(try #require(engine.currentCursor).measureIndex == 2)
+    }
+
+    /// A different score handed to `play` swaps without seating the old position first: the count runs once, from
+    /// the asked start.
+    @Test func playWithAnotherScoreCountsInOnce() throws {
+        let original = Self.score()
+        let engine = try Self.engine(original)
+        defer { engine.teardown() }
+        engine.play(from: .beat(measureIndex: 1, tickInMeasure: 0), in: original)
+        CountInTransportTests.pull(engine, seconds: 0.2)
+
+        engine.play(from: .beat(measureIndex: 3, tickInMeasure: 0), in: Self.score(pitch: 64), countIn: true)
+        let transport = try #require(engine.probeTransport)
+        #expect(transport.countingIn)
+        #expect(!transport.scoreRunning)
+        #expect(transport.reportedScoreTick == 3 * 1920)
     }
 
     @Test func theLoopIsStillTheLoop() throws {

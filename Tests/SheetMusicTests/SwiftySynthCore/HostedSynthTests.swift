@@ -1,7 +1,7 @@
 #if canImport(SheetMusicAudioSwiftySynthCore)
     import Foundation
     import SheetMusicAudioCore
-    import SheetMusicAudioSwiftySynthCore
+    @testable import SheetMusicAudioSwiftySynthCore
     @testable import SheetMusicCore
     import SheetMusicMIDI
     import SwiftySynth
@@ -166,6 +166,20 @@
             let synth = try clickSynth()
             #expect(synth.attachSequence(smf: Data([0, 1, 2])) == nil)
             #expect(HostedSynth.prepareSequence(smf: Data([0, 1, 2])) == nil)
+        }
+
+        /// The Windows engine reasserts every strip's program from its render thread; the same selection again must
+        /// start no prefetch task there. A different program does.
+        @Test func `selecting the same program again starts no prefetch`() throws {
+            let synth = try clickSynth()
+            let afterLoad = synth.prefetchCount
+            synth.programSelect(channel: 9, bank: 128, program: 0)
+            synth.programSelect(channel: 9, bank: 128, program: 0)
+            #expect(synth.prefetchCount == afterLoad)
+            synth.programSelect(channel: 0, bank: 0, program: 0)
+            #expect(synth.prefetchCount == afterLoad + 1)
+            synth.programSelect(channel: 0, bank: 0, program: 0)
+            #expect(synth.prefetchCount == afterLoad + 1)
         }
 
         /// The Windows engine parses outside its own lock and attaches under it.

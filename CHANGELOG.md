@@ -7,6 +7,35 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **`WindowsPlaybackEngine` plays through SwiftySynth (`HostedSynth`), the synth the Apple and Android apps use, in
+  place of FluidSynth.** Its public API is unchanged; what it sounds like now matches the Mac.
+  - The output level is the Mac's (`windowsOutputGain` 1), about 8 dB below the FluidSynth engine's.
+  - The cymbal choke ignores a held sustain pedal, as on the Mac.
+  - A metronome count-in keeps its click after an A–B loop wraps to before the count's start: the count-in click
+    sequence carries the whole body (`MetronomeSequenceBuilder.countInSequenceWithWholeBody`).
+- **`WindowsPlaybackEngine.replaceScore(with:)` keeps the transport, as the Apple engine's does.** Playing goes on
+  from the same measure, paused stays paused there, and the loop survives. It used to stop and rewind.
+- **`HostedSynth.programSelect` prefetches only when the selection changes.** A host that sends the same program again
+  starts no task.
+
+### Added
+
+- **`WindowsPlaybackEngine.playPreview(noteIDs:in:duration:velocity:)`**: a tap sounds every note that starts on its
+  beat, as one audition, as the Apple engine's does.
+- **`MetronomeSequenceBuilder.countInSequenceWithWholeBody(...)`** and **`metronomeTick(forScoreTick:offset:)`**:
+  portable, for any one-sequence-per-synth host.
+- **`HostedSynth`**: `prepareSequence(smf:)` / `attach(_:)`, `allSoundsOff()`, `resetHostState()`, `activeVoiceCount`,
+  `hasSoundFont`, `recordedProgram(channel:)` and `recordedTuning(channel:)`.
+- **`HostedSequence`**: `totalTicks`, `isAtEnd` and `isPlaying`. All additive; Android's calls are unchanged.
+
+### Notes
+
+- The Windows suites that need a General MIDI font are skipped without one: `ChokeTests`, `OnsetPreviewTests` and
+  (with `SSM_CALIBRATION=1`) `CalibrationTests`, gated on `SSM_TEST_SF2`. CI does not run them, and does not run
+  `SheetMusicAudioWindowsTests` at all (Windows only). They were run on a Windows machine for this release.
+
 ## [4.28.0] - 2026-11-04
 
 ### Added

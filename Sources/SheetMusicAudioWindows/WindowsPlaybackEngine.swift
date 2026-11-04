@@ -230,64 +230,10 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         try prepareFully(score: score, derivation: PreparedPlayback.derive(score: score), renderedMidi: nil)
     }
 
-    /// Replaces the prepared score while keeping the synths, the mixer, rate, tuning, transposition, the master stage
-    /// and the metronome — when the mixer layout is unchanged. A changed layout or an unprepared engine falls back to
-    /// the full `prepare(score:)`.
-    ///
-    /// Either way the transport is kept, as the Apple engine's `replaceScore(with:)` keeps it: playing goes on playing,
-    /// paused stays paused, from the same place — the cursor and the loop recorded as measure positions before the
-    /// swap (`PlaybackMeasurePosition`, the coordinate that still names the same place once measures were inserted or
-    /// removed ahead of it) and found again in the edited score. Before this an edit while playing sent playback back
-    /// to the top.
-    @discardableResult
-    public func replaceScore(with prepared: PreparedPlayback) throws -> ScoreReplacementOutcome {
-        let transport = replacementTransport()
-        let outcome = try swapScore(with: prepared)
-        restore(transport, in: prepared.score)
-        return outcome
-    }
-
-    /// What `replaceScore(with:)` puts back after the swap.
-    private struct ReplacementTransport {
-        let state: PlaybackState
-        let cursor: PlaybackMeasurePosition?
-        let loop: PlaybackMeasureLoop?
-    }
-
-    private func replacementTransport() -> ReplacementTransport? {
-        guard let timeline = loaded?.derivation.timeline else { return nil }
-        return ReplacementTransport(
-            state: state,
-            cursor: currentCursor.flatMap { timeline.measurePosition(ofCursor: $0) },
-            loop: loopRange.flatMap { timeline.measureLoop(of: $0) },
-        )
-    }
-
-    /// Seats the transport recorded before a swap in the score now loaded: the loop first, so a play or seek into it
-    /// snaps as it would have, then the cursor in the state it was in. A cursor that no longer resolves — the score
-    /// lost every measure — leaves the transport stopped at the top.
-    private func restore(_ transport: ReplacementTransport?, in score: Score) {
-        guard let transport, let timeline = loaded?.derivation.timeline else { return }
-        if let loop = transport.loop.flatMap({ timeline.loopRange(at: $0) }) {
-            apply(loop: loop)
-        }
-        let cursor = transport.cursor.flatMap { timeline.cursor(at: $0) }
-        switch transport.state {
-        case .playing:
-            play(from: cursor, in: score)
-        case .paused:
-            if let cursor {
-                seek(to: cursor)
-                pause()
-            }
-        case .stopped, .exporting:
-            if let cursor {
-                seek(to: cursor)
-            }
-        }
-    }
-
-    private func swapScore(with prepared: PreparedPlayback) throws -> ScoreReplacementOutcome {
+    /// The swap itself (`WindowsPlaybackEngine+Replace.swift` keeps the transport around it): in place when the layout
+    /// is unchanged, with `seat` set in the same critical section; else a full prepare. `play(from:in:countIn:)` calls
+    /// it with no seat, since it positions the transport itself.
+    func swapScore(with prepared: PreparedPlayback, seating seat: TransportSeat?) throws -> ScoreReplacementOutcome {
         guard let loaded, loaded.derivation.channelLayout == prepared.channelLayout else {
             try prepareFully(prepared)
             return .fullyPrepared
@@ -310,6 +256,9 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
             shared.applyTuning()
             shared.reassertChannelState()
             shared.applyMixerState()
+            if let seat {
+                shared.seat(seat)
+            }
             return true
         }
         guard replaced else {

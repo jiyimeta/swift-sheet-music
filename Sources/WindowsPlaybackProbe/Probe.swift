@@ -93,7 +93,8 @@ final class Probe { // swiftlint:disable:this type_body_length
             value: mismatches.isEmpty ? "\(strips.count) strips" : mismatches.joined(separator: "; "),
             limit: "every strip on its mixer program, drums in bank 128",
         )
-        // SwiftySynth reads the SoundFont in place (memory-mapped): whether Windows then lets the file be renamed.
+        // Whether the loaded SoundFont's file can be renamed: SwiftySynth reads it whole into memory on Windows (it
+        // maps a font in place only on Darwin, Glibc and Android), so it should hold nothing open.
         let renamed = soundFontCopy.appendingPathExtension("renamed")
         do {
             try FileManager.default.moveItem(at: soundFontCopy, to: renamed)

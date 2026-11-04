@@ -28,7 +28,10 @@ struct SynthHandle: @unchecked Sendable {
     /// played 7.8–8.0 dB louder than the Mac on the three calibration scores; `CalibrationTests` holds the Mac's.
     static let windowsOutputGain: Float = 1
 
-    /// Builds a synth at `sampleRate` and loads `soundFontURL` into it (read in place, memory-mapped). The score's has
+    /// Builds a synth at `sampleRate` and loads `soundFontURL` into it. On Windows SwiftySynth reads the whole file
+    /// into memory — it maps a font in place only on Darwin, Glibc and Android — so a General MIDI font (~200 MB) is
+    /// read synchronously here, at a prepare, a reload and an export; the engine calls this outside its lock. The
+    /// score's has
     /// SwiftySynth's score voicing (256 voices, reverb and chorus); without `effects`, the metronome's (8 voices,
     /// dry) — what the Apple and Android engines' click synth is.
     ///

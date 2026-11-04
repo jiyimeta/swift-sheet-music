@@ -12,8 +12,8 @@ struct CountInTransportTests {
 
     /// Four bars of 4/4 quarters, so every beat is a frame a count can count into. `pitch` makes an edited copy
     /// (`ReplaceScoreTransportTests`) with the same layout.
-    static func score(pitch: Int = 60) -> Score {
-        let measures = (0 ..< 4).map { _ in
+    static func score(pitch: Int = 60, measures count: Int = 4) -> Score {
+        let measures = (0 ..< count).map { _ in
             Measure(voices: [Voice(elements: (0 ..< 4).map { _ in
                 .chord(Chord(duration: .quarter, notes: [Note(pitch: pitch, tpc: 14)]))
             })])
