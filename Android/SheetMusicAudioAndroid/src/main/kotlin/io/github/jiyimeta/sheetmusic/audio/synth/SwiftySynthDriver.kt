@@ -94,6 +94,11 @@ internal class SwiftySynthDriver internal constructor(
         withHandle(Unit) { native.synthNoteOff(it, channel, pitch) }
     }
 
+    /** `HostedSynth.pitchBend`: the bend sensitivity, then the wheel — the messages the Apple backend sends. */
+    override fun pitchBend(channel: Int, value: Int) {
+        withHandle(Unit) { native.synthPitchBend(it, channel, value) }
+    }
+
     override fun allNotesOff(channel: Int) {
         withHandle(Unit) { native.synthAllNotesOff(it, channel) }
     }

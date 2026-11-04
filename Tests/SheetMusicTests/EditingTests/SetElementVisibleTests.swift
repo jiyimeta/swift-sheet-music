@@ -102,6 +102,41 @@ struct SetElementVisibleTests {
         #expect(score == before)
     }
 
+    /// `[ts, f, fermata, C4 (staccato), breath, r, r, r]` — every kind of mark around one chord.
+    private static func markedScore() -> Score {
+        var score = EditingFixtures.chordAtIndex1()
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                var elements = staffValue.measures[0].voices[0].elements.values
+                if case var .chord(chord) = elements[1] {
+                    chord.articulations = [ChordArticulation(kind: .staccato)]
+                    elements[1] = .chord(chord)
+                }
+                elements.insert(.breath(Breath(kind: .breathMark(.comma))), at: 2)
+                elements.insert(.fermata(Fermata(subtype: "fermataAbove")), at: 1)
+                elements.insert(.dynamic(Dynamic(subtype: "f", velocity: 96)), at: 1)
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
+            }
+        }
+        return score
+    }
+
+    /// A selected mark is addressed by its chord, and `V` on it must hide the mark, not the chord: the slot is the
+    /// mark's own. A mark written on the chord itself carries no flag this command writes, so it has no slot.
+    @Test("a selected mark resolves to its own slot, and a mark written on its chord to none")
+    func slotOfASelectedMark() {
+        let score = Self.markedScore()
+        let chord = Self.slot(3)
+        #expect(SetElementVisible.slot(of: .dynamic(anchor: chord), in: score) == Self.slot(1))
+        #expect(SetElementVisible.slot(of: .fermata(anchor: chord), in: score) == Self.slot(2))
+        #expect(SetElementVisible.slot(of: .breath(anchor: chord), in: score) == Self.slot(4))
+        #expect(SetElementVisible.slot(of: .articulation(anchor: chord, kind: .staccato), in: score) == nil)
+        #expect(SetElementVisible.slot(of: .tempo(anchor: chord), in: score) == nil)
+        // A rest wearing none of them resolves to nothing rather than to the rest.
+        #expect(SetElementVisible.slot(of: .dynamic(anchor: Self.slot(5)), in: score) == nil)
+        #expect(SetElementVisible.slot(of: .breath(anchor: Self.slot(5)), in: score) == nil)
+    }
+
     private static func reason(of error: SheetMusicError?) -> EditRefusal.Reason? {
         guard case let .invalidEdit(refusal)? = error else { return nil }
         return refusal.reason

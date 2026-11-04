@@ -291,6 +291,11 @@ internal class SynthEngine(
         synth?.noteOff(channel, pitch)
     }
 
+    /** Puts [channel]'s pitch wheel at [value] (14-bit, 8192 the center) for an audition — see [SynthDriver.pitchBend]. */
+    fun previewPitchBend(channel: Int, value: Int) {
+        synth?.pitchBend(channel, value)
+    }
+
     /** Sends allNotesOff to every configured channel (may be sparse — see class doc). */
     fun allNotesOff() {
         for (ch in staffLoadParams.indices) if (staffLoadParams[ch] != null) synth?.allNotesOff(ch)

@@ -7,7 +7,8 @@ import SheetMusicFoundation
 /// through), a rest becomes rests spelled the same way. A tuplet survives only when every one of its members lands
 /// inside one piece — a bracket cannot span a barline, and the members still sound right without it because their
 /// stored durations are sounding ticks. A non-timed element the stream carries (`lengthTicks == 0`) is placed at its
-/// own offset, joining the piece that owns that tick without consuming any of the bar's budget.
+/// own offset, joining the piece that owns that tick — for a breath on a barline, the bar it closes — without consuming
+/// any of the bar's budget.
 enum RangeCopyPlacement {
     struct Piece {
         let measureIndex: Int
@@ -89,7 +90,13 @@ enum RangeCopyPlacement {
                 // own offset and nothing else: it has no extent, so the cut path below would have nothing to
                 // cut, and it must not move the cursor, or whatever shares its tick would land a beat late.
                 let landing = destinationTick + (absoluteTick - sourceStartTick)
-                guard let position = geometry.position(atAbsolute: landing) else { return nil }
+                // A breath on a barline closes the bar before it (`RangeCopyGeometry.position(closingAt:)`) rather
+                // than opening the next — and on the staff's last barline it needs no bar appended after it.
+                let closesItsBar = if case .breath = element { true } else { false }
+                let found = closesItsBar
+                    ? geometry.position(closingAt: landing)
+                    : geometry.position(atAbsolute: landing)
+                guard let position = found else { return nil }
                 accumulator.open(measure: position.measure, at: position.tick)
                 accumulator.append(element)
                 continue

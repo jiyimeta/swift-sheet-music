@@ -1,8 +1,14 @@
 package io.github.jiyimeta.sheetmusic.audio.fakes
 
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
+import io.github.jiyimeta.sheetmusic.audio.model.NoteID
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewPitchBend
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewPlan
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewVoice
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 import io.github.jiyimeta.sheetmusic.audio.serialization.PreviewPlanCodec
+import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
+import io.github.jiyimeta.wirelet.BinaryWriter
 
 /**
  * Test double for [AndroidPlaybackEngine.JniBridge].
@@ -117,16 +123,20 @@ internal open class FakeJniBridge(
     var previewRouteResult: ((pitch: Int) -> LongArray)? = null
     /** `(scoreHandle, preparedScoreHandle, pitch)` for every [previewRoute] call. */
     val previewRouteCalls = mutableListOf<Triple<Long, Long, Int>>()
+    /** The `cents` of every [previewRoute] call, in the same order as [previewRouteCalls]. */
+    val previewRouteCents = mutableListOf<Double>()
 
     override fun previewRoute(
         scoreHandle: Long,
         preparedScoreHandle: Long,
         noteIdBytes: ByteArray,
         pitch: Int,
+        cents: Double,
     ): LongArray {
         previewRouteCalls += Triple(scoreHandle, preparedScoreHandle, pitch)
+        previewRouteCents += cents
         val scripted = previewRouteResult
-            ?: return super.previewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch)
+            ?: return super.previewRoute(scoreHandle, preparedScoreHandle, noteIdBytes, pitch, cents)
         return scripted(pitch)
     }
     override fun earliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray {
@@ -165,18 +175,16 @@ internal open class FakeJniBridge(
     private var previewGeneration = 0L
 
     /**
-     * Builds the plan for each [previewPolicyBegin]. The default plans a plain audition that supersedes
-     * nothing; override it to script a supersede, a drum's longer ring, or an unusual tail.
+     * Builds the plan for each [previewPolicyBegin]. The default plans a plain audition of the notes asked for that
+     * supersedes nothing; override it to script a supersede, a drum's longer ring, or an unusual tail.
      */
     var previewPlanFor: (
-        channel: Int, pitch: Int, velocity: Int, isDrum: Boolean, ringMillis: Int,
-    ) -> PreviewPlan = { channel, pitch, velocity, isDrum, ringMillis ->
+        voices: List<PreviewVoice>, velocity: Int, isDrum: Boolean, ringMillis: Int,
+    ) -> PreviewPlan = { voices, velocity, isDrum, ringMillis ->
         PreviewPlan(
             generation = ++previewGeneration,
-            supersedesChannel = -1,
-            supersedesPitch = 0,
-            channel = channel,
-            pitch = pitch,
+            supersededVoices = emptyList(),
+            voices = voices,
             velocity = velocity,
             isDrum = isDrum,
             ringMilliseconds = ringMillis,
@@ -185,21 +193,24 @@ internal open class FakeJniBridge(
     }
 
     /**
-     * What [previewPolicyEnd] answers, packed as `channel shl 8 or pitch`, or -1 for "superseded".
+     * What [previewPolicyEnd] answers: the notes to silence, or empty for "superseded".
      *
-     * The default ends the newest plan's own note and nothing else — the shape the real policy has, stated
+     * The default ends the newest plan's own notes and nothing else — the shape the real policy has, stated
      * once here rather than re-derived in every test that needs an audition to end normally.
      */
-    var previewPolicyEndResult: (generation: Long) -> Long = { generation ->
+    var previewPolicyEndResult: (generation: Long) -> List<PreviewVoice> = { generation ->
         previewPolicyBeginCalls.lastOrNull()
             ?.takeIf { it.generation == generation }
-            ?.let { it.channel.toLong() shl 8 or it.pitch.toLong() }
-            ?: -1L
+            ?.voices
+            ?: emptyList()
     }
 
     var previewPolicyCreateResult: Long = 7L
     val previewPolicyReleaseCalls = mutableListOf<Long>()
     val previewPolicySilenceCalls = mutableListOf<Long>()
+
+    /** What [onsetNoteItems] answers for any item: the notes a tap sounds. Empty by default ("nothing starts"). */
+    var onsetNoteItemsResult: List<NoteID> = emptyList()
 
     override fun previewPolicyCreate(): Long = previewPolicyCreateResult
 
@@ -207,25 +218,93 @@ internal open class FakeJniBridge(
         previewPolicyReleaseCalls += policyHandle
     }
 
+    /** The wheels each [previewPolicyBegin] was handed, unpacked, in the order of [previewPolicyBeginCalls]. */
+    val previewPolicyBeginBends = mutableListOf<List<Int>>()
+
+    /**
+     * The wheel moves each plan carries, given the notes and the wheels they were begun with. The default moves none —
+     * a plain audition; script it to hand the engine a plan that bends.
+     */
+    var previewPitchBendsFor: (voices: List<PreviewVoice>, bends: List<Int>) -> List<PreviewPitchBend> =
+        { _, _ -> emptyList() }
+
+    /**
+     * `false` plays a bridge written before the pitch wheel: the [previewPolicyBegin] that takes the wheels falls to
+     * the interface's default, which plans through the one without them.
+     */
+    var answersWheels = true
+
     override fun previewPolicyBegin(
         policyHandle: Long,
-        channel: Int,
-        pitch: Int,
+        voices: ByteArray,
+        velocity: Int,
+        isDrum: Boolean,
+        ringMilliseconds: Int,
+    ): ByteArray = planPreview(voices, wheels = null, velocity, isDrum, ringMilliseconds)
+
+    override fun previewPolicyBegin(
+        policyHandle: Long,
+        voices: ByteArray,
+        bends: ByteArray,
         velocity: Int,
         isDrum: Boolean,
         ringMilliseconds: Int,
     ): ByteArray {
-        val plan = previewPlanFor(channel, pitch, velocity, isDrum, ringMilliseconds)
+        if (!answersWheels) {
+            return super.previewPolicyBegin(policyHandle, voices, bends, velocity, isDrum, ringMilliseconds)
+        }
+        val wheels = (0 until bends.size / 2).map {
+            (bends[it * 2].toInt() and 0xFF) or ((bends[it * 2 + 1].toInt() and 0xFF) shl 8)
+        }
+        return planPreview(voices, wheels, velocity, isDrum, ringMilliseconds)
+    }
+
+    /** Both [previewPolicyBegin]s; `null` [wheels] for the one that takes none, which records none. */
+    private fun planPreview(
+        voices: ByteArray,
+        wheels: List<Int>?,
+        velocity: Int,
+        isDrum: Boolean,
+        ringMilliseconds: Int,
+    ): ByteArray {
+        val notes = (0 until voices.size / 2).map {
+            PreviewVoice(channel = voices[it * 2].toInt() and 0xFF, pitch = voices[it * 2 + 1].toInt() and 0xFF)
+        }
+        if (notes.isEmpty()) return ByteArray(0)
+        wheels?.let { previewPolicyBeginBends += it }
+        val plan = previewPlanFor(notes, velocity, isDrum, ringMilliseconds)
+            .copy(pitchBends = previewPitchBendsFor(notes, wheels.orEmpty()))
         previewPolicyBeginCalls += plan
         return PreviewPlanCodec.encode(plan)
     }
 
-    override fun previewPolicyEnd(policyHandle: Long, generation: Long): Long =
-        previewPolicyEndResult(generation)
+    override fun previewPolicyEnd(policyHandle: Long, generation: Long): ByteArray =
+        packed(previewPolicyEndResult(generation))
 
-    override fun previewPolicySilence(policyHandle: Long): Long {
+    override fun previewPolicySilence(policyHandle: Long): ByteArray {
         previewPolicySilenceCalls += policyHandle
-        return -1L
+        return ByteArray(0)
+    }
+
+    override fun onsetNoteItems(scoreHandle: Long, itemBytes: ByteArray): ByteArray {
+        if (onsetNoteItemsResult.isEmpty()) return ByteArray(0)
+        val w = BinaryWriter()
+        w.writeLengthPrefixed {
+            for (id in onsetNoteItemsResult) {
+                writeLengthPrefixed { ScoreItemIDCodec.encodePayload(ScoreItemID.Note(id), this) }
+            }
+        }
+        return w.toByteArray()
+    }
+
+    /** Packs notes the way the policy's JNI entry points answer them: `channel, pitch`, a byte each. */
+    private fun packed(voices: List<PreviewVoice>): ByteArray {
+        val bytes = ByteArray(voices.size * 2)
+        voices.forEachIndexed { index, voice ->
+            bytes[index * 2] = voice.channel.toByte()
+            bytes[index * 2 + 1] = voice.pitch.toByte()
+        }
+        return bytes
     }
 
     /**

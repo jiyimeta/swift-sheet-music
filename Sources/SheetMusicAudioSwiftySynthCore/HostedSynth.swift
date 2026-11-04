@@ -143,6 +143,20 @@ public final class HostedSynth: @unchecked Sendable {
         }
     }
 
+    /// Puts `channel`'s pitch wheel at `value` (14-bit, 8192 the center) for an audition — a microtonal note's offset,
+    /// or the center that undoes one (`PreviewPlan.pitchBends`). Sends the bend sensitivity first
+    /// (`Synthesizer.sendAuditionPitchBend`), as the Apple backend does.
+    ///
+    /// Not kept across resets, unlike a control change: the next audition sets the wheel it needs, and a sequencer
+    /// reset — play, seek, stop — puts it back to the center playback starts from, which is exactly what playback
+    /// wants.
+    public func pitchBend(channel: Int, value: Int) {
+        lock.withLock {
+            guard !isClosed else { return }
+            synthesizer.sendAuditionPitchBend(channel: channel, value: UInt16(clamping: min(max(0, value), 16383)))
+        }
+    }
+
     /// Releases every note on `channel` (they ring out their release, as `fluid_synth_all_notes_off` lets them).
     public func allNotesOff(channel: Int) {
         lock.withLock {

@@ -16,14 +16,6 @@ import SheetMusicBridgeCore
 /// One coordinator per playback engine. Kotlin owns the lifetime, as it does for a score handle.
 let previewPolicyTable = HandleTable<NotePreviewCoordinator>()
 
-/// Packs a voice the way `nativePreviewPolicyEnd` and `nativePreviewPolicySilence` answer: `channel << 8 | pitch`,
-/// or -1 for "nothing to silence". Two bytes do not earn a wire type, and the packed-scalar shape matches
-/// `nativePitchAndStaffOfNote` next door.
-private func packed(_ voice: PreviewVoice?) -> Int64 {
-    guard let voice else { return -1 }
-    return Int64(voice.channel) << 8 | Int64(voice.pitch)
-}
-
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicAudioJNI.nativePreviewPolicyCreate()` call site.
 public func nativePreviewPolicyCreate() -> Int64 {
@@ -38,47 +30,52 @@ public func nativePreviewPolicyRelease(policyHandle: Int64) {
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin
-/// `SheetMusicAudioJNI.nativePreviewPolicyBegin(...)` call site. Returns an encoded `PreviewPlan`, or empty
-/// `Data` when the handle is unknown — for which the engine's only sane response is to sound nothing, since it
-/// would otherwise have no generation to end the note by.
+/// `SheetMusicAudioJNI.nativePreviewPolicyBegin(...)` call site. Plans one audition of the notes `voices` packs
+/// (`PreviewVoicePairs`: `channel, pitch` a byte each), struck together, each at the pitch wheel `bends` packs for it
+/// (`PreviewBendPairs`; empty for all centered) — the plan's `pitchBends` say which wheels to move before the notes
+/// start. Returns an encoded `PreviewPlan`, or empty `Data` when the handle is unknown or `voices` names no note — for
+/// which the engine's only sane response is to sound nothing, since it would otherwise have no generation to end the
+/// notes by.
 ///
-/// The channel, pitch and drum flag are the engine's own resolved values (`staffLiveChannel`,
-/// `StaffParams.isDrums`) rather than something re-derived here: the engine assigned those channels.
+/// The channels, pitches and drum flag are the engine's own resolved values (`staffLiveChannel`,
+/// `StaffParams.isDrums`) rather than something re-derived here: the engine assigned those channels. The wheels are
+/// the routes' (`nativePreviewRoute`), so the cents-to-wheel arithmetic stays in Swift.
 public func nativePreviewPolicyBegin(
     policyHandle: Int64,
-    channel: Int32,
-    pitch: Int32,
+    voices: Data,
+    bends: Data,
     velocity: Int32,
     isDrum: Bool,
     ringMilliseconds: Int32,
 ) -> Data {
-    guard let coordinator = previewPolicyTable.value(for: policyHandle) else { return Data() }
-    let plan = coordinator.begin(
-        channel: UInt8(clamping: channel),
-        pitch: UInt8(clamping: pitch),
-        velocity: UInt8(clamping: velocity),
-        isDrum: isDrum,
-        ringMilliseconds: Int(ringMilliseconds),
-    )
+    guard let coordinator = previewPolicyTable.value(for: policyHandle),
+          let plan = coordinator.begin(
+              voices: PreviewVoicePairs.decode(voices),
+              bends: PreviewBendPairs.decode(bends),
+              velocity: UInt8(clamping: velocity),
+              isDrum: isDrum,
+              ringMilliseconds: Int(ringMilliseconds),
+          )
+    else { return Data() }
     return PreviewPlanCodec.encode(plan)
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin
-/// `SheetMusicAudioJNI.nativePreviewPolicyEnd(...)` call site. Answers the note to silence now that this
-/// audition's ring time is up, packed as `channel << 8 | pitch`, or -1 when it was superseded and silencing
-/// anything would silence the note that replaced it.
-public func nativePreviewPolicyEnd(policyHandle: Int64, generation: Int64) -> Int64 {
-    guard let coordinator = previewPolicyTable.value(for: policyHandle) else { return -1 }
-    return packed(coordinator.end(generation: UInt64(bitPattern: generation)))
+/// `SheetMusicAudioJNI.nativePreviewPolicyEnd(...)` call site. Answers the notes to silence now that this
+/// audition's ring time is up, packed as `PreviewVoicePairs`, or empty when it was superseded and silencing
+/// anything would silence the notes that replaced it.
+public func nativePreviewPolicyEnd(policyHandle: Int64, generation: Int64) -> Data {
+    guard let coordinator = previewPolicyTable.value(for: policyHandle) else { return Data() }
+    return PreviewVoicePairs.encode(coordinator.endVoices(generation: UInt64(bitPattern: generation)))
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicAudioJNI.nativePreviewPolicySilence(...)` call site. Abandons any audition in progress — for
-/// teardown and for re-preparing on another score — and answers the note that has to be silenced for that to be
-/// true, packed as `channel << 8 | pitch`, or -1.
-public func nativePreviewPolicySilence(policyHandle: Int64) -> Int64 {
-    guard let coordinator = previewPolicyTable.value(for: policyHandle) else { return -1 }
-    return packed(coordinator.silence())
+/// teardown and for re-preparing on another score — and answers the notes that have to be silenced for that to be
+/// true, packed as `PreviewVoicePairs`, or empty.
+public func nativePreviewPolicySilence(policyHandle: Int64) -> Data {
+    guard let coordinator = previewPolicyTable.value(for: policyHandle) else { return Data() }
+    return PreviewVoicePairs.encode(coordinator.silenceVoices())
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin

@@ -177,7 +177,7 @@ enum RangeCopyPayload {
     }
 
     /// One voice at the boundary: drops the chords, rests, measure-repeat signs and `.spanner`s whose own tick falls
-    /// outside `low ..< high`, and the `.locationShift` kind outright.
+    /// outside `low ..< high`, the marks attached to a slot it drops, and the `.locationShift` kind outright.
     ///
     /// A sign is a rest of its bar's length, so it is kept or dropped by its tick exactly as a rest is — which keeps
     /// it whenever the range reaches its bar at all, since it opens the bar. A jog is the one kind a cut boundary
@@ -194,8 +194,19 @@ enum RangeCopyPayload {
     /// problem: `RangeCopySpanners.lineSpanners(for:…)` is all-or-nothing against the payload's own extent and
     /// drops it there, exactly as it does for a duplicate.
     ///
-    /// Every other non-timed element — clef, key/time signature, annotations — is kept regardless of its tick,
-    /// which is what "leaving everything else" means.
+    /// A mark goes with the chord or rest it is attached to, by the adjacency every edit command reads
+    /// (`AdjacentElementSlot.run(_:of:in:)`): the annotations in the run ahead of the slot — a dynamic, fermata, chord
+    /// symbol and the rest of `AdjacentElementSlot.isAnnotation(_:)` — and the breaths in the run after it. Left behind
+    /// a dropped slot, a mark would slide onto the tick the trim closed up to, which is a range EDGE: an annotation of
+    /// the chord before the range lands on the first tick, where the paste reads it as the first copied chord's own,
+    /// and a breath of the chord after the range on the end tick, where the paste reads it as the last one's
+    /// (`RangeCopySource.standsInRange(_:at:range:)`). MuseScore never has the question: its clipboard holds only the
+    /// segments from the range's first ChordRest to its end segment, with their annotations
+    /// (`TWrite::writeSegments`, `rw/write/twrite.cpp:3501, 3527-3557`).
+    ///
+    /// Every other non-timed element — a clef and key/time signature ahead of the slot, a mark no slot in the bar owns
+    /// (a breath at the head of the bar) — is kept regardless of its tick, which is what "leaving everything else"
+    /// means.
     ///
     /// `Voice.tuplets` rides through the same removal `Voice.removeElements(at:)` gives any other edit: a
     /// tuplet whose members are all cut drops with them, and one whose members all survive keeps its bracket,
@@ -223,6 +234,12 @@ enum RangeCopyPayload {
             default:
                 break
             }
+        }
+        let elements = voice.elements.values
+        for slot in removed.sorted() where elements[slot].isRangeSlot {
+            let before = AdjacentElementSlot.run(.before, of: slot, in: elements)
+            removed.formUnion(before.filter { AdjacentElementSlot.isAnnotation(elements[$0]) })
+            removed.formUnion(AdjacentElementSlot.run(.after, of: slot, in: elements))
         }
 
         var trimmed = voice

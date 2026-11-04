@@ -62,6 +62,7 @@ private class FakeSynth : SynthDriver {
 
     override fun noteOff(channel: Int, pitch: Int) { calls += "noteOff($channel,$pitch)" }
 
+    override fun pitchBend(channel: Int, value: Int) { calls += "pitchBend($channel,$value)" }
     override fun allNotesOff(channel: Int) { calls += "allNotesOff($channel)" }
 
     override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int {

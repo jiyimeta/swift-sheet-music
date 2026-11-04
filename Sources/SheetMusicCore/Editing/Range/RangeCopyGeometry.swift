@@ -54,4 +54,19 @@ struct RangeCopyGeometry {
         }
         return ScoreTickPosition(measure: index, tick: tick - measureStarts[index])
     }
+
+    /// `position(atAbsolute:)` read from the other side of a barline: a tick ON one answers the bar it closes, at that
+    /// bar's full length, and `totalTicks` answers the last bar rather than `nil`. That is where a breath on a barline
+    /// lives — after the bar's last chord, ahead of its end barline — and where MuseScore's paste puts one back
+    /// (`rw/read460/read460.cpp:716-722`). Tick 0 closes nothing, so it answers what `position(atAbsolute:)` does.
+    func position(closingAt tick: Int) -> ScoreTickPosition? {
+        guard tick > 0 else { return position(atAbsolute: tick) }
+        guard tick <= totalTicks else { return nil }
+        // `measureStarts` is ascending, so the bar a tick closes is the last one starting strictly before it.
+        var index = 0
+        for (candidate, start) in measureStarts.enumerated() where start < tick {
+            index = candidate
+        }
+        return ScoreTickPosition(measure: index, tick: tick - measureStarts[index])
+    }
 }

@@ -77,6 +77,115 @@ and this project adheres to
   U+FFFF). Written raw, a control character from a PDF's text layer made a file `XMLTreeParser` rejected
   (`control character in character data`).
 
+## [4.27.0] - 2026-11-03
+
+### Added
+
+- **The Android engine bends an audition by the note's microtonal offset**, as the Apple engine does: a clicked
+  quarter-tone flat is heard a quarter tone low rather than on the plain semitone.
+  `AndroidPlaybackEngine.playPreviewNotes` takes `PreviewNote`s — a note sounding its own pitch is bent by its own
+  accidental, read from the score; an explicit pitch (a grace note auditioned through its parent's `NoteID`) by the
+  `cents` given with it. `playPreview(notes)` and `playOnsetPreview` bend each note by its own offset. The Windows
+  engine still sounds the plain semitone.
+- **`NotePreviewPolicy` decides the pitch wheel too** (`begin(voices:bends:…)`, `PreviewPlan.pitchBends`,
+  `moveWheel(to:)`, `releaseWheel()`): which channel keeps which offset — one channel carries one wheel, so a beat sounds
+  under its last key's, as playback does — and when a bent channel goes back to the center. The Apple engine's own copy
+  of that rule moved into it, so both engines run one. `Synthesizer.sendAuditionPitchBend(channel:value:)`
+  (`SheetMusicAudioSwiftySynthCore`) sends the bend sensitivity and the wheel for both SwiftySynth hosts.
+- **`AndroidPlaybackEngine.JniBridge` gains `previewRoute(…, pitch, cents)` and `previewPolicyBegin(…, voices, bends,
+  …)`**, which carry the wheel: the route answers it as a fifth element, and the plan's `pitchBends` say which wheel
+  moves where. Their defaults fall to the existing `previewRoute(…, pitch)` and `previewPolicyBegin(…, voices, …)`, so
+  a bridge that does not implement them still auditions every note, routed, on the plain semitone. Under them, the JNI
+  pair moves together: `nativePreviewRoute` takes `cents`, `nativePreviewPolicyBegin` takes the struck notes' wheels
+  (`PreviewBendPairs`), and `nativeSynthPitchBend` is new.
+
+## [4.26.0] - 2026-11-03
+
+### Added
+
+- **`SetElementVisible.slot(of:in:)` resolves the slot that shows or hides a selected mark.** A dynamic, a fermata
+  and a breath are addressed by the chord they belong to (`ScoreElementID.anchor`), so a host that wrote
+  `SetElementVisible` at the anchor hid the chord and left the mark standing. This answers the mark's own slot — and
+  `nil` for a mark written on its chord or note (an articulation, an arpeggio, a tie, …), which carries no flag the
+  command writes.
+
+### Fixed
+
+- **A seek past an A–B loop while stopped or paused stays where it was sent** (Apple engine). It snapped to the loop's
+  start, so a tap past the section — to set a new B there — sent the cursor back to A, and only a second tap stuck
+  (user report). Playing, a seek outside the loop still snaps to its start, and playback started from a cursor parked
+  outside the loop still begins at the loop's start, so the section keeps looping. The Android engine already left the
+  reported cursor where it was sent; the Windows engine still snaps.
+- **A previewed beat whose keys want different microtonal offsets sounds the way playback does** (Apple engine). One
+  channel carries one pitch wheel, and the preview bent it to the first microtonal key of the beat, while playback
+  leaves it at the last key struck (voice by voice, chord order within each) — so a tapped chord could sound a quarter
+  tone away from the same chord played. The preview now takes the last key's offset too, a plain key's center
+  included. Sounding each key at its own offset would need a channel per key, in playback as well as in the preview.
+- **A range copy carries the breath after its last chord** (`R`, ⌘C / ⌘V). It was dropped, and since a range delete
+  takes that breath, cutting a selection that ended on a breath and pasting it lost the breath altogether.
+  Copy, paste and `R` now carry it, as MuseScore does, so a cut and paste moves it. A pasted breath that lands on a
+  barline closes the bar before it rather than opening the next one, and replaces the breath already at that tick
+  instead of standing beside it. The breath on the range's first tick still stays behind: it closes the chord before
+  the range.
+- **Copying a passage no longer gives its first note the marks of the note before it** (⌘C / ⌘V). A dynamic, fermata,
+  chord symbol, sticking, expression text, capo, string tuning, figured bass, symbol or fret diagram on the note just
+  ahead of the selection was pasted onto the passage's first note. A mark on the passage's own first note still comes
+  along, and `R` was never affected.
+
+## [4.25.0] - 2026-11-02
+
+### Added
+
+- **`SetBreath.current(after:in:)` is public.** It answers the breath `SetBreath(after:)` would replace or remove, so
+  a host that reads a breath before writing it (a clipboard copying the selected one) asks the command rather than
+  re-walking the voice itself.
+- **A preview can strike several notes together.** `PlaybackEngine.playPreview(noteIDs:in:duration:velocity:)` (Apple)
+  and `AndroidPlaybackEngine.playPreview(notes:)` sound their notes as one audition: struck together, ended together,
+  and cut together by the next preview. The single-note `playPreview`s are that call with one note. The Windows engine
+  still strikes one note per preview.
+  `NotePreviewPolicy.begin(voices:velocity:isDrum:ringMilliseconds:)` plans it; a `(channel, pitch)` named twice is
+  struck once, and an empty list plans nothing and leaves the ringing audition alone.
+- **`Score.onsetNoteIDs(of:)`** answers every note starting on the beat a note or rest sits on, in every voice of its
+  staff — what a tap on a beat should sound, so a drum part written as hands in voice 1 and feet in voice 2 sounds the
+  kick with the cymbal, and a tap on voice 1's rest still sounds voice 2. `AndroidPlaybackEngine.playOnsetPreview(item)`
+  sounds it from Kotlin through the same Swift.
+
+### Changed
+
+- **`NotePreviewPolicy` tracks an audition's notes as a list.** `PreviewPlan.supersededVoices` / `voices`,
+  `NotePreviewPolicy.soundingVoices`, `endVoices(generation:)` and `silenceVoices()` replace the single-note
+  `supersedes` / `voice`, `sounding`, `end(generation:)` and `silence()`, which are deprecated and answer the first
+  note. The Android JNI preview-policy entry points take and answer notes packed `channel, pitch` a byte each
+  (`PreviewVoicePairs`), and `PreviewPlan`'s wire carries the two lists.
+- **`SetBreath` takes a rest as it takes a chord.** It writes, replaces and removes the breath after a rest, as
+  MuseScore drops one on any chord or rest (`Rest::acceptDrop` → `ChordRest::acceptDrop`); it used to refuse a rest
+  with `wrongElementKind`. A host that offers breaths on notes only keeps gating on its own selection.
+- **`DeleteRange` takes the breaths of the slots it deletes.** A breath goes with the chord or rest it follows: every
+  breath whose owner the range covers goes — the one after the range's last slot too, and the one at the head of the
+  next bar when the range covers the slot ending the bar before — and one whose owner lies outside the range stays.
+  A range of nothing but rests still takes its breaths, and the covered slots either side of a taken breath fill as
+  one run of rests. Until now every breath was carried over, so a deleted bar kept its breath behind the measure
+  rest.
+
+### Fixed
+
+- **`Score.resolveTickInMeasure(for:)` counts a voice's `.locationShift` jogs and measure repeats**, as every other
+  walker in the package does (`VoiceElement.cursorAdvance`). It summed chords alone, so a cursor on an element after a
+  jog reported a beat the file is not positioned at — and a preview routed by that tick could pick the wrong
+  instrument after a mid-score change. `Score.onsetNoteIDs(of:)` measures onsets the same way.
+- **A breath written at the head of a bar can be selected, replaced and deleted.** A file can carry a breath ahead of
+  a bar's first chord, where it follows the previous bar's last chord — MuseScore's element paste re-homes a
+  `<Breath>` by tick and leaves it there, and its reader keeps it. It was drawn, but its glyph had no identity
+  (`LayoutElement.breath`'s `anchor` was `nil`), so it could not be selected, and `SetBreath(after:)` on that chord
+  could not reach it. The glyph now names the chord ending the bar before — the correction MuseScore's range paste
+  makes (`read460.cpp:719`) — and `SetBreath` replaces or removes it through that chord when the chord's own bar has
+  no breath after it. A new breath is still written into the chord's own bar. The breath stays where the file put it,
+  so drawing, playback and MSCX round-trips are unchanged.
+- **A breath after a rest can be selected and deleted.** Its glyph had no identity either — the layout named a breath's
+  owner only when it was a chord with notes — so a breath left behind a rest (a cleared bar's, before `DeleteRange`
+  took them) could not be selected or removed. It now names the rest, within a bar and across the barline, and a
+  bar-head breath after a bar ending on a rest is that rest's.
+
 ## [4.24.0] - 2026-10-31
 
 ### Added

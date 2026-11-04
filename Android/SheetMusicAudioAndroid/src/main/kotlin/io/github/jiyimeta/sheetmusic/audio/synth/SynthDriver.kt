@@ -39,6 +39,13 @@ internal interface SynthDriver {
     fun setChannelType(channel: Int, isDrum: Boolean)
     fun noteOn(channel: Int, pitch: Int, velocity: Int)
     fun noteOff(channel: Int, pitch: Int)
+
+    /**
+     * Puts [channel]'s pitch wheel at [value] (14-bit, 8192 the center) for an audition, with the bend sensitivity the
+     * playback renderer uses set first — so an audition's microtonal offset bends by what the same note bends in
+     * playback. Not kept across the sequencer's resets, unlike a [cc].
+     */
+    fun pitchBend(channel: Int, value: Int)
     fun allNotesOff(channel: Int)
     fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int
     fun close()

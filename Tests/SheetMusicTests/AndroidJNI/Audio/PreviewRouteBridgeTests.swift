@@ -6,6 +6,7 @@
     import SheetMusicCore
     import SheetMusicEditWire
     import SheetMusicFoundation
+    import SheetMusicMIDI
     import Testing
 
     /// The Android engine routes a note audition through `nativePreviewRoute`, the rule the Apple and Windows engines
@@ -120,26 +121,95 @@
             ) == nil)
         }
 
-        @Test("the JNI entry answers [pitch, staff, channel, drum], and routes through the score when there is no copy")
+        @Test("the JNI entry answers [pitch, staff, channel, drum, bend], routing through the score with no copy")
         func nativeEntryWire() throws {
             let score = Self.scoreWithInstrumentChange()
             let (_, changed) = try Self.channels(of: score)
             let handle = scoreTable.insert(score)
             defer { nativeReleaseScore(handle: handle) }
             let noteBytes = PathIDCodecs.encode(Self.noteID(measure: 1, element: 0))
+            let center = Int64(MidiEvent.pitchBendCenter)
 
             let own = nativePreviewRoute(
-                scoreHandle: handle, preparedScoreHandle: 0, noteIdBytes: noteBytes, pitch: -1,
+                scoreHandle: handle, preparedScoreHandle: 0, noteIdBytes: noteBytes, pitch: -1, cents: 0,
             )
             let overridden = nativePreviewRoute(
-                scoreHandle: handle, preparedScoreHandle: handle, noteIdBytes: noteBytes, pitch: 74,
+                scoreHandle: handle, preparedScoreHandle: handle, noteIdBytes: noteBytes, pitch: 74, cents: 0,
             )
 
-            #expect(own == [60, 0, Int64(changed), 0])
-            #expect(overridden == [74, 0, Int64(changed), 0])
+            #expect(own == [60, 0, Int64(changed), 0, center])
+            #expect(overridden == [74, 0, Int64(changed), 0, center])
             #expect(nativePreviewRoute(
-                scoreHandle: -42, preparedScoreHandle: 0, noteIdBytes: noteBytes, pitch: -1,
+                scoreHandle: -42, preparedScoreHandle: 0, noteIdBytes: noteBytes, pitch: -1, cents: 0,
             ).isEmpty)
+        }
+
+        // MARK: - The wheel an audition bends by
+
+        /// One 4/4 measure on one piano staff whose first quarter (element 1) is a quarter-tone-flat B
+        /// (`mirroredFlat`, -50 cents), the rest plain Cs.
+        private static func scoreWithQuarterToneFlat() -> Score {
+            let flat = Chord(duration: .quarter, notes: [Note(pitch: 71, tpc: 19, accidental: .mirroredFlat)])
+            let plain = Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])
+            let elements: [VoiceElement] = [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(flat), .chord(plain), .chord(plain), .chord(plain),
+            ]
+            return Score(
+                division: 480,
+                parts: [
+                    Part(
+                        id: "piano",
+                        instrument: Instrument(
+                            id: "piano", longName: "Piano", channels: [InstrumentChannel(program: 0)],
+                        ),
+                        staves: [Staff(measures: [Measure(voices: [Voice(elements: elements)])])],
+                    ),
+                ],
+                systemMeasures: IdentifiedArray([SystemMeasure()]),
+            )
+        }
+
+        @Test("a microtonal note's own audition carries its offset as the wheel, as the Apple engine bends one")
+        func ownPitchCarriesTheNotesOffset() {
+            let score = Self.scoreWithQuarterToneFlat()
+
+            let route = AudioMidiBridge.previewRoute(
+                score: score, prepared: score, noteID: Self.noteID(measure: 0, element: 1), pitch: nil,
+            )
+
+            #expect(route?.bend == MidiEvent.pitchBendValue(cents: -50))
+            #expect(route?.pitch == 71)
+        }
+
+        /// A grace note is auditioned through its parent's `NoteID`, whose accidental is not the grace's — so with an
+        /// explicit pitch the wheel comes from the `cents` the host read off the grace, never from the parent.
+        @Test("an explicit pitch sounds with the cents it was given, not the parent note's offset")
+        func explicitPitchTakesTheGivenCents() {
+            let score = Self.scoreWithQuarterToneFlat()
+            let parent = Self.noteID(measure: 0, element: 1)
+
+            let plain = AudioMidiBridge.previewRoute(score: score, prepared: score, noteID: parent, pitch: 69)
+            let sharp = AudioMidiBridge.previewRoute(
+                score: score, prepared: score, noteID: parent, pitch: 69, cents: 50,
+            )
+
+            #expect(plain?.bend == MidiEvent.pitchBendCenter)
+            #expect(sharp?.bend == MidiEvent.pitchBendValue(cents: 50))
+        }
+
+        @Test("the JNI entry hands the note's own offset across")
+        func nativeEntryCarriesTheBend() {
+            let score = Self.scoreWithQuarterToneFlat()
+            let handle = scoreTable.insert(score)
+            defer { nativeReleaseScore(handle: handle) }
+            let noteBytes = PathIDCodecs.encode(Self.noteID(measure: 0, element: 1))
+
+            let own = nativePreviewRoute(
+                scoreHandle: handle, preparedScoreHandle: 0, noteIdBytes: noteBytes, pitch: -1, cents: 0,
+            )
+
+            #expect(own.last == Int64(MidiEvent.pitchBendValue(cents: -50)))
         }
     }
 #endif
