@@ -949,7 +949,7 @@ let packageDependencies: [Package.Dependency] = [
     ),
     .package(
         url: "https://github.com/jiyimeta/swiftysynth.git",
-        exact: "0.4.1",
+        exact: "0.4.2",
     ),
     // Declared unconditionally on purpose. A wasm-only dependency changes
     // `Package.resolved`'s `originHash`, so the file's contents would depend on
