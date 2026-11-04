@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.28.0] - 2026-11-04
+
 ### Added
 
 - **`GraceChord.spanners` and `Spanner.nextGraceIndex`: a slur can begin or end on a grace note.** A grace's slur
