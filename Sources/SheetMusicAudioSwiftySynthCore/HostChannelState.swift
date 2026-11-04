@@ -101,6 +101,29 @@ public struct HostChannelState {
         }
     }
 
+    /// The effective bank (128 and up for a drum kit) and program the host last selected on `channel`; nil when it
+    /// selected none there.
+    public func program(channel: Int) -> (bank: Int, program: Int)? {
+        guard (0 ..< Self.channelCount).contains(channel), programs[channel] != Self.unset else { return nil }
+        return (Int(banks[channel]), Int(programs[channel]))
+    }
+
+    /// The tuning the host's RPNs set on `channel`: coarse tune (RPN 0:2, semitones) and fine tune (RPN 0:1, cents,
+    /// the 14-bit value around 8192 as ±100). Concert pitch where it sent none.
+    public func tuning(channel: Int) -> (coarseSemitones: Int, fineCents: Double) {
+        guard (0 ..< Self.channelCount).contains(channel) else { return (0, 0) }
+        let coarseSlot = channel * Self.rpnCount + 2
+        let fineSlot = channel * Self.rpnCount + 1
+        let coarse = rpnCoarse[coarseSlot] == Self.unset ? 0 : Int(rpnCoarse[coarseSlot]) - 64
+        var fine = 0.0
+        if rpnCoarse[fineSlot] != Self.unset || rpnFine[fineSlot] != Self.unset {
+            let msb = rpnCoarse[fineSlot] == Self.unset ? 64 : Int(rpnCoarse[fineSlot])
+            let lsb = rpnFine[fineSlot] == Self.unset ? 0 : Int(rpnFine[fineSlot])
+            fine = Double((msb << 7 | lsb) - 8192) / 8192 * 100
+        }
+        return (coarse, fine)
+    }
+
     /// Sends everything recorded, channel by channel, as MIDI channel messages: bank select (CC 0) then program
     /// change, the plain controllers in controller order, then each recorded RPN as select → data entry → null RPN.
     ///

@@ -1,5 +1,6 @@
 #if canImport(SheetMusicAudioSwiftySynthCore)
     import Foundation
+    import SheetMusicAudioCore
     import SheetMusicAudioSwiftySynthCore
     @testable import SheetMusicCore
     import SheetMusicMIDI
@@ -164,6 +165,45 @@
         @Test func `bytes that are not an SMF attach nothing`() throws {
             let synth = try clickSynth()
             #expect(synth.attachSequence(smf: Data([0, 1, 2])) == nil)
+            #expect(HostedSynth.prepareSequence(smf: Data([0, 1, 2])) == nil)
+        }
+
+        /// The Windows engine parses outside its own lock and attaches under it.
+        @Test func `a sequence parsed ahead attaches like one attached from bytes`() throws {
+            let synth = try clickSynth()
+            let prepared = try #require(HostedSynth.prepareSequence(smf: clickTrack(quarters: 2)))
+            let sequence = try #require(synth.attach(prepared))
+            #expect(sequence.totalTicks >= 720)
+            sequence.play()
+            #expect(render(synth, seconds: 0.1) > 0.01)
+        }
+
+        /// What the Windows probe reads back: the program, the tuning RPNs, the voices, whether a font loaded.
+        @Test func `the host's program and tuning read back, and a reset forgets them`() throws {
+            let bare = try #require(HostedSynth(sampleRate: Self.rate, voicing: .score))
+            #expect(!bare.hasSoundFont)
+            let synth = try clickSynth()
+            #expect(synth.hasSoundFont)
+            #expect(synth.recordedProgram(channel: 9) == (128, 0))
+            #expect(synth.recordedProgram(channel: 0) == nil)
+            for message in MasterTuning.rpnControlChanges(cents: 168.23) {
+                synth.controlChange(channel: 0, controller: Int(message.controller), value: Int(message.value))
+            }
+            let tuning = synth.recordedTuning(channel: 0)
+            let expected = MasterTuning.split(cents: 168.23)
+            #expect(tuning.coarseSemitones == expected.coarseSemitones)
+            #expect(abs(tuning.fineCents - expected.fineCents) <= 0.05, "\(tuning.fineCents)")
+            #expect(synth.recordedTuning(channel: 1) == (0, 0))
+
+            synth.noteOn(channel: 9, key: HostedSynthFixtures.strongKey, velocity: 100)
+            render(synth, seconds: 0.01)
+            #expect(synth.activeVoiceCount > 0)
+            synth.allSoundsOff()
+            #expect(synth.activeVoiceCount == 0)
+
+            synth.resetHostState()
+            #expect(synth.recordedProgram(channel: 9) == nil)
+            #expect(synth.recordedTuning(channel: 0) == (0, 0))
         }
 
         /// No gain of its own: what the score voicing's synthesizer and sequencer render for the same SMF, sample for

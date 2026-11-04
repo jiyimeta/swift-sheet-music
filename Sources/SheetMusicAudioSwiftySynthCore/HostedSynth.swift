@@ -92,15 +92,18 @@ public final class HostedSynth: @unchecked Sendable {
 
     /// Selects `program` in `bank` on `channel` — 128 and up for a drum kit, which SwiftySynth sounds on the percussion
     /// channel only (`HostChannelState.replay`). Kept across resets. Reads the preset's samples in on a utility thread,
-    /// so its first notes do not fault the font's pages in on the render thread.
+    /// so its first notes do not fault the font's pages in on the render thread — only when the selection changes, so
+    /// a host that sends the same program again from its render thread (Windows' reassert) starts no task there.
     public func programSelect(channel: Int, bank: Int, program: Int) {
         let bankSelect = HostChannelState.bankSelect(channel: channel, bank: bank)
         let program = min(max(0, program), 127)
         let font: SoundFont? = lock.withLock {
             guard !isClosed else { return nil }
+            let previous = hostState.program(channel: channel)
             hostState.recordProgram(channel: channel, bank: bank, program: program)
             synthesizer.processMidiMessage(channel: channel, command: 0xB0, data1: 0, data2: bankSelect)
             synthesizer.processMidiMessage(channel: channel, command: 0xC0, data1: program, data2: 0)
+            if let previous, let now = hostState.program(channel: channel), previous == now { return nil }
             return synthesizer.soundFont
         }
         guard let font, font !== Self.silentFont else { return }
@@ -168,6 +171,47 @@ public final class HostedSynth: @unchecked Sendable {
         }
     }
 
+    /// Cuts every sounding voice at once, releases included — MIDI's All Sound Off, on every channel.
+    public func allSoundsOff() {
+        lock.withLock {
+            guard !isClosed else { return }
+            synthesizer.noteOffAll(immediate: true)
+        }
+    }
+
+    /// Back to a new synth's state: voices cut, every channel reset, and the host's record of what it set forgotten —
+    /// for a host that reuses the synth for another score. The gain and an attached sequence are kept.
+    public func resetHostState() {
+        lock.withLock {
+            guard !isClosed else { return }
+            hostState = HostChannelState()
+            synthesizer.reset()
+        }
+    }
+
+    // MARK: - Read-backs
+
+    /// The effective bank and program the host last selected on `channel` — what every reset sends back, so what the
+    /// channel plays. Nil when the host selected none there.
+    public func recordedProgram(channel: Int) -> (bank: Int, program: Int)? {
+        lock.withLock { hostState.program(channel: channel) }
+    }
+
+    /// The coarse (semitones) and fine (cents) tuning the host's RPNs hold on `channel`.
+    public func recordedTuning(channel: Int) -> (coarseSemitones: Int, fineCents: Double) {
+        lock.withLock { hostState.tuning(channel: channel) }
+    }
+
+    /// Voices sounding now.
+    public var activeVoiceCount: Int {
+        lock.withLock { synthesizer.activeVoiceCount }
+    }
+
+    /// Whether a SoundFont loaded, rather than the silent placeholder playing.
+    public var hasSoundFont: Bool {
+        lock.withLock { synthesizer.soundFont !== Self.silentFont }
+    }
+
     // MARK: - Render
 
     /// Renders `frames` stereo frames into `left` and `right`: through the attached sequence while it plays, else the
@@ -207,20 +251,40 @@ public final class HostedSynth: @unchecked Sendable {
     ///
     /// Attaching resets the synthesizer — notes still sounding stop — and sends the host's state again.
     public func attachSequence(smf: Data) -> HostedSequence? {
+        Self.prepareSequence(smf: smf).flatMap(attach)
+    }
+
+    /// An SMF parsed for `attach(_:)`: what `attachSequence(smf:)` does before it takes the synth's lock, for a host
+    /// that must attach under a lock of its own and keeps the parse out of it.
+    public struct PreparedSequence: @unchecked Sendable {
+        let midi: SwiftySynth.MidiFile
+        let tempoMap: SequenceTempoMap
+        let totalTicks: Int
+    }
+
+    /// Parses `smf`; nil when the bytes are not an SMF SwiftySynth reads.
+    public static func prepareSequence(smf: Data) -> PreparedSequence? {
         guard let midi = try? SwiftySynth.MidiFile(data: smf), let tempoMap = SequenceTempoMap(smf: smf),
               let file = try? MidiReader.read(smf)
         else {
             return nil
         }
         let totalTicks = file.tracks.compactMap { $0.events.last?.tick }.max() ?? 0
+        return PreparedSequence(midi: midi, tempoMap: tempoMap, totalTicks: totalTicks)
+    }
+
+    /// `attachSequence(smf:)` for a sequence parsed already. Allocates the sequencer, and nothing else. Nil once the
+    /// synth is closed.
+    public func attach(_ prepared: PreparedSequence) -> HostedSequence? {
         let id: Int? = lock.withLock {
             guard !isClosed else { return nil }
             let id = nextSequenceID
             nextSequenceID += 1
             let sequencer = SwiftySynthVoicing.makeSequencer(driving: synthesizer)
-            sequencer.play(midi, loop: false)
+            sequencer.play(prepared.midi, loop: false)
             attached = Attached(
-                id: id, midi: midi, tempoMap: tempoMap, totalTicks: totalTicks, sequencer: sequencer,
+                id: id, midi: prepared.midi, tempoMap: prepared.tempoMap, totalTicks: prepared.totalTicks,
+                sequencer: sequencer,
             )
             replayHostState()
             return id
