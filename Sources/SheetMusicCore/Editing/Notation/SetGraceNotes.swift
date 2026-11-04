@@ -80,12 +80,18 @@ public struct SetGraceNotes: EditCommand {
     /// literal is value-equal to the existing slot while carrying unassigned note identifiers. Keeping
     /// `current[index]` preserves those without minting; only a genuinely new slot mints, and does so
     /// down to its own notes, matching `Chord.assignMissingNestedIDs`'s widened coverage.
+    ///
+    /// The comparison ignores the graces' slurs (`GraceChord.spanners`), and a matched slot keeps the current ones.
+    /// A host that rebuilds the list from what it shows — the wire form, `GraceChordWire`, carries no slurs — would
+    /// otherwise turn "add an acciaccatura" into "and drop the slur on the one already there". This command never
+    /// sets a grace's slurs; a new slot takes whatever the caller's value carries.
     private static func match(
         _ wanted: [GraceChord], against current: IdentifiedArray<GraceChord>, using ids: inout EIDAllocator,
     ) -> IdentifiedArray<GraceChord> {
         var used: Set<Int> = []
         return IdentifiedArray(wanted.map { grace in
-            if let index = current.indices.first(where: { !used.contains($0) && current[$0] == grace }) {
+            let match = current.indices.first { !used.contains($0) && sameIgnoringSlurs(current[$0], grace) }
+            if let index = match {
                 used.insert(index)
                 return (current.eid(at: index), current[index])
             }
@@ -95,5 +101,12 @@ public struct SetGraceNotes: EditCommand {
             minted.notes.assignMissingIDs(using: &ids)
             return (eid, minted)
         })
+    }
+
+    private static func sameIgnoringSlurs(_ lhs: GraceChord, _ rhs: GraceChord) -> Bool {
+        var lhs = lhs, rhs = rhs
+        lhs.spanners = []
+        rhs.spanners = []
+        return lhs == rhs
     }
 }

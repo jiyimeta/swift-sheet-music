@@ -32,6 +32,11 @@ extension Voice {
         /// so every existing consumer of `systemElements` (tests
         /// included) keeps compiling unchanged.
         let systemElementEIDs: [EID]
+
+        /// Every tie side the voice's notes carry, with what the file
+        /// names as its partner — for `MSCXTiePairing`. Addressed by
+        /// element; the measure and staff decoders fill in the rest.
+        var tieSides: [MSCXTieSide] = []
     }
 
     /// Convenience that drops the lifted system elements, returning
@@ -87,6 +92,9 @@ extension Voice {
         // per-measure and never flushed, so it doesn't keep them
         // either.
         var pendingGraces: [(EID, GraceChord)] = []
+        // The `<Chord>` each pending grace came from, for its tie sides.
+        var pendingGraceNodes: [XMLTreeNode] = []
+        var tieSides: [MSCXTieSide] = []
         // Measure-relative read position, in fractions-of-whole-note.
         // Advances by each chord/rest's tuplet-scaled duration AND by
         // every `<location>` delta, exactly like the single tick that
@@ -157,25 +165,13 @@ extension Voice {
                     // Decode shape but do NOT scale by tuplet ratios:
                     // graces don't consume tuplet time — see
                     // CompatMidiRender::renderGraceNotesBefore.
+                    // A slur begun on the grace — most often an acciaccatura
+                    // slurred into its own principal note — stays on it:
+                    // `Chord.decode` has already read its begin sides (and
+                    // announced any non-slur chord-level spanner, exactly as
+                    // for an ordinary chord), and `GraceChord.spanners` holds
+                    // them with the same meaning `Chord.spanners` has.
                     let inner = try Chord.decode(child)
-                    // `GraceChord` carries no spanner list, so a slur that
-                    // *begins* on a grace note cannot be modeled. Its `<prev>`
-                    // end marker is consumed in silence by design, so without
-                    // this the whole pair would vanish untraced — MuseScore's
-                    // own `selectionfilter_gracesandslurs.mscx` writes exactly
-                    // this shape. One diagnostic per grace chord, naming the
-                    // types it carried.
-                    if !inner.spanners.isEmpty {
-                        let types = Set(inner.spanners.map(\.rawType))
-                            .sorted()
-                            .joined(separator: "/")
-                        mscxDecoderWarn(
-                            code: "mscx.chord.spannerDropped",
-                            message: "grace-note <Spanner type=\"\(types)\"> "
-                                + "is not modeled — dropped",
-                            location: "Chord[grace]/Spanner",
-                        )
-                    }
                     // `GraceChord` carries no bracket either, and unlike a
                     // spanner a `<ChordBracket>` is *consumable*: `Chord.decode`
                     // lifts it out of `inner.preservedMarkup` into
@@ -195,13 +191,25 @@ extension Voice {
                         duration: inner.duration,
                         notes: inner.notes,
                         preservedMarkup: graceMarkup,
+                        spanners: inner.spanners,
                     )))
+                    pendingGraceNodes.append(child)
                     continue
                 }
                 var chord = try Chord.decode(child)
                 chord.duration = scaled(
                     chord.duration, by: tupletFractions(),
                 )
+                let start = cursor
+                let end = if case .measure = chord.duration { cursor } else { cursor + chord.duration.asFraction }
+                // The element index `appendVoiceElement` is about to give the chord, past any pending jog it writes
+                // first.
+                let elementIndex = elements.count + (pendingShift.numerator != 0 ? 1 : 0)
+                tieSides += MSCXTieSide.record(child, element: elementIndex, grace: nil, start: start, end: end)
+                tieSides += Self.graceTieSides(
+                    pendingGraces.map(\.1), nodes: pendingGraceNodes, element: elementIndex, start: start, end: end,
+                )
+                pendingGraceNodes.removeAll(keepingCapacity: true)
                 if !pendingGraces.isEmpty {
                     // Split the buffered run by grace-type tag, exactly
                     // as `Chord::graceNotesBefore()` / `graceNotesAfter()`
@@ -477,7 +485,25 @@ extension Voice {
             voice: Voice(elements: IdentifiedArray(elements), tuplets: IdentifiedArray(tuplets)),
             systemElements: systemElements,
             systemElementEIDs: systemElementEIDs,
+            tieSides: tieSides,
         )
+    }
+
+    /// The tie sides of a run of grace chords about to join the chord at `element`, addressed by their place in its
+    /// before-run (file order) or after-run (reversed) — the split the attach below makes.
+    private static func graceTieSides(
+        _ graces: [GraceChord], nodes: [XMLTreeNode], element: Int, start: Fraction, end: Fraction,
+    ) -> [MSCXTieSide] {
+        var sides: [MSCXTieSide] = []
+        let before = graces.indices.filter { !graces[$0].graceType.isAfter }
+        let after = Array(graces.indices.filter { graces[$0].graceType.isAfter }.reversed())
+        for (slot, index) in before.enumerated() where nodes.indices.contains(index) {
+            sides += MSCXTieSide.record(nodes[index], element: element, grace: .before(slot), start: start, end: end)
+        }
+        for (slot, index) in after.enumerated() where nodes.indices.contains(index) {
+            sides += MSCXTieSide.record(nodes[index], element: element, grace: .after(slot), start: start, end: end)
+        }
+        return sides
     }
 
     /// Second pass over the decoded `elements`: every chord whose

@@ -7,7 +7,7 @@ import SheetMusicBridgeCore
 /// band, and a whole page into one for the probe's untiled reference).
 ///
 /// Like that walk, and like `canvas.ts` and the Kotlin `ScoreCanvas` it was ported from, it takes commands in
-/// document millimetres, multiplies them by `pxPerMM`, clamps strokes to `minStrokePx`, and fills glyphs and text as
+/// document millimetres, multiplies them by `pxPerMM`, clamps strokes to a floor, and fills glyphs and text as
 /// outlines. Direct2D is Y-down like the stream, so unlike the CoreGraphics walk nothing is flipped. SMuFL glyphs come
 /// from Bravura, the system face from Segoe UI (the face `WindowsFontMetricsProvider` measured it in) and everything
 /// else from Edwin, with the weight (bold over semibold over regular) and italic taken from the family's own faces and
@@ -18,6 +18,15 @@ import SheetMusicBridgeCore
 struct DrawCommandWalker {
     /// The Kotlin renderer's `coerceAtLeast(1.5f)`, `canvas.ts`'s `MIN_STROKE_PX`, `DrawProgramCGRenderer.minStrokePx`.
     static let minStrokePx = 1.5
+    /// The floor in document millimetres once zoomed out: a quarter of a 1.75 mm staff space, give or take. A fixed
+    /// 1.5 px floor is wider than that below ~3.75 px/mm, and at zoom 25% on a 100% display (~0.95 px/mm) the staff's
+    /// five lines, ~1.65 px apart, merge into a gray band. Above that the 1.5 px floor holds as before.
+    static let minStrokeMM = 0.4
+
+    /// The thinnest stroke drawn at `pxPerMM`: `minStrokePx`, or `minStrokeMM` when that is thinner.
+    static func strokeFloorPx(pxPerMM: Double) -> Double {
+        min(minStrokePx, minStrokeMM * pxPerMM)
+    }
 
     let canvas: OpaquePointer
     let pxPerMM: Double
@@ -25,6 +34,7 @@ struct DrawCommandWalker {
     /// Canvas pixels outside which a fill cannot show (a band's own rectangle): glyphs, text and rectangles that
     /// certainly miss it are skipped. Paths are always walked — a path's extent is only known at its stroke.
     let cull: DrawRect?
+    private let strokeFloor: Float
     private var dashOn: Float = 0
     private var dashOff: Float = 0
     private var textStyleFlags: UInt8 = DrawCommand.TextStyleFlag.none
@@ -35,6 +45,7 @@ struct DrawCommandWalker {
         self.pxPerMM = pxPerMM
         self.offset = offset
         self.cull = cull
+        strokeFloor = Float(Self.strokeFloorPx(pxPerMM: pxPerMM))
         cd2d_set_color(canvas, 0xFF00_0000)
         setRotation(radians: 0, pivotX: 0, pivotY: 0)
     }
@@ -55,7 +66,7 @@ struct DrawCommandWalker {
         case let .cubicTo(cx1, cy1, cx2, cy2, x, y):
             cd2d_cubic_to(canvas, px(cx1), px(cy1), px(cx2), px(cy2), px(x), px(y))
         case let .stroke(width):
-            cd2d_stroke(canvas, max(px(width), Float(Self.minStrokePx)), dashOn, dashOff)
+            cd2d_stroke(canvas, max(px(width), strokeFloor), dashOn, dashOff)
         case .fillPath:
             // Closed, nonzero, in the current color; the dash does not apply.
             cd2d_fill_path(canvas)

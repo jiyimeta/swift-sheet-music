@@ -128,10 +128,12 @@ enum MeasureAccidentalWalk {
     /// Paired the way playback pairs them (`MidiRenderer.resolvingTiedPitches`): within a voice the previous chord's
     /// forward ties feed this chord's back ties in note order, a rest severs them, and signatures, clefs and the like
     /// sit between without breaking them; a tie into another voice comes from `crossVoice`
-    /// (`CrossVoiceTies.links`). A tied-back note with no partner — a tie whose start is a grace note, or one left
+    /// (`CrossVoiceTies.links`), and one from another staff of the part or past the chords in between from
+    /// `detached` (`DetachedTies`). A tied-back note with no partner — a tie whose start is a grace note, or one left
     /// dangling — is absent, and callers say nothing new about it.
     static func tieStartTPCs(
         in measures: [Measure], measureIndex: Int, crossVoice: [CrossVoiceTies.Link],
+        detached: DetachedTies.StaffEnds = DetachedTies.StaffEnds(),
     ) -> [MainAddress: Int] {
         func tpc(at end: CrossVoiceTies.End) -> Int? {
             guard measures.indices.contains(end.measure),
@@ -143,10 +145,13 @@ enum MeasureAccidentalWalk {
             return chord.notes[end.note].tpc
         }
         var starts: [MainAddress: Int] = [:]
-        let forwardAcross = Set(crossVoice.map(\.from))
-        let backAcross = Set(crossVoice.map(\.to))
+        let forwardAcross = Set(crossVoice.map(\.from)).union(detached.forward)
+        let backAcross = Set(crossVoice.map(\.to)).union(detached.back)
         for link in crossVoice where link.to.measure == measureIndex {
             starts[MainAddress(voice: link.to.voice, element: link.to.element, note: link.to.note)] = tpc(at: link.from)
+        }
+        for (end, tpc) in detached.backStartTPCs where end.measure == measureIndex {
+            starts[MainAddress(voice: end.voice, element: end.element, note: end.note)] = tpc
         }
         /// The forward ties a chord sends on, as the tpcs of their notes.
         func outgoing(_ chord: Chord, measure: Int, voice: Int, element: Int) -> [Int] {

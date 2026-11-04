@@ -89,6 +89,7 @@ extension Staff {
         effectiveMeasureDurations: [Fraction] = [],
         columnEIDs: [EID],
         options: MSCXEncoderOptions = .init(),
+        tieEndpoints: MSCXCrossVoiceTieEndpoints? = nil,
     ) throws -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         // Thread per-voice tie-carry data across measures so a tie
@@ -98,8 +99,9 @@ extension Staff {
         // offsets — the same-`<fractions>`-only encoding makes
         // MuseScore match the wrong destination chord).
         var carry: [Voice.VoiceTieCarry] = []
-        // A tie into another voice names its partner across voices, which the voice-at-a-time walk cannot see.
-        let crossVoiceTies = MSCXCrossVoiceTieEndpoints(measures: measures)
+        // A tie into another voice or staff, or past the chords in between, names a partner the voice-at-a-time walk
+        // cannot see. The part's caller supplies the ties into its other staves; a staff on its own has only its own.
+        let crossVoiceTies = tieEndpoints ?? MSCXCrossVoiceTieEndpoints(measures: measures)
         for (measureIndex, measure) in measures.enumerated() {
             children.append(contentsOf: blocks.lazy
                 .filter { $0.beforeMeasureIndex == measureIndex }

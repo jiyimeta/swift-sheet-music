@@ -53,6 +53,9 @@ extension Score {
         let division = copy.division
         for partIndex in copy.parts.indices {
             let isDrumset = copy.parts[partIndex].instrument.useDrumset
+            // Ties are paired against the part as given; suppression only ever takes glyphs off, never a tie or a tpc.
+            let staves = copy.parts[partIndex].staves.map(\.measures)
+            let detached = isDrumset ? [] : DetachedTies.links(in: staves)
             for staffIndex in copy.parts[partIndex].staves.indices {
                 copy.parts.updateValue(at: partIndex) { partValue in
                     partValue.staves.updateValue(at: staffIndex) { staffValue in
@@ -62,6 +65,7 @@ extension Score {
                             Self.suppressInStaff(
                                 &staffValue,
                                 division: division,
+                                detached: DetachedTies.StaffEnds(staff: staffIndex, links: detached, staves: staves),
                             )
                         }
                     }
@@ -110,7 +114,7 @@ extension Score {
         }
     }
 
-    private static func suppressInStaff(_ staff: inout Staff, division: Int) {
+    private static func suppressInStaff(_ staff: inout Staff, division: Int, detached: DetachedTies.StaffEnds) {
         let durations = staff.measures.effectiveMeasureDurations()
         // Active concert-key value carried across measures. Updated from
         // each measure's voice-0 key signatures (last one wins), mirroring
@@ -136,7 +140,7 @@ extension Score {
                 division: division,
                 measureDuration: dur,
                 tieStarts: MeasureAccidentalWalk.tieStartTPCs(
-                    in: measures, measureIndex: measureIndex, crossVoice: crossVoice,
+                    in: measures, measureIndex: measureIndex, crossVoice: crossVoice, detached: detached,
                 ),
             )
         }

@@ -28,11 +28,16 @@ extension MidiRenderer {
     static func resolvingTiedPitches(in score: Score) -> Score {
         var score = score
         for partIndex in score.parts.indices {
+            let detached = DetachedTies.links(in: score.parts[partIndex])
             for staffIndex in score.parts[partIndex].staves.indices {
                 score.parts.updateValue(at: partIndex) { partValue in
                     partValue.staves.updateValue(at: staffIndex) { staffValue in
                         resolveTiedPitches(
                             in: &staffValue,
+                            detached: (
+                                forward: detached.filter { $0.from.staff == staffIndex }.map(\.from.inStaff),
+                                back: detached.filter { $0.to.staff == staffIndex }.map(\.to.inStaff),
+                            ),
                         )
                     }
                 }
@@ -41,11 +46,16 @@ extension MidiRenderer {
         return score
     }
 
-    private static func resolveTiedPitches(in staff: inout Staff) {
-        // A tie into another voice (`CrossVoiceTies`) lands on a note of its own pitch there, so it has no pitch to
-        // carry — and left in its voice's queue it would hand its head to whichever tie into that voice came next.
+    private static func resolveTiedPitches(
+        in staff: inout Staff, detached: (forward: [CrossVoiceTies.End], back: [CrossVoiceTies.End]),
+    ) {
+        // A tie into another voice (`CrossVoiceTies`), into another staff or past other chords (`DetachedTies`) lands
+        // on a note of its own pitch there, so it has no pitch to carry — and left in its voice's queue it would hand
+        // its head to whichever tie into that voice came next.
         let links = CrossVoiceTies.links(in: staff.measures)
-        let crossVoice = (forward: Set(links.map(\.from)), back: Set(links.map(\.to)))
+        let crossVoice = (
+            forward: Set(links.map(\.from) + detached.forward), back: Set(links.map(\.to) + detached.back),
+        )
         let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
         for voiceIndex in 0 ..< voiceCount {
             // Sounding head pitches flowing out of the previous note-chord,

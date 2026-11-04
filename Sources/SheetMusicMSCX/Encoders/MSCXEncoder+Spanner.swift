@@ -145,12 +145,13 @@ extension Spanner {
         return XMLTreeNode(name: rawType, children: children + trailing)
     }
 
-    /// `<next><location>…</location></next>`. Returns nil when both
-    /// offsets are at their defaults (no end-side anchor needed).
+    /// `<next><location>…</location></next>`. Returns nil when every
+    /// field is at its default (no end-side anchor needed).
     private func nextLocationElement() -> XMLTreeNode? {
         let locationChildren = Self.relativeLocationChildren(
             measures: nextMeasuresOffset,
             fractions: nextFractionsOffset,
+            grace: nextGraceIndex,
         )
         guard !locationChildren.isEmpty else { return nil }
         return XMLTreeNode(name: "next", children: [
@@ -158,11 +159,13 @@ extension Spanner {
         ])
     }
 
-    /// The `<measures>` / `<fractions>` children of a relative
+    /// The `<measures>` / `<fractions>` / `<grace>` children of a relative
     /// `<location>`. `<measures>` is elided at its `0` default, matching
     /// `xml.tag("measures", …, relDefaults.measure())`; `<fractions>` is
     /// written whenever the model holds one, `nil` standing for "MuseScore
-    /// elided it".
+    /// elided it". `<grace>` names a grace chord at the other end; its
+    /// "absent" default is `INT_MIN`, not `0` (`Location::relative()`), so
+    /// index `0` is written like any other.
     ///
     /// **`<measures>` before `<fractions>`, in every target version.**
     /// MuseScore has only ever had one `Location` writer and it has always
@@ -188,6 +191,7 @@ extension Spanner {
     private static func relativeLocationChildren(
         measures: Int,
         fractions: Fraction?,
+        grace: Int? = nil,
     ) -> [XMLTreeNode] {
         var locationChildren: [XMLTreeNode] = []
         if measures != 0 {
@@ -200,6 +204,9 @@ extension Spanner {
                 name: "fractions",
                 text: "\(fractions.numerator)/\(fractions.denominator)",
             ))
+        }
+        if let grace {
+            locationChildren.append(XMLTreeNode(name: "grace", text: String(grace)))
         }
         return locationChildren
     }
@@ -216,14 +223,20 @@ extension Spanner {
     /// `<prev>`-only markers and the encoder recomputes them. An invisible
     /// slur still writes its payload.
     ///
-    /// `<next>` is emitted even when both offsets are at their defaults —
-    /// as the bare `<next/>` the glissando writer also uses. The decoder
-    /// keys "this is a begin side" off the presence of `<next>`, so eliding
-    /// it would make the slur vanish on the next read.
+    /// `<next>` is emitted even when every location field is at its default,
+    /// as `<next><location/></next>` — the shape MuseScore writes for a grace
+    /// slurred into its own principal note, whose begin and end share a tick.
+    /// The decoder keys "this is a begin side" off the presence of `<next>`,
+    /// so eliding it would make the slur vanish on the next read; and the
+    /// `<location>` inside it is not decoration: MuseScore's
+    /// `ConnectorInfoReader::readEndpointLocation` only replaces the
+    /// `Location::absolute()` default when it meets a `<location>`, and
+    /// `ConnectorInfo::hasNext` is false on that default, so a bare `<next/>`
+    /// would not read back as a begin side in MuseScore.
     func encodeChordAnchoredBegin(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children = [
             payloadElement(options: options),
-            nextLocationElement() ?? XMLTreeNode(name: "next"),
+            nextLocationElement() ?? XMLTreeNode(name: "next", children: [XMLTreeNode(name: "location")]),
         ]
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(
@@ -244,11 +257,14 @@ extension Spanner {
     ///
     /// The caller supplies the already-negated values, because it is the
     /// voice walker — not the spanner — that knows which chord the marker
-    /// landed on.
+    /// landed on. `grace` is the begin side's own `<grace>` index when the
+    /// slur starts on a grace chord: like the begin side's `<next><grace>`,
+    /// it names the OTHER end, not this one.
     static func chordAnchoredEndMarker(
         rawType: String,
         measures: Int,
         fractions: Fraction?,
+        grace: Int? = nil,
     ) -> XMLTreeNode {
         XMLTreeNode(
             name: "Spanner",
@@ -260,6 +276,7 @@ extension Spanner {
                         children: relativeLocationChildren(
                             measures: measures,
                             fractions: fractions,
+                            grace: grace,
                         ),
                     ),
                 ]),

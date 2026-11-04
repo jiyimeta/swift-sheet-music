@@ -147,65 +147,6 @@ extension Staff {
     }
 }
 
-/// Top-level `<Staff id="N">` measure block — id is required at this
-/// level; raised in `decode` if missing.
-struct MSCXTopLevelStaff {
-    let mscxID: String
-    let measures: [Measure]
-    /// One entry per measure (positionally aligned with `measures`):
-    /// the system-level elements lifted out of that measure's
-    /// voices during decoding. `originalStaff` is left nil here and
-    /// gets stamped during part assembly.
-    let systemElementsByMeasure: [[PositionedSystemElement]]
-    /// One entry per measure, one entry per element within it —
-    /// positionally aligned with `systemElementsByMeasure` — carrying
-    /// each lifted element's own `<eid>`. See
-    /// `Voice.DecodeResult.systemElementEIDs`.
-    let systemElementEIDsByMeasure: [[EID]]
-    /// One entry per measure (positionally aligned with `measures`):
-    /// that `<Measure>`'s own `<eid>`, decoded unconditionally.
-    /// Only the score's first staff's entries are meaningful — see
-    /// `Measure.DecodeResult.eid` and `assembleParts`.
-    let measureEIDs: [EID]
-}
-
-extension MSCXTopLevelStaff {
-    static func decode(_ node: XMLTreeNode) throws -> MSCXTopLevelStaff {
-        guard let id = node.attributes["id"] else {
-            throw SheetMusicError.malformedScore(
-                ScoreFault(
-                    code: "mscx.staff.missingID",
-                    message: "top-level <Staff> missing id attribute",
-                    location: "Staff",
-                ),
-            )
-        }
-        let measureNodes = node.all("Measure")
-            .filter { !Measure.isMultiMeasureRestContainer($0) }
-        var measures: [Measure] = []
-        var systemElementsByMeasure: [[PositionedSystemElement]] = []
-        var systemElementEIDsByMeasure: [[EID]] = []
-        var measureEIDs: [EID] = []
-        for measureNode in measureNodes {
-            let result = try Measure.decodeWithSystemElements(measureNode)
-            measures.append(result.measure)
-            systemElementsByMeasure.append(result.systemElements)
-            systemElementEIDsByMeasure.append(result.systemElementEIDs)
-            measureEIDs.append(result.eid)
-        }
-        return MSCXTopLevelStaff(
-            mscxID: id,
-            // A tie is two half-spanners, and a file can carry one whose
-            // other half is gone. MuseScore drops such a side while reading;
-            // so do we, here, where the whole staff is finally in hand.
-            measures: MSCXTiePairing.pruningUnpairedTies(in: measures),
-            systemElementsByMeasure: systemElementsByMeasure,
-            systemElementEIDsByMeasure: systemElementEIDsByMeasure,
-            measureEIDs: measureEIDs,
-        )
-    }
-}
-
 /// Pairs declared (per-Part) staves with top-level (measures) staves.
 /// Hybrid rule:
 ///   1. Declarations with an explicit id consume the matching top-level Staff.
@@ -274,6 +215,7 @@ func assembleParts( // swiftlint:disable:this function_body_length
     var partEIDs: [EID] = []
     for dp in decoded {
         var assembled: [(EID, Staff)] = []
+        var tieSides: [MSCXTieSide] = []
         for (staffIndexInPart, declared) in dp.declared.enumerated() {
             let topLevelStaff: MSCXTopLevelStaff
             if let id = declared.mscxID {
@@ -314,6 +256,7 @@ func assembleParts( // swiftlint:disable:this function_body_length
             var s = declared.staff
             s.measures = topLevelStaff.measures
             assembled.append((declared.eid, s))
+            tieSides += topLevelStaff.tieSides.stamped(\.staff, staffIndexInPart)
             let address = StaffAddress(
                 partIndex: parts.count,
                 staffIndexInPart: staffIndexInPart,
@@ -324,6 +267,12 @@ func assembleParts( // swiftlint:disable:this function_body_length
             perStaffSystemElements.append(
                 (address, topLevelStaff.systemElementsByMeasure, topLevelStaff.systemElementEIDsByMeasure),
             )
+        }
+        // A tie is two half-spanners, and a file can carry one whose other half is gone. MuseScore drops such a side
+        // while reading; so do we, here, where the whole part — every staff a tie can reach — is finally in hand.
+        let pruned = MSCXTiePairing.pruningUnpairedTies(in: assembled.map(\.1.measures), sides: tieSides)
+        for index in assembled.indices {
+            assembled[index].1.measures = pruned[index]
         }
         parts.append(Part(
             id: dp.partID,

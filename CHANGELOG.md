@@ -22,6 +22,90 @@ and this project adheres to
   shared a table no longer do, or a track joins another's — restarts the groups it changes. A backend that does not
   implement the new requirement plays every track from the shared table.
 
+## [4.28.0] - 2026-11-04
+
+### Added
+
+- **`GraceChord.spanners` and `Spanner.nextGraceIndex`: a slur can begin or end on a grace note.** A grace's slur
+  begins are stored on the grace as an ordinary chord's are on the chord, their offsets measured from the parent
+  chord's tick, which the grace shares; a slur ending on a grace names it by MuseScore's `<location><grace>` index,
+  which `Chord.grace(atMuseScoreGraceIndex:)` and `Chord.museScoreGraceIndex(side:index:)` map to and from a grace
+  slot. Both fields are additive with defaults, so no existing call site changes.
+
+### Changed
+
+- **A tie side the MSCX reader still has to drop is reported under a code naming the shape of its tie**, in place of
+  the single `mscx.tie.unpairedSide`: `mscx.tie.unpairedSide.crossStaff` (its `<location>` names another staff),
+  `.crossVoice` (another voice), `.distant` (a note past the neighbouring chord — over other chords or rests, or more
+  bars on), `.noPartner` (the neighbouring chord, where nothing carries the other half), `.grace` (a grace note's tie),
+  `.noLocation` (MuseScore 2's `<Tie id>` / `<endSpanner>`, or a `<next>` / `<prev>` without a `<location>`) and
+  `.museScore5` (MuseScore 5's `<Tie>` naming its start note by `<eid>`). The message carries the raw `<location>`
+  deltas. A host matching the old code exactly should match the `mscx.tie.unpairedSide` prefix instead.
+
+### Fixed
+
+- **A tie into another staff of the part, or past the chords in between, is kept, drawn, played and written back.**
+  MuseScore looks for a tie's partner in every track of the part and pairs the two halves it wrote by `<location>`
+  however far apart they are, so piano scores carry ties from one hand into the other (`<staves>±1</staves>`: a note
+  held across, or a broken chord moved to the other staff whose notes each tie into the chord they sustain into —
+  MuseScore's `vtest/scores/tie-4.mscz` and `tie-18.mscz`), and MuseScore 3.02 tied over a hidden rest into the next
+  bar. Everything that paired a tie's ends walked one staff, so the reader dropped both halves and the note was struck
+  again. `DetachedTies` (Core) finds them by one rule that the reader, layout, playback, `TiePlanner`, the dangling-tie
+  pass, accidental visibility and the writer share; the reader takes such a tie only where the file names the same
+  partner, and the writer names it with `<staves>` and its true `<measures>` / `<fractions>`. Playback holds the note
+  from its first strike to the end of the last note of the tie, across the staves' tracks. The dangling-tie pass now
+  looks at every staff of the part, two bars either side of an edit.
+- **A MuseScore 5 tie is read.** MuseScore 5 writes a tie once, as a `<Tie>` on its end note whose `<startElement>`
+  names the start note's `<eid>`; the reader took that `<Tie>` for a MuseScore 2 tie start on the end note, so the tie
+  was lost and the end note's flag dangled.
+- **A slur that begins on a grace note is kept, drawn and saved.** The acciaccatura or appoggiatura slurred into its
+  principal note is a slur on the grace chord in MuseScore, and it was dropped with `mscx.chord.spannerDropped`
+  ("grace-note <Spanner type="Slur"> is not modeled"). It now decodes into `GraceChord.spanners`, is drawn from the
+  grace notehead — below the up-stemmed grace, as MuseScore's `SlurTieLayout::computeUp` puts it — and is written back
+  with both halves in the right `<Chord>`s and the `<grace>` indices MuseScore pairs them by. It is drawn but not
+  selectable: no `SlurID` case reaches a slur stored on a grace. A range copy carries it when it ends in its own grace
+  run (the common case) and leaves it behind otherwise; `FormatRhythms` protects its end like a chord's slur. A grace
+  slur that reaches another chord is not re-anchored by the bar-structure edits (insert / delete measure, time
+  signature, re-time), which keep its offsets as written.
+- **A slur that ends on a grace note ends there, not on the grace's chord.** `<next><location><grace>` was dropped with
+  `mscx.slur.locationDropped` and the slur re-homed onto the chord the grace belongs to; it is now read, drawn to the
+  grace and written back. Over a 615-file MuseScore 4 corpus `mscx.chord.spannerDropped` now fires in 7 files instead
+  of 13 (all seven are `HammerOnPullOff`, a different spanner) and `mscx.slur.locationDropped` in 2 instead of 7 (a
+  voice hop and a staff hop); over 672 MuseScore 3 files both fall to none, from 4 and 2.
+- **A chord-anchored slur whose ends share a tick writes `<next><location/></next>`, not a bare `<next/>`.** MuseScore
+  reads a `<next>` without a `<location>` as no begin side at all (`ConnectorInfoReader::readEndpointLocation` keeps
+  `Location::absolute()`), so the grace slurred into its own principal — the shape with no offset — would not have
+  read back.
+- **`SetGraceNotes` keeps the slur on a grace the caller restates.** Graces are matched ignoring their slurs and a
+  matched slot keeps its own, so a host that rebuilds the list from what it shows (the wire form carries no slurs) no
+  longer strips one when it adds a grace.
+
+- **A PDF whose measure changes clef, key or time keeps that measure's tuplets.** Prepending the clef / key / time
+  elements rebuilt the first voice without its tuplets, so the triplets in that measure lost their spans, were written
+  as `<durationType>measure</durationType>`, and the `.mscx` the import produced failed to read back
+  (`mscx.chord.invalidDurationType`). 36 of a 658-PDF corpus failed this way; none do now.
+- **A MuseScore 2 glissando is read, and its end is no longer taken for a tie's.** MuseScore 2 puts a glissando on its
+  start note as `<Glissando id="N">` and ends it with the note-level `<endSpanner id="N"/>` a tie also ends with. Every
+  such end was read as a tie end, found no partner and was reported as `mscx.tie.unpairedSide`, while the glissando
+  itself was kept only as unread markup — neither drawn nor played. An `<endSpanner>` is now a tie end only when its id
+  names a `<Tie>`, and the `<Glissando>` decodes like MuseScore 4's. In a 671-file corpus the warning fell from 253
+  occurrences in 40 files to 60 in 3 (those three are MuseScore 3 ties that jump a rest).
+- **`XMLTreeSerializer` drops the characters XML 1.0 cannot carry** (C0 controls other than tab / LF / CR, U+FFFE,
+  U+FFFF). Written raw, a control character from a PDF's text layer made a file `XMLTreeParser` rejected
+  (`control character in character data`).
+- **Windows: a zoomed-out page keeps its staff lines apart.** The Direct2D walk floored every stroke at 1.5 px, wider
+  than a quarter of a staff space below ~3.75 px/mm, so at zoom 25% on a 100% display the five lines merged into a
+  gray band and every line read as bold. The floor is now 1.5 px or 0.4 mm, whichever is thinner; at reading sizes
+  nothing changes. Android, the web and the RenderPreviews walk keep their fixed floor.
+- Windows playback: the FluidSynth reverb now matches SwiftySynth's (the Apple and Android engines) — explicit
+  `synth.reverb.*` settings in place of FluidSynth 2.6.1's defaults, whose tail rang about half as long again; every
+  0.35–2.5 s window of a measured tail is within 3 dB of SwiftySynth's.
+- Windows playback: the metronome and count-in play dry (no reverb or chorus on the click synth), as SwiftySynth's
+  click synth does.
+- Windows playback: a choked cymbal stops. FluidSynth ignored the render's choke marker and a note-off does not end
+  a crash (it releases over ~48 s), so a choked crash rang on; the marker now cuts the channel's voices at that key to
+  SwiftySynth's 0.05 s release, in live playback, after a seek, in the count-in and in export.
+
 ## [4.27.0] - 2026-11-03
 
 ### Added

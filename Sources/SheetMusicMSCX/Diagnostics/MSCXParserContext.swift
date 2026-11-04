@@ -1,5 +1,6 @@
 import SheetMusicCore
 import SheetMusicFoundation
+import SheetMusicXMLTools
 
 /// TaskLocal stash that lets decoders find the active
 /// `MSCXDiagnosticCollector` without threading it through every
@@ -39,5 +40,36 @@ enum MSCXParserContext {
               let major = Int(parts[0]), let minor = Int(parts[1])
         else { return nil }
         return major * 100 + minor
+    }
+
+    /// The ids of every legacy note-level `<Tie id="N">` in the file being decoded, bound for the rest of
+    /// `Score.decode(_:)`; nil outside it. MuseScore 2 ends a glissando with the same `<endSpanner id="N"/>` on the
+    /// end note that it ends a tie with, so a note's `<endSpanner>` is a tie end only when its id is one of these —
+    /// read as a tie, a glissando's end found no partner and was reported as `mscx.tie.unpairedSide`.
+    @TaskLocal static var legacyTieIDs: Set<String>?
+
+    /// The `<eid>` of every note a MuseScore 5 tie starts on, bound beside `legacyTieIDs`. MuseScore 5 writes a tie
+    /// once, as a `<Tie>` on its END note whose `<startElement>` names the start note (`ties_ref.mscx` in MuseScore's
+    /// MNX tests), so the start note carries nothing of its own to say it is tied.
+    @TaskLocal static var museScore5TieStarts: Set<String>?
+
+    /// Collects `legacyTieIDs` and `museScore5TieStarts` from a score subtree, in one walk.
+    static func tieReferences(in node: XMLTreeNode) -> (legacyIDs: Set<String>, museScore5Starts: Set<String>) {
+        var ids = Set<String>()
+        var starts = Set<String>()
+        var stack = [node]
+        while let current = stack.popLast() {
+            if current.name == "Note" {
+                for tie in current.all("Tie") {
+                    if let start = tie.first("startElement")?.text {
+                        starts.insert(start)
+                    } else if let id = tie.attributes["id"] {
+                        ids.insert(id)
+                    }
+                }
+            }
+            stack.append(contentsOf: current.children)
+        }
+        return (ids, starts)
     }
 }

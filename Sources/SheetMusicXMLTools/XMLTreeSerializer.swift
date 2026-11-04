@@ -115,31 +115,38 @@ public enum XMLTreeSerializer {
     }
 
     private static func escapeText(_ s: String) -> String {
-        var r = ""
-        r.reserveCapacity(s.count)
-        for ch in s {
-            switch ch {
-            case "&": r += "&amp;"
-            case "<": r += "&lt;"
-            case ">": r += "&gt;"
-            default: r.append(ch)
-            }
-        }
-        return r
+        escape(s, quote: false)
     }
 
     private static func escapeAttribute(_ s: String) -> String {
-        var r = ""
-        r.reserveCapacity(s.count)
-        for ch in s {
-            switch ch {
-            case "&": r += "&amp;"
-            case "<": r += "&lt;"
-            case ">": r += "&gt;"
-            case "\"": r += "&quot;"
-            default: r.append(ch)
+        escape(s, quote: true)
+    }
+
+    /// Escapes the metacharacters and drops every scalar XML 1.0 cannot carry (§2.2 `Char`): the C0 controls other
+    /// than tab, LF and CR, and U+FFFE / U+FFFF. Those have no spelling at all — a character reference to one is just
+    /// as ill-formed — so `XMLTreeParser` rejects them, and writing one made a file that could not be reopened. A
+    /// PDF's text layer is where they come from (a glyph with no Unicode mapping extracts as a control).
+    private static func escape(_ s: String, quote: Bool) -> String {
+        var r = String.UnicodeScalarView()
+        for scalar in s.unicodeScalars {
+            switch scalar {
+            case "&": r.append(contentsOf: "&amp;".unicodeScalars)
+            case "<": r.append(contentsOf: "&lt;".unicodeScalars)
+            case ">": r.append(contentsOf: "&gt;".unicodeScalars)
+            case "\"" where quote: r.append(contentsOf: "&quot;".unicodeScalars)
+            default:
+                if isXMLChar(scalar) { r.append(scalar) }
             }
         }
-        return r
+        return String(r)
+    }
+
+    private static func isXMLChar(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x09, 0x0A, 0x0D: true
+        case 0x00 ..< 0x20: false
+        case 0xFFFE, 0xFFFF: false
+        default: true
+        }
     }
 }

@@ -89,6 +89,7 @@ public enum MidiRenderer {
             let route = PartChannelRoute.build(
                 score: score, partIndex: partIndex, assignments: channels,
             )
+            var staffVoices: [StaffVoiceEvents] = []
             for (s, staff) in part.staves.enumerated() {
                 let address = StaffAddress(
                     partIndex: partIndex,
@@ -97,9 +98,36 @@ public enum MidiRenderer {
                 let systemElementsForStaff = filterSystemElements(
                     score: score, forStaff: address,
                 )
-                let track = try renderTrack(
+                let staffTrack = trackIndex + s
+                try staffVoices.append(renderVoices(
                     staff: staff,
                     staffIndex: s,
+                    part: part,
+                    plan: plan,
+                    route: route,
+                    isFirstTrack: staffTrack == 0,
+                    emitsChokes: emitsChokes,
+                    division: score.division,
+                    swingMap: staffTrack < swingMaps.count
+                        ? swingMaps[staffTrack]
+                        : .empty,
+                    systemElementsByMeasure: systemElementsForStaff,
+                    tempoMap: tempoMap,
+                    fermataCloseEvents: staffTrack == 0 ? projectedFermataClose : [],
+                    fermataOpenEvents: staffTrack == 0 ? projectedFermataOpen : [],
+                ))
+            }
+            // A tie from one staff of the part into another (`DetachedTies`) is struck in one track and let go in the
+            // other. Each track resolving its own same-pitch overlaps would close the struck note at once and drop
+            // the release, so such a part resolves them across its tracks, as the one channel they share sounds them.
+            let tiesAcrossStaves = part.staves.count > 1
+                && DetachedTies.links(in: part).contains { $0.from.staff != $0.to.staff }
+            let noteEvents = tiesAcrossStaves
+                ? resolveUnisonOverlap(acrossTracks: staffVoices.map(\.events))
+                : staffVoices.map { resolveUnisonOverlap($0.events) }
+            for (s, staff) in part.staves.enumerated() {
+                let track = renderTrack(
+                    staff: staff,
                     part: part,
                     plan: plan,
                     route: route,
@@ -107,13 +135,10 @@ public enum MidiRenderer {
                     isFirstTrack: trackIndex == 0,
                     isTopOfPart: s == 0,
                     includingSustainPedal: includingSustainPedal,
-                    emitsChokes: emitsChokes,
                     division: score.division,
-                    swingMap: trackIndex < swingMaps.count
-                        ? swingMaps[trackIndex]
-                        : .empty,
-                    systemElementsByMeasure: systemElementsForStaff,
                     tempoMap: tempoMap,
+                    noteEvents: noteEvents[s],
+                    lyricAnchors: staffVoices[s].lyricAnchors,
                     fermataCloseEvents: trackIndex == 0 ? projectedFermataClose : [],
                     fermataOpenEvents: trackIndex == 0 ? projectedFermataOpen : [],
                 )
@@ -269,16 +294,20 @@ public enum MidiRenderer {
         }
     }
 
-    private static func renderTrack(
+    /// One staff's voice walks, before their same-pitch overlaps are resolved: every voice's events end to end, and the
+    /// lyric anchors they collected.
+    private struct StaffVoiceEvents {
+        var events: [TimedMidiEvent]
+        var lyricAnchors: [LyricMidiCodec.Anchor]
+    }
+
+    private static func renderVoices(
         staff: Staff,
         staffIndex: Int,
         part: Part,
         plan: [PlaybackEntry],
         route: PartChannelRoute,
-        channels: [ChannelAssignment],
         isFirstTrack: Bool,
-        isTopOfPart: Bool,
-        includingSustainPedal: Bool,
         emitsChokes: Bool,
         division: Int,
         swingMap: SwingMap,
@@ -286,7 +315,52 @@ public enum MidiRenderer {
         tempoMap: ResolvedTempoMap,
         fermataCloseEvents: [TimedMidiEvent],
         fermataOpenEvents: [TimedMidiEvent],
-    ) throws -> MidiTrack {
+    ) throws -> StaffVoiceEvents {
+        var voiceEventBuckets: [[TimedMidiEvent]] = []
+        var lyricAnchors: [LyricMidiCodec.Anchor] = []
+        // What the tempo-writing walk reads to tell what the track plays at a repeat jump (`tempoEvents`).
+        let bookends = BookendTempoTrack(close: fermataCloseEvents, open: fermataOpenEvents)
+        let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
+        for voiceIndex in 0 ..< voiceCount {
+            let (voiceEvents, _, anchors) = try renderVoice(
+                voiceIndex: voiceIndex,
+                staffIndex: staffIndex,
+                staff: staff,
+                part: part,
+                route: route,
+                division: division,
+                plan: plan,
+                swingMap: swingMap,
+                systemElementsByMeasure: systemElementsByMeasure,
+                tempoMap: tempoMap,
+                emitsTempoEvents: isFirstTrack && voiceIndex == 0,
+                bookends: bookends,
+                emitsChokes: emitsChokes,
+            )
+            voiceEventBuckets.append(voiceEvents)
+            lyricAnchors.append(contentsOf: anchors)
+        }
+        return StaffVoiceEvents(events: voiceEventBuckets.flatMap(\.self), lyricAnchors: lyricAnchors)
+    }
+
+    /// One staff's track: its header and the part- and score-level events it carries around `noteEvents`, the staff's
+    /// voice walks with their same-pitch overlaps already resolved (`resolveUnisonOverlap`).
+    private static func renderTrack(
+        staff: Staff,
+        part: Part,
+        plan: [PlaybackEntry],
+        route: PartChannelRoute,
+        channels: [ChannelAssignment],
+        isFirstTrack: Bool,
+        isTopOfPart: Bool,
+        includingSustainPedal: Bool,
+        division: Int,
+        tempoMap: ResolvedTempoMap,
+        noteEvents: [TimedMidiEvent],
+        lyricAnchors: [LyricMidiCodec.Anchor],
+        fermataCloseEvents: [TimedMidiEvent],
+        fermataOpenEvents: [TimedMidiEvent],
+    ) -> MidiTrack {
         var events: [TimedMidiEvent] = headerEvents(
             staff: staff,
             part: part,
@@ -326,33 +400,8 @@ public enum MidiRenderer {
             ))
         }
 
-        var voiceEventBuckets: [[TimedMidiEvent]] = []
-        var lyricAnchors: [LyricMidiCodec.Anchor] = []
-        // What the tempo-writing walk reads to tell what the track plays at a repeat jump (`tempoEvents`).
-        let bookends = BookendTempoTrack(close: fermataCloseEvents, open: fermataOpenEvents)
-        let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
-        for voiceIndex in 0 ..< voiceCount {
-            let (voiceEvents, _, anchors) = try renderVoice(
-                voiceIndex: voiceIndex,
-                staffIndex: staffIndex,
-                staff: staff,
-                part: part,
-                route: route,
-                division: division,
-                plan: plan,
-                swingMap: swingMap,
-                systemElementsByMeasure: systemElementsByMeasure,
-                tempoMap: tempoMap,
-                emitsTempoEvents: isFirstTrack && voiceIndex == 0,
-                bookends: bookends,
-                emitsChokes: emitsChokes,
-            )
-            voiceEventBuckets.append(voiceEvents)
-            lyricAnchors.append(contentsOf: anchors)
-        }
-        // Multi-voice merge resolves same-pitch overlaps (the "muted unison" case).
-        let merged = resolveUnisonOverlap(voiceEventBuckets.flatMap(\.self))
-        events.append(contentsOf: merged)
+        // Multi-voice merge resolved same-pitch overlaps (the "muted unison" case) before this.
+        events.append(contentsOf: noteEvents)
 
         events.append(contentsOf: lyricEvents(from: lyricAnchors))
 

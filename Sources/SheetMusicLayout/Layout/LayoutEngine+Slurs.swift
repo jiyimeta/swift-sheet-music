@@ -8,23 +8,51 @@ extension LayoutEngine {
     /// A chord or rest's address in the score — the four fields `NoteID`
     /// and `RestID` share. Both ends of a slur are `ChordRest`s in
     /// MuseScore's model, and a rest is a note-less `Chord` in ours, so one
-    /// key has to reach either.
+    /// key has to reach either. A grace chord is a `ChordRest` too: `grace`
+    /// names one of the chord's graces instead of the chord itself.
     struct ChordRestRef: Hashable {
+        /// One grace chord of the chord a `ChordRestRef` addresses.
+        struct GraceSlot: Hashable {
+            let side: GraceNoteID.Side
+            let index: Int
+        }
+
         let staff: StaffAddress
         let measureIndex: Int
         let voiceIndex: Int
         let elementIndex: Int
+        let grace: GraceSlot?
 
         init(
             staff: StaffAddress,
             measureIndex: Int,
             voiceIndex: Int,
             elementIndex: Int,
+            grace: GraceSlot? = nil,
         ) {
             self.staff = staff
             self.measureIndex = measureIndex
             self.voiceIndex = voiceIndex
             self.elementIndex = elementIndex
+            self.grace = grace
+        }
+
+        init(graceNoteID: GraceNoteID) {
+            self.init(
+                staff: graceNoteID.staff,
+                measureIndex: graceNoteID.measureIndex,
+                voiceIndex: graceNoteID.voiceIndex,
+                elementIndex: graceNoteID.elementIndex,
+                grace: GraceSlot(side: graceNoteID.side, index: graceNoteID.graceIndex),
+            )
+        }
+
+        /// The same address on one of its chord's graces.
+        func onGrace(_ slot: GraceSlot?) -> ChordRestRef {
+            ChordRestRef(
+                staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex, elementIndex: elementIndex,
+                grace: slot,
+            )
         }
 
         init(noteID: NoteID) {
@@ -54,7 +82,10 @@ extension LayoutEngine {
     struct SlurPairing: Equatable {
         let start: ChordRestRef
         let end: ChordRestRef
-        let identity: SlurID
+        /// The slur's storage address, or `nil` for a slur that begins on a grace chord: `SlurID` names a slur by
+        /// the chord or rest that stores it, and a grace's slur lives in `GraceChord.spanners`, which no `SlurID`
+        /// case reaches — so it is drawn but not selectable.
+        let identity: SlurID?
         /// Authored `<placement>` override, or `nil` to compute the side.
         let placement: Spanner.Placement?
         /// `true` when any measure the slur spans carries more than one
@@ -104,10 +135,18 @@ extension LayoutEngine {
                                 elementIndex: elementIndex,
                             )
                             out.append(contentsOf: pairings(
-                                for: chord, start: start, staff: staff,
+                                for: chord.spanners, start: start, staff: staff,
                                 durations: durations,
                                 startTick: tick, division: score.division,
                             ))
+                            // A grace's slurs are measured from its chord's tick, which the grace shares.
+                            for (slot, grace) in graces(of: chord) where !grace.spanners.isEmpty {
+                                out.append(contentsOf: pairings(
+                                    for: grace.spanners, start: start.onGrace(slot), staff: staff,
+                                    durations: durations,
+                                    startTick: tick, division: score.division,
+                                ))
+                            }
                             tick += chord.duration
                                 .resolved(in: measureDuration)
                                 .ticks(division: score.division)
@@ -128,10 +167,16 @@ extension LayoutEngine {
         return out
     }
 
-    /// One chord's slur spanners → their pairings, dropping the ones whose
-    /// end cannot be resolved.
+    /// Every grace chord of `chord`, with the slot that addresses it.
+    private static func graces(of chord: Chord) -> [(ChordRestRef.GraceSlot, GraceChord)] {
+        chord.graceNotesBefore.enumerated().map { (ChordRestRef.GraceSlot(side: .before, index: $0), $1) }
+            + chord.graceNotesAfter.enumerated().map { (ChordRestRef.GraceSlot(side: .after, index: $0), $1) }
+    }
+
+    /// One chord's (or one grace chord's) slur spanners → their pairings,
+    /// dropping the ones whose end cannot be resolved.
     private static func pairings(
-        for chord: Chord,
+        for spanners: [Spanner],
         start: ChordRestRef,
         staff: Staff,
         durations: [Fraction],
@@ -140,7 +185,7 @@ extension LayoutEngine {
     ) -> [SlurPairing] {
         var result: [SlurPairing] = []
         var ordinal = 0
-        for spanner in chord.spanners {
+        for spanner in spanners {
             guard spanner.kind == .slur else { continue }
             let currentOrdinal = ordinal
             ordinal += 1
@@ -158,6 +203,7 @@ extension LayoutEngine {
                 measureIndex: end.measureIndex,
                 voiceIndex: start.voiceIndex,
                 elementIndex: end.elementIndex,
+                grace: end.grace,
             )
             // An end that resolves back onto the start chord is a
             // zero-length arc — drop it rather than draw a dot.
@@ -165,7 +211,7 @@ extension LayoutEngine {
             result.append(SlurPairing(
                 start: start,
                 end: endRef,
-                identity: .chord(
+                identity: start.grace != nil ? nil : .chord(
                     anchor: VoiceElementID(
                         staff: start.staff, measureIndex: start.measureIndex,
                         voiceIndex: start.voiceIndex, elementIndex: start.elementIndex,
@@ -184,8 +230,9 @@ extension LayoutEngine {
     }
 
     /// The chord/rest a slur's `<next><location>` lands on, as (measure
-    /// index, element index in the start voice), or `nil` when nothing
-    /// sits there.
+    /// index, element index in the start voice, and the grace of that chord
+    /// `nextGraceIndex` names), or `nil` when nothing sits there — a grace
+    /// index the chord has no grace for included.
     private static func slurEnd(
         spanner: Spanner,
         staff: Staff,
@@ -194,7 +241,7 @@ extension LayoutEngine {
         startTick: Int,
         voiceIndex: Int,
         division: Int,
-    ) -> (measureIndex: Int, elementIndex: Int)? {
+    ) -> (measureIndex: Int, elementIndex: Int, grace: ChordRestRef.GraceSlot?)? {
         guard let anchor = slurEndAnchor(
             startMeasureIndex: startMeasureIndex,
             startTick: startTick,
@@ -215,7 +262,13 @@ extension LayoutEngine {
             measureDuration: measureDuration,
             division: division,
         ) else { return nil }
-        return (anchor.measureIndex, elementIndex)
+        guard let graceIndex = spanner.nextGraceIndex else {
+            return (anchor.measureIndex, elementIndex, nil)
+        }
+        guard case let .chord(chord) = measure.voices[voiceIndex].elements[elementIndex],
+              let slot = chord.grace(atMuseScoreGraceIndex: graceIndex)
+        else { return nil }
+        return (anchor.measureIndex, elementIndex, ChordRestRef.GraceSlot(side: slot.side, index: slot.index))
     }
 
     /// Resolve a chord-anchored slur's end to a (measure index, in-measure
@@ -443,7 +496,7 @@ extension LayoutEngine {
                 fromOrigin: fromOrigin,
                 toOrigin: toOrigin,
                 above: above,
-                identity: .slur(pairing.identity),
+                identity: pairing.identity.map(ScoreElementID.slur),
             )
         }
     }
@@ -519,6 +572,15 @@ extension LayoutEngine {
                 in: staffMidYsLocal,
             )
             return (ref, entry)
+        case let .graceChord(notes, _, stem, _, _, _, mag, _):
+            // A grace head carries the grace it draws; its origin is measure-local like an ordinary head's.
+            guard let graceNoteID = notes.first?.graceNoteID else { return nil }
+            let ref = ChordRestRef(graceNoteID: graceNoteID)
+            guard needed.contains(ref) else { return nil }
+            return (ref, graceAnchor(
+                notes: notes, stem: stem, mag: mag, measureOrigin: measureOrigin,
+                systemOriginY: systemOriginY, staffMidYsLocal: staffMidYsLocal, sp: sp,
+            ))
         case let .rest(_, restOrigin, _, restID, _):
             let ref = ChordRestRef(restID: restID)
             guard needed.contains(ref) else { return nil }
@@ -537,6 +599,37 @@ extension LayoutEngine {
         default:
             return nil
         }
+    }
+
+    /// A grace chord's anchor material — `anchor(for:…)`'s chord case at the grace's own scale, which is the scale
+    /// its mirrored heads were pushed by.
+    private static func graceAnchor(
+        notes: [LayoutChordNote],
+        stem: StemDirection,
+        mag: CGFloat,
+        measureOrigin: CGPoint,
+        systemOriginY: CGFloat,
+        staffMidYsLocal: [CGFloat],
+        sp: CGFloat,
+    ) -> SlurAnchor {
+        var entry = SlurAnchor()
+        entry.stem = stem
+        entry.heads = notes.map { note in
+            (
+                step: note.step,
+                point: CGPoint(
+                    x: measureOrigin.x + note.origin.x + note.mirrorDx(stem: stem, sp: sp * mag),
+                    y: measureOrigin.y + note.origin.y,
+                ),
+            )
+        }
+        if let head = entry.heads.first {
+            entry.staffIndex = nearestStaffIndex(
+                toMidYLocal: (head.point.y - systemOriginY) + CGFloat(head.step) * sp / 2,
+                in: staffMidYsLocal,
+            )
+        }
+        return entry
     }
 
     /// The arc endpoint on `anchor`: the outermost notehead on the arc's

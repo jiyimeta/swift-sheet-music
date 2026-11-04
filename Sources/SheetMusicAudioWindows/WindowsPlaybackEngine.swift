@@ -293,7 +293,7 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
             scoreSynth = try SynthHandle.make(sampleRate: sampleRate, soundFontURL: newResolver.defaultGMSoundfontURL)
             do {
                 metronomeSynth = try SynthHandle.make(
-                    sampleRate: sampleRate, soundFontURL: clickResolver.resolvedSoundFontURL(),
+                    sampleRate: sampleRate, soundFontURL: clickResolver.resolvedSoundFontURL(), effects: false,
                 )
             } catch {
                 scoreSynth.delete()
@@ -409,7 +409,7 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
             if let kept = current?.metronome, kept.soundFontURL == clickURL, kept.sampleRate == sampleRate {
                 metronome = kept
             } else {
-                metronome = try SynthHandle.make(sampleRate: sampleRate, soundFontURL: clickURL)
+                metronome = try SynthHandle.make(sampleRate: sampleRate, soundFontURL: clickURL, effects: false)
                 built.append(metronome)
             }
             return (score, metronome, built)

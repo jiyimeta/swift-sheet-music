@@ -6,6 +6,7 @@ import SheetMusicBridgeCore
 /// `DrawCommandWalker`, the one `ScoreSurface` draws the screen with.
 public enum Direct2DPageRenderer {
     /// The Kotlin renderer's `coerceAtLeast(1.5f)`, `canvas.ts`'s `MIN_STROKE_PX`, `DrawProgramCGRenderer.minStrokePx`.
+    /// Below ~3.75 px/mm the walk floors strokes thinner than this (`DrawCommandWalker.strokeFloorPx(pxPerMM:)`).
     public static let minStrokePx = DrawCommandWalker.minStrokePx
 
     public struct Failure: Error, CustomStringConvertible {

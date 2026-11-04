@@ -522,7 +522,7 @@ extension PDFImporter {
     /// them, mirroring how A (mscz) carries them on the measure. Also
     /// reports how many were prepended, which the geometry side-car needs
     /// to keep its element indices aligned with the returned voices.
-    private static func prependingScoreState(
+    static func prependingScoreState(
         _ voices: [Voice],
         clef: Clef?,
         key: KeySignature?,
@@ -534,9 +534,28 @@ extension PDFImporter {
         if let time { leading.append(.timeSignature(time)) }
         var out = voices.isEmpty ? [Voice(elements: [])] : voices
         if !leading.isEmpty {
-            out[0] = Voice(elements: leading + out[0].elements.values)
+            out[0] = Voice(
+                elements: leading + out[0].elements.values,
+                tuplets: shiftedTuplets(of: out[0], by: leading.count),
+            )
         }
         return (out, leading.count)
+    }
+
+    /// The voice's tuplets, moved `offset` elements later. Rebuilding the voice without them dropped every tuplet in a
+    /// measure that changes clef, key or time — and a scaled member outside any tuplet is written as
+    /// `<durationType>measure</durationType>`, which the Chord decoder rejects, so the converted score could not be
+    /// reopened.
+    private static func shiftedTuplets(of voice: Voice, by offset: Int) -> [Tuplet] {
+        voice.tupletSpans.map { span in
+            Tuplet(
+                normalNotes: span.normalNotes,
+                actualNotes: span.actualNotes,
+                startIndex: span.startIndex + offset,
+                endIndex: span.endIndex + offset,
+                appearance: span.appearance,
+            )
+        }
     }
 
     /// Record per-element + measure-cell geometry for the side-car, using

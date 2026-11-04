@@ -191,9 +191,10 @@ extension LayoutEngine {
         }.map(\.pair)
     }
 
-    /// The ties of `score` that MuseScore made into another voice of their staff (`CrossVoiceTies`), as note IDs.
-    /// Pairing these by their two ends rather than by the shared key keeps them from taking the place of a tie held
-    /// in another voice at the same pitch.
+    /// The ties of `score` that MuseScore made into another voice of their staff (`CrossVoiceTies`), into another
+    /// staff of their part or past the chords in between (`DetachedTies`), as note IDs. Pairing these by their two
+    /// ends rather than by the shared key keeps them from taking the place of a tie held in another voice at the same
+    /// pitch — and lets an end in another staff find the other at all.
     private struct CrossVoiceTieEnds {
         var froms: Set<NoteID> = []
         var fromByTo: [NoteID: NoteID] = [:]
@@ -203,12 +204,18 @@ extension LayoutEngine {
                 for (staffIndex, staff) in part.staves.enumerated() {
                     let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
                     for link in CrossVoiceTies.links(in: staff.measures) {
-                        let from = NoteID(link.from, staff: address)
-                        froms.insert(from)
-                        fromByTo[NoteID(link.to, staff: address)] = from
+                        add(from: NoteID(link.from, staff: address), to: NoteID(link.to, staff: address))
                     }
                 }
+                for link in DetachedTies.links(in: part) {
+                    add(from: NoteID(link.from, part: partIndex), to: NoteID(link.to, part: partIndex))
+                }
             }
+        }
+
+        private mutating func add(from: NoteID, to: NoteID) {
+            froms.insert(from)
+            fromByTo[to] = from
         }
     }
 

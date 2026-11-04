@@ -24,12 +24,25 @@ struct SynthHandle: @unchecked Sendable {
     /// (`sheetmusicaudio_jni.cpp`, chosen by ear against AUMIDISynth).
     static let gain: Float = 2.0
 
+    /// The reverb, matched by measurement to SwiftySynth's, which the Apple and Android apps play through. FluidSynth
+    /// 2.6.1's own defaults rang about half as long again (a C4 at CC 91 = 40: audible to 2.7 s against 1.8 s, and
+    /// 10–23 dB more from 1 s on), which read as a heavy reverb. These keep each window of the tail within ±2 dB of
+    /// SwiftySynth's at CC 91 = 40 and 64; damp 0.5 takes the highs off the tail as SwiftySynth's does.
+    static let reverb: [(key: String, value: Double)] = [
+        ("synth.reverb.level", 1.0),
+        ("synth.reverb.room-size", 0.2),
+        ("synth.reverb.damp", 0.5),
+        ("synth.reverb.width", 0.5),
+    ]
+
     /// Builds a synth at `sampleRate` and loads `soundFontURL` into it. Slow with a large General MIDI SoundFont —
-    /// `sfload` reads every sample — so the engine calls it outside its lock.
+    /// `sfload` reads every sample — so the engine calls it outside its lock. Without `effects` the synth has no
+    /// reverb or chorus at all: the metronome's, as SwiftySynth's click synth runs dry
+    /// (`enableReverbAndChorus: false`).
     ///
     /// - Throws: `WindowsAudioError.synth` when FluidSynth cannot make the settings or the synth. A SoundFont it
     ///   cannot load is not an error (see `soundFontID`).
-    static func make(sampleRate: Double, soundFontURL: URL?) throws -> SynthHandle {
+    static func make(sampleRate: Double, soundFontURL: URL?, effects: Bool = true) throws -> SynthHandle {
         guard let settings = new_fluid_settings() else { throw WindowsAudioError.synth("new_fluid_settings failed") }
         fluid_settings_setnum(settings, "synth.sample-rate", sampleRate)
         // Control calls (CC, program, note on/off) reach the synth from the engine's control thread while the render
@@ -43,6 +56,14 @@ struct SynthHandle: @unchecked Sendable {
         fluid_settings_setint(settings, "player.reset-synth", 0)
         // Every sample in memory at load, never streamed from the file mid-playback.
         fluid_settings_setint(settings, "synth.dynamic-sample-loading", 0)
+        if effects {
+            for (key, value) in reverb {
+                fluid_settings_setnum(settings, key, value)
+            }
+        } else {
+            fluid_settings_setint(settings, "synth.reverb.active", 0)
+            fluid_settings_setint(settings, "synth.chorus.active", 0)
+        }
         guard let synth = new_fluid_synth(settings) else {
             delete_fluid_settings(settings)
             throw WindowsAudioError.synth("new_fluid_synth failed")
@@ -190,6 +211,9 @@ struct PlayerHandle: @unchecked Sendable {
             delete_fluid_player(player)
             throw WindowsAudioError.synth("the player refused the MIDI")
         }
+        // Every event the player sends — live, after a seek's chase, and in an export, all of which play through a
+        // player made here — goes through the choke handler on its way to the synth.
+        fluid_player_set_playback_callback(player, FluidChoke.playbackHandler, UnsafeMutableRawPointer(synth.synth))
         let handle = PlayerHandle(player: player)
         handle.setTempo(rate)
         return handle

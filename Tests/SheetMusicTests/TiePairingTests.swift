@@ -199,6 +199,42 @@
             #expect(pairs.map(\.identity) == [.tie(start: Self.note(0, 1, 0), end: Self.note(0, 0, 1))])
         }
 
+        @Test("A tie into the other staff of a piano is drawn between its two notes")
+        func tieIntoTheOtherStaffIsDrawn() {
+            guard #available(macOS 15.0, *) else { return }
+            // MuseScore's vtest tie-18: a C4 in the upper staff held into the lower staff's C4 on beat 2.
+            let upper = Staff(measures: [Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14, tieForward: 1)])),
+                .chord(Chord(duration: .quarter, notes: [])),
+                .chord(Chord(duration: .half, notes: [])),
+            ])])])
+            let lower = Staff(defaultClefType: "F", measures: [Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: [])),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14, tieBack: 1)])),
+                .chord(Chord(duration: .half, notes: [])),
+            ])])])
+            let score = ScoreEditor(score: Score(
+                division: 480,
+                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [upper, lower])],
+            )).score
+            let doc = LayoutEngine.layout(score: score, options: .init(), availableWidth: 1200)
+            let pairs = LayoutEngine.resolveTies(for: doc, score: score)
+            let start = NoteID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0,
+                elementIndex: 0, noteIndexInChord: 0,
+            )
+            let end = NoteID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 1), measureIndex: 0, voiceIndex: 0,
+                elementIndex: 1, noteIndexInChord: 0,
+            )
+            #expect(pairs.map(\.identity) == [.tie(start: start, end: end)])
+            // Drawn from the upper staff's notehead down to the lower staff's.
+            if let pair = pairs.first {
+                #expect(pair.toOrigin.y > pair.fromOrigin.y)
+                #expect(pair.toOrigin.x > pair.fromOrigin.x)
+            }
+        }
+
         @Test("Two voices holding the same pitch tied at once keep their own ties")
         func unisonTiesInTwoVoicesStayInTheirVoices() {
             guard #available(macOS 15.0, *) else { return }
