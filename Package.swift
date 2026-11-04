@@ -752,6 +752,7 @@ if isWindows {
         .target(
             name: "SheetMusicAudioWindows",
             dependencies: [
+                .product(name: "SwiftySynth", package: "swiftysynth"),
                 "CFluidSynth",
                 "CMediaFoundation",
                 "CWASAPI",

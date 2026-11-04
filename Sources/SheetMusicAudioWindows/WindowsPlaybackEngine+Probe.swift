@@ -3,9 +3,9 @@ import SheetMusicAudioCore
 import SheetMusicCore
 import Synchronization
 
-// Read-backs for `windows-playback-probe`, which checks what the engine asked FluidSynth for against what FluidSynth
-// holds, and times the transport against the wall clock. Not API: everything here is `@_spi(PlaybackProbe)`, and a
-// host has no business depending on it.
+// Read-backs for `windows-playback-probe`, which checks what the engine asked the synth for against what the synth
+// keeps (`HostedSynth`'s record, which every reset of its sequencer sends back), and times the transport against the
+// wall clock. Not API: everything here is `@_spi(PlaybackProbe)`, and a host has no business depending on it.
 
 extension WindowsPlaybackEngine {
     /// One mixer strip's live channel.
@@ -53,9 +53,7 @@ extension WindowsPlaybackEngine {
     public var probeTransport: ProbeTransport? {
         core.shared.withLock { shared -> ProbeTransport? in
             guard let session = shared.session else { return nil }
-            let metronome = shared.usingCountInMetronome
-                ? session.countInMetronome ?? session.bodyMetronome
-                : session.bodyMetronome
+            let metronome = session.metronomePlayer
             return ProbeTransport(
                 scorePlayerTick: session.scorePlayer.tick, reportedScoreTick: shared.reportedScoreTick,
                 metronomeTick: metronome.tick, metronomeOffsetTicks: shared.metronomeOffsetTicks,
@@ -99,12 +97,6 @@ extension WindowsPlaybackEngine {
             guard let session = shared.session else { return [0, 0] }
             return [session.score.activeVoiceCount, session.metronome.activeVoiceCount]
         }
-    }
-
-    /// An integer FluidSynth setting of the score synth (`synth.dynamic-sample-loading`, `player.reset-synth`, …).
-    @_spi(PlaybackProbe)
-    public func probeSetting(_ name: String) -> Int? {
-        core.shared.withLock { $0.session?.score.integerSetting(name) }
     }
 
     /// The unrolled tick a play or seek to `cursor` lands on: its first occurrence in playback order.

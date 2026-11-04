@@ -2,15 +2,15 @@ import CFluidSynth
 import Foundation
 import SheetMusicAudioCore
 
-// The FluidSynth objects the Windows engine drives: one synth + player pair for the score and one for the metronome,
-// the shape Android's `FluidSynthEngine` + `PlayerDriver` and `MetronomeMixer` have. These are thin value wrappers
-// over the C handles; who may call what, and when, is the engine's business (see `PlaybackCore`).
+// The FluidSynth objects the Windows engine drove until it moved to SwiftySynth (`SwiftySynthRenderer.swift`): kept
+// compiled, unused, until FluidSynth leaves the build with the same release (plan T6). Thin value wrappers over the C
+// handles.
 
 /// A `fluid_synth_t` with the settings it was made from, and the SoundFont loaded into it.
 ///
 /// A value on purpose: nothing deletes it behind the engine's back. The engine deletes it explicitly
 /// (`delete()`), after the players attached to it and only once nothing renders it any more.
-struct SynthHandle: @unchecked Sendable {
+struct FluidSynthHandle: @unchecked Sendable {
     let settings: OpaquePointer
     let synth: OpaquePointer
     /// FluidSynth's id for the loaded SoundFont, or `-1` when none is (no URL, or FluidSynth refused the file). A
@@ -42,7 +42,7 @@ struct SynthHandle: @unchecked Sendable {
     ///
     /// - Throws: `WindowsAudioError.synth` when FluidSynth cannot make the settings or the synth. A SoundFont it
     ///   cannot load is not an error (see `soundFontID`).
-    static func make(sampleRate: Double, soundFontURL: URL?, effects: Bool = true) throws -> SynthHandle {
+    static func make(sampleRate: Double, soundFontURL: URL?, effects: Bool = true) throws -> FluidSynthHandle {
         guard let settings = new_fluid_settings() else { throw WindowsAudioError.synth("new_fluid_settings failed") }
         fluid_settings_setnum(settings, "synth.sample-rate", sampleRate)
         // Control calls (CC, program, note on/off) reach the synth from the engine's control thread while the render
@@ -77,7 +77,7 @@ struct SynthHandle: @unchecked Sendable {
                 return fluid_synth_sfload(synth, path, 1)
             }
         }
-        return SynthHandle(
+        return FluidSynthHandle(
             settings: settings, synth: synth, soundFontID: max(-1, soundFontID), soundFontURL: soundFontURL,
             sampleRate: sampleRate,
         )
@@ -192,7 +192,7 @@ struct SynthHandle: @unchecked Sendable {
 ///   to every channel it played on;
 /// - a seek is carried out with a chase — every event up to the target but note on / off, tempo included — after All
 ///   Sound Off on the channels the player had played on.
-struct PlayerHandle: @unchecked Sendable {
+struct FluidPlayerHandle: @unchecked Sendable {
     let player: OpaquePointer
 
     /// A player on `synth` holding `midi`, at tempo scale `rate`.
@@ -200,7 +200,7 @@ struct PlayerHandle: @unchecked Sendable {
     /// Must not run while `synth` renders: `new_fluid_player` registers the player's sample timer on the synth, and
     /// FluidSynth does that without the synth's own lock (`new_fluid_sample_timer`), so it would race the timer walk
     /// inside `fluid_synth_write_float`. The engine calls it under its lock, or on a synth not yet rendered.
-    static func make(on synth: SynthHandle, midi: Data, rate: Float) throws -> PlayerHandle {
+    static func make(on synth: FluidSynthHandle, midi: Data, rate: Float) throws -> FluidPlayerHandle {
         guard let player = new_fluid_player(synth.synth) else {
             throw WindowsAudioError.synth("new_fluid_player failed")
         }
@@ -214,7 +214,7 @@ struct PlayerHandle: @unchecked Sendable {
         // Every event the player sends — live, after a seek's chase, and in an export, all of which play through a
         // player made here — goes through the choke handler on its way to the synth.
         fluid_player_set_playback_callback(player, FluidChoke.playbackHandler, UnsafeMutableRawPointer(synth.synth))
-        let handle = PlayerHandle(player: player)
+        let handle = FluidPlayerHandle(player: player)
         handle.setTempo(rate)
         return handle
     }

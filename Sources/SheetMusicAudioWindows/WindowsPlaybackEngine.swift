@@ -1,19 +1,21 @@
 // swiftlint:disable file_length
 import Foundation
 import SheetMusicAudioCore
+import SheetMusicAudioSwiftySynthCore
 import SheetMusicCore
 import SheetMusicMIDI
 import Synchronization
 
 /// Score playback on Windows, with the Apple `PlaybackEngine`'s operations under the same names and argument labels.
 ///
-/// **Shape.** Android's, on the same shared core: the score's SMF (`PreparedPlayback.render` → `MidiSynthPostProcess`,
-/// what `AudioMidiBridge.renderMidi` gives Android) plays through FluidSynth's own MIDI player on one synth, and the
-/// metronome through a second synth + player over `MetronomeSequenceBuilder`'s click sequence (Android's
-/// `MetronomeMixer`, the SwiftySynth backend's second sequencer). The metronome is never taken out of the render, so
-/// the two transports stay in step and a mute is a level, not a reload. Output is WASAPI shared mode (`CWASAPI`).
+/// **Shape.** Android's, on the same shared core and the same synth: the score's SMF (`PreparedPlayback.render` →
+/// `MidiSynthPostProcess`, what `AudioMidiBridge.renderMidi` gives Android) plays through SwiftySynth's sequencer on
+/// one `HostedSynth`, and the metronome through a second synth over `MetronomeSequenceBuilder`'s click sequence
+/// (Android's `MetronomeMixer`, the Apple SwiftySynth backend's second sequencer). The metronome is never taken out of
+/// the render, so the two transports stay in step and a mute is a level, not a reload. Output is WASAPI shared mode
+/// (`CWASAPI`).
 ///
-/// **Time.** Both players run on the render thread's sample clock (`player.timing-source = sample`). Every position
+/// **Time.** Both sequences run on the render thread's sample clock — they move by the frames rendered. Every position
 /// this engine reports is the score player's tick — unrolled, as the SMF is — projected onto the notated timeline
 /// (`PlaybackUnroll`, `PlaybackTimeline`), exactly as the Apple engine's AUMIDISynth path reads its sequencer's beat.
 /// The device clock (`IAudioClock`) is not used for position: it counts frames the device played, which a seek or a
@@ -184,7 +186,7 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
             stats.sampleRate = sampleRate
         }
         let (wraps, handover, soundFont) = core.shared.withLock { shared in
-            (shared.loopWraps, shared.lastHandoverLateTicks, (shared.session?.score.soundFontID ?? -1) >= 0)
+            (shared.loopWraps, shared.lastHandoverLateTicks, shared.session?.score.soundFontLoaded ?? false)
         }
         return Diagnostics(
             sampleRate: stats.sampleRate, bufferFrames: stats.bufferFrames, latencySeconds: stats.latencySeconds,
@@ -222,8 +224,8 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
     /// Synchronous. The SoundFont is loaded only when it is not the one already loaded — an edit's re-prepare keeps
     /// the synth — and for an edited score `replaceScore(with:)` keeps everything but the sequence.
     ///
-    /// - Throws: when FluidSynth cannot make a synth or a player, or the SMF cannot be written. Having no output
-    ///   device is not an error.
+    /// - Throws: when SwiftySynth cannot make a synth or read a sequence, or the SMF cannot be written. Having no
+    ///   output device is not an error.
     public func prepare(score: Score) throws {
         try prepareFully(score: score, derivation: PreparedPlayback.derive(score: score), renderedMidi: nil)
     }
@@ -244,15 +246,14 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
             shared.stopPlayers(silence: .cut)
             shared.cancelPreviews()
             guard var session = shared.session else { return false }
-            // Made and deleted under the lock: see `PlayerHandle.make`.
+            // Attached under the lock, in place of the old ones: see `PlayerHandle.make`.
             let players = try Self.makePlayers(
                 for: sequences, score: session.score, metronome: session.metronome, rate: shared.rate,
             )
             Self.deletePlayers(of: session)
-            session.sequences = sequences
             session.scorePlayer = players.score
-            session.bodyMetronome = players.metronome
-            session.countInMetronome = nil
+            session.metronomePlayer = players.metronome
+            session.metronomeWholeBodyOffsetTicks = 0
             shared.session = session
             shared.install(prepared.derivation, keepingMixer: true)
             shared.applyTuning()
@@ -275,7 +276,7 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
     /// paused transport, the loop, the mixer, rate and tuning — the Apple engine's `restartGraphPreservingState`. The
     /// metronome follows too: its click resolver is rebuilt on the new resolver.
     ///
-    /// Before the first `prepare(score:)` this only replaces the resolver. A synth FluidSynth cannot build leaves the
+    /// Before the first `prepare(score:)` this only replaces the resolver. A synth SwiftySynth cannot build leaves the
     /// old ones playing; a SoundFont it cannot load plays silence (`diagnostics.soundFontLoaded`).
     public func reloadSoundfont(resolver newResolver: SoundfontResolver) {
         resolver = newResolver
@@ -299,7 +300,7 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
                 scoreSynth.delete()
                 throw error
             }
-            // Neither synth renders yet, so their players can be made outside the lock.
+            // Neither synth renders yet, so their sequences can be attached outside the lock.
             do {
                 players = try Self.makePlayers(
                     for: loaded.sequences, score: scoreSynth, metronome: metronomeSynth, rate: rate,
@@ -315,8 +316,8 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         let retired = core.shared.withLock { shared -> Session? in
             let old = shared.session
             shared.adopt(Session(
-                score: scoreSynth, metronome: metronomeSynth, sequences: loaded.sequences,
-                scorePlayer: players.score, bodyMetronome: players.metronome, countInMetronome: nil,
+                score: scoreSynth, metronome: metronomeSynth, scorePlayer: players.score,
+                metronomePlayer: players.metronome,
             ))
             return old
         }
@@ -343,7 +344,7 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         let retired: Session?
         do {
             retired = try core.shared.withLock { shared throws -> Session? in
-                // Players are made and deleted under the lock: see `PlayerHandle.make`.
+                // Sequences are attached under the lock: see `PlayerHandle.make`.
                 let players = try Self.makePlayers(
                     for: sequences, score: scoreSynth, metronome: metronomeSynth, rate: shared.rate,
                 )
@@ -353,15 +354,15 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
                     Self.deletePlayers(of: old)
                 }
                 // A kept synth goes back to a new synth's state; `reassertChannelState` then sets what the score uses.
-                if old?.score.synth == scoreSynth.synth {
+                if let old, old.score.isSame(as: scoreSynth) {
                     scoreSynth.systemReset()
                 }
-                if old?.metronome.synth == metronomeSynth.synth {
+                if let old, old.metronome.isSame(as: metronomeSynth) {
                     metronomeSynth.systemReset()
                 }
                 shared.session = Session(
-                    score: scoreSynth, metronome: metronomeSynth, sequences: sequences,
-                    scorePlayer: players.score, bodyMetronome: players.metronome, countInMetronome: nil,
+                    score: scoreSynth, metronome: metronomeSynth, scorePlayer: players.score,
+                    metronomePlayer: players.metronome,
                 )
                 shared.sampleRate = sampleRate
                 shared.install(derivation, keepingMixer: false)
@@ -376,10 +377,10 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         }
         // Nothing renders a replaced synth any more; its players went under the lock.
         if let retired {
-            if retired.score.synth != scoreSynth.synth {
+            if !retired.score.isSame(as: scoreSynth) {
                 retired.score.delete()
             }
-            if retired.metronome.synth != metronomeSynth.synth {
+            if !retired.metronome.isSame(as: metronomeSynth) {
                 retired.metronome.delete()
             }
         }
@@ -441,9 +442,9 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
     private static func makePlayers(
         for sequences: LoadedSequences, score: SynthHandle, metronome: SynthHandle, rate: Float,
     ) throws -> (score: PlayerHandle, metronome: PlayerHandle) {
-        let scorePlayer = try PlayerHandle.make(on: score, midi: sequences.score, rate: rate)
+        let scorePlayer = try PlayerHandle.make(on: score, prepared: sequences.score, rate: rate)
         do {
-            return try (scorePlayer, PlayerHandle.make(on: metronome, midi: sequences.metronome, rate: rate))
+            return try (scorePlayer, PlayerHandle.make(on: metronome, prepared: sequences.metronome, rate: rate))
         } catch {
             scorePlayer.delete()
             throw error
@@ -452,8 +453,7 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
 
     private static func deletePlayers(of session: Session) {
         session.scorePlayer.delete()
-        session.bodyMetronome.delete()
-        session.countInMetronome?.delete()
+        session.metronomePlayer.delete()
     }
 
     // MARK: Teardown
@@ -483,23 +483,24 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
     }
 }
 
-/// The two sequences a loaded score plays: the score's own, and the metronome's.
+/// The two sequences a loaded score plays — the score's own, and the metronome's — parsed for attaching, outside the
+/// engine's lock.
 struct LoadedSequences: Sendable {
     /// The unrolled render with the mixer-owned channels' tick-0 program and CC 7 stripped
     /// (`MidiSynthPostProcess`) — the bytes `AudioMidiBridge.renderMidi` hands Android.
-    let score: Data
+    let score: HostedSynth.PreparedSequence
     /// The score's tempo map and a click on every unrolled beat (`MetronomeSequenceBuilder`), the Apple SwiftySynth
     /// backend's and Android's metronome sequence.
-    let metronome: Data
+    let metronome: HostedSynth.PreparedSequence
 
     init(rendered: MidiFile, derivation: PlaybackScoreDerivation) throws {
         var midi = rendered
         MidiSynthPostProcess.apply(
             midi: &midi, mixerManagedChannels: derivation.channelLayout.liveChannelPlan.managedChannels,
         )
-        score = try MidiWriter.write(midi)
-        metronome = try MidiWriter.write(MetronomeSequenceBuilder.metronomeOnlySequence(
+        score = try PlayerHandle.prepare(MidiWriter.write(midi))
+        metronome = try PlayerHandle.prepare(MidiWriter.write(MetronomeSequenceBuilder.metronomeOnlySequence(
             rendered: rendered, metronomeBeats: derivation.metronomeBeats,
-        ))
+        )))
     }
 }

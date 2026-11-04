@@ -93,19 +93,14 @@ final class Probe { // swiftlint:disable:this type_body_length
             value: mismatches.isEmpty ? "\(strips.count) strips" : mismatches.joined(separator: "; "),
             limit: "every strip on its mixer program, drums in bank 128",
         )
-        let dynamic = engine.probeSetting("synth.dynamic-sample-loading")
-        report.check("prepare", "synth.dynamic-sample-loading", dynamic == 0, value: "\(dynamic ?? -1)", limit: "0")
-        let reset = engine.probeSetting("player.reset-synth")
-        report.check("prepare", "player.reset-synth", reset == 0, value: "\(reset ?? -1)", limit: "0")
-
-        // W0-6's open question: does FluidSynth keep the SoundFont's file open after loading it?
+        // SwiftySynth reads the SoundFont in place (memory-mapped): whether Windows then lets the file be renamed.
         let renamed = soundFontCopy.appendingPathExtension("renamed")
         do {
             try FileManager.default.moveItem(at: soundFontCopy, to: renamed)
             try FileManager.default.moveItem(at: renamed, to: soundFontCopy)
-            report.note("prepare", "the loaded SoundFont could be renamed: FluidSynth does not hold its file open")
+            report.note("prepare", "the loaded SoundFont could be renamed: the synth does not hold its file open")
         } catch {
-            report.note("prepare", "the loaded SoundFont could NOT be renamed (\(error)): FluidSynth holds its file")
+            report.note("prepare", "the loaded SoundFont could NOT be renamed (\(error)): the synth holds its file")
         }
     }
 

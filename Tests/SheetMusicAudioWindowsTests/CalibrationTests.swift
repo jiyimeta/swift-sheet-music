@@ -8,9 +8,9 @@ import Testing
 /// The Windows engine's output level and reverb tail, for the SwiftySynth switch's calibration table (folino spec
 /// `2026-11-04-windows-swiftysynth-design.md` §5): the same scores exported offline before the switch (FluidSynth)
 /// and after (SwiftySynth), and on the Mac through the Apple backend, must match within ±1 dB of level and show a
-/// like reverb tail. A measurement, not a check — it prints one line per score and asserts only that something
-/// sounded. Runs only with `SSM_TEST_SF2` (the font) and `SSM_CALIBRATION=1`; `SSM_CALIBRATION_SCORES` adds scores
-/// by path, `;`-separated (folino's `Now_is_the_time.mscz`, for one).
+/// like reverb tail. It prints one line per score, and holds each score with a `referenceRMS` to it within ±1 dB.
+/// Runs only with `SSM_TEST_SF2` (the font) and `SSM_CALIBRATION=1`; `SSM_CALIBRATION_SCORES` adds scores by path,
+/// `;`-separated (folino's `Now_is_the_time.mscz`, for one).
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["SSM_TEST_SF2"] != nil
         && ProcessInfo.processInfo.environment["SSM_CALIBRATION"] == "1"))
 struct CalibrationTests {
@@ -29,6 +29,17 @@ struct CalibrationTests {
         }
     }
 
+    /// The level each score is held to, ±1 dB of overall RMS (dBFS), by name — the one place the owner's choice of
+    /// level lands, with `SynthHandle.windowsOutputGain`.
+    ///
+    /// TODO(owner): these are Windows under FluidSynth (T2's "before", folino-win 2026-11-04), which the gain keeps
+    /// until the owner picks. Matching the Mac instead: piano −34.2, drums −31.0, Now_is_the_time −24.8.
+    static let referenceRMS: [String: Double] = [
+        "piano chord, then rests": -26.2,
+        "drum groove": -23.2,
+        "Now_is_the_time.mscz": -17.0,
+    ]
+
     @Test func theCalibrationTable() async throws {
         let font = try #require(ProcessInfo.processInfo.environment["SSM_TEST_SF2"].map(URL.init(fileURLWithPath:)))
         var scores: [(String, URL)] = try [
@@ -43,11 +54,15 @@ struct CalibrationTests {
             let samples = try await render(url, font: font)
             let pcm = Measure(samples: samples, sampleRate: Self.sampleRate)
             let struck = pcm.rmsDB(from: 0.05, to: 0.45)
+            let rms = pcm.rmsDB(from: 0, to: .infinity)
             print("[calibration] \(name): " + String(
                 format: "rms %.1f dBFS, peak %.1f dBFS, struck %.1f dBFS, tail 0.75-1.5 s %+.1f dB",
-                pcm.rmsDB(from: 0, to: .infinity), pcm.peakDB, struck, pcm.rmsDB(from: 0.75, to: 1.5) - struck,
+                rms, pcm.peakDB, struck, pcm.rmsDB(from: 0.75, to: 1.5) - struck,
             ))
             #expect(pcm.peakDB > -60, "\(name) rendered silence")
+            if let reference = Self.referenceRMS[name] {
+                #expect(abs(rms - reference) <= 1, "\(name): rms \(rms) against \(reference)")
+            }
         }
     }
 
