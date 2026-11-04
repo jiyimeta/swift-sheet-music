@@ -156,6 +156,24 @@
         /// `chordSlot` comment above), so `.delete` at `chordSlot` first — which leaves a same-duration rest
         /// (`DeleteVoiceElement`) — then `.inputNote` at that rest with `duration: nil` (keep the slot's length),
         /// exercising the `hasDuration == 0` branch specifically.
+        @Test("inputNote applies through the bridge after a delete clears a rest")
+        func inputNoteAfterDelete() throws {
+            let handle = try Self.loadedHandle()
+            defer { nativeReleaseScore(handle: handle) }
+            #expect(nativeBeginEditSession(scoreHandle: handle))
+            let deleteIntent = EditIntent.delete(at: Self.chordSlot)
+            #expect(nativeApplyEditIntent(scoreHandle: handle, intentBytes: EditIntentCodec.encode(deleteIntent)))
+            let afterDelete = nativeScoreFingerprint(scoreHandle: handle)
+
+            let rest = RestID(
+                staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: Self.chordSlot.elementIndex,
+            )
+            let inputIntent = EditIntent.inputNote(at: rest, pitch: 67, tpc: 20, duration: nil)
+            #expect(nativeApplyEditIntent(scoreHandle: handle, intentBytes: EditIntentCodec.encode(inputIntent)))
+            #expect(nativeScoreFingerprint(scoreHandle: handle) != afterDelete)
+            nativeEndEditSession(scoreHandle: handle)
+        }
+
         /// A relayed `.pasteRange` carries the copied range as MSCX text, which only a session built with a payload
         /// reader can read. Without one every Android paste (and its undo) is refused and falls into a full resync.
         @Test("a relayed range paste applies on the mirror session")
@@ -183,24 +201,6 @@
 
         private static func slot(element: Int) -> VoiceElementID {
             VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: element)
-        }
-
-        @Test("inputNote applies through the bridge after a delete clears a rest")
-        func inputNoteAfterDelete() throws {
-            let handle = try Self.loadedHandle()
-            defer { nativeReleaseScore(handle: handle) }
-            #expect(nativeBeginEditSession(scoreHandle: handle))
-            let deleteIntent = EditIntent.delete(at: Self.chordSlot)
-            #expect(nativeApplyEditIntent(scoreHandle: handle, intentBytes: EditIntentCodec.encode(deleteIntent)))
-            let afterDelete = nativeScoreFingerprint(scoreHandle: handle)
-
-            let rest = RestID(
-                staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: Self.chordSlot.elementIndex,
-            )
-            let inputIntent = EditIntent.inputNote(at: rest, pitch: 67, tpc: 20, duration: nil)
-            #expect(nativeApplyEditIntent(scoreHandle: handle, intentBytes: EditIntentCodec.encode(inputIntent)))
-            #expect(nativeScoreFingerprint(scoreHandle: handle) != afterDelete)
-            nativeEndEditSession(scoreHandle: handle)
         }
     }
 #endif
