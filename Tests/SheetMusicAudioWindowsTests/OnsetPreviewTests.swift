@@ -1,4 +1,5 @@
 import Foundation
+import SheetMusicAudioCore
 @_spi(PlaybackProbe) @testable import SheetMusicAudioWindows
 import SheetMusicCore
 import Testing

@@ -43,8 +43,7 @@ struct ReplaceScoreTransportTests {
         try engine.replaceScore(with: PreparedPlayback.make(score: Self.score(pitch: 64)))
         #expect(engine.state == .paused)
         let after = try #require(engine.currentCursor)
-        #expect(after.measureIndex == before.measureIndex)
-        #expect(after.tickInMeasure == before.tickInMeasure)
+        #expect(after == before)
     }
 
     @Test func theLoopIsStillTheLoop() throws {
