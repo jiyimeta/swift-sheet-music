@@ -244,14 +244,7 @@ public func nativeEncodeDrawProgram(
         return Data()
     }
 
-    var expandedIDs: Set<ScoreItemID> = []
-    for id in decoded.ids {
-        guard case let .item(filtered) = score.translateCursorForHiddenStaves(
-            .item(id), hiddenStaves: entry.hiddenStaves,
-        ) else { continue }
-        expandedIDs.formUnion(SelectionExpansion.expand(filtered, in: entry.filteredScore))
-    }
-
+    let expandedIDs = cachedSelectionIDs(decoded.ids, of: score, in: entry)
     let tint: (argb: UInt32, ids: Set<ScoreItemID>)? = expandedIDs.isEmpty
         ? nil
         : (argb: decoded.argb, ids: expandedIDs)
@@ -262,4 +255,25 @@ public func nativeEncodeDrawProgram(
         tint: tint,
     )
     return DrawProgramCodec.encode(pages: pages)
+}
+
+/// A host's selection — full-score-addressed ids, as a `SelectionTintCodec` payload carries them — as the ids the
+/// cached (filtered) layout lights: each re-addressed past the entry's hidden staves with
+/// `Score.translateCursorForHiddenStaves` (an id on a hidden staff is dropped, since nothing it names is laid out),
+/// then expanded with `SelectionExpansion.expand(_:in:)` so a tuplet covers every member note and rest.
+///
+/// The one rule both selection painters read: `nativeEncodeDrawProgram` tints these ids and `nativeRangeBoxFrames`
+/// draws its box around them, so the box always surrounds exactly what is tinted — as on Apple, where both read
+/// `SelectionRenderState.selectedIDs`.
+func cachedSelectionIDs(
+    _ ids: Set<ScoreItemID>, of score: Score, in entry: LayoutDocumentCache.Entry,
+) -> Set<ScoreItemID> {
+    var expanded: Set<ScoreItemID> = []
+    for id in ids {
+        guard case let .item(filtered) = score.translateCursorForHiddenStaves(
+            .item(id), hiddenStaves: entry.hiddenStaves,
+        ) else { continue }
+        expanded.formUnion(SelectionExpansion.expand(filtered, in: entry.filteredScore))
+    }
+    return expanded
 }

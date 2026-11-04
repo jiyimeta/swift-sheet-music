@@ -735,4 +735,27 @@ object SheetMusicJNI {
             arena,
         ).toByteArray()
     }
+
+    /**
+     * The outline a range selection draws in the cached layout of [scoreHandle] — the box Apple hosts stroke around
+     * a range — as a `RangeBoxFramesWire` payload: `lineWidthMm` (the stroke, once), then `frames`, one document-mm
+     * rect (`xMm`/`yMm`/`widthMm`/`heightMm`, Y down) per system the selection reaches, in system order. Decode with
+     * the generated `io.github.jiyimeta.sheetmusic.audio.serialization.RangeBoxFramesCodec`.
+     *
+     * [selectionBytes] is the same `SelectionTintCodec` payload [nativeEncodeDrawProgram] takes, re-addressed and
+     * expanded the same way, so the box surrounds exactly what the tint lights; its color is not read. Apple draws
+     * the box only for a range selection — when to ask is the host's call. Empty array = no box: the handle is
+     * unknown, nothing is cached, the payload does not decode, or no selected note or rest is laid out.
+     */
+    fun nativeRangeBoxFrames(
+        scoreHandle: Long,
+        selectionBytes: ByteArray,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeRangeBoxFrames(
+            scoreHandle,
+            SwiftData.fromByteArray(selectionBytes, arena),
+            arena,
+        ).toByteArray()
+    }
 }

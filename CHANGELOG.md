@@ -7,6 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`nativeRangeBoxFrames(scoreHandle:selectionBytes:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeRangeBoxFrames`) —
+  the outline a range selection draws, which Android had no way to draw: for the cached layout, one
+  `LayoutSystem.rangeBoxRect(selectedIDs:metrics:)` per system the selection reaches, moved by the system's origin into
+  document millimetres, plus `StaffMetrics.rangeBoxLineWidth` once, as a **`RangeBoxFramesCodec`** payload
+  (`SheetMusicEditWire`; `lineWidthMm`, then `frames` of `RangeBoxFrameWire` `xMm`/`yMm`/`widthMm`/`heightMm`). It
+  takes the `SelectionTintCodec` payload `nativeEncodeDrawProgram` takes, re-addressed past the cache entry's hidden
+  staves and expanded the same way, so the box surrounds exactly what the tint lights. The wire sits where
+  `:SheetMusicAudioAndroid`'s `editGeometry` codegen scans, so the AAR carries a Kotlin `RangeBoxFramesCodec`. Empty
+  when there is no box: an unknown handle, no cached layout, an undecodable payload, or no selected note or rest laid
+  out.
+
 ### Fixed
 
 - **`.writeNote` unties the note it writes over.** Typing a pitch over a tied note used to re-pitch it with a bare
