@@ -29,15 +29,13 @@ struct CalibrationTests {
         }
     }
 
-    /// The level each score is held to, ±1 dB of overall RMS (dBFS), by name — the one place the owner's choice of
-    /// level lands, with `SynthHandle.windowsOutputGain`.
-    ///
-    /// TODO(owner): these are Windows under FluidSynth (T2's "before", folino-win 2026-11-04), which the gain keeps
-    /// until the owner picks. Matching the Mac instead: piano −34.2, drums −31.0, Now_is_the_time −24.8.
+    /// The level each score is held to, ±1 dB of overall RMS (dBFS), by name: the Mac's, through the Apple SwiftySynth
+    /// backend (`AppleCalibrationTests`, T2, 2026-11-04) — the owner's choice of level (2026-11-04), with
+    /// `SynthHandle.windowsOutputGain`. Windows under FluidSynth measured −26.2, −23.2 and −17.0.
     static let referenceRMS: [String: Double] = [
-        "piano chord, then rests": -26.2,
-        "drum groove": -23.2,
-        "Now_is_the_time.mscz": -17.0,
+        "piano chord, then rests": -34.2,
+        "drum groove": -31.0,
+        "Now_is_the_time.mscz": -24.8,
     ]
 
     @Test func theCalibrationTable() async throws {

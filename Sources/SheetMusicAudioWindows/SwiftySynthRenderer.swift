@@ -23,13 +23,10 @@ struct SynthHandle: @unchecked Sendable {
     let sampleRate: Double
     let slot: SequenceSlot
 
-    /// The output level on Windows, on both synths (SwiftySynth's `masterVolume`).
-    ///
-    /// TODO(owner): match the Mac (1, SwiftySynth's own level, which the Apple and Android apps play at) or keep what
-    /// Windows played at under FluidSynth (its gain 2.0, measured 7.8–8.0 dB louder than the Mac on the three
-    /// calibration scores). Until the owner picks, this keeps today's Windows level: 10^(7.9 / 20) ≈ 2.48, so a
-    /// Windows user hears no change. `CalibrationTests` measures against the reference the answer picks.
-    static let windowsOutputGain: Float = 2.48
+    /// The output level on Windows, on both synths (SwiftySynth's `masterVolume`): the Mac's — 1, SwiftySynth's own
+    /// level, which the Apple and Android apps play at (owner, 2026-11-04). Windows under FluidSynth (its gain 2.0)
+    /// played 7.8–8.0 dB louder than the Mac on the three calibration scores; `CalibrationTests` holds the Mac's.
+    static let windowsOutputGain: Float = 1
 
     /// Builds a synth at `sampleRate` and loads `soundFontURL` into it (read in place, memory-mapped). The score's has
     /// SwiftySynth's score voicing (256 voices, reverb and chorus); without `effects`, the metronome's (8 voices,
