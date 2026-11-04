@@ -690,21 +690,19 @@ if !isWasm, !isWindows {
 // What the SwiftySynth backends share: the synth voicings and the choke hook the Apple backend and Android both build
 // with, the SoundFont cache, and the lockable host objects Android's Kotlin engine drives through JNI. Not portable in
 // the wasm sense — SwiftySynth imports the Foundation umbrella — and nothing in the wasm graph reaches it; declared
-// there anyway because the Apple-only targets that depend on it are declared in that manifest shape too. Off Windows,
-// which still plays through FluidSynth (cymbal choke design, phase 4).
-if !isWindows {
-    targets += [
-        .target(
-            name: "SheetMusicAudioSwiftySynthCore",
-            dependencies: [
-                .product(name: "SwiftySynth", package: "swiftysynth"),
-                "SheetMusicAudioCore",
-                "SheetMusicFoundation",
-                "SheetMusicMIDI",
-            ],
-        ),
-    ]
-}
+// there anyway because the Apple-only targets that depend on it are declared in that manifest shape too. On Windows
+// too: the Windows engine moves onto it (cymbal choke design, phase 4; folino spec 2026-11-04-windows-swiftysynth).
+targets += [
+    .target(
+        name: "SheetMusicAudioSwiftySynthCore",
+        dependencies: [
+            .product(name: "SwiftySynth", package: "swiftysynth"),
+            "SheetMusicAudioCore",
+            "SheetMusicFoundation",
+            "SheetMusicMIDI",
+        ],
+    ),
+]
 
 if isAndroid {
     products += [
@@ -758,6 +756,7 @@ if isWindows {
                 "CMediaFoundation",
                 "CWASAPI",
                 "SheetMusicAudioCore",
+                "SheetMusicAudioSwiftySynthCore",
                 "SheetMusicBridgeCore",
                 "SheetMusicCore",
                 "SheetMusicMIDI",
