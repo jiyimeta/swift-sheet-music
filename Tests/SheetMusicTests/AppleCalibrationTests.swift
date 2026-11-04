@@ -20,11 +20,21 @@
         struct AppleCalibrationTests {
             @Test func theMacReferenceRow() async throws {
                 let font = try #require(ProcessInfo.processInfo.environment["SSM_TEST_SF2"])
+                var scores: [(String, URL)] = []
                 for (name, mscx) in [("piano chord, then rests", Self.pianoChord), ("drum groove", Self.drumGroove)] {
                     let source = FileManager.default.temporaryDirectory
                         .appendingPathComponent("ssm-apple-calibration-\(UUID().uuidString).mscx")
                     try mscx.write(to: source, atomically: true, encoding: .utf8)
-                    defer { try? FileManager.default.removeItem(at: source) }
+                    scores.append((name, source))
+                }
+                defer { scores.prefix(2).forEach { try? FileManager.default.removeItem(at: $0.1) } }
+                // `SSM_CALIBRATION_SCORES` adds scores by path, `;`-separated, as on Windows.
+                let extra = ProcessInfo.processInfo.environment["SSM_CALIBRATION_SCORES"] ?? ""
+                for path in extra.split(separator: ";") where !path.isEmpty {
+                    let url = URL(fileURLWithPath: String(path))
+                    scores.append((url.lastPathComponent, url))
+                }
+                for (name, source) in scores {
                     let score = try ScoreLoader.loadScore(contentsOf: source)
                     let engine = PlaybackEngine(
                         soundfontResolver: FixedSoundfontResolver(url: URL(fileURLWithPath: font)),
