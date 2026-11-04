@@ -29,10 +29,23 @@ struct PlaybackTransportStepperTests {
     @Test("wraps at the loop's end: notes off, both players back to the start, the metronome by its offset")
     func wraps() {
         #expect(PlaybackTransportStepper.step(snapshot(score: 3840, offset: 960, loop: loop)) == [
-            .allNotesOff, .seekScore(tick: 1920), .seekMetronome(tick: 2880), .wrapped,
+            .allNotesOff, .seekScore(tick: 1920), .seekMetronome(tick: 2880, offsetTicks: 960), .wrapped,
         ])
         // Overshooting the end by a chunk wraps the same way.
         #expect(PlaybackTransportStepper.step(snapshot(score: 3900, loop: loop)).first == .allNotesOff)
+    }
+
+    @Test("a wrap in a count-in sequence that carries the whole body lands on the copy, and says so")
+    func wrapsOntoTheWholeBody() {
+        // The first part runs 1920 − 2400 = −480 ahead (counted into 2400, past the loop's start, whose beats it does
+        // not hold); the copy starts at 20000.
+        let snapshot = PlaybackTransportStepper.Snapshot(
+            isPlaying: true, scoreTick: 3840, metronomeTick: 3360, metronomeOffsetTicks: -480,
+            metronomeWrapOffsetTicks: 20000, loop: loop, countIn: nil, totalTicks: 9600,
+        )
+        #expect(PlaybackTransportStepper.step(snapshot) == [
+            .allNotesOff, .seekScore(tick: 1920), .seekMetronome(tick: 21920, offsetTicks: 20000), .wrapped,
+        ])
     }
 
     @Test("a loop that ends where the score does wraps instead of stopping")

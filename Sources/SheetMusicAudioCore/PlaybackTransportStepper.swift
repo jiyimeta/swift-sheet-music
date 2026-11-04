@@ -14,6 +14,10 @@ package enum PlaybackTransportStepper {
         /// with the count-in's bars.
         package var metronomeTick: Int
         package var metronomeOffsetTicks: Int
+        /// The offset a loop wrap lands with: the whole body's in a count-in sequence that carries one
+        /// (`MetronomeSequenceBuilder.countInSequenceWithWholeBody`) — the first part holds only the beats from the
+        /// count's start on — else `metronomeOffsetTicks`.
+        package var metronomeWrapOffsetTicks: Int
         package var loop: TransportLoop?
         /// A count-in still sounding: the score starts when the metronome reaches `preRollTicks`.
         package var countIn: CountIn?
@@ -21,13 +25,14 @@ package enum PlaybackTransportStepper {
         package var totalTicks: Int
 
         package init(
-            isPlaying: Bool, scoreTick: Int, metronomeTick: Int, metronomeOffsetTicks: Int, loop: TransportLoop?,
-            countIn: CountIn?, totalTicks: Int,
+            isPlaying: Bool, scoreTick: Int, metronomeTick: Int, metronomeOffsetTicks: Int,
+            metronomeWrapOffsetTicks: Int? = nil, loop: TransportLoop?, countIn: CountIn?, totalTicks: Int,
         ) {
             self.isPlaying = isPlaying
             self.scoreTick = scoreTick
             self.metronomeTick = metronomeTick
             self.metronomeOffsetTicks = metronomeOffsetTicks
+            self.metronomeWrapOffsetTicks = metronomeWrapOffsetTicks ?? metronomeOffsetTicks
             self.loop = loop
             self.countIn = countIn
             self.totalTicks = totalTicks
@@ -50,7 +55,8 @@ package enum PlaybackTransportStepper {
         /// Silence every sounding note (before a jump, so nothing hangs).
         case allNotesOff
         case seekScore(tick: Int)
-        case seekMetronome(tick: Int)
+        /// Move the metronome to `tick`, which runs `offsetTicks` ahead of the score from now on.
+        case seekMetronome(tick: Int, offsetTicks: Int)
         /// The count-in is over: start the score player at `tick`.
         case startScore(tick: Int)
         /// The loop wrapped once (for the engine's counters and the host's events).
@@ -71,7 +77,12 @@ package enum PlaybackTransportStepper {
             return [
                 .allNotesOff,
                 .seekScore(tick: loop.startTick),
-                .seekMetronome(tick: loop.startTick + snapshot.metronomeOffsetTicks),
+                .seekMetronome(
+                    tick: MetronomeSequenceBuilder.metronomeTick(
+                        forScoreTick: loop.startTick, offset: snapshot.metronomeWrapOffsetTicks,
+                    ),
+                    offsetTicks: snapshot.metronomeWrapOffsetTicks,
+                ),
                 .wrapped,
             ]
         }

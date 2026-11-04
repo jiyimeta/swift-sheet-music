@@ -136,7 +136,7 @@ extension Shared {
             }
             pendingScoreTick = tick
             reassertPending = true
-        case let .seekMetronome(tick):
+        case let .seekMetronome(tick, _):
             if usingCountInMetronome {
                 // The count is over once its first pass is: the jump lands on the plain sequence, which has every
                 // beat (the count-in's keeps only those from its start position on) — the Apple backend's loop wrap.
