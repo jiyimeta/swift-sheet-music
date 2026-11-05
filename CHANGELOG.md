@@ -20,6 +20,9 @@ and this project adheres to
   - Spacing treats them as a chord's: a rest's syllable is a demand on its column, and the syllable before it reaches
     to it rather than past it (`nextLyricBearingChord`).
   - The MusicXML import keeps a rest's `<lyric>`s (`addLyrics(…, cr, …)` in MuseScore's import).
+  - **The MusicXML import reads a `<lyric>`'s side and `relative-x`**, as `MusicXmlParserLyric::parse` does: above
+    for `placement="above"` or, without one, a positive `default-y` + `relative-y`; and a `relative-x` becomes the
+    offset's x, at the score's `<defaults><scaling>`, beside the style's y for that side.
   - **Lyric entry reaches rests as MuseScore's does.** `SetLyric` / `SetLyrics` write a rest's syllables (they
     refused a rest). `LyricInputPlanner` advances and steps back to the next chord, or to a rest that already carries
     a syllable on that verse, and passes every other rest (`NotationInteraction::navigateToLyrics`); the new

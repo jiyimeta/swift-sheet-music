@@ -40,9 +40,11 @@ extension Score {
         }
         // The exporter, which a few readings bend for (`MusicXMLExporterSoftware`).
         let software = MusicXMLExporterSoftware.detect(root: root)
-        let (parts, systemMeasures) = try decodeParts(
-            root: root, partList: partList, options: options, software: software,
-        )
+        let (parts, systemMeasures) = try MusicXMLDecodeContext.$spatiumMillimeters.withValue(
+            MusicXMLDecodeContext.spatiumMillimeters(root: root),
+        ) {
+            try decodeParts(root: root, partList: partList, options: options, software: software)
+        }
 
         // Hard-code division = 480 ticks per quarter, matching MuseScore's default
         // and the `*_ref.mscx` fixtures we semantic-compare against. MusicXML's
