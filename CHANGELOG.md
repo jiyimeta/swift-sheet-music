@@ -19,6 +19,17 @@ and this project adheres to
   `:SheetMusicAudioAndroid`'s `editGeometry` codegen scans, so the AAR carries a Kotlin `RangeBoxFramesCodec`. Empty
   when there is no box: an unknown handle, no cached layout, an undecodable payload, or no selected note or rest laid
   out.
+- **`nativeSelectionInkFrames(scoreHandle:itemBytes:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeSelectionInkFrames`)
+  — where a selected clef or engraved element (a mark) is drawn, so an Android host can hang a control off the glyph
+  the reader selected: for the cached layout, `ScoreHitTester.clefHitRects(for:)` for a `.clef` or
+  `elementHitRects(for:)` for an `.element`, one rect per place drawn (a hairpin across a system break, a signature and
+  its courtesy announcement), in document millimetres, plus `StaffMetrics.sp` once, as a **`SelectionInkFramesCodec`**
+  payload (`SheetMusicEditWire`; `spMm`, then `frames` of `SelectionInkFrameWire` `xMm`/`yMm`/`widthMm`/`heightMm`).
+  It takes the `ScoreItemIDCodec` payload `nativeEditingCaretFrame` takes and re-addresses it past the cache entry's
+  hidden staves the same way — one function both verbs now call. The wire sits where `:SheetMusicAudioAndroid`'s
+  `editGeometry` codegen scans, so the AAR carries a Kotlin `SelectionInkFramesCodec`. Empty for an unknown handle, no
+  cached layout, undecodable bytes, an item on a hidden staff, any item that is not a clef or an element, or one drawn
+  nowhere.
 
 ### Fixed
 

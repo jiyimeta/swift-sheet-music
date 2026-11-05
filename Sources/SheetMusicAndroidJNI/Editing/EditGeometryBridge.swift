@@ -149,7 +149,7 @@ public func nativeEditingHitTarget(scoreHandle: Int64, xMm: Double, yMm: Double)
 /// `nativeEditingHitTest` returns and a host keeps as "the selected item" for edit intents. Re-addressed into
 /// the cached (filtered) document's own addressing via `Score.translateCursorForHiddenStaves` (wrapped in a
 /// throwaway `ScoreCursor.item`) before the geometry lookup, mirroring `nativeCursorFrame`'s own translate
-/// step for a playback cursor.
+/// step for a playback cursor — `cachedItem`, which `nativeSelectionInkFrames` reads too.
 ///
 /// `minimumWidthMm` floors a zero-width frame (converted to points before being handed to
 /// `LayoutDocument.editingCaretRect(for:in:minimumWidth:)`); pass 0 for no floor.
@@ -164,25 +164,9 @@ public func nativeEditingCaretFrame(
     minimumWidthMm: Double,
 ) -> Data {
     guard let score = scoreTable.value(for: scoreHandle),
-          let entry = LayoutDocumentCache.entry(for: scoreHandle)
+          let entry = LayoutDocumentCache.entry(for: scoreHandle),
+          let filteredItem = cachedItem(itemBytes, of: score, in: entry)
     else { return Data() }
-
-    let item: ScoreItemID
-    do {
-        item = try ScoreItemIDCodec.decode(itemBytes)
-    } catch {
-        return Data()
-    }
-
-    guard case let .item(filteredItem) = score.translateCursorForHiddenStaves(
-        .item(item), hiddenStaves: entry.hiddenStaves,
-    ) else {
-        // A `.beat` fallback means `item`'s staff is hidden — there is no laid-out frame for it to caret
-        // against (a host cannot have selected it in the first place, since `nativeEditingHitTest` only
-        // ever hits items the filtered document actually renders). Refuse rather than resolve against the
-        // wrong staff.
-        return Data()
-    }
 
     let mmToPt = 72.0 / 25.4
     let ptToMM = 25.4 / 72.0
@@ -255,6 +239,25 @@ public func nativeEncodeDrawProgram(
         tint: tint,
     )
     return DrawProgramCodec.encode(pages: pages)
+}
+
+/// A host's selected item — a `ScoreItemIDCodec` payload, full-score-addressed, the value `nativeEditingHitTest`
+/// returns — as the item the cached (filtered) layout draws: decoded, then re-addressed past the entry's hidden staves
+/// with `Score.translateCursorForHiddenStaves` (wrapped in a throwaway `ScoreCursor.item`).
+///
+/// `nil` when the bytes do not decode, or when the re-addressing falls back to a `.beat`: the item's staff is hidden,
+/// so there is no laid-out place to answer for (a host cannot have selected it in the first place, since the hit tests
+/// only ever hit items the filtered document renders). Refuse rather than resolve against the wrong staff.
+///
+/// The one rule both single-item geometry verbs read: `nativeEditingCaretFrame` carets this item and
+/// `nativeSelectionInkFrames` answers where it is drawn.
+func cachedItem(_ itemBytes: Data, of score: Score, in entry: LayoutDocumentCache.Entry) -> ScoreItemID? {
+    guard let item = try? ScoreItemIDCodec.decode(itemBytes),
+          case let .item(filtered) = score.translateCursorForHiddenStaves(
+              .item(item), hiddenStaves: entry.hiddenStaves,
+          )
+    else { return nil }
+    return filtered
 }
 
 /// A host's selection — full-score-addressed ids, as a `SelectionTintCodec` payload carries them — as the ids the

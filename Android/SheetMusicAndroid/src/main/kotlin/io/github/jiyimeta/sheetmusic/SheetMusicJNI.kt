@@ -758,4 +758,28 @@ object SheetMusicJNI {
             arena,
         ).toByteArray()
     }
+
+    /**
+     * Where a selected clef or engraved element (a mark) is drawn in the cached layout of [scoreHandle], for hanging a
+     * control off the glyph, as a `SelectionInkFramesWire` payload: `spMm` (the staff space it was engraved at, once),
+     * then `frames`, one document-mm rect (`xMm`/`yMm`/`widthMm`/`heightMm`, Y down) per place it is drawn, in document
+     * order — a hairpin across a system break, or a signature and its courtesy announcement, is drawn in two. Decode
+     * with the generated `io.github.jiyimeta.sheetmusic.audio.serialization.SelectionInkFramesCodec`.
+     *
+     * [itemBytes] is a `ScoreItemID` wire payload, full-score addressed — the value [nativeEditingHitTarget] returns —
+     * re-addressed past the cached layout's hidden staves as [nativeEditingCaretFrame]'s is. Empty array = nothing to
+     * answer: the handle is unknown, nothing is cached, the bytes do not decode or name an item on a hidden staff, the
+     * item is not a clef or an element (a note, rest, tuplet, text or grace note), or it is drawn nowhere.
+     */
+    fun nativeSelectionInkFrames(
+        scoreHandle: Long,
+        itemBytes: ByteArray,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeSelectionInkFrames(
+            scoreHandle,
+            SwiftData.fromByteArray(itemBytes, arena),
+            arena,
+        ).toByteArray()
+    }
 }
