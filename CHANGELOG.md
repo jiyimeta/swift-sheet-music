@@ -22,6 +22,7 @@ and this project adheres to
   from the same measure, paused stays paused there, and the loop survives. It used to stop and rewind.
 - **`HostedSynth.programSelect` prefetches only when the selection changes.** A host that sends the same program again
   starts no task.
+- **SwiftySynth 0.4.2** (exact), the release that builds on Windows again.
 
 ### Added
 
@@ -33,11 +34,21 @@ and this project adheres to
   `hasSoundFont`, `recordedProgram(channel:)` and `recordedTuning(channel:)`.
 - **`HostedSequence`**: `totalTicks`, `isAtEnd` and `isPlaying`. All additive; Android's calls are unchanged.
 
+### Fixed
+
+- **Windows draws a frame's picture.** `DrawCommandWalker` skipped `drawImage`; it now decodes the bytes with WIC
+  once per canvas resources (`cd2d_draw_image`, cached by content) and stretches them over the rectangle with
+  Direct2D, as `DrawProgramCGRenderer` does on the Mac. Bytes WIC cannot read draw nothing.
+- **An edited frame's tiles are redrawn on Windows.** `ScoreSurface.replaceCommands` keyed spans by system index
+  alone, so the title block and every frame shared one key and only the first was compared; spans without a system
+  are now told apart by their place on the page (`SpanKey`).
+
 ### Notes
 
 - The Windows suites that need a General MIDI font are skipped without one: `ChokeTests`, `OnsetPreviewTests` and
   (with `SSM_CALIBRATION=1`) `CalibrationTests`, gated on `SSM_TEST_SF2`. CI does not run them, and does not run
-  `SheetMusicAudioWindowsTests` at all (Windows only). They were run on a Windows machine for this release.
+  `SheetMusicAudioWindowsTests` or `SheetMusicRenderWindowsTests` at all (Windows only). They were run on a Windows
+  machine for this release.
 
 ## [4.28.0] - 2026-11-04
 

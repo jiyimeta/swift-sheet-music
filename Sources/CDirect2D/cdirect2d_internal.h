@@ -85,6 +85,9 @@ struct cd2d_resources {
     std::map<cd2d::GlyphKey, cd2d::ComPtr<ID2D1PathGeometry>> glyphs;
     std::map<cd2d::StrokeKey, cd2d::ComPtr<ID2D1StrokeStyle>> strokes;
     std::map<cd2d::FormatKey, cd2d::ComPtr<IDWriteTextFormat>> formats;
+    /// Pictures decoded once (`cd2d_draw_image`), by a hash of their bytes and their length: WIC's own copy in
+    /// premultiplied BGRA, which outlives the bytes the draw program handed in and is independent of any device.
+    std::map<std::pair<uint64_t, uint32_t>, cd2d::ComPtr<IWICBitmap>> images;
 };
 
 /// A render target to draw the draw program's vocabulary on, with the path under construction and the transform.

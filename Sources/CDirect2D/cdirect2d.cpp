@@ -512,6 +512,67 @@ extern "C" void cd2d_fill_rect(cd2d_canvas *canvas, float x, float y, float widt
     canvas->target->FillRectangle(D2D1::RectF(x, y, x + width, y + height), canvas->brush.Get());
 }
 
+namespace {
+
+/// FNV-1a over the bytes: the picture cache's key, with the length beside it.
+uint64_t imageHash(const uint8_t *data, uint32_t length) {
+    uint64_t hash = 0xcbf29ce484222325ULL;
+    for (uint32_t index = 0; index < length; ++index) {
+        hash ^= data[index];
+        hash *= 0x100000001b3ULL;
+    }
+    return hash;
+}
+
+/// The picture decoded into WIC's own premultiplied BGRA bitmap, once: from the cache, or decoded now and kept.
+IWICBitmap *decodedImage(cd2d_resources *resources, const uint8_t *data, uint32_t length) {
+    const auto key = std::make_pair(imageHash(data, length), length);
+    auto found = resources->images.find(key);
+    if (found != resources->images.end()) return found->second.Get();
+    IWICImagingFactory *wic = resources->wic.Get();
+    if (!wic) return nullptr;
+    ComPtr<IWICStream> stream;
+    ComPtr<IWICBitmapDecoder> decoder;
+    ComPtr<IWICBitmapFrameDecode> frame;
+    ComPtr<IWICFormatConverter> converter;
+    ComPtr<IWICBitmap> bitmap;
+    HRESULT hr = wic->CreateStream(&stream);
+    // The stream reads the caller's bytes in place; the bitmap kept below is WIC's own copy of the pixels.
+    if (SUCCEEDED(hr)) hr = stream->InitializeFromMemory(const_cast<BYTE *>(data), length);
+    if (SUCCEEDED(hr)) {
+        hr = wic->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnDemand, &decoder);
+    }
+    if (SUCCEEDED(hr)) hr = decoder->GetFrame(0, &frame);
+    if (SUCCEEDED(hr)) hr = wic->CreateFormatConverter(&converter);
+    if (SUCCEEDED(hr)) {
+        hr = converter->Initialize(
+            frame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0,
+            WICBitmapPaletteTypeMedianCut);
+    }
+    if (SUCCEEDED(hr)) hr = wic->CreateBitmapFromSource(converter.Get(), WICBitmapCacheOnLoad, &bitmap);
+    if (FAILED(hr)) return nullptr;
+    IWICBitmap *decoded = bitmap.Get();
+    resources->images[key] = bitmap;
+    return decoded;
+}
+
+}  // namespace
+
+extern "C" int32_t cd2d_draw_image(
+    cd2d_canvas *canvas, const uint8_t *data, uint32_t length, float x, float y, float width, float height) {
+    if (!data || length == 0 || width <= 0 || height <= 0) return E_INVALIDARG;
+    IWICBitmap *decoded = decodedImage(canvas->resources, data, length);
+    if (!decoded) return E_FAIL;
+    // A bitmap belongs to the target it was made for (a band's device context, or the PNG path's WIC target), so it is
+    // made for this one; the decode above is the expensive half, and it is shared.
+    ComPtr<ID2D1Bitmap> bitmap;
+    HRESULT hr = canvas->target->CreateBitmapFromWicBitmap(decoded, nullptr, &bitmap);
+    if (FAILED(hr)) return hr;
+    canvas->target->DrawBitmap(
+        bitmap.Get(), D2D1::RectF(x, y, x + width, y + height), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+    return S_OK;
+}
+
 extern "C" void cd2d_fill_glyph(
     cd2d_canvas *canvas, const uint16_t *family, uint32_t codepoint, float x, float y, float size, int32_t weight,
     int32_t italic) {

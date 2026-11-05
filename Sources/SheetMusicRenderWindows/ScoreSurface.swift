@@ -164,11 +164,8 @@ public final class ScoreSurface {
         let old = pages[page]
         let oldSpans = spans[page]
         var dirty: [DrawRect] = []
-        func bySystem(_ spans: [SystemSpan]) -> [Int: SystemSpan] {
-            Dictionary(spans.map { ($0.systemIndex ?? -1, $0) }, uniquingKeysWith: { first, _ in first })
-        }
-        let oldBySystem = bySystem(oldSpans)
-        let newBySystem = bySystem(newSpans)
+        let oldBySystem = SpanKey.keyed(oldSpans)
+        let newBySystem = SpanKey.keyed(newSpans)
         for key in Set(oldBySystem.keys).union(newBySystem.keys) {
             switch (oldBySystem[key], newBySystem[key]) {
             case let (before?, after?):

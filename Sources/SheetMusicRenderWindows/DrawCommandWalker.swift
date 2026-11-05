@@ -1,4 +1,5 @@
 import CDirect2D
+import Foundation // `Data`, the draw program's picture bytes
 import SheetMusicBridgeCore
 
 /// Walks draw commands onto a CDirect2D canvas: the walk `DrawProgramCGRenderer` (RenderPreviews) does on the Mac, over
@@ -93,10 +94,14 @@ struct DrawCommandWalker {
         case let .setDash(onMM, offMM):
             dashOn = px(onMM)
             dashOff = px(offMM)
-        case .drawImage:
-            // Pictures are not drawn on Windows yet: folino's Windows reader records the gap as a PARITY(windows)
-            // marker, which is where the ledger tracks it.
-            break
+        case let .drawImage(data, x, y, w, h):
+            // Stretched over its rectangle, as `DrawProgramCGRenderer.drawImage` draws it; decoded once per resources
+            // (`cd2d_draw_image`). A picture WIC cannot read draws nothing, as an unreadable one does on the Mac.
+            guard !data.isEmpty else { return }
+            _ = data.withUnsafeBytes { bytes -> Int32 in
+                guard let base = bytes.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+                return cd2d_draw_image(canvas, base, UInt32(bytes.count), px(x), px(y), px(w), px(h))
+            }
         }
     }
 
