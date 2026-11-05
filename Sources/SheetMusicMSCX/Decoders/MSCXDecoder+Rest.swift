@@ -11,7 +11,8 @@ enum MSCXRestDecoder {
     /// `duration` on a measure rest is encoder-owned informational
     /// data and is regenerated from the effective measure duration.
     private static let consumedRestChildren: Set = [
-        "Spanner", "color", "dots", "duration", "durationType", "offset", "autoplace", "placement", "track", "visible",
+        "Lyrics", "Spanner", "color", "dots", "duration", "durationType", "offset", "autoplace", "placement", "track",
+        "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> Chord {
@@ -27,9 +28,12 @@ enum MSCXRestDecoder {
         let duration = try duration(
             forDurationType: durationText, node: node,
         )
+        // A syllable may sit under a rest as under a chord: MuseScore reads `<Lyrics>` for any `ChordRest`
+        // (`TRead::readProperties(ChordRest*)`). Left as preserved markup it was kept on save but never drawn.
         var rest = Chord(
             duration: duration,
             notes: [],
+            lyrics: Chord.decodeLyrics(node),
             preservedMarkup: node.preservedMarkup(consuming: consumedRestChildren),
         )
         rest.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)

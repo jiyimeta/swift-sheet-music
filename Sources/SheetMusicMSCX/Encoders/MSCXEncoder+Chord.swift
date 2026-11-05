@@ -88,17 +88,8 @@ extension Chord {
             children.append(XMLTreeNode(name: "StemDirection", text: stemDirection.mscxValue))
         }
         // Lyrics sit between durationType and the first <Note>: this matches MuseScore's serializer (Chord::write) and
-        // is what both MS3 and MS4 readers expect. Empty-text placeholders (verse-padding entries inserted by the
-        // decoder when verse N exists without verse N-1) are skipped — emitting them produces stray empty syllables on
-        // screen.
-        //
-        // A syllable of symbols alone (`<text><sym>…</sym></text>`) has empty text too, but it is no placeholder: its
-        // markup still describes that text, so layout draws it (`Lyric.richText`) and its markup is written back
-        // (`Lyric.savesMarkup(options:)`). With preserved markup off it would save as an empty `<text>`, a stray
-        // syllable again, so it is skipped then.
-        for lyric in lyrics where !lyric.text.isEmpty || lyric.savesMarkup(options: options) {
-            children.append(lyric.encode(options: options))
-        }
+        // is what both MS3 and MS4 readers expect.
+        children += lyricNodes(options: options)
         // Per-note overrides for a tie whose partner is one of this
         // chord's own graces rather than the neighbouring real chord
         // the `tieForwardLocation` / `tieBackLocation` arguments were
@@ -269,6 +260,9 @@ extension Chord {
     /// A rest carries chord-anchored spanner markers exactly as a chord does:
     /// MuseScore anchors slurs to any `ChordRest` and writes both sides
     /// through the one `TWrite::writeProperties(const ChordRest*, …)`.
+    ///
+    /// Lyrics too: that writer puts a `ChordRest`'s `<Lyrics>` right after `<durationType>` / `<duration>` and before
+    /// the slur loop, and a rest has no notes or articulations to come between, so the rest follows it exactly.
     func encodeAsRest(
         eid: EID,
         slurEndMarkers: [XMLTreeNode] = [],
@@ -277,6 +271,7 @@ extension Chord {
         var children: [XMLTreeNode] = []
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
         duration.appendDurationXML(to: &children)
+        children += lyricNodes(options: options)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
@@ -297,11 +292,26 @@ extension Chord {
         var children: [XMLTreeNode] = []
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
         duration.appendDurationXML(to: &children, in: measureDuration)
+        children += lyricNodes(options: options)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Rest", children: children)
+    }
+
+    /// The `<Lyrics>` a chord or rest writes, one per printed verse. Empty-text placeholders (verse-padding entries
+    /// inserted by the decoder when verse N exists without verse N-1) are skipped — emitting them produces stray empty
+    /// syllables on screen.
+    ///
+    /// A syllable of symbols alone (`<text><sym>…</sym></text>`) has empty text too, but it is no placeholder: its
+    /// markup still describes that text, so layout draws it (`Lyric.richText`) and its markup is written back
+    /// (`Lyric.savesMarkup(options:)`). With preserved markup off it would save as an empty `<text>`, a stray
+    /// syllable again, so it is skipped then.
+    private func lyricNodes(options: MSCXEncoderOptions) -> [XMLTreeNode] {
+        lyrics
+            .filter { !$0.text.isEmpty || $0.savesMarkup(options: options) }
+            .map { $0.encode(options: options) }
     }
 }
 

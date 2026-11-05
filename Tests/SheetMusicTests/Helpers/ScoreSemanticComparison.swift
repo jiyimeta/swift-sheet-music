@@ -78,6 +78,12 @@ enum ScoreSemanticComparison {
         /// not read `<extend>` yet, while MuseScore's import turns it into the `<ticks_f>` its refs carry — a known
         /// gap, which went unseen while the MSCX decoder dropped `<ticks_f>` too.
         var ignoresLyricMelismas = false
+        /// If true, clear every syllable's `offset` and `placement` on both sides. The MusicXML decoder reads a
+        /// `<lyric>`'s number, text and syllabic only, while MuseScore's import also turns its `placement` and
+        /// `default-y` / `relative-x` into the side and offset its refs carry — a known gap, which went unseen while
+        /// the MSCX decoder left a rest's `<Lyrics>` as preserved markup, the only lyrics in these fixtures that have
+        /// either.
+        var ignoresLyricPlacement = false
     }
 
     /// The `metaTag` keys MuseScore's app (not its importer) writes when `mscore` saves outside test mode:
@@ -328,11 +334,14 @@ enum ScoreSemanticComparison {
         if options.stripsStaffText { s = removingStaffText(s) }
         if options.sortsAnnotationRuns { s = sortingAnnotationRuns(s) }
         if options.ignoresLineGeometry { s = ignoringLineGeometry(s) }
-        if options.ignoresLyricMelismas { s = clearingLyricMelismas(s) }
+        if options.ignoresLyricMelismas || options.ignoresLyricPlacement {
+            s = clearingLyricFields(s, options: options)
+        }
         return applyingWriterAllowances(s, options: options, isReference: isReference)
     }
 
-    private static func clearingLyricMelismas(_ score: Score) -> Score {
+    /// `Options.ignoresLyricMelismas` and `Options.ignoresLyricPlacement`, in one walk.
+    private static func clearingLyricFields(_ score: Score, options: Options) -> Score {
         var s = score
         s.parts.mapValues { part in
             var pt = part
@@ -345,7 +354,11 @@ enum ScoreSemanticComparison {
                             guard case var .chord(chord) = element else { return element }
                             chord.lyrics = chord.lyrics.map { lyric in
                                 var cleared = lyric
-                                cleared.ticks = 0
+                                if options.ignoresLyricMelismas { cleared.ticks = 0 }
+                                if options.ignoresLyricPlacement {
+                                    cleared.elementProperties.offset = nil
+                                    cleared.elementProperties.placement = nil
+                                }
                                 return cleared
                             }
                             return .chord(chord)

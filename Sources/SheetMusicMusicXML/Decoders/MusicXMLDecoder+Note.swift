@@ -55,13 +55,14 @@ enum MusicXMLNoteDecoder {
         if isRest {
             let restNode = node.children.first(where: { $0.name == "rest" })
             let isMeasureRest = restNode?.attributes["measure"] == "yes"
-            if isMeasureRest {
-                // `<duration>` (which `MusicXMLDuration.decode` already
-                // consumed for divisions-cursor correctness) is
-                // informational under the `.measure` marker model.
-                return .new(prefix + [.rest(duration: .measure)] + suffix)
-            }
-            return .new(prefix + [.rest(duration: duration)] + suffix)
+            // `<duration>` (which `MusicXMLDuration.decode` already
+            // consumed for divisions-cursor correctness) is
+            // informational under the `.measure` marker model.
+            //
+            // A rest keeps its `<lyric>`s as a note does: MuseScore adds them to the note's `ChordRest`, rest or
+            // chord alike (`importmusicxmlpass2.cpp`, `addLyrics(…, cr, …)`).
+            let rest = Chord(duration: isMeasureRest ? .measure : duration, notes: [], lyrics: decodeLyrics(node))
+            return .new(prefix + [.chord(rest)] + suffix)
         }
 
         let midi: Int
