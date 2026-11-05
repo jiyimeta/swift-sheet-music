@@ -1,6 +1,6 @@
 import SheetMusicFoundation
 
-/// Replaces the lyrics array on a chord. Inverse is another
+/// Replaces the lyrics array on a chord or rest. Inverse is another
 /// `SetLyrics` carrying the prior lyrics.
 ///
 /// > Note: This command is sugar over `ReplaceVoiceElement` —
@@ -26,9 +26,8 @@ public struct SetLyrics: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
-        guard case var .chord(chord) = score[location],
-              !chord.notes.isEmpty
-        else {
+        // A rest carries lyrics as a chord does (`SetLyric`).
+        guard case var .chord(chord) = score[location] else {
             throw Self.refused(.wrongElementKind(at: location, expected: .chord))
         }
         let prior = chord.lyrics

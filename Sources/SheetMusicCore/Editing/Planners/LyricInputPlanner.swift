@@ -105,9 +105,29 @@ public enum LyricInputPlanner {
         }
     }
 
-    public static func previousCursor(from cursor: Cursor, in score: Score) -> Cursor? {
-        score.previousChord(before: cursor.location).map {
+    /// Where the caret goes on one slot without writing — a host's → at the end of a syllable — by the same stops a
+    /// typed syllable's advance takes (`stopsLyricEntry(verse:)`): the next chord, or a rest carrying a syllable.
+    public static func nextCursor(from cursor: Cursor, in score: Score) -> Cursor? {
+        score.nextChord(after: cursor.location, where: stopsLyricEntry(verse: cursor.verse)).map {
             Cursor(location: $0, verse: cursor.verse)
+        }
+    }
+
+    public static func previousCursor(from cursor: Cursor, in score: Score) -> Cursor? {
+        score.previousChord(before: cursor.location, where: stopsLyricEntry(verse: cursor.verse)).map {
+            Cursor(location: $0, verse: cursor.verse)
+        }
+    }
+
+    /// Where lyric entry stops when it moves on: a chord, or a rest that already carries a syllable on `verse`.
+    /// MuseScore's `NotationInteraction::navigateToLyrics` walks the segments the same way, either direction — it
+    /// breaks on a chord, and on a rest only when `lyrics(verse, placement)` finds one there — so typing words never
+    /// lands on a silent beat, while a syllable written under a rest is still reached. Lyric entry starts on a rest
+    /// only when the host opens it there (⌘L with the rest selected).
+    static func stopsLyricEntry(verse: Int) -> (Chord) -> Bool {
+        { chord in
+            !chord.notes.isEmpty
+                || (chord.lyrics.indices.contains(verse) && !chord.lyrics[verse].text.isEmpty)
         }
     }
 
@@ -125,7 +145,7 @@ public enum LyricInputPlanner {
         in score: Score,
     ) -> Cursor? {
         guard terminator != .none,
-              let location = score.nextChord(after: cursor.location)
+              let location = score.nextChord(after: cursor.location, where: stopsLyricEntry(verse: cursor.verse))
         else { return nil }
         return Cursor(location: location, verse: cursor.verse)
     }
@@ -261,13 +281,14 @@ public enum LyricInputPlanner {
         before cursor: Cursor,
         in score: Score,
     ) -> (location: VoiceElementID, lyric: Lyric)? {
-        var location = score.previousChord(before: cursor.location)
+        let stops = stopsLyricEntry(verse: cursor.verse)
+        var location = score.previousChord(before: cursor.location, where: stops)
         while let candidate = location {
             let candidateCursor = Cursor(location: candidate, verse: cursor.verse)
             if let lyric = lyric(at: candidateCursor, in: score) {
                 return (candidate, lyric)
             }
-            location = score.previousChord(before: candidate)
+            location = score.previousChord(before: candidate, where: stops)
         }
         return nil
     }

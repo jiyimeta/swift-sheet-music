@@ -26,7 +26,7 @@ extension LayoutDocument {
                 }
             }
         }
-        guard let anchor = chordStemOrigin(at: cursor.location),
+        guard let anchor = lyricColumnOrigin(at: cursor.location),
               let y = lyricLineY(
                   at: cursor.location,
                   verse: cursor.verse,
@@ -41,6 +41,33 @@ extension LayoutDocument {
             role: .lyrics, properties: elementProperties, style: style, side: side,
         ).x
         return CGPoint(x: anchor.x + CGFloat(x) * metrics.sp, y: y)
+    }
+
+    /// Where a syllable under the chord or rest at `anchor` is centered, in document space: the chord's stem origin,
+    /// or the rest's segment column — for a full-measure rest the bar's first column rather than the centered glyph,
+    /// which is where layout draws a rest's syllable (`LayoutEngine.placeMeasureElements`, `emitLyrics`). So the caret
+    /// of a syllable typed under a rest does not jump when its first letter is engraved.
+    func lyricColumnOrigin(at anchor: VoiceElementID) -> CGPoint? {
+        if let chord = chordStemOrigin(at: anchor) {
+            return chord
+        }
+        let restID = RestID(
+            staff: anchor.staff,
+            measureIndex: anchor.measureIndex,
+            voiceIndex: anchor.voiceIndex,
+            elementIndex: anchor.elementIndex,
+        )
+        for system in systems {
+            for measure in system.measures where measure.measureIndex == anchor.measureIndex {
+                for element in measure.elements {
+                    guard case let .rest(duration, origin, _, candidate, _) = element, candidate == restID
+                    else { continue }
+                    let x = duration == .measure ? measure.tickColumns[0] ?? origin.x : origin.x
+                    return absolute(CGPoint(x: x, y: origin.y), in: system, measure: measure)
+                }
+            }
+        }
+        return nil
     }
 
     /// The final document-space origin of a chord stem or rest at `anchor`.

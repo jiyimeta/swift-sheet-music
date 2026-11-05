@@ -77,6 +77,27 @@ struct RestLyricLayoutTests {
         }
     }
 
+    /// Lyric entry opens on a selected rest (⌘L): the empty caret has to stand where the first letter will be drawn,
+    /// the bar's first column under a full-measure rest, or the field jumps when it is.
+    @Test("an empty caret under a full-measure rest stands where its syllable is drawn")
+    func emptyRestCaretMatchesItsSyllable() throws {
+        let anchor = VoiceElementID(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 0,
+        )
+        let empty = Self.layout(Self.score(bars: [[.chord(Chord(duration: .measure, notes: []))]]))
+        let caret = try #require(empty.lyricEntryOrigin(
+            at: LyricInputPlanner.Cursor(location: anchor, verse: 0), placementStyle: TextPlacementStyles(),
+            elementProperties: .default, textProperties: TextProperties(),
+        ))
+        let typed = Self.layout(Self.score(bars: [[
+            .chord(Chord(duration: .measure, notes: [], lyrics: [Lyric(text: "で")])),
+        ]]))
+        let system = try #require(typed.systems.first)
+        let measure = try #require(system.measures.first)
+        let mark = try #require(Self.lyricMarks(in: measure).first)
+        #expect(abs(caret.x - (system.origin.x + measure.origin.x + mark.origin.x)) < 0.001)
+    }
+
     // MARK: - Helpers
 
     private static func note(_ duration: NoteDuration, _ syllable: String) -> Chord {

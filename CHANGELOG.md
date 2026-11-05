@@ -20,6 +20,11 @@ and this project adheres to
   - Spacing treats them as a chord's: a rest's syllable is a demand on its column, and the syllable before it reaches
     to it rather than past it (`nextLyricBearingChord`).
   - The MusicXML import keeps a rest's `<lyric>`s (`addLyrics(…, cr, …)` in MuseScore's import).
+  - **Lyric entry reaches rests as MuseScore's does.** `SetLyric` / `SetLyrics` write a rest's syllables (they
+    refused a rest). `LyricInputPlanner` advances and steps back to the next chord, or to a rest that already carries
+    a syllable on that verse, and passes every other rest (`NotationInteraction::navigateToLyrics`); the new
+    `nextCursor(from:in:)` moves the same way without writing, for a host's →. An empty caret under a rest stands at
+    its segment column, where the syllable is drawn (`lyricEntryOrigin`).
 - **An engraved text's authored `<offset>` replaces its style's position instead of adding to it**, as MuseScore's
   does: a text is laid out at its staff edge and drawn at that plus `Pid::OFFSET`, whose default IS the style's
   position, so a file writes the whole offset once the text was moved. Adding the style's position on top of it

@@ -61,16 +61,32 @@ struct SetLyricsTests {
         #expect(chord.lyrics.isEmpty)
     }
 
-    @Test("apply throws when the target is not a chord")
-    func applyOnRest() {
+    @Test("apply throws when the target is not a chord or rest")
+    func applyOnTimeSignature() {
+        var score = EditingFixtures.fourQuarterRests()
+        let timeSignatureID = VoiceElementID(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
+            voiceIndex: 0, elementIndex: 0,
+        )
+        let cmd = SetLyrics(at: timeSignatureID, lyrics: [Lyric(text: "x")])
+        #expect(throws: SheetMusicError.self) {
+            _ = try cmd.apply(to: &score)
+        }
+    }
+
+    /// A rest carries lyrics as a chord does (MuseScore's `ChordRest`).
+    @Test("apply writes a rest's lyrics")
+    func applyOnRest() throws {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2,
         )
-        let cmd = SetLyrics(at: restID, lyrics: [Lyric(text: "x")])
-        #expect(throws: SheetMusicError.self) {
-            _ = try cmd.apply(to: &score)
+        _ = try SetLyrics(at: restID, lyrics: [Lyric(text: "x")]).apply(to: &score)
+        guard case let .chord(rest)? = score[restID] else {
+            Issue.record("expected the rest")
+            return
         }
+        #expect(rest.lyrics.map(\.text) == ["x"])
     }
 }
