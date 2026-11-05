@@ -1270,14 +1270,20 @@ extension LayoutEngine {
                     // a center Y of `chordSouth + 2.5 sp` leaves
                     // ~0.5 sp of clearance above the glyph top —
                     // matching MuseScore's `Sid::dynamicsMinDistance`.
+                    //
+                    // That 2 sp is `Sid::dynamicsPosBelow` (0, 2). An authored offset replaces it rather than adding
+                    // to it, as every text's does (`placedTextPosition`): x and y both, measured where the default is.
+                    let position = d.elementProperties.offset ?? Self.dynamicsPosBelow
                     let defaultDynY = staffMidY + metrics.sp * 4
+                        + CGFloat(position.y - Self.dynamicsPosBelow.y) * metrics.sp
                     let chordSouth = voiceChordSouthByTick[tickCursor]
                         ?? -.infinity
                     let chordAvoid = chordSouth + metrics.sp * 2.5
                     let dynY = max(defaultDynY, chordAvoid)
                     let dynamicElement = Self.dynamicElement(
                         d, anchor: attachmentAnchor(at: elementAddress, in: voice),
-                        origin: CGPoint(x: baseX - metrics.sp, y: dynY), metrics: metrics,
+                        origin: CGPoint(x: baseX - metrics.sp + CGFloat(position.x) * metrics.sp, y: dynY),
+                        metrics: metrics,
                     )
                     if d.visible {
                         out.append(dynamicElement)

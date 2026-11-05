@@ -9,6 +9,10 @@ extension LayoutEngine {
     /// (`Dynamic.displayedRichText`: "subito p", "più ⟨f⟩", an `other-dynamics` word) carries its runs instead
     /// (`LayoutRichText.dynamic`), starting at the same X with its first baseline on the plain glyphs' baseline —
     /// MuseScore sets every dynamic on one baseline (`Sid::dynamicsAlign`, `engraving/style/styledef.cpp:1119`).
+    /// `Sid::dynamicsPosBelow` (`styledef.cpp:765`): where a dynamic below the staff sits, from the bottom line, in
+    /// spatiums. Its authored offset replaces this rather than adding to it.
+    static let dynamicsPosBelow = ScoreOffset(x: 0, y: 2)
+
     static func dynamicElement(
         _ dynamic: Dynamic, anchor: VoiceElementID?, origin: CGPoint, metrics: StaffMetrics,
     ) -> LayoutElement {

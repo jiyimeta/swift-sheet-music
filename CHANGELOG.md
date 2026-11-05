@@ -37,6 +37,8 @@ and this project adheres to
     (`lyricAnchorCorrectionY`, now given the score's style) follow it.
   - `SetTextOffset` writes the same thing, measured from the side's staff edge; `nil` still restores the style.
   - Marks and jumps already read their offset this way, from the staff edge with no style part, and are unchanged.
+  - **A dynamic's authored offset is read at all**, by the same rule: it replaces `Sid::dynamicsPosBelow` (0, 2),
+    x and y. Layout ignored it, so a dynamic moved by hand in MuseScore sat at the default.
 
 ## [4.29.0] - 2026-11-05
 

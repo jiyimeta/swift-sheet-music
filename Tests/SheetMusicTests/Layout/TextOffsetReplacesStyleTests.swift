@@ -63,7 +63,37 @@ struct TextOffsetReplacesStyleTests {
         #expect(abs(atStyle - plain) < 0.001)
     }
 
+    @Test("a dynamic's offset replaces Sid::dynamicsPosBelow")
+    func dynamicOffsetReplacesStyle() throws {
+        let plain = try Self.dynamicOrigin(offset: nil)
+        let atStyle = try Self.dynamicOrigin(offset: ScoreOffset(x: 0, y: 2))
+        #expect(abs(atStyle.y - plain.y) < 0.001)
+        #expect(abs(atStyle.x - plain.x) < 0.001)
+        // Far enough below the staff that autoplace leaves both where their offsets put them (the styled 2 sp is
+        // pushed on by the staff's clearance): 2 sp apart is the offsets' own difference, not 2 sp more on top.
+        let low = try Self.dynamicOrigin(offset: ScoreOffset(x: 1.5, y: 4))
+        let lower = try Self.dynamicOrigin(offset: ScoreOffset(x: 1.5, y: 6))
+        #expect(abs((lower.y - low.y) - 2 * Self.sp) < 0.001)
+        #expect(abs((low.x - plain.x) - 1.5 * Self.sp) < 0.001)
+        #expect(low.y > plain.y)
+    }
+
     // MARK: - Helpers
+
+    /// A dynamic on a middle-line note, so no chord reaches down to push it: the offset decides where it stays.
+    private static func dynamicOrigin(offset: ScoreOffset?) throws -> CGPoint {
+        var dynamic = Dynamic(subtype: "f", velocity: 96)
+        dynamic.elementProperties.offset = offset
+        let document = layout([
+            .dynamic(dynamic),
+            .chord(Chord(duration: .whole, notes: ChordNotes([Note(pitch: 71, tpc: 19)]))),
+        ])
+        let origin = try #require(allElements(document).lazy.compactMap { element -> CGPoint? in
+            guard case let .textMark(.dynamic, _, origin, _) = element else { return nil }
+            return origin
+        }.first)
+        return try CGPoint(x: origin.x, y: origin.y - topStaffLine(document))
+    }
 
     private static let sp: CGFloat = StaffMetrics(staffSize: 28).sp
 
