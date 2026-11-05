@@ -8,6 +8,7 @@ import Testing
 
 #if !canImport(CoreGraphics)
     private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
 #endif
 
 /// An engraved text's authored `<offset>` replaces its style's position; it does not add to it. MuseScore lays a text

@@ -8,6 +8,7 @@ import Testing
 
 #if !canImport(CoreGraphics)
     private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
 #endif
 
 /// A syllable under a rest is drawn, and spaced, like one under a chord. MuseScore anchors lyrics to any `ChordRest`:
