@@ -359,7 +359,7 @@ final class AudioDeviceStream: @unchecked Sendable {
 public enum WindowsAudioError: Error, CustomStringConvertible {
     /// A WASAPI call failed; `hresult` is its HRESULT.
     case device(call: String, hresult: Int32)
-    /// FluidSynth refused: `what` names the step.
+    /// The synth refused: `what` names the step.
     case synth(String)
 
     public var description: String {
@@ -367,7 +367,7 @@ public enum WindowsAudioError: Error, CustomStringConvertible {
         case let .device(call, hresult):
             "\(call) failed (HRESULT 0x\(String(UInt32(bitPattern: hresult), radix: 16, uppercase: true)))"
         case let .synth(what):
-            "FluidSynth: \(what)"
+            "synth: \(what)"
         }
     }
 }

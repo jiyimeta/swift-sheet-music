@@ -721,16 +721,13 @@ if isAndroid {
     ]
 }
 
-// Playback on Windows: FluidSynth renders and schedules (as on Android), WASAPI plays, and the cursor follows the score
-// player's tick. Declared on Windows only. FluidSynth is found through the include and library paths the build passes
-// (`-Xcc -I<fluidsynth>\include -Xlinker -L<fluidsynth>\lib`, the official release zip's cpp11 flavor), and ships
-// as its LGPL DLL beside the app.
+// Playback on Windows: SwiftySynth renders and schedules (`HostedSynth`, as on Android), WASAPI plays, and the cursor
+// follows the score sequence's tick. Declared on Windows only. Nothing outside the package is linked for the synth.
 if isWindows {
     products += [
         .library(name: "SheetMusicAudioWindows", targets: ["SheetMusicAudioWindows"]),
     ]
     targets += [
-        .systemLibrary(name: "CFluidSynth", path: "Sources/CFluidSynth"),
         .target(
             name: "CWASAPI",
             path: "Sources/CWASAPI",
@@ -753,7 +750,6 @@ if isWindows {
             name: "SheetMusicAudioWindows",
             dependencies: [
                 .product(name: "SwiftySynth", package: "swiftysynth"),
-                "CFluidSynth",
                 "CMediaFoundation",
                 "CWASAPI",
                 "SheetMusicAudioCore",
@@ -761,10 +757,6 @@ if isWindows {
                 "SheetMusicBridgeCore",
                 "SheetMusicCore",
                 "SheetMusicMIDI",
-            ],
-            linkerSettings: [
-                // The import library in FluidSynth's Windows release zip; Unix builds call it `fluidsynth`.
-                .linkedLibrary("libfluidsynth-3"),
             ],
         ),
         // The export's length, errors and containers (`exportAudioFile`), which need no SoundFont and no device — a

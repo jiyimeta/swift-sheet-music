@@ -66,13 +66,13 @@ extension WindowsPlaybackEngine {
         }
     }
 
-    /// Controller `controller` on the score synth's `channel`, as FluidSynth holds it.
+    /// Controller `controller` on the score synth's `channel`, as the synth holds it.
     @_spi(PlaybackProbe)
     public func probeController(_ controller: Int, onChannel channel: Int) -> Int? {
         core.shared.withLock { $0.session?.score.controller(Int32(controller), onChannel: Int32(channel)) }
     }
 
-    /// `[bank, program]` on the score synth's `channel`, as FluidSynth holds them.
+    /// `[bank, program]` on the score synth's `channel`, as the synth holds them.
     @_spi(PlaybackProbe)
     public func probeProgram(onChannel channel: Int) -> [Int]? {
         core.shared.withLock { shared -> [Int]? in

@@ -32,8 +32,7 @@ struct ExportTests {
         defer { try? FileManager.default.removeItem(at: url) }
         try await engine.exportAudioFile(to: url, score: score, format: wav16)
         let expected = engine.totalTimeSeconds * 44100
-        // The end is decided between two 64-frame chunks, after the chunk that reached it, and FluidSynth rounds its
-        // player's position to the millisecond.
+        // The end is decided between two chunks, after the chunk that reached it.
         #expect(try abs(Double(wavFrames(url)) - expected) < Double(3 * PlaybackCore.chunkFrames))
         #expect(engine.state == .stopped)
     }

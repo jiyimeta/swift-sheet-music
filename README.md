@@ -18,7 +18,7 @@ cross-compiles to Android via the Swift 6.3 official Android SDK and
 is consumable from Kotlin through a Gradle module that ships as an
 `.aar`. See [Android](#android) below. The same subset builds natively
 on Windows (x64), where two Windows-only libraries draw a score with
-Direct2D and play it through FluidSynth and WASAPI. See
+Direct2D and play it through SwiftySynth and WASAPI. See
 [Windows](#windows).
 
 > **Status:** unofficial. Not affiliated with MuseScore Limited / Muse Group,
@@ -52,7 +52,7 @@ Windows-only; every other unmarked target is Apple-only.
 | `SheetMusicPDF` | ✓ | ✓ | PDF import via a pure-Swift reader (all platforms, including Android and Windows) + PDF export (Apple-only, iOS 17+ / macOS 14+). Import reads the PDF's vector content; add `SheetMusicOMRModel` for scanned pages. Export reuses `SheetMusicUI`'s layout + drawing pipeline through an `ImageRenderer` → `CGPDFContext` bridge, so glyphs stay vector. |
 | `SheetMusicOMRModel` |   |   | The bundled optical music recognition model (~1.1 MB, compiled Core ML) that lets `SheetMusicPDF` read **scanned** (image-only) PDFs. Opt-in: `SheetMusicPDF` never depends on it, so a consumer that reads only typeset PDFs carries none of it. See [Scanned PDFs](#scanned-pdfs-omr). |
 | `SheetMusicRenderWindows` |   | ✓ | Windows-only. `ScorePages` lays a score out into pages and `ScoreSurface` draws them onto a composition swap chain for a XAML `SwapChainPanel` through Direct2D + DirectWrite; `installWindowsFontMetrics()` sets up the layout's font metrics. Bundles Bravura, the Edwin faces (SIL OFL) and their metrics table. See [Windows](#windows). |
-| `SheetMusicAudioWindows` |   | ✓ | Windows-only. `WindowsPlaybackEngine`: the Apple `PlaybackEngine`'s operations over FluidSynth + WASAPI, following the default output device. Links the FluidSynth DLL. See [Windows](#windows). |
+| `SheetMusicAudioWindows` |   | ✓ | Windows-only. `WindowsPlaybackEngine`: the Apple `PlaybackEngine`'s operations over SwiftySynth + WASAPI, following the default output device. See [Windows](#windows). |
 
 Android playback is delivered out-of-band as the
 `io.github.jiyimeta:sheet-music-audio-android` Kotlin Gradle module
@@ -472,7 +472,7 @@ score:
 | Product | Contents |
 |---|---|
 | `SheetMusicRenderWindows` | `ScorePages`: a score laid out per `ScorePageOptions` and cut into pages, and the same pages with a selection tinted. `ScoreSurface`: those pages on a composition swap chain, rasterized into tiles from each system's commands and blitted every frame with the app's overlays (cursor, selection) on top; rebuilt after a device loss. `installWindowsFontMetrics()`. `Direct2DPageRenderer.renderPNG(pages:page:pxPerMM:fontFiles:to:)` for one page as a PNG. Bravura, the Edwin faces and their metrics table bundled. Direct2D + DirectWrite. |
-| `SheetMusicAudioWindows` | `WindowsPlaybackEngine`: the Apple `PlaybackEngine`'s operations under the same names — prepare / replace the score / reload the SoundFont, transport, loops, rate / transposition / tuning, the mixer with its metronome strip, master gain and output stage, level monitoring, note previews, audio-file export (`exportAudioFile`, WAV, AIFF and M4A) — plus events for the end of the score and a lost / recovered output device. FluidSynth + WASAPI; follows the default output device. An engine made with `output: .offline(sampleRate:)` opens no device, for exporting. |
+| `SheetMusicAudioWindows` | `WindowsPlaybackEngine`: the Apple `PlaybackEngine`'s operations under the same names — prepare / replace the score / reload the SoundFont, transport, loops, rate / transposition / tuning, the mixer with its metronome strip, master gain and output stage, level monitoring, note previews, audio-file export (`exportAudioFile`, WAV, AIFF and M4A) — plus events for the end of the score and a lost / recovered output device. SwiftySynth + WASAPI; follows the default output device. An engine made with `output: .offline(sampleRate:)` opens no device, for exporting. |
 
 Not on Windows: scanned-PDF reading (Apple-only, as on Android) and
 arm64. Audio-file export (4.6.0) writes WAV, AIFF and, through Media
@@ -489,26 +489,10 @@ starts there).
   ([install](https://www.swift.org/install/windows/)), with the Visual
   Studio components its installer asks for (the MSVC x64 build tools
   and a Windows SDK). Direct2D, DirectWrite, Direct3D 11, WIC and
-  WASAPI come with the Windows SDK; drawing needs nothing else.
-- **FluidSynth**, for `SheetMusicAudioWindows` only — below.
-
-### FluidSynth
-
-`SheetMusicAudioWindows` links FluidSynth 2 dynamically. Use the official Windows release zip in its `cpp11` flavor
-(x64, no glib; verified with 2.6.1), unpack it, and pass its `include`
-and `lib` directories to every build of a package that depends on
-`SheetMusicAudioWindows`:
-
-```powershell
-$fluidsynth = 'C:\fluidsynth'   # the unpacked release zip
-swift build -Xcc "-I$fluidsynth\include" -Xlinker "-L$fluidsynth\lib"
-```
-
-The target links the zip's import library, `libfluidsynth-3`. At run
-time `libfluidsynth-3.dll` and the DLLs it depends on from the zip's
-`bin` directory must sit beside your executable (or on `PATH`).
-FluidSynth is LGPL 2.1 and is linked as a DLL, never statically; ship
-its license text alongside it.
+  WASAPI come with the Windows SDK; drawing needs nothing else, and
+  neither does playback: `SheetMusicAudioWindows` synthesizes with
+  SwiftySynth, a SwiftPM dependency (it used FluidSynth before 4.29.0,
+  which needed its DLLs beside the app).
 
 ### Bundled fonts and metrics
 

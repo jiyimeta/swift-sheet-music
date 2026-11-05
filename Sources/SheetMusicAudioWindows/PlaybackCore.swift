@@ -207,9 +207,10 @@ struct Shared: Sendable {
     var previewPolicy = NotePreviewPolicy()
     var previewDeadline: PreviewDeadline?
     var sustainedPreview: SustainedPreview?
-    /// A score player stopped while playing has yet to render its next block, in which FluidSynth sends All Sound Off
-    /// on every channel it played on (`PlayerHandle`): a preview sent before then is cut with the score's notes — a
-    /// held preview started in the same moment as a pause, most of the time.
+    /// A score player stopped while playing has yet to render its next block. A FluidSynth player sent All Sound Off
+    /// in that block, cutting a preview sent before it — a held preview started in the same moment as a pause. A
+    /// SwiftySynth sequence cuts its voices inside `stop()` itself, so the hold now only delays such a preview by one
+    /// block; it is kept until the probe's `previewRightAfterPause` has run without it.
     var scoreStopUnrendered = false
     /// The previews' messages sent while `scoreStopUnrendered`, in order; they go out right after that block. Room is
     /// reserved up front and kept on every clear: the render thread can append one too (a tap's note-off due in the

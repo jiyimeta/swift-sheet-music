@@ -11,6 +11,9 @@ and this project adheres to
 
 - **`WindowsPlaybackEngine` plays through SwiftySynth (`HostedSynth`), the synth the Apple and Android apps use, in
   place of FluidSynth.** Its public API is unchanged; what it sounds like now matches the Mac.
+  - Nothing outside the package is linked for playback any more: the `CFluidSynth` system-library target and the
+    `libfluidsynth-3` link are gone, so a Windows build no longer passes FluidSynth's include / lib paths and an app
+    no longer ships its DLLs or LGPL text.
   - The output level is the Mac's (`windowsOutputGain` 1), about 8 dB below the FluidSynth engine's.
   - The cymbal choke ignores a held sustain pedal, as on the Mac.
   - A metronome count-in keeps its click after an A–B loop wraps to before the count's start: the count-in click
