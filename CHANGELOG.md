@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.29.0] - 2026-11-05
+
 ### Changed
 
 - **`WindowsPlaybackEngine` plays through SwiftySynth (`HostedSynth`), the synth the Apple and Android apps use, in
