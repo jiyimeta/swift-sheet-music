@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.29.1] - 2026-11-06
+
 ### Fixed
 
 - **A syllable under a rest is read, drawn, spaced and saved.** MuseScore anchors lyrics to any `ChordRest`, but the
