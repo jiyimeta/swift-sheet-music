@@ -37,7 +37,9 @@ extension LayoutDocument {
         else { return nil }
         let style = placementStyle ?? TextPlacementStyles()
         let side = style.side(for: .lyrics, element: elementProperties)
-        let x = style.position(for: .lyrics, side: side).x + (elementProperties.offset?.x ?? 0)
+        let x = LayoutEngine.placedTextPosition(
+            role: .lyrics, properties: elementProperties, style: style, side: side,
+        ).x
         return CGPoint(x: anchor.x + CGFloat(x) * metrics.sp, y: y)
     }
 

@@ -20,6 +20,18 @@ and this project adheres to
   - Spacing treats them as a chord's: a rest's syllable is a demand on its column, and the syllable before it reaches
     to it rather than past it (`nextLyricBearingChord`).
   - The MusicXML import keeps a rest's `<lyric>`s (`addLyrics(…, cr, …)` in MuseScore's import).
+- **An engraved text's authored `<offset>` replaces its style's position instead of adding to it**, as MuseScore's
+  does: a text is laid out at its staff edge and drawn at that plus `Pid::OFFSET`, whose default IS the style's
+  position, so a file writes the whole offset once the text was moved. Adding the style's position on top of it
+  placed every moved text too far out by that much — a lyric MuseScore wrote at `<offset x="4.16" y="3"/>` (moved
+  right along its row) a row's worth below it, staff text 1 sp too high, system text and a tempo marking 2 sp.
+  - `LayoutEngine.placedTextPosition` is the one rule, for every text `placedTextOrigin` places — lyrics, staff and
+    system text, chord symbols and Roman / Nashville numbers, rehearsal marks, Expression, Sticking, harp pedal
+    diagrams and the annotations laid out as staff text — and for tempo markings (`tempoOrigin`).
+  - The lyric caret (`lyricLineY`, `lyricEntryOrigin`) and the verse row a moved syllable is recovered from
+    (`lyricAnchorCorrectionY`, now given the score's style) follow it.
+  - `SetTextOffset` writes the same thing, measured from the side's staff edge; `nil` still restores the style.
+  - Marks and jumps already read their offset this way, from the staff edge with no style part, and are unchanged.
 
 ## [4.29.0] - 2026-11-05
 

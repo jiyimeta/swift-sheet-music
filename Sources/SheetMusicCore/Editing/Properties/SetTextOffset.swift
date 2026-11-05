@@ -10,8 +10,10 @@ import SheetMusicFoundation
 /// an offset and round-trips it without moving, which is why this command does not accept them: an inspector row
 /// over an inert write is worse than no row.
 ///
-/// The offset is applied on top of the resolved side, so it composes with `SetElementPlacement` rather than
-/// replacing it.
+/// The offset is measured from the resolved side's staff edge and replaces the style's position there, as
+/// MuseScore's `Pid::OFFSET` does (`ElementProperties.offset`); nil puts the style's position back. It composes
+/// with `SetElementPlacement`: a side change moves the edge, and an authored offset stays as written — MuseScore
+/// resets only a styled one.
 ///
 /// > Note: This command is sugar over the lane and chord writes `TextElementProperties` owns. It exists to give
 /// > the operation a domain-meaningful name and to centralise the small bit of validation it performs. See

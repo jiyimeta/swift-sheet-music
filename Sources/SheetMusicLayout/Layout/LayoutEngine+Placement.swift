@@ -498,7 +498,9 @@ extension LayoutEngine {
                         autoplace: lyric.elementProperties.autoplace ?? true,
                         verse: verseIdx,
                         staff: staffAddress,
-                        lyricAnchorCorrectionY: Double(lyricAnchorCorrectionY(lyric: lyric, metrics: metrics)),
+                        lyricAnchorCorrectionY: Double(lyricAnchorCorrectionY(
+                            lyric: lyric, style: textPlacementStyle, metrics: metrics,
+                        )),
                     )
                     let row = LyricRow(side: side, verse: verseIdx)
                     let origin = lyricOrigin(
@@ -2259,7 +2261,7 @@ extension LayoutEngine {
                     text: t.text ?? "\(t.beatGlyph) = \(Tempo.printedNumber(t.beatsPerMinute))",
                     origin: tempoOrigin(
                         rich: tempoRich, side: t.elementProperties.placement ?? .above, x: xAtTick,
-                        offset: CGPoint(x: CGFloat(t.offsetX), y: CGFloat(t.offsetY)),
+                        offset: t.elementProperties.offset,
                         lineGeometry: lineGeometry, metrics: metrics,
                     ),
                     richText: tempoRich,

@@ -107,7 +107,9 @@ struct TextPlacementBaselineTests {
             let b = try #require(TextPlacementFixtures.mark(offset))
             let ay = TextPlacementFixtures.origin(a).y - (styled.systems.first?.staffOrigins.first?.y ?? 0)
             let by = TextPlacementFixtures.origin(b).y - (offset.systems.first?.staffOrigins.first?.y ?? 0)
-            #expect(abs(by - ay - 21) < 0.0001)
+            // The authored offset replaces the styled position (8 sp below the staff) rather than adding to it:
+            // 3 sp below, 5 sp nearer the staff (`LayoutEngine.placedTextPosition`).
+            #expect(abs(by - ay - (3 - 8) * TextPlacementFixtures.metrics.sp) < 0.0001)
         }
     }
 

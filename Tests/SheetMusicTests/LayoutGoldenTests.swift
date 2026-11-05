@@ -390,8 +390,20 @@
         /// no fixture ends on a bar with one, so the last-bar break moved nothing here. The other files that set the
         /// limit to 0 already fill 30% of their line. Rendered and read: `testArpeggio`'s arpeggios and tempo mark
         /// follow their chords out across the line.
+        ///
+        /// **Re-recorded 2026-11-06 when an engraved text's authored offset began to replace its style's position
+        /// instead of adding to it (`LayoutEngine.placedTextPosition`), after reading the diff** — against origin/main
+        /// `14bc507e`, which already wrote `a642a27a…` here, not the `da6b4846…` above: the layout commits since
+        /// `2136f055` (grace-note slurs, ties into another staff, the cymbal choke, breaths) were never re-recorded,
+        /// and their diffs were NOT read in this one. This change moved 6 blocks of 72, both wrap modes of
+        /// `guitarbend_gracebend`, `guitarbend_simple` and `guitarbend_slightbend`: each writes a tempo at
+        /// `<offset y="-5.03"/>` and system texts at `y="-2.84"` / `"-2.16"`, which used to add the style's -2 sp and
+        /// now replace it, so every text and the system's top move 2 sp down (height 131.47 → 117.47 at `wrap=true`).
+        /// Nothing else moved; a lyric's offset had no fixture. Rendered `guitarbend_simple` at 1100 pt and read it
+        /// against MuseScore 4.7's own render: the tempo's baseline 5.0 sp over the top line (MuseScore 4.8), the
+        /// system texts 2.9 / 2.2 sp (2.5 / 2.0), in MuseScore's order.
         private static let expectedDigestSHA256 =
-            "da6b48464f10cbae1875d3ee84c2734319ed3404f19ee95acbafcc504466118d"
+            "07d8349c9689fae4b46b73328c123753b5e07ad96f0c76919cbad320a7809ab7"
 
         @Test("write digest")
         func writeDigest() throws {
