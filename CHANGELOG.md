@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.29.2] - 2026-11-06
+
 ### Fixed
 
 - **A syllable under a full-measure rest stands under the centered rest, and its offset counts from there**, as
