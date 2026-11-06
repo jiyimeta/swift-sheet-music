@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A syllable under a full-measure rest stands under the centered rest, and its offset counts from there**, as
+  MuseScore draws it. 4.29.1 drew it at the bar's first column. MuseScore does lay the syllable out at the rest's
+  segment (`RestLayout::layoutRest` resets the rest's x, `LyricsLayout::layout` negates it), but relative to the rest,
+  and `MeasureLayout` centers a full-measure rest only afterwards — the syllable moves with it. The empty caret of lyric
+  entry under such a rest follows (`lyricEntryOrigin` now centers it on `timedElementOrigin`). Spacing is unchanged:
+  MuseScore spaces the bar with the syllable still at its segment, as this package already did.
+
 ## [4.29.1] - 2026-11-06
 
 ### Fixed
