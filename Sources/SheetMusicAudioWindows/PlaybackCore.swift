@@ -144,13 +144,6 @@ struct SustainedPreview: Sendable {
     let pitch: UInt8
 }
 
-/// A preview's MIDI message kept back until a stopped score player has rendered its block
-/// (`Shared.scoreStopUnrendered`).
-enum HeldPreviewMessage: Sendable {
-    case noteOn(channel: Int32, pitch: Int32, velocity: Int32)
-    case noteOff(channel: Int32, pitch: Int32)
-}
-
 /// Everything behind `PlaybackCore.shared`. Every method here runs under that lock.
 struct Shared: Sendable {
     // MARK: Synths and players
@@ -207,19 +200,6 @@ struct Shared: Sendable {
     var previewPolicy = NotePreviewPolicy()
     var previewDeadline: PreviewDeadline?
     var sustainedPreview: SustainedPreview?
-    /// A score player stopped while playing has yet to render its next block. A FluidSynth player sent All Sound Off
-    /// in that block, cutting a preview sent before it — a held preview started in the same moment as a pause. A
-    /// SwiftySynth sequence cuts its voices inside `stop()` itself, so the hold now only delays such a preview by one
-    /// block; it is kept until the probe's `previewRightAfterPause` has run without it.
-    var scoreStopUnrendered = false
-    /// The previews' messages sent while `scoreStopUnrendered`, in order; they go out right after that block. Room is
-    /// reserved up front and kept on every clear: the render thread can append one too (a tap's note-off due in the
-    /// chunk whose end-of-score stop set the hold), and must not allocate under the lock.
-    var heldPreviewMessages: [HeldPreviewMessage] = {
-        var messages: [HeldPreviewMessage] = []
-        messages.reserveCapacity(16)
-        return messages
-    }()
 
     // MARK: Counters (diagnostics and the probe)
 

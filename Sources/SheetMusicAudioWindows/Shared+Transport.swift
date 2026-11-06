@@ -33,9 +33,6 @@ extension Shared {
     /// fresh one. A SwiftySynth sequence takes any seek, stopped or not.)
     mutating func stopPlayers(silence: SilenceMode) {
         guard let session else { return }
-        if session.scorePlayer.isPlaying {
-            scoreStopUnrendered = true
-        }
         session.scorePlayer.stop()
         session.metronomePlayer.stop()
         scoreRunning = false
@@ -180,12 +177,10 @@ extension Shared {
         metronomeOffsetTicks = new.metronomeWholeBodyOffsetTicks
         deferredSeek = nil
         awaitingWrapLanding = false
-        // Previews sounded on the old synth, and what is held back was meant for it.
+        // Previews sounded on the old synth.
         _ = previewPolicy.silenceVoices()
         previewDeadline = nil
         sustainedPreview = nil
-        heldPreviewMessages.removeAll(keepingCapacity: true)
-        scoreStopUnrendered = false
         session = new
         rewind(to: resume)
         if wasPlaying {
@@ -262,46 +257,20 @@ extension Shared {
 
     // MARK: Previews
 
-    /// A preview's note-on on the score synth, or held back while a stopped score player's block is still to come
-    /// (`scoreStopUnrendered`).
-    mutating func sendPreviewNoteOn(channel: Int32, pitch: Int32, velocity: Int32) {
-        if scoreStopUnrendered {
-            heldPreviewMessages.append(.noteOn(channel: channel, pitch: pitch, velocity: velocity))
-        } else {
-            session?.score.noteOn(channel: channel, pitch: pitch, velocity: velocity)
-        }
+    /// A preview's note-on on the score synth, sent at once. A score player stopped in the same moment has already cut
+    /// its voices inside `stop()` (`HostedSequence.stop`), so nothing it renders later can catch this one — unlike a
+    /// FluidSynth player, whose All Sound Off came in its next block and made the engine hold previews back until then.
+    func sendPreviewNoteOn(channel: Int32, pitch: Int32, velocity: Int32) {
+        session?.score.noteOn(channel: channel, pitch: pitch, velocity: velocity)
     }
 
-    /// A preview's note-off, held back with the note-ons so the two keep their order.
-    mutating func sendPreviewNoteOff(channel: Int32, pitch: Int32) {
-        if scoreStopUnrendered {
-            heldPreviewMessages.append(.noteOff(channel: channel, pitch: pitch))
-        } else {
-            session?.score.noteOff(channel: channel, pitch: pitch)
-        }
-    }
-
-    /// Sends what the previews held back, now that the stopped player's block is rendered. Render thread; allocates
-    /// nothing.
-    mutating func releaseHeldPreviews(to synth: SynthHandle) {
-        scoreStopUnrendered = false
-        for message in heldPreviewMessages {
-            switch message {
-            case let .noteOn(channel, pitch, velocity):
-                synth.noteOn(channel: channel, pitch: pitch, velocity: velocity)
-            case let .noteOff(channel, pitch):
-                synth.noteOff(channel: channel, pitch: pitch)
-            }
-        }
-        heldPreviewMessages.removeAll(keepingCapacity: true)
+    /// A preview's note-off on the score synth.
+    func sendPreviewNoteOff(channel: Int32, pitch: Int32) {
+        session?.score.noteOff(channel: channel, pitch: pitch)
     }
 
     /// Forgets every preview, silencing what is sounding: for a stop of the synth it plays on.
     mutating func cancelPreviews() {
-        // Never sent, so nothing of them sounds. Every caller deletes the stopped players next, so no All Sound Off
-        // is coming to wait for either.
-        heldPreviewMessages.removeAll(keepingCapacity: true)
-        scoreStopUnrendered = false
         let voices = previewPolicy.silenceVoices()
         previewDeadline = nil
         guard let synth = session?.score else {

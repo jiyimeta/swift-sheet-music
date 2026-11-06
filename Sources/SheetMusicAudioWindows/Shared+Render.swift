@@ -34,10 +34,6 @@ extension Shared {
     ) {
         let chunk = PlaybackCore.chunkFrames
         session.score.write(frames: Int32(chunk), into: out)
-        if scoreStopUnrendered {
-            // The block a stopped player owed is rendered; the previews can sound now, from the next one.
-            releaseHeldPreviews(to: session.score)
-        }
         // Rendered even while silent, so the click transport keeps in step with the score's (the Apple backend keeps
         // its muted metronome transport running for the same reason: an unmute lands on the beat).
         session.metronome.write(frames: Int32(chunk), into: scratch)

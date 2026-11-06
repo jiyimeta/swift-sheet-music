@@ -7,6 +7,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Windows: a preview right after a pause or stop goes to the synth at once.** `WindowsPlaybackEngine` held a
+  preview's messages back until a score player stopped while playing had rendered one more block, because a FluidSynth
+  player sent its All Sound Off in that block and cut the preview. A SwiftySynth sequence cuts its voices inside
+  `stop()` itself, so the hold (`Shared.scoreStopUnrendered`, `heldPreviewMessages`) only delayed the preview by one
+  block and is gone. The probe's `previewRightAfterPause` checks that ten previews in a row still sound.
+
 ## [4.29.1] - 2026-11-06
 
 ### Fixed
