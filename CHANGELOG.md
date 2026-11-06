@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.30.0] - 2026-11-07
+
 ### Added
 
 - **`nativeRangeBoxFrames(scoreHandle:selectionBytes:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeRangeBoxFrames`) —
