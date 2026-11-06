@@ -472,10 +472,11 @@ extension LayoutEngine {
             /// hyphens back to the previous syllable of each verse, and (if the lyric extends beyond this chord) a
             /// melisma rule that stretches to the end of the last note it covers.
             ///
-            /// A rest carries lyrics as a chord does — MuseScore anchors them to any `ChordRest`. Its `x` is the
-            /// rest's segment column, not the rest glyph's own x: `LyricsLayout::layout` negates the rest's offset
-            /// (`x = o.x() - cr->x()`), so a syllable under a full-measure rest stands at the bar's first column rather
-            /// than under the centered rest.
+            /// A rest carries lyrics as a chord does — MuseScore anchors them to any `ChordRest`. Its `x` is the rest's
+            /// own x, which under a full-measure rest is the middle of the bar, not the bar's first column. MuseScore
+            /// lays the syllable out relative to its rest while the rest still stands at its segment
+            /// (`RestLayout::layoutRest` resets its x to 0, then `LyricsLayout::layout` negates that 0); only
+            /// afterwards does `MeasureLayout` center the full-measure rest, and the syllable moves with it.
             func emitLyrics( // swiftlint:disable:this function_body_length
                 of chord: Chord, elementIndex: Int, x chordX: CGFloat, chordTicks: Int,
             ) {
@@ -951,12 +952,10 @@ extension LayoutEngine {
                     // else: toggle off + hidden — skip emission. Slot
                     // is preserved by the unconditional tick advance
                     // below.
-                    // The rest's syllables, at its segment's column (`emitLyrics`) — for a full-measure rest the bar's
-                    // first column, not `restX`. Their own `visible` decides, as under a chord, not the rest's.
+                    // The rest's syllables, under the rest (`emitLyrics`) — for a full-measure rest under the centered
+                    // glyph, as MuseScore draws them. Their own `visible` decides, as under a chord, not the rest's.
                     let restTicks = r.duration.resolved(in: measureDuration).ticks(division: division)
-                    emitLyrics(
-                        of: r, elementIndex: voiceElemIdx, x: timedX(atTick: tickCursor), chordTicks: restTicks,
-                    )
+                    emitLyrics(of: r, elementIndex: voiceElemIdx, x: restX, chordTicks: restTicks)
                     tickCursor += restTicks
                 case let .chord(chord):
                     inHeader = false

@@ -11,16 +11,17 @@ import Testing
     private typealias CGPoint = SheetMusicLayout.CGPoint
 #endif
 
-/// A syllable under a rest is drawn, and spaced, like one under a chord. MuseScore anchors lyrics to any `ChordRest`:
-/// `LyricsLayout::layout` places a syllable at its segment, negating the rest's own offset (`x = o.x() - cr->x()`), so
-/// the syllable under a full-measure rest stands at the bar's first column rather than under the centered rest, and
-/// the segment's shape carries the syllable into horizontal spacing like any other.
+/// A syllable under a rest is drawn, and spaced, like one under a chord. MuseScore anchors lyrics to any `ChordRest`
+/// and lays a syllable out relative to its rest while the rest still stands at its segment (`RestLayout::layoutRest`
+/// resets its x, `LyricsLayout::layout` negates it); `MeasureLayout` centers a full-measure rest only afterwards, and
+/// the syllable moves with it — so it stands under the centered rest, and its offset counts from there. The segment's
+/// shape carries the syllable into horizontal spacing like any other.
 @Suite("Lyrics on rests in layout")
 struct RestLyricLayoutTests {
     private let _installFontMetrics = TestSupport.installFontMetrics
 
-    @Test("A full-measure rest's syllable is drawn at the bar's first column, anchored to the rest")
-    func measureRestSyllableStandsAtFirstColumn() throws {
+    @Test("A full-measure rest's syllable is drawn under the centered rest, anchored to it")
+    func measureRestSyllableStandsUnderTheRest() throws {
         let rest = Chord(duration: .measure, notes: [], lyrics: [Lyric(text: "でもね、")])
         let document = Self.layout(Self.score(bars: [[.chord(rest)]]))
         let measure = try #require(document.systems.first?.measures.first)
@@ -28,8 +29,25 @@ struct RestLyricLayoutTests {
         try #require(marks.count == 1)
         #expect(marks[0].text == "でもね、")
         #expect(marks[0].anchor?.elementIndex == 0)
+        let restX = try #require(Self.restOrigins(in: measure).first).x
         let firstColumn = try #require(measure.tickColumns[0])
-        #expect(abs(marks[0].origin.x - firstColumn) < 0.001)
+        // The two candidates stand 3 sp apart in this lone (unjustified) bar, so the check below tells them apart.
+        try #require(restX - firstColumn > document.metrics.sp * 2)
+        #expect(abs(marks[0].origin.x - restX) < 0.001)
+    }
+
+    /// The owner's report (2026-11-06): a moved syllable under a full-measure rest kept its distance from the bar's
+    /// first column rather than from the rest, where MuseScore measures it.
+    @Test("A full-measure rest's syllable offset counts from the rest")
+    func measureRestSyllableOffsetCountsFromTheRest() throws {
+        var lyric = Lyric(text: "でもね、")
+        lyric.elementProperties.offset = ScoreOffset(x: -2.5, y: 3)
+        let rest = Chord(duration: .measure, notes: [], lyrics: [lyric])
+        let document = Self.layout(Self.score(bars: [[.chord(rest)]]))
+        let measure = try #require(document.systems.first?.measures.first)
+        let mark = try #require(Self.lyricMarks(in: measure).first)
+        let restX = try #require(Self.restOrigins(in: measure).first).x
+        #expect(abs(mark.origin.x - (restX - 2.5 * document.metrics.sp)) < 0.001)
     }
 
     @Test("A typed rest's syllable is drawn at the rest's column")
@@ -78,7 +96,7 @@ struct RestLyricLayoutTests {
     }
 
     /// Lyric entry opens on a selected rest (⌘L): the empty caret has to stand where the first letter will be drawn,
-    /// the bar's first column under a full-measure rest, or the field jumps when it is.
+    /// under the centered rest for a full-measure one, or the field jumps when it is.
     @Test("an empty caret under a full-measure rest stands where its syllable is drawn")
     func emptyRestCaretMatchesItsSyllable() throws {
         let anchor = VoiceElementID(
@@ -89,6 +107,10 @@ struct RestLyricLayoutTests {
             at: LyricInputPlanner.Cursor(location: anchor, verse: 0), placementStyle: TextPlacementStyles(),
             elementProperties: .default, textProperties: TextProperties(),
         ))
+        let emptySystem = try #require(empty.systems.first)
+        let emptyMeasure = try #require(emptySystem.measures.first)
+        let restX = try #require(Self.restOrigins(in: emptyMeasure).first).x
+        #expect(abs(caret.x - (emptySystem.origin.x + emptyMeasure.origin.x + restX)) < 0.001)
         let typed = Self.layout(Self.score(bars: [[
             .chord(Chord(duration: .measure, notes: [], lyrics: [Lyric(text: "で")])),
         ]]))
@@ -122,6 +144,13 @@ struct RestLyricLayoutTests {
             guard case let .textMark(.lyrics(_, _, anchor, _, _), text, origin, _) = element else { return nil }
             return (text, origin, anchor)
         }.sorted { $0.origin.x < $1.origin.x }
+    }
+
+    private static func restOrigins(in measure: LayoutMeasure) -> [CGPoint] {
+        measure.elements.compactMap { element -> CGPoint? in
+            guard case let .rest(_, origin, _, _, _) = element else { return nil }
+            return origin
+        }
     }
 
     private static func syllableSpans(_ document: LayoutDocument) -> [(left: CGFloat, right: CGFloat)] {
