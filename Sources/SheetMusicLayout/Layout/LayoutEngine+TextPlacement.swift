@@ -36,22 +36,40 @@ extension LayoutEngine {
     /// Where a tempo marking's `LayoutRichText.anchor(for: .tempo)` (top-left) origin goes so its FIRST BASELINE sits
     /// at MuseScore's tempo position: `tempoPosAbove` = (0, -2 sp) from the top staff line, `tempoPosBelow` = (0, 3 sp)
     /// from the bottom one (`engraving/style/styledef.cpp:1149-1159`, `tempoAlign` = LEFT, BASELINE). The staff's top
-    /// line is at `2 sp` in a measure's frame, as for `placedTextOrigin`. `offset` is the authored offset in sp.
+    /// line is at `2 sp` in a measure's frame, as for `placedTextOrigin`. `offset` is the authored offset in sp, which
+    /// replaces that position rather than adding to it, as every text's does (`placedTextPosition`).
     static func tempoOrigin(
-        rich: LayoutRichText, side: Placement, x: CGFloat, offset: CGPoint,
+        rich: LayoutRichText, side: Placement, x: CGFloat, offset: ScoreOffset?,
         lineGeometry: StaffLineGeometry, metrics: StaffMetrics,
     ) -> CGPoint {
         let sp = metrics.sp
-        let baseline = side == .above
-            ? sp * 2 - sp * tempoPosAboveSp
-            : sp * 2 + lineGeometry.height(sp: sp) + sp * tempoPosBelowSp
-        return CGPoint(x: x + offset.x * sp, y: baseline - rich.firstBaseline + offset.y * sp)
+        let edge = side == .above ? sp * 2 : sp * 2 + lineGeometry.height(sp: sp)
+        let position = offset ?? ScoreOffset(x: 0, y: Double(side == .above ? -tempoPosAboveSp : tempoPosBelowSp))
+        return CGPoint(
+            x: x + CGFloat(position.x) * sp,
+            y: edge + CGFloat(position.y) * sp - rich.firstBaseline,
+        )
     }
 
     /// `Sid::tempoPosAbove`'s distance above the top staff line, in spatiums (`styledef.cpp:1157`).
     static let tempoPosAboveSp: CGFloat = 2
     /// `Sid::tempoPosBelow`'s distance below the bottom staff line, in spatiums (`styledef.cpp:1158`).
     static let tempoPosBelowSp: CGFloat = 3
+
+    /// Where a text's first baseline sits from its staff edge — the top line above the staff, the bottom line below
+    /// it — in spatiums: the element's authored offset when it carries one, else the style's position for `side`.
+    ///
+    /// The authored offset REPLACES the styled position; it does not add to it. MuseScore lays a text out at (0, 0),
+    /// or (0, staff height) below the staff (`TextLayout::layoutBaseTextBase`), and draws it at that plus its offset
+    /// (`EngravingItem::pos()`), whose default value is the style's position (`textstyle.cpp`: `Sid::lyricsPosBelow`
+    /// for a lyric, `Sid::staffTextPosAbove` for staff text, …). So a file writes the whole offset, style part and
+    /// all, once the text was moved: `<offset x="4.16" y="3"/>` under a lyric is a syllable moved right along its own
+    /// row, and adding it to the style's 3 sp dropped it a row's worth below.
+    static func placedTextPosition(
+        role: TextPlacementRole, properties: ElementProperties, style: TextPlacementStyles, side: Placement,
+    ) -> ScoreOffset {
+        properties.offset ?? style.position(for: role, side: side)
+    }
 
     static func placedTextOrigin(
         text: String, role: TextPlacementRole, properties: ElementProperties,
@@ -60,15 +78,20 @@ extension LayoutEngine {
         rich: LayoutRichText? = nil,
     ) -> CGPoint {
         let side = style.side(for: role, element: properties)
-        let position = style.position(for: role, side: side)
+        let position = placedTextPosition(role: role, properties: properties, style: style, side: side)
         let edge = metrics.sp * 2 + (side == .above ? 0 : lineGeometry.height(sp: metrics.sp))
         let baseline = CGPoint(x: x + CGFloat(position.x) * metrics.sp, y: edge + CGFloat(position.y) * metrics.sp)
-        let origin = rich.map { textPlacementOrigin(rich: $0, baseline: baseline, center: center, padding: padding) }
+        return rich.map { textPlacementOrigin(rich: $0, baseline: baseline, center: center, padding: padding) }
             ?? textPlacementOrigin(text: text, font: font, baseline: baseline, center: center, padding: padding)
-        return CGPoint(
-            x: origin.x + CGFloat(properties.offset?.x ?? 0) * metrics.sp,
-            y: origin.y + CGFloat(properties.offset?.y ?? 0) * metrics.sp,
-        )
+    }
+
+    /// How far, in spatiums, a syllable's authored offset moves it off its verse row's styled position — what a
+    /// caret recovering the row takes back out (`lyricAnchorCorrectionY`, `LayoutDocument.lyricLineY`). Zero for a
+    /// syllable with no offset, and for one whose offset is the style's own.
+    static func lyricRowDisplacementY(_ properties: ElementProperties, style: TextPlacementStyles) -> Double {
+        let side = style.side(for: .lyrics, element: properties)
+        return placedTextPosition(role: .lyrics, properties: properties, style: style, side: side).y
+            - style.position(for: .lyrics, side: side).y
     }
 
     static func lyricOrigin(
@@ -85,12 +108,15 @@ extension LayoutEngine {
         return CGPoint(x: origin.x, y: origin.y + CGFloat(row) * metrics.sp * lyricVerseStrideInSpatiums)
     }
 
-    static func lyricAnchorCorrectionY(lyric: Lyric, metrics: StaffMetrics) -> CGFloat {
+    static func lyricAnchorCorrectionY(
+        lyric: Lyric, style: TextPlacementStyles, metrics: StaffMetrics,
+    ) -> CGFloat {
         let font = TextInkGeometry.font(for: .lyricsOdd, overrides: lyric.properties, metrics: metrics)
         let provider = FontMetrics.provider
         let extra = TextInkGeometry.typographicSize(text: lyric.text, font: font).height
             - provider.ascent(font: font) - provider.descent(font: font)
-        let correction = CGFloat(lyric.elementProperties.offset?.y ?? 0) * metrics.sp + extra / 2
+        let correction = CGFloat(lyricRowDisplacementY(lyric.elementProperties, style: style)) * metrics.sp
+            + extra / 2
         guard lyric.properties.hasFontOverride else { return correction }
         // Not the row's displacement either, so a caret recovering the row takes it out with the rest.
         return correction + lyricCenterShift(properties: lyric.properties, metrics: metrics)

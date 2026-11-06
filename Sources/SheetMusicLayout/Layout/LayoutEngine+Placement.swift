@@ -468,6 +468,199 @@ extension LayoutEngine {
             // when no following chord exists in the same voice.
             var lastEmittedChordTick: Int?
 
+            /// Emit the syllables under the chord or rest at `elementIndex`, centered on `x`: the syllable text, the
+            /// hyphens back to the previous syllable of each verse, and (if the lyric extends beyond this chord) a
+            /// melisma rule that stretches to the end of the last note it covers.
+            ///
+            /// A rest carries lyrics as a chord does — MuseScore anchors them to any `ChordRest`. Its `x` is the rest's
+            /// own x, which under a full-measure rest is the middle of the bar, not the bar's first column. MuseScore
+            /// lays the syllable out relative to its rest while the rest still stands at its segment
+            /// (`RestLayout::layoutRest` resets its x to 0, then `LyricsLayout::layout` negates that 0); only
+            /// afterwards does `MeasureLayout` center the full-measure rest, and the syllable moves with it.
+            func emitLyrics( // swiftlint:disable:this function_body_length
+                of chord: Chord, elementIndex: Int, x chordX: CGFloat, chordTicks: Int,
+            ) {
+                // Use the voice's pre-computed max south-driven
+                // Y so every chord in the measure shares the
+                // same lyric center (within-measure horizontal
+                // alignment). The system-wide post-pass in
+                // `LayoutEngine.layout` then aligns this Y
+                // across measures of the same system.
+                let lyricAnchor = VoiceElementID(
+                    staff: staffAddress,
+                    measureIndex: measureIndex,
+                    voiceIndex: voiceIdx,
+                    elementIndex: elementIndex,
+                )
+                for (verseIdx, lyric) in chord.lyrics.enumerated() {
+                    let side = textPlacementStyle.side(for: .lyrics, element: lyric.elementProperties)
+                    let placement = TextPlacementMetadata(
+                        side: side,
+                        autoplace: lyric.elementProperties.autoplace ?? true,
+                        verse: verseIdx,
+                        staff: staffAddress,
+                        lyricAnchorCorrectionY: Double(lyricAnchorCorrectionY(
+                            lyric: lyric, style: textPlacementStyle, metrics: metrics,
+                        )),
+                    )
+                    let row = LyricRow(side: side, verse: verseIdx)
+                    let origin = lyricOrigin(
+                        lyric: lyric, verse: verseIdx, maxAboveVerse: maxAboveLyricVerse,
+                        style: textPlacementStyle, x: chordX, lineGeometry: lineGeometry, metrics: metrics,
+                    )
+                    // A host that hides lyrics loses the WHOLE row:
+                    // syllable, hyphens and melisma rule alike, because
+                    // every decoration below is emitted only alongside a
+                    // syllable that reached this point (the incoming
+                    // continuations from an earlier measure are gated on
+                    // the same flag where they are emitted). Nothing is
+                    // routed to `invisibleOut` either — this is a display
+                    // choice by the host, not the element's own `visible`
+                    // flag, so `showsInvisibleElements` must not bring it
+                    // back.
+                    guard options.lyricsVisible else { break }
+                    // A syllable of symbols alone has empty plain text and still prints: its runs do.
+                    let rich = Self.lyricRichText(lyric, metrics: metrics)
+                    guard !lyric.text.isEmpty || rich != nil else { continue }
+                    let textWidth = Self.lyricsTextWidth(
+                        lyric.text, properties: lyric.properties, rich: rich, metrics: metrics,
+                    )
+                    // A side change interrupts this verse's trail; it must not reconnect
+                    // to an earlier syllable if a later syllable returns to that side.
+                    previousLyric.removeValue(forKey: LyricRow(
+                        side: side == .above ? .below : .above,
+                        verse: verseIdx,
+                    ))
+                    // Hidden lyrics: drop entirely when toggle is
+                    // off (print-by-default); when toggle is on
+                    // route the syllable text to `invisibleOut`
+                    // (NOT `out`) so the hidden glyph is exposed
+                    // for invisible-overlay rendering but does not
+                    // print. Decorations (hyphens / melisma rule)
+                    // are NOT emitted for hidden lyrics — they
+                    // would otherwise dangle visually without their
+                    // anchor syllable. The `previousLyric` trail is
+                    // still updated so a following visible
+                    // syllable in the same verse hyphenates from
+                    // the hidden lyric's slot rather than reaching
+                    // back to an earlier visible syllable.
+                    guard lyric.visible || options.showsInvisibleElements
+                    else {
+                        previousLyric[row] = LyricTrail(
+                            centerX: origin.x,
+                            textWidth: textWidth,
+                            lyricsY: origin.y,
+                            syllabic: lyric.syllabic,
+                            placement: placement,
+                        )
+                        continue
+                    }
+                    // Verse stride 1.7 sp keeps multi-verse
+                    // stacks compact while still clearing
+                    // ascender/descender overlap between
+                    // adjacent verse lines (≈
+                    // `Sid::lyricsLineHeight = 1.0` × font
+                    // height).
+                    let lyricsY = origin.y
+                    let lyricElement = LayoutElement.textMark(
+                        kind: .lyrics(
+                            color: lyric.elementProperties.color,
+                            verse: verseIdx,
+                            anchor: lyricAnchor,
+                            placement: placement,
+                            properties: lyric.properties.fontOverrides,
+                        ),
+                        text: lyric.text,
+                        origin: origin,
+                        richText: rich,
+                    )
+                    if lyric.visible {
+                        out.append(lyricElement)
+                    } else {
+                        invisibleOut.append(lyricElement)
+                    }
+                    // Hyphens between this syllable and the
+                    // previous one in the same verse. Only the
+                    // CURRENT syllable must be visible; the
+                    // previous endpoint may have been a hidden
+                    // lyric, whose early `continue` above still
+                    // recorded it in `previousLyric` — the hyphen
+                    // then starts from the hidden lyric's slot
+                    // (see the hidden-lyrics comment above).
+                    if lyric.visible,
+                       let prev = previousLyric[row],
+                       connectsWithHyphen(
+                           prev: prev.syllabic,
+                           curr: lyric.syllabic,
+                       )
+                    {
+                        let prevRight = prev.centerX
+                            + prev.textWidth / 2
+                            + metrics.sp * lyricsDashPadSp
+                        let currLeft = origin.x - textWidth / 2
+                            - metrics.sp * lyricsDashPadSp
+                        emitLyricHyphens(
+                            fromX: prevRight,
+                            toX: currLeft,
+                            y: prev.lyricsY,
+                            placement: prev.placement,
+                            metrics: metrics,
+                            out: &out,
+                        )
+                    }
+                    previousLyric[row] = LyricTrail(
+                        centerX: origin.x,
+                        textWidth: textWidth,
+                        lyricsY: lyricsY,
+                        syllabic: lyric.syllabic,
+                        placement: placement,
+                    )
+                    // `<ticks>N</ticks>` in MuseScore marks a
+                    // melisma whose visual rule reaches the
+                    // chord that starts at `anchor.tick + N`.
+                    // Any positive value means "draw a melisma
+                    // line up to that target chord" — even when
+                    // it equals the anchor chord's own duration
+                    // (in which case the target is whatever
+                    // chord follows the anchor).
+                    if lyric.visible, lyric.ticks > 0 {
+                        // `>=`: a melisma that lands exactly on
+                        // the barline still needs to extend past
+                        // it so the boundary-cap continuation in
+                        // the next measure (see
+                        // `appendContinuations`) meets it.
+                        let continuesPastMeasure =
+                            tickCursor + lyric.ticks
+                                >= voiceTotalTicks
+                        // Drop the rule down to roughly the
+                        // underscore baseline of the lyric font
+                        // (~`sp * 0.9` below the center anchor
+                        // we use for the syllable text). Matches
+                        // MuseScore's "at baseline + underline
+                        // offset" placement, see
+                        // `melismaLineYOffset` below.
+                        let melismaLineY = lyricsY
+                            + Self.melismaLineYOffset(sp: metrics.sp)
+                        emitMelismaLine(
+                            chordX: origin.x,
+                            lyricWidth: textWidth,
+                            lyricTicks: lyric.ticks,
+                            lyricsY: melismaLineY,
+                            tickCursor: tickCursor,
+                            chordTicks: chordTicks,
+                            tickColumns: tickColumns,
+                            headerContentStartX:
+                            headerSchedule.contentStartX,
+                            measureWidth: width,
+                            continuesPastMeasure: continuesPastMeasure,
+                            placement: placement,
+                            metrics: metrics,
+                            out: &out,
+                        )
+                    }
+                }
+            }
+
             // Match SetKeySignature's leading signature prefix, not the geometry's tick-zero header.
             let signaturePrefixCount = voice.elements.prefix {
                 switch $0 {
@@ -759,7 +952,11 @@ extension LayoutEngine {
                     // else: toggle off + hidden — skip emission. Slot
                     // is preserved by the unconditional tick advance
                     // below.
-                    tickCursor += r.duration.resolved(in: measureDuration).ticks(division: division)
+                    // The rest's syllables, under the rest (`emitLyrics`) — for a full-measure rest under the centered
+                    // glyph, as MuseScore draws them. Their own `visible` decides, as under a chord, not the rest's.
+                    let restTicks = r.duration.resolved(in: measureDuration).ticks(division: division)
+                    emitLyrics(of: r, elementIndex: voiceElemIdx, x: restX, chordTicks: restTicks)
+                    tickCursor += restTicks
                 case let .chord(chord):
                     inHeader = false
                     // Every element at a shared tick lives at the same
@@ -1046,189 +1243,10 @@ extension LayoutEngine {
                             out.append(bars)
                         }
                     }
-                    // Lyrics: emit the syllable text + (if the lyric
-                    // extends beyond this chord) a melisma rule that
-                    // stretches to the end of the last note it covers.
                     let chordTicks = chord.duration
                         .resolved(in: measureDuration)
                         .ticks(division: division)
-                    // Use the voice's pre-computed max south-driven
-                    // Y so every chord in the measure shares the
-                    // same lyric center (within-measure horizontal
-                    // alignment). The system-wide post-pass in
-                    // `LayoutEngine.layout` then aligns this Y
-                    // across measures of the same system.
-                    let lyricAnchor = VoiceElementID(
-                        staff: staffAddress,
-                        measureIndex: measureIndex,
-                        voiceIndex: voiceIdx,
-                        elementIndex: voiceElemIdx,
-                    )
-                    for (verseIdx, lyric) in chord.lyrics.enumerated() {
-                        let side = textPlacementStyle.side(for: .lyrics, element: lyric.elementProperties)
-                        let placement = TextPlacementMetadata(
-                            side: side,
-                            autoplace: lyric.elementProperties.autoplace ?? true,
-                            verse: verseIdx,
-                            staff: staffAddress,
-                            lyricAnchorCorrectionY: Double(lyricAnchorCorrectionY(lyric: lyric, metrics: metrics)),
-                        )
-                        let row = LyricRow(side: side, verse: verseIdx)
-                        let origin = lyricOrigin(
-                            lyric: lyric, verse: verseIdx, maxAboveVerse: maxAboveLyricVerse,
-                            style: textPlacementStyle, x: chordX, lineGeometry: lineGeometry, metrics: metrics,
-                        )
-                        // A host that hides lyrics loses the WHOLE row:
-                        // syllable, hyphens and melisma rule alike, because
-                        // every decoration below is emitted only alongside a
-                        // syllable that reached this point (the incoming
-                        // continuations from an earlier measure are gated on
-                        // the same flag where they are emitted). Nothing is
-                        // routed to `invisibleOut` either — this is a display
-                        // choice by the host, not the element's own `visible`
-                        // flag, so `showsInvisibleElements` must not bring it
-                        // back.
-                        guard options.lyricsVisible else { break }
-                        // A syllable of symbols alone has empty plain text and still prints: its runs do.
-                        let rich = Self.lyricRichText(lyric, metrics: metrics)
-                        guard !lyric.text.isEmpty || rich != nil else { continue }
-                        let textWidth = Self.lyricsTextWidth(
-                            lyric.text, properties: lyric.properties, rich: rich, metrics: metrics,
-                        )
-                        // A side change interrupts this verse's trail; it must not reconnect
-                        // to an earlier syllable if a later syllable returns to that side.
-                        previousLyric.removeValue(forKey: LyricRow(
-                            side: side == .above ? .below : .above,
-                            verse: verseIdx,
-                        ))
-                        // Hidden lyrics: drop entirely when toggle is
-                        // off (print-by-default); when toggle is on
-                        // route the syllable text to `invisibleOut`
-                        // (NOT `out`) so the hidden glyph is exposed
-                        // for invisible-overlay rendering but does not
-                        // print. Decorations (hyphens / melisma rule)
-                        // are NOT emitted for hidden lyrics — they
-                        // would otherwise dangle visually without their
-                        // anchor syllable. The `previousLyric` trail is
-                        // still updated so a following visible
-                        // syllable in the same verse hyphenates from
-                        // the hidden lyric's slot rather than reaching
-                        // back to an earlier visible syllable.
-                        guard lyric.visible || options.showsInvisibleElements
-                        else {
-                            previousLyric[row] = LyricTrail(
-                                centerX: origin.x,
-                                textWidth: textWidth,
-                                lyricsY: origin.y,
-                                syllabic: lyric.syllabic,
-                                placement: placement,
-                            )
-                            continue
-                        }
-                        // Verse stride 1.7 sp keeps multi-verse
-                        // stacks compact while still clearing
-                        // ascender/descender overlap between
-                        // adjacent verse lines (≈
-                        // `Sid::lyricsLineHeight = 1.0` × font
-                        // height).
-                        let lyricsY = origin.y
-                        let lyricElement = LayoutElement.textMark(
-                            kind: .lyrics(
-                                color: lyric.elementProperties.color,
-                                verse: verseIdx,
-                                anchor: lyricAnchor,
-                                placement: placement,
-                                properties: lyric.properties.fontOverrides,
-                            ),
-                            text: lyric.text,
-                            origin: origin,
-                            richText: rich,
-                        )
-                        if lyric.visible {
-                            out.append(lyricElement)
-                        } else {
-                            invisibleOut.append(lyricElement)
-                        }
-                        // Hyphens between this syllable and the
-                        // previous one in the same verse. Only the
-                        // CURRENT syllable must be visible; the
-                        // previous endpoint may have been a hidden
-                        // lyric, whose early `continue` above still
-                        // recorded it in `previousLyric` — the hyphen
-                        // then starts from the hidden lyric's slot
-                        // (see the hidden-lyrics comment above).
-                        if lyric.visible,
-                           let prev = previousLyric[row],
-                           connectsWithHyphen(
-                               prev: prev.syllabic,
-                               curr: lyric.syllabic,
-                           )
-                        {
-                            let prevRight = prev.centerX
-                                + prev.textWidth / 2
-                                + metrics.sp * lyricsDashPadSp
-                            let currLeft = origin.x - textWidth / 2
-                                - metrics.sp * lyricsDashPadSp
-                            emitLyricHyphens(
-                                fromX: prevRight,
-                                toX: currLeft,
-                                y: prev.lyricsY,
-                                placement: prev.placement,
-                                metrics: metrics,
-                                out: &out,
-                            )
-                        }
-                        previousLyric[row] = LyricTrail(
-                            centerX: origin.x,
-                            textWidth: textWidth,
-                            lyricsY: lyricsY,
-                            syllabic: lyric.syllabic,
-                            placement: placement,
-                        )
-                        // `<ticks>N</ticks>` in MuseScore marks a
-                        // melisma whose visual rule reaches the
-                        // chord that starts at `anchor.tick + N`.
-                        // Any positive value means "draw a melisma
-                        // line up to that target chord" — even when
-                        // it equals the anchor chord's own duration
-                        // (in which case the target is whatever
-                        // chord follows the anchor).
-                        if lyric.visible, lyric.ticks > 0 {
-                            // `>=`: a melisma that lands exactly on
-                            // the barline still needs to extend past
-                            // it so the boundary-cap continuation in
-                            // the next measure (see
-                            // `appendContinuations`) meets it.
-                            let continuesPastMeasure =
-                                tickCursor + lyric.ticks
-                                    >= voiceTotalTicks
-                            // Drop the rule down to roughly the
-                            // underscore baseline of the lyric font
-                            // (~`sp * 0.9` below the center anchor
-                            // we use for the syllable text). Matches
-                            // MuseScore's "at baseline + underline
-                            // offset" placement, see
-                            // `melismaLineYOffset` below.
-                            let melismaLineY = lyricsY
-                                + Self.melismaLineYOffset(sp: metrics.sp)
-                            emitMelismaLine(
-                                chordX: origin.x,
-                                lyricWidth: textWidth,
-                                lyricTicks: lyric.ticks,
-                                lyricsY: melismaLineY,
-                                tickCursor: tickCursor,
-                                chordTicks: chordTicks,
-                                tickColumns: tickColumns,
-                                headerContentStartX:
-                                headerSchedule.contentStartX,
-                                measureWidth: width,
-                                continuesPastMeasure: continuesPastMeasure,
-                                placement: placement,
-                                metrics: metrics,
-                                out: &out,
-                            )
-                        }
-                    }
+                    emitLyrics(of: chord, elementIndex: voiceElemIdx, x: chordX, chordTicks: chordTicks)
                     lastEmittedChordTick = tickCursor
                     tickCursor += chordTicks
                 case let .dynamic(d):
@@ -1251,14 +1269,20 @@ extension LayoutEngine {
                     // a center Y of `chordSouth + 2.5 sp` leaves
                     // ~0.5 sp of clearance above the glyph top —
                     // matching MuseScore's `Sid::dynamicsMinDistance`.
+                    //
+                    // That 2 sp is `Sid::dynamicsPosBelow` (0, 2). An authored offset replaces it rather than adding
+                    // to it, as every text's does (`placedTextPosition`): x and y both, measured where the default is.
+                    let position = d.elementProperties.offset ?? Self.dynamicsPosBelow
                     let defaultDynY = staffMidY + metrics.sp * 4
+                        + CGFloat(position.y - Self.dynamicsPosBelow.y) * metrics.sp
                     let chordSouth = voiceChordSouthByTick[tickCursor]
                         ?? -.infinity
                     let chordAvoid = chordSouth + metrics.sp * 2.5
                     let dynY = max(defaultDynY, chordAvoid)
                     let dynamicElement = Self.dynamicElement(
                         d, anchor: attachmentAnchor(at: elementAddress, in: voice),
-                        origin: CGPoint(x: baseX - metrics.sp, y: dynY), metrics: metrics,
+                        origin: CGPoint(x: baseX - metrics.sp + CGFloat(position.x) * metrics.sp, y: dynY),
+                        metrics: metrics,
                     )
                     if d.visible {
                         out.append(dynamicElement)
@@ -2242,7 +2266,7 @@ extension LayoutEngine {
                     text: t.text ?? "\(t.beatGlyph) = \(Tempo.printedNumber(t.beatsPerMinute))",
                     origin: tempoOrigin(
                         rich: tempoRich, side: t.elementProperties.placement ?? .above, x: xAtTick,
-                        offset: CGPoint(x: CGFloat(t.offsetX), y: CGFloat(t.offsetY)),
+                        offset: t.elementProperties.offset,
                         lineGeometry: lineGeometry, metrics: metrics,
                     ),
                     richText: tempoRich,

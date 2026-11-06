@@ -69,7 +69,7 @@ extension LayoutDocument {
                 // Fixed neighbors do not share the target's automatic row displacement.
                 guard elementProperties.autoplace != false, metadata?.autoplace != false else { continue }
                 let rowY = y - CGFloat(metadata?.lyricAnchorCorrectionY ?? 0)
-                    + CGFloat(elementProperties.offset?.y ?? 0) * system.sp
+                    + CGFloat(LayoutEngine.lyricRowDisplacementY(elementProperties, style: style)) * system.sp
                 candidates.append((markVerse, metadata?.side ?? .below, rowY))
             }
             if let exact = candidates
@@ -88,14 +88,16 @@ extension LayoutDocument {
             {
                 return nearest.y + CGFloat(verse - nearest.verse) * system.sp * lyricVerseStrideInSpatiums + ownShift
             }
-            let position = style.position(for: .lyrics, side: side)
+            let position = LayoutEngine.placedTextPosition(
+                role: .lyrics, properties: elementProperties, style: style, side: side,
+            )
             let geometry = system.geometry(atFlatIndex: staffIndex)
             let edge = system.origin.y + system.staffOrigins[staffIndex].y
                 + (side == .above ? 0 : geometry.height(sp: system.sp))
             let row = side == .above ? verse - max(verse, maxAboveVerse) : verse
             let baseline = CGPoint(
                 x: 0,
-                y: edge + CGFloat(position.y + (elementProperties.offset?.y ?? 0)) * system.sp
+                y: edge + CGFloat(position.y) * system.sp
                     + CGFloat(row) * system.sp * lyricVerseStrideInSpatiums,
             )
             return LayoutEngine.textPlacementOrigin(

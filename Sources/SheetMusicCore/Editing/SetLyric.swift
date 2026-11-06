@@ -1,6 +1,6 @@
 import SheetMusicFoundation
 
-/// Writes, replaces or (with `nil`) removes one verse's lyric syllable on a chord.
+/// Writes, replaces or (with `nil`) removes one verse's lyric syllable on a chord or rest.
 ///
 /// `Chord.lyrics` is indexed by verse: the entry at index `i` has `verse == i`. This command owns that invariant
 /// because layout places lyric rows by the array index it gets from `enumerated()`, not by `Lyric.verse`. Writing a
@@ -75,7 +75,9 @@ public struct SetLyric: EditCommand {
         guard let element = score[location] else {
             throw Self.refused(.targetNotFound(location))
         }
-        guard case var .chord(chord) = element, !chord.notes.isEmpty else {
+        // A chord or a rest: MuseScore anchors lyrics to any `ChordRest`, and lyric entry stops on a rest that carries
+        // a syllable or that the user opened it on (`LyricInputPlanner.stopsLyricEntry(verse:)`).
+        guard case var .chord(chord) = element else {
             throw Self.refused(.wrongElementKind(at: location, expected: .chord))
         }
         let previous = chord.lyrics
@@ -141,7 +143,6 @@ public struct SetLyric: EditCommand {
     static func current(at location: VoiceElementID, verse: Int, in score: Score) -> Lyric? {
         guard verse >= 0,
               case let .chord(chord) = score[location],
-              !chord.notes.isEmpty,
               chord.lyrics.indices.contains(verse)
         else { return nil }
         return chord.lyrics[verse]

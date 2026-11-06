@@ -107,4 +107,73 @@ public enum MetronomeSequenceBuilder {
             tracks: [MidiTrack(events: conductor), clickTrack(beats: beats, division: division)],
         )
     }
+
+    /// A count-in's click sequence for a backend that plays the metronome as ONE sequence on its own synth (Windows'
+    /// and Android's SwiftySynth host, one sequence per synth): the pre-roll and the body from `baseTick` on, as
+    /// `metronomeOnlySequence(... includingPreRollClicks: true)` writes them, then the WHOLE body again, from tick 0,
+    /// starting at `wholeBodyTick`. A loop wrap during that play moves on to the whole copy instead of a second
+    /// sequence — so nothing is attached on the render thread — and the clicks before `baseTick` the first part drops
+    /// are there for it.
+    ///
+    /// Positions: score tick `t` is metronome tick `t + (plan.preRollTicks - baseTick)` in the first part and
+    /// `t + wholeBodyTick` in the copy — the two values of the one offset a backend keeps
+    /// (`metronomeTick(forScoreTick:offset:)`).
+    ///
+    /// - Parameter bodyEndTick: the score's end (unrolled). The copy starts past where the first part maps it, and
+    ///   past the pre-roll, so its tempo map never reaches back into a stretch the first part is still playing — a
+    ///   score running on after its last click, or a count whose bars outlast the last body beat.
+    public static func countInSequenceWithWholeBody(
+        rendered: MidiFile,
+        metronomeBeats: [MetronomeBeat],
+        plan: CountInBeats.Result,
+        baseTick: Int,
+        bodyEndTick: Int,
+    ) -> (file: MidiFile, wholeBodyTick: Int) {
+        let first = metronomeOnlySequence(
+            rendered: rendered, metronomeBeats: metronomeBeats, plan: plan, baseTick: baseTick,
+            includingPreRollClicks: true,
+        )
+        let body = metronomeOnlySequence(rendered: rendered, metronomeBeats: metronomeBeats)
+        let firstEnd = first.tracks.flatMap(\.events).map(\.tick).max() ?? 0
+        let wholeBodyTick = max(
+            firstEnd,
+            metronomeTick(forScoreTick: max(bodyEndTick, baseTick), offset: plan.preRollTicks - baseTick),
+        ) + 1
+        // The copy's governing tempo at its own tick 0: the body's first tempo there, else the SMF default, so the
+        // first part's last tempo cannot carry into it.
+        let bodyConductor = body.tracks[0].events
+        let hasTempoAtZero = bodyConductor.contains {
+            if $0.tick == 0, case .meta(.tempo) = $0.event { return true }
+            return false
+        }
+        var conductor = first.tracks[0].events
+        if !hasTempoAtZero {
+            conductor.append(TimedMidiEvent(
+                tick: wholeBodyTick, event: .meta(.tempo(microsecondsPerQuarter: defaultMicrosecondsPerQuarter)),
+            ))
+        }
+        conductor += bodyConductor.map { TimedMidiEvent(tick: $0.tick + wholeBodyTick, event: $0.event) }
+        let firstClicks = first.tracks[1].events.filter {
+            if case .endOfTrack = $0.event { return false }
+            return true
+        }
+        let bodyClicks = body.tracks[1].events.map { TimedMidiEvent(tick: $0.tick + wholeBodyTick, event: $0.event) }
+        return (
+            MidiFile(division: rendered.division, tracks: [
+                MidiTrack(events: conductor), MidiTrack(events: firstClicks + bodyClicks),
+            ]),
+            wholeBodyTick,
+        )
+    }
+
+    /// The SMF default before any tempo event: 120 bpm.
+    static let defaultMicrosecondsPerQuarter = 500_000
+
+    /// The metronome sequence's tick for score tick `scoreTick`: `scoreTick + offset`, where `offset` is the one a
+    /// backend keeps — 0 on the plain body sequence, `plan.preRollTicks - baseTick` in a count-in's first part,
+    /// `wholeBodyTick` in its whole copy. Every seek, wrap, cursor and position mapping goes through here, so the
+    /// offset is never added by hand in two places.
+    public static func metronomeTick(forScoreTick scoreTick: Int, offset: Int) -> Int {
+        scoreTick + offset
+    }
 }

@@ -926,6 +926,17 @@ extension LayoutEngine {
                             spanDemands.append((tick, end, pendingHarmonyWidth))
                             pendingHarmonyWidth = 0
                         }
+                        // A syllable under a rest is room its column keeps, as under a chord: MuseScore puts every
+                        // `ChordRest`'s lyrics in its segment's shape. Placement draws it at this column.
+                        let syllableWidth = lyricSpacing.width(at: idx, lyrics: r.lyrics)
+                        if syllableWidth > 0 {
+                            firstSyllable = firstSyllable ?? (tick, syllableWidth)
+                            lastSyllable = (tick, syllableWidth, lyricsCarryDash(r.lyrics))
+                        }
+                        if let demand = lyricSpacing.demand(at: idx, lyrics: r.lyrics) {
+                            lyricDemands.append((tick, demand.nextIndex, demand.width))
+                        }
+                        chordTicks[idx] = tick
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: baseWeight,
                         ))
@@ -1495,15 +1506,17 @@ extension LayoutEngine {
         return widest
     }
 
-    /// The next chord after `startIndex` that actually CARRIES a
+    /// The next chord or rest after `startIndex` that actually CARRIES a
     /// syllable — the one whose column the syllable at `startIndex` has
     /// to clear — and its position in `elements`.
     ///
-    /// Notes without a syllable, untimed elements (clefs, key
-    /// signatures, barlines) and RESTS are stepped over. The old
+    /// Notes and rests without a syllable, and untimed elements (clefs,
+    /// key signatures, barlines) are stepped over. The old
     /// `nextChordLyrics` stopped at the first rest and reported "no
     /// lyric follows", which made the syllable before a rest demand its
-    /// full half-width of the rest's own gap.
+    /// full half-width of the rest's own gap. A rest that carries a
+    /// syllable is a stop like a note that does: MuseScore lays lyrics
+    /// out on any `ChordRest`.
     ///
     /// `nil` when no syllable follows in this voice at all.
     static func nextLyricBearingChord(
@@ -1511,7 +1524,7 @@ extension LayoutEngine {
     ) -> (lyrics: [Lyric], index: Int)? {
         guard startIndex + 1 < elements.count else { return nil }
         for j in (startIndex + 1) ..< elements.count {
-            if case let .chord(nc) = elements[j], !nc.notes.isEmpty, nc.lyrics.contains(where: lyricHasContent) {
+            if case let .chord(nc) = elements[j], nc.lyrics.contains(where: lyricHasContent) {
                 return (nc.lyrics, j)
             }
         }
@@ -1537,8 +1550,8 @@ struct VoiceLyricSpacing {
         self.metrics = metrics
     }
 
-    /// The widest syllable under the notes-bearing chord at `index` (`lyrics`), `0` when none prints: carried from
-    /// the pair before when that one measured it, and carried on to this chord's own pair.
+    /// The widest syllable under the chord or rest at `index` (`lyrics`), `0` when none prints: carried from the pair
+    /// before when that one measured it, and carried on to this chord's own pair.
     mutating func width(at index: Int, lyrics: [Lyric]) -> CGFloat {
         if let carried, carried.index == index { return carried.width }
         let width = LayoutEngine.chordLyricMaxWidth(lyrics, metrics: metrics)
@@ -1546,8 +1559,8 @@ struct VoiceLyricSpacing {
         return width
     }
 
-    /// The distance the syllables under the notes-bearing chord at `index` (`lyrics`) need between its column and
-    /// the column of the next chord that carries one, at `nextIndex` in `elements`; `nil` when this chord carries no
+    /// The distance the syllables under the chord or rest at `index` (`lyrics`) need between its column and the column
+    /// of the next chord or rest that carries one, at `nextIndex` in `elements`; `nil` when this one carries no
     /// syllable or none follows it in the voice.
     mutating func demand(at index: Int, lyrics: [Lyric]) -> (width: CGFloat, nextIndex: Int)? {
         let current = width(at: index, lyrics: lyrics)

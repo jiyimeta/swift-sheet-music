@@ -22,6 +22,12 @@ public struct ElementProperties: Sendable, Equatable, Codable {
     /// file is represented by `ScoreOffset(x: 0, y: 0)`. Swift construction
     /// through an element's zero-valued `offsetX` / `offsetY` initializer
     /// parameters is indistinguishable from no offset and stores `nil`.
+    ///
+    /// On an engraved text it is MuseScore's `Pid::OFFSET` as written, and
+    /// so it REPLACES the style's position rather than adding to it: the
+    /// property's default value is that position (a lyric's
+    /// `Sid::lyricsPosBelow`, staff text's `Sid::staffTextPosAbove`, …), so
+    /// a moved text carries all of it (`LayoutEngine.placedTextPosition`).
     public var offset: ScoreOffset?
 
     /// Author override for which side of the staff the element sits on.

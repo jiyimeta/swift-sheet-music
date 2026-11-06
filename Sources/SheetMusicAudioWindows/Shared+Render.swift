@@ -35,8 +35,7 @@ extension Shared {
         let chunk = PlaybackCore.chunkFrames
         session.score.write(frames: Int32(chunk), into: out)
         if scoreStopUnrendered {
-            // A stopped player's All Sound Off went out at the start of that block; the previews can sound now, from
-            // the next one.
+            // The block a stopped player owed is rendered; the previews can sound now, from the next one.
             releaseHeldPreviews(to: session.score)
         }
         // Rendered even while silent, so the click transport keeps in step with the score's (the Apple backend keeps
@@ -75,9 +74,10 @@ extension Shared {
 
         if let deadline = previewDeadline, renderedFrames >= deadline.frame {
             previewDeadline = nil
-            if let voice = previewPolicy.end(generation: deadline.generation) {
-                // A note-off, as Android ends its previews: FluidSynth needs none of the CC 120 workarounds the
-                // AUMIDISynth path has, and the release rings out on a stream that never parks.
+            for voice in previewPolicy.endVoices(generation: deadline.generation) {
+                // Note-offs, as Android ends its previews: the synth needs none of the CC 120 workarounds the
+                // AUMIDISynth path has, and the release rings out on a stream that never parks. Allocates nothing
+                // beyond the policy's own array (a handful of voices, one tap's).
                 sendPreviewNoteOff(channel: Int32(voice.channel), pitch: Int32(voice.pitch))
             }
         }
@@ -89,11 +89,6 @@ extension Shared {
         countIn != nil || !metronomeMuted ? metronomeVolume : 0
     }
 
-    private var activeMetronome: PlayerHandle? {
-        guard let session else { return nil }
-        return usingCountInMetronome ? session.countInMetronome ?? session.bodyMetronome : session.bodyMetronome
-    }
-
     /// Asks `PlaybackTransportStepper` what the positions call for and does it.
     private mutating func step(session: Session, outcome: inout RenderOutcome) {
         var scoreTick = pendingScoreTick ?? session.scorePlayer.tick
@@ -102,15 +97,19 @@ extension Shared {
         if scoreRunning, pendingScoreTick == nil, session.scorePlayer.isDone {
             scoreTick = max(scoreTick, totalTicks)
         }
-        var metronomeTick = activeMetronome?.tick ?? 0
-        // A count-in sequence can end before its bars do — its last event is a click's note-off when no body beat
-        // follows the start position — and a player that has run out stops advancing: it counts as having got there.
-        if let countIn, activeMetronome?.isDone == true {
+        let metronome = session.metronomePlayer
+        var metronomeTick = metronome.tick
+        // A sequence that has run out stops advancing: during a count-in it counts as having got to the score's start.
+        // (The count-in's sequence carries the whole body behind its first pass, past the pre-roll, so this is a
+        // guard, not the path.)
+        if let countIn, metronome.isDone {
             metronomeTick = max(metronomeTick, countIn.preRollTicks)
         }
         let actions = PlaybackTransportStepper.step(PlaybackTransportStepper.Snapshot(
             isPlaying: true, scoreTick: scoreTick, metronomeTick: metronomeTick,
-            metronomeOffsetTicks: metronomeOffsetTicks, loop: transportLoop, countIn: countIn, totalTicks: totalTicks,
+            metronomeOffsetTicks: metronomeOffsetTicks,
+            metronomeWrapOffsetTicks: session.metronomeWholeBodyOffsetTicks, loop: transportLoop, countIn: countIn,
+            totalTicks: totalTicks,
         ))
         let positions = (score: scoreTick, metronome: metronomeTick)
         for action in actions {
@@ -136,22 +135,13 @@ extension Shared {
             }
             pendingScoreTick = tick
             reassertPending = true
-        case let .seekMetronome(tick):
-            if usingCountInMetronome {
-                // The count is over once its first pass is: the jump lands on the plain sequence, which has every
-                // beat (the count-in's keeps only those from its start position on) — the Apple backend's loop wrap.
-                session.countInMetronome?.stop()
-                usingCountInMetronome = false
-                let bodyTick = tick - metronomeOffsetTicks
-                metronomeOffsetTicks = 0
-                session.bodyMetronome.seek(to: bodyTick)
-                session.bodyMetronome.play()
-            } else {
-                session.bodyMetronome.seek(to: tick)
-                if !session.bodyMetronome.isPlaying {
-                    // The click sequence ends one tick after its last beat, before the score does.
-                    session.bodyMetronome.play()
-                }
+        case let .seekMetronome(tick, offsetTicks):
+            // Out of a count-in's first pass, the jump lands on the whole body behind it, which has every beat (the
+            // first pass keeps only those from its start on) — the Apple backend's loop wrap, on one sequence.
+            metronomeOffsetTicks = offsetTicks
+            session.metronomePlayer.seek(to: tick)
+            if !session.metronomePlayer.isPlaying {
+                session.metronomePlayer.play()
             }
         case let .startScore(tick):
             session.scorePlayer.seek(to: tick)
@@ -185,11 +175,9 @@ extension Shared {
         if !session.scorePlayer.isPlaying {
             session.scorePlayer.play()
         }
-        if let metronome = activeMetronome {
-            metronome.seek(to: seek.metronomeTick)
-            if !metronome.isPlaying {
-                metronome.play()
-            }
+        session.metronomePlayer.seek(to: seek.metronomeTick)
+        if !session.metronomePlayer.isPlaying {
+            session.metronomePlayer.play()
         }
         pendingScoreTick = seek.scoreTick
         reassertPending = true

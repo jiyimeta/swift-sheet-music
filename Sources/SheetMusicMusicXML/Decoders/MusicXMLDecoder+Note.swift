@@ -55,13 +55,14 @@ enum MusicXMLNoteDecoder {
         if isRest {
             let restNode = node.children.first(where: { $0.name == "rest" })
             let isMeasureRest = restNode?.attributes["measure"] == "yes"
-            if isMeasureRest {
-                // `<duration>` (which `MusicXMLDuration.decode` already
-                // consumed for divisions-cursor correctness) is
-                // informational under the `.measure` marker model.
-                return .new(prefix + [.rest(duration: .measure)] + suffix)
-            }
-            return .new(prefix + [.rest(duration: duration)] + suffix)
+            // `<duration>` (which `MusicXMLDuration.decode` already
+            // consumed for divisions-cursor correctness) is
+            // informational under the `.measure` marker model.
+            //
+            // A rest keeps its `<lyric>`s as a note does: MuseScore adds them to the note's `ChordRest`, rest or
+            // chord alike (`importmusicxmlpass2.cpp`, `addLyrics(…, cr, …)`).
+            let rest = Chord(duration: isMeasureRest ? .measure : duration, notes: [], lyrics: decodeLyrics(node))
+            return .new(prefix + [.chord(rest)] + suffix)
         }
 
         let midi: Int
@@ -328,11 +329,40 @@ enum MusicXMLNoteDecoder {
             let text = lyricNode.first("text")?.text ?? ""
             let syllabic = (lyricNode.first("syllabic")?.text)
                 .flatMap(Syllabic.init(mscxValue:)) ?? .single
-            map[verse - 1] = Lyric(
-                text: text, syllabic: syllabic, ticks: 0,
-            )
+            var lyric = Lyric(text: text, syllabic: syllabic, ticks: 0)
+            lyric.elementProperties = lyricElementProperties(lyricNode)
+            map[verse - 1] = lyric
         }
         guard let maxVerse = map.keys.max() else { return [] }
         return (0 ... maxVerse).map { map[$0] ?? Lyric(text: "") }
+    }
+
+    /// A `<lyric>`'s side and offset, as `MusicXmlParserLyric::parse` sets them. The side is `placement`, else the
+    /// sign of `default-y` + `relative-y` (positive — up — is above), else below, the lyrics style's own side, so
+    /// below stays `nil`. The offset is the style's for that side (`resetProperty(Pid::OFFSET)`) with `relative-x` in
+    /// its x when there is one; with none it is left to the style, `nil`. `default-y` places nothing else: MuseScore
+    /// lays lyric rows out itself.
+    private static func lyricElementProperties(_ node: XMLTreeNode) -> ElementProperties {
+        let defaultY = node.attributes["default-y"].flatMap(Double.init)
+        let relativeY = node.attributes["relative-y"].flatMap(Double.init)
+        let above: Bool = switch node.attributes["placement"] {
+        case "above": true
+        case "below": false
+        default:
+            if defaultY ?? 0 != 0 || relativeY ?? 0 != 0 {
+                (defaultY ?? 0) + (relativeY ?? 0) > 0
+            } else {
+                false
+            }
+        }
+        var properties = ElementProperties()
+        properties.placement = above ? .above : nil
+        if let relativeX = node.attributes["relative-x"].flatMap(Double.init), relativeX != 0 {
+            let side: Placement = above ? .above : .below
+            // To the six decimals MuseScore writes an offset with, so the import is what a MuseScore save of it holds.
+            let x = (MusicXMLDecodeContext.spatiums(tenths: relativeX) * 1e6).rounded() / 1e6
+            properties.offset = ScoreOffset(x: x, y: TextPlacementRole.lyrics.defaultPosition(on: side).y)
+        }
+        return properties
     }
 }

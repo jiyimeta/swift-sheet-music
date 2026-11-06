@@ -22,6 +22,100 @@ and this project adheres to
   shared a table no longer do, or a track joins another's — restarts the groups it changes. A backend that does not
   implement the new requirement plays every track from the shared table.
 
+## [4.29.2] - 2026-11-06
+
+### Fixed
+
+- **A syllable under a full-measure rest stands under the centered rest, and its offset counts from there**, as
+  MuseScore draws it. 4.29.1 drew it at the bar's first column. MuseScore does lay the syllable out at the rest's
+  segment (`RestLayout::layoutRest` resets the rest's x, `LyricsLayout::layout` negates it), but relative to the rest,
+  and `MeasureLayout` centers a full-measure rest only afterwards — the syllable moves with it. The empty caret of lyric
+  entry under such a rest follows (`lyricEntryOrigin` now centers it on `timedElementOrigin`). Spacing is unchanged:
+  MuseScore spaces the bar with the syllable still at its segment, as this package already did.
+
+## [4.29.1] - 2026-11-06
+
+### Fixed
+
+- **A syllable under a rest is read, drawn, spaced and saved.** MuseScore anchors lyrics to any `ChordRest`, but the
+  MSCX rest decoder left a `<Rest>`'s `<Lyrics>` as preserved markup — kept on save, never drawn — and the MusicXML
+  import dropped a rest's `<lyric>` outright.
+  - `MSCXRestDecoder` reads `<Lyrics>` into the rest's `Chord.lyrics` (`Chord.decodeLyrics`, shared with chords), and
+    `encodeAsRest` writes them back in MuseScore's slot, right after `<durationType>` / `<duration>`. A score that
+    already carried them as preserved markup reads them on its next open.
+  - Layout draws them at the rest's segment column — under a full-measure rest, the bar's first column, not the
+    centered rest, as `LyricsLayout::layout` places them — with the hyphens and melisma rules a chord's get.
+  - Spacing treats them as a chord's: a rest's syllable is a demand on its column, and the syllable before it reaches
+    to it rather than past it (`nextLyricBearingChord`).
+  - The MusicXML import keeps a rest's `<lyric>`s (`addLyrics(…, cr, …)` in MuseScore's import).
+  - **The MusicXML import reads a `<lyric>`'s side and `relative-x`**, as `MusicXmlParserLyric::parse` does: above
+    for `placement="above"` or, without one, a positive `default-y` + `relative-y`; and a `relative-x` becomes the
+    offset's x, at the score's `<defaults><scaling>`, beside the style's y for that side.
+  - **Lyric entry reaches rests as MuseScore's does.** `SetLyric` / `SetLyrics` write a rest's syllables (they
+    refused a rest). `LyricInputPlanner` advances and steps back to the next chord, or to a rest that already carries
+    a syllable on that verse, and passes every other rest (`NotationInteraction::navigateToLyrics`); the new
+    `nextCursor(from:in:)` moves the same way without writing, for a host's →. An empty caret under a rest stands at
+    its segment column, where the syllable is drawn (`lyricEntryOrigin`).
+- **An engraved text's authored `<offset>` replaces its style's position instead of adding to it**, as MuseScore's
+  does: a text is laid out at its staff edge and drawn at that plus `Pid::OFFSET`, whose default IS the style's
+  position, so a file writes the whole offset once the text was moved. Adding the style's position on top of it
+  placed every moved text too far out by that much — a lyric MuseScore wrote at `<offset x="4.16" y="3"/>` (moved
+  right along its row) a row's worth below it, staff text 1 sp too high, system text and a tempo marking 2 sp.
+  - `LayoutEngine.placedTextPosition` is the one rule, for every text `placedTextOrigin` places — lyrics, staff and
+    system text, chord symbols and Roman / Nashville numbers, rehearsal marks, Expression, Sticking, harp pedal
+    diagrams and the annotations laid out as staff text — and for tempo markings (`tempoOrigin`).
+  - The lyric caret (`lyricLineY`, `lyricEntryOrigin`) and the verse row a moved syllable is recovered from
+    (`lyricAnchorCorrectionY`, now given the score's style) follow it.
+  - `SetTextOffset` writes the same thing, measured from the side's staff edge; `nil` still restores the style.
+  - Marks and jumps already read their offset this way, from the staff edge with no style part, and are unchanged.
+  - **A dynamic's authored offset is read at all**, by the same rule: it replaces `Sid::dynamicsPosBelow` (0, 2),
+    x and y. Layout ignored it, so a dynamic moved by hand in MuseScore sat at the default.
+
+## [4.29.0] - 2026-11-05
+
+### Changed
+
+- **`WindowsPlaybackEngine` plays through SwiftySynth (`HostedSynth`), the synth the Apple and Android apps use, in
+  place of FluidSynth.** Its public API is unchanged; what it sounds like now matches the Mac.
+  - Nothing outside the package is linked for playback any more: the `CFluidSynth` system-library target and the
+    `libfluidsynth-3` link are gone, so a Windows build no longer passes FluidSynth's include / lib paths and an app
+    no longer ships its DLLs or LGPL text.
+  - The output level is the Mac's (`windowsOutputGain` 1), about 8 dB below the FluidSynth engine's.
+  - The cymbal choke ignores a held sustain pedal, as on the Mac.
+  - A metronome count-in keeps its click after an A–B loop wraps to before the count's start: the count-in click
+    sequence carries the whole body (`MetronomeSequenceBuilder.countInSequenceWithWholeBody`).
+- **`WindowsPlaybackEngine.replaceScore(with:)` keeps the transport, as the Apple engine's does.** Playing goes on
+  from the same measure, paused stays paused there, and the loop survives. It used to stop and rewind.
+- **`HostedSynth.programSelect` prefetches only when the selection changes.** A host that sends the same program again
+  starts no task.
+- **SwiftySynth 0.4.2** (exact), the release that builds on Windows again.
+
+### Added
+
+- **`WindowsPlaybackEngine.playPreview(noteIDs:in:duration:velocity:)`**: a tap sounds every note that starts on its
+  beat, as one audition, as the Apple engine's does.
+- **`MetronomeSequenceBuilder.countInSequenceWithWholeBody(...)`** and **`metronomeTick(forScoreTick:offset:)`**:
+  portable, for any one-sequence-per-synth host.
+- **`HostedSynth`**: `prepareSequence(smf:)` / `attach(_:)`, `allSoundsOff()`, `resetHostState()`, `activeVoiceCount`,
+  `hasSoundFont`, `recordedProgram(channel:)` and `recordedTuning(channel:)`.
+- **`HostedSequence`**: `totalTicks`, `isAtEnd` and `isPlaying`. All additive; Android's calls are unchanged.
+
+### Fixed
+
+- **Windows draws a frame's picture.** `DrawCommandWalker` skipped `drawImage`; it now decodes the bytes with WIC
+  once per canvas resources (`cd2d_draw_image`, cached by content) and stretches them over the rectangle with
+  Direct2D, as `DrawProgramCGRenderer` does on the Mac. Bytes WIC cannot read draw nothing.
+- **An edited frame's tiles are redrawn on Windows.** `ScoreSurface.replaceCommands` keyed spans by system index
+  alone, so the title block and every frame shared one key and only the first was compared; spans without a system
+  are now told apart by their place on the page (`SpanKey`).
+
+### Notes
+
+- The Windows suites that need a General MIDI font are skipped without one: `ChokeTests`, `OnsetPreviewTests` and
+  (with `SSM_CALIBRATION=1`) `CalibrationTests`, gated on `SSM_TEST_SF2`. CI does not run them, and does not run
+  `SheetMusicAudioWindowsTests` or `SheetMusicRenderWindowsTests` at all (Windows only). They were run on a Windows
+  machine for this release.
+
 ## [4.28.0] - 2026-11-04
 
 ### Added

@@ -93,19 +93,15 @@ final class Probe { // swiftlint:disable:this type_body_length
             value: mismatches.isEmpty ? "\(strips.count) strips" : mismatches.joined(separator: "; "),
             limit: "every strip on its mixer program, drums in bank 128",
         )
-        let dynamic = engine.probeSetting("synth.dynamic-sample-loading")
-        report.check("prepare", "synth.dynamic-sample-loading", dynamic == 0, value: "\(dynamic ?? -1)", limit: "0")
-        let reset = engine.probeSetting("player.reset-synth")
-        report.check("prepare", "player.reset-synth", reset == 0, value: "\(reset ?? -1)", limit: "0")
-
-        // W0-6's open question: does FluidSynth keep the SoundFont's file open after loading it?
+        // Whether the loaded SoundFont's file can be renamed: SwiftySynth reads it whole into memory on Windows (it
+        // maps a font in place only on Darwin, Glibc and Android), so it should hold nothing open.
         let renamed = soundFontCopy.appendingPathExtension("renamed")
         do {
             try FileManager.default.moveItem(at: soundFontCopy, to: renamed)
             try FileManager.default.moveItem(at: renamed, to: soundFontCopy)
-            report.note("prepare", "the loaded SoundFont could be renamed: FluidSynth does not hold its file open")
+            report.note("prepare", "the loaded SoundFont could be renamed: the synth does not hold its file open")
         } catch {
-            report.note("prepare", "the loaded SoundFont could NOT be renamed (\(error)): FluidSynth holds its file")
+            report.note("prepare", "the loaded SoundFont could NOT be renamed (\(error)): the synth holds its file")
         }
     }
 
@@ -176,10 +172,11 @@ final class Probe { // swiftlint:disable:this type_body_length
             )
         }
 
-        // The spec's ≤ 1 ms/min is for drift this engine could accumulate itself — FluidSynth's player, the SMF's tempo
-        // against the timeline's, the unroll — so it is taken on the score's clock against the audio rendered, which
-        // the players run on, and fitted over every chunk of the trace rather than over the polls. FluidSynth moves
-        // its player in whole milliseconds of the sample clock (`fluid_sample_timer_process` truncates) and in whole
+        // The spec's ≤ 1 ms/min is for drift this engine could accumulate itself — the synth's sequence, the SMF's
+        // tempo against the timeline's, the unroll — so it is taken on the score's clock against the audio rendered,
+        // which the players run on, and fitted over every chunk of the trace rather than over the polls. The analysis
+        // below was made under FluidSynth, the engine's synth before SwiftySynth (ssm 4.29.0): FluidSynth moved its
+        // player in whole milliseconds of the sample clock (`fluid_sample_timer_process` truncates) and in whole
         // ticks (`fluid_player_callback` rounds), so tick s − rendered s is a sawtooth 1.7–2 ms peak to peak (σ 0.4 ms
         // at 124 bpm, 480 ppq). A slope through 150–190 polls of it hangs on the polls' phase against that sawtooth: a
         // model of FluidSynth's arithmetic gives σ 0.3–0.7 ms/min while the phase wanders, and 1.8 ms/min once
@@ -562,11 +559,12 @@ final class Probe { // swiftlint:disable:this type_body_length
         previewRightAfterPause()
     }
 
-    /// A held preview started in the same moment as a pause. The paused score player sends All Sound Off in its next
+    /// A held preview started in the same moment as a pause. A paused FluidSynth player sent All Sound Off in its next
     /// rendered block — on the channels it sent a note-on on, and only those (`fluid_player_callback`) — which the
-    /// preview's note-on must not be caught by (folino docs/superpowers/specs/2026-10-03-ssm-windows-minor-design.md
-    /// §4). So playback starts AT a note of the previewed staff: its channel is then one the player played on, as in
-    /// a reader paused mid-piece. Ten tries: a lost one depends on when the next block comes.
+    /// preview's note-on must not be caught by; a SwiftySynth sequence cuts at `stop()`, and this still checks it
+    /// (folino docs/superpowers/specs/2026-10-03-ssm-windows-minor-design.md §4). So playback starts AT a note of the
+    /// previewed staff: its channel is then one the player played on, as in a reader paused mid-piece.
+    /// Ten tries: a lost one depends on when the next block comes.
     private func previewRightAfterPause() {
         guard let note = firstNote(drums: false),
               let staff = score.allStaves.firstIndex(where: { $0.address == note.staff })

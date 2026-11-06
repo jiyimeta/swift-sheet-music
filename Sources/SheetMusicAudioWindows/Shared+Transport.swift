@@ -16,8 +16,8 @@ extension Shared {
         return session?.scorePlayer.tick ?? 0
     }
 
-    /// What a stop does to the notes sounding. A player's own stop follows up with All Sound Off, in its next block, on
-    /// the channels it played on (`fluid_player_stop`); this is about the rest — previews, other channels, the click.
+    /// What a stop does to the notes sounding. A playing sequence's own stop cuts its synth's voices
+    /// (`HostedSequence.stop`); this is about the rest — previews, the click.
     enum SilenceMode {
         /// Nothing: nothing of the transport's was sounding (a play from stopped or paused), and a preview may be.
         case untouched
@@ -27,28 +27,20 @@ extension Shared {
         case cut
     }
 
-    /// Stops every player and leaves any count-in.
+    /// Stops every player and leaves any count-in: the metronome maps through its whole body from here on.
     ///
-    /// A player told to play that has not played a block yet has not parsed its sequence, and FluidSynth then refuses
-    /// a stopped player every seek past tick 0 (see `PlayerHandle`): such a player — played and stopped within one
-    /// device period, or with no device rendering at all — is replaced by a fresh one, which takes any seek.
+    /// (FluidSynth refused a never-played player every seek past tick 0, and this used to replace such a player with a
+    /// fresh one. A SwiftySynth sequence takes any seek, stopped or not.)
     mutating func stopPlayers(silence: SilenceMode) {
-        guard var session else { return }
+        guard let session else { return }
         if session.scorePlayer.isPlaying {
             scoreStopUnrendered = true
         }
-        session.scorePlayer = Self.stopped(
-            session.scorePlayer, remaking: session.sequences.score, on: session.score, rate: rate,
-        )
-        session.bodyMetronome = Self.stopped(
-            session.bodyMetronome, remaking: session.sequences.metronome, on: session.metronome, rate: rate,
-        )
-        session.countInMetronome?.stop()
-        self.session = session
+        session.scorePlayer.stop()
+        session.metronomePlayer.stop()
         scoreRunning = false
         countIn = nil
-        usingCountInMetronome = false
-        metronomeOffsetTicks = 0
+        metronomeOffsetTicks = session.metronomeWholeBodyOffsetTicks
         deferredSeek = nil
         awaitingWrapLanding = false
         switch silence {
@@ -63,31 +55,23 @@ extension Shared {
         }
     }
 
-    private static func stopped(
-        _ player: PlayerHandle, remaking sequence: Data, on synth: SynthHandle, rate: Float,
-    ) -> PlayerHandle {
-        guard player.isPlaying else { return player }
-        guard player.totalTicks == 0, let fresh = try? PlayerHandle.make(on: synth, midi: sequence, rate: rate) else {
-            player.stop()
-            return player
-        }
-        player.delete()
-        return fresh
-    }
-
-    /// Parks both stopped players at `tick` (the score's unrolled tick; the body metronome runs level with it).
+    /// Parks both stopped players at `tick` (the score's unrolled tick; the metronome at the same beat of its whole
+    /// body).
     mutating func rewind(to tick: Int) {
         guard let session else { return }
         session.scorePlayer.seek(to: tick)
-        session.bodyMetronome.seek(to: tick)
+        session.metronomePlayer.seek(to: MetronomeSequenceBuilder.metronomeTick(
+            forScoreTick: tick, offset: session.metronomeWholeBodyOffsetTicks,
+        ))
+        metronomeOffsetTicks = session.metronomeWholeBodyOffsetTicks
         pendingScoreTick = tick
     }
 
-    /// Starts the score player and the body metronome where they are parked.
+    /// Starts the score player and the metronome where they are parked.
     mutating func startPlayers() {
         guard let session else { return }
         session.scorePlayer.play()
-        session.bodyMetronome.play()
+        session.metronomePlayer.play()
         scoreRunning = true
     }
 
@@ -109,17 +93,14 @@ extension Shared {
             return
         }
         if scoreRunning {
-            if usingCountInMetronome {
-                // The count-in's sequence only holds beats from its start on: the jump lands on the plain one, which
-                // has not played since the count began (so it is not playing, and takes the seek at once).
-                session.countInMetronome?.stop()
-                usingCountInMetronome = false
-                metronomeOffsetTicks = 0
-                session.bodyMetronome.seek(to: tick)
-                session.bodyMetronome.play()
-            }
-            // Carried out by the render thread before its next step (see `DeferredSeek`).
-            deferredSeek = DeferredSeek(scoreTick: tick, metronomeTick: tick)
+            // Carried out by the render thread before its next step (see `DeferredSeek`). A count-in's first pass
+            // holds only the beats from its start on, so the metronome lands on its whole body.
+            let offset = session.metronomeWholeBodyOffsetTicks
+            metronomeOffsetTicks = offset
+            deferredSeek = DeferredSeek(
+                scoreTick: tick,
+                metronomeTick: MetronomeSequenceBuilder.metronomeTick(forScoreTick: tick, offset: offset),
+            )
         } else {
             // A seek during a count-in ends it: the score starts at `tick` now.
             stopPlayers(silence: .release)
@@ -148,8 +129,7 @@ extension Shared {
         state = .stopped
         scoreRunning = false
         countIn = nil
-        usingCountInMetronome = false
-        metronomeOffsetTicks = 0
+        metronomeOffsetTicks = session?.metronomeWholeBodyOffsetTicks ?? 0
         pendingScoreTick = 0
         deferredSeek = nil
         hasCursor = false
@@ -161,6 +141,34 @@ extension Shared {
         awaitingWrapLanding = false
     }
 
+    /// Seats a transport recorded before a score swap (`WindowsPlaybackEngine.replaceScore`), right after `install`
+    /// in the same critical section: the loop, then the players parked at the seat's tick and started when it was
+    /// playing. A playing seat whose cursor no longer resolves plays from the top, as the Apple engine's
+    /// `play(from: nil)` does; a paused or stopped one stays stopped at the top.
+    mutating func seat(_ seat: WindowsPlaybackEngine.TransportSeat) {
+        if let loop = seat.loop {
+            loopRange = loop.notated
+            transportLoop = loop.projected
+        }
+        switch seat.state {
+        case .playing:
+            rewind(to: seat.tick ?? 0)
+            startPlayers()
+            state = .playing
+            hasCursor = true
+            reassertPending = true
+        case .paused:
+            guard let tick = seat.tick else { return }
+            rewind(to: tick)
+            state = .paused
+            hasCursor = true
+        case .stopped, .exporting:
+            guard let tick = seat.tick else { return }
+            rewind(to: tick)
+            hasCursor = true
+        }
+    }
+
     /// Moves the transport onto `new` synths and players (a SoundFont reload), at the same position and in the same
     /// play / pause state. A count-in in progress becomes a plain play from the start it was counting into. The old
     /// session stops rendering with the swap; the caller deletes it.
@@ -169,12 +177,11 @@ extension Shared {
         let wasPlaying = state == .playing
         scoreRunning = false
         countIn = nil
-        usingCountInMetronome = false
-        metronomeOffsetTicks = 0
+        metronomeOffsetTicks = new.metronomeWholeBodyOffsetTicks
         deferredSeek = nil
         awaitingWrapLanding = false
         // Previews sounded on the old synth, and what is held back was meant for it.
-        _ = previewPolicy.silence()
+        _ = previewPolicy.silenceVoices()
         previewDeadline = nil
         sustainedPreview = nil
         heldPreviewMessages.removeAll(keepingCapacity: true)
@@ -190,10 +197,11 @@ extension Shared {
 
     // MARK: Channel state
 
-    /// Bank, program, drum type, CC 2, CC 7 and tuning on every strip's channel — the sole authority on them after a
-    /// load, a seek or a wrap, as the Apple engine's `reapplyMixerPrograms` + `applyMixerState` are: the SMF's tick-0
-    /// program and CC 7 on these channels are stripped (`MidiSynthPostProcess`), and with `player.reset-synth = 0`
-    /// nothing else resets them. Allocates nothing, so it may run on the render thread.
+    /// Bank, program, CC 2, CC 7 and tuning on every strip's channel — the sole authority on them after a load, a seek
+    /// or a wrap, as the Apple engine's `reapplyMixerPrograms` + `applyMixerState` are: the SMF's tick-0 program and
+    /// CC 7 on these channels are stripped (`MidiSynthPostProcess`). `HostedSynth` keeps what this sends and sends it
+    /// again after every reset of its own (play, seek, stop). Allocates nothing — a program sent again starts no
+    /// prefetch (`HostedSynth.programSelect`) — so it may run on the render thread.
     func reassertChannelState() {
         guard let synth = session?.score else { return }
         let soloing = mixerChannels.isSoloing
@@ -273,8 +281,8 @@ extension Shared {
         }
     }
 
-    /// Sends what the previews held back, now that the stopped player's block — and its All Sound Off — is rendered.
-    /// Render thread; allocates nothing.
+    /// Sends what the previews held back, now that the stopped player's block is rendered. Render thread; allocates
+    /// nothing.
     mutating func releaseHeldPreviews(to synth: SynthHandle) {
         scoreStopUnrendered = false
         for message in heldPreviewMessages {
@@ -294,13 +302,13 @@ extension Shared {
         // is coming to wait for either.
         heldPreviewMessages.removeAll(keepingCapacity: true)
         scoreStopUnrendered = false
-        let voice = previewPolicy.silence()
+        let voices = previewPolicy.silenceVoices()
         previewDeadline = nil
         guard let synth = session?.score else {
             sustainedPreview = nil
             return
         }
-        if let voice {
+        for voice in voices {
             synth.noteOff(channel: Int32(voice.channel), pitch: Int32(voice.pitch))
         }
         if let held = sustainedPreview {

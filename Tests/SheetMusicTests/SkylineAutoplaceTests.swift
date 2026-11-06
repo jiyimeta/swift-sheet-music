@@ -506,7 +506,7 @@ struct SkylineAutoplaceRegressionTests {
             systemMeasures: [SystemMeasure(elements: [
                 PositionedSystemElement(
                     position: .start,
-                    element: .staffText(StaffText(text: "dolce", offsetY: -2)),
+                    element: .staffText(StaffText(text: "dolce", offsetY: -3)),
                 ),
             ])],
         )
@@ -514,7 +514,8 @@ struct SkylineAutoplaceRegressionTests {
         let system = try #require(doc.systems.first)
         let staffTop = try #require(system.staffOrigins.first).y
         let y = try #require(SkylineFixtures.staffTextY(in: doc))
-        // The authored -2 sp offset keeps the new -1 sp baseline beyond staff clearance.
+        // The authored offset puts the baseline 3 sp over the top line — it replaces the style's -1 sp
+        // (`LayoutEngine.placedTextPosition`) — which keeps it beyond staff clearance.
         let font = TextInkGeometry.font(for: .staffText, metrics: doc.metrics)
         let descent = FontMetrics.provider.descent(font: font)
         #expect(abs(y - (staffTop - system.sp * 3 + descent)) < 0.01)

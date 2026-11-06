@@ -1,5 +1,5 @@
 // Scripted checks of WindowsPlaybackEngine — the exit of ssm 4.0.0 sub-project D (its design's §7). Each step drives
-// the engine the way folino will and reads back what FluidSynth and the transport actually did; every check prints
+// the engine the way folino will and reads back what the synth and the transport actually did; every check prints
 // one `ok` / `FAIL` line, and the run ends with a JSON summary.
 //
 //     windows-playback-probe <score> <soundfont.sf2> [--scenario NAME[,NAME…]] [--json PATH]

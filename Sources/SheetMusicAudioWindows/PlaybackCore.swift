@@ -7,17 +7,17 @@ import Synchronization
 ///
 /// **Threading.** One `Mutex` (an SRWLOCK on Windows) around `Shared` — no lock-free queue, the SwiftySynth model.
 /// The render thread holds it for a whole device callback; a control call holds it only to swap small values and send
-/// the few MIDI messages that go with them. Nothing slow happens under it: rendering an SMF in Swift and loading a
-/// SoundFont (`sfload`) are done before, deleting a synth after. The exceptions are `new_fluid_player` /
-/// `delete_fluid_player` (see `PlayerHandle.make`), which FluidSynth requires to be serialized with rendering, and
-/// which cost microseconds.
+/// the few MIDI messages that go with them. Nothing slow happens under it: rendering and parsing an SMF and loading a
+/// SoundFont are done before, deleting a synth after. The exception is attaching a sequence (`PlayerHandle.make`),
+/// which allocates its sequencer.
 ///
-/// **Time.** The render callback works in 64-frame chunks (`FLUID_BUFSIZE`): FluidSynth advances each player once per
-/// such block, so between two chunks both players' positions are settled, and the transport decisions
-/// (`PlaybackTransportStepper`: count-in handover, loop wrap, end of score) and the preview note-off deadlines are
-/// taken there — within 1.3 ms at 48 kHz, on the sample clock, and never on the host's UI thread.
+/// **Time.** The render callback works in 64-frame chunks, so between two chunks both sequences' positions are
+/// settled, and the transport decisions (`PlaybackTransportStepper`: count-in handover, loop wrap, end of score) and
+/// the preview note-off deadlines are taken there — within 1.3 ms at 48 kHz, on the sample clock, and never on the
+/// host's UI thread. (64 was FluidSynth's `FLUID_BUFSIZE`, the granularity its players moved at; SwiftySynth renders
+/// any count, and the chunk stays the decision grid.)
 final class PlaybackCore: @unchecked Sendable {
-    /// Frames per render chunk: FluidSynth's `FLUID_BUFSIZE`, the granularity its players move at.
+    /// Frames per render chunk: the grid the render thread's decisions are taken on.
     static let chunkFrames = 64
 
     let shared = Mutex(Shared())
@@ -101,14 +101,15 @@ struct RenderOutcome: Sendable {
 struct Session: Sendable {
     var score: SynthHandle
     var metronome: SynthHandle
-    /// What the two players were made from, to make a fresh one from (`Shared.stopPlayers`).
-    var sequences: LoadedSequences
     var scorePlayer: PlayerHandle
-    /// The metronome's plain sequence: the score's tempo map and the click on every beat.
-    var bodyMetronome: PlayerHandle
-    /// The sequence of the last count-in play: the count-in's bars, then the body's clicks shifted behind them. Kept
-    /// after its handover until the next jump, then parked; deleted by the next count-in, prepare or teardown.
-    var countInMetronome: PlayerHandle?
+    /// The metronome synth's one sequence: the plain one (the score's tempo map and the click on every beat), or —
+    /// from a count-in play on, until the next prepare — the count-in's, which carries the whole body behind its
+    /// first pass (`MetronomeSequenceBuilder.countInSequenceWithWholeBody`), so nothing is attached again to wrap,
+    /// seek or play on from it.
+    var metronomePlayer: PlayerHandle
+    /// Where the whole body starts in `metronomePlayer`'s sequence: 0 in the plain one. Every position but a count-in's
+    /// first pass maps through it (`MetronomeSequenceBuilder.metronomeTick(forScoreTick:offset:)`).
+    var metronomeWholeBodyOffsetTicks = 0
 }
 
 /// One mixer strip's live channel and what `reassertChannelState` asserts on it.
@@ -123,8 +124,8 @@ struct StripSlot: Sendable {
     var tuning: [MasterTuning.CC]
 }
 
-/// A seek asked for while the players run, carried out by the render thread between two chunks: FluidSynth refuses a
-/// second `fluid_player_seek` on a playing player until its next block has carried out the first.
+/// A seek asked for while the players run, carried out by the render thread between two chunks, after notes off — so
+/// it lands where the stepper's decisions are taken, never between them.
 struct DeferredSeek: Sendable {
     let scoreTick: Int
     let metronomeTick: Int
@@ -166,9 +167,8 @@ struct Shared: Sendable {
     var scoreRunning = false
     /// A count-in still sounding: the score player waits, parked at `countIn.scoreStartTick`.
     var countIn: PlaybackTransportStepper.CountIn?
-    /// The metronome plays `session.countInMetronome` rather than `bodyMetronome`.
-    var usingCountInMetronome = false
-    /// How far the playing metronome sequence runs ahead of the score's: the count-in sequence's shift, 0 for the body.
+    /// How far the metronome's sequence runs ahead of the score's now: a count-in's first pass's shift
+    /// (`preRollTicks - baseTick`) until the first jump, else `session.metronomeWholeBodyOffsetTicks`.
     var metronomeOffsetTicks = 0
     /// Where a seek sent the score player that it has not carried out yet. Reported in place of the player's own tick,
     /// which trails a seek by one block while playing and indefinitely while stopped.
@@ -207,9 +207,10 @@ struct Shared: Sendable {
     var previewPolicy = NotePreviewPolicy()
     var previewDeadline: PreviewDeadline?
     var sustainedPreview: SustainedPreview?
-    /// A score player stopped while playing has yet to render its next block, in which FluidSynth sends All Sound Off
-    /// on every channel it played on (`PlayerHandle`): a preview sent before then is cut with the score's notes — a
-    /// held preview started in the same moment as a pause, most of the time.
+    /// A score player stopped while playing has yet to render its next block. A FluidSynth player sent All Sound Off
+    /// in that block, cutting a preview sent before it — a held preview started in the same moment as a pause. A
+    /// SwiftySynth sequence cuts its voices inside `stop()` itself, so the hold now only delays such a preview by one
+    /// block; it is kept until the probe's `previewRightAfterPause` has run without it.
     var scoreStopUnrendered = false
     /// The previews' messages sent while `scoreStopUnrendered`, in order; they go out right after that block. Room is
     /// reserved up front and kept on every clear: the render thread can append one too (a tap's note-off due in the

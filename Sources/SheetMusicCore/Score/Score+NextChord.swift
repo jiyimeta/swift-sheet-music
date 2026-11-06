@@ -7,10 +7,23 @@ extension Score {
     /// key sigs, time sigs, barlines, etc.) are skipped.
     ///
     /// Returns `nil` when the end of the staff is reached without
-    /// finding another chord. Used by the lyric editor's Space-key
-    /// "advance to next syllable" flow and any future
-    /// chord-by-chord navigation.
+    /// finding another chord. Used by chord-by-chord navigation; the
+    /// lyric editor's Space-key advance also stops on a rest that
+    /// carries a syllable (`nextChord(after:where:)`).
     public func nextChord(after voiceElementID: VoiceElementID) -> VoiceElementID? {
+        nextChord(after: voiceElementID) { !$0.notes.isEmpty }
+    }
+
+    /// Walk backward in the same staff + voice from `voiceElementID` and return the previous sounding chord.
+    /// Crosses measure boundaries automatically and skips rests and every non-chord element.
+    public func previousChord(before voiceElementID: VoiceElementID) -> VoiceElementID? {
+        previousChord(before: voiceElementID) { !$0.notes.isEmpty }
+    }
+
+    /// `nextChord(after:)` with the stop chosen by `stopsAt`: the next `.chord` element — chord or rest — it accepts.
+    func nextChord(
+        after voiceElementID: VoiceElementID, where stopsAt: (Chord) -> Bool,
+    ) -> VoiceElementID? {
         let staffAddr = voiceElementID.staff
         let voiceIndex = voiceElementID.voiceIndex
         guard let staffValue = self[staffAddr] else {
@@ -26,9 +39,7 @@ extension Score {
                 let start = voiceElementID.elementIndex + 1
                 if start < elements.count {
                     for idx in start ..< elements.count {
-                        if case let .chord(c) = elements[idx],
-                           !c.notes.isEmpty
-                        {
+                        if case let .chord(c) = elements[idx], stopsAt(c) {
                             return VoiceElementID(
                                 staff: staffAddr,
                                 measureIndex: voiceElementID.measureIndex,
@@ -49,7 +60,7 @@ extension Score {
             guard voiceIndex < voices.count else { continue }
             let elements = voices[voiceIndex].elements
             for (idx, el) in elements.enumerated() {
-                if case let .chord(c) = el, !c.notes.isEmpty {
+                if case let .chord(c) = el, stopsAt(c) {
                     return VoiceElementID(
                         staff: staffAddr,
                         measureIndex: mIdx,
@@ -62,9 +73,11 @@ extension Score {
         return nil
     }
 
-    /// Walk backward in the same staff + voice from `voiceElementID` and return the previous sounding chord.
-    /// Crosses measure boundaries automatically and skips rests and every non-chord element.
-    public func previousChord(before voiceElementID: VoiceElementID) -> VoiceElementID? {
+    /// `previousChord(before:)` with the stop chosen by `stopsAt`: the previous `.chord` element — chord or rest — it
+    /// accepts.
+    func previousChord(
+        before voiceElementID: VoiceElementID, where stopsAt: (Chord) -> Bool,
+    ) -> VoiceElementID? {
         let staffAddr = voiceElementID.staff
         let voiceIndex = voiceElementID.voiceIndex
         guard let staffValue = self[staffAddr],
@@ -77,7 +90,7 @@ extension Score {
             let elements = currentVoices[voiceIndex].elements
             let end = min(max(voiceElementID.elementIndex, 0), elements.count)
             for index in elements[..<end].indices.reversed() {
-                if case let .chord(chord) = elements[index], !chord.notes.isEmpty {
+                if case let .chord(chord) = elements[index], stopsAt(chord) {
                     return VoiceElementID(
                         staff: staffAddr,
                         measureIndex: voiceElementID.measureIndex,
@@ -94,7 +107,7 @@ extension Score {
             guard voices.indices.contains(voiceIndex) else { continue }
             let elements = voices[voiceIndex].elements
             for index in elements.indices.reversed() {
-                if case let .chord(chord) = elements[index], !chord.notes.isEmpty {
+                if case let .chord(chord) = elements[index], stopsAt(chord) {
                     return VoiceElementID(
                         staff: staffAddr,
                         measureIndex: measureIndex,

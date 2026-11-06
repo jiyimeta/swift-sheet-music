@@ -4,7 +4,7 @@ import SheetMusicAudioCore
 import SheetMusicCore
 import Synchronization
 
-// Audio-file export: the prepared score rendered as fast as FluidSynth computes, through the same render the device
+// Audio-file export: the prepared score rendered as fast as SwiftySynth computes, through the same render the device
 // thread pulls, into a WAV, AIFF or AAC file (folino spec 2026-10-05-windows-phase4-import-export-pdf-design §8.2).
 
 extension WindowsPlaybackEngine {

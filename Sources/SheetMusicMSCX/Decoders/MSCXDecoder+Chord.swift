@@ -262,15 +262,15 @@ extension Chord {
         )
     }
 
-    /// Decode the `<Lyrics>` children of a `<Chord>` node — one per
-    /// verse line. Verse number comes from `<no>` (0-indexed); absent =
-    /// verse 0. `<syllabic>` places the syllable in a hyphenated word;
-    /// `<ticks_f>` / `<ticks>` size melismas (`melismaTicks(_:)`).
+    /// Decode the `<Lyrics>` children of a `<Chord>` or `<Rest>` node — one per verse line. MuseScore anchors lyrics
+    /// to any `ChordRest` (`TRead::readProperties(ChordRest*)`), so `MSCXRestDecoder` reads a rest's through here too.
+    /// Verse number comes from `<no>` (0-indexed); absent = verse 0. `<syllabic>` places the syllable in a hyphenated
+    /// word; `<ticks_f>` / `<ticks>` size melismas (`melismaTicks(_:)`).
     ///
     /// Gaps in the verse numbering are padded with empty placeholders so
     /// the returned array is indexable by verse; the encoder skips those
     /// again on write.
-    private static func decodeLyrics(_ node: XMLTreeNode) -> [Lyric] {
+    static func decodeLyrics(_ node: XMLTreeNode) -> [Lyric] {
         var lyricsMap: [Int: Lyric] = [:]
         for lyricsNode in node.all("Lyrics") {
             let verse = Int(lyricsNode.first("no")?.text ?? "0") ?? 0

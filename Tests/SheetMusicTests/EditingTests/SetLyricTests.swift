@@ -46,10 +46,10 @@ struct SetLyricTests {
         #expect(Self.lyrics(in: score) == beforeSecondWrite)
     }
 
-    @Test("missing, rest, negative verse, and whitespace-only writes have distinct refusals")
+    @Test("missing, non-chord, negative verse, and whitespace-only writes have distinct refusals")
     func refusals() {
         var score = EditingFixtures.chordAtIndex1()
-        let restID = Self.chordID.withElementIndex(2)
+        let timeSignatureID = Self.chordID.withElementIndex(0)
         let missingID = Self.chordID.withElementIndex(99)
         let before = score
 
@@ -58,10 +58,10 @@ struct SetLyricTests {
         }
         #expect(Self.reason(of: missing) == .targetNotFound(missingID))
 
-        let rest = #expect(throws: SheetMusicError.self) {
-            _ = try SetLyric(at: restID, verse: 0, text: "la").apply(to: &score)
+        let notChord = #expect(throws: SheetMusicError.self) {
+            _ = try SetLyric(at: timeSignatureID, verse: 0, text: "la").apply(to: &score)
         }
-        #expect(Self.reason(of: rest) == .wrongElementKind(at: restID, expected: .chord))
+        #expect(Self.reason(of: notChord) == .wrongElementKind(at: timeSignatureID, expected: .chord))
 
         let negative = #expect(throws: SheetMusicError.self) {
             _ = try SetLyric(at: Self.chordID, verse: -1, text: "la").apply(to: &score)
@@ -72,6 +72,23 @@ struct SetLyricTests {
             _ = try SetLyric(at: Self.chordID, verse: 0, text: " \n ").apply(to: &score)
         }
         #expect(Self.reason(of: empty) == .emptyLyricText)
+        #expect(score == before)
+    }
+
+    /// MuseScore anchors lyrics to any `ChordRest`: a rest takes a syllable, and its undo takes it away again.
+    @Test("a rest takes a syllable and undo removes it")
+    func restTakesASyllable() throws {
+        var score = EditingFixtures.chordAtIndex1()
+        let restID = Self.chordID.withElementIndex(2)
+        let before = score
+        let inverse = try SetLyric(at: restID, verse: 0, text: "でもね、").apply(to: &score)
+        guard case let .chord(rest)? = score[restID] else {
+            Issue.record("expected the rest")
+            return
+        }
+        #expect(rest.notes.isEmpty)
+        #expect(rest.lyrics.map(\.text) == ["でもね、"])
+        _ = try inverse.apply(to: &score)
         #expect(score == before)
     }
 

@@ -690,21 +690,19 @@ if !isWasm, !isWindows {
 // What the SwiftySynth backends share: the synth voicings and the choke hook the Apple backend and Android both build
 // with, the SoundFont cache, and the lockable host objects Android's Kotlin engine drives through JNI. Not portable in
 // the wasm sense — SwiftySynth imports the Foundation umbrella — and nothing in the wasm graph reaches it; declared
-// there anyway because the Apple-only targets that depend on it are declared in that manifest shape too. Off Windows,
-// which still plays through FluidSynth (cymbal choke design, phase 4).
-if !isWindows {
-    targets += [
-        .target(
-            name: "SheetMusicAudioSwiftySynthCore",
-            dependencies: [
-                .product(name: "SwiftySynth", package: "swiftysynth"),
-                "SheetMusicAudioCore",
-                "SheetMusicFoundation",
-                "SheetMusicMIDI",
-            ],
-        ),
-    ]
-}
+// there anyway because the Apple-only targets that depend on it are declared in that manifest shape too. On Windows
+// too: the Windows engine moves onto it (cymbal choke design, phase 4; folino spec 2026-11-04-windows-swiftysynth).
+targets += [
+    .target(
+        name: "SheetMusicAudioSwiftySynthCore",
+        dependencies: [
+            .product(name: "SwiftySynth", package: "swiftysynth"),
+            "SheetMusicAudioCore",
+            "SheetMusicFoundation",
+            "SheetMusicMIDI",
+        ],
+    ),
+]
 
 if isAndroid {
     products += [
@@ -723,16 +721,13 @@ if isAndroid {
     ]
 }
 
-// Playback on Windows: FluidSynth renders and schedules (as on Android), WASAPI plays, and the cursor follows the score
-// player's tick. Declared on Windows only. FluidSynth is found through the include and library paths the build passes
-// (`-Xcc -I<fluidsynth>\include -Xlinker -L<fluidsynth>\lib`, the official release zip's cpp11 flavor), and ships
-// as its LGPL DLL beside the app.
+// Playback on Windows: SwiftySynth renders and schedules (`HostedSynth`, as on Android), WASAPI plays, and the cursor
+// follows the score sequence's tick. Declared on Windows only. Nothing outside the package is linked for the synth.
 if isWindows {
     products += [
         .library(name: "SheetMusicAudioWindows", targets: ["SheetMusicAudioWindows"]),
     ]
     targets += [
-        .systemLibrary(name: "CFluidSynth", path: "Sources/CFluidSynth"),
         .target(
             name: "CWASAPI",
             path: "Sources/CWASAPI",
@@ -754,17 +749,14 @@ if isWindows {
         .target(
             name: "SheetMusicAudioWindows",
             dependencies: [
-                "CFluidSynth",
+                .product(name: "SwiftySynth", package: "swiftysynth"),
                 "CMediaFoundation",
                 "CWASAPI",
                 "SheetMusicAudioCore",
+                "SheetMusicAudioSwiftySynthCore",
                 "SheetMusicBridgeCore",
                 "SheetMusicCore",
                 "SheetMusicMIDI",
-            ],
-            linkerSettings: [
-                // The import library in FluidSynth's Windows release zip; Unix builds call it `fluidsynth`.
-                .linkedLibrary("libfluidsynth-3"),
             ],
         ),
         // The export's length, errors and containers (`exportAudioFile`), which need no SoundFont and no device — a
@@ -957,7 +949,7 @@ let packageDependencies: [Package.Dependency] = [
     ),
     .package(
         url: "https://github.com/jiyimeta/swiftysynth.git",
-        exact: "0.4.1",
+        exact: "0.4.2",
     ),
     // Declared unconditionally on purpose. A wasm-only dependency changes
     // `Package.resolved`'s `originHash`, so the file's contents would depend on

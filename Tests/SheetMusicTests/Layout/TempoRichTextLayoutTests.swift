@@ -184,7 +184,7 @@ struct TempoRichTextLayoutTests {
             style: .tempo, metrics: metrics,
         )
         let origin = LayoutEngine.tempoOrigin(
-            rich: rich, side: .above, x: 40, offset: .zero, lineGeometry: .standard, metrics: metrics,
+            rich: rich, side: .above, x: 40, offset: nil, lineGeometry: .standard, metrics: metrics,
         )
         let runs = rich.positionedRuns(at: origin, anchor: LayoutRichText.anchor(for: .tempo))
         #expect(runs.count == 2)

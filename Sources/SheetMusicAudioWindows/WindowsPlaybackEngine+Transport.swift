@@ -23,8 +23,10 @@ extension WindowsPlaybackEngine {
     public func play(from cursor: ScoreCursor? = nil, in score: Score, countIn: Bool = false) {
         guard let current = loaded else { return }
         if score != current.score {
+            // The swap alone: this play positions the transport itself, and a replaceScore would first play on from
+            // the old position (and, with countIn, play before counting again).
             do {
-                try replaceScore(with: PreparedPlayback.make(score: score))
+                try swapScore(with: PreparedPlayback.make(score: score), seating: nil)
             } catch {
                 return
             }
@@ -66,24 +68,31 @@ extension WindowsPlaybackEngine {
         startPlaying(from: target)
     }
 
+    /// Attaches the count-in's sequence to the metronome synth in place of the one there (Android's shape: one
+    /// sequence per synth) and plays it. It carries the whole body behind its first pass
+    /// (`MetronomeSequenceBuilder.countInSequenceWithWholeBody`), so a wrap, a seek or a later play maps onto that
+    /// copy and nothing is attached again until the next prepare. Built and parsed before the lock.
     private func startCountIn(plan: CountInBeats.Result, baseTick: Int, loaded: LoadedScore) -> Bool {
-        let sequence = MetronomeSequenceBuilder.metronomeOnlySequence(
+        let built = MetronomeSequenceBuilder.countInSequenceWithWholeBody(
             rendered: loaded.rendered, metronomeBeats: loaded.derivation.metronomeBeats, plan: plan,
-            baseTick: baseTick, includingPreRollClicks: true,
+            baseTick: baseTick, bodyEndTick: core.shared.withLock { $0.totalTicks },
         )
-        guard let bytes = try? MidiWriter.write(sequence) else { return false }
+        guard let bytes = try? MidiWriter.write(built.file), let prepared = try? PlayerHandle.prepare(bytes) else {
+            return false
+        }
         return core.shared.withLock { shared -> Bool in
             guard shared.session != nil else { return false }
             shared.stopPlayers(silence: shared.state == .playing ? .release : .untouched)
             guard var session = shared.session,
-                  let player = try? PlayerHandle.make(on: session.metronome, midi: bytes, rate: shared.rate)
+                  let player = try? PlayerHandle.make(on: session.metronome, prepared: prepared, rate: shared.rate)
             else { return false }
-            session.countInMetronome?.delete()
-            session.countInMetronome = player
+            session.metronomePlayer.delete()
+            session.metronomePlayer = player
+            session.metronomeWholeBodyOffsetTicks = built.wholeBodyTick
             shared.session = session
-            // The score waits at its start; the metronome's sequence runs `preRollTicks - baseTick` ahead of it.
+            // The score waits at its start; the first pass runs `preRollTicks - baseTick` ahead of it, from its top.
             shared.rewind(to: baseTick)
-            shared.usingCountInMetronome = true
+            player.seek(to: 0)
             shared.metronomeOffsetTicks = plan.preRollTicks - baseTick
             shared.countIn = PlaybackTransportStepper.CountIn(preRollTicks: plan.preRollTicks, scoreStartTick: baseTick)
             player.play()
@@ -99,8 +108,10 @@ extension WindowsPlaybackEngine {
             guard shared.session != nil else { return }
             var target = target
             let wasPlaying = shared.state == .playing
-            if shared.countIn != nil || shared.usingCountInMetronome {
-                // Leaving a count-in (or its sequence): the plain metronome, level with the score.
+            if shared.countIn != nil
+                || shared.metronomeOffsetTicks != shared.session?.metronomeWholeBodyOffsetTicks
+            {
+                // Leaving a count-in (or its first pass): the metronome's whole body, level with the score.
                 target = target ?? shared.reportedScoreTick
             }
             if wasPlaying, target == nil {
@@ -203,7 +214,7 @@ extension WindowsPlaybackEngine {
 
     /// Keeps the loop notated (what the host reads back) and its projection onto the unrolled transport, which is
     /// what the render thread compares the player's tick against (`TransportLoop`, shared with the Apple engine).
-    private func apply(loop: LoopRange) {
+    func apply(loop: LoopRange) {
         guard let derivation = loaded?.derivation else { return }
         let projected = TransportLoop.project(
             loop, timeline: derivation.timeline, unroll: derivation.unroll, unrolledTimeMap: derivation.unrolledTimeMap,
@@ -222,16 +233,15 @@ extension WindowsPlaybackEngine {
 
     // MARK: Rate, tuning, transposition
 
-    /// Scales playback speed (`1.0` = the score's tempo), on both players, through `fluid_player_set_tempo`'s internal
-    /// scale — so the tempo map still applies. Remembered: a player built later (a prepare, a count-in) starts at it.
-    /// Not clamped here, as on the Apple engine; FluidSynth ignores a scale outside 0.001…1000.
+    /// Scales playback speed (`1.0` = the score's tempo), on both sequences, over their own tempo maps. Remembered: a
+    /// sequence attached later (a prepare, a count-in) starts at it. Not clamped here, as on the Apple engine;
+    /// `HostedSequence` holds it at 0.01 and up.
     public func setRate(_ rate: Float) {
         core.shared.withLock { shared in
             shared.rate = rate
             guard let session = shared.session else { return }
             session.scorePlayer.setTempo(rate)
-            session.bodyMetronome.setTempo(rate)
-            session.countInMetronome?.setTempo(rate)
+            session.metronomePlayer.setTempo(rate)
         }
     }
 

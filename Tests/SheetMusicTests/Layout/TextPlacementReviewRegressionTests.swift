@@ -14,21 +14,27 @@ struct TextPlacementReviewRegressionTests {
 
     @Test(arguments: [Placement.above, .below], [false, true])
     func emptyLyricKeepsOwnOffsetWithoutBorrowingNeighborCorrection(side: Placement, autoplace: Bool) throws {
+        // Each authored offset moves its syllable off the ±15 sp row (an offset replaces the style's position, so it
+        // is written as the row's y plus the move): this syllable by (3, 2), its neighbor by (0, 4).
+        var style = TextPlacementStyles()
+        style[.lyrics] = TextPlacementStyle(
+            positionAbove: ScoreOffset(x: 0, y: -15), positionBelow: ScoreOffset(x: 0, y: 15),
+        )
         var own = Lyric(text: "A")
         own.elementProperties = ElementProperties(
-            offset: ScoreOffset(x: 3, y: 2),
+            offset: ScoreOffset(x: 3, y: Self.styleY(side, in: style) + 2),
             placement: side,
             autoplace: autoplace,
         )
         own.properties = TextProperties(face: "Edwin", size: 33, style: [.italic])
         var neighbor = Lyric(text: "Ag\nAg")
-        neighbor.elementProperties = ElementProperties(offset: ScoreOffset(x: 0, y: 4), placement: side)
+        neighbor.elementProperties = ElementProperties(
+            offset: ScoreOffset(x: 0, y: Self.styleY(side, in: style) + 4), placement: side,
+        )
         var score = makeScore([[
             chord(pitch: 71, lyrics: [own]), chord(pitch: 71, lyrics: [neighbor]),
         ]])
-        score.style.textPlacement[.lyrics] = TextPlacementStyle(
-            positionAbove: ScoreOffset(x: 0, y: -15), positionBelow: ScoreOffset(x: 0, y: 15),
-        )
+        score.style.textPlacement = style
         let cursor = LyricInputPlanner.Cursor(location: anchor(measure: 0, element: 0), verse: 0)
         let filled = TextPlacementFixtures.layout(score)
         let before = try #require(filled.lyricEntryOrigin(
@@ -86,7 +92,7 @@ struct TextPlacementReviewRegressionTests {
         let outerVerse = side == .above ? 0 : 2
         let offset = side == .above ? -12.0 : 12.0
         let document = TextPlacementFixtures.layout(makeScore([
-            [chord(pitch: 71, lyrics: lyrics(verse: innerVerse, side: side, autoplace: false, offset: offset))],
+            [chord(pitch: 71, lyrics: lyrics(verse: innerVerse, side: side, autoplace: false, rowOffset: offset))],
             [chord(pitch: 71, lyrics: lyrics(verse: outerVerse, side: side))],
         ]))
         let elements = document.systems.flatMap(\.measures).flatMap(\.elements)
@@ -133,7 +139,7 @@ struct TextPlacementReviewRegressionTests {
     func emptyLyricSharesOnlyMovableNeighborRowShift(side: Placement, autoplace: Bool) throws {
         let document = TextPlacementFixtures.layout(makeScore([[
             chord(pitch: 71, lyrics: []),
-            extremeChord(side: side, lyrics: lyrics(verse: 0, side: side, offset: 4)),
+            extremeChord(side: side, lyrics: lyrics(verse: 0, side: side, rowOffset: 4)),
         ]]))
         let system = try #require(document.systems.first)
         let neighbor = try #require(system.measures.flatMap(\.elements).first { $0.textPlacement?.verse == 0 })
@@ -141,7 +147,7 @@ struct TextPlacementReviewRegressionTests {
         let origin = try #require(document.lyricEntryOrigin(
             at: cursor, placementStyle: TextPlacementStyles(),
             elementProperties: ElementProperties(
-                offset: ScoreOffset(x: 0, y: 2),
+                offset: ScoreOffset(x: 0, y: Self.styleY(side) + 2),
                 placement: side,
                 autoplace: autoplace,
             ),
@@ -193,15 +199,22 @@ struct TextPlacementReviewRegressionTests {
         ))
     }
 
-    private func lyrics(verse: Int, side: Placement, autoplace: Bool = true, offset: Double = 0) -> [Lyric] {
+    /// `rowOffset` moves the syllable that many spaces off its styled row: an authored offset replaces the style's
+    /// position (`LayoutEngine.placedTextPosition`), so the offset written is the default style's y plus it.
+    private func lyrics(verse: Int, side: Placement, autoplace: Bool = true, rowOffset: Double? = nil) -> [Lyric] {
         var values = (0 ... verse).map { Lyric(text: "", verse: $0) }
         values[verse].text = "Ag"
         values[verse].elementProperties = ElementProperties(
-            offset: ScoreOffset(x: 0, y: offset),
+            offset: rowOffset.map { ScoreOffset(x: 0, y: Self.styleY(side) + $0) },
             placement: side,
             autoplace: autoplace,
         )
         return values
+    }
+
+    /// The y of `side`'s lyric row in `style` (default: `Sid::lyricsPosAbove` / `Sid::lyricsPosBelow`).
+    private static func styleY(_ side: Placement, in style: TextPlacementStyles = TextPlacementStyles()) -> Double {
+        style.position(for: .lyrics, side: side).y
     }
 
     private func chord(pitch: Int, lyrics: [Lyric]) -> VoiceElement {

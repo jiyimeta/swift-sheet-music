@@ -7,6 +7,8 @@
 #elseif canImport(Musl)
     import Musl
 #elseif os(WASI)
+#elseif os(Windows)
+    import WinSDK
 #else
     #error("HostLock has no backing on this platform — add one before building here.")
 #endif
@@ -32,6 +34,26 @@ final class HostLock: @unchecked Sendable {
             precondition(!isLocked, "HostLock reentered; on a threaded platform this deadlocks.")
             isLocked = true
             defer { isLocked = false }
+            return try body()
+        }
+
+    #elseif os(Windows)
+        /// A slim reader/writer lock taken exclusively: Windows' cheapest mutex. Like a pthread mutex it must not move
+        /// once initialized, so it lives on the heap; it needs no destroy call.
+        private let lock: UnsafeMutablePointer<SRWLOCK>
+
+        init() {
+            lock = .allocate(capacity: 1)
+            InitializeSRWLock(lock)
+        }
+
+        deinit {
+            lock.deallocate()
+        }
+
+        func withLock<R>(_ body: () throws -> R) rethrows -> R {
+            AcquireSRWLockExclusive(lock)
+            defer { ReleaseSRWLockExclusive(lock) }
             return try body()
         }
 

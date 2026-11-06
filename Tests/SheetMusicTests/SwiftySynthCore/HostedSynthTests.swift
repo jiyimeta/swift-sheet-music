@@ -1,6 +1,7 @@
 #if canImport(SheetMusicAudioSwiftySynthCore)
     import Foundation
-    import SheetMusicAudioSwiftySynthCore
+    import SheetMusicAudioCore
+    @testable import SheetMusicAudioSwiftySynthCore
     @testable import SheetMusicCore
     import SheetMusicMIDI
     import SwiftySynth
@@ -132,9 +133,92 @@
             #expect(second.currentTick == 0)
         }
 
+        /// The length and the end a host reads to finish playback (the Windows engine's `isDone` / `totalTicks`), known
+        /// from the attach on.
+        @Test func `the transport knows its length and when it has run past it`() throws {
+            let synth = try clickSynth()
+            let sequence = try #require(synth.attachSequence(smf: clickTrack(quarters: 2)))
+            // The second click's note-off, at 480 + 240, or a later end-of-track.
+            #expect(sequence.totalTicks >= 720)
+            #expect(!sequence.isAtEnd)
+            #expect(!sequence.isPlaying)
+            sequence.play()
+            #expect(sequence.isPlaying)
+            render(synth, seconds: 0.5)
+            #expect(!sequence.isAtEnd, "half-way through two quarters at 120 bpm")
+            render(synth, seconds: 1.0)
+            #expect(sequence.isAtEnd)
+            sequence.stop()
+            #expect(!sequence.isPlaying)
+        }
+
+        @Test func `an inert transport reads as ended and empty`() throws {
+            let synth = try clickSynth()
+            let first = try #require(synth.attachSequence(smf: clickTrack()))
+            first.play()
+            _ = try #require(synth.attachSequence(smf: clickTrack()))
+            #expect(first.totalTicks == 0)
+            #expect(first.isAtEnd)
+            #expect(!first.isPlaying)
+        }
+
         @Test func `bytes that are not an SMF attach nothing`() throws {
             let synth = try clickSynth()
             #expect(synth.attachSequence(smf: Data([0, 1, 2])) == nil)
+            #expect(HostedSynth.prepareSequence(smf: Data([0, 1, 2])) == nil)
+        }
+
+        /// The Windows engine reasserts every strip's program from its render thread; the same selection again must
+        /// start no prefetch task there. A different program does.
+        @Test func `selecting the same program again starts no prefetch`() throws {
+            let synth = try clickSynth()
+            let afterLoad = synth.prefetchCount
+            synth.programSelect(channel: 9, bank: 128, program: 0)
+            synth.programSelect(channel: 9, bank: 128, program: 0)
+            #expect(synth.prefetchCount == afterLoad)
+            synth.programSelect(channel: 0, bank: 0, program: 0)
+            #expect(synth.prefetchCount == afterLoad + 1)
+            synth.programSelect(channel: 0, bank: 0, program: 0)
+            #expect(synth.prefetchCount == afterLoad + 1)
+        }
+
+        /// The Windows engine parses outside its own lock and attaches under it.
+        @Test func `a sequence parsed ahead attaches like one attached from bytes`() throws {
+            let synth = try clickSynth()
+            let prepared = try #require(HostedSynth.prepareSequence(smf: clickTrack(quarters: 2)))
+            let sequence = try #require(synth.attach(prepared))
+            #expect(sequence.totalTicks >= 720)
+            sequence.play()
+            #expect(render(synth, seconds: 0.1) > 0.01)
+        }
+
+        /// What the Windows probe reads back: the program, the tuning RPNs, the voices, whether a font loaded.
+        @Test func `the host's program and tuning read back, and a reset forgets them`() throws {
+            let bare = try #require(HostedSynth(sampleRate: Self.rate, voicing: .score))
+            #expect(!bare.hasSoundFont)
+            let synth = try clickSynth()
+            #expect(synth.hasSoundFont)
+            let drumKit = try #require(synth.recordedProgram(channel: 9))
+            #expect(drumKit.bank == 128 && drumKit.program == 0)
+            #expect(synth.recordedProgram(channel: 0) == nil)
+            for message in MasterTuning.rpnControlChanges(cents: 168.23) {
+                synth.controlChange(channel: 0, controller: Int(message.controller), value: Int(message.value))
+            }
+            let tuning = synth.recordedTuning(channel: 0)
+            let expected = MasterTuning.split(cents: 168.23)
+            #expect(tuning.coarseSemitones == expected.coarseSemitones)
+            #expect(abs(tuning.fineCents - expected.fineCents) <= 0.05, "\(tuning.fineCents)")
+            #expect(synth.recordedTuning(channel: 1) == (0, 0))
+
+            synth.noteOn(channel: 9, key: HostedSynthFixtures.strongKey, velocity: 100)
+            render(synth, seconds: 0.01)
+            #expect(synth.activeVoiceCount > 0)
+            synth.allSoundsOff()
+            #expect(synth.activeVoiceCount == 0)
+
+            synth.resetHostState()
+            #expect(synth.recordedProgram(channel: 9) == nil)
+            #expect(synth.recordedTuning(channel: 0) == (0, 0))
         }
 
         /// No gain of its own: what the score voicing's synthesizer and sequencer render for the same SMF, sample for

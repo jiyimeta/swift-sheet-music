@@ -26,7 +26,7 @@ extension LayoutDocument {
                 }
             }
         }
-        guard let anchor = chordStemOrigin(at: cursor.location),
+        guard let anchor = timedElementOrigin(at: cursor.location),
               let y = lyricLineY(
                   at: cursor.location,
                   verse: cursor.verse,
@@ -37,13 +37,18 @@ extension LayoutDocument {
         else { return nil }
         let style = placementStyle ?? TextPlacementStyles()
         let side = style.side(for: .lyrics, element: elementProperties)
-        let x = style.position(for: .lyrics, side: side).x + (elementProperties.offset?.x ?? 0)
+        let x = LayoutEngine.placedTextPosition(
+            role: .lyrics, properties: elementProperties, style: style, side: side,
+        ).x
         return CGPoint(x: anchor.x + CGFloat(x) * metrics.sp, y: y)
     }
 
     /// The final document-space origin of a chord stem or rest at `anchor`.
     /// Used only as a deterministic empty-editor fallback when no pending
-    /// engraved text exists yet.
+    /// engraved text exists yet — among others, where an empty lyric caret is
+    /// centered: layout draws a syllable under a rest at the rest's own x
+    /// (`emitLyrics`; the middle of the bar under a full-measure rest), so the
+    /// caret does not jump when its first letter is engraved.
     public func timedElementOrigin(
         at anchor: VoiceElementID,
     ) -> CGPoint? {
