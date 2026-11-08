@@ -2,23 +2,23 @@
 /// the same track; stepping to it would click, so the render heads for it linearly over the recording fade instead.
 /// Lives with the track's render state and is carried with its playhead through a same-id `setRecordingTracks`.
 /// Allocation-free.
-struct RecordingGainRamp {
+package struct RecordingGainRamp {
     /// The gain the ramp heads for: the last one the track was handed.
-    private(set) var target: Float
+    package private(set) var target: Float
     /// The gain of the last frame rendered.
-    private(set) var current: Float
+    package private(set) var current: Float
     private var step: Float = 0
     /// Frames left until `current` reaches `target`; 0 when it has.
     private var remaining = 0
 
     /// A ramp already at `gain`: a new track starts at its gain, as it fades in from silence anyway.
-    init(gain: Float) {
+    package init(gain: Float) {
         target = gain
         current = gain
     }
 
     /// Heads for `gain` from the current gain over `frames` frames. Nothing changes when it already heads there.
-    mutating func head(for gain: Float, frames: Int) {
+    package mutating func head(for gain: Float, frames: Int) {
         guard gain != target else { return }
         target = gain
         remaining = max(1, frames)
@@ -26,13 +26,13 @@ struct RecordingGainRamp {
     }
 
     /// The gain of the next frame, which it then becomes.
-    mutating func next() -> Float {
+    package mutating func next() -> Float {
         advance(by: 1)
         return current
     }
 
     /// `frames` frames go by.
-    mutating func advance(by frames: Int) {
+    package mutating func advance(by frames: Int) {
         guard remaining > 0, frames > 0 else { return }
         if frames >= remaining {
             current = target
@@ -44,12 +44,12 @@ struct RecordingGainRamp {
     }
 
     /// Nothing sounds through it now or later: at 0 and heading nowhere else.
-    var isSilent: Bool {
+    package var isSilent: Bool {
         remaining == 0 && current == 0
     }
 
     /// Jumps to `gain`, for a track nothing is heard from (a pause, a stop, a load, a gap): it fades in afterwards.
-    mutating func settle(at gain: Float) {
+    package mutating func settle(at gain: Float) {
         target = gain
         current = gain
         remaining = 0

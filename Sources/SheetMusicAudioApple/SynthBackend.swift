@@ -238,33 +238,13 @@ public protocol SynthBackend: AnyObject {
     )
 }
 
-/// One recording as a backend mixes it: the mapped PCM and how it sits against the reference timing, with the gain and
-/// transposition the engine has already resolved from the mixer.
-public struct RecordingTrackRender: Sendable {
-    /// Stable across calls, so a backend can keep a playing track's position when the set is replaced.
-    public let id: String
-    public let recording: MappedRecording
-    /// Seconds into the reference recording's time at which this track's file starts.
-    public var offsetSeconds: TimeInterval
-    /// The strip's effective volume × mute × solo, resolved by the engine. A backend ramps to a new gain for a playing
-    /// track rather than stepping, which would click: `SwiftySynthBackend` ramps over its 5 ms recording fade. A track
-    /// read through a stretcher (a rate other than 100 %, or a transposition) carries its gain in the stretcher's
-    /// input, so there the change reaches the output one stretcher lead late — about 0.1 s with Signalsmith Stretch.
-    public var gain: Float
-    /// The track's own transposition plus the reader's, resolved by the engine.
-    public var transposeSemitones: Double
+/// One recording as a backend mixes it. Declared in SheetMusicAudioCore, where Android's engine reads it too; named
+/// here as well so a host that imports only this module keeps spelling it as before.
+public typealias RecordingTrackRender = SheetMusicAudioCore.RecordingTrackRender
 
-    public init(
-        id: String, recording: MappedRecording, offsetSeconds: TimeInterval = 0, gain: Float = 1,
-        transposeSemitones: Double = 0,
-    ) {
-        self.id = id
-        self.recording = recording
-        self.offsetSeconds = offsetSeconds
-        self.gain = gain
-        self.transposeSemitones = transposeSemitones
-    }
-}
+/// A decoded recording's PCM cache file mapped into memory. Declared in SheetMusicAudioCore (see
+/// `RecordingTrackRender`).
+public typealias MappedRecording = SheetMusicAudioCore.MappedRecording
 
 extension SynthBackend {
     /// Default for a backend that loads its SoundFont synchronously: it's always

@@ -3,6 +3,7 @@
         @testable import SheetMusicAudioApple
         @testable import SheetMusicAudioCore
         @testable import SheetMusicAudioSwiftySynth
+        @testable import SheetMusicAudioSwiftySynthCore
         import Testing
 
         /// Tables of a track's own read through a stretcher (`setPlaybackAlignment(warp:segments:trackSegments:)`):
@@ -218,8 +219,11 @@
                 kept.setPlaybackAlignment(
                     warp: nil, segments: Fixtures.wholeRecording(4), trackSegments: ["b": Fixtures.wholeRecording(4)],
                 )
-                #expect(kept.swapTablesInPlace(["b": later], tables: shorter), "the grouping is kept")
-                #expect(kept.recordingGroupLayout.map(\.segments) == [nil, later])
+                let keptSwap = kept.recordingMix.swapTablesInPlace(
+                    ["b": later], tables: shorter, withAlignment: kept.withAlignment,
+                )
+                #expect(keptSwap, "the grouping is kept")
+                #expect(kept.recordingMix.recordingGroupLayout.map(\.segments) == [nil, later])
                 let swapped = reading(kept)
                 #expect(swapped.groups == [nil, 0.5], "B's group reads its new table: \(swapped.groups)")
                 #expect(swapped.shared == nil, "the shared table was swapped with it: \(String(describing: swapped))")
@@ -231,8 +235,12 @@
                     "a": Fixtures.wholeRecording(4), "b": Fixtures.wholeRecording(4),
                 ])
                 let splitting = ["a": Fixtures.wholeRecording(4), "b": later]
-                #expect(!split.swapTablesInPlace(splitting, tables: shorter), "the group splits")
-                #expect(split.recordingGroupLayout.map(\.segments) == [Fixtures.wholeRecording(4)], "nothing changed")
+                let splitSwap = split.recordingMix.swapTablesInPlace(
+                    splitting, tables: shorter, withAlignment: split.withAlignment,
+                )
+                #expect(!splitSwap, "the group splits")
+                let splitLayout = split.recordingMix.recordingGroupLayout.map(\.segments)
+                #expect(splitLayout == [Fixtures.wholeRecording(4)], "nothing changed")
                 let untouched = reading(split)
                 #expect(untouched.groups == [1], "the group still reads its table: \(untouched.groups)")
                 #expect(untouched.shared == 3, "nor was the shared table swapped: \(String(describing: untouched))")

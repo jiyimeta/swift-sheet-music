@@ -1,13 +1,12 @@
-import SheetMusicAudioApple
 import SheetMusicAudioCore
 
 // The recordings that share one transposition and one table, read through one stretcher pair when the rate is not
-// 100 % or the transposition is not 0 (`SwiftySynthBackend+Stretch.swift`). The pair and the scratch are made on the
+// 100 % or the transposition is not 0 (`RecordingRender+Stretch.swift`). The pair and the scratch are made on the
 // main actor and handed to the render thread in a lock swap; the render thread only calls them.
 
 /// A group's two stretchers. The active one plays the current stream; at a jump the other is primed at the new
 /// position and faded to, so a jump never waits on the stretcher's latency.
-struct StretcherPair {
+package struct StretcherPair {
     let first: any RecordingStretcher
     let second: any RecordingStretcher
 
@@ -23,7 +22,7 @@ struct StretcherPair {
 
 /// Where a group's stretched reading is, advanced by the render thread. Mirrors `RecordingPlayhead` with two
 /// stretchers in place of two read positions.
-struct StretchGroupState {
+package struct StretchGroupState {
     /// The stretcher playing the current stream, 0 or 1.
     var active = 0
     /// Whether the active stretcher plays a stream; `false` while silent or fading out to silence.
@@ -66,14 +65,14 @@ struct StretchGroupState {
 }
 
 /// One group as the render thread reads it.
-struct RecordingStretchGroup {
+package struct RecordingStretchGroup {
     let transposeSemitones: Double
     /// The table its tracks have of their own (`SynthBackend.setPlaybackAlignment(warp:segments:trackSegments:)`),
     /// laid out on the main actor. Its source seconds are the tracks' file seconds, so each was handed over with its
     /// offset at 0. Nil for tracks without one, which play the shared table (`PlaybackAlignmentState.schedule`) at
     /// their offsets. A new table that keeps the grouping is swapped in here, in place, as the shared one is swapped
-    /// (`SwiftySynthBackend.swapTablesInPlace`).
-    var schedule: RecordingSchedule?
+    /// (`RecordingMixController.swapTablesInPlace`).
+    package var schedule: RecordingSchedule?
     /// Indices into the tracks it reads: `PlaybackAlignmentState.tracks`, or `drainTracks` while draining.
     let trackIndices: [Int]
     /// Nil until a stretcher is needed and the backend has a factory; the group is then read directly.
@@ -97,7 +96,7 @@ extension RecordingStretchGroup {
 
 /// The main actor's copy of a group: what it holds and its pair, so a new track list or rate can be planned and its
 /// stretchers made before the lock, without reading the render thread's state.
-struct RecordingGroupLayout {
+package struct RecordingGroupLayout {
     let transposeSemitones: Double
     /// The table its tracks have of their own, or nil for the shared one (`RecordingStretchGroup.schedule`).
     var segments: [RecordingSegment]?
@@ -110,7 +109,7 @@ struct RecordingGroupLayout {
 }
 
 /// How a track list groups by transposition and table, and which previous group each new one carries on from.
-enum RecordingGroupPlan {
+package enum RecordingGroupPlan {
     struct Group {
         let transposeSemitones: Double
         /// The table of the group's own, or nil for the shared one.
@@ -218,7 +217,7 @@ enum RecordingGroupPlan {
 
 /// The stretched reading's buffers: the input it builds for a stretcher, and each stretcher's output. Allocated on the
 /// main actor, sized for any rate up to `sizedRate`, and written only by the render thread once handed over.
-final class StretchScratch {
+package final class StretchScratch {
     /// The highest rate the buffers are sized for. Above it a group whose seek no longer fits is read directly.
     static let sizedRate = 2.0
     /// The most output frames one `process` call covers.

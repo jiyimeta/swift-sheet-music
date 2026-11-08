@@ -1,5 +1,6 @@
 import AVFoundation
 import os
+import SheetMusicAudioSwiftySynthCore
 import SwiftySynth
 
 /// The `AVAudioSourceNode` render factory and the metronome mix — split out of
@@ -101,33 +102,19 @@ extension SwiftySynthBackend {
         shared: inout Shared,
     ) {
         let count = left.count
-        let blockSize = sequencer.synthesizer.blockSize
         var offset = 0
         while offset < count {
-            let position = sequencer.position.components
-            let now = shared.alignment.transportSeconds(
-                quantized: Double(position.seconds) + Double(position.attoseconds) * 1e-18,
-                sampleRate: sampleRate, blockSize: blockSize,
+            // The speed decision, the score transport and the recordings are shared with Android's `HostedSynth`
+            // (`PlaybackAlignmentState.beginBodyChunk` / `renderBodyChunk`).
+            let chunk = shared.alignment.beginBodyChunk(
+                sequencer: sequencer, sampleRate: sampleRate, limit: count - offset,
             )
-            if shared.alignment.blockPhase == 0 {
-                let middle = now + Double(blockSize) / 2 * sequencer.speed / sampleRate
-                let speed = shared.alignment.speed(atTransport: middle)
-                if sequencer.speed != speed { sequencer.speed = speed }
-                if let metronome = shared.metronomeSequencer, metronome.speed != speed { metronome.speed = speed }
-                shared.alignment.blockSpeed = speed
+            if let speed = chunk.decidedSpeed, let metronome = shared.metronomeSequencer, metronome.speed != speed {
+                metronome.speed = speed
             }
-            let speed = shared.alignment.blockSpeed
-            let chunk = max(1, shared.alignment.framesBeforeSpeedDecision(
-                at: now, speed: speed, sampleRate: sampleRate, blockSize: blockSize, limit: count - offset,
-            ))
-            let chunkL = UnsafeMutableBufferPointer(rebasing: left[offset ..< offset + chunk])
-            let chunkR = UnsafeMutableBufferPointer(rebasing: right[offset ..< offset + chunk])
-            // Advance the score transport, dispatch due events, render.
-            sequencer.render(left: chunkL, right: chunkR)
-            mixRecordings(
-                into: chunkL, chunkR, transportStart: now, transportPerFrame: speed / sampleRate,
-                sampleRate: sampleRate, alignment: &shared.alignment,
-            )
+            let chunkL = UnsafeMutableBufferPointer(rebasing: left[offset ..< offset + chunk.frames])
+            let chunkR = UnsafeMutableBufferPointer(rebasing: right[offset ..< offset + chunk.frames])
+            shared.alignment.renderBodyChunk(chunk, sequencer: sequencer, into: chunkL, chunkR, sampleRate: sampleRate)
             // Mix the metronome in when it's audible. While muted or at zero gain it is NOT rendered
             // at all (its transport freezes), so the effects-free click synth costs zero —
             // `setMetronomeMuted` / `setMetronomeVolume` reseek it to the score position when it
@@ -136,8 +123,7 @@ extension SwiftySynthBackend {
                 into: chunkL, chunkR, shared: &shared,
                 render: { seq, l, r in seq.render(left: l, right: r) },
             )
-            shared.alignment.advance(frames: chunk, blockSize: blockSize)
-            offset += chunk
+            offset += chunk.frames
         }
     }
 

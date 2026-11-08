@@ -109,11 +109,10 @@ extension PlaybackEngine {
     func recordingRenders(soloing: Bool) -> [RecordingTrackRender] {
         recordings.map { loaded in
             let track = loaded.track
-            let silenced = track.isMuted || (soloing && !track.isSoloed)
-            return RecordingTrackRender(
+            return RecordingTrackRender.resolved(
                 id: track.id, recording: loaded.recording, offsetSeconds: track.offsetSeconds,
-                gain: silenced ? 0 : max(0, min(1, track.volume)),
-                transposeSemitones: Double(transposeSemitones + track.transposeSemitones),
+                transposeSemitones: track.transposeSemitones, readerTransposeSemitones: transposeSemitones,
+                volume: track.volume, isMuted: track.isMuted, isSoloed: track.isSoloed, soloing: soloing,
             )
         }
     }
@@ -183,9 +182,9 @@ extension PlaybackEngine {
     // MARK: Reading ahead
 
     /// Wall-clock seconds of each recording read in ahead of the transport.
-    nonisolated static let recordingPrefetchAheadSeconds = 2.0
+    nonisolated static let recordingPrefetchAheadSeconds = RecordingPrefetch.aheadSeconds
     /// File seconds read in behind each stretch as well: a stretcher primed at a jump is fed the input before it.
-    nonisolated static let recordingPrefetchBehindSeconds = 0.5
+    nonisolated static let recordingPrefetchBehindSeconds = RecordingPrefetch.behindSeconds
     /// Cursor polls (about 30 a second) between read-aheads while playing.
     static let recordingPrefetchTickInterval = 10
 
@@ -222,11 +221,7 @@ extension PlaybackEngine {
     nonisolated static func recordingSchedule(
         for track: RecordingTrack, shared: RecordingSchedule, own: [String: RecordingSchedule],
     ) -> (schedule: RecordingSchedule, offset: TimeInterval) {
-        if let schedule = own[track.id] {
-            (schedule: schedule, offset: 0)
-        } else {
-            (schedule: shared, offset: track.offsetSeconds)
-        }
+        RecordingPrefetch.schedule(forTrack: track.id, offsetSeconds: track.offsetSeconds, shared: shared, own: own)
     }
 
     /// The file seconds a track plays from transport second `transportSeconds` on, `recordingPrefetchAheadSeconds` of
@@ -237,11 +232,8 @@ extension PlaybackEngine {
         transportSeconds: TimeInterval, rate: Double, table: TransportSpeedTable, schedule: RecordingSchedule,
         offset: TimeInterval,
     ) -> [Range<TimeInterval>] {
-        let output = table.outputSeconds(atTransport: transportSeconds)
-        let speed = rate.isFinite ? max(1, rate) : 1
-        let window = schedule.sourceRanges(
-            fromOutput: output, to: output + recordingPrefetchAheadSeconds * speed, offset: offset,
+        RecordingPrefetch.ranges(
+            transportSeconds: transportSeconds, rate: rate, table: table, schedule: schedule, offset: offset,
         )
-        return window.map { max(0, $0.lowerBound - recordingPrefetchBehindSeconds) ..< $0.upperBound }
     }
 }

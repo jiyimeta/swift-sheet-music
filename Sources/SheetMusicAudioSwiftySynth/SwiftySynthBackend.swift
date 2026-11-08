@@ -95,7 +95,7 @@ public final class SwiftySynthBackend: SynthBackend {
 
     // Persisted transport/tuning state, re-applied whenever the synth or
     // sequence is rebuilt (both reset SwiftySynth's channel/speed state).
-    // `rate` is internal so `SwiftySynthBackend+Recordings.swift` can tell which groups need a stretcher.
+    // `rate` is mirrored on `recordingMix`, which decides from it which groups need a stretcher.
     var rate: Float = 1
     private var tuningCents: Double = 0
     private var transposeSemitones = 0
@@ -146,24 +146,14 @@ public final class SwiftySynthBackend: SynthBackend {
     /// What makes the stretchers recordings are read through when the rate is not 100 % or a track is transposed. Nil:
     /// recordings are read directly at any rate (varispeed) and their transposition is ignored.
     let stretcherFactory: RecordingStretcherFactory?
-    /// The main actor's copy of `Shared.alignment.groups`' layout and pairs (`SwiftySynthBackend+Recordings.swift`).
-    var recordingGroupLayout: [RecordingGroupLayout] = []
-    /// The main actor's copy of the groups left draining after the track list dropped them; in the render's array they
-    /// follow `recordingGroupLayout`'s.
-    var drainingGroupLayout: [RecordingGroupLayout] = []
-    /// The input capacity of the stretch scratch handed to the render thread, 0 before the first.
-    var stretchScratchCapacity = 0
-    /// The track list (`setRecordingTracks`) and the tables of a track's own
-    /// (`setPlaybackAlignment(warp:segments:trackSegments:)`) last handed over. A track's table decides its group, so
-    /// each call reads the other's latest. A new track list groups the tracks again (`installRecordingTracks`); new
-    /// tables that keep the grouping are swapped into their groups in place (`swapTablesInPlace`), and only tables that
-    /// regroup the tracks group them again.
-    var recordingTracks: [RecordingTrackRender] = []
-    var recordingTrackSegments: [String: [RecordingSegment]] = [:]
+    /// The main actor's side of the recordings: the track list, the tables of a track's own, and the stretcher groups
+    /// it hands to `Shared.alignment` (`SwiftySynthBackend+Recordings.swift`).
+    let recordingMix: RecordingMixController
 
     public init(sampleRate: Double = 44100, stretcherFactory: RecordingStretcherFactory? = nil) {
         self.sampleRate = sampleRate
         self.stretcherFactory = stretcherFactory
+        recordingMix = RecordingMixController(sampleRate: sampleRate, stretcherFactory: stretcherFactory)
         sourceNode = Self.makeSourceNode(lock: lock, sampleRate: sampleRate)
     }
 
@@ -383,14 +373,14 @@ public final class SwiftySynthBackend: SynthBackend {
     /// kept when the rate comes back, so a tempo drag makes them once.
     public func setRate(_ rate: Float) {
         self.rate = rate
+        recordingMix.rate = rate
         let speed = max(0.01, Double(rate))
-        let stretchers = stretchersForRate()
-        var scratch = stretchers.scratch
+        var stretchers = recordingMix.stretchersForRate()
         lock.withLockUnchecked { shared in
             shared.alignment.userSpeed = speed
             shared.sequencer?.speed = speed
             shared.metronomeSequencer?.speed = speed
-            Self.installStretchers(stretchers.pairs, scratch: &scratch, into: &shared)
+            stretchers.install(into: &shared.alignment)
         }
     }
 

@@ -1,11 +1,11 @@
 @preconcurrency import AVFoundation
 import Foundation
+import SheetMusicAudioCore
 
 /// Decodes a recording once into an Int16 stereo PCM file that `MappedRecording` maps, so that several recordings
 /// need no more resident memory than the pages being played.
 ///
-/// File layout, little-endian: `"SMPC"`, UInt32 version (1), UInt32 frame count, UInt32 sample rate in Hz, then
-/// `frameCount × 2` Int16 samples, interleaved left and right.
+/// The file is `RecordingPCMCacheFormat`'s, which Android's decoder writes too (`RecordingPCMCacheWriter`).
 public enum RecordingPCMCache {
     public enum Failure: Error, Equatable {
         /// There is no file at the source URL.
@@ -29,11 +29,10 @@ public enum RecordingPCMCache {
     public static func prepare(
         source: URL, cacheKey: String, sampleRate: Double, directory: URL,
     ) async throws -> URL {
-        let wholeHertz = sampleRate.rounded()
-        guard wholeHertz.isFinite, wholeHertz >= 1, wholeHertz <= Double(UInt32.max) else {
+        guard let fileName = RecordingPCMCacheFormat.fileName(cacheKey: cacheKey, sampleRate: sampleRate) else {
             throw Failure.invalidSampleRate
         }
-        let destination = directory.appendingPathComponent("\(cacheKey)-\(Int(wholeHertz)).pcm")
+        let destination = directory.appendingPathComponent(fileName)
         if (try? MappedRecording(pcmFile: destination)) != nil { return destination }
         guard FileManager.default.fileExists(atPath: source.path) else { throw Failure.noFile }
 
@@ -49,12 +48,14 @@ public enum RecordingPCMCache {
         do {
             let handle = try FileHandle(forWritingTo: temporary)
             defer { try? handle.close() }
-            try handle.write(contentsOf: Data(count: MappedRecording.headerSize))
+            try handle.write(contentsOf: Data(count: RecordingPCMCacheFormat.headerSize))
             let frameCount = try decode(file, to: handle, sampleRate: sampleRate)
-            guard frameCount > 0, frameCount <= Int(UInt32.max) else { throw Failure.invalidLength(frames: frameCount) }
+            guard let header = RecordingPCMCacheFormat.header(frameCount: frameCount, sampleRate: sampleRate) else {
+                throw Failure.invalidLength(frames: frameCount)
+            }
             // The header goes in last, so a file the process died writing has no magic and fails validation.
             try handle.seek(toOffset: 0)
-            try handle.write(contentsOf: header(frameCount: frameCount, sampleRate: sampleRate))
+            try handle.write(contentsOf: Data(header))
             try handle.close()
             guard rename(temporary.path, destination.path) == 0 else {
                 throw Failure.decodeFailed("cannot move the cache file into place (errno \(errno))")
@@ -64,14 +65,6 @@ public enum RecordingPCMCache {
             throw error
         }
         return destination
-    }
-
-    private static func header(frameCount: Int, sampleRate: Double) -> Data {
-        var data = Data(MappedRecording.magic)
-        for value in [MappedRecording.version, UInt32(frameCount), UInt32(sampleRate.rounded())] {
-            withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
-        }
-        return data
     }
 
     /// Reads `file` through a converter and appends interleaved Int16 chunks to `handle`; returns the frame count.

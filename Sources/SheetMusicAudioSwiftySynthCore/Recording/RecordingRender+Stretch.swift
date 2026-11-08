@@ -179,15 +179,15 @@ struct StretchReader {
     }
 }
 
-extension SwiftySynthBackend {
+extension RecordingRender {
     /// Reference frames between a group's target and its continuation that still count as continuous.
-    nonisolated static let stretchJumpToleranceFrames = 2.0
+    static let stretchJumpToleranceFrames = 2.0
 
     /// One group's stretched reading over one chunk. `playing` is whether the group is read through its stretcher now;
     /// when it is not, the stretcher only finishes fading out. Returns the input frames the playing stretcher took,
     /// which the caller moves the group's gain ramps by: the reader holds the track list, so this cannot write it.
     /// Allocation-free.
-    nonisolated static func mixStretchGroup(
+    static func mixStretchGroup(
         _ index: Int, playing: Bool,
         into left: UnsafeMutableBufferPointer<Float>, _ right: UnsafeMutableBufferPointer<Float>,
         clock: ChunkClock, sampleRate: Double, fadeFrames: Int,
@@ -248,13 +248,13 @@ extension SwiftySynthBackend {
 
     /// Whether `target` carries on what the group's stretched reading was doing: the stream it plays (within the
     /// tolerance, and not owed a retune), or silence after silence.
-    nonisolated static func continues(_ state: StretchGroupState, at target: Double?) -> Bool {
+    static func continues(_ state: StretchGroupState, at target: Double?) -> Bool {
         guard let target else { return !state.hasSource }
         return state.hasSource && !state.needsRestart && abs(target - state.expected) <= stretchJumpToleranceFrames
     }
 
     /// Whether a run's next frame, whose target is `target`, carries on from a frame whose continuation is `expected`.
-    nonisolated static func isContinuation(_ target: Double?, of expected: Double?) -> Bool {
+    static func isContinuation(_ target: Double?, of expected: Double?) -> Bool {
         switch (target, expected) {
         case let (target?, expected?): abs(target - expected) <= stretchJumpToleranceFrames
         case (nil, nil): true
