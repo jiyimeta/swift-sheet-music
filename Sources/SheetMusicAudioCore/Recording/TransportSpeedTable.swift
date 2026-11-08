@@ -67,6 +67,22 @@ package struct TransportSpeedTable: Sendable {
         return ends[index] + (o - outputEnds[index])
     }
 
+    /// The notated second — the score's own timeline, repeats folded — that warped second `o` stands for, when the
+    /// transport runs the score's unrolled sequence that `unrolled` lays over its notated timeline: back through the
+    /// warp to the transport, then onto the notated timeline. A second in a repeat's later pass maps to that pass's
+    /// notated second. The rule `PlaybackEngine.notatedSeconds(forReportedSeconds:)` reads under an alignment, and
+    /// Android's `HostedSynth` too.
+    package func notatedSeconds(atOutput o: TimeInterval, unrolled: UnrolledTimeMap) -> TimeInterval {
+        unrolled.notatedSeconds(fromUnrolled: transportSeconds(atOutput: o))
+    }
+
+    /// The warped second at which notated second `t` plays: the inverse of `notatedSeconds(atOutput:unrolled:)`, at the
+    /// notated second's FIRST occurrence on the transport (`UnrolledTimeMap.unrolledSeconds(fromNotated:)`), where a
+    /// seek to it lands.
+    package func outputSeconds(atNotated t: TimeInterval, unrolled: UnrolledTimeMap) -> TimeInterval {
+        outputSeconds(atTransport: unrolled.unrolledSeconds(fromNotated: t))
+    }
+
     /// How a count-in plays when the body it counts into starts at transport second `bodyStart`; `seconds` is the
     /// count's own length, its metronome SMF's. Under a warp the count runs at the speed of the stretch the body starts
     /// in — `userSpeed` × the stretch 1 ms past `bodyStart`, clear of rounding at the barline — for its whole length,

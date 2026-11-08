@@ -164,4 +164,12 @@ extension AudioMidiBridge {
         let unroll = MidiRenderer.playbackUnroll(score: score)
         return Int64(unroll.firstUnrolledTick(forNotated: Int(notatedTick)))
     }
+
+    /// The Android score player's clock — `renderMidi`'s unrolled sequence, in seconds — laid over the notated
+    /// timeline: the `UnrolledTimeMap` the Apple engine builds at prepare (`PreparedPlayback.derive`), for the score
+    /// synth to convert between its warped seconds and the notated ones. Walks the whole score, so it is built once
+    /// per prepared score, not per conversion.
+    package static func unrolledTimeMap(score: Score) -> UnrolledTimeMap {
+        UnrolledTimeMap(unroll: MidiRenderer.playbackUnroll(score: score), timeline: PlaybackTimeline(score: score))
+    }
 }

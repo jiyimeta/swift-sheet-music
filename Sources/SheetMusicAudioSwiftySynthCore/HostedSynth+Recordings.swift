@@ -82,6 +82,28 @@ extension HostedSynth {
         lock.withLock { alignment.speedTable.transportSeconds(atOutput: seconds) }
     }
 
+    /// How the sequence this synth plays — the score's, repeats and jumps played out — lies over the score's notated
+    /// timeline, as `SwiftySynthBackend.setUnrolledTimeMap` takes it: what `notatedSeconds(atOutput:)` and
+    /// `outputSeconds(atNotated:)` read. Set it when a sequence rendered from another score is attached; until then the
+    /// identity, which is right for a score without a repeat plan.
+    public func setUnrolledTimeMap(_ map: UnrolledTimeMap) {
+        lock.withLock { unrolledTimeMap = map }
+    }
+
+    /// The notated second — the score's own timeline, repeats folded — that warped second `seconds` stands for
+    /// (`TransportSpeedTable.notatedSeconds(atOutput:unrolled:)`, the rule Apple's
+    /// `PlaybackEngine.notatedSeconds(forReportedSeconds:)` reads under an alignment). Through the identity warp and
+    /// map, the identity.
+    public func notatedSeconds(atOutput seconds: Double) -> Double {
+        lock.withLock { alignment.speedTable.notatedSeconds(atOutput: seconds, unrolled: unrolledTimeMap) }
+    }
+
+    /// The warped second at which notated second `seconds` plays, at its first occurrence: the inverse of
+    /// `notatedSeconds(atOutput:)`, as `PlaybackEngine.reportedSeconds(forNotatedSeconds:)` has it.
+    public func outputSeconds(atNotated seconds: Double) -> Double {
+        lock.withLock { alignment.speedTable.outputSeconds(atNotated: seconds, unrolled: unrolledTimeMap) }
+    }
+
     /// The attached sequence's second at `tick`, on its own tempo map; 0 without one.
     public func transportSeconds(atTick tick: Int) -> Double {
         lock.withLock { attached.map { max(0, $0.tempoMap.seconds(atTick: Double(tick))) } ?? 0 }

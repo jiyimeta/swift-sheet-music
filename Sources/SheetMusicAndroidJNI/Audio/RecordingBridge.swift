@@ -2,6 +2,7 @@ import Foundation
 import SheetMusicAudioCore
 import SheetMusicAudioSignalsmith
 import SheetMusicAudioSwiftySynthCore
+import SheetMusicBridgeCore
 
 // The recordings Kotlin mixes onto the score synth (`AndroidPlaybackEngine.setRecordingTracks` / `setAlignment`): the
 // tracks and the alignment are staged one primitive call at a time and committed in one, so neither crosses JNI as a
@@ -158,6 +159,27 @@ public func nativeSynthOutputSecondsAtTick(handle: Int64, tick: Int64) -> Double
 public func nativeSynthTickAtOutputSeconds(handle: Int64, seconds: Double) -> Int64 {
     guard let synth = SynthBridge.synth(handle) else { return 0 }
     return Int64(synth.tick(atTransportSeconds: synth.transportSeconds(atOutput: seconds)))
+}
+
+/// Lays the synth's sequence over the notated timeline of the score behind `scoreHandle` — the score it was rendered
+/// from — for `nativeSynthNotatedSecondsAtOutput` / `nativeSynthOutputSecondsAtNotated`
+/// (`HostedSynth.setUnrolledTimeMap`). Walks the whole score: Kotlin calls it when the score its sequence comes from
+/// changes, while nothing renders, never per conversion. An unknown score handle sets the identity.
+public func nativeSynthSetTransportScore(handle: Int64, scoreHandle: Int64) {
+    guard let synth = SynthBridge.synth(handle) else { return }
+    synth.setUnrolledTimeMap(scoreTable.value(for: scoreHandle).map(AudioMidiBridge.unrolledTimeMap) ?? .identity)
+}
+
+/// The notated second — the score's own timeline, repeats folded — that warped second `seconds` stands for
+/// (`HostedSynth.notatedSeconds(atOutput:)`); `seconds` for an unknown handle.
+public func nativeSynthNotatedSecondsAtOutput(handle: Int64, seconds: Double) -> Double {
+    SynthBridge.synth(handle)?.notatedSeconds(atOutput: seconds) ?? seconds
+}
+
+/// The warped second at which notated second `seconds` first plays (`HostedSynth.outputSeconds(atNotated:)`);
+/// `seconds` for an unknown handle.
+public func nativeSynthOutputSecondsAtNotated(handle: Int64, seconds: Double) -> Double {
+    SynthBridge.synth(handle)?.outputSeconds(atNotated: seconds) ?? seconds
 }
 
 /// Reads the recordings' next pages in from where the transport is and, for `loopStartTick` ≥ 0, from the loop's start.

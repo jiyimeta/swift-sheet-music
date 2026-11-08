@@ -121,5 +121,57 @@
             #expect(nativeSynthAlignmentCommit(handle: synth) == -1)
             #expect(abs(nativeSynthOutputSecondsAtTick(handle: synth, tick: 960) - 2) < 1e-6, "nothing changed")
         }
+
+        @Test func `the notated clock follows the transport score's repeats through the warp`() {
+            let synth = nativeSynthCreate(sampleRate: 48000, voicing: 0)
+            defer { nativeSynthRelease(handle: synth) }
+            let score = scoreTable.insert(RepeatedScoreFixture.score())
+            defer { nativeReleaseScore(handle: score) }
+            nativeSynthAlignmentClear(handle: synth)
+            for span in RepeatedScoreFixture.spans {
+                nativeSynthAlignmentAddSpan(handle: synth, start: span.start, end: span.end, duration: span.duration)
+            }
+            #expect(nativeSynthAlignmentCommit(handle: synth) == 0)
+
+            // Before the score is named: the warp alone, transport seconds taken for notated ones.
+            #expect(abs(nativeSynthNotatedSecondsAtOutput(handle: synth, seconds: 4.3) - 3.2) < 1e-9)
+
+            nativeSynthSetTransportScore(handle: synth, scoreHandle: score)
+            #expect(abs(nativeSynthNotatedSecondsAtOutput(handle: synth, seconds: 4.3) - 1.2) < 1e-9, "A's 2nd pass")
+            #expect(abs(nativeSynthOutputSecondsAtNotated(handle: synth, seconds: 3.0) - 6.5) < 1e-9)
+            #expect(abs(nativeSynthOutputSecondsAtNotated(handle: synth, seconds: 1.2) - 1.5) < 1e-9, "1st pass")
+
+            // An unknown score lays nothing over the transport; an unknown synth answers what it was given.
+            nativeSynthSetTransportScore(handle: synth, scoreHandle: 0)
+            #expect(abs(nativeSynthNotatedSecondsAtOutput(handle: synth, seconds: 4.3) - 3.2) < 1e-9)
+            #expect(nativeSynthNotatedSecondsAtOutput(handle: 0, seconds: 4.3) == 4.3)
+            #expect(nativeSynthOutputSecondsAtNotated(handle: 0, seconds: 4.3) == 4.3)
+        }
+
+        @Test func `the notated clock agrees with the tick clock of the sequence rendered from the score`() {
+            let synth = nativeSynthCreate(sampleRate: 48000, voicing: 0)
+            defer { nativeSynthRelease(handle: synth) }
+            let score = scoreTable.insert(RepeatedScoreFixture.score())
+            defer { nativeReleaseScore(handle: score) }
+            let sequence = nativeSequenceCreate(synthHandle: synth, smf: nativeRenderMidi(scoreHandle: score))
+            #expect(sequence != 0)
+            defer { nativeSequenceRelease(handle: sequence) }
+            nativeSynthAlignmentClear(handle: synth)
+            for span in RepeatedScoreFixture.spans {
+                nativeSynthAlignmentAddSpan(handle: synth, start: span.start, end: span.end, duration: span.duration)
+            }
+            #expect(nativeSynthAlignmentCommit(handle: synth) == 0)
+            nativeSynthSetTransportScore(handle: synth, scoreHandle: score)
+
+            // B's third quarter: notated tick 2880, played after both passes of A at unrolled tick 3840 + 960. What
+            // the engine reports there (a seek, the readout) is what the notated clock converts to and from.
+            let unrolled = nativeUnrolledTickForNotated(scoreHandle: score, notatedTick: 2880)
+            #expect(unrolled == 4800)
+            let reported = nativeSynthOutputSecondsAtTick(handle: synth, tick: unrolled)
+            #expect(abs(reported - 6.5) < 1e-6)
+            #expect(abs(nativeSynthOutputSecondsAtNotated(handle: synth, seconds: 3.0) - reported) < 1e-6)
+            #expect(abs(nativeSynthNotatedSecondsAtOutput(handle: synth, seconds: reported) - 3.0) < 1e-6)
+            #expect(nativeSynthTickAtOutputSeconds(handle: synth, seconds: reported) == 4800)
+        }
     }
 #endif

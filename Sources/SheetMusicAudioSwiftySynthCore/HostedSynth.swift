@@ -44,6 +44,9 @@ public final class HostedSynth: @unchecked Sendable {
     /// The recordings mixed onto the sequence, the alignment it follows, and the render's block bookkeeping
     /// (`HostedSynth+Recordings.swift`).
     var alignment = PlaybackAlignmentState()
+    /// How the score's unrolled sequence lies over its notated timeline (`setUnrolledTimeMap`); the identity until the
+    /// host sets one.
+    var unrolledTimeMap = UnrolledTimeMap.identity
 
     /// The control side of the recordings, guarded by `recordingControlLock` — taken before `lock`, never after it.
     let recordingMix: RecordingMixController

@@ -2887,7 +2887,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// its first occurrence, as every seek does).
     public func notatedSeconds(forReportedSeconds seconds: TimeInterval) -> TimeInterval {
         guard hasAlignment else { return seconds }
-        return unrolledTimeMap.notatedSeconds(fromUnrolled: alignmentSpeedTable.transportSeconds(atOutput: seconds))
+        return alignmentSpeedTable.notatedSeconds(atOutput: seconds, unrolled: unrolledTimeMap)
     }
 
     /// The reported second (`notatedSeconds(forReportedSeconds:)`) at which notated second `seconds` plays: the
@@ -2896,7 +2896,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// (rehearsal marks, measure numbers) on a seek bar that `totalTimeSeconds` spans.
     public func reportedSeconds(forNotatedSeconds seconds: TimeInterval) -> TimeInterval {
         guard hasAlignment else { return seconds }
-        return alignmentSpeedTable.outputSeconds(atTransport: unrolledTimeMap.unrolledSeconds(fromNotated: seconds))
+        return alignmentSpeedTable.outputSeconds(atNotated: seconds, unrolled: unrolledTimeMap)
     }
 
     private func backendTickCursor(
