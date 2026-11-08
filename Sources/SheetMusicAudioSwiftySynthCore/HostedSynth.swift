@@ -33,14 +33,21 @@ public final class HostedSynth: @unchecked Sendable {
         var isPlaying = false
     }
 
-    private let lock = HostLock()
+    let lock = HostLock()
     // Everything below is guarded by `lock`.
-    private var synthesizer: Synthesizer
+    var synthesizer: Synthesizer
     private var hostState = HostChannelState()
     private var gain: Float = 1
-    private var isClosed = false
-    private var attached: Attached?
+    var isClosed = false
+    var attached: Attached?
     private var nextSequenceID = 1
+    /// The recordings mixed onto the sequence, the alignment it follows, and the render's block bookkeeping
+    /// (`HostedSynth+Recordings.swift`).
+    var alignment = PlaybackAlignmentState()
+
+    /// The control side of the recordings, guarded by `recordingControlLock` — taken before `lock`, never after it.
+    let recordingMix: RecordingMixController
+    let recordingControlLock = HostLock()
     /// Prefetches `programSelect` has started, for the test that a repeated selection starts none.
     private var prefetchesStarted = 0
 
@@ -58,6 +65,7 @@ public final class HostedSynth: @unchecked Sendable {
         self.sampleRate = sampleRate
         self.voicing = voicing
         synthesizer = placeholder
+        recordingMix = RecordingMixController(sampleRate: Double(sampleRate), stretcherFactory: nil)
     }
 
     /// A one-preset font whose samples are silence, standing in until a real one loads.
@@ -89,6 +97,8 @@ public final class HostedSynth: @unchecked Sendable {
                 attached.sequencer.speed = speed
                 if position > .zero { attached.sequencer.seek(to: position) }
                 self.attached = attached
+                // The new sequencer starts a block of its own; the recordings carry on, crossfaded if they jump.
+                alignment.sequencerRepositioned()
             }
             replayHostState()
             return true
@@ -301,6 +311,10 @@ public final class HostedSynth: @unchecked Sendable {
                 id: id, midi: prepared.midi, tempoMap: prepared.tempoMap, totalTicks: prepared.totalTicks,
                 sequencer: sequencer,
             )
+            // A fresh sequencer, parked at its start at speed 1: the recordings fade in when it plays.
+            alignment.sequencerRepositioned()
+            alignment.silenceRecordings()
+            alignment.userSpeed = sequencer.speed
             replayHostState()
             return id
         }

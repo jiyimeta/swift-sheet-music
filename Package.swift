@@ -556,28 +556,6 @@ if !isAppleFree {
                 "SheetMusicAudioSwiftySynthCore",
             ],
         ),
-        // Signalsmith Stretch (MIT) and the FFT it uses, header-only C++ vendored with a C shim
-        // (`Sources/CSignalsmithStretch/VENDORED.md`). Only `SheetMusicAudioSignalsmith` imports it; everything else
-        // sees `RecordingStretcher`. No optimization flag of its own: `unsafeFlags` would stop a host from resolving
-        // this package by version, so a Debug build runs the stretcher unoptimized.
-        .target(
-            name: "CSignalsmithStretch",
-            path: "Sources/CSignalsmithStretch",
-            exclude: [
-                "VENDORED.md",
-                "signalsmith-stretch/LICENSE.txt",
-                "signalsmith-linear/LICENSE.txt",
-            ],
-            cxxSettings: [
-                .define("SIGNALSMITH_USE_ACCELERATE"),
-                .headerSearchPath("."),
-            ],
-            linkerSettings: [.linkedFramework("Accelerate")],
-        ),
-        .target(
-            name: "SheetMusicAudioSignalsmith",
-            dependencies: ["SheetMusicAudioCore", "CSignalsmithStretch"],
-        ),
         .target(
             name: "SheetMusicOMRModel",
             dependencies: ["SheetMusicPDF", "SheetMusicCore"],
@@ -651,6 +629,37 @@ if !isAppleFree {
     }
 }
 
+// Signalsmith Stretch (MIT) and the FFT it uses, header-only C++ vendored with a C shim
+// (`Sources/CSignalsmithStretch/VENDORED.md`). Only `SheetMusicAudioSignalsmith` imports it; everything else sees
+// `RecordingStretcher`. Apple and Android both read recordings through it: on Apple the FFT is Accelerate's vDSP, on
+// Android Signalsmith Linear's own C++ FFT, which `fft.h` falls back to when no platform FFT is defined. Both settings
+// are platform conditions rather than `unsafeFlags`, which would stop a host from resolving this package by version
+// — so there is no optimization flag either, and a Debug build runs the stretcher unoptimized. Off wasm and Windows,
+// where nothing plays recordings yet.
+if !isWasm, !isWindows {
+    let applePlatforms: [Platform] = [.macOS, .iOS, .tvOS, .watchOS, .visionOS, .macCatalyst]
+    targets += [
+        .target(
+            name: "CSignalsmithStretch",
+            path: "Sources/CSignalsmithStretch",
+            exclude: [
+                "VENDORED.md",
+                "signalsmith-stretch/LICENSE.txt",
+                "signalsmith-linear/LICENSE.txt",
+            ],
+            cxxSettings: [
+                .define("SIGNALSMITH_USE_ACCELERATE", .when(platforms: applePlatforms)),
+                .headerSearchPath("."),
+            ],
+            linkerSettings: [.linkedFramework("Accelerate", .when(platforms: applePlatforms))],
+        ),
+        .target(
+            name: "SheetMusicAudioSignalsmith",
+            dependencies: ["SheetMusicAudioCore", "CSignalsmithStretch"],
+        ),
+    ]
+}
+
 // Declared off wasm and off Windows. Apple keeps it because SheetMusicTests exercises the bridge on the Apple host;
 // Windows has no JVM to bridge to, and declaring it there would make SwiftPM build swift-java's plugin tooling for
 // every root build of this package (measured 2026-09-29: ~480 extra compile steps on a two-core machine).
@@ -668,6 +677,8 @@ if !isWasm, !isWindows {
                 "SheetMusicMIDI",
                 "SheetMusicAudioCore",
                 "SheetMusicAudioSwiftySynthCore",
+                // Recordings away from 100 % are read through Signalsmith Stretch (`RecordingBridge.swift`).
+                "SheetMusicAudioSignalsmith",
                 "SheetMusicEditWire",
                 .product(name: "SwiftySynth", package: "swiftysynth"),
                 .product(name: "Wirelet", package: "swift-wirelet"),

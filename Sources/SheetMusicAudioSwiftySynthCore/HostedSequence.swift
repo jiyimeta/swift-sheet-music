@@ -31,9 +31,12 @@ public final class HostedSequence: @unchecked Sendable {
     /// Holds the position, and cuts the synth's voices at once: the host stops its output right after, so a release
     /// tail would only sound under the next play — what the Apple backend's pause avoids the same way.
     public func stop() {
+        let synth = synth
         synth.withSequence(id, fallback: ()) { attached, synthesizer in
             attached.isPlaying = false
             synthesizer.noteOffAll(immediate: true)
+            // The recordings stop with it, and fade in when it plays again.
+            synth.alignment.silenceRecordings()
         }
     }
 
@@ -49,6 +52,9 @@ public final class HostedSequence: @unchecked Sendable {
             attached.sequencer.seek(to: .seconds(seconds))
             // In the same critical section, so no block renders between the reset and the state coming back.
             synth.replayHostStateHoldingLock()
+            // The seek re-primes the sequencer's block. The recordings keep their playheads: a seek while playing (a
+            // loop wrap) is a jump of their read position, which the playhead crossfades from where it was.
+            synth.alignment.sequencerRepositioned()
         }
     }
 
@@ -78,11 +84,10 @@ public final class HostedSequence: @unchecked Sendable {
         synth.withSequence(id, fallback: false) { attached, _ in attached.isPlaying }
     }
 
-    /// Scales the tempo: 1 is the SMF's own, 2 twice as fast. Clamped to 0.01 and up.
+    /// Scales the tempo: 1 is the SMF's own, 2 twice as fast. Clamped to 0.01 and up. Under an alignment this is the
+    /// user's rate, which the render stretches by the speed table at every block start (`HostedSynth.renderMix`).
     public func setSpeed(_ speed: Double) {
-        synth.withSequence(id, fallback: ()) { attached, _ in
-            attached.sequencer.speed = max(0.01, speed.isFinite ? speed : 1)
-        }
+        synth.setSequenceSpeed(id, speed: speed)
     }
 
     /// Lets go of the synth's transport; the synth keeps playing previews.

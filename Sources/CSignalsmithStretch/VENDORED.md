@@ -21,7 +21,9 @@ table, and run `SignalsmithStretcherTests` and `RecordingStretcherRenderTests`.
 
 ## Build settings
 
-- `SIGNALSMITH_USE_ACCELERATE` selects Accelerate's vDSP FFT. The target links `Accelerate`.
+- `SIGNALSMITH_USE_ACCELERATE` selects Accelerate's vDSP FFT, and the target links `Accelerate` — both on Apple
+  platforms only (`.when(platforms:)`). On Android neither is set, and `fft.h` uses Linear's own C++ FFT; Android's
+  `HostedSynth` reads recordings away from 100 % through it (`SheetMusicAndroidJNI` depends on the target there).
 - No optimization flag of its own. Upstream recommends optimizing even Debug builds, as the unoptimized stretcher
   is up to 10× slower, but `-O2` needs `unsafeFlags`, which SwiftPM refuses in a package resolved by version, as
   folino resolves this one. A Debug build therefore runs the stretcher unoptimized. Audio QA runs a Release build.
