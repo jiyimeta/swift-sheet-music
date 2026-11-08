@@ -1,5 +1,13 @@
 import SheetMusicFoundation
 
+// A C `FILE *` as the platform's overlay imports it: a typed pointer where `FILE` is a complete struct (Darwin, Glibc,
+// Windows), an opaque one where the C library leaves it incomplete (Bionic, Musl, WASI).
+#if canImport(Darwin) || canImport(Glibc) || os(Windows)
+    typealias CFile = UnsafeMutablePointer<FILE>
+#else
+    typealias CFile = OpaquePointer
+#endif
+
 /// Writes a PCM cache file (`RecordingPCMCacheFormat`) from samples a platform's own decoder produces — Android's
 /// MediaCodec decoder hands its PCM here over JNI, so the format has one writer.
 ///
@@ -22,7 +30,7 @@ public final class RecordingPCMCacheWriter {
     public let destinationPath: String
     private let temporaryPath: String
     private let sampleRate: Double
-    private var file: UnsafeMutablePointer<FILE>?
+    private var file: CFile?
     private var framesWritten = 0
 
     /// The path of a valid cache file for `cacheKey` at `sampleRate` in `directory`, when one is there already: a
@@ -124,7 +132,7 @@ public final class RecordingPCMCacheWriter {
     }
 
     private func write(
-        _ samples: UnsafePointer<Int16>, count: Int, to file: UnsafeMutablePointer<FILE>,
+        _ samples: UnsafePointer<Int16>, count: Int, to file: CFile,
     ) throws(Failure) {
         // The format is little-endian, as every platform this runs on is; a big-endian host would swap here.
         guard fwrite(samples, MemoryLayout<Int16>.size, count, file) == count else {

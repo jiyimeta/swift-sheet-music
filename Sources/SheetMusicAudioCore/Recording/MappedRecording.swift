@@ -109,7 +109,8 @@ public final class MappedRecording: @unchecked Sendable {
                 }
 
                 let length = headerSize + parsed.frameCount * 4
-                let address = mmap(nil, length, PROT_READ, MAP_PRIVATE, descriptor, 0)
+                // Optional on Darwin and Glibc, not on Bionic: typed here so one binding reads both.
+                let address: UnsafeMutableRawPointer? = mmap(nil, length, PROT_READ, MAP_PRIVATE, descriptor, 0)
                 // `MAP_FAILED` is `(void *)-1`, a macro not every platform overlay spells out.
                 guard let address, Int(bitPattern: address) != -1 else { throw Failure.unreadable(code: errno) }
                 // Advice only: a kernel that ignores it still maps the file.
