@@ -122,6 +122,35 @@
             #expect(abs(nativeSynthOutputSecondsAtTick(handle: synth, tick: 960) - 2) < 1e-6, "nothing changed")
         }
 
+        /// Spans as Kotlin's `PlaybackTimeWarpSpan.encode` writes them: three big-endian Float64 each.
+        private static func encoded(_ spans: [(start: Double, end: Double, duration: Double)]) -> Data {
+            var data = Data()
+            for span in spans {
+                for value in [span.start, span.end, span.duration] {
+                    withUnsafeBytes(of: value.bitPattern.bigEndian) { data.append(contentsOf: $0) }
+                }
+            }
+            return data
+        }
+
+        @Test func `a warp is checked without a synth, by PlaybackTimeWarp's rules`() {
+            #expect(nativeWarpSpansAreValid(spans: Data()), "the identity")
+            #expect(nativeWarpSpansAreValid(spans: Self.encoded([(0, 2, 2.5), (2, 4, 3)])))
+            #expect(!nativeWarpSpansAreValid(spans: Self.encoded([(0, 2, 4), (1, 3, 2)])), "overlapping")
+            #expect(!nativeWarpSpansAreValid(spans: Self.encoded([(0, 2, 1000)])), "a stretch below 0.02")
+            #expect(!nativeWarpSpansAreValid(spans: Self.encoded([(2, 2, 1)])), "an end not after its start")
+            #expect(!nativeWarpSpansAreValid(spans: Self.encoded([(0, 2, 4)]).dropLast()), "not whole spans")
+        }
+
+        @Test func `the warp payload is big-endian doubles, as the Kotlin side writes them`() throws {
+            // 1.0, 2.0, 0.5 — the bytes `PlaybackTimeWarpSpanTest` pins on the Kotlin side.
+            let bytes: [UInt8] = [
+                0x3F, 0xF0, 0, 0, 0, 0, 0, 0, 0x40, 0x00, 0, 0, 0, 0, 0, 0, 0x3F, 0xE0, 0, 0, 0, 0, 0, 0,
+            ]
+            let spans = try #require(RecordingBridge.warpSpans(Data(bytes)))
+            #expect(spans == [PlaybackTimeWarp.Span(start: 1, end: 2, duration: 0.5)])
+        }
+
         @Test func `the notated clock follows the transport score's repeats through the warp`() {
             let synth = nativeSynthCreate(sampleRate: 48000, voicing: 0)
             defer { nativeSynthRelease(handle: synth) }

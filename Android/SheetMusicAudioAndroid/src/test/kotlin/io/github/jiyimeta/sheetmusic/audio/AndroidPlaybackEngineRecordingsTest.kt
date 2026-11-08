@@ -145,6 +145,9 @@ class AndroidPlaybackEngineRecordingsTest {
         ),
     )
 
+    /** Configures each score synth a prepare builds, before the engine hands it anything. */
+    private var newSynth: (RecordingsSynth) -> Unit = {}
+
     private fun engine(): AndroidPlaybackEngine = AndroidPlaybackEngine(
         context = null,
         soundfontResolver = object : SoundfontResolver {
@@ -152,7 +155,7 @@ class AndroidPlaybackEngineRecordingsTest {
             override val defaultGmSoundfontUri: Uri? = null
         },
         jniBridge = bridge,
-        synthFactory = { _ -> RecordingsSynth().also { synths += it } },
+        synthFactory = { _ -> RecordingsSynth().also { synths += it; newSynth(it) } },
         playerFactory = { _ -> PlayerDriver(null, player) },
         oboeFactory = { PullingOboeStream().also { stream = it } },
         pollDispatcher = UnconfinedTestDispatcher(scheduler),
@@ -266,6 +269,43 @@ class AndroidPlaybackEngineRecordingsTest {
             engine.setRecordingTracks(listOf(track.copy(id = "other")))
         }
         assertEquals(listOf(track), engine.recordings)
+    }
+
+    @Test fun `an invalid warp is refused before a prepare too, by the shared rule, and never reaches a synth`() =
+        runTest(scheduler) {
+            val engine = engine()
+            bridge.warpSpansValid = false
+            assertThrows(IllegalArgumentException::class.java) { engine.setAlignment(halfSpeed, whole) }
+            assertEquals(
+                "the spans, as the Swift rule reads them",
+                PlaybackTimeWarpSpan.encode(halfSpeed).toList(), bridge.warpSpansCalls.single().toList(),
+            )
+            engine.prepare(1L)
+            assertTrue("nothing kept to hand the new synth", synths.single().alignmentCalls.isEmpty())
+            assertFalse(engine.hasAlignment)
+
+            // Segments alone set no warp, so there is nothing to ask.
+            bridge.warpSpansValid = true
+            engine.setAlignment(emptyList(), whole)
+            assertEquals(1, bridge.warpSpansCalls.size)
+            assertTrue(engine.hasAlignment)
+        }
+
+    @Test fun `a prepare drops an alignment or a track list the new synth refuses`() = runTest(scheduler) {
+        val engine = engine()
+        engine.setRecordingTracks(listOf(track))
+        engine.setAlignment(halfSpeed, whole)
+        newSynth = { it.acceptsAlignment = false; it.acceptsTracks = false }
+        engine.prepare(1L)
+        assertFalse("not an identity table reported as an alignment", engine.hasAlignment)
+        assertEquals("the notated total", 2.0, engine.totalTimeSeconds.value, 1e-9)
+        assertTrue("no recordings claimed that do not play", engine.recordings.isEmpty())
+
+        // The next prepare hands the new synth nothing it refused before.
+        newSynth = {}
+        engine.prepare(1L)
+        assertTrue(synths.last().alignmentCalls.isEmpty())
+        assertTrue(synths.last().trackCalls.isEmpty())
     }
 
     @Test fun `an invalid warp throws`() = runTest(scheduler) {

@@ -204,6 +204,13 @@ class AndroidPlaybackEngine internal constructor(
         fun carryLoop(fromScoreHandle: Long, toScoreHandle: Long, startTick: Long, endTick: Long): LongArray =
             LongArray(0)
 
+        /**
+         * Whether [spans] ([PlaybackTimeWarpSpan.encode]) make a warp the shared Swift accepts (`PlaybackTimeWarp`):
+         * what [setAlignment] asks before it keeps one no synth has taken. The default accepts every warp, leaving the
+         * synth to refuse one, as before.
+         */
+        fun warpSpansAreValid(spans: ByteArray): Boolean = true
+
         /** Returns a serialized `CountInWire` for a pre-roll starting at [cursorBytes]. */
         fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
 
@@ -377,6 +384,7 @@ class AndroidPlaybackEngine internal constructor(
                 SheetMusicAudioJNI.nativeCarryCursor(fromScoreHandle, toScoreHandle, cursorBytes)
             override fun carryLoop(fromScoreHandle: Long, toScoreHandle: Long, startTick: Long, endTick: Long) =
                 SheetMusicAudioJNI.nativeCarryLoop(fromScoreHandle, toScoreHandle, startTick, endTick)
+            override fun warpSpansAreValid(spans: ByteArray) = SheetMusicAudioJNI.nativeWarpSpansAreValid(spans)
             override fun countIn(h: Long, c: ByteArray) = SheetMusicAudioJNI.nativeCountIn(h, c)
             override fun staffParams(h: Long) = SheetMusicAudioJNI.nativeStaffParams(h)
             override fun instrumentParams(h: Long) = SheetMusicAudioJNI.nativeInstrumentParams(h)
@@ -758,11 +766,16 @@ class AndroidPlaybackEngine internal constructor(
             // pitch, so a score opened while either is non-zero would otherwise play untransposed.
             if (effectiveTuningCents != 0.0) engine.setMasterTuning(effectiveTuningCents)
             this@AndroidPlaybackEngine.synthEngine = engine
-            // The host's recordings and alignment outlive the score: hand them to the new synth. A track list that no
-            // longer maps (a file deleted since) leaves the synth without recordings rather than failing the prepare.
+            // The host's recordings and alignment outlive the score: hand them to the new synth. One the synth refuses —
+            // a track list that no longer maps (a file deleted since) — is dropped rather than failing the prepare, so
+            // [recordings] and [hasAlignment] say what plays; the host sets it again when it has a good one.
             engine.synthDriver?.let { synth ->
-                if (!alignment.isEmpty) synth.setAlignment(alignment)
-                if (recordingTracks.isNotEmpty()) synth.setRecordingTracks(recordingTracks, isSoloing(), transposeSemitones)
+                if (!alignment.isEmpty && !synth.setAlignment(alignment)) alignment = PlaybackAlignment()
+                if (recordingTracks.isNotEmpty() &&
+                    !synth.setRecordingTracks(recordingTracks, isSoloing(), transposeSemitones)
+                ) {
+                    recordingTracks = emptyList()
+                }
             }
             // Seed each strip's channel volume into the synth from the score's CC 7. The rendered SMF
             // no longer carries CC 7 on mixer-managed channels (stripped in the shared
@@ -2245,7 +2258,8 @@ class AndroidPlaybackEngine internal constructor(
      * to the host, as the tracks do.
      *
      * @throws IllegalArgumentException for warp spans that are invalid (a stretch outside `0.02..50`, an end not after
-     *   its start) or overlap; nothing changes.
+     *   its start) or overlap — asked of the shared Swift rule (`PlaybackTimeWarp`) whether or not a score is prepared;
+     *   nothing changes.
      */
     fun setAlignment(
         warpSpans: List<PlaybackTimeWarpSpan>,
@@ -2253,6 +2267,10 @@ class AndroidPlaybackEngine internal constructor(
         trackSegments: Map<String, List<RecordingSegment>> = emptyMap(),
     ) {
         val next = PlaybackAlignment(warpSpans, segments, trackSegments)
+        // Before a prepare there is no synth to refuse it, and the next prepare would hand it one that does.
+        if (warpSpans.isNotEmpty() && !jniBridge.warpSpansAreValid(PlaybackTimeWarpSpan.encode(warpSpans))) {
+            throw IllegalArgumentException("the warp's spans are invalid or overlap")
+        }
         val synth = synthEngine?.synthDriver
         if (synth != null && !synth.setAlignment(next)) {
             throw IllegalArgumentException("the warp's spans are invalid or overlap")

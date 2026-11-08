@@ -108,6 +108,16 @@ internal open class FakeJniBridge(
         return carryLoopResult(startTick, endTick)
     }
 
+    /** What [warpSpansAreValid] answers — the shared Swift's verdict on a warp; every warp passes by default. */
+    var warpSpansValid: Boolean = true
+    /** The encoded spans [warpSpansAreValid] was asked about, in order. */
+    val warpSpansCalls = mutableListOf<ByteArray>()
+
+    override fun warpSpansAreValid(spans: ByteArray): Boolean {
+        warpSpansCalls += spans
+        return warpSpansValid
+    }
+
     override fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray = countInResult
     override fun staffParams(scoreHandle: Long): ByteArray = staffParamsResult
     override fun instrumentParams(scoreHandle: Long): ByteArray = instrumentParamsResult

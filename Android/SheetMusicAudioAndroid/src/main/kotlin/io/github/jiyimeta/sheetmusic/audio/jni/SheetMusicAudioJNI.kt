@@ -114,6 +114,12 @@ internal object SheetMusicAudioJNI {
     fun nativeCarryLoop(fromScoreHandle: Long, toScoreHandle: Long, startTick: Long, endTick: Long): LongArray =
         SwiftJavaJNI.nativeCarryLoop(fromScoreHandle, toScoreHandle, startTick, endTick)
 
+    /** Whether [spans] (`PlaybackTimeWarpSpan.encode`) make a warp `PlaybackTimeWarp` accepts. */
+    fun nativeWarpSpansAreValid(spans: ByteArray): Boolean {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeWarpSpansAreValid(SwiftData.fromByteArray(spans, arena))
+    }
+
     fun nativeFrameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeFrameForCursor(

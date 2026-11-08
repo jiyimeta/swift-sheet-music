@@ -73,6 +73,23 @@ enum RecordingBridge {
         synth.setPlaybackAlignment(warp: warp, segments: staging.segments, trackSegments: staging.trackSegments)
         return 0
     }
+
+    /// Bytes one span takes in `nativeWarpSpansAreValid`'s payload: three big-endian Float64.
+    static let encodedSpanSize = 24
+
+    /// `nativeWarpSpansAreValid`'s payload as spans; nil when it is not a whole number of them.
+    static func warpSpans(_ data: Data) -> [PlaybackTimeWarp.Span]? {
+        let bytes = [UInt8](data)
+        guard bytes.count.isMultiple(of: encodedSpanSize) else { return nil }
+        func double(at offset: Int) -> Double {
+            Double(bitPattern: bytes[offset ..< offset + 8].reduce(UInt64(0)) { $0 << 8 | UInt64($1) })
+        }
+        return stride(from: 0, to: bytes.count, by: encodedSpanSize).map { offset in
+            PlaybackTimeWarp.Span(
+                start: double(at: offset), end: double(at: offset + 8), duration: double(at: offset + 16),
+            )
+        }
+    }
 }
 
 // MARK: - swift-java entry points: recordings
@@ -132,6 +149,15 @@ public func nativeSynthAlignmentAddSegment(
 /// Commits the staged alignment: 0, or -1 for a warp whose spans are invalid or overlap (nothing changes).
 public func nativeSynthAlignmentCommit(handle: Int64) -> Int32 {
     RecordingBridge.commitAlignment(handle: handle)
+}
+
+/// Whether `spans` make a warp `PlaybackTimeWarp(spans:)` accepts — each span's `start`, `end` and `duration` as
+/// big-endian Float64, one span after another (Kotlin's `PlaybackTimeWarpSpan.encode`); false for a payload that is not
+/// whole spans. No synth needed: `AndroidPlaybackEngine.setAlignment` asks it before keeping an alignment that no synth
+/// has taken yet, so an invalid warp is refused whether or not a score is prepared.
+public func nativeWarpSpansAreValid(spans: Data) -> Bool {
+    guard let decoded = RecordingBridge.warpSpans(spans) else { return false }
+    return (try? PlaybackTimeWarp(spans: decoded)) != nil
 }
 
 /// How long the score waits for a count-in of `seconds` (its metronome SMF's length) into where the sequence is parked

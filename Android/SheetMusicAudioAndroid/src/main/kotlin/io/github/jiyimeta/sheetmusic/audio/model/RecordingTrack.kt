@@ -1,5 +1,8 @@
 package io.github.jiyimeta.sheetmusic.audio.model
 
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
 /**
  * One recording on the engine's mixer: a decoded PCM cache file (`RecordingPCMCacheFormat`, written by
  * [io.github.jiyimeta.sheetmusic.audio.recording.RecordingPcmDecoder]) placed against the reference recording's time,
@@ -29,7 +32,21 @@ data class RecordingTrack(
  * [duration] seconds at 100 % rate. Mirrors Apple's `PlaybackTimeWarp.Span`; the stretch `(end − start) / duration`
  * must lie in `0.02..50`, and spans ascend without overlapping.
  */
-data class PlaybackTimeWarpSpan(val start: Double, val end: Double, val duration: Double)
+data class PlaybackTimeWarpSpan(val start: Double, val end: Double, val duration: Double) {
+    companion object {
+        /**
+         * [spans] as `nativeWarpSpansAreValid` reads them: each span's [start], [end] and [duration] as big-endian
+         * IEEE 754 doubles, one span after another.
+         */
+        internal fun encode(spans: List<PlaybackTimeWarpSpan>): ByteArray {
+            val buffer = ByteBuffer.allocate(spans.size * Double.SIZE_BYTES * 3).order(ByteOrder.BIG_ENDIAN)
+            for (span in spans) {
+                buffer.putDouble(span.start).putDouble(span.end).putDouble(span.duration)
+            }
+            return buffer.array()
+        }
+    }
+}
 
 /**
  * A stretch of the reference recording, `[sourceStart, sourceEnd)` in reference seconds, that plays from warped output
