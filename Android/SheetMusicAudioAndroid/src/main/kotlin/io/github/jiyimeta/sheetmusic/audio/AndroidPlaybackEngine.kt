@@ -18,7 +18,11 @@ import io.github.jiyimeta.sheetmusic.audio.model.MixAudibility
 import io.github.jiyimeta.sheetmusic.audio.model.MixLevel
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
+import io.github.jiyimeta.sheetmusic.audio.model.PlaybackAlignment
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
+import io.github.jiyimeta.sheetmusic.audio.model.PlaybackTimeWarpSpan
+import io.github.jiyimeta.sheetmusic.audio.model.RecordingSegment
+import io.github.jiyimeta.sheetmusic.audio.model.RecordingTrack
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewNote
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewPitchBend
 import io.github.jiyimeta.sheetmusic.audio.model.PreviewVoice
@@ -351,6 +355,9 @@ class AndroidPlaybackEngine internal constructor(
          */
         private const val COUNT_IN_HANDOVER_POLL_MILLIS = 2L
 
+        /** Cursor polls (about 30 a second) between read-aheads of the recordings' pages while playing. */
+        private const val RECORDING_PREFETCH_POLLS = 10
+
         /** Production bridge backed by [SheetMusicAudioJNI]. */
         val defaultBridge: JniBridge = object : JniBridge {
             override fun renderMidi(h: Long) = SheetMusicAudioJNI.nativeRenderMidi(h)
@@ -600,6 +607,20 @@ class AndroidPlaybackEngine internal constructor(
     @Volatile private var masterVolume: Float = 1.0f
 
     /**
+     * The recordings mixed with the score ([setRecordingTracks]) and the alignment they and the transport follow
+     * ([setAlignment]). The host's, not the score's: both survive [prepare] and [teardown], and are handed to every
+     * score synth a prepare builds.
+     */
+    @Volatile private var recordingTracks: List<RecordingTrack> = emptyList()
+    @Volatile private var alignment: PlaybackAlignment = PlaybackAlignment()
+
+    /** The score's length on the notated clock, which [totalTimeSeconds] reports without an alignment. */
+    @Volatile private var notatedTotalSeconds: Double = 0.0
+
+    /** Cursor polls until the next read-ahead of the recordings' pages. */
+    private var recordingPrefetchCountdown = 0
+
+    /**
      * Master output stage and level handler, held here as well as on the stream because [prepare]
      * builds a NEW [OboeStream] every time — a host that set either once would otherwise silently
      * lose it the next time a score is adopted.
@@ -737,6 +758,12 @@ class AndroidPlaybackEngine internal constructor(
             // pitch, so a score opened while either is non-zero would otherwise play untransposed.
             if (effectiveTuningCents != 0.0) engine.setMasterTuning(effectiveTuningCents)
             this@AndroidPlaybackEngine.synthEngine = engine
+            // The host's recordings and alignment outlive the score: hand them to the new synth. A track list that no
+            // longer maps (a file deleted since) leaves the synth without recordings rather than failing the prepare.
+            engine.synthDriver?.let { synth ->
+                if (!alignment.isEmpty) synth.setAlignment(alignment)
+                if (recordingTracks.isNotEmpty()) synth.setRecordingTracks(recordingTracks, isSoloing(), transposeSemitones)
+            }
             // Seed each strip's channel volume into the synth from the score's CC 7. The rendered SMF
             // no longer carries CC 7 on mixer-managed channels (stripped in the shared
             // MidiSynthPostProcess so the live mixer is the sole authority), so the synth must be told
@@ -803,13 +830,29 @@ class AndroidPlaybackEngine internal constructor(
                     for (i in 0 until frameCount) { left[i] = 0f; right[i] = 0f }
                     return@setProducer
                 }
-                eng.writeFloat(frameCount, left, right)
                 val mm = this@AndroidPlaybackEngine.metronomeMixer
-                if (mm != null && mm.isAudible) {
-                    if (metronomeLeft.size < frameCount) {
-                        metronomeLeft = FloatArray(frameCount)
-                        metronomeRight = FloatArray(frameCount)
+                if (metronomeLeft.size < frameCount) {
+                    metronomeLeft = FloatArray(frameCount)
+                    metronomeRight = FloatArray(frameCount)
+                }
+                // The score with its recordings and the click in one native call: the click's speed follows the
+                // score's through a warp, and the recordings are read on the score's clock (`HostedSynth.renderMix`).
+                // A driver that cannot (a test's fake) renders the two synths apart, as before.
+                val audible = mm != null && mm.isAudible
+                val mixed = eng.synthDriver?.renderMix(
+                    mm?.synth, audible, frameCount, left, right, metronomeLeft, metronomeRight,
+                ) == true
+                if (mixed) {
+                    if (audible) {
+                        for (i in 0 until frameCount) {
+                            left[i] += metronomeLeft[i]
+                            right[i] += metronomeRight[i]
+                        }
                     }
+                    return@setProducer
+                }
+                eng.writeFloat(frameCount, left, right)
+                if (mm != null && mm.isAudible) {
                     mm.synth.writeFloat(frameCount, metronomeLeft, metronomeRight)
                     for (i in 0 until frameCount) {
                         left[i] += metronomeLeft[i]
@@ -846,7 +889,8 @@ class AndroidPlaybackEngine internal constructor(
                     isDrums = s.isDrums,
                 )
             }
-            _totalTimeSeconds.value = totalSecs
+            notatedTotalSeconds = totalSecs
+            _totalTimeSeconds.value = reportedTotalSeconds()
             _currentTimeSeconds.value = 0.0
             _currentCursor.value = null
             _currentRate.value = pendingRate
@@ -926,7 +970,8 @@ class AndroidPlaybackEngine internal constructor(
                 c.copy(displayName = name)
             }
         }
-        _totalTimeSeconds.value = derivation.totalSeconds
+        notatedTotalSeconds = derivation.totalSeconds
+        _totalTimeSeconds.value = reportedTotalSeconds()
         _currentTimeSeconds.value = 0.0
         _currentCursor.value = null
         scoreTickIntent = 0L
@@ -1157,6 +1202,7 @@ class AndroidPlaybackEngine internal constructor(
         // position, not this one's.
         restoreBodyMetronomeSequence()
         oboeStream?.play()
+        prefetchRecordings()
 
         val countIn = beginCountInOrNull()
         if (countIn == null) {
@@ -1205,6 +1251,8 @@ class AndroidPlaybackEngine internal constructor(
                 // `finally`, so a cancelled pre-roll (pause / stop / seek / restart) also closes the mix
                 // path instead of leaving the metronome permanently audible.
                 metronomeMixer?.isCountingIn = false
+                // A warped count's own speed ends with it: from the body on the click follows the score's speed.
+                if (countIn.metronomeSpeed != null) metronomeMixer?.setTempo(pendingRate.toDouble())
             }
         }
     }
@@ -1233,16 +1281,26 @@ class AndroidPlaybackEngine internal constructor(
         mixer.loadSequence(smf)
         metronomeTickOffset = schedule.preRollTicks.toLong()
         val rate = pendingRate.toDouble().coerceAtLeast(0.01)
+        // Under a warp the click counts at the speed of the measure it counts into, for the whole count, and the count
+        // lasts its length at that speed (`TransportSpeedTable.countIn`, the rule Apple's backend reads). Without one
+        // it counts at the user's rate, as it always did.
+        val timing = alignedClock()?.countIn(schedule.totalSeconds)
+        timing?.speed?.let { mixer.setTempo(it) }
+        val countSeconds = timing?.durationSeconds ?: (schedule.totalSeconds / rate)
         return CountInHandover(
             preRollTicks = metronomeTickOffset,
             // Twice the pre-roll's own length plus a second: long enough never to cut a healthy count-in
             // short, short enough that a stalled transport doesn't strand playback.
-            timeoutMillis = ((schedule.totalSeconds / rate) * 2000.0).toLong() + 1000L,
+            timeoutMillis = (countSeconds * 2000.0).toLong() + 1000L,
+            metronomeSpeed = timing?.speed,
         )
     }
 
-    /** What the count-in's job waits for: the click transport's tick, with a wall-clock backstop. */
-    private data class CountInHandover(val preRollTicks: Long, val timeoutMillis: Long)
+    /**
+     * What the count-in's job waits for: the click transport's tick, with a wall-clock backstop. [metronomeSpeed] is
+     * the warped speed the click counts at, which the handover gives back to the user's rate.
+     */
+    private data class CountInHandover(val preRollTicks: Long, val timeoutMillis: Long, val metronomeSpeed: Double?)
 
     /**
      * Puts the click transport back on the plain body sequence, undoing a count-in's shift. Called
@@ -1367,7 +1425,8 @@ class AndroidPlaybackEngine internal constructor(
         restoreBodyMetronomeSequence()
         repositionMetronome(snapped)
         _currentCursor.value = to
-        _currentTimeSeconds.value = frame.timeSeconds
+        _currentTimeSeconds.value = reportedSeconds(atTick = snapped, notatedSeconds = frame.timeSeconds)
+        prefetchRecordings()
     }
 
     /**
@@ -1380,6 +1439,10 @@ class AndroidPlaybackEngine internal constructor(
         val player = playerDriver ?: return
         val total = _totalTimeSeconds.value
         val target = (_currentTimeSeconds.value + seconds).coerceIn(0.0, total)
+        alignedClock()?.let { clock ->
+            skipOnWarpedClock(player, clock, target)
+            return
+        }
         // `total` and `totalTicks` are both NOTATED, so this estimate is a notated tick — but
         // `frameAtTick` takes the player's UNROLLED coordinates, so it has to be projected first.
         val targetTickEstimate = if (total > 0) {
@@ -1399,6 +1462,29 @@ class AndroidPlaybackEngine internal constructor(
         repositionMetronome(snapped)
         _currentCursor.value = frame.cursor
         _currentTimeSeconds.value = frame.timeSeconds
+        prefetchRecordings()
+    }
+
+    /**
+     * [skip] under an alignment: [target] is a warped second — the recording's time, which the seek bar shows — so the
+     * score synth turns it into the transport's tick on its own clock, a repeat's later pass included, rather than
+     * through the notated timeline. A target outside the loop lands on the loop's start, as [snapTickToLoop] has it.
+     */
+    private fun skipOnWarpedClock(player: PlayerDriver, clock: SynthDriver, target: Double) {
+        val tick = clock.tickAtOutputSeconds(target).coerceAtLeast(0L)
+        val loop = transportLoop
+        val landed = if (loop != null && (tick < loop.startTick || tick >= loop.endTick)) loop.startTick else tick
+        val frameBytes = jniBridge.frameAtTick(transportScoreHandle, landed)
+        val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
+        frame ?: return
+        synthEngine?.allNotesOff()
+        player.seekTick(landed)
+        scoreTickIntent = landed
+        restoreBodyMetronomeSequence()
+        repositionMetronome(landed)
+        _currentCursor.value = frame.cursor
+        _currentTimeSeconds.value = if (landed == tick) target else clock.outputSecondsAtTick(landed)
+        prefetchRecordings()
     }
 
     /**
@@ -1984,6 +2070,8 @@ class AndroidPlaybackEngine internal constructor(
         if (idx < 0) return
         updateChannel(idx) { it.copy(isSoloed = soloed) }
         for (i in _mixerChannels.value.indices) reapplyChannelAudibility(i)
+        // The bus decides each recording's gain as well.
+        if (recordingTracks.isNotEmpty()) pushRecordingTracks()
     }
 
     /**
@@ -2049,6 +2137,8 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         transposeSemitones = semitones.coerceIn(-12, 12)
         applyTuning()
+        // A recording is transposed by the reader's transposition plus its own, through its stretcher.
+        if (recordingTracks.isNotEmpty()) pushRecordingTracks()
     }
 
     /**
@@ -2090,6 +2180,133 @@ class AndroidPlaybackEngine internal constructor(
     /** Sets metronome click volume (range 0..1). */
     fun setMetronomeVolume(volume: Float) {
         metronomeMixer?.volume = volume
+    }
+
+    // ── Recordings and alignment ─────────────────────────────────────
+
+    /**
+     * Replaces the recordings mixed with the score, each played at its strip's mix. Mirrors Apple's
+     * `PlaybackEngine.setRecordingTracks(_:)`: callable while playing, and a track whose [RecordingTrack.id] was already
+     * playing carries on from where it is; a track that keeps its id and its [RecordingTrack.pcmPath] keeps its mapping,
+     * so a list that changes only a mix, an offset or a transposition does not restart it.
+     *
+     * A recording strip sits on the same solo bus as the instrument strips: a soloed track silences every unsoloed
+     * instrument strip and recording, and a soloed instrument every unsoloed recording. The metronome stays off it.
+     *
+     * The tracks belong to the host, not to the score: they survive [prepare] and [teardown], as the alignment does. A
+     * host that switches to another score clears both, or sets the new score's, before it plays.
+     *
+     * @throws IllegalArgumentException when a file cannot be mapped as a PCM cache file (missing, unreadable, or not
+     *   `RecordingPCMCacheFormat`); the recordings already playing stay as they were.
+     */
+    fun setRecordingTracks(tracks: List<RecordingTrack>) {
+        require(tracks.map { it.id }.toSet().size == tracks.size) { "recording track ids must be unique" }
+        val previous = recordingTracks
+        recordingTracks = tracks
+        if (!pushRecordingTracks()) {
+            recordingTracks = previous
+            throw IllegalArgumentException("a recording's PCM cache file could not be mapped")
+        }
+        reapplyInstrumentSolo()
+        prefetchRecordings()
+    }
+
+    /**
+     * Sets a recording strip's volume (linear, applied clamped to `0..1`), mute and solo, as [setStaffVolume],
+     * [setStaffMuted] and [setStaffSoloed] set an instrument strip's. A gain change is ramped over 5 ms, never stepped.
+     * No-op for an id not in the track list.
+     */
+    fun setRecordingMix(id: String, volume: Float, isMuted: Boolean, isSoloed: Boolean) {
+        val index = recordingTracks.indexOfFirst { it.id == id }
+        if (index < 0) return
+        recordingTracks = recordingTracks.toMutableList().also {
+            it[index] = it[index].copy(volume = volume, isMuted = isMuted, isSoloed = isSoloed)
+        }
+        pushRecordingTracks()
+        reapplyInstrumentSolo()
+    }
+
+    /** The recordings as last set, with their strips' mix. */
+    val recordings: List<RecordingTrack> get() = recordingTracks
+
+    /**
+     * The alignment the transport and the recordings follow. Mirrors Apple's
+     * `PlaybackEngine.setAlignment(warp:segments:trackSegments:)`: [warpSpans] set how long each stretch of the
+     * transport's clock lasts (empty = the notated tempo), [segments] which seconds of the reference recording sound at
+     * each warped second, and [trackSegments] tables of a track's own, in that track's file seconds (its offset is then
+     * not applied). Callable while playing: a table swap on the score synth from its next block, never a stop, a seek
+     * or a reload.
+     *
+     * While one is set ([hasAlignment]), [currentTimeSeconds] and [totalTimeSeconds] report warped seconds at 100 % —
+     * the recording's time — and [seek] (`toTimeSeconds`) and [skip] take them. Passing empty lists clears it. It belongs
+     * to the host, as the tracks do.
+     *
+     * @throws IllegalArgumentException for warp spans that are invalid (a stretch outside `0.02..50`, an end not after
+     *   its start) or overlap; nothing changes.
+     */
+    fun setAlignment(
+        warpSpans: List<PlaybackTimeWarpSpan>,
+        segments: List<RecordingSegment>,
+        trackSegments: Map<String, List<RecordingSegment>> = emptyMap(),
+    ) {
+        val next = PlaybackAlignment(warpSpans, segments, trackSegments)
+        val synth = synthEngine?.synthDriver
+        if (synth != null && !synth.setAlignment(next)) {
+            throw IllegalArgumentException("the warp's spans are invalid or overlap")
+        }
+        alignment = next
+        _totalTimeSeconds.value = reportedTotalSeconds()
+        prefetchRecordings()
+    }
+
+    /**
+     * Whether the transport follows an alignment: a span, a shared segment or a segment of a track's own table is set,
+     * on a score synth that plays recordings. Time is then reported on the warped clock ([setAlignment]).
+     */
+    val hasAlignment: Boolean get() = alignedClock() != null
+
+    /** The score synth when an alignment is set and it keeps the warped clock; null otherwise. */
+    private fun alignedClock(): SynthDriver? {
+        if (alignment.isEmpty) return null
+        val synth = synthEngine?.synthDriver ?: return null
+        return synth.takeIf { !it.currentOutputSeconds().isNaN() }
+    }
+
+    /** The solo bus: an instrument strip or a recording soloed. */
+    private fun isSoloing(): Boolean = MixAudibility.isSoloing(_mixerChannels.value, recordingTracks)
+
+    /** Hands the score synth the recordings as they resolve now; false when a file cannot be mapped. */
+    private fun pushRecordingTracks(): Boolean {
+        val synth = synthEngine?.synthDriver ?: return true
+        return synth.setRecordingTracks(recordingTracks, isSoloing(), transposeSemitones)
+    }
+
+    /** A recording's solo moves the bus the instrument strips are on: their effective mutes follow it. */
+    private fun reapplyInstrumentSolo() {
+        _mixerChannels.update { recomputeEffectiveMutes(it) }
+        for (i in _mixerChannels.value.indices) reapplyChannelAudibility(i)
+    }
+
+    /** What [totalTimeSeconds] reports: the warped length of the whole sequence under an alignment, else notated. */
+    private fun reportedTotalSeconds(): Double {
+        val clock = alignedClock() ?: return notatedTotalSeconds
+        if (unrolledTotalTicks <= 0) return notatedTotalSeconds
+        return clock.outputSecondsAtTick(unrolledTotalTicks).takeIf { !it.isNaN() } ?: notatedTotalSeconds
+    }
+
+    /** What [currentTimeSeconds] reports for the transport at [atTick]: its warped second, else [notatedSeconds]. */
+    private fun reportedSeconds(atTick: Long, notatedSeconds: Double): Double =
+        alignedClock()?.outputSecondsAtTick(atTick)?.takeIf { !it.isNaN() } ?: notatedSeconds
+
+    /**
+     * Asks the score synth to read the recordings' next pages in — from where the transport is and from the loop's
+     * start — so the audio thread does not fault on them. After a play, a seek, a new track list or alignment, and
+     * every few cursor polls (`MappedRecording.prefetch`).
+     */
+    private fun prefetchRecordings() {
+        recordingPrefetchCountdown = RECORDING_PREFETCH_POLLS
+        if (recordingTracks.isEmpty()) return
+        synthEngine?.synthDriver?.prefetchRecordings(transportLoop?.startTick ?: -1L)
     }
 
     // ── Audio file export ────────────────────────────────────────────
@@ -2222,6 +2439,9 @@ class AndroidPlaybackEngine internal constructor(
             transposeSemitones = transposeSemitones,
             masterGain = masterGain,
             masterOutputStage = masterOutputStage,
+            // The recordings and the alignment playback follows, so the file sounds like it.
+            recordings = recordingTracks,
+            alignment = alignment,
         )
 
         val smfBytes = jniBridge.renderMidi(scoreHandle)
@@ -2383,8 +2603,12 @@ class AndroidPlaybackEngine internal constructor(
                 // can observe on the UI dispatcher themselves via flowOn().
                 if (frame != null) {
                     _currentCursor.value = frame.cursor
-                    _currentTimeSeconds.value = frame.timeSeconds
+                    // Under an alignment the readout is the warped clock — the recording's seconds — exactly where
+                    // the score synth's transport stands, rather than the notated time of the tick.
+                    val warped = alignedClock()?.currentOutputSeconds()?.takeIf { !it.isNaN() }
+                    _currentTimeSeconds.value = warped ?: frame.timeSeconds
                 }
+                if (--recordingPrefetchCountdown <= 0) prefetchRecordings()
                 // End of score: only stop when no loop is active. Compare
                 // against the UNROLLED length — the player traverses the
                 // repeat/jump-expanded SMF, so `tick` runs past the notated
@@ -2475,7 +2699,8 @@ class AndroidPlaybackEngine internal constructor(
      * mirroring the Apple engine's `MixerChannel.isSilenced(soloing:)`. A strip both muted and soloed engages solo.
      */
     private fun recomputeEffectiveMutes(channels: List<MixerChannel>): List<MixerChannel> {
-        val soloing = MixAudibility.isSoloing(channels)
+        // The recording strips are on the same solo bus (`setRecordingTracks`).
+        val soloing = MixAudibility.isSoloing(channels, recordingTracks)
         return channels.map { c -> c.copy(effectiveMute = MixAudibility.isSilenced(c, soloing)) }
     }
 

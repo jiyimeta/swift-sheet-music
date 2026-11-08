@@ -152,9 +152,9 @@ internal open class OboeStream(
     /**
      * Registers or clears the audio [Producer]. May be called while the
      * stream is playing; the change takes effect on the next buffer
-     * boundary.
+     * boundary. Open so a test's stream can pull from the engine's producer.
      */
-    fun setProducer(p: Producer?) { producer.set(p) }
+    open fun setProducer(p: Producer?) { producer.set(p) }
 
     /**
      * Creates and configures the underlying [AudioTrack].

@@ -1,7 +1,10 @@
 package io.github.jiyimeta.sheetmusic.audio.export
 
 import io.github.jiyimeta.sheetmusic.audio.model.MasterOutputStage
+import io.github.jiyimeta.sheetmusic.audio.model.MixAudibility
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
+import io.github.jiyimeta.sheetmusic.audio.model.PlaybackAlignment
+import io.github.jiyimeta.sheetmusic.audio.model.RecordingTrack
 import io.github.jiyimeta.sheetmusic.audio.synth.AndroidMetronomeClickResolver
 
 /**
@@ -43,7 +46,17 @@ internal data class ExportEngineSnapshot(
     val masterGain: Float = 1f,
     /** What happens to a gained mix past full scale, as live playback's `setMasterOutputStage`. */
     val masterOutputStage: MasterOutputStage = MasterOutputStage.NONE,
+    /** The live recordings, mixed into the file as playback mixes them (`setRecordingTracks`). */
+    val recordings: List<RecordingTrack> = emptyList(),
+    /** The live alignment the file's transport and recordings follow (`setAlignment`). */
+    val alignment: PlaybackAlignment = PlaybackAlignment(),
 ) {
+    /** Whether the render goes through the recordings' mix: there are recordings, or an alignment to follow. */
+    val mixesRecordings: Boolean get() = recordings.isNotEmpty() || !alignment.isEmpty
+
+    /** The solo bus as live playback has it: an instrument strip or a recording soloed. */
+    val isSoloing: Boolean get() = MixAudibility.isSoloing(mixerChannels, recordings)
+
     // `metronomeSmfBytes` makes the generated equals/hashCode identity-based; compare by content so the
     // data-class semantics hold for tests that assert on a captured snapshot.
     override fun equals(other: Any?): Boolean {
@@ -58,7 +71,9 @@ internal data class ExportEngineSnapshot(
             masterTuningCents == other.masterTuningCents &&
             transposeSemitones == other.transposeSemitones &&
             masterGain == other.masterGain &&
-            masterOutputStage == other.masterOutputStage
+            masterOutputStage == other.masterOutputStage &&
+            recordings == other.recordings &&
+            alignment == other.alignment
     }
 
     override fun hashCode(): Int {
@@ -72,6 +87,8 @@ internal data class ExportEngineSnapshot(
         result = 31 * result + transposeSemitones
         result = 31 * result + masterGain.hashCode()
         result = 31 * result + masterOutputStage.hashCode()
+        result = 31 * result + recordings.hashCode()
+        result = 31 * result + alignment.hashCode()
         return result
     }
 }

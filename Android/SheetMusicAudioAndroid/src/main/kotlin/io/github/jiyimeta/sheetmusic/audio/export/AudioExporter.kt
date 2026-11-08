@@ -106,6 +106,13 @@ internal class AudioExporter(
                 metronomeMixer?.setTempo(snapshot.rate.toDouble())
             }
             player.seekTick(startTick)
+            // The live recordings and alignment, on the offline score synth: its render then mixes them on the
+            // transport's warped clock, as live playback's does. Without either the render is the one it always was.
+            val mixesRecordings = snapshot.mixesRecordings
+            if (mixesRecordings) {
+                synth.setAlignment(snapshot.alignment)
+                synth.setRecordingTracks(snapshot.recordings, snapshot.isSoloing, snapshot.transposeSemitones)
+            }
 
             val left = FloatArray(BUFFER_FRAMES)
             val right = FloatArray(BUFFER_FRAMES)
@@ -113,26 +120,54 @@ internal class AudioExporter(
             val metronomeRight = FloatArray(BUFFER_FRAMES)
             val totalTicks = (endTick - startTick).coerceAtLeast(0)
 
+            /** One block: through the recordings' mix when there is one, else the two synths summed as before. */
+            fun renderBlock(frames: Int, metronomeAudible: Boolean) {
+                val mixer = metronomeMixer
+                if (mixesRecordings && synth.renderMix(
+                        mixer?.synth, metronomeAudible && mixer != null, frames, left, right, metronomeLeft,
+                        metronomeRight,
+                    )
+                ) {
+                    if (mixer != null && metronomeAudible) {
+                        for (i in 0 until frames) {
+                            left[i] += metronomeLeft[i]
+                            right[i] += metronomeRight[i]
+                        }
+                    }
+                    return
+                }
+                synth.writeFloat(frames, left, right)
+                if (mixer != null && metronomeAudible) {
+                    mixMetronome(mixer, frames, left, right, metronomeLeft, metronomeRight)
+                }
+            }
+
             if (countIn != null) {
                 // The count plays from the head of its sequence while the score player waits at the range's start.
                 // Live playback hands over when the click transport reaches the pre-roll's last tick, which it polls
                 // for; an offline render has no clock to poll, so the score is held for exactly the pre-roll's length
                 // of output instead — its sequence-clock length divided by the rate both transports play at. The
                 // last block is cut short rather than rounded up, or the music would come in up to a block late.
+                //
+                // Under a warp the score synth says how long, and at what speed the click counts: the speed of the
+                // measure it counts into (`TransportSpeedTable.countIn`, the rule Apple's export reads).
                 metronomeMixer?.isCountingIn = true
-                metronomeMixer?.start(0L)
                 val rate = snapshot.rate.toDouble().coerceAtLeast(0.01)
-                var remaining = ((countIn.preRollSeconds / rate) * sampleRate).roundToLong()
+                val timing = if (mixesRecordings) synth.countIn(countIn.preRollSeconds) else null
+                timing?.speed?.let { metronomeMixer?.setTempo(it) }
+                metronomeMixer?.start(0L)
+                val seconds = timing?.durationSeconds ?: (countIn.preRollSeconds / rate)
+                var remaining = (seconds * sampleRate).roundToLong()
                 while (remaining > 0) {
                     coroutineContext.ensureActive()
                     val frames = minOf(BUFFER_FRAMES.toLong(), remaining).toInt()
-                    synth.writeFloat(frames, left, right)
-                    metronomeMixer?.let { mixMetronome(it, frames, left, right, metronomeLeft, metronomeRight) }
+                    renderBlock(frames, metronomeAudible = true)
                     applyMasterStage(snapshot, frames, left, right)
                     encoder.appendPcmFloat(left, right, frames)
                     remaining -= frames
                 }
                 metronomeMixer?.isCountingIn = false
+                if (timing?.speed != null) metronomeMixer?.setTempo(snapshot.rate.toDouble())
                 player.play()
             } else {
                 player.play()
@@ -146,10 +181,7 @@ internal class AudioExporter(
                 // BUFFER_FRAMES is an upper bound; the loop terminates on
                 // currentTick crossing endTick regardless of frame budget.
                 val frames = BUFFER_FRAMES
-                synth.writeFloat(frames, left, right)
-                metronomeMixer?.takeIf { it.isAudible }?.let {
-                    mixMetronome(it, frames, left, right, metronomeLeft, metronomeRight)
-                }
+                renderBlock(frames, metronomeAudible = metronomeMixer?.isAudible == true)
                 applyMasterStage(snapshot, frames, left, right)
                 encoder.appendPcmFloat(left, right, frames)
                 val nowMs = System.currentTimeMillis()
@@ -255,7 +287,8 @@ internal class AudioExporter(
             // Live playback's own rule, so a strip the user hears silent is silent in the file: mute wins, and a
             // strip both muted and soloed engages solo. Apple's export reads the same rule
             // (`PlaybackEngine.exportVolumeCC7(of:soloing:)`).
-            val soloing = MixAudibility.isSoloing(snapshot.mixerChannels)
+            // The bus counts the recording strips too: a soloed recording silences the instruments in the file.
+            val soloing = snapshot.isSoloing
             for (chan in snapshot.mixerChannels) {
                 val gain = if (MixAudibility.isSilenced(chan, soloing)) 0f else chan.volume
                 synth.cc(chan.liveChannel, 7, (gain * 127).toInt().coerceIn(0, 127))

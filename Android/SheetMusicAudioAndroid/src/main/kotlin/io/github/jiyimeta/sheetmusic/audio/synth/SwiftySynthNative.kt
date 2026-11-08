@@ -28,6 +28,38 @@ internal interface SynthNativeCalls {
     fun synthAllNotesOff(handle: Long, channel: Int)
     fun nativeRender(handle: Long, frames: Int, left: FloatArray, right: FloatArray): Int
     fun sequenceCreate(synthHandle: Long, smf: ByteArray): Long
+
+    // ── Recordings (`RecordingBridge.swift`) ──
+    //
+    // Defaults answer as a library without recordings would, so a test's stand-in implements only what it checks.
+    fun nativeRenderMix(
+        scoreHandle: Long,
+        metronomeHandle: Long,
+        metronomeAudible: Boolean,
+        frames: Int,
+        left: FloatArray,
+        right: FloatArray,
+        metronomeLeft: FloatArray,
+        metronomeRight: FloatArray,
+    ): Int = 0
+    fun recordingsClear(handle: Long) {}
+    fun recordingsStage(
+        handle: Long, id: String, pcmPath: String, offsetSeconds: Double, transposeSemitones: Int, volume: Double,
+        muted: Boolean, soloed: Boolean,
+    ) {}
+    fun recordingsCommit(handle: Long, soloing: Boolean, readerTransposeSemitones: Int): Int = 0
+    fun alignmentClear(handle: Long) {}
+    fun alignmentAddSpan(handle: Long, start: Double, end: Double, duration: Double) {}
+    fun alignmentAddSegment(
+        handle: Long, trackId: String, sourceStart: Double, sourceEnd: Double, outputStart: Double,
+    ) {}
+    fun alignmentCommit(handle: Long): Int = 0
+    fun countInDuration(handle: Long, seconds: Double): Double = seconds
+    fun countInSpeed(handle: Long, seconds: Double): Double = 0.0
+    fun currentOutputSeconds(handle: Long): Double = 0.0
+    fun outputSecondsAtTick(handle: Long, tick: Long): Double = 0.0
+    fun tickAtOutputSeconds(handle: Long, seconds: Double): Long = 0L
+    fun recordingsPrefetch(handle: Long, loopStartTick: Long) {}
 }
 
 internal object SwiftySynthNative : SynthNativeCalls {
@@ -44,6 +76,56 @@ internal object SwiftySynthNative : SynthNativeCalls {
      * [frames], or 0 — arrays untouched — for an unknown handle or arrays shorter than [frames].
      */
     external override fun nativeRender(handle: Long, frames: Int, left: FloatArray, right: FloatArray): Int
+
+    /**
+     * Renders [frames] frames of the score synth behind [scoreHandle], its recordings mixed in, into [left] / [right],
+     * and of the metronome synth behind [metronomeHandle] (0 for none) into [metronomeLeft] / [metronomeRight] —
+     * zeroed unless [metronomeAudible]. Returns [frames], or 0 — arrays untouched — for an unknown score handle or
+     * arrays shorter than [frames]. Hand-written JNI, like [nativeRender]: one crossing per block, no allocation.
+     */
+    external override fun nativeRenderMix(
+        scoreHandle: Long,
+        metronomeHandle: Long,
+        metronomeAudible: Boolean,
+        frames: Int,
+        left: FloatArray,
+        right: FloatArray,
+        metronomeLeft: FloatArray,
+        metronomeRight: FloatArray,
+    ): Int
+
+    // ── Recordings ───────────────────────────────────────────────────
+
+    override fun recordingsClear(handle: Long) = SwiftJavaJNI.nativeSynthRecordingsClear(handle)
+    override fun recordingsStage(
+        handle: Long, id: String, pcmPath: String, offsetSeconds: Double, transposeSemitones: Int, volume: Double,
+        muted: Boolean, soloed: Boolean,
+    ) = SwiftJavaJNI.nativeSynthRecordingsStage(
+        handle, id, pcmPath, offsetSeconds, transposeSemitones, volume, muted, soloed,
+    )
+    override fun recordingsCommit(handle: Long, soloing: Boolean, readerTransposeSemitones: Int): Int =
+        SwiftJavaJNI.nativeSynthRecordingsCommit(handle, soloing, readerTransposeSemitones)
+    override fun alignmentClear(handle: Long) = SwiftJavaJNI.nativeSynthAlignmentClear(handle)
+    override fun alignmentAddSpan(handle: Long, start: Double, end: Double, duration: Double) =
+        SwiftJavaJNI.nativeSynthAlignmentAddSpan(handle, start, end, duration)
+    override fun alignmentAddSegment(
+        handle: Long, trackId: String, sourceStart: Double, sourceEnd: Double, outputStart: Double,
+    ) = SwiftJavaJNI.nativeSynthAlignmentAddSegment(handle, trackId, sourceStart, sourceEnd, outputStart)
+    override fun alignmentCommit(handle: Long): Int = SwiftJavaJNI.nativeSynthAlignmentCommit(handle)
+    override fun countInDuration(handle: Long, seconds: Double): Double =
+        SwiftJavaJNI.nativeSynthCountInDuration(handle, seconds)
+    override fun countInSpeed(handle: Long, seconds: Double): Double =
+        SwiftJavaJNI.nativeSynthCountInSpeed(handle, seconds)
+    override fun currentOutputSeconds(handle: Long): Double = SwiftJavaJNI.nativeSynthCurrentOutputSeconds(handle)
+    override fun outputSecondsAtTick(handle: Long, tick: Long): Double =
+        SwiftJavaJNI.nativeSynthOutputSecondsAtTick(handle, tick)
+    override fun tickAtOutputSeconds(handle: Long, seconds: Double): Long =
+        SwiftJavaJNI.nativeSynthTickAtOutputSeconds(handle, seconds)
+    override fun recordingsPrefetch(handle: Long, loopStartTick: Long) =
+        SwiftJavaJNI.nativeSynthRecordingsPrefetch(handle, loopStartTick)
+
+    /** Reads the score synth's recordings through Signalsmith Stretch, so they keep their pitch away from 100 %. */
+    fun enableRecordingStretch(handle: Long) = SwiftJavaJNI.nativeSynthEnableRecordingStretch(handle)
 
     // ── Synth ────────────────────────────────────────────────────────
 

@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.net.Uri
 import io.github.jiyimeta.sheetmusic.audio.AudioBackendException
+import io.github.jiyimeta.sheetmusic.audio.model.PlaybackAlignment
+import io.github.jiyimeta.sheetmusic.audio.model.RecordingTrack
 import java.io.File
 import java.io.OutputStream
 import java.nio.file.Files
@@ -46,6 +48,9 @@ internal class SwiftySynthDriver internal constructor(
             if (handle == 0L) {
                 throw AudioBackendException.SynthInit("no synthesizer at $sampleRate Hz")
             }
+            // The score synth is the one recordings are mixed onto; read away from 100 % through Signalsmith Stretch,
+            // as the Apple backend reads them.
+            if (voicing == SwiftySynthNative.VOICING_SCORE) SwiftySynthNative.enableRecordingStretch(handle)
             return SwiftySynthDriver(handle, SwiftySynthNative)
         }
     }
@@ -116,6 +121,79 @@ internal class SwiftySynthDriver internal constructor(
      */
     override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int =
         withHandle(0) { native.nativeRender(it, frameCount, left, right) }
+
+    override fun setRecordingTracks(
+        tracks: List<RecordingTrack>,
+        soloing: Boolean,
+        readerTransposeSemitones: Int,
+    ): Boolean = withHandle(false) { h ->
+        native.recordingsClear(h)
+        for (t in tracks) {
+            native.recordingsStage(
+                h, t.id, t.pcmPath, t.offsetSeconds, t.transposeSemitones, t.volume.toDouble(), t.isMuted, t.isSoloed,
+            )
+        }
+        native.recordingsCommit(h, soloing, readerTransposeSemitones) == 0
+    }
+
+    override fun setAlignment(alignment: PlaybackAlignment): Boolean = withHandle(false) { h ->
+        native.alignmentClear(h)
+        for (s in alignment.warpSpans) native.alignmentAddSpan(h, s.start, s.end, s.duration)
+        for (s in alignment.segments) native.alignmentAddSegment(h, "", s.sourceStart, s.sourceEnd, s.outputStart)
+        for ((id, segments) in alignment.trackSegments) {
+            // An empty id stands for the shared table on the wire; a track's is never empty.
+            if (id.isEmpty()) continue
+            for (s in segments) native.alignmentAddSegment(h, id, s.sourceStart, s.sourceEnd, s.outputStart)
+        }
+        native.alignmentCommit(h) == 0
+    }
+
+    /**
+     * One crossing for both synths, this driver's lock and then the metronome's held across it — in this order only,
+     * and nothing else holds two drivers' locks — so neither is closed under the render.
+     */
+    override fun renderMix(
+        metronome: SynthDriver?,
+        metronomeAudible: Boolean,
+        frameCount: Int,
+        left: FloatArray,
+        right: FloatArray,
+        metronomeLeft: FloatArray,
+        metronomeRight: FloatArray,
+    ): Boolean {
+        val click = metronome as? SwiftySynthDriver
+        if (metronome != null && click == null) return false
+        return withHandle(false) { h ->
+            if (click == null || click === this) {
+                native.nativeRenderMix(h, 0L, false, frameCount, left, right, metronomeLeft, metronomeRight)
+            } else {
+                synchronized(click.lock) {
+                    val clickHandle = if (click.closed) 0L else click.handle
+                    native.nativeRenderMix(
+                        h, clickHandle, metronomeAudible && clickHandle != 0L, frameCount, left, right,
+                        metronomeLeft, metronomeRight,
+                    )
+                }
+            }
+            true
+        }
+    }
+
+    override fun currentOutputSeconds(): Double = withHandle(Double.NaN) { native.currentOutputSeconds(it) }
+
+    override fun outputSecondsAtTick(tick: Long): Double =
+        withHandle(Double.NaN) { native.outputSecondsAtTick(it, tick) }
+
+    override fun tickAtOutputSeconds(seconds: Double): Long =
+        withHandle(-1L) { native.tickAtOutputSeconds(it, seconds) }
+
+    override fun countIn(seconds: Double): CountInTiming? = withHandle(null) { h ->
+        val speed = native.countInSpeed(h, seconds)
+        CountInTiming(durationSeconds = native.countInDuration(h, seconds), speed = speed.takeIf { it > 0.0 })
+    }
+
+    override fun prefetchRecordings(loopStartTick: Long) =
+        withHandle(Unit) { native.recordingsPrefetch(it, loopStartTick) }
 
     override fun close() = synchronized(lock) {
         if (closed) return@synchronized
