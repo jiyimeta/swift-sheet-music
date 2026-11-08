@@ -7,8 +7,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.31.0] - 2026-11-08
+
 ### Added
 
+- **`PlaybackTimeWarp.stretchRange` is public** — the stretches a span may have (`0.02 ... 50`), which
+  `PlaybackTimeWarp(spans:)` checks. A host that builds a warp from its own timing clamps or merges its spans to it
+  instead of keeping a copy of the bounds.
 - **A recording track can have a segment table of its own (`PlaybackEngine.setAlignment(warp:segments:trackSegments:)`,
   `SynthBackend.setPlaybackAlignment(warp:segments:trackSegments:)`).** A track whose id is a key of `trackSegments`
   plays from that table, whose source seconds are the track's own file seconds, so its `offsetSeconds` is not applied;
@@ -29,6 +34,9 @@ and this project adheres to
   player sent its All Sound Off in that block and cut the preview. A SwiftySynth sequence cuts its voices inside
   `stop()` itself, so the hold (`Shared.scoreStopUnrendered`, `heldPreviewMessages`) only delayed the preview by one
   block and is gone. The probe's `previewRightAfterPause` checks that ten previews in a row still sound.
+- **`NOTICE` credits Signalsmith Stretch and Signalsmith Linear**, the MIT-licensed time-stretcher vendored in
+  `Sources/CSignalsmithStretch` since 4.23.0, with both copyright lines and the permission notice, so an application
+  that ships `SheetMusicAudioSignalsmith` has the notices the MIT License asks it to carry.
 
 ## [4.30.0] - 2026-11-07
 

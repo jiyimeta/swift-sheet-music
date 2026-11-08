@@ -28,8 +28,10 @@ public struct PlaybackTimeWarp: Sendable, Equatable {
         }
     }
 
-    /// The stretches a span may have (see the type's documentation).
-    static let stretchRange: ClosedRange<Double> = 0.02 ... 50
+    /// The stretches a span may have (see the type's documentation): `init(spans:)` throws `.invalidSpan` for a span
+    /// outside it. Public so a host that builds a warp from its own timing can clamp or merge spans to it rather than
+    /// keep a copy of the bounds.
+    public static let stretchRange: ClosedRange<Double> = 0.02 ... 50
 
     /// Ascending and non-overlapping (touching is allowed).
     package private(set) var spans: [Span]
