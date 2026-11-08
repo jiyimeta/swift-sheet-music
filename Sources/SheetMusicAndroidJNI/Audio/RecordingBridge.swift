@@ -8,8 +8,10 @@ import SheetMusicBridgeCore
 // tracks and the alignment are staged one primitive call at a time and committed in one, so neither crosses JNI as a
 // wire format of its own. The render is `SynthRenderJNI.swift`'s `nativeRenderMix`.
 //
-// Kotlin makes every call for a synth from under its driver's lock, so the staging of one handle is never written by
-// two threads at once; the table lock below covers the dictionary only.
+// Kotlin makes every call for a synth from under its driver's control lock (`SwiftySynthDriver.controlLock`), so the
+// staging of one handle is never written by two threads at once; the table lock below covers the dictionary only. The
+// render takes another lock, so mapping files and making stretchers here never holds it up: what reaches the render is
+// swapped in under the synth's own lock (`HostedSynth+Recordings.swift`).
 
 /// What Kotlin staged for one score synth, and what it last committed.
 final class RecordingStaging: @unchecked Sendable {

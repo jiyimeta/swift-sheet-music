@@ -9,16 +9,22 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Collections
+import kotlin.concurrent.thread
 
 /** What [SwiftySynthDriver] sends the recording entry points (`RecordingBridge.swift`), against stand-in natives. */
 class SwiftySynthDriverRecordingsTest {
     private class Natives : SynthNativeCalls {
-        val calls = mutableListOf<String>()
+        val calls: MutableList<String> = Collections.synchronizedList(mutableListOf())
         var commitResult = 0
         var alignmentResult = 0
         var speed = 0.0
         /** What `nativeRenderMix` answers; null answers the frames asked for. */
         var renderResult: Int? = null
+        /** Runs inside `recordingsCommit`, where the real one maps the tracks' files and makes their stretchers. */
+        var duringCommit: (() -> Unit)? = null
+        /** Runs inside `nativeRenderMix`, where the real one renders a block. */
+        var duringRender: (() -> Unit)? = null
 
         override fun synthRelease(handle: Long) { calls += "release($handle)" }
         override fun synthLoadSoundFont(handle: Long, path: String) = 0
@@ -38,6 +44,7 @@ class SwiftySynthDriverRecordingsTest {
             left: FloatArray, right: FloatArray, metronomeLeft: FloatArray, metronomeRight: FloatArray,
         ): Int {
             calls += "renderMix($scoreHandle,$metronomeHandle,$metronomeAudible,$frames)"
+            duringRender?.invoke()
             return renderResult ?: frames
         }
         override fun recordingsClear(handle: Long) { calls += "clear($handle)" }
@@ -47,6 +54,7 @@ class SwiftySynthDriverRecordingsTest {
         ) { calls += "stage($id,$pcmPath,$offsetSeconds,$transposeSemitones,$volume,$muted,$soloed)" }
         override fun recordingsCommit(handle: Long, soloing: Boolean, readerTransposeSemitones: Int): Int {
             calls += "commit($soloing,$readerTransposeSemitones)"
+            duringCommit?.invoke()
             return commitResult
         }
         override fun alignmentClear(handle: Long) { calls += "alignmentClear" }
@@ -125,6 +133,56 @@ class SwiftySynthDriverRecordingsTest {
         assertEquals(listOf("renderMix(7,9,true,480)", "release(9)", "renderMix(7,0,false,480)"), natives.calls)
         score.close()
         assertFalse("a closed score synth renders nothing", score.renderMix(null, false, 480, buffers[0], buffers[1], buffers[2], buffers[3]))
+    }
+
+    /** Runs [body] on another thread and answers whether it finished within two seconds — false: it waited on a lock. */
+    private fun finishesElsewhere(body: () -> Unit): Boolean {
+        val other = thread(isDaemon = true) { body() }
+        other.join(2_000)
+        return !other.isAlive
+    }
+
+    @Test fun `a track list commits without holding up the render`() {
+        val natives = Natives()
+        val score = SwiftySynthDriver(7L, natives)
+        val click = SwiftySynthDriver(9L, natives)
+        val buffers = List(4) { FloatArray(480) }
+        var rendered = false
+        natives.duringCommit = {
+            rendered = finishesElsewhere {
+                score.renderMix(click, true, 480, buffers[0], buffers[1], buffers[2], buffers[3])
+            }
+        }
+        assertTrue(score.setRecordingTracks(listOf(RecordingTrack("a", "/a.pcm")), soloing = false, 0))
+        assertTrue("the writer thread renders a block while the files map", rendered)
+    }
+
+    @Test fun `a render holds up no control call, a clock read or an alignment`() {
+        val natives = Natives()
+        val driver = SwiftySynthDriver(7L, natives)
+        val buffers = List(4) { FloatArray(480) }
+        var answered = false
+        natives.duringRender = {
+            answered = finishesElsewhere {
+                driver.currentOutputSeconds()
+                driver.setAlignment(PlaybackAlignment(warpSpans = listOf(PlaybackTimeWarpSpan(0.0, 2.0, 4.0))))
+                driver.prefetchRecordings(-1L)
+            }
+        }
+        assertTrue(driver.renderMix(null, false, 480, buffers[0], buffers[1], buffers[2], buffers[3]))
+        assertTrue(answered)
+    }
+
+    @Test fun `after close neither a render nor a control call reaches the handle`() {
+        val natives = Natives()
+        val driver = SwiftySynthDriver(7L, natives)
+        val buffers = List(4) { FloatArray(480) }
+        assertTrue(driver.renderMix(null, false, 480, buffers[0], buffers[1], buffers[2], buffers[3]))
+        assertTrue(driver.setAlignment(PlaybackAlignment()))
+        driver.close()
+        assertFalse(driver.renderMix(null, false, 480, buffers[0], buffers[1], buffers[2], buffers[3]))
+        assertFalse(driver.setAlignment(PlaybackAlignment()))
+        assertEquals(1, natives.calls.count { it.startsWith("release") })
     }
 
     @Test fun `renderMix fails when the native render left the arrays untouched`() {

@@ -13,8 +13,9 @@ import SwiftySynth
 /// Handles, and the work behind the entry points that is not JNI glue.
 ///
 /// **A handle is a retained object's address**, not a key in a table: the render looks its synth up every output block,
-/// and a `HandleTable` lookup is a `DispatchQueue.sync` there. The Kotlin drivers make every call under their own lock
-/// and stop using a handle once they release it, as they did with FluidSynth's pointers. A sequence handle retains its
+/// and a `HandleTable` lookup is a `DispatchQueue.sync` there. The Kotlin drivers make every call under a lock of their
+/// own — the render under one, every other call under another, the release under both (`SwiftySynthDriver`) — and
+/// stop using a handle once they release it, as they did with FluidSynth's pointers. A sequence handle retains its
 /// synth, so a sequence released after its synth still points at live memory.
 enum SynthBridge {
     static func retain(_ object: AnyObject) -> Int64 {

@@ -17,24 +17,37 @@ import java.nio.file.StandardCopyOption
  *
  * Use [create] to construct; the constructor is private to guarantee the handle is valid.
  *
- * **Every native call is taken under [lock], and a closed driver is inert rather than fatal.** The handle is the
+ * **Every native call is taken under a lock, and a closed driver is inert rather than fatal.** The handle is the
  * address of a retained Swift object; once [close] releases it, any call still passing it would reach freed memory.
- * The lock is what makes "closed" mean anything: teardown runs from a `prepare` coroutine while
+ * The locks are what make "closed" mean anything: teardown runs from a `prepare` coroutine while
  * `AndroidPlaybackEngine.stop` reaches `allNotesOff` from the main thread, so a check-then-call would still be closed
- * in the window between the two. It also serializes [close] against a call already in flight — the render included,
- * which is why that lock is taken on the audio writer thread every block; it is uncontended in the steady state.
- * (The same discipline `FluidSynthDriver` kept for FluidSynth's pointer, 2.0.1.)
+ * in the window between the two. (The same discipline `FluidSynthDriver` kept for FluidSynth's pointer, 2.0.1.)
+ *
+ * **Two locks, so nothing a control call does holds up the render.** The render ([writeFloat], [renderMix]) takes
+ * [renderLock] on the audio writer thread every block; every other call takes [controlLock] — among them a track list
+ * that maps its files and makes its stretchers, a SoundFont load, a clock read and a prefetch. Only [close] takes both,
+ * control first, so it waits out a call of either kind in flight. Render and control meet in the Swift synth alone,
+ * whose own lock (`HostedSynth`'s) a control call holds only to swap in what it built outside it, as the Apple
+ * backend's do. [controlLock] also keeps two threads from interleaving what they stage (`RecordingBridge.swift`).
  */
 internal class SwiftySynthDriver internal constructor(
     private val handle: Long,
     private val native: SynthNativeCalls,
 ) : SynthDriver {
 
-    private val lock = Any()
+    private val renderLock = Any()
+    private val controlLock = Any()
+
+    /** Written under both locks, so either one reads it settled. */
     private var closed = false
 
-    /** Runs [body] with the live handle, or answers [fallback] once the driver is closed. */
-    private inline fun <T> withHandle(fallback: T, body: (Long) -> T): T = synchronized(lock) {
+    /** Runs [body] with the live handle under [controlLock], or answers [fallback] once the driver is closed. */
+    private inline fun <T> withHandle(fallback: T, body: (Long) -> T): T = synchronized(controlLock) {
+        if (closed) fallback else body(handle)
+    }
+
+    /** [withHandle] for a render, under [renderLock]. */
+    private inline fun <T> rendering(fallback: T, body: (Long) -> T): T = synchronized(renderLock) {
         if (closed) fallback else body(handle)
     }
 
@@ -120,7 +133,7 @@ internal class SwiftySynthDriver internal constructor(
      * untouched and reports 0 frames once closed. One JNI crossing, no allocation.
      */
     override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int =
-        withHandle(0) { native.nativeRender(it, frameCount, left, right) }
+        rendering(0) { native.nativeRender(it, frameCount, left, right) }
 
     override fun setRecordingTracks(
         tracks: List<RecordingTrack>,
@@ -149,10 +162,10 @@ internal class SwiftySynthDriver internal constructor(
     }
 
     /**
-     * One crossing for both synths, this driver's lock and then the metronome's held across it — in this order only,
-     * and nothing else holds two drivers' locks — so neither is closed under the render. False when the native render
-     * left the arrays untouched (an unknown handle, an array too short), so the caller renders another way rather than
-     * sending the last block again.
+     * One crossing for both synths, this driver's [renderLock] and then the metronome's held across it — in this order
+     * only, and nothing else holds two drivers' locks — so neither is closed under the render. False when the native
+     * render left the arrays untouched (an unknown handle, an array too short), so the caller renders another way
+     * rather than sending the last block again.
      */
     override fun renderMix(
         metronome: SynthDriver?,
@@ -165,11 +178,11 @@ internal class SwiftySynthDriver internal constructor(
     ): Boolean {
         val click = metronome as? SwiftySynthDriver
         if (metronome != null && click == null) return false
-        return withHandle(false) { h ->
+        return rendering(false) { h ->
             val rendered = if (click == null || click === this) {
                 native.nativeRenderMix(h, 0L, false, frameCount, left, right, metronomeLeft, metronomeRight)
             } else {
-                synchronized(click.lock) {
+                synchronized(click.renderLock) {
                     val clickHandle = if (click.closed) 0L else click.handle
                     native.nativeRenderMix(
                         h, clickHandle, metronomeAudible && clickHandle != 0L, frameCount, left, right,
@@ -206,11 +219,13 @@ internal class SwiftySynthDriver internal constructor(
     override fun prefetchRecordings(loopStartTick: Long) =
         withHandle(Unit) { native.recordingsPrefetch(it, loopStartTick) }
 
-    override fun close() = synchronized(lock) {
-        if (closed) return@synchronized
-        // Mark first, so nothing that later reads the flag can observe a handle that has already been released.
-        closed = true
-        native.synthRelease(handle)
+    override fun close() = synchronized(controlLock) {
+        synchronized(renderLock) {
+            if (closed) return@synchronized
+            // Mark first, so nothing that later reads the flag can observe a handle that has already been released.
+            closed = true
+            native.synthRelease(handle)
+        }
     }
 
     private fun materializeUriToCache(uri: Uri, context: Context): String? {
