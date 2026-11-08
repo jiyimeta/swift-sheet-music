@@ -634,9 +634,10 @@ if !isAppleFree {
 // `RecordingStretcher`. Apple and Android both read recordings through it: on Apple the FFT is Accelerate's vDSP, on
 // Android Signalsmith Linear's own C++ FFT, which `fft.h` falls back to when no platform FFT is defined. Both settings
 // are platform conditions rather than `unsafeFlags`, which would stop a host from resolving this package by version
-// — so there is no optimization flag either, and a Debug build runs the stretcher unoptimized. Off wasm and Windows,
-// where nothing plays recordings yet.
-if !isWasm, !isWindows {
+// — so there is no optimization flag either, and a Debug build runs the stretcher unoptimized. Off Windows, where
+// nothing plays recordings yet. Declared in the wasm shape as it always was — the Apple products there name it —
+// though nothing in the wasm graph builds it.
+if !isWindows {
     let applePlatforms: [Platform] = [.macOS, .iOS, .tvOS, .watchOS, .visionOS, .macCatalyst]
     targets += [
         .target(
