@@ -150,7 +150,9 @@ internal class SwiftySynthDriver internal constructor(
 
     /**
      * One crossing for both synths, this driver's lock and then the metronome's held across it — in this order only,
-     * and nothing else holds two drivers' locks — so neither is closed under the render.
+     * and nothing else holds two drivers' locks — so neither is closed under the render. False when the native render
+     * left the arrays untouched (an unknown handle, an array too short), so the caller renders another way rather than
+     * sending the last block again.
      */
     override fun renderMix(
         metronome: SynthDriver?,
@@ -164,7 +166,7 @@ internal class SwiftySynthDriver internal constructor(
         val click = metronome as? SwiftySynthDriver
         if (metronome != null && click == null) return false
         return withHandle(false) { h ->
-            if (click == null || click === this) {
+            val rendered = if (click == null || click === this) {
                 native.nativeRenderMix(h, 0L, false, frameCount, left, right, metronomeLeft, metronomeRight)
             } else {
                 synchronized(click.lock) {
@@ -175,7 +177,7 @@ internal class SwiftySynthDriver internal constructor(
                     )
                 }
             }
-            true
+            rendered == frameCount
         }
     }
 

@@ -17,6 +17,8 @@ class SwiftySynthDriverRecordingsTest {
         var commitResult = 0
         var alignmentResult = 0
         var speed = 0.0
+        /** What `nativeRenderMix` answers; null answers the frames asked for. */
+        var renderResult: Int? = null
 
         override fun synthRelease(handle: Long) { calls += "release($handle)" }
         override fun synthLoadSoundFont(handle: Long, path: String) = 0
@@ -36,7 +38,7 @@ class SwiftySynthDriverRecordingsTest {
             left: FloatArray, right: FloatArray, metronomeLeft: FloatArray, metronomeRight: FloatArray,
         ): Int {
             calls += "renderMix($scoreHandle,$metronomeHandle,$metronomeAudible,$frames)"
-            return frames
+            return renderResult ?: frames
         }
         override fun recordingsClear(handle: Long) { calls += "clear($handle)" }
         override fun recordingsStage(
@@ -123,6 +125,21 @@ class SwiftySynthDriverRecordingsTest {
         assertEquals(listOf("renderMix(7,9,true,480)", "release(9)", "renderMix(7,0,false,480)"), natives.calls)
         score.close()
         assertFalse("a closed score synth renders nothing", score.renderMix(null, false, 480, buffers[0], buffers[1], buffers[2], buffers[3]))
+    }
+
+    @Test fun `renderMix fails when the native render left the arrays untouched`() {
+        val natives = Natives()
+        val score = SwiftySynthDriver(7L, natives)
+        val click = SwiftySynthDriver(9L, natives)
+        val buffers = List(4) { FloatArray(480) }
+        natives.renderResult = 0
+        assertFalse(score.renderMix(click, true, 480, buffers[0], buffers[1], buffers[2], buffers[3]))
+        assertFalse("alone too", score.renderMix(null, false, 480, buffers[0], buffers[1], buffers[2], buffers[3]))
+        natives.renderResult = 479
+        assertFalse(
+            "a short render is not a block",
+            score.renderMix(null, false, 480, buffers[0], buffers[1], buffers[2], buffers[3]),
+        )
     }
 
     @Test fun `the notated clock goes to the synth's handle, and is NaN once it is closed`() {
