@@ -1057,6 +1057,9 @@ class AndroidPlaybackEngine internal constructor(
     private fun retakeScoreSnapshot(scoreHandle: Long) {
         releaseScoreSnapshot()
         preparedScoreSnapshot.set(jniBridge.snapshotScore(scoreHandle))
+        // The score synth converts between its warped clock and the notated one over the score its sequence comes
+        // from ([notatedSeconds]); both callers have just loaded that sequence and nothing is rendering yet.
+        synthEngine?.synthDriver?.setTransportScore(transportScoreHandle)
     }
 
     private fun releaseScoreSnapshot() {
@@ -2264,6 +2267,32 @@ class AndroidPlaybackEngine internal constructor(
      * on a score synth that plays recordings. Time is then reported on the warped clock ([setAlignment]).
      */
     val hasAlignment: Boolean get() = alignedClock() != null
+
+    /**
+     * The notated second — the score's own timeline, repeats folded — that a reported one stands for, reported being
+     * the clock [currentTimeSeconds] and [totalTimeSeconds] speak. Mirrors Apple's
+     * `PlaybackEngine.notatedSeconds(forReportedSeconds:)`: without an alignment ([hasAlignment]) that clock is the
+     * notated timeline's and this is the identity. With one, a reported second is a warped second on the transport's
+     * clock, repeats played out; it is taken back through the warp to the transport and onto the notated timeline, so
+     * a second in a repeat's later pass maps to that pass's notated second (which a seek then plays at its first
+     * occurrence). The arithmetic is the score synth's (`HostedSynth.notatedSeconds(atOutput:)`).
+     */
+    fun notatedSeconds(reportedSeconds: Double): Double {
+        val clock = alignedClock() ?: return reportedSeconds
+        return clock.notatedSecondsAtOutput(reportedSeconds).takeIf { !it.isNaN() } ?: reportedSeconds
+    }
+
+    /**
+     * The reported second at which notated second [notatedSeconds] plays — the other way round from the conversion
+     * above: the identity without an alignment. With one, a notated second inside a repeated passage plays once per
+     * pass, and this is its FIRST occurrence, where a seek to it lands; what a host reads to place the score's own
+     * marks on a seek bar that [totalTimeSeconds] spans. Mirrors Apple's
+     * `PlaybackEngine.reportedSeconds(forNotatedSeconds:)`.
+     */
+    fun reportedSeconds(notatedSeconds: Double): Double {
+        val clock = alignedClock() ?: return notatedSeconds
+        return clock.outputSecondsAtNotated(notatedSeconds).takeIf { !it.isNaN() } ?: notatedSeconds
+    }
 
     /** The score synth when an alignment is set and it keeps the warped clock; null otherwise. */
     private fun alignedClock(): SynthDriver? {

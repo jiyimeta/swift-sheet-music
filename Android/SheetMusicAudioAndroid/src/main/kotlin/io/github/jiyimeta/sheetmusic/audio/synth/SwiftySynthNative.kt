@@ -59,6 +59,9 @@ internal interface SynthNativeCalls {
     fun currentOutputSeconds(handle: Long): Double = 0.0
     fun outputSecondsAtTick(handle: Long, tick: Long): Double = 0.0
     fun tickAtOutputSeconds(handle: Long, seconds: Double): Long = 0L
+    fun setTransportScore(handle: Long, scoreHandle: Long) {}
+    fun notatedSecondsAtOutput(handle: Long, seconds: Double): Double = seconds
+    fun outputSecondsAtNotated(handle: Long, seconds: Double): Double = seconds
     fun recordingsPrefetch(handle: Long, loopStartTick: Long) {}
 }
 
@@ -121,6 +124,12 @@ internal object SwiftySynthNative : SynthNativeCalls {
         SwiftJavaJNI.nativeSynthOutputSecondsAtTick(handle, tick)
     override fun tickAtOutputSeconds(handle: Long, seconds: Double): Long =
         SwiftJavaJNI.nativeSynthTickAtOutputSeconds(handle, seconds)
+    override fun setTransportScore(handle: Long, scoreHandle: Long) =
+        SwiftJavaJNI.nativeSynthSetTransportScore(handle, scoreHandle)
+    override fun notatedSecondsAtOutput(handle: Long, seconds: Double): Double =
+        SwiftJavaJNI.nativeSynthNotatedSecondsAtOutput(handle, seconds)
+    override fun outputSecondsAtNotated(handle: Long, seconds: Double): Double =
+        SwiftJavaJNI.nativeSynthOutputSecondsAtNotated(handle, seconds)
     override fun recordingsPrefetch(handle: Long, loopStartTick: Long) =
         SwiftJavaJNI.nativeSynthRecordingsPrefetch(handle, loopStartTick)
 

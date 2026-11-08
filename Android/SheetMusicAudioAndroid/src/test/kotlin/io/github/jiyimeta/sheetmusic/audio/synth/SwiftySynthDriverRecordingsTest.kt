@@ -60,6 +60,15 @@ class SwiftySynthDriverRecordingsTest {
         }
         override fun countInDuration(handle: Long, seconds: Double) = seconds * 2
         override fun countInSpeed(handle: Long, seconds: Double) = speed
+        override fun setTransportScore(handle: Long, scoreHandle: Long) { calls += "transportScore($handle,$scoreHandle)" }
+        override fun notatedSecondsAtOutput(handle: Long, seconds: Double): Double {
+            calls += "notated($handle,$seconds)"
+            return seconds - 1
+        }
+        override fun outputSecondsAtNotated(handle: Long, seconds: Double): Double {
+            calls += "output($handle,$seconds)"
+            return seconds + 1
+        }
     }
 
     @Test fun `a track list is staged in order and committed with the bus and the reader's transposition`() {
@@ -114,6 +123,21 @@ class SwiftySynthDriverRecordingsTest {
         assertEquals(listOf("renderMix(7,9,true,480)", "release(9)", "renderMix(7,0,false,480)"), natives.calls)
         score.close()
         assertFalse("a closed score synth renders nothing", score.renderMix(null, false, 480, buffers[0], buffers[1], buffers[2], buffers[3]))
+    }
+
+    @Test fun `the notated clock goes to the synth's handle, and is NaN once it is closed`() {
+        val natives = Natives()
+        val driver = SwiftySynthDriver(7L, natives)
+        driver.setTransportScore(42L)
+        assertEquals(2.0, driver.notatedSecondsAtOutput(3.0), 0.0)
+        assertEquals(4.0, driver.outputSecondsAtNotated(3.0), 0.0)
+        assertEquals(listOf("transportScore(7,42)", "notated(7,3.0)", "output(7,3.0)"), natives.calls)
+
+        driver.close()
+        driver.setTransportScore(43L)
+        assertTrue(driver.notatedSecondsAtOutput(3.0).isNaN())
+        assertTrue(driver.outputSecondsAtNotated(3.0).isNaN())
+        assertEquals("nothing reaches a released handle", listOf("release(7)"), natives.calls.drop(3))
     }
 
     @Test fun `a count-in reports the warped speed, or none`() {

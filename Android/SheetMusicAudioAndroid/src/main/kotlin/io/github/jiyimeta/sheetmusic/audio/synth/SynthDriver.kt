@@ -91,6 +91,22 @@ internal interface SynthDriver {
     fun tickAtOutputSeconds(seconds: Double): Long = -1L
 
     /**
+     * Lays the attached sequence over the notated timeline of the score behind [scoreHandle] — the score it was
+     * rendered from — for [notatedSecondsAtOutput] and [outputSecondsAtNotated]. Walks the whole score: call it when
+     * that score changes, while nothing renders.
+     */
+    fun setTransportScore(scoreHandle: Long) {}
+
+    /**
+     * The notated second (the score's own timeline, repeats folded) warped second [seconds] stands for; NaN when this
+     * driver has no such clock.
+     */
+    fun notatedSecondsAtOutput(seconds: Double): Double = Double.NaN
+
+    /** The warped second notated second [seconds] first plays at; NaN when this driver has no such clock. */
+    fun outputSecondsAtNotated(seconds: Double): Double = Double.NaN
+
+    /**
      * How a count-in of [seconds] (its click sequence's own length) plays into where the sequence is parked: how long
      * the score waits, and the speed the click counts at under a warp (null without one: the user's rate). Null when
      * this driver cannot tell, and the caller divides by the rate as it always did.

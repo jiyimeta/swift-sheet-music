@@ -187,6 +187,15 @@ internal class SwiftySynthDriver internal constructor(
     override fun tickAtOutputSeconds(seconds: Double): Long =
         withHandle(-1L) { native.tickAtOutputSeconds(it, seconds) }
 
+    override fun setTransportScore(scoreHandle: Long) =
+        withHandle(Unit) { native.setTransportScore(it, scoreHandle) }
+
+    override fun notatedSecondsAtOutput(seconds: Double): Double =
+        withHandle(Double.NaN) { native.notatedSecondsAtOutput(it, seconds) }
+
+    override fun outputSecondsAtNotated(seconds: Double): Double =
+        withHandle(Double.NaN) { native.outputSecondsAtNotated(it, seconds) }
+
     override fun countIn(seconds: Double): CountInTiming? = withHandle(null) { h ->
         val speed = native.countInSpeed(h, seconds)
         CountInTiming(durationSeconds = native.countInDuration(h, seconds), speed = speed.takeIf { it > 0.0 })

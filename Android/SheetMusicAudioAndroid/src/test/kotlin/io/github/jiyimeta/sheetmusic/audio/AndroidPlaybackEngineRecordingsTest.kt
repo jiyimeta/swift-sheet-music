@@ -49,6 +49,7 @@ private class RecordingsSynth(val base: FakeSynthDriver = FakeSynthDriver()) : S
     val renderMixCalls = mutableListOf<Pair<SynthDriver?, Boolean>>()
     val prefetchCalls = mutableListOf<Long>()
     val countInCalls = mutableListOf<Double>()
+    val transportScores = mutableListOf<Long>()
     var acceptsTracks = true
     var acceptsAlignment = true
     var currentTick = 0L
@@ -88,6 +89,13 @@ private class RecordingsSynth(val base: FakeSynthDriver = FakeSynthDriver()) : S
     override fun currentOutputSeconds(): Double = warp(currentTick / 480.0)
     override fun outputSecondsAtTick(tick: Long): Double = warp(tick / 480.0)
     override fun tickAtOutputSeconds(seconds: Double): Long = ((if (aligned) seconds / 2 else seconds) * 480).toLong()
+
+    // The notated clock: half speed back to the transport, then a repeat's worth (0.25 s) folded off — whatever the
+    // synth's own arithmetic, the engine is only to hand it on. The fake answers so even unaligned, so an engine that
+    // asked it without an alignment would show.
+    override fun setTransportScore(scoreHandle: Long) { transportScores += scoreHandle }
+    override fun notatedSecondsAtOutput(seconds: Double): Double = seconds / 2 - 0.25
+    override fun outputSecondsAtNotated(seconds: Double): Double = (seconds + 0.25) * 2
     override fun countIn(seconds: Double): CountInTiming {
         countInCalls += seconds
         return CountInTiming(durationSeconds = seconds * 2, speed = 0.5)
@@ -187,6 +195,42 @@ class AndroidPlaybackEngineRecordingsTest {
         engine.setAlignment(emptyList(), emptyList())
         assertFalse(engine.hasAlignment)
         assertEquals(2.0, engine.totalTimeSeconds.value, 1e-9)
+    }
+
+    @Test fun `reported and notated seconds are the identity without an alignment and the synth's clock under one`() =
+        runTest(scheduler) {
+            val engine = engine()
+            assertEquals("before a prepare", 3.0, engine.notatedSeconds(3.0), 0.0)
+            assertEquals(3.0, engine.reportedSeconds(3.0), 0.0)
+            engine.prepare(1L)
+            assertEquals("prepared, unaligned", 3.0, engine.notatedSeconds(3.0), 0.0)
+            assertEquals(3.0, engine.reportedSeconds(3.0), 0.0)
+
+            engine.setAlignment(halfSpeed, whole)
+            assertEquals(1.25, engine.notatedSeconds(3.0), 1e-9)
+            assertEquals(3.0, engine.reportedSeconds(1.25), 1e-9)
+
+            engine.setAlignment(emptyList(), emptyList())
+            assertEquals("cleared", 3.0, engine.notatedSeconds(3.0), 0.0)
+            assertEquals(3.0, engine.reportedSeconds(3.0), 0.0)
+        }
+
+    @Test fun `the synth converts over the score its sequence was rendered from, after a prepare and a swap`() =
+        runTest(scheduler) {
+            bridge.keepsSnapshots = true
+            val engine = engine()
+            engine.prepare(1L)
+            val synth = synths.single()
+            assertEquals("the prepared copy, not the host's handle", listOf(100L), synth.transportScores)
+
+            engine.replaceScore(1L)
+            assertEquals("the same synth, the swapped-in copy", listOf(100L, 101L), synths.single().transportScores)
+        }
+
+    @Test fun `without a copy kept the synth converts over the host's handle`() = runTest(scheduler) {
+        val engine = engine()
+        engine.prepare(7L)
+        assertEquals(listOf(7L), synths.single().transportScores)
     }
 
     @Test fun `a soloed recording silences the instruments and the bus reaches the synth`() = runTest(scheduler) {
