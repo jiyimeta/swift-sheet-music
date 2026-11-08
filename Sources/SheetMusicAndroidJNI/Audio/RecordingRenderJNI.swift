@@ -11,7 +11,12 @@
     ///
     /// Hand-written for the reason `nativeRender` is: one crossing per output block, nothing allocated. Both synths'
     /// locks are taken — the score's, then the metronome's, the one order any caller takes two in — *before* the four
-    /// arrays are pinned, so nothing waits inside a critical region.
+    /// arrays are pinned, so nothing waits on a lock inside a critical region.
+    ///
+    /// One wait is left inside it: the recordings are read from their mappings (`MappedRecording`), and a page that is
+    /// not resident faults there and waits for the disk, with the arrays pinned and the VM held off a collection. What
+    /// keeps that rare is the read-ahead — the mapping's sequential advice and the engine's `prefetchRecordings` after
+    /// a play, a seek and every few polls — so keep that cadence when changing either side.
     @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_synth_SwiftySynthNative_nativeRenderMix")
     // swiftlint:disable:next identifier_name function_parameter_count
     public func Java_io_github_jiyimeta_sheetmusic_audio_synth_SwiftySynthNative_nativeRenderMix(

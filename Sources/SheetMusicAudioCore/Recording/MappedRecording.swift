@@ -131,6 +131,10 @@ public final class MappedRecording: @unchecked Sendable {
 #else
     extension MappedRecording {
         /// The file read into memory whole, on a platform without `mmap`.
+        ///
+        /// Right for WebAssembly, which has no mapping to fall back on. Windows does: before it plays recordings, give
+        /// it a `CreateFileMapping` / `MapViewOfFile` storage of its own, since reading the whole file here makes a
+        /// long recording cost its full size in resident memory and blocks the call that maps it until the read ends.
         final class Storage {
             let base: UnsafeMutableRawPointer
             let length: Int
