@@ -22,6 +22,44 @@ and this project adheres to
   shared a table no longer do, or a track joins another's — restarts the groups it changes. A backend that does not
   implement the new requirement plays every track from the shared table.
 
+## [4.30.0] - 2026-11-07
+
+### Added
+
+- **`nativeRangeBoxFrames(scoreHandle:selectionBytes:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeRangeBoxFrames`) —
+  the outline a range selection draws, which Android had no way to draw: for the cached layout, one
+  `LayoutSystem.rangeBoxRect(selectedIDs:metrics:)` per system the selection reaches, moved by the system's origin into
+  document millimetres, plus `StaffMetrics.rangeBoxLineWidth` once, as a **`RangeBoxFramesCodec`** payload
+  (`SheetMusicEditWire`; `lineWidthMm`, then `frames` of `RangeBoxFrameWire` `xMm`/`yMm`/`widthMm`/`heightMm`). It
+  takes the `SelectionTintCodec` payload `nativeEncodeDrawProgram` takes, re-addressed past the cache entry's hidden
+  staves and expanded the same way, so the box surrounds exactly what the tint lights. The wire sits where
+  `:SheetMusicAudioAndroid`'s `editGeometry` codegen scans, so the AAR carries a Kotlin `RangeBoxFramesCodec`. Empty
+  when there is no box: an unknown handle, no cached layout, an undecodable payload, or no selected note or rest laid
+  out.
+- **`nativeSelectionInkFrames(scoreHandle:itemBytes:)`** (Android JNI, Kotlin `SheetMusicJNI.nativeSelectionInkFrames`)
+  — where a selected clef or engraved element (a mark) is drawn, so an Android host can hang a control off the glyph
+  the reader selected: for the cached layout, `ScoreHitTester.clefHitRects(for:)` for a `.clef` or
+  `elementHitRects(for:)` for an `.element`, one rect per place drawn (a hairpin across a system break, a signature and
+  its courtesy announcement), in document millimetres, plus `StaffMetrics.sp` once, as a **`SelectionInkFramesCodec`**
+  payload (`SheetMusicEditWire`; `spMm`, then `frames` of `SelectionInkFrameWire` `xMm`/`yMm`/`widthMm`/`heightMm`).
+  It takes the `ScoreItemIDCodec` payload `nativeEditingCaretFrame` takes and re-addresses it past the cache entry's
+  hidden staves the same way — one function both verbs now call. The wire sits where `:SheetMusicAudioAndroid`'s
+  `editGeometry` codegen scans, so the AAR carries a Kotlin `SelectionInkFramesCodec`. Empty for an unknown handle, no
+  cached layout, undecodable bytes, an item on a hidden staff, any item that is not a clef or an element, or one drawn
+  nowhere.
+
+### Fixed
+
+- **The Android mirror edit session reads a pasted range.** `nativeBeginEditSession` built its `ScoreEditSession` with
+  the refusing payload reader, so a relayed `.pasteRange` (and the undo after it) was refused with `.noPayloadReader`
+  and every Android paste fell into a full resync. The session now reads payloads with `MSCXParser.parse`.
+- **`.writeNote` unties the note it writes over.** Typing a pitch over a tied note used to re-pitch it with a bare
+  `SetNotePitch`, which kept `tieForward` / `tieBack`; `TiePlanner` pairs ties by rank rather than by pitch, so
+  `DanglingTies` saw nothing to seal. The neighbour then never sounded (its `tieBack` suppresses the note-on), and the
+  next `.setNotePitch` on either note walked the leftover chain and moved both. The write now removes notehead 0's ties
+  at both ends first, in the same undo step and whatever the new pitch — the written note is a new note, as in
+  MuseScore. An untied write still plans to the bare command it always did.
+
 ## [4.29.2] - 2026-11-06
 
 ### Fixed
