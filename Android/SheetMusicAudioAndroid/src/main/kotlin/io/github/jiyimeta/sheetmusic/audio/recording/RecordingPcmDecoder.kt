@@ -118,6 +118,10 @@ class RecordingPcmDecoder internal constructor(
                         outputRate = out.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                         floatOutput = out.containsKey(MediaFormat.KEY_PCM_ENCODING) &&
                             out.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT
+                        // The file is named for the rate the decoder puts out, which HE-AAC's SBR doubles from the
+                        // container's: a file an earlier decode wrote is found only under that rate.
+                        writer.existingAfterFormatChange(dir, cacheKey, sourceRate, outputRate, writing = handle != 0L)
+                            ?.let { return it }
                     }
                     outIndex >= 0 -> {
                         val buffer = codec.getOutputBuffer(outIndex)
@@ -167,6 +171,22 @@ class RecordingPcmDecoder internal constructor(
     private companion object {
         const val TIMEOUT_MICROS = 10_000L
     }
+}
+
+/**
+ * A valid cache file for [cacheKey] at the decoder's [outputRate] once its output format is known, to be returned
+ * instead of decoding: null when that rate is the container's [sourceRate], already looked up before the decode, or
+ * while a file is being [writing] (a format that changes mid-stream). Apart so a JVM test can pin it.
+ */
+internal fun RecordingPcmWriterCalls.existingAfterFormatChange(
+    directory: String,
+    cacheKey: String,
+    sourceRate: Int,
+    outputRate: Int,
+    writing: Boolean,
+): String? {
+    if (writing || outputRate == sourceRate) return null
+    return existing(directory, cacheKey, outputRate.toDouble()).takeIf { it.isNotEmpty() }
 }
 
 /** The sample conversions a decoded buffer goes through before the writer, apart so a JVM test can pin them. */
