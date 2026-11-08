@@ -560,8 +560,8 @@ final class Probe { // swiftlint:disable:this type_body_length
     }
 
     /// A held preview started in the same moment as a pause. A paused FluidSynth player sent All Sound Off in its next
-    /// rendered block — on the channels it sent a note-on on, and only those (`fluid_player_callback`) — which the
-    /// preview's note-on must not be caught by; a SwiftySynth sequence cuts at `stop()`, and this still checks it
+    /// rendered block, and the engine held previews back until that block had run; a SwiftySynth sequence cuts at
+    /// `stop()`, so the preview now goes to the synth at once, and this checks nothing renders after it to cut it
     /// (folino docs/superpowers/specs/2026-10-03-ssm-windows-minor-design.md §4). So playback starts AT a note of the
     /// previewed staff: its channel is then one the player played on, as in a reader paused mid-piece.
     /// Ten tries: a lost one depends on when the next block comes.
