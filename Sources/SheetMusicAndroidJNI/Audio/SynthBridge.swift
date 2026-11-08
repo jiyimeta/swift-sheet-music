@@ -84,6 +84,7 @@ public func nativeSynthCreate(sampleRate: Int32, voicing: Int32) -> Int64 {
 public func nativeSynthRelease(handle: Int64) {
     SynthBridge.synth(handle)?.close()
     SynthBridge.release(HostedSynth.self, handle)
+    RecordingBridge.forget(handle)
 }
 
 /// Loads the SF2 file at `path` (read in place, memory-mapped). 0 on success, -1 when the file is missing, does not
