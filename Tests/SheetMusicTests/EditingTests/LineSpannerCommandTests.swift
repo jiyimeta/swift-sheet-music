@@ -2,9 +2,9 @@
 import Testing
 
 /// The eight line spanners (63 hairpin, 64 pedal, 66 ottava, 67 textLine, 68 trill, 69 vibrato, 70 palmMute,
-/// 71 letRing) are one shape with eight templates: a `.spanner` `VoiceElement` inserted immediately before the
-/// range's first chord, ending at the END TICK of its last element. The harness below asserts that shape once;
-/// each case adds its own payload assertion via one `Row` in `commands`.
+/// 71 letRing) and the gradual tempo change are one shape with nine templates: a `.spanner` `VoiceElement` inserted
+/// immediately before the range's first chord, ending at the END TICK of its last element. The harness below asserts
+/// that shape once; each case adds its own payload assertion via one `Row` in `commands`.
 @Suite("Line spanner commands")
 struct LineSpannerCommandTests {
     private static let flute = StaffAddress(partIndex: 0, staffIndexInPart: 0)
@@ -73,6 +73,15 @@ struct LineSpannerCommandTests {
         Row(
             name: "letRing", build: { SetLetRing(over: $0) },
             kind: .letRing, rawType: "LetRing", payload: { _ in true },
+        ),
+        // Not one of the spec's eight, but the same engine and so the same shape and refusals.
+        Row(
+            name: "gradualTempoChange", build: { SetGradualTempoChange(over: $0, type: .ritardando, factor: 0.5) },
+            kind: .gradualTempoChange, rawType: "GradualTempoChange",
+            payload: {
+                $0.gradualTempoChange == Spanner.GradualTempoChangePayload(type: .ritardando, factor: 0.5)
+                    && $0.beginText == "rit."
+            },
         ),
     ]
 

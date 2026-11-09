@@ -7,6 +7,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`SetGradualTempoChange(over:type:factor:)`** — writes a gradual tempo change (rit., accel., rall., …) over a range,
+  placed like `SetTextLine` and the other line spanners and refused the same way (`.duplicateSpanner` where one already
+  begins, `.targetNotFound` for a range that resolves to nothing). It carries what MuseScore's palette puts on one: the
+  type, its abbreviation as the begin text and in parentheses as the continuation text (`rit.` / `(rit.)`), so it
+  draws the conventional label; `.undefined` writes a bare line. `factor` is the target tempo as a multiple of the
+  tempo where the change starts, `nil` for the type's default. The tempo map ramps over the new line and the MSCX
+  encoder writes it as `<Spanner type="GradualTempoChange">`. There is no `EditIntent` case for it yet.
+
 ## [4.32.0] - 2026-11-09
 
 ### Added

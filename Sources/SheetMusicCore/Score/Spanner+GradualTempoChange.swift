@@ -29,6 +29,27 @@ public enum GradualTempoChangeType: String, Sendable, CaseIterable {
         case .stringendo: 1.5
         }
     }
+
+    /// The abbreviation MuseScore's palette labels a change of this type with (`MASTER_TEMPO_CHANGE`,
+    /// `palette/internal/palettecreator.cpp:1444-1456`); `nil` for `.undefined`, which has no palette cell. A change
+    /// draws no label of its own (`GradualTempoChange::propertyDefault(Pid::BEGIN_TEXT)` is empty), so this is what an
+    /// inserted one carries as its begin text.
+    var paletteText: String? {
+        switch self {
+        case .undefined: nil
+        case .accelerando: "accel."
+        case .allargando: "allarg."
+        case .calando: "calando"
+        case .lentando: "lentando"
+        case .morendo: "morendo"
+        case .precipitando: "precipitando"
+        case .rallentando: "rall."
+        case .ritardando: "rit."
+        case .smorzando: "smorz."
+        case .sostenuto: "sost."
+        case .stringendo: "string."
+        }
+    }
 }
 
 extension Spanner {

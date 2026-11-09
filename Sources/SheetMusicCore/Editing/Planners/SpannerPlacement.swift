@@ -1,6 +1,6 @@
 import SheetMusicFoundation
 
-/// The one placement engine behind every spanner command (spec 2026-09-02 §3.2). Ten `set…` commands and one
+/// The one placement engine behind every spanner command (spec 2026-09-02 §3.2). Eleven `set…` commands and one
 /// `RemoveSpanner` are names over this; nothing else in the package decides where a spanner goes.
 ///
 /// Three storage forms, because MuseScore has three:
@@ -40,9 +40,10 @@ enum SpannerPlacement {
         switch kind {
         case .slur: .chordAnchored
         case .volta: .measureVolta
-        case .hairpin, .pedal, .ottava, .textLine, .chordTextLine, .trill, .vibrato, .palmMute, .letRing:
+        case .hairpin, .pedal, .ottava, .textLine, .chordTextLine, .trill, .vibrato, .palmMute, .letRing,
+             .gradualTempoChange:
             .voiceElement
-        case .glissando, .gradualTempoChange, .other: .voiceElement
+        case .glissando, .other: .voiceElement
         }
     }
 
@@ -64,7 +65,7 @@ enum SpannerPlacement {
     /// The command that writes `template` over `range`, its offsets filled in. Throws every refusal.
     ///
     /// `operation` is the refusing command's own type name — every caller passes `String(describing: Self.self)`,
-    /// the way `EditCommand.refused(_:)` stamps it for a command that refuses on its own. Eleven commands share
+    /// the way `EditCommand.refused(_:)` stamps it for a command that refuses on its own. Twelve commands share
     /// this engine, so a fixed literal here would tell a host "a spanner was refused" without saying which one.
     static func add(
         _ template: Spanner, over range: VoiceElementRange, in score: Score, operation: String,
