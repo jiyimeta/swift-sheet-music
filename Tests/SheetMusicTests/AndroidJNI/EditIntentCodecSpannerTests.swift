@@ -34,6 +34,10 @@ struct EditIntentCodecSpannerTests {
         .setLetRing(over: range),
         .removeSpanner(at: start, kind: .letRing),
         .removeSpanner(at: start, kind: .other),
+        // Index 96: both shapes of the factor, a slowing and a quickening type, and `.undefined`'s own spelling.
+        .setGradualTempoChange(over: range, type: .ritardando, factor: 0.844),
+        .setGradualTempoChange(over: range, type: .accelerando, factor: 1.25),
+        .setGradualTempoChange(over: range, type: .undefined, factor: nil),
     ]
 
     @Test("every spanner intent survives an encode/decode round trip", arguments: cases)
@@ -59,7 +63,25 @@ struct EditIntentCodecSpannerTests {
         #expect(EditIntentCodec.encode(.setPalmMute(over: range))[1] == 70)
         #expect(EditIntentCodec.encode(.setLetRing(over: range))[1] == 71)
         #expect(EditIntentCodec.encode(.removeSpanner(at: slot, kind: .slur))[1] == 72)
+        #expect(EditIntentCodec.encode(.setGradualTempoChange(over: range, type: .ritardando, factor: nil))[1] == 96)
         #expect(EditIntentCodec.encode(.setVolta(over: range, endings: [], text: nil)).count < 128)
+    }
+
+    @Test func `an unknown gradual tempo spelling is refused, and an unset factor decodes as nil`() throws {
+        var unknown = SetGradualTempoChangeIntentWire(range: Self.range, type: .ritardando, factor: nil)
+        unknown.type = "ritenuto"
+        #expect(throws: (any Error).self) {
+            try EditIntentCodec.decode(EditIntentWire.setGradualTempoChange(unknown).encodeToData())
+        }
+        var unset = SetGradualTempoChangeIntentWire(range: Self.range, type: .ritardando, factor: nil)
+        unset.factor = 0.5
+        guard case let .setGradualTempoChange(_, _, factor) = try EditIntentCodec.decode(
+            EditIntentWire.setGradualTempoChange(unset).encodeToData(),
+        ) else {
+            Issue.record("expected a setGradualTempoChange")
+            return
+        }
+        #expect(factor == nil)
     }
 
     /// The codec's first scalar array. An empty list must survive as an empty list (not as nil, not as [0]), and

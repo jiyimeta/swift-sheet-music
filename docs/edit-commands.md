@@ -137,7 +137,7 @@ own substantive logic.
 | `SetVibrato` | not in the example — host command registry | sugar |
 | `SetPalmMute` | not in the example — host command registry | sugar |
 | `SetLetRing` | not in the example — host command registry | sugar |
-| `SetGradualTempoChange` | not in the example — host command registry (a rit. / accel. line carrying the palette's abbreviation; no `EditIntent` case yet) | sugar |
+| `SetGradualTempoChange` | not in the example — host command registry (a rit. / accel. line carrying the palette's abbreviation; `EditIntent.setGradualTempoChange`, wire index 96) | sugar |
 | `RemoveSpanner` — unchanged: removes every matching slur in the chord's spanners list, not one ordinal; other kinds remove their standalone slot | not in the example — host command registry | sugar |
 | `SetChordSymbol` | not in the example — host command registry | sugar |
 | `SetTextVisible` | not in the example — a host's properties panel, on a selected text | partly sugar |

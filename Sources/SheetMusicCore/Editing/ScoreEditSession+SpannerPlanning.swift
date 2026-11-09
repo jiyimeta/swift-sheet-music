@@ -1,7 +1,8 @@
 import SheetMusicFoundation
 
-/// `ScoreEditSession`'s planning half for the parity project's spanner intents (62…72). Its own file for the
-/// reason `+MarkPlanning.swift` and `+RangePlanning.swift` exist: `+Planning.swift` sits at its line budget.
+/// `ScoreEditSession`'s planning half for the parity project's spanner intents (62…72, and 96, appended later on
+/// the same rules). Its own file for the reason `+MarkPlanning.swift` and `+RangePlanning.swift` exist:
+/// `+Planning.swift` sits at its line budget.
 ///
 /// Unlike every other planner in this project, none of these returns `nil`. The standing rule — an intent that
 /// restates the score plans to `.nothingToApply` rather than to a self-restoring undo entry — is met here by the
@@ -24,6 +25,8 @@ extension ScoreEditSession {
         case let .setVibrato(range, type): SetVibrato(over: range, type: type)
         case let .setPalmMute(range): SetPalmMute(over: range)
         case let .setLetRing(range): SetLetRing(over: range)
+        case let .setGradualTempoChange(range, type, factor):
+            SetGradualTempoChange(over: range, type: type, factor: factor)
         case let .removeSpanner(location, kind): RemoveSpanner(at: location, kind: kind)
         // Passes through for `removeSpanner`'s reason: "nothing is there" is the command's refusal.
         case let .removeSlur(id): RemoveSlur(id)

@@ -15,7 +15,11 @@ and this project adheres to
   type, its abbreviation as the begin text and in parentheses as the continuation text (`rit.` / `(rit.)`), so it
   draws the conventional label; `.undefined` writes a bare line. `factor` is the target tempo as a multiple of the
   tempo where the change starts, `nil` for the type's default. The tempo map ramps over the new line and the MSCX
-  encoder writes it as `<Spanner type="GradualTempoChange">`. There is no `EditIntent` case for it yet.
+  encoder writes it as `<Spanner type="GradualTempoChange">`.
+- **`EditIntent.setGradualTempoChange(over:type:factor:)` (wire index 96)** — the same edit as an intent, so a host
+  that relays intents (an Android or web mirror session) can write the line too. It follows the spanner group's rules:
+  a second one where one already begins is refused as `.duplicateSpanner`, and `removeSpanner(kind:
+  .gradualTempoChange)` takes it off. An unknown type spelling on the wire is a decode failure.
 
 ### Changed
 
