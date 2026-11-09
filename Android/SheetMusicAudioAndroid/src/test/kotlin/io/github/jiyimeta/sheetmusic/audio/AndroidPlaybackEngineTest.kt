@@ -1301,6 +1301,8 @@ class AndroidPlaybackEngineTest {
 
         assertEquals(PlaybackState.PLAYING, engine.state.value)
         assertEquals("cc(0,7,0)", synth.calls.last { it.startsWith("cc(0,7,") })
+        // Before `runTest` drains the scheduler, which a poll loop that is still PLAYING never lets go idle.
+        engine.teardown()
     }
 
     @Test
@@ -1315,6 +1317,8 @@ class AndroidPlaybackEngineTest {
         engine.playPreview(NoteID(StaffAddress(0, 0), 0, 0, 0, 0))
 
         assertFalse("got ${synth.calls}", synth.calls.any { it.startsWith("cc(0,7,") && it != "cc(0,7,0)" })
+        // Before `runTest` drains the scheduler, which a poll loop that is still PLAYING never lets go idle.
+        engine.teardown()
     }
 
     // T43 — instrument-params re-key: REAL (non-fallback) strip data.
