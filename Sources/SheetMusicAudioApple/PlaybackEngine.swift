@@ -2160,23 +2160,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         unroll.firstUnrolledTick(forNotated: tick)
     }
 
-    /// Where a seek to `tick` lands with a loop set. Playing, inside the loop — snapped to its start when `tick` is
-    /// outside it — so playback never leaves the section. Stopped or paused, at `tick` itself: the user is parking the
-    /// cursor, typically past the section to set a new B there, and snapping it back to A undid the tap (user report,
-    /// 2026-11-02 — only a second tap stuck, because the cursor no longer changed and nothing moved the reader's).
-    /// The loop takes over when playback starts: `play` begins a start outside the loop at the loop's start.
+    /// Where a seek to `tick` lands with a loop set — `LoopRange.seekTick(_:whilePlaying:)`, the rule the Windows
+    /// engine seeks by too: snapped into the loop while playing, where it was sent while stopped or paused (user
+    /// report, 2026-11-02 — only a second tap stuck, because the cursor no longer changed and nothing moved the
+    /// reader's).
     private func seekTick(forFrameTick tick: Int) -> Int {
-        state == .playing ? snapTickToLoop(tick) : tick
-    }
-
-    /// Clamp `tick` into the active loop region. Returns `tick`
-    /// unchanged when no loop is set or the tick is already inside.
-    private func snapTickToLoop(_ tick: Int) -> Int {
-        guard let loop = loopRange else { return tick }
-        if tick < loop.startTick || tick >= loop.endTick {
-            return loop.startTick
-        }
-        return tick
+        loopRange?.seekTick(tick, whilePlaying: state == .playing) ?? tick
     }
 
     /// Current playback position in seconds, derived from the

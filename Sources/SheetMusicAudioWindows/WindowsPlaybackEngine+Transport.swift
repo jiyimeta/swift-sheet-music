@@ -141,7 +141,8 @@ extension WindowsPlaybackEngine {
     public func pause() {
         core.shared.withLock { shared in
             if shared.state == .playing {
-                let resume = shared.reportedScoreTick
+                // Folded: a pause just past the loop's end parks where the wrap would have put it.
+                let resume = shared.foldedReportedScoreTick
                 shared.stopPlayers(silence: .cut)
                 shared.rewind(to: resume)
             }
@@ -159,15 +160,21 @@ extension WindowsPlaybackEngine {
         }
     }
 
-    /// Moves playback to `cursor` without changing play / pause state, snapped into an active loop — the Apple
-    /// engine's click-to-seek. While playing, the jump is carried out between two chunks, with notes off before it and
-    /// the channel state reasserted after the player's controller chase. A seek during a count-in ends it and the
-    /// score starts at `cursor` at once (the Apple SwiftySynth backend's `seek`).
+    /// Moves playback to `cursor` without changing play / pause state — the Apple engine's click-to-seek. With a loop
+    /// set it lands where `LoopRange.seekTick(_:whilePlaying:)` says, as the Apple engine's does: snapped into the loop
+    /// while playing, where it was sent while stopped or paused, so a tap past the section to set a new B stays there;
+    /// `play` then starts a cursor outside the loop at the loop's start. While playing, the jump is carried out between
+    /// two chunks, with notes off before it and the channel state reasserted after the player's controller chase. A
+    /// seek during a count-in ends it and the score starts at `cursor` at once (the Apple SwiftySynth backend's
+    /// `seek`).
     public func seek(to cursor: ScoreCursor) {
         guard let loaded, let frame = loaded.derivation.timeline.frame(forCursor: cursor) else { return }
-        let tick = loaded.derivation.unroll.firstUnrolledTick(forNotated: snapTickToLoop(frame.tick))
+        let unroll = loaded.derivation.unroll
+        // One lock for the state read and the move: the render thread stops the transport at the score's end, and a
+        // state read before that would snap a seek made after it into the loop.
         core.shared.withLock { shared in
-            shared.reposition(to: tick)
+            let notated = shared.loopRange?.seekTick(frame.tick, whilePlaying: shared.state == .playing) ?? frame.tick
+            shared.reposition(to: unroll.firstUnrolledTick(forNotated: notated))
         }
     }
 
@@ -229,12 +236,6 @@ extension WindowsPlaybackEngine {
             shared.loopRange = loop
             shared.transportLoop = projected
         }
-    }
-
-    /// Clamps a notated tick into the active loop, as the Apple engine's `snapTickToLoop` does.
-    private func snapTickToLoop(_ tick: Int) -> Int {
-        guard let loop = loopRange else { return tick }
-        return tick < loop.startTick || tick >= loop.endTick ? loop.startTick : tick
     }
 
     // MARK: Rate, tuning, transposition

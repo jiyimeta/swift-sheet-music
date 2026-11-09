@@ -73,10 +73,14 @@ extension Shared {
     }
 
     /// `reportedScoreTick` folded into the active loop, as the Apple engine's `currentTimeSeconds` folds its
-    /// sequencer's beat: a tick past the loop's end reads as where the wrap puts it.
+    /// sequencer's beat: a tick past the loop's end reads as where the wrap puts it. Only a playing transport wraps; a
+    /// stopped or paused one parked past the loop by a seek (`LoopRange.seekTick`) reads where it was sent, and a pause
+    /// parks at the folded tick, so neither needs folding.
     var foldedReportedScoreTick: Int {
         let tick = reportedScoreTick
-        guard let loop = transportLoop, tick >= loop.endTick, loop.endTick > loop.startTick else { return tick }
+        guard state == .playing, let loop = transportLoop, tick >= loop.endTick, loop.endTick > loop.startTick else {
+            return tick
+        }
         return loop.startTick + (tick - loop.startTick) % (loop.endTick - loop.startTick)
     }
 

@@ -7,6 +7,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`LoopRange.contains(_:)` and `LoopRange.seekTick(_:whilePlaying:)`** — the one rule for where a seek lands with an
+  A–B loop set: snapped to the loop's start while playing, where it was sent while stopped or paused. The Apple and
+  the Windows engine both seek by it.
+
+### Fixed
+
+- **The Windows engine's stopped or paused seek past an A–B loop stays where it was sent**, as the Apple engine does.
+  `WindowsPlaybackEngine.seek(to:)` used to snap it to the loop's start whatever the state, so a tap past the section
+  to set a new B landed on A. It now seeks by `LoopRange.seekTick(_:whilePlaying:)`, and the cursor and the current
+  time read where the seek put it; playing from there starts at the loop's start, as before. A pause just past B
+  reads and resumes where the loop's wrap would have put it. The Android engine (`AndroidPlaybackEngine.seek`) still
+  snaps a stopped seek.
+
 ## [4.33.0] - 2026-11-09
 
 ### Added
