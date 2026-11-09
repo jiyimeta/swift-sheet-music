@@ -32,8 +32,9 @@ struct StaffMeasureBuilder {
     private var pendingAfterGraceCount: [Int: Int] = [:]
     /// Each positional voice's tuplets, grouped as its chords and rests arrive (`MusicXMLTupletTracker`).
     private var tupletTrackers: [Int: MusicXMLTupletTracker] = [:]
-    /// Each positional voice's open beam, as the element index of the chord that began it (MuseScore's `currBeams`).
-    private var openBeams: [Int: Int] = [:]
+    /// Each positional voice's open beam, as the element indices of its chords and rests, the chord that began it first
+    /// (MuseScore's `currBeams`, one per voice and kept for the measure only, `P2:2772`, `7083-7087`).
+    private var openBeams: [Int: [Int]] = [:]
     /// Each positional voice's two-note tremolo waiting for its second note, as the element index of its first
     /// (MuseScore's `m_tremStart`).
     private var openTremolos: [Int: Int] = [:]
@@ -101,24 +102,45 @@ struct StaffMeasureBuilder {
         return padding
     }
 
-    /// After the voice's last chord was appended: its `<stem>` goes where MuseScore's `handleBeamAndStemDir` puts it
-    /// (`P2:2475-2538`). A note that begins a beam gives the beam its direction (`Chord.beamStemDirection`); one no
-    /// beam holds, its own (`Chord.stemDirection`); one inside a beam, nothing. A begin while a beam is open, or a
-    /// note with no beam inside one, drops the open beam and the direction it was given. A rest leaves the beam
-    /// open, as MuseScore beams no rest here.
-    mutating func applyStem(_ stem: MusicXMLStemBeam, toVoice voiceId: String) {
+    /// After the voice's last chord or rest was appended: its `<beam>` and `<stem>` go where MuseScore's
+    /// `handleBeamAndStemDir` puts them (`P2:2475-2539`).
+    ///
+    /// A chord starts at its note's beam mode, an `end` read as `auto` ("better not to force beam end",
+    /// `findOrCreateChord`, `P2:6502-6507`). A `begin` opens a beam, dropping one still open. Inside a beam, a note
+    /// whose mode places it in none — `auto` — drops the beam, and any other joins it. A note no beam holds then takes
+    /// `stem.unbeamedMode` and sets its own stem direction (`Chord.stemDirection`); the note that begins a beam gives
+    /// the beam the direction instead (`Chord.beamStemDirection`), and the others in it set none. An `end` closes the
+    /// beam, its members keeping their modes.
+    ///
+    /// A rest joins the voice's open beam at `mid` (`P2:7214-7226`); outside one it keeps its default — MuseScore's
+    /// `no` for a rest, which its writer leaves out and the MSCX reader reads as `auto`.
+    mutating func applyBeamAndStem(_ stem: MusicXMLStemBeam, toVoice voiceId: String) {
         let idx = internVoice(voiceId)
-        guard let elementIndex = anchors[idx].last?.elementIndex,
-              case var .chord(chord) = voices[idx][elementIndex], !chord.notes.isEmpty
+        guard let elementIndex = anchors[idx].last?.elementIndex, case var .chord(chord) = voices[idx][elementIndex]
         else { return }
+        guard !chord.notes.isEmpty else {
+            guard openBeams[idx] != nil else { return }
+            chord.beamMode = .mid
+            openBeams[idx]?.append(elementIndex)
+            voices[idx][elementIndex] = .chord(chord)
+            return
+        }
+        chord.beamMode = stem.beamMode == .end ? .auto : stem.beamMode
         if stem.beamMode == .begin {
             dropBeam(voice: idx)
-            openBeams[idx] = elementIndex
+            openBeams[idx] = []
             chord.beamStemDirection = stem.direction
-        } else if stem.beamMode == .none {
-            dropBeam(voice: idx)
         }
-        if openBeams[idx] == nil { chord.stemDirection = stem.direction }
+        if openBeams[idx] != nil {
+            switch stem.beamMode {
+            case .begin, .mid, .end, .begin16, .begin32: openBeams[idx]?.append(elementIndex)
+            case .auto, .none: dropBeam(voice: idx)
+            }
+        }
+        if openBeams[idx] == nil {
+            chord.stemDirection = stem.direction
+            chord.beamMode = stem.unbeamedMode
+        }
         voices[idx][elementIndex] = .chord(chord)
         if stem.beamMode == .end { openBeams[idx] = nil }
     }
@@ -157,11 +179,16 @@ struct StaffMeasureBuilder {
         if chord.duration != .measure { chord.duration = NoteDuration.canonical(chord.duration.asFraction) }
     }
 
-    /// Ends the voice's open beam unfinished (`removeBeam`), taking back the direction its first chord gave it.
+    /// Ends the voice's open beam unfinished (`removeBeam`, `P2:2462-2469`): every member is set to `no` — a rest's
+    /// `no` being its default, read as `auto` — and the direction the first chord gave the beam goes with it.
     private mutating func dropBeam(voice idx: Int) {
-        guard let lead = openBeams.removeValue(forKey: idx), case var .chord(chord) = voices[idx][lead] else { return }
-        chord.beamStemDirection = nil
-        voices[idx][lead] = .chord(chord)
+        guard let members = openBeams.removeValue(forKey: idx) else { return }
+        for (position, index) in members.enumerated() {
+            guard case var .chord(member) = voices[idx][index] else { continue }
+            member.beamMode = member.notes.isEmpty ? .auto : .none
+            if position == 0 { member.beamStemDirection = nil }
+            voices[idx][index] = .chord(member)
+        }
     }
 
     /// A rest of `padding`, from `start`, that joins the tuplet the voice stopped last; nothing for zero.
@@ -268,6 +295,10 @@ struct StaffMeasureBuilder {
             let padding = tracker.finish()
             settled.tupletTrackers[idx] = tracker
             settled.appendPadding(padding, voice: idx, at: settled.anchors[idx].last?.end ?? .zeroTick)
+        }
+        // A beam the measure leaves open is dropped, so none extends into the next measure (`P2:2938-2943`).
+        for idx in settled.openBeams.keys.sorted() {
+            settled.dropBeam(voice: idx)
         }
         var final = settled.voices
         // The end bar line goes into the first voice, whichever voice wrote the last note (`P2:5819-5831`).
