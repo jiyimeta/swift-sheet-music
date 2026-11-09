@@ -157,6 +157,10 @@ public final class LayoutCache: @unchecked Sendable {
         let synthesizedEndBarLineIndex: Int?
         let newClef: NotatedClef
         let newKey: Int
+        /// `MeasurePlacement.relocations` / `.invisibleRelocations` / `.crossStaffBeams`, restored on a hit.
+        var relocations: [Int: Int] = [:]
+        var invisibleRelocations: [Int: Int] = [:]
+        var crossStaffBeams: [CrossStaffBeam] = []
     }
 
     /// One system's cached inputs and outputs. The cached `system`
@@ -350,5 +354,9 @@ public final class LayoutCache: @unchecked Sendable {
         /// The chord in the bar before that a breath at this bar's head names (`LayoutEngine.barHeadBreathOwners`),
         /// which lives in the bar before rather than in `measure`. Empty for a bar that opens with no breath.
         var barHeadBreathOwners: [Int?] = []
+        /// The chords of this bar drawn on a sibling staff, with that staff's clef at each (`LayoutEngine.movedChords`)
+        /// — the clef is the sibling's, so a clef change on the other staff moves these notes without touching
+        /// `measure`. Empty for a bar where nothing moves.
+        var movedChords: [VoiceSlot: MovedChordPlacement] = [:]
     }
 }

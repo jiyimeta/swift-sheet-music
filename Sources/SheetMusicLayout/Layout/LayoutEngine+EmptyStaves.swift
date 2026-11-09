@@ -8,14 +8,13 @@ import SheetMusicCore
 /// part's `Part.hideWhenEmpty`, where `auto` follows the score's `ScoreStyle.hideEmptyStaves` — except in the first
 /// system (of the score, or after a section break) while `dontHideStavesInFirstSystem` is on. A staff that may hide
 /// stays when it is not empty in the system (`computeShowSysStaff`, `:602-669`): a staff spanner overlaps the system,
-/// a measure of it holds content (`Measure::isEmpty`, `dom/measure.cpp:2448-2502`), or — when its part hides its staves
-/// only together — another staff of the part holds content. A system left with no staff at all gets back its
-/// `Staff.showIfSystemEmpty` staves, or else its first.
+/// a measure of it holds content (`Measure::isEmpty`, `dom/measure.cpp:2448-2502`), a sibling's chord is drawn on it
+/// (`Chord.staffMove`), or — when its part hides its staves only together — another staff of the part holds content. A
+/// system left with no staff at all gets back its `Staff.showIfSystemEmpty` staves, or else its first.
 ///
 /// What this leaves out: MuseScore's per-measure `<hideIfEmpty>` overrides and `<cutaway>` (both kept as preserved
-/// markup), and notes moved to another staff (`staffMove`), which this model does not have. The engine draws every
-/// staff it is given, so a staff a host hides (`Score.filtered(hidingStaves:)`, MuseScore's `Staff::show()`) is gone
-/// before this runs.
+/// markup). The engine draws every staff it is given, so a staff a host hides (`Score.filtered(hidingStaves:)`,
+/// MuseScore's `Staff::show()`) is gone before this runs.
 struct EmptyStaffHiding {
     private enum Mode {
         case alwaysShow, whenStaffEmpty, whenPartEmpty
@@ -88,6 +87,7 @@ struct EmptyStaffHiding {
             case .whenStaffEmpty:
                 shown[staffIdx] = spannerOverlaps(staffIdx: staffIdx, measureRange: measureRange)
                     || hasContent(staffIdx)
+                    || receivesMovedNotes(staffIdx: staffIdx, measureRange: measureRange)
             case .whenPartEmpty:
                 // A sibling's spanners do not count, only its measures (`systemlayout.cpp:633-648`).
                 shown[staffIdx] = spannerOverlaps(staffIdx: staffIdx, measureRange: measureRange)
@@ -194,6 +194,31 @@ struct EmptyStaffHiding {
     }
 
     // MARK: - Emptiness
+
+    /// Whether a chord of a sibling staff is drawn on this one in the measures — MuseScore keeps a staff that receives
+    /// cross-staff notes (`Chord.staffMove`) however empty its own measures are (`systemlayout.cpp:630-667`).
+    private func receivesMovedNotes(staffIdx: Int, measureRange: Range<Int>) -> Bool {
+        let address = addresses[staffIdx]
+        let part = score.parts[address.partIndex]
+        guard part.staves.count > 1 else { return false }
+        for sibling in part.staves.indices where sibling != address.staffIndexInPart {
+            for measureIdx in measureRange where part.staves[sibling].measures.indices.contains(measureIdx) {
+                for voice in part.staves[sibling].measures[measureIdx].voices {
+                    for element in voice.elements {
+                        guard case let .chord(chord) = element, !chord.notes.isEmpty, chord.staffMove != 0 else {
+                            continue
+                        }
+                        if sibling + part.effectiveStaffMove(chord.staffMove, fromStaff: sibling)
+                            == address.staffIndexInPart
+                        {
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
 
     /// MuseScore's `Measure::isEmpty(staffIdx)` (`dom/measure.cpp:2448-2502`): a measure of a multi-measure rest is
     /// empty; one in a measure-repeat group is not; otherwise only rests make it empty — a chord, hidden or not, does

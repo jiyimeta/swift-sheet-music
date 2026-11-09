@@ -35,6 +35,8 @@ extension LayoutEngine {
         /// HBox room before the measure (0 for the system's first). Every walk over the measures' x — pass 1's
         /// `xOffsets`, `extractLineSpanners` and pass 2 — advances by it before the measure.
         let leadingGap: CGFloat
+        /// Beams whose chords are drawn on two staves, drawn once the staves are placed (`layOutCrossStaffBeams`).
+        var crossStaffBeams: [CrossStaffBeam] = []
     }
 
     // MARK: - Per-system layout
@@ -64,6 +66,12 @@ extension LayoutEngine {
         let metrics = context.metrics
         let spacing = metrics.spacing
         let allStaves = context.score.allStaves
+        let flatIndexByAddress = Dictionary(
+            allStaves.enumerated().map { ($1.address, $0) }, uniquingKeysWith: { first, _ in first },
+        )
+        func flatIndex(of address: StaffAddress) -> Int? {
+            flatIndexByAddress[address]
+        }
         let staves = allStaves.map(\.staff)
         let hidesStaves = shownStaves.count == staves.count && shownStaves.contains(false)
             && shownStaves.contains(true)
@@ -281,6 +289,12 @@ extension LayoutEngine {
             var perStaff: [Int: [LayoutElement]] = [:]
             var perStaffInvisible: [Int: [LayoutElement]] = [:]
             var synthesizedEndBarLineIndices: [Int: Int] = [:]
+            // Chords drawn on a sibling staff: what each staff's placement handed over, and the beams across two
+            // staves. The clefs as the measure starts, because a staff placed before its sibling has already moved
+            // its own entry in `clefs` to the end of the measure.
+            var relocationsByStaff: [Int: (visible: [Int: Int], invisible: [Int: Int])] = [:]
+            var measureCrossStaffBeams: [CrossStaffBeam] = []
+            let clefsAtMeasureStart = clefs
             let laneByStaff = systemElementsByStaff(
                 measureIdx: measureIdx, score: context.score, addresses: addresses, isShown: isShown,
             )
@@ -316,6 +330,18 @@ extension LayoutEngine {
                 let staffCountInPart = context.score.parts.indices.contains(address.partIndex)
                     ? context.score.parts[address.partIndex].staves.count : 1
                 let breathOwners = barHeadBreathOwners(measureIdx: measureIdx, in: staff)
+                let staffMoves = movedChords(
+                    in: m, staffIndexInPart: address.staffIndexInPart, of: part,
+                    measureDuration: measDuration, division: context.score.division,
+                    targetClefAtStart: { sibling in
+                        flatIndex(of: StaffAddress(partIndex: address.partIndex, staffIndexInPart: sibling))
+                            .map { clefsAtMeasureStart[$0] }
+                    },
+                    targetMeasure: { sibling in
+                        let measures = part.staves[sibling].measures
+                        return measures.indices.contains(measureIdx) ? measures[measureIdx] : nil
+                    },
+                )
                 let placementInputs = LayoutCache.PlacementInputs(
                     measure: m,
                     isPitchedStaff: isPitchedStaff,
@@ -347,12 +373,15 @@ extension LayoutEngine {
                     followingClef: followingClefsHere[staffIdx],
                     staffCountInPart: staffCountInPart,
                     barHeadBreathOwners: breathOwners,
+                    movedChords: staffMoves,
                 )
                 let els: [LayoutElement]
                 let invisibleEls: [LayoutElement]
                 let synthesizedEndBarLineIndex: Int?
                 let newClef: NotatedClef
                 let newKey: Int
+                let staffRelocations: (visible: [Int: Int], invisible: [Int: Int])
+                let staffCrossBeams: [CrossStaffBeam]
                 if let cached = context.cache?
                     .entries[measureIdx]?.placements[staffIdx],
                     cached.inputs == placementInputs
@@ -363,6 +392,8 @@ extension LayoutEngine {
                         .synthesizedEndBarLineIndex
                     newClef = cached.newClef
                     newKey = cached.newKey
+                    staffRelocations = (cached.relocations, cached.invisibleRelocations)
+                    staffCrossBeams = cached.crossStaffBeams
                     context.cache?.placementHits += 1
                 } else {
                     let result = placeMeasureElements(
@@ -396,6 +427,7 @@ extension LayoutEngine {
                         followingClef: followingClefsHere[staffIdx],
                         staffCountInPart: staffCountInPart,
                         barHeadBreathOwners: breathOwners,
+                        movedChords: staffMoves,
                     )
                     els = result.elements
                     invisibleEls = result.invisibleElements
@@ -403,20 +435,29 @@ extension LayoutEngine {
                         .synthesizedEndBarLineIndex
                     newClef = result.clef
                     newKey = result.key
+                    staffRelocations = (result.relocations, result.invisibleRelocations)
+                    staffCrossBeams = result.crossStaffBeams
                     context.cache?.placementMisses += 1
                     if var entry = context.cache?.entries[measureIdx] {
-                        entry.placements[staffIdx] = LayoutCache
-                            .StaffPlacement(
-                                inputs: placementInputs,
-                                elements: els,
-                                invisibleElements: invisibleEls,
-                                synthesizedEndBarLineIndex: synthesizedEndBarLineIndex,
-                                newClef: newClef,
-                                newKey: newKey,
-                            )
+                        var placement = LayoutCache.StaffPlacement(
+                            inputs: placementInputs,
+                            elements: els,
+                            invisibleElements: invisibleEls,
+                            synthesizedEndBarLineIndex: synthesizedEndBarLineIndex,
+                            newClef: newClef,
+                            newKey: newKey,
+                        )
+                        placement.relocations = result.relocations
+                        placement.invisibleRelocations = result.invisibleRelocations
+                        placement.crossStaffBeams = result.crossStaffBeams
+                        entry.placements[staffIdx] = placement
                         context.cache?.entries[measureIdx] = entry
                     }
                 }
+                if !staffRelocations.visible.isEmpty || !staffRelocations.invisible.isEmpty {
+                    relocationsByStaff[staffIdx] = staffRelocations
+                }
+                measureCrossStaffBeams += staffCrossBeams
                 clefs[staffIdx] = newClef
                 keys[staffIdx] = newKey
                 perStaff[staffIdx] = els
@@ -468,6 +509,16 @@ extension LayoutEngine {
                     )
                 }
             }
+            // Chords and rests drawn on a sibling staff go to that staff's buffer, with the marks and beams drawn with
+            // them — after the courtesy pass above, which still indexes each staff's buffer as placement left it.
+            relocateMovedElements(
+                relocationsByStaff.mapValues(\.visible), in: &perStaff,
+                addressOf: { allStaves[$0].address }, flatIndex: flatIndex(of:),
+            )
+            relocateMovedElements(
+                relocationsByStaff.mapValues(\.invisible), in: &perStaffInvisible,
+                addressOf: { allStaves[$0].address }, flatIndex: flatIndex(of:),
+            )
             // Measure number — TOP STAFF ONLY. Engraving convention
             // places a single number above the topmost staff; how often
             // is `options.measureNumbers` (every system head by default,
@@ -556,6 +607,7 @@ extension LayoutEngine {
                 tickCols: tickCols,
                 multiMeasureRestCount: nil,
                 leadingGap: gapBefore[j],
+                crossStaffBeams: measureCrossStaffBeams,
             ))
         }
 
@@ -821,6 +873,17 @@ extension LayoutEngine {
                 currentY += staffHeights[idx]
                     + staffBottomPads[idx] + minGap
             }
+        }
+
+        // Beams across two staves, now that both staves have a place.
+        for index in untranslated.indices where !untranslated[index].crossStaffBeams.isEmpty {
+            layOutCrossStaffBeams(
+                untranslated[index].crossStaffBeams,
+                in: &untranslated[index].perStaffElements,
+                flatIndex: flatIndex(of:),
+                staffOriginY: { staffOrigins[$0].y },
+                metrics: metrics,
+            )
         }
 
         // Build LayoutBrackets — one per visible BracketItem on each

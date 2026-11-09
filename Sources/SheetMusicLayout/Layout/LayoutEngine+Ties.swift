@@ -142,9 +142,12 @@ extension LayoutEngine {
                             toMidYLocal: noteMidYLocal,
                             in: staffMidYsLocal,
                         )
-                        // A system built without addresses keys by row, as before them.
+                        // Keyed by the staff the note is WRITTEN on — the note's own address — not the row it is drawn
+                        // in: a chord moved onto a sibling staff (`Chord.staffMove`) is drawn there, and its tie to or
+                        // from an unmoved note of the same voice still pairs. A system built without addresses keys by
+                        // row, as before them.
                         let staff = system.staffAddresses.indices.contains(staffIndex)
-                            ? system.staffAddresses[staffIndex]
+                            ? n.noteID.staff
                             : StaffAddress(partIndex: -1, staffIndexInPart: staffIndex)
 
                         if let back = n.tieBack {
