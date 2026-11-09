@@ -14,7 +14,7 @@
     struct PagedScoreViewOptionsCopyTests {
         /// Every field deliberately different from its default.
         private static func probeOptions() -> ScoreViewOptions {
-            ScoreViewOptions(
+            var options = ScoreViewOptions(
                 staffSize: 33,
                 systemGap: 55,
                 wrapToViewWidth: false,
@@ -39,6 +39,9 @@
                     systemVerticalPadding: 2,
                 ),
             )
+            // Not an initializer parameter: set on the value.
+            options.hidesEmptyStaves = false
+            return options
         }
 
         private static func fields(
