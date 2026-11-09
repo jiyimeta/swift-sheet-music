@@ -40,6 +40,15 @@ public struct Staff: Sendable, Equatable {
     /// layout: the engine draws every staff it is given, and a host that honors the flag drops the staff itself (see
     /// `Score.authoredHiddenStaffAddresses`). The staff still plays.
     public var isVisibleInScore: Bool
+    /// MuseScore `<Part><Staff><hideWhenEmpty>` — whether this staff is hidden from a system in which it is empty,
+    /// whatever its part and the score's style say: `on` hides it, `off` always shows it, `auto` (the default) leaves
+    /// it to `Part.hideWhenEmpty` and `ScoreStyle.hideEmptyStaves` (`computeHideMode`,
+    /// `rendering/score/systemlayout.cpp:545-600`). C++: `Staff::hideWhenEmpty()` (`dom/staff.h:299`).
+    public var hideWhenEmpty: AutoOnOff = .auto
+    /// MuseScore `<Part><Staff><showIfSystemEmpty>` — when hiding would leave a system with no staff at all, this
+    /// staff comes back (`SystemLayout::hideEmptyStaves`, `rendering/score/systemlayout.cpp:722-741`); without any such
+    /// staff the system keeps its first one. C++: `Staff::showIfEntireSystemEmpty()`.
+    public var showIfSystemEmpty = false
     public var measures: [Measure]
     /// Source markup inside this staff declaration's `<StaffType>`
     /// that the model does not represent.

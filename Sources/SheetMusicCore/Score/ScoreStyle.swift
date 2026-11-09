@@ -55,6 +55,22 @@ public struct ScoreStyle: Sendable, Equatable {
     /// like `chordSymbolCase`: the tag stays as preserved markup. C++: `Sid::lastSystemFillLimit`
     /// (`styledef.cpp:279`), default 0.3.
     public var lastSystemFillLimit: Double
+    /// Whether a staff empty in a system is left out of that system — MuseScore's "Hide empty staves" (Format ▸
+    /// Style ▸ Score), for every part and staff whose own `hideWhenEmpty` is `auto`. The four keys below are read for
+    /// layout and NOT written, like `lastSystemFillLimit`: their tags stay preserved markup. C++:
+    /// `Sid::hideEmptyStaves` (`style/styledef.cpp:537`), default false.
+    public var hideEmptyStaves = false
+    /// Whether `hideEmptyStaves` spares the first system — of the score, and after each section break. Parts and
+    /// staves set to hide on their own still hide there. C++: `Sid::dontHideStavesInFirstSystem`
+    /// (`style/styledef.cpp:538`), default true.
+    public var dontHideStavesInFirstSystem = true
+    /// Whether a bracket other than a square one is still drawn when hiding leaves it a single staff. MSCX field
+    /// `<alwaysShowBracketsWhenEmptyStavesAreHidden>`, shortened here to the identifier length the lint allows. C++:
+    /// `Sid::alwaysShowBracketsWhenEmptyStavesAreHidden` (`style/styledef.cpp:541`), default false.
+    public var alwaysShowBracketsWhenHidingStaves = false
+    /// The same for a square bracket. MSCX field `<alwaysShowSquareBracketsWhenEmptyStavesAreHidden>`. C++:
+    /// `Sid::alwaysShowSquareBracketsWhenEmptyStavesAreHidden` (`style/styledef.cpp:542`), default false.
+    public var alwaysShowSquareBracketsWhenHidingStaves = false
     /// Source markup under this element that the model does not
     /// represent, kept so that read → write does not delete it. See
     /// `PreservedXML`.

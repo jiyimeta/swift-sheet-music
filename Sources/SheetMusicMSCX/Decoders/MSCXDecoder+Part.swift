@@ -6,7 +6,8 @@ extension Part {
     /// Every `<Part>` child this decoder reads. Anything else becomes
     /// preserved markup — see `PreservedXML`.
     private static let consumedPartChildren: Set = [
-        "Instrument", "Staff", "show", "trackName", EIDXML.childName,
+        "Instrument", "Staff", "hideStavesWhenIndividuallyEmpty", "hideWhenEmpty", "show", "trackName",
+        EIDXML.childName,
     ]
 
     /// Decode the per-`<Part>` declaration. Top-level `<Staff>` measures
@@ -15,12 +16,34 @@ extension Part {
     /// document order; it backstops missing/empty `id` attributes
     /// with a sequential integer so the decoded `Part.id` is always
     /// non-empty (matches the encoder's id-synthesis convention).
+    /// `globalHideEmptyStaves` is the score's `ScoreStyle.hideEmptyStaves`, which turning a pre-4.60 file's staff
+    /// hide modes into the part's settings consults (`HideWhenEmptyDecoding.resolveLegacy`).
     static func decodePairing(
-        _ node: XMLTreeNode, fallbackIndex: Int,
+        _ node: XMLTreeNode, fallbackIndex: Int, globalHideEmptyStaves: Bool = false,
     ) throws -> MSCXStaffPairing {
         let raw = node.attributes["id"] ?? ""
         let id = raw.isEmpty ? String(fallbackIndex) : raw
-        let declared = node.all("Staff").map { Staff.declared($0) }
+        let staffNodes = node.all("Staff")
+        var declared = staffNodes.map { Staff.declared($0) }
+        var hideWhenEmpty = AutoOnOff.auto
+        var hideStavesWhenIndividuallyEmpty = false
+        if HideWhenEmptyDecoding.isLegacy(formatRevision: MSCXParserContext.formatRevision) {
+            // A pre-4.60 reader has no part-level tags (they would be unknown to it), only each staff's integer.
+            let resolved = HideWhenEmptyDecoding.resolveLegacy(
+                staffModes: staffNodes.map { HideWhenEmptyDecoding.legacyMode($0.first("hideWhenEmpty")?.text) },
+                globalHideEmptyStaves: globalHideEmptyStaves,
+            )
+            hideWhenEmpty = resolved.part
+            hideStavesWhenIndividuallyEmpty = resolved.individually
+            for index in declared.indices {
+                declared[index].staff.hideWhenEmpty = resolved.staves[index]
+            }
+        } else {
+            // `rw/read460/tread.cpp:3611-3614`: the string form, and `readBool()` — a non-zero integer — for the flag.
+            hideWhenEmpty = node.first("hideWhenEmpty").map { HideWhenEmptyDecoding.autoOnOff($0.text) } ?? .auto
+            hideStavesWhenIndividuallyEmpty = node.first("hideStavesWhenIndividuallyEmpty")
+                .map { (Int($0.text) ?? 0) != 0 } ?? false
+        }
         guard let instrNode = node.first("Instrument") else {
             throw SheetMusicError.malformedScore(ScoreFault(
                 code: "mscx.part.missingInstrument",
@@ -44,6 +67,8 @@ extension Part {
             isVisibleInScore: isVisibleInScore,
             preservedMarkup: node.preservedMarkup(consuming: consumedPartChildren),
             eid: EIDXML.decode(from: node),
+            hideWhenEmpty: hideWhenEmpty,
+            hideStavesWhenIndividuallyEmpty: hideStavesWhenIndividuallyEmpty,
         )
     }
 }

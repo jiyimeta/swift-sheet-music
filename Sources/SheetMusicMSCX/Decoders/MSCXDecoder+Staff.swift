@@ -7,7 +7,7 @@ extension Staff {
     /// Anything else becomes preserved markup — see `PreservedXML`.
     private static let consumedStaffChildren: Set = [
         "StaffType", "bracket", "BracketItem", "defaultClef", "defaultConcertClef",
-        "defaultTransposingClef", "isStaffVisible", EIDXML.childName,
+        "defaultTransposingClef", "hideWhenEmpty", "isStaffVisible", "showIfSystemEmpty", EIDXML.childName,
     ]
 
     /// Every `<StaffType>` child this decoder reads. Its other children
@@ -73,7 +73,7 @@ extension Staff {
         let mscxID = node.attributes["id"]
         let (brackets, unmodeledBracketItems) = decodedBrackets(of: node)
 
-        return (mscxID, EIDXML.decode(from: node), Staff(
+        var staff = Staff(
             staffType: staffType,
             group: group,
             lineCount: lineCount,
@@ -85,7 +85,17 @@ extension Staff {
                 consuming: consumedStaffTypeChildren,
             ) ?? [],
             preservedMarkup: node.preservedMarkup(consuming: consumedStaffChildren) + unmodeledBracketItems,
-        ))
+        )
+        // `<showIfSystemEmpty>` is `readInt()` in every reader (`rw/read460/tread.cpp:4072-4073`,
+        // `rw/read400/tread.cpp:3822-3823`). `<hideWhenEmpty>` is the 4.60 string here; an older file's integer is
+        // resolved with its part's other staves (`Part.decodePairing`), as MuseScore resolves it.
+        staff.showIfSystemEmpty = node.first("showIfSystemEmpty").map { isMuseScoreTrue($0.text) } ?? false
+        if !HideWhenEmptyDecoding.isLegacy(formatRevision: MSCXParserContext.formatRevision),
+           let raw = node.first("hideWhenEmpty")?.text
+        {
+            staff.hideWhenEmpty = HideWhenEmptyDecoding.autoOnOff(raw)
+        }
+        return (mscxID, EIDXML.decode(from: node), staff)
     }
 
     /// A boolean the way MuseScore reads `<isStaffVisible>`: `readBool()` is `readInt()` (`rw/xmlreader.h:57`), so
@@ -173,6 +183,9 @@ struct MSCXStaffPairing {
     /// writes (P4 plan decision 4); we write and read our own child
     /// in the same first-child position as every other carrier.
     var eid: EID
+    /// `Part.hideWhenEmpty` and `Part.hideStavesWhenIndividuallyEmpty`, as `Part.decodePairing` resolved them.
+    var hideWhenEmpty: AutoOnOff = .auto
+    var hideStavesWhenIndividuallyEmpty = false
 }
 
 /// Result of part assembly: the wired-up `[Part]` plus the
@@ -282,14 +295,17 @@ func assembleParts( // swiftlint:disable:this function_body_length
         for index in assembled.indices {
             assembled[index].1.measures = pruned[index]
         }
-        parts.append(Part(
+        var part = Part(
             id: dp.partID,
             trackName: dp.trackName,
             instrument: dp.instrument,
             staves: IdentifiedArray(assembled),
             isVisibleInScore: dp.isVisibleInScore,
             preservedMarkup: dp.preservedMarkup,
-        ))
+        )
+        part.hideWhenEmpty = dp.hideWhenEmpty
+        part.hideStavesWhenIndividuallyEmpty = dp.hideStavesWhenIndividuallyEmpty
+        parts.append(part)
         partEIDs.append(dp.eid)
     }
 

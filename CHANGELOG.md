@@ -21,6 +21,17 @@ and this project adheres to
   hidden-staff set; the example app's Mac view does.
 - **`StaffWire.isAuthoredHidden`** (in `PartsStavesWire`) — 1 when `authoredHiddenStaffAddresses` holds the staff, so
   an Android host seeds the same set without combining the part and staff flags itself.
+- **MuseScore's "hide empty staves" settings are read and written (`AutoOnOff`, `Staff.hideWhenEmpty`,
+  `Staff.showIfSystemEmpty`, `Part.hideWhenEmpty`, `Part.hideStavesWhenIndividuallyEmpty`, and `ScoreStyle`'s
+  `hideEmptyStaves`, `dontHideStavesInFirstSystem`, `alwaysShowBracketsWhenHidingStaves` and
+  `alwaysShowSquareBracketsWhenHidingStaves`).** The part and staff tags were kept as preserved markup. A 4.60
+  file's `auto` / `on` / `off` strings are read as they are; an older file's staff integers (MuseScore 3 and 4.0–4.5,
+  most files in the wild) are converted into the part and staff settings exactly as MuseScore 4.6 converts them,
+  against the score's `<hideEmptyStaves>` — inline or from the container's `score_style.mss`. The 4.60 output writes
+  the strings where MuseScore does (a staff's after `<defaultClef>`, a part's after `<trackName>`); the 3.02 output
+  writes each staff's integer, losing only an `on` multi-staff part that hides its staves together, which reads back
+  as following the style. The four style keys are read for layout and saved as the file had them, like
+  `lastSystemFillLimit`.
 
 ## [4.31.0] - 2026-11-08
 
