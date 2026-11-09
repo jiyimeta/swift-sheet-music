@@ -94,6 +94,10 @@ package enum BeamGrouping {
         var groups: [BeamGroup] = []
         var currentIndices: [Int] = []
         var currentLevel = 0
+        // A tuplet just closed: the next chord starts a new beam — unless its own `beamMode` carries the beam on,
+        // which MuseScore lets an explicit mode do. Deferred to that chord rather than flushed on the spot so the
+        // chord's mode can be consulted.
+        var breakBeforeNext = false
         func flush() {
             if currentIndices.count >= 2 && currentLevel >= 1 {
                 groups.append(BeamGroup(
@@ -102,25 +106,41 @@ package enum BeamGrouping {
             }
             currentIndices.removeAll()
             currentLevel = 0
+            breakBeforeNext = false
         }
         for (i, el) in voice.elements.enumerated() {
             switch el {
             case let .chord(c) where c.notes.isEmpty:
-                // Rest: breaks any in-progress beam group.
-                flush()
+                // A rest at `auto` or `no` is never beamed and breaks the beam (`Groups::actualBeamMode`). One set to
+                // `begin` / `mid` / `end` is beamed over (`BeamLayout::createBeams`: "Rests of any duration can be
+                // beamed over, if required"): it does not break the beam, and it is no member of it — it has no
+                // stem for the bar to meet. `begin` starts a fresh beam at the rest, `end` closes it there.
+                switch c.beamMode {
+                case .auto, .none, .begin, .end: flush()
+                case .mid, .begin16, .begin32: break
+                }
                 tick += c.duration.resolved(in: measureDuration).ticks(division: division)
             case let .chord(c):
                 let level = Self.level(of: c.drawnDuration)
-                if level == 0 {
+                // A chord with no flag is never beamed, whatever its mode (`Groups::actualBeamMode`); `no` unbeams
+                // one that has a flag.
+                if level == 0 || c.beamMode == .none {
                     flush()
                     tick += c.duration.resolved(in: measureDuration).ticks(division: division)
                     continue
                 }
-                // Entering a tuplet: whatever was running stops here, whatever the meter would have said.
-                if tupletStarts.contains(i) {
+                // An explicit mode wins over every rule below (`Groups::baseBeamMode`): `begin` breaks, and `mid`
+                // / `end` / `begin16` / `begin32` continue — across a tuplet, a beat or the half bar alike.
+                if c.beamMode == .begin {
                     flush()
+                } else if !c.beamMode.continuesBeam {
+                    // Entering a tuplet, or the one before has just closed: whatever was running stops here,
+                    // whatever the meter would have said.
+                    if tupletStarts.contains(i) || breakBeforeNext {
+                        flush()
+                    }
                 }
-                if tick > 0 {
+                if c.beamMode == .auto, tick > 0 {
                     // Hard boundary (half-note in 4/4).
                     if maxGroupLen > 0 && tick % maxGroupLen == 0 {
                         flush()
@@ -161,12 +181,16 @@ package enum BeamGrouping {
                         }
                     }
                 }
+                breakBeforeNext = false
                 currentIndices.append(i)
                 currentLevel = max(currentLevel, level)
                 tick += c.duration.resolved(in: measureDuration).ticks(division: division)
-                // Leaving a tuplet: the group closes ON its last member, so the note after it starts a new one.
-                if tupletEnds.contains(i) {
+                if c.beamMode == .end {
                     flush()
+                } else if tupletEnds.contains(i) {
+                    // Leaving a tuplet: the group closes ON its last member, so the note after it starts a new one
+                    // — unless that note's mode continues the beam.
+                    breakBeforeNext = true
                 }
             case let .locationShift(delta):
                 tick += delta.ticks(division: division)

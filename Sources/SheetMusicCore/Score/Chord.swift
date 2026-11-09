@@ -110,6 +110,10 @@ public struct Chord: Sendable, Equatable {
     /// says it with a `<durationType>` twice its `<duration>`. `duration` stays the time the chord takes; the value it
     /// is drawn as is `drawnDuration`.
     public var isWrittenDoubled = false
+    /// How this chord or rest joins the beam around it — MuseScore `<BeamMode>`. `auto` (the default) leaves it to
+    /// the meter; a rest at `auto` is never beamed, as in MuseScore (`Groups::actualBeamMode`), while a rest at `begin`
+    /// / `mid` / `end` is beamed over. Honored by `BeamGrouping.groups`.
+    public var beamMode: BeamMode = .auto
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
 

@@ -56,6 +56,7 @@ extension Chord {
                 text: stemDirection?.mscxValue ?? (voiceIndex == 0 ? "up" : "down"),
             ))
         }
+        appendBeamMode(to: &children)
         let chordCarriesSmall = appendChordLevelSmall(for: notes, to: &children)
         appendWrittenDuration(to: &children)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
@@ -270,6 +271,7 @@ extension Chord {
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        appendBeamMode(to: &children)
         duration.appendDurationXML(to: &children)
         children += lyricNodes(options: options)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
@@ -291,6 +293,7 @@ extension Chord {
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        appendBeamMode(to: &children)
         duration.appendDurationXML(to: &children, in: measureDuration)
         children += lyricNodes(options: options)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
@@ -298,6 +301,17 @@ extension Chord {
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Rest", children: children)
+    }
+
+    /// `<BeamMode>`, written where `TWrite::writeProperties(const ChordRest*)` writes it — after the item properties,
+    /// before `<small>` / `<dots>` / `<durationType>` (`rw/write/twrite.cpp:1098-1104`) — and only off its default: a
+    /// chord's is `auto`; a rest's is `no`, and a rest at `auto` beams the same as at `no` (`Groups::actualBeamMode`),
+    /// so a rest writes only the modes that beam over it.
+    func appendBeamMode(to children: inout [XMLTreeNode]) {
+        let isDefault = notes.isEmpty ? (beamMode == .none || beamMode == .auto) : beamMode == .auto
+        if !isDefault {
+            children.append(XMLTreeNode(name: "BeamMode", text: beamMode.rawValue))
+        }
     }
 
     /// The `<Lyrics>` a chord or rest writes, one per printed verse. Empty-text placeholders (verse-padding entries

@@ -182,10 +182,13 @@ extension Voice {
                     // in document order; MuseScore's reader is order-agnostic
                     // inside `<Chord>`. A grace chord's `<StemDirection>`,
                     // which `Chord.decode` lifts into `inner.stemDirection`,
-                    // goes back the same way.
+                    // goes back the same way, and so does its `<BeamMode>`
+                    // (`inner.beamMode`): graces beam among themselves, which
+                    // `BeamGrouping` does not group.
                     let graceMarkup = inner.preservedMarkup
                         + child.all("ChordBracket").map(PreservedXML.init)
                         + child.all("StemDirection").map(PreservedXML.init)
+                        + child.all("BeamMode").map(PreservedXML.init)
                     pendingGraces.append((EIDXML.decode(from: child), GraceChord(
                         graceType: graceType,
                         duration: inner.duration,
