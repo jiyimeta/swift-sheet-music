@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.33.0] - 2026-11-09
+
 ### Added
 
 - **`SetGradualTempoChange(over:type:factor:)`** — writes a gradual tempo change (rit., accel., rall., …) over a range,
