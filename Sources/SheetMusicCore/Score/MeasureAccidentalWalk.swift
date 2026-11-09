@@ -80,6 +80,51 @@ enum MeasureAccidentalWalk {
         }
     }
 
+    // MARK: - Across the staves of a part
+
+    /// One note of a part's measure: `ref`, within the measure of staff `staff` (its index in the part).
+    struct PartNoteRef: Hashable {
+        let staff: Int
+        let ref: NoteRef
+    }
+
+    /// The notes staff `visualStaff` of `part` DRAWS in one measure, in the order MuseScore's accidental state for that
+    /// staff reads them.
+    ///
+    /// `ModifyDom::cmdUpdateNotes` keeps one state per staff and walks every track of the PART into it, segment by
+    /// segment (`rendering/score/modifydom.cpp:80-126`); each chord speaks only to the staff it is drawn on
+    /// (`Chord::cmdUpdateNotes`, `dom/chord.cpp:1166-1190`). So a chord moved onto this staff from a sibling
+    /// (`Chord.staffMove`, as `Part.effectiveStaffMove` honors it) reads and writes this staff's state, and one moved
+    /// off it the other staff's. Sorted by onset tick, then the part's track order — staff, then voice — then
+    /// `noteRefs(in:…)`'s own phase and note order. A grace chord is drawn on its own staff: this model reads no move
+    /// for it. With nothing moved, the refs of `visualStaff` are exactly `noteRefs(in:…)`'s for its measure.
+    ///
+    /// `measures[s]` is staff `s`'s measure (nil where that staff has none), `durations[s]` its effective duration.
+    static func noteRefs(
+        onVisualStaff visualStaff: Int, of part: Part, measures: [Measure?], durations: [Fraction], division: Int,
+    ) -> [PartNoteRef] {
+        var refs: [PartNoteRef] = []
+        for (staff, measure) in measures.enumerated() {
+            guard let measure, durations.indices.contains(staff) else { continue }
+            for ref in noteRefs(in: measure, division: division, measureDuration: durations[staff]) {
+                var drawnOn = staff
+                if !ref.isGrace, case let .chord(chord) = measure.voices[ref.voice].elements[ref.element] {
+                    drawnOn += part.effectiveStaffMove(chord.staffMove, fromStaff: staff)
+                }
+                if drawnOn == visualStaff {
+                    refs.append(PartNoteRef(staff: staff, ref: ref))
+                }
+            }
+        }
+        return refs.sorted {
+            if $0.ref.tick != $1.ref.tick { return $0.ref.tick < $1.ref.tick }
+            if $0.staff != $1.staff { return $0.staff < $1.staff }
+            if $0.ref.voice != $1.ref.voice { return $0.ref.voice < $1.ref.voice }
+            if $0.ref.slot.phase != $1.ref.slot.phase { return $0.ref.slot.phase < $1.ref.slot.phase }
+            return $0.ref.note < $1.ref.note
+        }
+    }
+
     /// The note `ref` names in `voices`, or nil when the address no longer holds one.
     static func note(at ref: NoteRef, in voices: [Voice]) -> Note? {
         guard let notes = chordNotes(at: ref, in: voices), notes.indices.contains(ref.note) else { return nil }

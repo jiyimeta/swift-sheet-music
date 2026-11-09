@@ -53,6 +53,10 @@ extension Score {
         let division = copy.division
         for partIndex in copy.parts.indices {
             let isDrumset = copy.parts[partIndex].instrument.useDrumset
+            if !isDrumset, copy.parts[partIndex].hasEffectiveStaffMoves {
+                copy.parts.updateValue(at: partIndex) { Self.suppressAcrossStaves(of: &$0, division: division) }
+                continue
+            }
             // Ties are paired against the part as given; suppression only ever takes glyphs off, never a tie or a tpc.
             let staves = copy.parts[partIndex].staves.map(\.measures)
             let detached = isDrumset ? [] : DetachedTies.links(in: staves)
@@ -146,6 +150,70 @@ extension Score {
         }
     }
 
+    /// `suppressInStaff` for a part some of whose chords are drawn on a sibling staff (`Chord.staffMove`): one
+    /// accidental state per staff the notes are DRAWN on, each walking the notes the part draws there
+    /// (`MeasureAccidentalWalk.noteRefs(onVisualStaff:…)`) from that staff's key — MuseScore's
+    /// `ModifyDom::cmdUpdateNotes`. A right-hand F♯ moved into the bass staff then covers the left hand's F later in
+    /// the bar, and leaves the right hand's own F alone. Percussion staves drop their accidentals as before; nothing
+    /// is moved onto or off them (`Part.effectiveStaffMove`).
+    private static func suppressAcrossStaves(of part: inout Part, division: Int) {
+        // Ties are paired against the part as given; suppression only ever takes glyphs off, never a tie or a tpc.
+        let staves = part.staves.map(\.measures)
+        let detached = DetachedTies.links(in: staves)
+        let durations = staves.map { $0.effectiveMeasureDurations() }
+        let crossVoice = staves.map { CrossVoiceTies.links(in: $0) }
+        let pitched = part.staves.map { $0.group != "percussion" }
+        let given = part
+        for staffIndex in part.staves.indices where !pitched[staffIndex] {
+            part.staves.updateValue(at: staffIndex) { Self.dropAccidentals(in: &$0) }
+        }
+        // Each staff's concert key, carried across measures from its voice-0 signatures (`suppressInStaff`).
+        var keys = Array(repeating: 0, count: staves.count)
+        for measureIndex in 0 ..< (staves.map(\.count).max() ?? 0) {
+            let measures: [Measure?] = staves.map { $0.indices.contains(measureIndex) ? $0[measureIndex] : nil }
+            for (staffIndex, measure) in measures.enumerated() {
+                for case let .keySignature(key) in measure?.voices.first?.elements.values ?? [] {
+                    keys[staffIndex] = key.concertKey
+                }
+            }
+            let measureDurations = durations.map {
+                $0.indices.contains(measureIndex) ? $0[measureIndex] : Fraction(numerator: 4, denominator: 4)
+            }
+            let tieStarts = staves.indices.map { staffIndex in
+                measures[staffIndex] == nil ? [:] : MeasureAccidentalWalk.tieStartTPCs(
+                    in: staves[staffIndex], measureIndex: measureIndex, crossVoice: crossVoice[staffIndex],
+                    detached: DetachedTies.StaffEnds(staff: staffIndex, links: detached, staves: staves),
+                )
+            }
+            var redundant: [MeasureAccidentalWalk.PartNoteRef] = []
+            for visualStaff in staves.indices where pitched[visualStaff] {
+                let refs = MeasureAccidentalWalk.noteRefs(
+                    onVisualStaff: visualStaff, of: given, measures: measures, durations: measureDurations,
+                    division: division,
+                )
+                redundant += redundantGlyphs(
+                    refs, key: keys[visualStaff],
+                    note: { ref in
+                        measures[ref.staff].flatMap { MeasureAccidentalWalk.note(at: ref.ref, in: $0.voices) }
+                    },
+                    tieStart: { ref in ref.ref.mainAddress.flatMap { tieStarts[ref.staff][$0] } },
+                    alteredUnison: { ref in
+                        measures[ref.staff].map {
+                            MeasureAccidentalWalk.hasAlteredUnison(at: ref.ref, in: $0.voices)
+                        } ?? false
+                    },
+                )
+            }
+            for ref in redundant {
+                part.staves.updateValue(at: ref.staff) { staff in
+                    MeasureAccidentalWalk.updateNote(
+                        at: ref.ref, in: &staff.measures[measureIndex].voices, stripGlyph,
+                    )
+                }
+            }
+        }
+    }
+
     /// One staff line, identified by its WRITTEN letter (0=C … 6=B) and
     /// written octave. Two enharmonic spellings (C♯4 vs D♭4) are
     /// different lines and so have independent accidental state.
@@ -161,19 +229,49 @@ extension Score {
         measureDuration: Fraction,
         tieStarts: [MeasureAccidentalWalk.MainAddress: Int],
     ) {
+        let voices = measure.voices
+        let refs = MeasureAccidentalWalk.noteRefs(in: measure, division: division, measureDuration: measureDuration)
+        let redundant = redundantGlyphs(
+            refs, key: key,
+            note: { MeasureAccidentalWalk.note(at: $0, in: voices) },
+            tieStart: { $0.mainAddress.flatMap { tieStarts[$0] } },
+            alteredUnison: { MeasureAccidentalWalk.hasAlteredUnison(at: $0, in: voices) },
+        )
+        for ref in redundant {
+            MeasureAccidentalWalk.updateNote(at: ref, in: &measure.voices, stripGlyph)
+        }
+    }
+
+    private static func stripGlyph(_ note: inout Note) {
+        note.accidental = nil
+        note.accidentalBracket = .none
+    }
+
+    /// The notes of `refs` — one accidental state's notes, in the order it reads them — whose glyph is redundant and
+    /// comes off. Each note's decision rests on its own glyph and the state the notes before it left, never on whether
+    /// an earlier glyph came off (the state records the alteration either way), so the answer can be read from the
+    /// notes as given and applied afterwards.
+    ///
+    /// `note` reads the note a ref names, `tieStart` the tpc of the note it is tied from (when it is tied back and that
+    /// start was found), `alteredUnison` whether another note of its chord stands on its line at a different
+    /// alteration (`AccidentalLineState.hasAlteredUnison`).
+    private static func redundantGlyphs<Ref>(
+        _ refs: [Ref], key: Int,
+        note: (Ref) -> Note?, tieStart: (Ref) -> Int?, alteredUnison: (Ref) -> Bool,
+    ) -> [Ref] {
         // Per-letter alteration implied by the key signature. Seeds the
         // state's default for each line.
         let keyAlteration = keyAlterationByLetter(forKey: key)
-        let refs = MeasureAccidentalWalk.noteRefs(in: measure, division: division, measureDuration: measureDuration)
 
         // Accidental state: written line → alteration currently in force, and whether it arrived only through a tie
         // from the previous bar (`AccidentalLineState.tiedOver` — the next note on that line keeps its accidental).
         // Reset (empty) at the start of each measure; an absent line defaults to the key signature's alteration for
         // that letter.
         var state: [LineKey: AccidentalLineState] = [:]
+        var redundant: [Ref] = []
 
         for ref in refs {
-            guard let note = MeasureAccidentalWalk.note(at: ref, in: measure.voices) else { continue }
+            guard let note = note(ref) else { continue }
 
             guard let spelled = AccidentalLineState.spelling(pitch: note.pitch, tpc: note.tpc) else {
                 // Can't reliably derive the written line / alteration —
@@ -189,18 +287,15 @@ extension Score {
                 // its spelling carries the alteration; one the state covers speaks only to tell an altered unison
                 // apart.
                 let speaks = if current.needsAccidental(for: spelled.alteration) {
-                    note.tieBack == nil || ref.mainAddress.flatMap { tieStarts[$0] } != note.tpc
+                    note.tieBack == nil || tieStart(ref) != note.tpc
                 } else {
-                    MeasureAccidentalWalk.hasAlteredUnison(at: ref, in: measure.voices)
+                    alteredUnison(ref)
                 }
                 if !speaks,
                    note.accidentalRole == .auto,
                    isStandardAccidental(accidental)
                 {
-                    MeasureAccidentalWalk.updateNote(at: ref, in: &measure.voices) {
-                        $0.accidental = nil
-                        $0.accidentalBracket = .none
-                    }
+                    redundant.append(ref)
                     draws = false
                 }
                 // Otherwise the accidental is needed, USER-forced, or
@@ -210,6 +305,7 @@ extension Score {
             // following note, whether or not a glyph was drawn.
             state[lineKey] = current.after(note, alteration: spelled.alteration, drawsAccidental: draws)
         }
+        return redundant
     }
 
     // MARK: - Key signature
