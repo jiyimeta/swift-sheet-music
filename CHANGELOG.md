@@ -17,6 +17,17 @@ and this project adheres to
   tempo where the change starts, `nil` for the type's default. The tempo map ramps over the new line and the MSCX
   encoder writes it as `<Spanner type="GradualTempoChange">`. There is no `EditIntent` case for it yet.
 
+### Changed
+
+- **A note preview sounds through mute and solo while the transport is stopped or paused.** A tapped or entered note
+  (`playPreview`) and a held key (`previewNoteOn`) on a part that is muted, or shut out by another channel's solo,
+  used to be silent: the preview strikes the part's own channel, and the mixer held that channel's CC 7 at 0. Mute
+  and solo choose what the playback is heard with, and a preview is the user asking to hear that one note, so every
+  engine now opens the channel to its slider before the note-on (`MixerChannel.previewGain`) and closes it again
+  before the transport starts — on the Apple engine on both the SwiftySynth and the AUMIDISynth path, on Windows,
+  and on Android (to the channel's remembered CC 7). While the score plays a preview keeps playback's level: it
+  strikes the channel the music is on, and opening it would bring the muted part back in under the music.
+
 ## [4.32.0] - 2026-11-09
 
 ### Added

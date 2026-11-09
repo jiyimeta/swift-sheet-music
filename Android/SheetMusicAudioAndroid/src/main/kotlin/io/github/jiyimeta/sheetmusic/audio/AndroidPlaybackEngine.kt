@@ -1156,6 +1156,9 @@ class AndroidPlaybackEngine internal constructor(
         // Any shift a previous count-in left on the click transport belongs to that play's start
         // position, not this one's.
         restoreBodyMetronomeSequence()
+        // A preview since the last start may have opened a muted strip ([SynthEngine.openForPreview]), and the synth
+        // keeps that level across the seek above: mute it again before the stream renders a block of the score.
+        synthEngine?.closeMutedChannels()
         oboeStream?.play()
 
         val countIn = beginCountInOrNull()
@@ -1768,6 +1771,11 @@ class AndroidPlaybackEngine internal constructor(
         for (bend in plan.pitchBends) {
             engine.previewPitchBend(bend.channel, bend.value)
         }
+        // With the transport stopped or paused, a muted or solo-shut part still sounds the tapped note; while the
+        // score plays the note strikes the music's own channel, and opening it would bring the part back under it.
+        if (_state.value != PlaybackState.PLAYING) {
+            for (voice in plan.voices) engine.openForPreview(voice.channel)
+        }
         for (voice in plan.voices) {
             engine.previewNoteOn(voice.channel, voice.pitch, plan.velocity)
         }
@@ -1862,6 +1870,8 @@ class AndroidPlaybackEngine internal constructor(
         previewStreamHolders.incrementAndGet()
         oboeStream?.play()
 
+        // A muted or solo-shut part still sounds the held note (see [soundPreview]).
+        engine.openForPreview(liveChannel)
         engine.previewNoteOn(liveChannel, pitch, velocity)
         sustainedPreview = Triple(onStaff, liveChannel, pitch)
     }

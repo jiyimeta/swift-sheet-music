@@ -99,15 +99,18 @@ extension PlaybackEngine {
     /// resolve to changed (`pushRecordingTracks(soloing:)`): the backend
     /// keeps them across play, seek and loop wrap, so the re-assert
     /// after each of those sends nothing for them.
+    ///
+    /// A preview lifts the instrument strips past this while the
+    /// transport is stopped (`applyPreviewChannelState`); `play` puts
+    /// them back before it starts (`restorePlaybackGains`).
     func applyMixerState() {
         let soloing = isSoloing
         for channel in mixerChannels {
             switch channel.id {
             case .instrument:
-                let effectivelyMuted = channel.isSilenced(soloing: soloing)
                 applyInstrumentGain(
                     forChannel: channel.id,
-                    gain: effectivelyMuted ? 0 : channel.volume,
+                    gain: channel.playbackGain(soloing: soloing),
                 )
             case .metronome:
                 setMetronomeEnabled(!channel.isMuted)
@@ -120,41 +123,63 @@ extension PlaybackEngine {
     /// Whether the solo bus is engaged — i.e. at least one channel that
     /// is *on* that bus, or one recording, is soloed. The one place the
     /// live rule is expressed; `applyMixerState` and
-    /// `reassertBackendChannelState` read it so they can't drift apart,
+    /// `applyPreviewChannelState` read it so they can't drift apart,
     /// and an export captures it (`ExportEngineSnapshot.isSoloing`).
     var isSoloing: Bool {
         mixerChannels.isSoloing || recordings.contains { $0.track.isSoloed }
     }
 
-    /// Re-assert EVERY mixer-managed instrument channel's program +
-    /// volume on the injected backend synth, for use immediately before
-    /// a tap / hold preview's note-on. Playback streams the SMF's
-    /// programChange plus the mixer's CC 7 through the sequencer, but a
-    /// preview drives the synth directly — and a prior playback's
+    /// Set EVERY mixer-managed instrument channel up for a preview, for
+    /// use immediately before a tap / hold preview's note-on, on either
+    /// path.
+    ///
+    /// The volume is `MixerChannel.previewGain`: with the transport
+    /// stopped or paused, each strip's slider whatever its mute and solo
+    /// say — a part muted, or shut out by a solo, still sounds the note
+    /// the user tapped — and playback's own gain while the score plays.
+    /// `restorePlaybackGains` puts playback's back before the transport
+    /// starts.
+    ///
+    /// With a backend injected, the program too. Playback streams the
+    /// SMF's programChange plus the mixer's CC 7 through the sequencer,
+    /// but a preview drives the synth directly — and a prior playback's
     /// sequencer resets EVERY channel back to GM defaults, so without
     /// this a post-playback audition on any strip other than the one
     /// last played would sound on program 0 (piano) at the default
     /// volume: with every program living at tick 0 in the rendered SMF,
     /// re-asserting only the about-to-sound channel would leave every
     /// OTHER deduped instrument channel silently stuck at those
-    /// defaults. No-op unless a backend is injected (the AU path
-    /// resolves per-staff instruments itself and needs no direct
-    /// re-assert).
-    func reassertBackendChannelState() {
-        guard let backend else { return }
+    /// defaults. (The AU path resolves per-staff instruments itself and
+    /// needs no program re-assert.)
+    func applyPreviewChannelState() {
         let soloing = isSoloing
+        let isPlaying = state == .playing
         for channel in mixerChannels {
-            guard case .instrument = channel.id,
-                  let midiCh = midiChannel(forChannel: channel.id)
-            else { continue }
-            if let program = channel.program, midiCh != 9 {
+            guard case .instrument = channel.id else { continue }
+            if let backend, let program = channel.program,
+               let midiCh = midiChannel(forChannel: channel.id), midiCh != 9
+            {
                 backend.setProgram(channel: midiCh, program: program)
             }
-            let effectivelyMuted = channel.isSilenced(soloing: soloing)
-            let gain: Float = effectivelyMuted ? 0 : channel.volume
-            backend.sendVolume(
-                channel: midiCh, cc7: UInt8(clamping: Int((gain * 127).rounded())),
+            applyInstrumentGain(
+                forChannel: channel.id,
+                gain: channel.previewGain(soloing: soloing, isPlaying: isPlaying),
             )
+        }
+    }
+
+    /// Put playback's volume (`MixerChannel.playbackGain`) back on every
+    /// instrument strip, before the transport starts: a preview lifted a
+    /// muted or solo-shut strip to its slider
+    /// (`applyPreviewChannelState`), and a resumed transport does not
+    /// reset the channel before its first block — the `applyMixerState`
+    /// that follows the start would land a block late, with the muted
+    /// part's first notes already heard.
+    func restorePlaybackGains() {
+        let soloing = isSoloing
+        for channel in mixerChannels {
+            guard case .instrument = channel.id else { continue }
+            applyInstrumentGain(forChannel: channel.id, gain: channel.playbackGain(soloing: soloing))
         }
     }
 

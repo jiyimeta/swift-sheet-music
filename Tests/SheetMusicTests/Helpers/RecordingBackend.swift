@@ -18,6 +18,9 @@
         var currentPositionSeconds: TimeInterval = 0
         var isAtEnd = false
         private(set) var volumeSends: [(channel: UInt8, cc7: UInt8)] = []
+        /// Each channel's last CC 7 at the moment the last `play` came in — what the transport's first block renders
+        /// with, before anything the engine sends after the start.
+        private(set) var volumesAtLastPlay: [UInt8: UInt8] = [:]
         private(set) var programSends: [(channel: UInt8, program: UInt8)] = []
         private(set) var prepareCallCount = 0
         private(set) var stopCallCount = 0
@@ -147,6 +150,7 @@
             didPlay = true
             playCallCount += 1
             transportEvents.append(.play)
+            volumesAtLastPlay = currentVolumes
         }
 
         func play(afterCountInSeconds seconds: TimeInterval) {
@@ -154,6 +158,12 @@
             didPlay = true
             playCallCount += 1
             transportEvents.append(.playAfterCountIn(seconds: seconds))
+            volumesAtLastPlay = currentVolumes
+        }
+
+        /// Each channel's last CC 7, as the synth holds it.
+        var currentVolumes: [UInt8: UInt8] {
+            volumeSends.reduce(into: [:]) { $0[$1.channel] = $1.cc7 }
         }
 
         /// A second recorder, so an export test can assert what the offline

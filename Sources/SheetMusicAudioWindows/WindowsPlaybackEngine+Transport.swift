@@ -95,6 +95,9 @@ extension WindowsPlaybackEngine {
             player.seek(to: 0)
             shared.metronomeOffsetTicks = plan.preRollTicks - baseTick
             shared.countIn = PlaybackTransportStepper.CountIn(preRollTicks: plan.preRollTicks, scoreStartTick: baseTick)
+            // Mutes again a strip a preview lifted (`applyPreviewChannelState`), before the score starts after the
+            // count.
+            shared.applyMixerState()
             player.play()
             shared.state = .playing
             shared.hasCursor = true
@@ -121,6 +124,9 @@ extension WindowsPlaybackEngine {
                 shared.stopPlayers(silence: wasPlaying ? .release : .untouched)
                 shared.rewind(to: target)
             }
+            // A preview since the last start may have lifted a muted strip (`applyPreviewChannelState`); the synth
+            // keeps that level across the rewind, and the reassert below lands a block late.
+            shared.applyMixerState()
             shared.startPlayers()
             shared.state = .playing
             shared.hasCursor = true
