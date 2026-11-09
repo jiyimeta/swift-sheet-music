@@ -44,6 +44,26 @@ and this project adheres to
   shown staves (dropped at one staff unless the style keeps them), part names move to the part's shown staves, and
   tempo marks, rehearsal marks, measure numbers, markers, jumps and voltas move to the first shown staff. Ties across a
   system break, post-pass spanners and the sticky header now find a staff by its address rather than its row.
+- **A chord's or rest's manual beaming is honored (`BeamMode`, `Chord.beamMode`).** MuseScore writes `<BeamMode>` when
+  a beam is broken or joined by hand (`begin`, `mid`, `end`, `no`, `begin16`, `begin32`); the decoder kept it as
+  preserved markup and the layout beamed by the time signature alone. The beam grouping now starts a beam where a chord
+  says `begin`, leaves a `no` chord unbeamed, ends after `end`, and carries a beam across a rest marked `mid`, as
+  MuseScore's `BeamLayout` does; the encoder writes the mode back where MuseScore does. The MusicXML import sets the
+  same mode from `<beam>` (`begin` / `continue` / `end`, and a chord with no `<beam>` amid beamed ones), as MuseScore's
+  `computeBeamMode` does, so an imported file beams as its exporter drew it.
+- **Notes drawn on the other staff of a part are read, written and drawn (`Chord.staffMove`).** MuseScore writes
+  `<staffMove>` (MuseScore 2: `<move>`) on a chord crossed to the staff above (−1) or below (+1) — a right hand's run
+  dipping into the bass staff. The decoder kept it as preserved markup, so the notes were drawn on their own staff,
+  against its clef, with ledger lines down the page. Now `Part.effectiveStaffMove(_:fromStaff:)` and
+  `Score.effectiveStaffMove(of:at:)` give the move MuseScore applies (0 for a move off the part, onto a hidden staff or
+  onto a staff of another type), and the layout places such a chord against the target staff's clef and draws it — with its stem,
+  flag, dots, accidentals and articulations — on that staff, its stem pointing back toward its own staff; a beam group
+  moved as a whole does the same. A beam whose chords lie on both staves is drawn between them, its stems meeting it
+  from both sides, centered between the innermost noteheads and slanted as MuseScore's `calculateAnchorsCross` slants
+  it (the re-centering MuseScore does for secondary beams stacked on one side is not). A moved chord shares the
+  accidental state of the staff it is drawn on; a tie into or out of one still pairs; a staff that receives moved
+  notes does not hide as empty; and `Score.filtered(hidingStaves:)` re-expresses a move against the staves it keeps,
+  clearing one whose target it removes.
 
 ## [4.31.0] - 2026-11-08
 

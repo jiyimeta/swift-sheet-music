@@ -1,8 +1,15 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
 @testable import SheetMusicCore
 @testable import SheetMusicLayout
 import Testing
+
+#if !canImport(CoreGraphics)
+    private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+#endif
 
 /// Chords drawn on a sibling staff (`Chord.staffMove`, MuseScore's `<staffMove>`): placed in the target staff's frame
 /// with its clef, handed to that staff's buffer, stemmed toward their own staff, and — when a beam group straddles the

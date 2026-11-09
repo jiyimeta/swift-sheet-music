@@ -3,6 +3,11 @@ import Foundation
 @testable import SheetMusicLayout
 import Testing
 
+#if !canImport(CoreGraphics)
+    /// Foundation declares one too off Apple; the layout's is the one its elements carry.
+    private typealias CGFloat = SheetMusicLayout.CGFloat
+#endif
+
 /// MuseScore's "hide empty staves": a system leaves out the staves the score asks to hide while they are empty in it
 /// (`SystemLayout::hideEmptyStaves`, `rendering/score/systemlayout.cpp:545-742`). The decision is
 /// `LayoutEngine.shownStaves(score:measureRange:isFirstSystem:)`; the layout compacts the hidden staves out of the
