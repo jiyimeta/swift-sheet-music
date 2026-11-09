@@ -43,7 +43,9 @@ extension Score {
         let (parts, systemMeasures) = try MusicXMLDecodeContext.$spatiumMillimeters.withValue(
             MusicXMLDecodeContext.spatiumMillimeters(root: root),
         ) {
-            try decodeParts(root: root, partList: partList, options: options, software: software)
+            try MusicXMLDecodeContext.$hasBeamingInfo.withValue(MusicXMLStemBeam.hasBeamingInfo(root: root)) {
+                try decodeParts(root: root, partList: partList, options: options, software: software)
+            }
         }
 
         // Hard-code division = 480 ticks per quarter, matching MuseScore's default
