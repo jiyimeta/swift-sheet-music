@@ -402,8 +402,17 @@
         /// Nothing else moved; a lyric's offset had no fixture. Rendered `guitarbend_simple` at 1100 pt and read it
         /// against MuseScore 4.7's own render: the tempo's baseline 5.0 sp over the top line (MuseScore 4.8), the
         /// system texts 2.9 / 2.2 sp (2.5 / 2.0), in MuseScore's order.
+        ///
+        /// **Re-recorded 2026-11-09 when a chord's `<BeamMode>` began to decide its beam (`BeamGrouping.groups`), after
+        /// reading the diff** against origin/main `925ce7ce` (`07d8349c…`, which matched the hash here). 4 blocks of 72
+        /// moved, both wrap modes of the two top-level fixtures whose main chords carry a mode, both `no`:
+        /// `slur_grace_selectionfilter` (24 chords, 68 / 66 lines) and `tie_cross_voice_split184061` (3, 54 / 54). The
+        /// chords that were beamed are now flagged, so their elements, the slurs drawn from their stems and the system
+        /// height move; nothing else did. The `guitarbend_*` fixtures carry their modes on graces, which are not
+        /// grouped, and did not move. Rendered `tie_cross_voice_split184061` and read it against MuseScore 4.7's own
+        /// render: the dotted eighth and the sixteenth stand flagged, as there.
         private static let expectedDigestSHA256 =
-            "07d8349c9689fae4b46b73328c123753b5e07ad96f0c76919cbad320a7809ab7"
+            "f539778f1585c69e17ce2f937354bf4bb39ebffde14749fea977b1f9eb59e730"
 
         @Test("write digest")
         func writeDigest() throws {
