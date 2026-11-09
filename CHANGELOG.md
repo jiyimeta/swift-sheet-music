@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.32.0] - 2026-11-09
+
 ### Added
 
 - **A staff hidden on its own reads as hidden (`Staff.isVisibleInScore`).** MuseScore 4 writes
