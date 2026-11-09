@@ -40,6 +40,11 @@ extension Staff {
                 name: "defaultClef", text: defaultClefType,
             ))
         }
+        // Only a hidden staff carries the flag, after `<defaultClef>` and before `<bracket>`, as MuseScore writes it
+        // (`TWrite::write(const Staff*)`, rw/write/twrite.cpp:2795-2797).
+        if !isVisibleInScore {
+            children.append(XMLTreeNode(name: "isStaffVisible", text: "0"))
+        }
         for bracket in brackets {
             var bracketAttrs: [String: String] = [
                 "type": String(bracket.type.rawValue),

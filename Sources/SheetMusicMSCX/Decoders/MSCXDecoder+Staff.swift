@@ -7,7 +7,7 @@ extension Staff {
     /// Anything else becomes preserved markup — see `PreservedXML`.
     private static let consumedStaffChildren: Set = [
         "StaffType", "bracket", "BracketItem", "defaultClef", "defaultConcertClef",
-        "defaultTransposingClef", EIDXML.childName,
+        "defaultTransposingClef", "isStaffVisible", EIDXML.childName,
     ]
 
     /// Every `<StaffType>` child this decoder reads. Its other children
@@ -79,12 +79,20 @@ extension Staff {
             lineCount: lineCount,
             defaultClefType: defaultClef,
             brackets: brackets,
+            isVisibleInScore: node.first("isStaffVisible").map { isMuseScoreTrue($0.text) } ?? true,
             measures: [],
             staffTypePreservedMarkup: staffTypeNode?.preservedMarkup(
                 consuming: consumedStaffTypeChildren,
             ) ?? [],
             preservedMarkup: node.preservedMarkup(consuming: consumedStaffChildren) + unmodeledBracketItems,
         ))
+    }
+
+    /// A boolean the way MuseScore reads `<isStaffVisible>`: `readBool()` is `readInt()` (`rw/xmlreader.h:57`), so
+    /// only a non-zero integer is true — `false`, `true` and an empty element all read as 0. Matched rather than made
+    /// friendlier, so a staff is hidden here exactly when MuseScore hides it.
+    private static func isMuseScoreTrue(_ text: String) -> Bool {
+        (Int(text.trimmingWhitespaceAndNewlines()) ?? 0) != 0
     }
 
     /// The staff's brackets, and the MuseScore 5 `<BracketItem>`s this model cannot hold (kept as preserved markup).

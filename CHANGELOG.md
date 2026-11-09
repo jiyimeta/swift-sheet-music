@@ -7,6 +7,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **A staff hidden on its own reads as hidden (`Staff.isVisibleInScore`).** MuseScore 4 writes
+  `<isStaffVisible>0</isStaffVisible>` into a part's `<Staff>` when one staff is hidden with its eye in the Instruments
+  panel — the left hand of a piano, say. The MSCX decoder used to keep the tag as preserved markup only, so a host
+  could not see it and showed the staff. It now reads it the way MuseScore's `readBool()` does (only a non-zero
+  integer is visible), and the encoder writes it back, only for a hidden staff, after `<defaultClef>` and before
+  `<bracket>` as MuseScore does. Like `Part.isVisibleInScore`, it says what the file hides; the layout engine still
+  draws every staff it is given.
+- **`Score.authoredHiddenStaffAddresses`** — every staff the file hides in the score: all staves of a part with
+  `isVisibleInScore == false`, and each staff with its own `isVisibleInScore == false`. A host seeds it into its
+  hidden-staff set; the example app's Mac view does.
+- **`StaffWire.isAuthoredHidden`** (in `PartsStavesWire`) — 1 when `authoredHiddenStaffAddresses` holds the staff, so
+  an Android host seeds the same set without combining the part and staff flags itself.
+
 ## [4.31.0] - 2026-11-08
 
 ### Added
