@@ -58,7 +58,9 @@ extension Chord {
         }
         appendBeamMode(to: &children)
         let chordCarriesSmall = appendChordLevelSmall(for: notes, to: &children)
+        let durationStart = children.count
         appendWrittenDuration(to: &children)
+        insertStaffMove(into: &children, from: durationStart)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         // Articulations sit between durationType and the first
         // <Lyrics>/<Note>: matches MuseScore's Chord::write ordering
@@ -272,7 +274,9 @@ extension Chord {
         var children: [XMLTreeNode] = []
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
         appendBeamMode(to: &children)
+        let durationStart = children.count
         duration.appendDurationXML(to: &children)
+        insertStaffMove(into: &children, from: durationStart)
         children += lyricNodes(options: options)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
@@ -294,7 +298,9 @@ extension Chord {
         var children: [XMLTreeNode] = []
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
         appendBeamMode(to: &children)
+        let durationStart = children.count
         duration.appendDurationXML(to: &children, in: measureDuration)
+        insertStaffMove(into: &children, from: durationStart)
         children += lyricNodes(options: options)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())

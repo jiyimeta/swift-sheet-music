@@ -114,6 +114,14 @@ public struct Chord: Sendable, Equatable {
     /// the meter; a rest at `auto` is never beamed, as in MuseScore (`Groups::actualBeamMode`), while a rest at `begin`
     /// / `mid` / `end` is beamed over. Honored by `BeamGrouping.groups`.
     public var beamMode: BeamMode = .auto
+    /// How many staves of its part this chord or rest is drawn away from its own — MuseScore `<staffMove>` (MuseScore 2
+    /// `<move>`): +1 the staff below (a piano's right hand reaching into the left hand's staff), −1 the staff above, 0
+    /// (the default) its own (`ChordRest::m_staffMove`, `dom/chordrest.h:93-96`). The chord still belongs to its own
+    /// staff — its address, voice, playback and lyrics stay there — and is only drawn on the other one, under that
+    /// staff's clef. A file may hold a value the score cannot honor (no such staff in the part, a hidden or unpitched
+    /// one); the value is kept as written and the layout reads it through `Part.effectiveStaffMove(_:fromStaff:)`,
+    /// which draws such a chord on its own staff, as MuseScore does (`ChordRest::checkStaffMoveValidity`).
+    public var staffMove = 0
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
 

@@ -3,16 +3,15 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Chord {
-    /// Every direct `<Chord>` child this decoder reads, including
-    /// children interpreted by the voice decoder before this method
-    /// is called. Anything else becomes preserved markup.
+    /// Every direct `<Chord>` child this decoder reads, including children interpreted by the voice decoder before
+    /// this method is called. Anything else becomes preserved markup.
     private static let consumedChordChildren: Set = [
         "Arpeggio", "Articulation", "BeamMode", "ChordBracket", "ChordLine", "Lyrics",
         "Note", "NoteParenGroup", "Ornament", "Spanner", "Stem", "StemDirection", "Tremolo",
         "TremoloSingleChord", "TremoloTwoChord", "acciaccatura",
         "appoggiatura", "color", "dots", "durationType", "grace16",
         "grace16after", "grace32", "grace32after", "grace4", "grace8after",
-        "offset", "autoplace", "placement", "small", "track", "visible",
+        "move", "offset", "autoplace", "placement", "small", "staffMove", "track", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> Chord {
@@ -85,6 +84,7 @@ extension Chord {
         )
         chord.isWrittenDoubled = played != nil
         chord.beamMode = BeamMode.decode(in: node)
+        chord.staffMove = decodeStaffMove(in: node)
         chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         chord.spanners = decodeChordSpanners(node)
         return chord

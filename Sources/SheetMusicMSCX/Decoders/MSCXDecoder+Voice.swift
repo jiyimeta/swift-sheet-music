@@ -184,11 +184,15 @@ extension Voice {
                     // which `Chord.decode` lifts into `inner.stemDirection`,
                     // goes back the same way, and so does its `<BeamMode>`
                     // (`inner.beamMode`): graces beam among themselves, which
-                    // `BeamGrouping` does not group.
+                    // `BeamGrouping` does not group. So does a `<staffMove>`
+                    // (MuseScore 2 `<move>`): a grace chord is drawn on its own
+                    // staff here.
                     let graceMarkup = inner.preservedMarkup
                         + child.all("ChordBracket").map(PreservedXML.init)
                         + child.all("StemDirection").map(PreservedXML.init)
                         + child.all("BeamMode").map(PreservedXML.init)
+                        + child.all("staffMove").map(PreservedXML.init)
+                        + child.all("move").map(PreservedXML.init)
                     pendingGraces.append((EIDXML.decode(from: child), GraceChord(
                         graceType: graceType,
                         duration: inner.duration,

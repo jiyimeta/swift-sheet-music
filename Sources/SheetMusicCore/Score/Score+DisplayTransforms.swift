@@ -309,6 +309,14 @@ extension Score {
         var newLocation: [StaffAddress: (part: Int, staff: Int)] = [:]
         for (partIndex, part) in parts.enumerated() {
             var keptStaves: [(EID, Staff)] = []
+            // Where each kept staff of this part lands inside it, so a chord moved onto a sibling staff
+            // (`Chord.staffMove`, relative) still names the same staff once the ones between are gone.
+            var keptIndexByOld: [Int: Int] = [:]
+            for staffIndex in part.staves.indices
+                where isKept(StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex))
+            {
+                keptIndexByOld[staffIndex] = keptIndexByOld.count
+            }
             for (staffIndex, staff) in part.staves.enumerated() {
                 let address = StaffAddress(
                     partIndex: partIndex, staffIndexInPart: staffIndex,
@@ -317,6 +325,9 @@ extension Score {
                 newLocation[address] = (newParts.count, keptStaves.count)
                 var stripped = staff
                 stripped.brackets = []
+                if keptIndexByOld.count < part.staves.count {
+                    Self.remapStaffMoves(in: &stripped, from: staffIndex, keptIndexByOld: keptIndexByOld)
+                }
                 keptStaves.append((part.staves.eid(at: staffIndex), stripped))
             }
             guard !keptStaves.isEmpty else { continue }
