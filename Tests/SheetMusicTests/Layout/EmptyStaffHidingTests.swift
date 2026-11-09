@@ -290,6 +290,49 @@ struct EmptyStaffHidingTests {
         #expect(doc.systems.map(\.staffAddresses) == Array(repeating: [Self.flute, Self.oboe, Self.cello], count: 3))
     }
 
+    @Test("the system holding a caret on a staff it would hide draws every staff; the others hide as before")
+    func revealedStaffOpensItsSystem() throws {
+        let score = Self.trio()
+        let measure = try #require(Self.layout(score).systems.dropFirst().first?.measures.first?.measureIndex)
+        func systems(revealing staff: StaffAddress) -> [[StaffAddress]] {
+            var options = ScoreViewOptions(staffSize: 20, wrapToViewWidth: true, includeTitleFrame: false)
+            options.revealedStaff = .init(staff: staff, measureIndex: measure)
+            return LayoutEngine.layout(score: score, options: options, availableWidth: 600).systems
+                .map(\.staffAddresses)
+        }
+        let all = [Self.flute, Self.oboe, Self.cello]
+        #expect(systems(revealing: Self.oboe) == [all, all, all])
+        // A caret on a staff the system draws anyway changes nothing.
+        #expect(systems(revealing: Self.flute) == [all, [Self.flute, Self.cello], all])
+    }
+
+    /// The caret is no part of the cache's keys: moving it into a hidden staff lays out again only its own system.
+    @Test("a warm cache follows the revealed staff, laying out again only the system it opens")
+    func revealedStaffWithAWarmCache() throws {
+        let score = Self.trio()
+        var options = ScoreViewOptions(staffSize: 20, wrapToViewWidth: true, includeTitleFrame: false)
+        let cache = LayoutCache()
+        let plain = LayoutEngine.layout(score: score, options: options, availableWidth: 600, cache: cache)
+        let measure = try #require(plain.systems.dropFirst().first?.measures.first?.measureIndex)
+        options.revealedStaff = .init(staff: Self.oboe, measureIndex: measure)
+        let warm = LayoutEngine.layout(score: score, options: options, availableWidth: 600, cache: cache)
+        // The counters are the last layout's: the first and last systems come from the cache, and only the one the
+        // caret opens is built again.
+        #expect(cache.systemHits == 2)
+        #expect(cache.systemMisses == 1)
+        #expect(warm == LayoutEngine.layout(score: score, options: options, availableWidth: 600))
+    }
+
+    @Test("a score asks to hide empty staves when some staff would hide under its own settings")
+    func asksToHideEmptyStaves() {
+        #expect(Self.trio().asksToHideEmptyStaves)
+        #expect(!Self.score(
+            [Self.part("Fl", [Self.staff([.note])]), Self.part("Vc", [Self.staff([.rest])])], hideEmptyStaves: false,
+        ).asksToHideEmptyStaves)
+        // One staff never hides, whatever the style says.
+        #expect(!Self.score([Self.part("Fl", [Self.staff([.rest])])]).asksToHideEmptyStaves)
+    }
+
     @Test("brackets are trimmed to the shown staves, and dropped at one staff unless the style keeps them")
     func brackets() throws {
         let brackets = [

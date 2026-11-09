@@ -44,6 +44,12 @@ and this project adheres to
   shown staves (dropped at one staff unless the style keeps them), part names move to the part's shown staves, and
   tempo marks, rehearsal marks, measure numbers, markers, jumps and voltas move to the first shown staff. Ties across a
   system break, post-pass spanners and the sticky header now find a staff by its address rather than its row.
+- **`Score.asksToHideEmptyStaves`** — whether some staff of the score hides while empty under the score's own
+  settings, so a host that lets the reader switch hiding on and off can start it on for a score that asks for it.
+- **`ScoreViewOptions.revealedStaff`** — where a host's editing caret is (a staff in a measure). The system holding it
+  that would hide that staff draws every staff instead, so a caret never sits on a staff the page leaves out; the
+  other systems hide as before. It is not part of the layout cache's keys, so a caret moving through the score lays
+  out again only the systems it opens or closes.
 - **A chord's or rest's manual beaming is honored (`BeamMode`, `Chord.beamMode`).** MuseScore writes `<BeamMode>` when
   a beam is broken or joined by hand (`begin`, `mid`, `end`, `no`, `begin16`, `begin32`); the decoder kept it as
   preserved markup and the layout beamed by the time signature alone. The beam grouping now starts a beam where a chord

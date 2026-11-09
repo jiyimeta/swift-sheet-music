@@ -39,8 +39,9 @@
                     systemVerticalPadding: 2,
                 ),
             )
-            // Not an initializer parameter: set on the value.
+            // Not initializer parameters: set on the value.
             options.hidesEmptyStaves = false
+            options.revealedStaff = .init(staff: StaffAddress(partIndex: 0, staffIndexInPart: 1), measureIndex: 3)
             return options
         }
 

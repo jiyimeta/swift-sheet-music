@@ -718,7 +718,7 @@ extension LayoutEngine {
             percussionGroups: staves.map { $0.group == "percussion" },
             partLabels: partLabels(of: context.score, isFirstSystem: isFirstSystem),
             totalMeasures: staves.first?.measures.count ?? 0,
-            options: context.options,
+            options: context.options.cacheKey,
             overlappingSpannerAnchors: overlappingAnchors,
             ottavaNumbersOnly: context.score.style.ottavaNumbersOnly,
             chordSymbolCase: context.score.style.chordSymbolCase,
@@ -739,6 +739,13 @@ extension LayoutEngine {
     ) -> [Bool] {
         guard let hiding = context.emptyStaffHiding else { return [] }
         let shown = hiding.shownStaves(measureRange: measureRange, isFirstSystem: isFirstSystem)
+        // The system the caret is in draws every staff when it would leave the caret's out
+        // (`ScoreViewOptions.revealedStaff`).
+        if let revealed = context.options.revealedStaff, measureRange.contains(revealed.measureIndex),
+           let flat = context.score.allStaves.firstIndex(where: { $0.address == revealed.staff }), !shown[flat]
+        {
+            return []
+        }
         return shown.contains(false) ? shown : []
     }
 

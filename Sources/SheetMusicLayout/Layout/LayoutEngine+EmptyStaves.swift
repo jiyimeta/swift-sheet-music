@@ -15,6 +15,15 @@ import SheetMusicCore
 /// What this leaves out: MuseScore's per-measure `<hideIfEmpty>` overrides and `<cutaway>` (both kept as preserved
 /// markup). The engine draws every staff it is given, so a staff a host hides (`Score.filtered(hidingStaves:)`,
 /// MuseScore's `Staff::show()`) is gone before this runs.
+extension Score {
+    /// Whether some staff of this score hides while it is empty under the score's own settings — its staff's or part's
+    /// `hideWhenEmpty`, or the style's `hideEmptyStaves` — so a host that lets the reader turn hiding on and off can
+    /// start it on for a score that asks for it. False for a single-staff score, which never hides its staff.
+    public var asksToHideEmptyStaves: Bool {
+        EmptyStaffHiding(score: self) != nil
+    }
+}
+
 struct EmptyStaffHiding {
     private enum Mode {
         case alwaysShow, whenStaffEmpty, whenPartEmpty
