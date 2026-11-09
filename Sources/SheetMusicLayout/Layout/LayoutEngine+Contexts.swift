@@ -24,6 +24,11 @@ public struct LayoutMeasureContext: Sendable, Equatable {
     /// measure is irregular and no number should be drawn (anacrusis
     /// convention). Mirrors `Score.displayedMeasureNumber(at:)`.
     public let displayedMeasureNumber: Int?
+    /// The staff each entry of `clefRawTypes`, `keySignatures` and `partLabels` stands for, as
+    /// `LayoutEngine.measureContexts(for:)` builds them — every staff of the score in order. A sticky header pairs
+    /// them with a template system's rows by address, since a system that hides empty staves has fewer rows. Empty
+    /// for a context built by hand, which pairs by position.
+    var staffAddresses: [StaffAddress] = []
 
     public struct TimeSignaturePair: Sendable, Equatable {
         public let numerator: Int
@@ -86,6 +91,7 @@ extension LayoutEngine {
                 ?? ""
         }
         let measureCount = allStaves.first?.staff.measures.count ?? 0
+        let addresses = allStaves.map(\.address)
         var contexts: [LayoutMeasureContext] = []
         contexts.reserveCapacity(measureCount)
         for measureIdx in 0 ..< measureCount {
@@ -116,7 +122,7 @@ extension LayoutEngine {
                     }
                 }
             }
-            contexts.append(LayoutMeasureContext(
+            var context = LayoutMeasureContext(
                 measureIndex: measureIdx,
                 clefRawTypes: clefs,
                 keySignatures: keys,
@@ -125,7 +131,9 @@ extension LayoutEngine {
                 displayedMeasureNumber: score.displayedMeasureNumber(
                     at: measureIdx,
                 ),
-            ))
+            )
+            context.staffAddresses = addresses
+            contexts.append(context)
         }
         return contexts
     }
@@ -259,7 +267,12 @@ extension LayoutEngine {
         let headerW = max(contentEndX, staffStartX + metrics.sp * 6)
 
         var elements: [LayoutElement] = []
-        for (staffIdx, origin) in staffOrigins.enumerated() {
+        for (row, origin) in staffOrigins.enumerated() {
+            // The context's entry for this row's staff: the same position while the template draws every staff, the
+            // staff's own when it hides some as empty.
+            let staffIdx = context.staffAddresses.isEmpty || !templateSystem.staffAddresses.indices.contains(row)
+                ? row
+                : context.staffAddresses.firstIndex(of: templateSystem.staffAddresses[row]) ?? row
             // `metrics.staffHeight` is the five-line REFERENCE height
             // that step→Y placement is expressed in, exactly as in
             // `placeMeasureElements`, so it stays put for every line
@@ -267,7 +280,7 @@ extension LayoutEngine {
             // staff's own height — the percussion clefs and the time
             // signature — take `centerOffsetSp` on top of it.
             let staffMidY = origin.y + metrics.staffHeight / 2
-            let geometry = templateSystem.geometry(atFlatIndex: staffIdx)
+            let geometry = templateSystem.geometry(atFlatIndex: row)
             if staffIdx < context.clefRawTypes.count {
                 let rawType = context.clefRawTypes[staffIdx]
                 let clefDy = metrics.sp * ClefGlyph.staffCenteringOffsetSp(

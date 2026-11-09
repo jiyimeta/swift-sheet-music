@@ -32,6 +32,18 @@ and this project adheres to
   writes each staff's integer, losing only an `on` multi-staff part that hides its staves together, which reads back
   as following the style. The four style keys are read for layout and saved as the file had them, like
   `lastSystemFillLimit`.
+- **The layout hides empty staves as MuseScore 4.6 does (`ScoreViewOptions.hidesEmptyStaves`, default on).** Each
+  system leaves out the staves those settings hide while they are empty in it: by the staff's own setting, else its
+  part's, else the style — which spares the first system, and the first after a section break, while
+  `dontHideStavesInFirstSystem` is on. A staff stays for a note, a measure repeat, a visible staff annotation
+  (dynamic, chord symbol, staff text, …) or a staff spanner reaching into the system, hidden ones and slurs included;
+  a part hiding its staves together keeps them while any one has content; a system left empty gets back its
+  `showIfSystemEmpty` staves or its first. Line breaks are decided first, so hiding never moves one. A system that
+  hides a staff has no row for it — `staffOrigins`, `staffAddresses` and `staffGeometries` hold the shown staves under
+  their score-wide addresses, so `flatIndex(for:)` returns nil — and draws nothing of it; brackets are trimmed to the
+  shown staves (dropped at one staff unless the style keeps them), part names move to the part's shown staves, and
+  tempo marks, rehearsal marks, measure numbers, markers, jumps and voltas move to the first shown staff. Ties across a
+  system break, post-pass spanners and the sticky header now find a staff by its address rather than its row.
 
 ## [4.31.0] - 2026-11-08
 

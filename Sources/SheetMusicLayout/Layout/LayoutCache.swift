@@ -263,6 +263,10 @@ public final class LayoutCache: @unchecked Sendable {
         /// (`LayoutEngine.barHeadBreathOwners`) — the same blind spot `followingClefs` covers at the other end.
         /// The bars after the first find theirs in `measuresPerStaff`. Empty entries for bars that open with no breath.
         var barHeadBreathOwners: [[Int?]] = []
+        /// Which staves the system draws (`LayoutEngine.systemShownStaves`), empty when it draws all. It depends on
+        /// more than this range's measures — the score's style, every part's and staff's hide settings, slurs and
+        /// hidden spanners reaching in from outside — so the decision itself is the key rather than its inputs.
+        var shownStaves: [Bool] = []
     }
 
     /// All inputs to `placeMeasureElements` for one (measure, staff).

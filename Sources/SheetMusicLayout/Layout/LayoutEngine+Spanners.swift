@@ -31,10 +31,12 @@ extension LayoutEngine {
 
         let kind: Spanner.Kind
         let rawType: String
-        let startStaff: Int
+        /// The flat (`Score.allStaves`) index of the staff the spanner is drawn against — `staffAddress`'s, except for
+        /// a system spanner moved off a staff its system hides (`LayoutEngine.movingSystemSpanners`).
+        var startStaff: Int
         let startMeasure: Int
         let startTick: Int
-        let endStaff: Int
+        var endStaff: Int
         let endMeasure: Int
         /// Tick at which the spanner ends, in the END measure's local
         /// tick frame (0 = start of `endMeasure`). Computed from
@@ -204,6 +206,9 @@ extension LayoutEngine {
 
         var extraPerSystem: [[LayoutElement]] =
             Array(repeating: [], count: systems.count)
+        // A system that hides staves has no row for them, so a spanner finds its row by address in each system it
+        // reaches (`spannerRow`) rather than by its score-wide index.
+        let addresses = score.allStaves.map(\.address)
 
         for anchor in anchors {
             guard let (startSys, startLocal) =
@@ -234,6 +239,7 @@ extension LayoutEngine {
 
             if startSys == endSys {
                 let system = systems[startSys]
+                guard let row = spannerRow(for: anchor, in: system, addresses: addresses) else { continue }
                 let fromX = snappedHairpinStartX(
                     startX(
                         anchor: anchor,
@@ -257,7 +263,7 @@ extension LayoutEngine {
                 )
                 let y = anchorY(
                     in: system, belowStaff: belowStaff,
-                    staffIndex: anchor.startStaff,
+                    staffIndex: row,
                     measureRange: startLocal ... endLocal,
                     metrics: metrics,
                     kind: kind,
@@ -294,38 +300,45 @@ extension LayoutEngine {
                 )
                 let toXStart = startSystem.size.width - metrics.sp * 2
                 let startEnd = max(startLocal, startSystem.measures.count - 1)
-                let yStart = anchorY(
-                    in: startSystem, belowStaff: belowStaff,
-                    staffIndex: anchor.startStaff,
-                    measureRange: startLocal ..< startSystem.measures.count,
-                    metrics: metrics,
-                    kind: kind,
-                    minNorthY: vibratoMinNorthY(
-                        in: startSystem.measures,
-                        localRange: startLocal ... startEnd,
-                        startTick: anchor.startTick,
-                        endTick: 0,
-                    ),
-                )
-                extraPerSystem[startSys].append(.spannerSegment(
-                    kind: kind,
-                    fromOrigin: CGPoint(x: fromX, y: yStart),
-                    toOrigin: CGPoint(x: toXStart, y: yStart),
-                    continuesLeft: false,
-                    continuesRight: true,
-                    text: label,
-                    anchor: anchor.selectionAnchor,
-                    richText: attachedLabelRuns(
-                        kind: kind, anchor: anchor, continuesLeft: false, metrics: metrics,
-                    ),
-                ))
+                // Each system's segment sits on that system's row for the staff, and a system with none draws no
+                // segment.
+                if let startRow = spannerRow(for: anchor, in: startSystem, addresses: addresses) {
+                    let yStart = anchorY(
+                        in: startSystem, belowStaff: belowStaff,
+                        staffIndex: startRow,
+                        measureRange: startLocal ..< startSystem.measures.count,
+                        metrics: metrics,
+                        kind: kind,
+                        minNorthY: vibratoMinNorthY(
+                            in: startSystem.measures,
+                            localRange: startLocal ... startEnd,
+                            startTick: anchor.startTick,
+                            endTick: 0,
+                        ),
+                    )
+                    extraPerSystem[startSys].append(.spannerSegment(
+                        kind: kind,
+                        fromOrigin: CGPoint(x: fromX, y: yStart),
+                        toOrigin: CGPoint(x: toXStart, y: yStart),
+                        continuesLeft: false,
+                        continuesRight: true,
+                        text: label,
+                        anchor: anchor.selectionAnchor,
+                        richText: attachedLabelRuns(
+                            kind: kind, anchor: anchor, continuesLeft: false, metrics: metrics,
+                        ),
+                    ))
+                }
                 if endSys > startSys + 1 {
                     for mid in (startSys + 1) ..< endSys {
                         let midSystem = systems[mid]
+                        guard let midRow = spannerRow(for: anchor, in: midSystem, addresses: addresses) else {
+                            continue
+                        }
                         let midEnd = max(0, midSystem.measures.count - 1)
                         let y = anchorY(
                             in: midSystem, belowStaff: belowStaff,
-                            staffIndex: anchor.startStaff,
+                            staffIndex: midRow,
                             measureRange: 0 ..< midSystem.measures.count,
                             metrics: metrics,
                             kind: kind,
@@ -356,6 +369,7 @@ extension LayoutEngine {
                     }
                 }
                 let endSystem = systems[endSys]
+                guard let endRow = spannerRow(for: anchor, in: endSystem, addresses: addresses) else { continue }
                 let fromXEnd: CGFloat = metrics.sp * 2
                 let toXEnd = snappedHairpinEndX(
                     endX(
@@ -370,7 +384,7 @@ extension LayoutEngine {
                 )
                 let yEnd = anchorY(
                     in: endSystem, belowStaff: belowStaff,
-                    staffIndex: anchor.endStaff,
+                    staffIndex: endRow,
                     measureRange: 0 ... endLocal,
                     metrics: metrics,
                     kind: kind,

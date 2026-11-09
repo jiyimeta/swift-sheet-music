@@ -484,6 +484,16 @@ extension LayoutEngine {
             }
             // HBox room joins its measure's slot only now, so no stretch scales it; `buildSystem` takes it back out.
             let slots = slotsWithRoom(stretched, systemStart: systemStart, gaps: horizontalGaps)
+            // Which staves the system draws, decided once its measures are fixed — MuseScore hides empty staves after
+            // collecting a system's measures and before its vertical layout (`systemlayout.cpp:384-398`), so hiding
+            // never moves a line break. A system after a section break is a first system here too (`:103-113`), in
+            // page layout only; the single horizontal system is the first one anyway. Empty when every staff draws.
+            let opensSection = systemStart > 0 && firstStaff.measures[systemStart - 1].sectionBreak
+            let shownStaves = systemShownStaves(
+                measureRange: systemStart ..< cursor,
+                isFirstSystem: isFirstSystem || (context.options.wrapToViewWidth && opensSection),
+                context: context,
+            )
             // Snapshot carry-in state BEFORE buildSystem mutates it.
             // Used either as cache key (on miss store) or for hit check.
             let activeClefsIn = activeClefs
@@ -498,6 +508,7 @@ extension LayoutEngine {
                 activeKeysIn: activeKeysIn,
                 trailingCourtesy: trailingCourtesy,
                 lineAggregates: lineAggregates,
+                shownStaves: shownStaves,
                 context: context,
             )
             let system: LayoutSystem
@@ -524,6 +535,7 @@ extension LayoutEngine {
                     activeClefs: &activeClefs,
                     activeKeys: &activeKeys,
                     widthPassAggregates: aggregates,
+                    shownStaves: shownStaves,
                     context: context,
                 )
                 system = shift(unshifted, byY: currentY)
@@ -649,6 +661,7 @@ extension LayoutEngine {
         activeKeysIn: [Int],
         trailingCourtesy: TrailingCourtesy?,
         lineAggregates: [TickAggregate?] = [],
+        shownStaves: [Bool] = [],
         context: RenderContext,
     ) -> LayoutCache.SystemInputs {
         let allStaves = context.score.allStaves
@@ -715,7 +728,19 @@ extension LayoutEngine {
             followingClefs: followingClefs(after: lastMeasure, staves: staves, plan: context.multiMeasureRestPlan),
             lineAggregates: lineAggregates,
             barHeadBreathOwners: staves.map { barHeadBreathOwners(measureIdx: measureStart, in: $0) },
+            shownStaves: shownStaves,
         )
+    }
+
+    /// Which staves the system holding `measureRange` draws, in `Score.allStaves` order
+    /// (`EmptyStaffHiding.shownStaves(measureRange:isFirstSystem:)`) — or empty, meaning every staff, which is
+    /// `buildSystem`'s path for a system that hides nothing.
+    static func systemShownStaves(
+        measureRange: Range<Int>, isFirstSystem: Bool, context: RenderContext,
+    ) -> [Bool] {
+        guard let hiding = context.emptyStaffHiding else { return [] }
+        let shown = hiding.shownStaves(measureRange: measureRange, isFirstSystem: isFirstSystem)
+        return shown.contains(false) ? shown : []
     }
 
     /// The part label each part contributes to a system — the same resolution

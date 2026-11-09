@@ -114,6 +114,7 @@ public enum LayoutEngine {
                 score: score, measureCount: staves.first?.measures.count ?? 0,
                 plan: multiMeasureRestPlan, sp: metrics.sp,
             ),
+            emptyStaffHiding: EmptyStaffHiding(score: score, options: options, plan: multiMeasureRestPlan),
         )
         let packedSystems = packSystems(context: context)
         // Use the actual rendered system extent — not `availableWidth`,
@@ -349,5 +350,9 @@ public enum LayoutEngine {
         /// (`horizontalGapIndexes`). Where `m` opens a system the room is dropped. Wrap and horizontal mode alike. A
         /// defaulted `var` for the same reason as `frameBreaks`.
         var horizontalGaps: [Int: CGFloat] = [:]
+        /// Which staves each system draws (`EmptyStaffHiding`), or nil when every system draws every staff — the host
+        /// turned `ScoreViewOptions.hidesEmptyStaves` off, or nothing in the score can hide. A defaulted `var` for the
+        /// same reason as `frameBreaks`.
+        var emptyStaffHiding: EmptyStaffHiding?
     }
 }

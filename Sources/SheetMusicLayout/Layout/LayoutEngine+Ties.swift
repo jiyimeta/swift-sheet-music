@@ -33,14 +33,15 @@ extension LayoutEngine {
         // - tieNumber alone collides across ALL staves.
         // - (number, pitch) collides when two staves share the same
         //   clef (e.g. two treble staves both holding C4).
-        // - Adding `staffIndex` (the index of the staff within the
-        //   system, derived by closest-midline match) uniquely
+        // - Adding `staff` (the address of the staff, found by
+        //   closest-midline match within the system) uniquely
         //   identifies the staff in a way that is STABLE across
         //   system breaks. An earlier version used the absolute
         //   staff-midline Y, but that differs between systems in
         //   vertical / page mode (different `system.origin.y`),
         //   so a tie crossing a system break failed to match and
-        //   was silently dropped.
+        //   was silently dropped. The row within the system is not
+        //   stable either once a system hides an empty staff above.
         // - `voiceIndex` keeps two voices that hold the same pitch tied
         //   at once apart, now that the walk follows time rather than
         //   one voice after another. A tie into another voice is paired
@@ -52,7 +53,7 @@ extension LayoutEngine {
         struct TieKey: Hashable {
             let number: Int
             let pitch: Int
-            let staffIndex: Int
+            let staff: StaffAddress
             let voiceIndex: Int
         }
         /// Pair ties by SOUNDING pitch, not staff step. Transpose can spell the
@@ -141,6 +142,10 @@ extension LayoutEngine {
                             toMidYLocal: noteMidYLocal,
                             in: staffMidYsLocal,
                         )
+                        // A system built without addresses keys by row, as before them.
+                        let staff = system.staffAddresses.indices.contains(staffIndex)
+                            ? system.staffAddresses[staffIndex]
+                            : StaffAddress(partIndex: -1, staffIndexInPart: staffIndex)
 
                         if let back = n.tieBack {
                             let openTie: (origin: CGPoint, above: Bool, noteID: NoteID)?
@@ -149,7 +154,7 @@ extension LayoutEngine {
                             } else {
                                 let key = TieKey(
                                     number: back, pitch: tieDiscriminator(n),
-                                    staffIndex: staffIndex, voiceIndex: n.noteID.voiceIndex,
+                                    staff: staff, voiceIndex: n.noteID.voiceIndex,
                                 )
                                 openTie = open.removeValue(forKey: key)
                             }
@@ -172,7 +177,7 @@ extension LayoutEngine {
                             } else {
                                 let key = TieKey(
                                     number: fwd, pitch: tieDiscriminator(n),
-                                    staffIndex: staffIndex, voiceIndex: n.noteID.voiceIndex,
+                                    staff: staff, voiceIndex: n.noteID.voiceIndex,
                                 )
                                 open[key] = (absolute, above, n.noteID)
                             }
