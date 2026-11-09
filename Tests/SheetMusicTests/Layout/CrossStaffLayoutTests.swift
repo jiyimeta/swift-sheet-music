@@ -22,12 +22,15 @@ struct CrossStaffLayoutTests {
 
     private static let treble = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-    private static func layout(_ data: Data) throws -> LayoutDocument {
-        try layout(Fixture.parse(data))
+    private static func layout(_ data: Data, showsInvisible: Bool = false) throws -> LayoutDocument {
+        try layout(Fixture.parse(data), showsInvisible: showsInvisible)
     }
 
-    private static func layout(_ score: Score, width: CGFloat = 1200, cache: LayoutCache? = nil) -> LayoutDocument {
-        let options = ScoreViewOptions(staffSize: 20, wrapToViewWidth: true, includeTitleFrame: false)
+    private static func layout(
+        _ score: Score, width: CGFloat = 1200, cache: LayoutCache? = nil, showsInvisible: Bool = false,
+    ) -> LayoutDocument {
+        var options = ScoreViewOptions(staffSize: 20, wrapToViewWidth: true, includeTitleFrame: false)
+        options.showsInvisibleElements = showsInvisible
         return LayoutEngine.layout(score: score, options: options, availableWidth: width, cache: cache)
     }
 
@@ -133,7 +136,83 @@ struct CrossStaffLayoutTests {
         #expect(chords.filter { $0.writtenOn != Self.treble }.allSatisfy { $0.stem == .down && $0.isBeamed })
     }
 
+    @Test("a moved chord's fingering and its tuplet's number are drawn on the staff the chord is drawn on")
+    func marksWithoutAnOwnerFollowTheChord() throws {
+        let fingered = "<Chord><staffMove>1</staffMove><durationType>eighth</durationType><Note>"
+            + "<Fingering><text>1</text></Fingering><pitch>55</pitch><tpc>15</tpc></Note></Chord>"
+        let tuplet = "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes><baseNote>eighth</baseNote>"
+            + "<Number><style>tuplet</style><text>3</text></Number></Tuplet>" + fingered
+            + Fixture.chord([(53, 13)], "eighth", move: 1) + Fixture.chord([(52, 18)], "eighth", move: 1)
+            + "<endTuplet/>" + Fixture.rest() + Fixture.rest("half")
+        let doc = try Self.layout(Fixture.piano(treble: [tuplet], bass: [Fixture.rest("measure")]))
+        let noteYs = try Self.chords(doc, measure: 0).flatMap(\.noteYs)
+        try #require(noteYs.count == 3)
+        let center = noteYs.reduce(0, +) / 3
+        let laidOut = try #require(doc.systems.first?.measures.first)
+        let marks = laidOut.elements.compactMap { element -> (String, CGFloat)? in
+            switch element {
+            case let .staffText(text, origin, _, _, _, _, _, _, _) where text == "1":
+                ("fingering", laidOut.origin.y + origin.y)
+            case let .tupletLabel(from, _, _, _, _, _):
+                ("tuplet", laidOut.origin.y + from.y)
+            default:
+                nil
+            }
+        }
+        #expect(Set(marks.map(\.0)) == ["fingering", "tuplet"])
+        // Left with the treble staff each would sit a whole row (staff and gap) above the notes it belongs to.
+        let rowGap = try Self.row(doc, 1) - Self.row(doc, 0)
+        for (kind, y) in marks {
+            #expect(abs(y - center) < rowGap / 2, "\(kind) at \(y), notes around \(center), rows \(rowGap) apart")
+        }
+    }
+
+    @Test("a hidden moved rest shown as a ghost is drawn on the staff it moved to")
+    func hiddenMovedRestMoves() throws {
+        let hiddenRest = "<Rest><staffMove>1</staffMove><visible>0</visible><durationType>half</durationType></Rest>"
+        let nativeRest = "<Rest><visible>0</visible><durationType>half</durationType></Rest>"
+        let half = Fixture.rest("half")
+        let moved = try Self.layout(
+            Fixture.piano(treble: [hiddenRest + half], bass: [half + half]), showsInvisible: true,
+        )
+        let native = try Self.layout(
+            Fixture.piano(treble: [half + half], bass: [nativeRest + half]), showsInvisible: true,
+        )
+        func ghostRestY(_ doc: LayoutDocument) throws -> CGFloat {
+            let laidOut = try #require(doc.systems.first?.measures.first)
+            let ys = laidOut.invisibleElements.compactMap { element -> CGFloat? in
+                if case let .rest(_, origin, _, _, _) = element { laidOut.origin.y + origin.y } else { nil }
+            }
+            return try #require(ys.first)
+        }
+        #expect(try ghostRestY(moved) - Self.row(moved, 1) == ghostRestY(native) - Self.row(native, 1))
+    }
+
     // MARK: - A beam across the staves
+
+    @Test("a chord a cross-staff beam turns over carries its staccato on the far side of its new stem")
+    func crossBeamSettlesStemsBeforeMarks() throws {
+        let staccato = "<Articulation><subtype>articStaccatoBelow</subtype></Articulation>"
+        let doc = try Self.layout(Fixture.piano(
+            treble: [
+                Fixture.chord([(55, 15)], "eighth", move: 1) + Fixture.chord([(64, 18)], "eighth", extra: staccato)
+                    + Fixture.rest() + Fixture.rest("half"),
+            ],
+            bass: [Fixture.rest("measure")],
+        ))
+        let chords = try Self.chords(doc, measure: 0)
+        try #require(chords.count == 2)
+        // E4 on its own would stem up; in the beam it is above the beam, stem down.
+        #expect(chords[1].stem == .down)
+        let laidOut = try #require(doc.systems.first?.measures.first)
+        let marks = laidOut.elements.compactMap { element -> (Bool, CGFloat)? in
+            guard case let .articulation(_, origin, isAbove, _) = element else { return nil }
+            return (isAbove, laidOut.origin.y + origin.y)
+        }
+        let mark = try #require(marks.first)
+        let head = try #require(chords[1].noteYs.first)
+        #expect(mark.0 && mark.1 < head)
+    }
 
     /// Measure 1 of MuseScore's own example: an arpeggio climbing from the bass staff into the treble and back.
     private static let arpeggio = Fixture.piano(

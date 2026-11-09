@@ -271,6 +271,20 @@ public final class LayoutCache: @unchecked Sendable {
         /// more than this range's measures — the score's style, every part's and staff's hide settings, slurs and
         /// hidden spanners reaching in from outside — so the decision itself is the key rather than its inputs.
         var shownStaves: [Bool] = []
+        /// Each staff's type group and `isVisibleInScore`, in `Score.allStaves` order: whether a sibling's chord may be
+        /// drawn on it (`Part.effectiveStaffMove`) turns on both, and neither is in the measures.
+        var staffMoveTargets: [StaffMoveTarget] = []
+    }
+
+    /// What decides whether a staff takes a sibling's moved chord.
+    struct StaffMoveTarget: Equatable {
+        let group: String
+        let isVisibleInScore: Bool
+
+        init(staff: Staff) {
+            group = staff.group
+            isVisibleInScore = staff.isVisibleInScore
+        }
     }
 
     /// All inputs to `placeMeasureElements` for one (measure, staff).

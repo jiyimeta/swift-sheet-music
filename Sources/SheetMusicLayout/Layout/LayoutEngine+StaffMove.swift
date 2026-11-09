@@ -120,6 +120,9 @@ extension LayoutEngine {
             return slot(anchor)
         case let .chordLine(_, _, _, anchor):
             return slot(anchor)
+        case let .tupletLabel(_, _, _, _, _, tupletID?):
+            // A tuplet is drawn on the staff its first chord is drawn on (`Tuplet::vStaffIdx`).
+            return VoiceSlot(voiceIndex: tupletID.voiceIndex, elementIndex: tupletID.startElementIndex)
         default:
             return nil
         }
@@ -127,11 +130,13 @@ extension LayoutEngine {
 
     /// Hands each staff's elements drawn on a sibling staff (`relocations`: by flat staff index, element index → move)
     /// to that staff's buffer. Placement put them in the target's own frame, so they are appended as they are; the
-    /// target's ledger lines, vertical extent and translation then follow from its buffer. An element whose target has
-    /// no buffer in this measure stays where it was. Indices are read against the buffers as placement left them.
+    /// target's ledger lines, vertical extent and translation then follow from its buffer. An element whose target was
+    /// not placed in this measure (`placedStaves`, by flat index) stays where it was. Indices are read against the
+    /// buffers as placement left them.
     static func relocateMovedElements(
         _ relocations: [Int: [Int: Int]],
         in buffers: inout [Int: [LayoutElement]],
+        placedStaves: Set<Int>,
         addressOf: (Int) -> StaffAddress,
         flatIndex: (StaffAddress) -> Int?,
     ) {
@@ -147,7 +152,7 @@ extension LayoutEngine {
                    let target = flatIndex(StaffAddress(
                        partIndex: home.partIndex, staffIndexInPart: home.staffIndexInPart + move,
                    )),
-                   original[target] != nil
+                   placedStaves.contains(target)
                 {
                     arriving[target, default: []].append(element)
                 } else {
@@ -162,13 +167,13 @@ extension LayoutEngine {
     }
 
     /// For each element of `elements` drawn on a sibling staff, its index and that staff's move — the chords and rests
-    /// in `moved` and the marks drawn with them (`ownerSlot`), plus `beamIndices`, the beams of groups whose every
-    /// member moved alike.
+    /// in `moved` and the marks drawn with them (`ownerSlot`), plus `extraIndices`, those that name no owner of their
+    /// own: the beams of groups whose every member moved alike, a moved chord's fingerings and symbols.
     static func relocations(
-        of elements: [LayoutElement], moved: [VoiceSlot: MovedChordPlacement], beamIndices: [Int: Int] = [:],
+        of elements: [LayoutElement], moved: [VoiceSlot: MovedChordPlacement], extraIndices: [Int: Int] = [:],
     ) -> [Int: Int] {
         guard !moved.isEmpty else { return [:] }
-        var result = beamIndices
+        var result = extraIndices
         for (index, element) in elements.enumerated() {
             if let slot = ownerSlot(of: element), let placement = moved[slot] {
                 result[index] = placement.staffMove

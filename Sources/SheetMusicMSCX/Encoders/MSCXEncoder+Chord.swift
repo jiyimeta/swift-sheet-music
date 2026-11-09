@@ -56,7 +56,7 @@ extension Chord {
                 text: stemDirection?.mscxValue ?? (voiceIndex == 0 ? "up" : "down"),
             ))
         }
-        appendBeamMode(to: &children)
+        appendBeamMode(to: &children, options: options)
         let chordCarriesSmall = appendChordLevelSmall(for: notes, to: &children)
         let durationStart = children.count
         appendWrittenDuration(to: &children)
@@ -273,7 +273,7 @@ extension Chord {
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
-        appendBeamMode(to: &children)
+        appendBeamMode(to: &children, options: options)
         let durationStart = children.count
         duration.appendDurationXML(to: &children)
         insertStaffMove(into: &children, from: durationStart)
@@ -297,7 +297,7 @@ extension Chord {
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
-        appendBeamMode(to: &children)
+        appendBeamMode(to: &children, options: options)
         let durationStart = children.count
         duration.appendDurationXML(to: &children, in: measureDuration)
         insertStaffMove(into: &children, from: durationStart)
@@ -312,11 +312,12 @@ extension Chord {
     /// `<BeamMode>`, written where `TWrite::writeProperties(const ChordRest*)` writes it — after the item properties,
     /// before `<small>` / `<dots>` / `<durationType>` (`rw/write/twrite.cpp:1098-1104`) — and only off its default: a
     /// chord's is `auto`; a rest's is `no`, and a rest at `auto` beams the same as at `no` (`Groups::actualBeamMode`),
-    /// so a rest writes only the modes that beam over it.
-    func appendBeamMode(to children: inout [XMLTreeNode]) {
+    /// so a rest writes only the modes that beam over it. The 2.x and 3.x outputs name the secondary-beam breaks by
+    /// their older tokens (`BeamMode.token(for:)`).
+    func appendBeamMode(to children: inout [XMLTreeNode], options: MSCXEncoderOptions) {
         let isDefault = notes.isEmpty ? (beamMode == .none || beamMode == .auto) : beamMode == .auto
         if !isDefault {
-            children.append(XMLTreeNode(name: "BeamMode", text: beamMode.rawValue))
+            children.append(XMLTreeNode(name: "BeamMode", text: beamMode.token(for: options.targetVersion)))
         }
     }
 

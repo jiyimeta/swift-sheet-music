@@ -35,6 +35,33 @@ struct CrossBeamChord: Equatable {
 }
 
 extension LayoutEngine {
+    /// The move from which a chord of a beam across staves is drawn below it: `ceil((min + max) / 2)` of the members'
+    /// moves (`beambase.cpp:113-117`, `ChordRest::isBelowCrossBeam`).
+    static func crossStaffBeamSplit(_ moves: [Int]) -> Int? {
+        guard let lowest = moves.min(), let highest = moves.max(), lowest != highest else { return nil }
+        return Int((Double(lowest + highest) / 2).rounded(.up))
+    }
+
+    /// The stem of every chord of a voice's beams across two staves, by element index: up below the beam, down above
+    /// it. Settled before the chords are placed, so their noteheads and marks take the side the beam gives them — a
+    /// cross beam decides its chords' stems over any direction of their own (`ChordLayout::computeUpBeamCase`,
+    /// `rendering/score/chordlayout.cpp:1276-1285`, reached before the explicit direction once a chord is beamed).
+    static func crossStaffBeamStems(
+        groups: [BeamGroup], voiceIndex: Int, movedChords: [VoiceSlot: MovedChordPlacement],
+    ) -> [Int: StemDirection] {
+        var stems: [Int: StemDirection] = [:]
+        for group in groups {
+            let moves = group.memberIndices.map {
+                movedChords[VoiceSlot(voiceIndex: voiceIndex, elementIndex: $0)]?.staffMove ?? 0
+            }
+            guard let split = crossStaffBeamSplit(moves) else { continue }
+            for (position, member) in group.memberIndices.enumerated() {
+                stems[member] = moves[position] >= split ? .up : .down
+            }
+        }
+        return stems
+    }
+
     /// Sets the stems of a beam group whose members are drawn on two staves and describes the group for
     /// `layOutCrossStaffBeams`; nil when fewer than two of its chords were placed.
     ///
@@ -48,8 +75,7 @@ extension LayoutEngine {
         staffAddress: StaffAddress, measureIndex: Int,
         chordOutIndex: [Int: Int], out: inout [LayoutElement],
     ) -> CrossStaffBeam? {
-        guard let lowest = moves.min(), let highest = moves.max() else { return nil }
-        let split = Int((Double(lowest + highest) / 2).rounded(.up))
+        guard let split = crossStaffBeamSplit(moves) else { return nil }
         var members: [CrossStaffBeam.Member] = []
         var color: ScoreColor?
         for (position, memberIndex) in group.memberIndices.enumerated() {

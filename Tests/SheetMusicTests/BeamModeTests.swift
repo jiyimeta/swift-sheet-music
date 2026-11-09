@@ -12,10 +12,10 @@ import Testing
 struct BeamModeTests {
     private static let fourFour = TimeSignature(numerator: 4, denominator: 4)
 
-    private static func measureXML(_ body: String) -> Data {
+    private static func measureXML(_ body: String, version: String = "4.60") -> Data {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
-        <museScore version="4.60"><Score><Division>480</Division>
+        <museScore version="\(version)"><Score><Division>480</Division>
         <Part id="1"><Staff><StaffType group="pitched"><name>stdNormal</name></StaffType></Staff>
         <Instrument id="piano"><longName>Piano</longName></Instrument></Part>
         <Staff id="1"><Measure><voice>
@@ -46,6 +46,29 @@ struct BeamModeTests {
         let body = tokens.map { Self.eighth($0) }.joined() + Self.eighth()
         let modes = try Self.chords(MSCXParser.parse(Self.measureXML(body))).map(\.beamMode)
         #expect(modes == [.auto, .none, .begin, .mid, .end, .begin16, .begin32, .auto, .auto])
+    }
+
+    /// MuseScore 2.x through 4.0 named the two secondary-beam breaks `begin32` / `begin64`; 4.1 renamed them `begin16`
+    /// / `begin32` and renames the old tokens when it reads an older file (`rw/read400/tread.cpp:2428-2437`).
+    /// Only the two old names are renamed; any other token — `begin16` included — goes through as it is, as in
+    /// MuseScore's reader.
+    @Test("a pre-4.10 file's begin32 / begin64 read as begin16 / begin32", arguments: ["3.02", "4.00"])
+    func legacySecondaryBeamTokens(version: String) throws {
+        let body = Self.eighth("begin32") + Self.eighth("begin64") + Self.eighth("begin16") + Self.eighth("mid")
+        let modes = try Self.chords(MSCXParser.parse(Self.measureXML(body, version: version))).map(\.beamMode)
+        #expect(modes == [.begin16, .begin32, .begin16, .mid])
+    }
+
+    @Test("the 3.x output writes the secondary-beam breaks by their older tokens, and reads them back")
+    func legacyOutputTokens() throws {
+        let original = try MSCXParser.parse(Self.measureXML(Self.eighth("begin16") + Self.eighth("begin32")))
+        let v3 = try #require(String(
+            bytes: MSCXEncoder.encode(original, options: MSCXEncoderOptions(targetVersion: .v3)), encoding: .utf8,
+        ))
+        #expect(v3.contains("<BeamMode>begin32</BeamMode>") && v3.contains("<BeamMode>begin64</BeamMode>"))
+        #expect(try Self.chords(MSCXParser.parse(Data(v3.utf8))).map(\.beamMode) == [.begin16, .begin32])
+        let v4 = try #require(String(bytes: MSCXEncoder.encode(original), encoding: .utf8))
+        #expect(v4.contains("<BeamMode>begin16</BeamMode>") && v4.contains("<BeamMode>begin32</BeamMode>"))
     }
 
     @Test("a rest reads its BeamMode too, and is no longer preserved markup")

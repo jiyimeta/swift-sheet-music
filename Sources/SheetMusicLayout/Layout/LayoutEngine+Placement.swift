@@ -134,8 +134,11 @@ extension LayoutEngine {
         var invisibleOut: [LayoutElement] = []
         // Some voice ends the bar with a bar line of its own — shown or hidden — so none is synthesized there.
         var voiceEndsBar = false
-        // Beams of groups that moved as a whole (by index in `out`, with the move) and beams across two staves.
-        var movedBeamIndices: [Int: Int] = [:]
+        // Elements drawn with a moved chord that name no owner of their own — the beams of a group that moved as a
+        // whole, a moved chord's fingerings and symbols — by index in `out` / `invisibleOut`, with the move; and the
+        // beams across two staves.
+        var movedExtraIndices: [Int: Int] = [:]
+        var movedInvisibleExtraIndices: [Int: Int] = [:]
         var crossStaffBeams: [CrossStaffBeam] = []
         var currentClef = activeClef
         var currentKey = activeKey
@@ -301,8 +304,17 @@ extension LayoutEngine {
                 ? (voiceIdx.isMultiple(of: 2) ? .up : .down)
                 : nil
             // A chord that sets its own stem direction wins over `forcedStem` (`stemOverride`); a beam's settles in
-            // the beaming pass below.
+            // the beaming pass below — except a beam across two staves, whose stems are known now and win over both.
             let voiceElements = voice.elements.values
+            let crossBeamStems = movedChords.keys.contains { $0.voiceIndex == voiceIdx }
+                ? Self.crossStaffBeamStems(
+                    groups: beamGroups(
+                        voice: voice, timeSignature: measureTimeSig, measureDuration: measureDuration,
+                        division: division,
+                    ),
+                    voiceIndex: voiceIdx, movedChords: movedChords,
+                )
+                : [:]
             // Rest y offset when multiple voices coexist — even if the
             // second voice only carries rests, we still need to pull
             // them out of the way of voice 0's melody.
@@ -1030,7 +1042,8 @@ extension LayoutEngine {
                             kitNoteheads: kitNoteheads(of: note, in: drumNoteheads),
                         )
                     }
-                    let stem = Self.stemOverride(ofChordAt: voiceElemIdx, in: voiceElements) ?? forcedStem
+                    let stem = crossBeamStems[voiceElemIdx]
+                        ?? Self.stemOverride(ofChordAt: voiceElemIdx, in: voiceElements) ?? forcedStem
                         ?? Self.movedStemDirection(moved)
                         ?? StemDirectionRule.direction(
                             for: preliminaryNotes.map(\.step),
@@ -1261,6 +1274,9 @@ extension LayoutEngine {
                             measureDuration: measureDuration,
                             division: division,
                             timedX: timedX,
+                            followerPlacement: {
+                                movedChords[VoiceSlot(voiceIndex: voiceIdx, elementIndex: $0)]
+                            },
                         ) {
                             out.append(bars)
                         }
@@ -1775,7 +1791,7 @@ extension LayoutEngine {
                 defer {
                     if groupMove != 0 {
                         for index in beamsBefore ..< out.count {
-                            movedBeamIndices[index] = groupMove
+                            movedExtraIndices[index] = groupMove
                         }
                     }
                 }
@@ -2151,7 +2167,16 @@ extension LayoutEngine {
                     lineGeometry: lineGeometry, chordTickByOutIndex: chordTickByOutIndex,
                 ),
                 metrics: metrics, options: options, out: &out, invisibleOut: &invisibleOut,
-            )
+            ) { elementIndex, visible, invisible in
+                guard let move = movedChords[VoiceSlot(voiceIndex: voiceIdx, elementIndex: elementIndex)]?.staffMove
+                else { return }
+                for index in visible {
+                    movedExtraIndices[index] = move
+                }
+                for index in invisible {
+                    movedInvisibleExtraIndices[index] = move
+                }
+            }
 
             // --- Tuplet brackets / numbers ---
             //
@@ -2452,8 +2477,10 @@ extension LayoutEngine {
             clef: currentClef,
             key: currentKey,
             synthesizedEndBarLineIndex: synthesizedEndBarLineIndex,
-            relocations: relocations(of: out, moved: movedChords, beamIndices: movedBeamIndices),
-            invisibleRelocations: relocations(of: invisibleOut, moved: movedChords),
+            relocations: relocations(of: out, moved: movedChords, extraIndices: movedExtraIndices),
+            invisibleRelocations: relocations(
+                of: invisibleOut, moved: movedChords, extraIndices: movedInvisibleExtraIndices,
+            ),
             crossStaffBeams: crossStaffBeams,
         )
     }

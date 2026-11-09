@@ -511,12 +511,17 @@ extension LayoutEngine {
             }
             // Chords and rests drawn on a sibling staff go to that staff's buffer, with the marks and beams drawn with
             // them — after the courtesy pass above, which still indexes each staff's buffer as placement left it.
+            // A staff with no hidden element has no invisible buffer yet: what is placed is what `perStaff` holds.
+            // What a staff this system hides would hand over stays with it and goes when it goes: MuseScore draws
+            // nothing whose own staff is hidden, wherever it would be drawn (`Measure::visible(staffIdx)`).
+            let placedStaves = Set(perStaff.keys)
+            let handingOver = relocationsByStaff.filter { isShown($0.key) }
             relocateMovedElements(
-                relocationsByStaff.mapValues(\.visible), in: &perStaff,
+                handingOver.mapValues(\.visible), in: &perStaff, placedStaves: placedStaves,
                 addressOf: { allStaves[$0].address }, flatIndex: flatIndex(of:),
             )
             relocateMovedElements(
-                relocationsByStaff.mapValues(\.invisible), in: &perStaffInvisible,
+                handingOver.mapValues(\.invisible), in: &perStaffInvisible, placedStaves: placedStaves,
                 addressOf: { allStaves[$0].address }, flatIndex: flatIndex(of:),
             )
             // Measure number — TOP STAFF ONLY. Engraving convention

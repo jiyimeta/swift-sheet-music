@@ -669,8 +669,7 @@ extension LayoutEngine {
         let measuresPerStaff: [[Measure?]] = staves.map { staff in
             (0 ..< measureCount).map { local in
                 let abs = measureStart + local
-                return abs < staff.measures.count
-                    ? staff.measures[abs] : nil
+                return abs < staff.measures.count ? staff.measures[abs] : nil
             }
         }
         // The lane can be shorter than the measure count (a score that
@@ -683,8 +682,7 @@ extension LayoutEngine {
                 return abs < context.score.systemMeasures.count
                     ? context.score.systemMeasures[abs] : SystemMeasure()
             }
-        let melismaForRange: [[[MelismaContinuation]]]
-        melismaForRange = (0 ..< staves.count).map { staffIdx in
+        let melismaForRange: [[[MelismaContinuation]]] = (0 ..< staves.count).map { staffIdx in
             (0 ..< measureCount).map { local in
                 let abs = measureStart + local
                 guard staffIdx < context.melismaContinuations.count,
@@ -729,6 +727,7 @@ extension LayoutEngine {
             lineAggregates: lineAggregates,
             barHeadBreathOwners: staves.map { barHeadBreathOwners(measureIdx: measureStart, in: $0) },
             shownStaves: shownStaves,
+            staffMoveTargets: staves.map(LayoutCache.StaffMoveTarget.init(staff:)),
         )
     }
 
