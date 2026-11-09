@@ -221,6 +221,9 @@ extension Shared {
 
     /// CC 7 on every strip plus the metronome's level: the mixer's volume / mute / solo, as the Apple engine's
     /// `applyMixerState` sends them.
+    ///
+    /// A preview lifts the strips past this while the transport is stopped (`applyPreviewChannelState`), and the synth
+    /// keeps the lifted CC 7 across its resets, so every start of the transport sends this first.
     mutating func applyMixerState() {
         let soloing = mixerChannels.isSoloing
         if let synth = session?.score {
@@ -249,10 +252,29 @@ extension Shared {
         }
     }
 
+    /// CC 7 on every strip at the level a preview sounds it at (`MixerChannel.previewGain`), before a preview's
+    /// note-on: with the transport stopped or paused, the slider whatever the mute and solo say — a part muted, or shut
+    /// out by a solo, still sounds the note the user tapped — and playback's own level while the score plays. The
+    /// Apple engine's `applyPreviewChannelState`.
+    func applyPreviewChannelState() {
+        guard let synth = session?.score else { return }
+        let soloing = mixerChannels.isSoloing
+        let isPlaying = state == .playing
+        for strip in strips {
+            let gain = mixerChannels.first(where: { $0.id == strip.kind })?
+                .previewGain(soloing: soloing, isPlaying: isPlaying) ?? 0
+            synth.controlChange(channel: strip.channel, controller: 7, value: Self.controllerVolume(gain))
+        }
+    }
+
     /// The Apple engine's CC 7: the linear volume scaled to 0…127 and rounded, 0 while silenced by mute or solo.
     private static func channelVolume(_ channel: MixerChannel?, soloing: Bool) -> Int32 {
-        guard let channel, !channel.isSilenced(soloing: soloing) else { return 0 }
-        return Int32(min(127, max(0, (channel.volume * 127).rounded())))
+        controllerVolume(channel?.playbackGain(soloing: soloing) ?? 0)
+    }
+
+    /// A linear gain as CC 7: scaled to 0…127 and rounded.
+    private static func controllerVolume(_ gain: Float) -> Int32 {
+        Int32(min(127, max(0, (gain * 127).rounded())))
     }
 
     // MARK: Previews
