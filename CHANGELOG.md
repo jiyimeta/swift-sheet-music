@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.34.1] - 2026-11-10
+
 ### Fixed
 
 - **`SheetMusicAudioCore` compiles on Windows again.** 4.34.0's `MappedRecording` and `RecordingPCMCacheWriter` read
