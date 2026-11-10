@@ -7,12 +7,10 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
-import java.nio.ByteOrder
-import kotlin.coroutines.coroutineContext
+import java.nio.ByteBuffer
 
 /**
  * Decodes a recording once into the PCM cache file [io.github.jiyimeta.sheetmusic.audio.model.RecordingTrack.pcmPath]
@@ -37,7 +35,7 @@ class RecordingPcmDecoder internal constructor(
     /**
      * Decodes [source] — a `content:` or `file:` URI — to `<cacheKey>-<Hz>.pcm` and returns that file's path, reusing
      * one already there. Runs on [Dispatchers.IO]; cancelling the caller stops it between buffers and removes the
-     * partial file.
+     * partial file, and the caller sees its cancellation rather than a [DecodeException].
      *
      * @throws DecodeException when the source has no audio track, the platform cannot decode it, it decodes to
      *   nothing, or the file cannot be written.
@@ -84,92 +82,69 @@ class RecordingPcmDecoder internal constructor(
         } catch (e: Exception) {
             throw DecodeException("no decoder for $mime", e)
         }
-        var handle = 0L
         try {
-            codec.configure(format, null, null, 0)
-            codec.start()
-            var outputChannels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            var outputRate = sourceRate
-            var floatOutput = false
-            var scratch = ShortArray(0)
-            val info = MediaCodec.BufferInfo()
-            var inputDone = false
-            while (true) {
-                coroutineContext.ensureActive()
-                if (!inputDone) {
-                    val inIndex = codec.dequeueInputBuffer(TIMEOUT_MICROS)
-                    if (inIndex >= 0) {
-                        val buffer = codec.getInputBuffer(inIndex) ?: throw DecodeException("no input buffer")
-                        val size = extractor.readSampleData(buffer, 0)
-                        if (size < 0) {
-                            codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                            inputDone = true
-                        } else {
-                            codec.queueInputBuffer(inIndex, 0, size, extractor.sampleTime, 0)
-                            extractor.advance()
-                        }
-                    }
-                }
-                val outIndex = codec.dequeueOutputBuffer(info, TIMEOUT_MICROS)
-                when {
-                    outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        val out = codec.outputFormat
-                        outputChannels = out.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                        outputRate = out.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                        floatOutput = out.containsKey(MediaFormat.KEY_PCM_ENCODING) &&
-                            out.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT
-                        // The file is named for the rate the decoder puts out, which HE-AAC's SBR doubles from the
-                        // container's: a file an earlier decode wrote is found only under that rate.
-                        writer.existingAfterFormatChange(dir, cacheKey, sourceRate, outputRate, writing = handle != 0L)
-                            ?.let { return it }
-                    }
-                    outIndex >= 0 -> {
-                        val buffer = codec.getOutputBuffer(outIndex)
-                        if (buffer != null && info.size > 0) {
-                            if (handle == 0L) {
-                                handle = writer.open(dir, cacheKey, outputRate.toDouble())
-                                if (handle == 0L) throw DecodeException("cannot create the cache file in $dir")
-                            }
-                            buffer.position(info.offset)
-                            buffer.limit(info.offset + info.size)
-                            buffer.order(ByteOrder.LITTLE_ENDIAN)
-                            val bytesPerSample = if (floatOutput) 4 else 2
-                            val samples = info.size / bytesPerSample
-                            val raw = if (floatOutput) {
-                                val floats = FloatArray(samples).also { buffer.asFloatBuffer().get(it) }
-                                PcmConversion.int16(floats)
-                            } else {
-                                ShortArray(samples).also { buffer.asShortBuffer().get(it) }
-                            }
-                            val frames = samples / outputChannels.coerceAtLeast(1)
-                            val (stereo, channels) = PcmConversion.atMostStereo(raw, frames, outputChannels, scratch)
-                            if (outputChannels > 2) scratch = stereo
-                            if (frames > 0 && writer.append(handle, stereo, frames, channels) != 0) {
-                                // The `finally` cancels the writer, which releases it.
-                                throw DecodeException("cannot write the cache file")
-                            }
-                        }
-                        codec.releaseOutputBuffer(outIndex, false)
-                        if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
-                    }
-                }
+            return reportingCodecFailures {
+                codec.configure(format, null, null, 0)
+                codec.start()
+                decodeToCache(
+                    MediaCodecDecode(codec, extractor),
+                    writer,
+                    dir,
+                    cacheKey,
+                    sourceRate,
+                    sourceChannels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT),
+                )
             }
-            if (handle == 0L) throw DecodeException("the recording decodes to nothing")
-            val path = writer.finish(handle)
-            handle = 0L
-            if (path.isEmpty()) throw DecodeException("cannot finish the cache file")
-            return path
-        } catch (e: IllegalStateException) {
-            throw DecodeException("the decoder failed", e)
         } finally {
-            if (handle != 0L) writer.cancel(handle)
             try { codec.stop() } catch (_: Throwable) {}
             codec.release()
         }
     }
+}
 
-    private companion object {
-        const val TIMEOUT_MICROS = 10_000L
+/** [DecodeCodec] over a started [codec] reading [extractor]'s selected track. */
+private class MediaCodecDecode(
+    private val codec: MediaCodec,
+    private val extractor: MediaExtractor,
+) : DecodeCodec {
+    private val bufferInfo = MediaCodec.BufferInfo()
+
+    override fun dequeueInputBuffer(timeoutMicros: Long): Int = codec.dequeueInputBuffer(timeoutMicros)
+
+    override fun queueInput(index: Int): Boolean {
+        val buffer = codec.getInputBuffer(index) ?: throw RecordingPcmDecoder.DecodeException("no input buffer")
+        val size = extractor.readSampleData(buffer, 0)
+        if (size < 0) {
+            codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+            return false
+        }
+        codec.queueInputBuffer(index, 0, size, extractor.sampleTime, 0)
+        extractor.advance()
+        return true
+    }
+
+    override fun dequeueOutputBuffer(info: DecodedBufferInfo, timeoutMicros: Long): Int {
+        val index = codec.dequeueOutputBuffer(bufferInfo, timeoutMicros)
+        if (index >= 0) {
+            info.offset = bufferInfo.offset
+            info.size = bufferInfo.size
+            info.endOfStream = bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+        }
+        return index
+    }
+
+    override fun outputBuffer(index: Int): ByteBuffer? = codec.getOutputBuffer(index)
+
+    override fun releaseOutputBuffer(index: Int) = codec.releaseOutputBuffer(index, false)
+
+    override fun outputFormat(): DecodedFormat {
+        val out = codec.outputFormat
+        return DecodedFormat(
+            channels = out.getInteger(MediaFormat.KEY_CHANNEL_COUNT),
+            sampleRate = out.getInteger(MediaFormat.KEY_SAMPLE_RATE),
+            floatSamples = out.containsKey(MediaFormat.KEY_PCM_ENCODING) &&
+                out.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT,
+        )
     }
 }
 
