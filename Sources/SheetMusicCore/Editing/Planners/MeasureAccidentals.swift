@@ -135,6 +135,22 @@ public enum MeasureAccidentals {
     public static func renotationCommands(in current: Score, changedFrom previous: Score) -> [any EditCommand] {
         var commands: [any EditCommand] = []
         for (partIndex, part) in current.parts.enumerated() where !part.instrument.useDrumset {
+            let previousPart = previous.parts.indices.contains(partIndex) ? previous.parts[partIndex] : nil
+            if part.hasEffectiveStaffMoves || previousPart?.hasEffectiveStaffMoves == true {
+                // A bar whose bytes moved on one staff can change what another staff draws (a chord moved onto it),
+                // so the part is renotated a bar at a time, every staff of it.
+                let changed = Set(part.staves.indices.flatMap { staffIndex -> [Int] in
+                    let before = previous[StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)]?.measures
+                    return part.staves[staffIndex].measures.indices.filter { measureIndex in
+                        before?.indices.contains(measureIndex) != true
+                            || before?[measureIndex] != part.staves[staffIndex].measures[measureIndex]
+                    }
+                })
+                for measureIndex in changed.sorted() {
+                    commands += renotatePart(measureIndex, of: part, at: partIndex, in: current)
+                }
+                continue
+            }
             for (staffIndex, staff) in part.staves.enumerated() where staff.group != "percussion" {
                 let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
                 let before = previous[address]?.measures
@@ -178,6 +194,13 @@ public enum MeasureAccidentals {
     public static func renotationCommands(in score: Score, measureRange: Range<Int>) -> [any EditCommand] {
         var commands: [any EditCommand] = []
         for (partIndex, part) in score.parts.enumerated() where !part.instrument.useDrumset {
+            if part.hasEffectiveStaffMoves {
+                let bars = part.staves.map(\.measures.count).max() ?? 0
+                for measureIndex in measureRange.clamped(to: 0 ..< bars) {
+                    commands += renotatePart(measureIndex, of: part, at: partIndex, in: score)
+                }
+                continue
+            }
             for (staffIndex, staff) in part.staves.enumerated() where staff.group != "percussion" {
                 let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
                 let durations = score.effectiveMeasureDurations(partIndex: partIndex, staffIndex: staffIndex)
@@ -272,7 +295,7 @@ public enum MeasureAccidentals {
 
     /// One written staff line. Two enharmonic spellings (C♯4 and D♭4) are different lines and so carry independent
     /// state — which is why this is keyed by the WRITTEN letter and octave rather than by sounding pitch.
-    private struct Line: Hashable {
+    struct Line: Hashable {
         let letter: Int
         let octave: Int
     }
@@ -283,7 +306,7 @@ public enum MeasureAccidentals {
     ///
     /// MuseScore's `Note::updateAccidental`: a note the state asks to speak does, unless a tie that keeps its spelling
     /// carries the alteration; one the state covers speaks only to tell an altered unison apart.
-    private static func glyph(
+    static func glyph(
         for note: Note, alteration: Int, against inForce: AccidentalLineState, tiedFrom: Int?, alteredUnison: Bool,
     ) -> Accidental?? {
         guard note.accidentalRole != .user else { return nil }
@@ -324,10 +347,14 @@ public enum MeasureAccidentals {
             division: division, measureDuration: measureDuration,
         )
         var alteration = fallback
-        for ref in MeasureAccidentalWalk.noteRefs(in: measure, division: division, measureDuration: measureDuration) {
-            guard ref.tick < cutoff else { break }
-            guard let note = MeasureAccidentalWalk.note(at: ref, in: measure.voices),
-                  !AccidentalLineState.isUnwrittenTie(note),
+        // The notes the staff draws: in a part with chords moved between its staves, those of the bar's staves drawn
+        // here (`drawnNotes(onStaffOf:in:)`), else its own.
+        let drawn = drawnNotes(onStaffOf: location, in: score)
+            ?? MeasureAccidentalWalk.noteRefs(in: measure, division: division, measureDuration: measureDuration)
+            .compactMap { ref in MeasureAccidentalWalk.note(at: ref, in: measure.voices).map { (ref.tick, $0) } }
+        for (tick, note) in drawn {
+            guard tick < cutoff else { break }
+            guard !AccidentalLineState.isUnwrittenTie(note),
                   let written = AccidentalLineState.spelling(pitch: note.pitch, tpc: note.tpc),
                   written.letter == line.letter, written.octave == line.octave
             else { continue }
@@ -348,7 +375,7 @@ public enum MeasureAccidentals {
 
     /// The alteration a key signature of `keySig` puts on `letter` (0=C … 6=B). Reuses `StaffStepPitch`'s in-key
     /// window so the two paths can't drift apart.
-    private static func keyAlteration(forLetter letter: Int, keySig: Int) -> Int {
+    static func keyAlteration(forLetter letter: Int, keySig: Int) -> Int {
         let natural = AccidentalLineState.naturalTpcByLetter[letter]
         return (StaffStepPitch.inKeyTpc(naturalTpc: natural, keySig: keySig) - natural) / 7
     }

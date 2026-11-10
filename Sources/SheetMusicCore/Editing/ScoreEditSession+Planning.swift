@@ -166,7 +166,7 @@ extension ScoreEditSession {
             }
             return SetLyricVerse(text, toVerse: destination)
         case .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
-             .setPalmMute, .setLetRing, .removeSpanner, .removeSlur:
+             .setPalmMute, .setLetRing, .removeSpanner, .removeSlur, .setGradualTempoChange:
             return spannerCommand(for: intent, in: score)
         }
     }

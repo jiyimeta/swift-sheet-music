@@ -1,6 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
+import SheetMusicCore
 
 /// Policy for honoring authored `<LayoutBreak>` markup at display time.
 ///
@@ -211,6 +212,40 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// Host-overridable engraving distances. `.standard` preserves the
     /// layout engine's historical spacing and document margins.
     public var spacing: EngravingSpacing
+    /// Whether a system leaves out the staves the score asks to hide while they are empty — MuseScore's "Hide empty
+    /// staves" (`ScoreStyle.hideEmptyStaves`, `Part.hideWhenEmpty`, `Staff.hideWhenEmpty`;
+    /// `SystemLayout::hideEmptyStaves`, `rendering/score/systemlayout.cpp:671-742`). Which measures form a system is
+    /// decided before, so turning it off only puts the staves back. A system that hides a staff has no row for it:
+    /// `LayoutSystem.flatIndex(for:)` returns nil there.
+    ///
+    /// Default: `true`, as MuseScore draws the score. A score that sets none of the keys hides nothing either way.
+    public var hidesEmptyStaves = true
+    /// Where a host's editing caret is, when it should never be on a staff the page leaves out: the system holding
+    /// `measureIndex` that would hide `staff` (`hidesEmptyStaves`) draws every staff instead. Every other system hides
+    /// as before. Only that one system's staves change, so it is no part of the layout cache's keys — each system's
+    /// own decision is — and a caret moving through the score lays out again only the systems it opens or closes.
+    ///
+    /// Default: `nil`.
+    public var revealedStaff: RevealedStaff?
+
+    /// A staff in one measure (`ScoreViewOptions.revealedStaff`).
+    public struct RevealedStaff: Sendable, Equatable {
+        public var staff: StaffAddress
+        public var measureIndex: Int
+
+        public init(staff: StaffAddress, measureIndex: Int) {
+            self.staff = staff
+            self.measureIndex = measureIndex
+        }
+    }
+
+    /// These options as the layout cache compares them: without `revealedStaff`, whose effect each system's own
+    /// shown-staves decision already carries.
+    var cacheKey: ScoreViewOptions {
+        var key = self
+        key.revealedStaff = nil
+        return key
+    }
 
     public init(
         staffSize: CGFloat = 28,

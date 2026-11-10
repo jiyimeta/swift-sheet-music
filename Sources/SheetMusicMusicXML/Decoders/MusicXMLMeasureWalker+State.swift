@@ -111,7 +111,8 @@ extension MusicXMLMeasureWalker {
             for element in elements {
                 state.builders[staffIdx].append(element, toVoice: voice, start: start, end: start + duration)
             }
-            state.builders[staffIdx].applyStem(MusicXMLStemBeam(node: child), toVoice: voice)
+            let stemBeam = MusicXMLStemBeam(node: child, divisions: divisions)
+            state.builders[staffIdx].applyBeamAndStem(stemBeam, toVoice: voice)
             if let tremolo = MusicXMLTremolo(note: child) {
                 state.builders[staffIdx].applyTremolo(tremolo, toVoice: voice)
             }

@@ -77,7 +77,9 @@ public struct LayoutMeasure: Sendable, Equatable {
 
     /// One dynamic's horizontal ink span, in measure-local X.
     public struct DynamicExtent: Sendable, Equatable {
-        /// Index into `LayoutSystem.staffOrigins`.
+        /// The staff's index in `Score.allStaves` — score-wide, the index a spanner anchor names its staff by. It is
+        /// an index into `LayoutSystem.staffOrigins` only while the system draws every staff; one that hides staves
+        /// as empty has fewer rows (`LayoutSystem.flatIndex(for:)`).
         public let staffIndex: Int
         /// Tick within the measure the dynamic is anchored at.
         public let tick: Int

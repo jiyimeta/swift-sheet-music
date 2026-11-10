@@ -11,7 +11,8 @@ enum MSCXRestDecoder {
     /// `duration` on a measure rest is encoder-owned informational
     /// data and is regenerated from the effective measure duration.
     private static let consumedRestChildren: Set = [
-        "Lyrics", "Spanner", "color", "dots", "duration", "durationType", "offset", "autoplace", "placement", "track",
+        "BeamMode", "Lyrics", "Spanner", "color", "dots", "duration", "durationType", "move", "offset", "autoplace",
+        "placement", "staffMove", "track",
         "visible",
     ]
 
@@ -37,6 +38,8 @@ enum MSCXRestDecoder {
             preservedMarkup: node.preservedMarkup(consuming: consumedRestChildren),
         )
         rest.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        rest.beamMode = BeamMode.decode(in: node)
+        rest.staffMove = Chord.decodeStaffMove(in: node)
         // A slur may begin or end on a rest — MuseScore anchors them to any
         // `ChordRest`, and its writer treats `<Rest>` and `<Chord>` through
         // the same `TWrite::writeProperties(const ChordRest*, …)`. Share the

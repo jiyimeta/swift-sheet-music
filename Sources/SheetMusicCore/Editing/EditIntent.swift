@@ -580,4 +580,13 @@ public enum EditIntent: Sendable, Equatable {
     /// is left as written. `policy` spells the rests of a rewritten bar. Resolves to nothing to apply when no bar
     /// needs re-voicing; a staff the score does not have is refused as `.staffNotFound`. See `RevoiceDrumStaff`.
     case revoiceDrumStaff(staff: StaffAddress, assignments: [DrumVoiceAssignment], policy: RhythmSpellingPolicy)
+
+    // Appended for folino's rit. / accel. lines in a score made from a recording (2026-11-09) — index 96. One of the
+    // spanner group's `set…` intents in every respect (62…72's rules above apply), appended rather than slotted in
+    // because the discriminator order is frozen.
+
+    /// Draw a gradual tempo change of `type` (rit., accel., rall., …) over `over`, labeled with the type's palette
+    /// abbreviation; `factor` is the target tempo as a multiple of the tempo where it starts, `nil` for the type's
+    /// default. See `SetGradualTempoChange`.
+    case setGradualTempoChange(over: VoiceElementRange, type: GradualTempoChangeType, factor: Double?)
 }

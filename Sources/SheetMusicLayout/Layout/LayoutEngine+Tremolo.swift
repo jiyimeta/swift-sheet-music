@@ -184,6 +184,7 @@ extension LayoutEngine {
         measureDuration: Fraction,
         division: Int,
         timedX: (Int) -> CGFloat,
+        followerPlacement: (Int) -> MovedChordPlacement? = { _ in nil },
     ) -> LayoutElement? {
         let (top, bottom) = stemEndpoints(
             chordX: chordX, chordNotes: chordNotes,
@@ -212,16 +213,17 @@ extension LayoutEngine {
                 division: division,
                 timedX: timedX,
             ) else { return nil }
+            // A follower drawn on a sibling staff sits against that staff's clef and stems back toward its own, as
+            // its own chord element does.
+            let followerMoved = followerPlacement(followerCtx.index)
             let followerNotes = preliminaryFollowerNotes(
-                followerCtx.chord,
-                atX: followerCtx.x,
-                staffMidY: staffMidY,
-                metrics: metrics,
-                clef: currentClef,
+                followerCtx.chord, atX: followerCtx.x, staffMidY: staffMidY, metrics: metrics,
+                clef: followerMoved?.clef ?? currentClef,
             )
             // The pair's direction when either chord sets one — what the start chord's override answers — as the
             // follower's own chord element takes it.
             let followerStem = Self.stemOverride(ofChordAt: currentVoiceElemIdx, in: currentVoiceElements)
+                ?? Self.movedStemDirection(followerMoved)
                 ?? StemDirectionRule.direction(for: followerNotes.map(\.step))
             // For .between tremolo placement we mirror the start
             // chord's extension on the follower so the bar geometry
@@ -305,7 +307,7 @@ extension LayoutEngine {
         measureDuration: Fraction,
         division: Int,
         timedX: (Int) -> CGFloat,
-    ) -> (chord: Chord, x: CGFloat)? {
+    ) -> (chord: Chord, x: CGFloat, index: Int)? {
         // The start chord's own duration moves the cursor forward by
         // its tick count before any follower can begin.
         guard startIdx < elements.count,
@@ -316,7 +318,7 @@ extension LayoutEngine {
         for j in (startIdx + 1) ..< elements.count {
             switch elements[j] {
             case let .chord(follower) where !follower.notes.isEmpty:
-                return (follower, timedX(tick))
+                return (follower, timedX(tick), j)
             case let .chord(rest):
                 // Rest-shaped empty chord; advance the cursor and
                 // keep searching for the sounding follower.

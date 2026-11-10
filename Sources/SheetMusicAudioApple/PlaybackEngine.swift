@@ -1415,8 +1415,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // audition sounds on program 0 (piano) at the default volume —
             // and re-asserting only this staff's channel would leave every
             // OTHER instrument channel stuck at those GM defaults until its
-            // own preview happened to fire. See `reassertBackendChannelState`.
-            reassertBackendChannelState()
+            // own preview happened to fire. The volume is the preview's, so a
+            // muted or solo-shut part still sounds. See
+            // `applyPreviewChannelState`.
+            applyPreviewChannelState()
             backendPlayPreview(resolved, duration: duration, velocity: velocity)
             return
         }
@@ -1451,6 +1453,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // preview ends with no follow-up tap.
         wakeGraphForPreview()
 
+        // A muted or solo-shut part still sounds the tapped note (`applyPreviewChannelState`).
+        applyPreviewChannelState()
         applyPreviewBends(plan.pitchBends)
         for (note, instrument) in struck {
             instrument.startNote(note.voice.pitch, withVelocity: velocity, onChannel: note.voice.channel)
@@ -1532,11 +1536,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // and let the matching note-off restore the host-parked state.
         wakeGraphForPreview()
 
+        // Every strip's program + volume first — a prior playback reset the synth's channel state to GM defaults, and a
+        // muted or solo-shut part still sounds the held note (see `applyPreviewChannelState`).
+        applyPreviewChannelState()
         if let backend {
-            // Re-assert EVERY strip's program + volume first — a prior
-            // playback reset the synth's channel state to GM defaults (see
-            // `reassertBackendChannelState`).
-            reassertBackendChannelState()
             applyPreviewBends(previewPolicy.moveWheel(to: PreviewPitchBend(channel: midiChannel, value: Self.unbent)))
             backend.startNote(channel: midiChannel, pitch: pitch, velocity: velocity)
         } else if let instrument {
@@ -1645,6 +1648,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // channel with no microtonal note carries no wheel event of its own to put it back — so the score would play a
         // quarter tone out on it. Recentre before either transport starts.
         applyPreviewBends(previewPolicy.releaseWheel())
+        // An audition also lifted the muted and solo-shut strips to their sliders (`applyPreviewChannelState`): mute
+        // them again before either transport starts, too.
+        restorePlaybackGains()
         // A `.mixUntilPlay` host has been sharing output with whatever else was playing since `prepare(score:)`; this
         // is the moment it asked for playback, so take the session exclusively. Ahead of both transport paths and of
         // the not-ready deferral below, so the claim lands on the user's press rather than on the SoundFont finishing
@@ -2154,23 +2160,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         unroll.firstUnrolledTick(forNotated: tick)
     }
 
-    /// Where a seek to `tick` lands with a loop set. Playing, inside the loop — snapped to its start when `tick` is
-    /// outside it — so playback never leaves the section. Stopped or paused, at `tick` itself: the user is parking the
-    /// cursor, typically past the section to set a new B there, and snapping it back to A undid the tap (user report,
-    /// 2026-11-02 — only a second tap stuck, because the cursor no longer changed and nothing moved the reader's).
-    /// The loop takes over when playback starts: `play` begins a start outside the loop at the loop's start.
+    /// Where a seek to `tick` lands with a loop set — `LoopRange.seekTick(_:whilePlaying:)`, the rule the Windows
+    /// engine seeks by too: snapped into the loop while playing, where it was sent while stopped or paused (user
+    /// report, 2026-11-02 — only a second tap stuck, because the cursor no longer changed and nothing moved the
+    /// reader's).
     private func seekTick(forFrameTick tick: Int) -> Int {
-        state == .playing ? snapTickToLoop(tick) : tick
-    }
-
-    /// Clamp `tick` into the active loop region. Returns `tick`
-    /// unchanged when no loop is set or the tick is already inside.
-    private func snapTickToLoop(_ tick: Int) -> Int {
-        guard let loop = loopRange else { return tick }
-        if tick < loop.startTick || tick >= loop.endTick {
-            return loop.startTick
-        }
-        return tick
+        loopRange?.seekTick(tick, whilePlaying: state == .playing) ?? tick
     }
 
     /// Current playback position in seconds, derived from the

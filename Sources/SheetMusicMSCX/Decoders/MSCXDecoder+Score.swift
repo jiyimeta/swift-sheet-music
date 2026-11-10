@@ -90,8 +90,17 @@ extension Score {
         version: MSCXVersion,
         styleFileStyle: XMLTreeNode?,
     ) throws -> Score {
+        // The container's `score_style.mss` (when present) is the base the score's own `<Style>` overrides — MuseScore
+        // reads them in that order. MuseScore 4 writes one or the other, never both, so in practice each side alone
+        // decides the style; the layering is what keeps a hand-assembled container correct. Read before the parts: a
+        // pre-4.60 part's hide modes resolve against `<hideEmptyStaves>`, which MuseScore has read by then (`<Style>`
+        // precedes `<Part>`; `rw/read400/tread.cpp:3312`).
+        let base = styleFileStyle.map { ScoreStyle.decode(style: $0) } ?? .museScoreDefaults
+        let style = scoreNode.first("Style").map { ScoreStyle.decode(style: $0, base: base) } ?? base
         let partPairings = try scoreNode.all("Part").enumerated().map {
-            try Part.decodePairing($0.element, fallbackIndex: $0.offset + 1)
+            try Part.decodePairing(
+                $0.element, fallbackIndex: $0.offset + 1, globalHideEmptyStaves: style.hideEmptyStaves,
+            )
         }
         let topLevelStaves = try scoreNode.all("Staff").map {
             try MSCXTopLevelStaff.decode($0)
@@ -120,19 +129,6 @@ extension Score {
         let blocks = scoreNode.first("Staff")
             .map(PositionedScoreBlock.decodeAll(inTopLevelStaff:)) ?? []
 
-        // The container's `score_style.mss` (when present) is the base
-        // the score's own `<Style>` overrides — MuseScore reads them in
-        // that order. MuseScore 4 writes one or the other, never both,
-        // so in practice each side alone decides the style; the
-        // layering is what keeps a hand-assembled container correct.
-        let base = styleFileStyle
-            .map { ScoreStyle.decode(style: $0) } ?? .museScoreDefaults
-        let style: ScoreStyle
-        if let styleNode = scoreNode.first("Style") {
-            style = ScoreStyle.decode(style: styleNode, base: base)
-        } else {
-            style = base
-        }
         let resolvedSystemMeasures = version == .v2
             ? promoteMS2StaffTextSwingToSystem(systemMeasures)
             : systemMeasures

@@ -34,6 +34,21 @@ public struct Staff: Sendable, Equatable {
     /// auto-derivation from instrument family must populate this list
     /// themselves before handing the `Score` to the layout engine.
     public var brackets: [BracketItem]
+    /// MuseScore `<Part><Staff><isStaffVisible>` — false when the file hides this one staff of its part in the score:
+    /// the eye beside a staff in MuseScore 4's Instruments panel, as on a piano with only the right hand shown. The
+    /// per-staff sibling of `Part.isVisibleInScore`, and like it a statement about the file, not an instruction to the
+    /// layout: the engine draws every staff it is given, and a host that honors the flag drops the staff itself (see
+    /// `Score.authoredHiddenStaffAddresses`). The staff still plays.
+    public var isVisibleInScore: Bool
+    /// MuseScore `<Part><Staff><hideWhenEmpty>` — whether this staff is hidden from a system in which it is empty,
+    /// whatever its part and the score's style say: `on` hides it, `off` always shows it, `auto` (the default) leaves
+    /// it to `Part.hideWhenEmpty` and `ScoreStyle.hideEmptyStaves` (`computeHideMode`,
+    /// `rendering/score/systemlayout.cpp:545-600`). C++: `Staff::hideWhenEmpty()` (`dom/staff.h:299`).
+    public var hideWhenEmpty: AutoOnOff = .auto
+    /// MuseScore `<Part><Staff><showIfSystemEmpty>` — when hiding would leave a system with no staff at all, this
+    /// staff comes back (`SystemLayout::hideEmptyStaves`, `rendering/score/systemlayout.cpp:722-741`); without any such
+    /// staff the system keeps its first one. C++: `Staff::showIfEntireSystemEmpty()`.
+    public var showIfSystemEmpty = false
     public var measures: [Measure]
     /// Source markup inside this staff declaration's `<StaffType>`
     /// that the model does not represent.
@@ -48,6 +63,7 @@ public struct Staff: Sendable, Equatable {
         lineCount: Int = 5,
         defaultClefType: String? = nil,
         brackets: [BracketItem] = [],
+        isVisibleInScore: Bool = true,
         measures: [Measure] = [],
         staffTypePreservedMarkup: [PreservedXML] = [],
         preservedMarkup: [PreservedXML] = [],
@@ -57,6 +73,7 @@ public struct Staff: Sendable, Equatable {
         self.lineCount = lineCount
         self.defaultClefType = defaultClefType
         self.brackets = brackets
+        self.isVisibleInScore = isVisibleInScore
         self.measures = measures
         self.staffTypePreservedMarkup = staffTypePreservedMarkup
         self.preservedMarkup = preservedMarkup

@@ -142,6 +142,7 @@ import Wirelet
 /// 93 = removeSlur(SlurIDWire) — the slur identity's own wire form, no wrapper struct
 /// 94 = setStripMix(SetStripMixIntentWire), see EditIntentPayloads+Range.swift
 /// 95 = revoiceDrumStaff(RevoiceDrumStaffIntentWire), see EditIntentPayloads+Range.swift
+/// 96 = setGradualTempoChange(SetGradualTempoChangeIntentWire), see EditIntentPayloads+Spanners2.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -158,8 +159,9 @@ import Wirelet
 /// (spec 2026-09-13). Cases 87 and 88 were appended for the score-transposition project (spec 2026-09-14) — the
 /// range form of the dot key, and the whole-score transposition. Case 89 was appended for the text font and color
 /// inspector — a tempo marking's font patch. Case 90 was appended for swing. Case 91 was appended for Format
-/// Rhythms; its number is final. Case 92 was appended for folino's pattern edit — a run re-timed in place — and 92
-/// is the catalogue's last.
+/// Rhythms; its number is final. Case 92 was appended for folino's pattern edit — a run re-timed in place. Case 93
+/// was appended for removing a selected slur, 94 for saving the mix to the score, 95 for drum voice conversion, and
+/// 96 for a gradual tempo change (rit. / accel.) — 96 is the catalogue's last.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -799,6 +801,15 @@ import Wirelet
 ///                  decodes as itself)
 /// ```
 ///
+/// `SetGradualTempoChangeIntentWire` (`setGradualTempoChange`'s payload, index 96):
+/// ```
+/// tag 1: range      VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: type       string — `GradualTempoChangeType.rawValue`; an unknown spelling throws, the trill type's rule
+///                   (`.undefined` is a spelling of its own)
+/// tag 3: hasFactor  u8, varint — 0 = the type's default factor, 1 = factor holds it
+/// tag 4: factor     f64 — 0 when hasFactor == 0
+/// ```
+///
 /// `SetChordSymbolIntentWire` (`setChordSymbol`'s payload):
 /// ```
 /// tag 1: location     VoiceElementIDWire, see PathIDCodecs.swift
@@ -1164,6 +1175,9 @@ public enum EditIntentWire {
     case setStripMix(SetStripMixIntentWire)
     /// Appended for folino's drum voice conversion (design 2026-10-26) — index 95. Never renumber anything above it.
     case revoiceDrumStaff(RevoiceDrumStaffIntentWire)
+    /// Appended for folino's rit. / accel. lines in a score made from a recording (2026-11-09) — index 96. Never
+    /// renumber anything above it.
+    case setGradualTempoChange(SetGradualTempoChangeIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1378,6 +1392,8 @@ public enum EditIntentWire {
             self = .setStripMix(SetStripMixIntentWire(mixes: mixes))
         case let .revoiceDrumStaff(staff, assignments, policy):
             self = .revoiceDrumStaff(RevoiceDrumStaffIntentWire(staff: staff, assignments: assignments, policy: policy))
+        case let .setGradualTempoChange(range, type, factor):
+            self = .setGradualTempoChange(SetGradualTempoChangeIntentWire(range: range, type: type, factor: factor))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         case let .setElementColor(target, color):
@@ -1678,6 +1694,9 @@ public enum EditIntentWire {
         case let .revoiceDrumStaff(wire):
             let decoded = wire.decoded()
             return .revoiceDrumStaff(staff: decoded.staff, assignments: decoded.assignments, policy: decoded.policy)
+        case let .setGradualTempoChange(wire):
+            let decoded = try wire.decoded()
+            return .setGradualTempoChange(over: decoded.range, type: decoded.type, factor: decoded.factor)
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)

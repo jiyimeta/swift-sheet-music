@@ -157,6 +157,10 @@ public final class LayoutCache: @unchecked Sendable {
         let synthesizedEndBarLineIndex: Int?
         let newClef: NotatedClef
         let newKey: Int
+        /// `MeasurePlacement.relocations` / `.invisibleRelocations` / `.crossStaffBeams`, restored on a hit.
+        var relocations: [Int: Int] = [:]
+        var invisibleRelocations: [Int: Int] = [:]
+        var crossStaffBeams: [CrossStaffBeam] = []
     }
 
     /// One system's cached inputs and outputs. The cached `system`
@@ -263,6 +267,24 @@ public final class LayoutCache: @unchecked Sendable {
         /// (`LayoutEngine.barHeadBreathOwners`) — the same blind spot `followingClefs` covers at the other end.
         /// The bars after the first find theirs in `measuresPerStaff`. Empty entries for bars that open with no breath.
         var barHeadBreathOwners: [[Int?]] = []
+        /// Which staves the system draws (`LayoutEngine.systemShownStaves`), empty when it draws all. It depends on
+        /// more than this range's measures — the score's style, every part's and staff's hide settings, slurs and
+        /// hidden spanners reaching in from outside — so the decision itself is the key rather than its inputs.
+        var shownStaves: [Bool] = []
+        /// Each staff's type group and `isVisibleInScore`, in `Score.allStaves` order: whether a sibling's chord may be
+        /// drawn on it (`Part.effectiveStaffMove`) turns on both, and neither is in the measures.
+        var staffMoveTargets: [StaffMoveTarget] = []
+    }
+
+    /// What decides whether a staff takes a sibling's moved chord.
+    struct StaffMoveTarget: Equatable {
+        let group: String
+        let isVisibleInScore: Bool
+
+        init(staff: Staff) {
+            group = staff.group
+            isVisibleInScore = staff.isVisibleInScore
+        }
     }
 
     /// All inputs to `placeMeasureElements` for one (measure, staff).
@@ -346,5 +368,9 @@ public final class LayoutCache: @unchecked Sendable {
         /// The chord in the bar before that a breath at this bar's head names (`LayoutEngine.barHeadBreathOwners`),
         /// which lives in the bar before rather than in `measure`. Empty for a bar that opens with no breath.
         var barHeadBreathOwners: [Int?] = []
+        /// The chords of this bar drawn on a sibling staff, with that staff's clef at each (`LayoutEngine.movedChords`)
+        /// — the clef is the sibling's, so a clef change on the other staff moves these notes without touching
+        /// `measure`. Empty for a bar where nothing moves.
+        var movedChords: [VoiceSlot: MovedChordPlacement] = [:]
     }
 }

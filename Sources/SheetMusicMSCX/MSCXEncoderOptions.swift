@@ -50,6 +50,11 @@ public struct MSCXEncoderOptions: Sendable {
     /// overwrites it with the score's own.
     package var division = 480
 
+    /// The score's `ScoreStyle.hideEmptyStaves`, for the 3.02 output's staff hide modes, which MuseScore resolves
+    /// against it on reading (`HideWhenEmptyDecoding.legacyModes(of:globalHideEmptyStaves:)`). `package` for the same
+    /// reason as `division`: the Score encoder overwrites it with the score's own.
+    package var hideEmptyStaves = false
+
     public init(targetVersion: MSCXVersion = .v4) {
         self.targetVersion = targetVersion == .v2 ? .v3 : targetVersion
     }

@@ -61,6 +61,30 @@ struct SpannerPlanningTests {
         #expect(session.score == EditingFixtures.parityFixture())
     }
 
+    /// Intent 96 plans to `SetGradualTempoChange` with the type and factor it names — a planner arm that dropped the
+    /// factor, or built the line with the type's default, would still draw a "rit." line and pass a kind check alone.
+    @Test("a gradual tempo change intent writes the line it names, refuses a second one, and undoes")
+    func gradualTempoChange() {
+        let session = ScoreEditSession(score: EditingFixtures.parityFixture())
+        #expect(session.apply(.setGradualTempoChange(over: Self.range(0, 1, 2), type: .ritardando, factor: 0.8)))
+        guard case let .spanner(spanner) = session.score[Self.slot(0, 1)] else {
+            Issue.record("expected a .spanner element at bar 0 element 1")
+            return
+        }
+        #expect(spanner.kind == .gradualTempoChange)
+        #expect(spanner.gradualTempoChange?.type == .ritardando)
+        #expect(spanner.gradualTempoChange?.factor == 0.8)
+        #expect(spanner.beginText == "rit.")
+        #expect(!session.apply(.setGradualTempoChange(over: Self.range(0, 2, 3), type: .accelerando, factor: nil)))
+        // The line sits before C4, which moved to element 2; the second range starts on C4 again.
+        #expect(session.lastRefusal?.reason == .duplicateSpanner(at: Self.slot(0, 2), kind: .gradualTempoChange))
+        #expect(session.apply(.removeSpanner(at: Self.slot(0, 1), kind: .gradualTempoChange)))
+        #expect(session.score == EditingFixtures.parityFixture())
+        #expect(session.undo())
+        #expect(session.undo())
+        #expect(session.score == EditingFixtures.parityFixture())
+    }
+
     @Test("a refused command surfaces its reason, not nothingToApply and not a crash")
     func refusalSurfaces() {
         let session = ScoreEditSession(score: EditingFixtures.parityFixture())

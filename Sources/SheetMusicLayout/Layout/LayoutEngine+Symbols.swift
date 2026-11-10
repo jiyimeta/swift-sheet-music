@@ -29,9 +29,13 @@ extension LayoutEngine {
     /// Each note's fingerings (`emitFingerings`) and `<Symbol>`s, placed once the chords are final (after beaming and
     /// mirroring). A symbol is baseline-left at the note's left edge on the note's own line, moved by its offset.
     /// Hidden ones are ghosts when the options ask for invisible elements.
-    static func emitNoteAnnotations(
+    ///
+    /// `emitted` hears, for each chord, the indices of `out` and `invisibleOut` its annotations took — they carry no
+    /// owner of their own, and a chord drawn on a sibling staff takes them along (`relocations`).
+    static func emitNoteAnnotations( // swiftlint:disable:this function_parameter_count
         voice: Voice, chordOutIndex: [Int: Int], context: NoteAnnotationContext, metrics: StaffMetrics,
         options: ScoreViewOptions, out: inout [LayoutElement], invisibleOut: inout [LayoutElement],
+        emitted: (_ elementIndex: Int, _ visible: Range<Int>, _ invisible: Range<Int>) -> Void = { _, _, _ in },
     ) {
         let sp = metrics.sp
         for (elementIndex, outIndex) in chordOutIndex.sorted(by: { $0.key < $1.key }) {
@@ -39,6 +43,9 @@ extension LayoutEngine {
                   case let .chord(chord) = voice.elements[elementIndex],
                   out.indices.contains(outIndex)
             else { continue }
+            let visibleStart = out.count
+            let invisibleStart = invisibleOut.count
+            defer { emitted(elementIndex, visibleStart ..< out.count, invisibleStart ..< invisibleOut.count) }
             if chord.notes.contains(where: { !$0.fingerings.isEmpty }) {
                 emitFingerings(
                     chord: chord, outIndex: outIndex, context: context, metrics: metrics, options: options,

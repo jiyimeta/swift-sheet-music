@@ -242,6 +242,28 @@ internal class SynthEngine(
     }
 
     /**
+     * Opens a muted [channel] to the level it plays at when audible — its remembered CC7 — for a note preview,
+     * leaving the mute itself in place: a part muted, or shut out by a solo, still sounds the note the user
+     * tapped (the Apple engine's `MixerChannel.previewGain`). A no-op on a channel that is not muted, which sits at
+     * that level already.
+     *
+     * The synth keeps the opened CC7 across its resets, so [closeMutedChannels] has to run before the
+     * transport starts.
+     */
+    fun openForPreview(channel: Int) {
+        if (staffLoadParams.getOrNull(channel) == null) return
+        if (!channelMuted[channel]) return
+        synth?.cc(channel = channel, controller = 7, value = rememberedCC7[channel])
+    }
+
+    /** Puts CC7 = 0 back on every muted channel — what [openForPreview] lifted — for a transport about to start. */
+    fun closeMutedChannels() {
+        for (ch in staffLoadParams.indices) {
+            if (staffLoadParams[ch] != null && channelMuted[ch]) synth?.cc(channel = ch, controller = 7, value = 0)
+        }
+    }
+
+    /**
      * Changes the instrument program on [channel] at runtime.
      *
      * Uses the soundfont id and bank captured during [setupStaves] so the caller

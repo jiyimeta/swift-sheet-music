@@ -493,6 +493,50 @@ class SynthEngineTest {
         )
     }
 
+    // ── A preview sounds through mute and solo ──────────────────────────────
+
+    @Test fun openForPreview_liftsAMutedChannelToItsRememberedLevel_keepingTheMute() {
+        val engine = buildEngine()
+        setupStaves(engine, 2)
+        val synth = capturedSynth!!
+        engine.setChannelVolume(0, 0.6f) // CC7 = 76
+        engine.muteChannel(0)
+        synth.calls.clear()
+
+        engine.openForPreview(0)
+        assertTrue("a muted channel opens to its remembered CC7", synth.calls.contains("cc(0,7,76)"))
+
+        // Still muted: a slider move is remembered, not written.
+        synth.calls.clear()
+        engine.setChannelVolume(0, 0.8f)
+        assertFalse(synth.calls.any { it.startsWith("cc(0,7,") })
+    }
+
+    @Test fun openForPreview_leavesAnAudibleChannelAlone() {
+        val engine = buildEngine()
+        setupStaves(engine, 2)
+        val synth = capturedSynth!!
+        synth.calls.clear()
+
+        engine.openForPreview(1)
+
+        assertFalse(synth.calls.any { it.startsWith("cc(1,7,") })
+    }
+
+    @Test fun closeMutedChannels_mutesAgainOnlyTheMutedChannels() {
+        val engine = buildEngine()
+        setupStaves(engine, 2)
+        val synth = capturedSynth!!
+        engine.muteChannel(0)
+        engine.openForPreview(0)
+        synth.calls.clear()
+
+        engine.closeMutedChannels()
+
+        assertTrue("the opened channel is muted again", synth.calls.contains("cc(0,7,0)"))
+        assertFalse("an audible channel keeps its level", synth.calls.any { it.startsWith("cc(1,7,") })
+    }
+
     // ── T4: setStaffProgram ─────────────────────────────────────────────────
 
     /**

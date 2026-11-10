@@ -6,8 +6,12 @@ extension Staff {
     /// Encode the per-Part `<Staff>` declaration block — staff type,
     /// bracket information, default clef. Measures are emitted by
     /// `encodeTopLevel(staffID:)` separately.
+    ///
+    /// `legacyHideMode` is the pre-4.60 `<hideWhenEmpty>` integer the 3.02 output gives this staff, which depends on
+    /// its part (`HideWhenEmptyDecoding.legacyModes(of:globalHideEmptyStaves:)`); nil writes none. The 4.60 output
+    /// ignores it and writes `hideWhenEmpty` itself.
     func encodeDeclaration(
-        eid: EID, staffID: String, options: MSCXEncoderOptions = .init(),
+        eid: EID, staffID: String, options: MSCXEncoderOptions = .init(), legacyHideMode: Int? = nil,
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         // `<eid>` is the first child MuseScore itself writes
@@ -39,6 +43,27 @@ extension Staff {
             children.append(XMLTreeNode(
                 name: "defaultClef", text: defaultClefType,
             ))
+        }
+        // After `<defaultClef>` and before `<isStaffVisible>`, each only when not the default, as MuseScore writes them
+        // (`TWrite::write(const Staff*)`, rw/write/twrite.cpp:2780-2788). `<cutaway>`, which sits between the two,
+        // stays preserved markup and is written with the rest of it below.
+        switch options.targetVersion {
+        case .v4:
+            if hideWhenEmpty != .auto {
+                children.append(XMLTreeNode(name: "hideWhenEmpty", text: hideWhenEmpty.rawValue))
+            }
+        case .v2, .v3:
+            if let legacyHideMode {
+                children.append(XMLTreeNode(name: "hideWhenEmpty", text: String(legacyHideMode)))
+            }
+        }
+        if showIfSystemEmpty {
+            children.append(XMLTreeNode(name: "showIfSystemEmpty", text: "1"))
+        }
+        // Only a hidden staff carries the flag, after `<defaultClef>` and before `<bracket>`, as MuseScore writes it
+        // (`TWrite::write(const Staff*)`, rw/write/twrite.cpp:2795-2797).
+        if !isVisibleInScore {
+            children.append(XMLTreeNode(name: "isStaffVisible", text: "0"))
         }
         for bracket in brackets {
             var bracketAttrs: [String: String] = [

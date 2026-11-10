@@ -9,11 +9,14 @@ public struct LayoutSystem: Sendable, Equatable {
     public let origin: CGPoint // in document coordinates
     public let size: CGSize
     public let measures: [LayoutMeasure]
-    /// Per-staff baselines (top-left in system coordinates).
+    /// Per-staff baselines (top-left in system coordinates), one per staff the system DRAWS: a staff hidden here as
+    /// empty (`ScoreViewOptions.hidesEmptyStaves`, MuseScore's "hide empty staves") has no entry, so these are the
+    /// score's staves only in a system that hides none.
     public let staffOrigins: [CGPoint]
     /// `StaffAddress` for each entry in `staffOrigins`, in the same
     /// display order. Enables `StaffAddress → flat-index` conversion
-    /// without re-visiting the originating `Score`.
+    /// without re-visiting the originating `Score`. Addresses are the score's own whichever staves the system leaves
+    /// out, so the same staff has the same address in every system and a different row where a staff above it hides.
     public let staffAddresses: [StaffAddress]
     /// Per-staff line geometry, parallel to `staffOrigins`. Empty means "every staff is standard five-line".
     ///
@@ -122,7 +125,7 @@ public struct LayoutSystem: Sendable, Equatable {
     }
 
     /// Flat index (= index into `staffOrigins`) for the given address.
-    /// Returns `nil` when the address is not present in this system.
+    /// Returns `nil` when the address is not present in this system — a staff the system hides as empty.
     public func flatIndex(for address: StaffAddress) -> Int? {
         staffAddresses.firstIndex(of: address)
     }

@@ -118,6 +118,8 @@ extension WindowsPlaybackEngine {
             for previous in plan.supersededVoices {
                 shared.sendPreviewNoteOff(channel: Int32(previous.channel), pitch: Int32(previous.pitch))
             }
+            // A muted or solo-shut part still sounds the tapped note.
+            shared.applyPreviewChannelState()
             for voice in plan.voices {
                 shared.sendPreviewNoteOn(
                     channel: Int32(voice.channel), pitch: Int32(voice.pitch), velocity: Int32(velocity),
@@ -145,6 +147,7 @@ extension WindowsPlaybackEngine {
             if let held = shared.sustainedPreview {
                 shared.sendPreviewNoteOff(channel: Int32(held.channel), pitch: Int32(held.pitch))
             }
+            shared.applyPreviewChannelState()
             shared.sendPreviewNoteOn(channel: Int32(channel), pitch: Int32(pitch), velocity: Int32(velocity))
             shared.sustainedPreview = SustainedPreview(staff: flatStaffIndex, channel: channel, pitch: pitch)
         }

@@ -26,10 +26,14 @@ extension Part {
         // `<Part>` (P4 plan decision 4) — but written first, like
         // every other carrier.
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        // The 3.02 output has no part-level hide settings; they go into each staff's integer mode instead.
+        let legacyHideModes = options.targetVersion == .v4
+            ? [] : HideWhenEmptyDecoding.legacyModes(of: self, globalHideEmptyStaves: options.hideEmptyStaves)
         for (index, id) in staffIDs.enumerated() {
             let staff = staves[index]
             children.append(staff.encodeDeclaration(
                 eid: staves.eid(at: index), staffID: id, options: options,
+                legacyHideMode: legacyHideModes.indices.contains(index) ? legacyHideModes[index] : nil,
             ))
         }
         // Round-trip MuseScore's `<Part><show>`: only a hidden part carries the
@@ -41,6 +45,16 @@ extension Part {
         }
         if let trackName {
             children.append(XMLTreeNode(name: "trackName", text: trackName))
+        }
+        // After `<trackName>`, each only when not the default, as MuseScore 4.6 writes them
+        // (`TWrite::write(const Part*)`, rw/write/twrite.cpp:2518-2524).
+        if options.targetVersion == .v4 {
+            if hideWhenEmpty != .auto {
+                children.append(XMLTreeNode(name: "hideWhenEmpty", text: hideWhenEmpty.rawValue))
+            }
+            if hideStavesWhenIndividuallyEmpty {
+                children.append(XMLTreeNode(name: "hideStavesWhenIndividuallyEmpty", text: "1"))
+            }
         }
         children.append(instrument.encode(options: options))
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)

@@ -1256,6 +1256,71 @@ class AndroidPlaybackEngineTest {
         )
     }
 
+    // A preview sounds through mute and solo — the Apple engine's `PlaybackEnginePreviewMixTests`.
+
+    @Test
+    fun `a muted part's tapped note opens its channel before the note-on`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = tracked(bridge = previewBridge(), fakeSynthDrivers = synths).also { it.prepare(1L) }
+        val synth = synths.first()
+        engine.setStaffMuted(0, 0, true)
+        synth.calls.clear()
+
+        engine.playPreview(NoteID(StaffAddress(0, 0), 0, 0, 0, 0))
+
+        val open = synth.calls.indexOf("cc(0,7,100)")
+        val strike = synth.calls.indexOf("noteOn(0,67,96)")
+        assertTrue("got ${synth.calls}", open >= 0 && strike > open)
+    }
+
+    @Test
+    fun `a part shut out by another's solo opens its channel for a held key`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = preparedEngine(staffCount = 2, fakeSynthDrivers = synths)
+        val synth = synths.first()
+        engine.setStaffSoloed(1, 0, true)
+        synth.calls.clear()
+
+        engine.previewNoteOn(pitch = 60, onStaff = 0)
+
+        val open = synth.calls.indexOf("cc(0,7,100)")
+        val strike = synth.calls.indexOf("noteOn(0,60,96)")
+        assertTrue("got ${synth.calls}", open >= 0 && strike > open)
+    }
+
+    @Test
+    fun `play mutes an opened channel again`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = tracked(bridge = previewBridge(), fakeSynthDrivers = synths).also { it.prepare(1L) }
+        val synth = synths.first()
+        engine.setStaffMuted(0, 0, true)
+        engine.playPreview(NoteID(StaffAddress(0, 0), 0, 0, 0, 0))
+        assertEquals("cc(0,7,100)", synth.calls.last { it.startsWith("cc(0,7,") })
+
+        engine.play()
+
+        assertEquals(PlaybackState.PLAYING, engine.state.value)
+        assertEquals("cc(0,7,0)", synth.calls.last { it.startsWith("cc(0,7,") })
+        // Before `runTest` drains the scheduler, which a poll loop that is still PLAYING never lets go idle.
+        engine.teardown()
+    }
+
+    @Test
+    fun `a preview while the score plays leaves a muted channel muted`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = tracked(bridge = previewBridge(), fakeSynthDrivers = synths).also { it.prepare(1L) }
+        val synth = synths.first()
+        engine.setStaffMuted(0, 0, true)
+        engine.play()
+        synth.calls.clear()
+
+        engine.playPreview(NoteID(StaffAddress(0, 0), 0, 0, 0, 0))
+
+        assertFalse("got ${synth.calls}", synth.calls.any { it.startsWith("cc(0,7,") && it != "cc(0,7,0)" })
+        // Before `runTest` drains the scheduler, which a poll loop that is still PLAYING never lets go idle.
+        engine.teardown()
+    }
+
     // T43 — instrument-params re-key: REAL (non-fallback) strip data.
     //
     // Every test above leaves `instrumentParamsResult` at its default empty

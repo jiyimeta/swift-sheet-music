@@ -31,6 +31,14 @@ struct MeasurePlacement {
     /// Index in `elements` of the generated trailing barline. `nil`
     /// when the source measure contained an explicit barline.
     let synthesizedEndBarLineIndex: Int?
+    /// Elements drawn on a sibling staff — a chord or rest written here with a `staffMove`, the marks drawn with it,
+    /// and the beam of a group that moved as a whole — by index in `elements`, each with its move. Placed in the
+    /// target staff's own frame; `buildSystem` hands them to that staff's buffer (`relocateMovedElements`).
+    var relocations: [Int: Int] = [:]
+    /// The same for `invisibleElements`.
+    var invisibleRelocations: [Int: Int] = [:]
+    /// Beams whose members are drawn on two staves, left for `layOutCrossStaffBeams` once staff origins are known.
+    var crossStaffBeams: [CrossStaffBeam] = []
 }
 
 extension LayoutEngine {
@@ -79,6 +87,8 @@ extension LayoutEngine {
         staffCountInPart: Int = 1,
         // The chord in the bar before that a breath at this bar's head follows, per voice (`barHeadBreathOwners`).
         barHeadBreathOwners: [Int?] = [],
+        // The chords and rests of this bar drawn on a sibling staff (`LayoutEngine.movedChords`).
+        movedChords: [VoiceSlot: MovedChordPlacement] = [:],
     ) -> MeasurePlacement {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         // Barlines are the one thing here measured against the staff's
@@ -124,6 +134,12 @@ extension LayoutEngine {
         var invisibleOut: [LayoutElement] = []
         // Some voice ends the bar with a bar line of its own — shown or hidden — so none is synthesized there.
         var voiceEndsBar = false
+        // Elements drawn with a moved chord that name no owner of their own — the beams of a group that moved as a
+        // whole, a moved chord's fingerings and symbols — by index in `out` / `invisibleOut`, with the move; and the
+        // beams across two staves.
+        var movedExtraIndices: [Int: Int] = [:]
+        var movedInvisibleExtraIndices: [Int: Int] = [:]
+        var crossStaffBeams: [CrossStaffBeam] = []
         var currentClef = activeClef
         var currentKey = activeKey
 
@@ -288,8 +304,17 @@ extension LayoutEngine {
                 ? (voiceIdx.isMultiple(of: 2) ? .up : .down)
                 : nil
             // A chord that sets its own stem direction wins over `forcedStem` (`stemOverride`); a beam's settles in
-            // the beaming pass below.
+            // the beaming pass below — except a beam across two staves, whose stems are known now and win over both.
             let voiceElements = voice.elements.values
+            let crossBeamStems = movedChords.keys.contains { $0.voiceIndex == voiceIdx }
+                ? Self.crossStaffBeamStems(
+                    groups: beamGroups(
+                        voice: voice, timeSignature: measureTimeSig, measureDuration: measureDuration,
+                        division: division,
+                    ),
+                    voiceIndex: voiceIdx, movedChords: movedChords,
+                )
+                : [:]
             // Rest y offset when multiple voices coexist — even if the
             // second voice only carries rests, we still need to pull
             // them out of the way of voice 0's melody.
@@ -317,6 +342,9 @@ extension LayoutEngine {
                     let ticks = chord.duration.resolved(in: measureDuration).ticks(division: division)
                     defer { t += ticks }
                     guard !chord.notes.isEmpty else { continue }
+                    // A chord drawn on a sibling staff is not in this staff's skyline (`ChordLayout`, vStaffIdx).
+                    guard movedChords[VoiceSlot(voiceIndex: voiceIdx, elementIndex: elementIndex)] == nil
+                    else { continue }
                     let steps: [Int] = chord.notes.map { note in
                         if let drumLine = drumLineMap?[note.pitch] {
                             return 4 - drumLine
@@ -365,6 +393,8 @@ extension LayoutEngine {
                     let ticks = chord.duration.resolved(in: measureDuration).ticks(division: division)
                     defer { t += ticks }
                     guard !chord.notes.isEmpty else { continue }
+                    guard movedChords[VoiceSlot(voiceIndex: voiceIdx, elementIndex: elementIndex)] == nil
+                    else { continue }
                     let steps: [Int] = chord.notes.map { note in
                         if let drumLine = drumLineMap?[note.pitch] {
                             return 4 - drumLine
@@ -966,6 +996,9 @@ extension LayoutEngine {
                     // chords from rests (and from notes in other
                     // voices) that share the same tick.
                     let chordX = timedX(atTick: tickCursor)
+                    // A chord drawn on a sibling staff reads that staff's clef, and is placed in its frame — the
+                    // frame every staff shares here (top line at `sp * 2`) — so `buildSystem` can hand it over as is.
+                    let moved = movedChords[VoiceSlot(voiceIndex: voiceIdx, elementIndex: voiceElemIdx)]
                     let preliminaryNotes = chord.notes.enumerated().map { noteIdx, note -> LayoutChordNote in
                         // For percussion staves, use the drum map's
                         // <line> value to position the notehead
@@ -979,7 +1012,7 @@ extension LayoutEngine {
                         } else {
                             step = PitchStaffPosition.step(
                                 midiPitch: note.pitch, tpc: note.tpc,
-                                clef: currentClef,
+                                clef: moved?.clef ?? currentClef,
                             ).step
                         }
                         let y = staffMidY - CGFloat(step) * metrics.sp / 2
@@ -1009,7 +1042,9 @@ extension LayoutEngine {
                             kitNoteheads: kitNoteheads(of: note, in: drumNoteheads),
                         )
                     }
-                    let stem = Self.stemOverride(ofChordAt: voiceElemIdx, in: voiceElements) ?? forcedStem
+                    let stem = crossBeamStems[voiceElemIdx]
+                        ?? Self.stemOverride(ofChordAt: voiceElemIdx, in: voiceElements) ?? forcedStem
+                        ?? Self.movedStemDirection(moved)
                         ?? StemDirectionRule.direction(
                             for: preliminaryNotes.map(\.step),
                         )
@@ -1239,6 +1274,9 @@ extension LayoutEngine {
                             measureDuration: measureDuration,
                             division: division,
                             timedX: timedX,
+                            followerPlacement: {
+                                movedChords[VoiceSlot(voiceIndex: voiceIdx, elementIndex: $0)]
+                            },
                         ) {
                             out.append(bars)
                         }
@@ -1732,6 +1770,31 @@ extension LayoutEngine {
                 division: division,
             )
             for group in groups {
+                // A group whose members are drawn on two staves is a cross-staff beam: its stems are set here and its
+                // line is drawn once the staves are placed (`layOutCrossStaffBeams`). A group that moved as a whole is
+                // beamed as any other, in the target staff's frame, and its beams go there with it.
+                let memberMoves = group.memberIndices.map {
+                    movedChords[VoiceSlot(voiceIndex: voiceIdx, elementIndex: $0)]?.staffMove ?? 0
+                }
+                if Set(memberMoves).count > 1 {
+                    if let beam = Self.prepareCrossStaffBeam(
+                        group: group, moves: memberMoves, voice: voice, voiceIndex: voiceIdx,
+                        staffAddress: staffAddress, measureIndex: measureIndex,
+                        chordOutIndex: voiceChordOutIndex, out: &out,
+                    ) {
+                        crossStaffBeams.append(beam)
+                    }
+                    continue
+                }
+                let groupMove = memberMoves.first ?? 0
+                let beamsBefore = out.count
+                defer {
+                    if groupMove != 0 {
+                        for index in beamsBefore ..< out.count {
+                            movedExtraIndices[index] = groupMove
+                        }
+                    }
+                }
                 // --- Phase 1: collect all note steps for direction ---
                 var groupSteps: [Int] = []
                 for memberIdx in group.memberIndices {
@@ -1743,7 +1806,7 @@ extension LayoutEngine {
                 }
                 guard groupSteps.count >= 2 else { continue }
                 let groupDirection = Self.beamDirection(
-                    members: group.memberIndices, in: voiceElements, forced: forcedStem,
+                    members: group.memberIndices, in: voiceElements, staffMove: groupMove, forced: forcedStem,
                 ) { StemDirectionRule.direction(for: groupSteps) }
                 let stemSideDx: CGFloat = metrics.sp * 0.59
                     * (groupDirection == .up ? 1 : -1)
@@ -2104,7 +2167,16 @@ extension LayoutEngine {
                     lineGeometry: lineGeometry, chordTickByOutIndex: chordTickByOutIndex,
                 ),
                 metrics: metrics, options: options, out: &out, invisibleOut: &invisibleOut,
-            )
+            ) { elementIndex, visible, invisible in
+                guard let move = movedChords[VoiceSlot(voiceIndex: voiceIdx, elementIndex: elementIndex)]?.staffMove
+                else { return }
+                for index in visible {
+                    movedExtraIndices[index] = move
+                }
+                for index in invisible {
+                    movedInvisibleExtraIndices[index] = move
+                }
+            }
 
             // --- Tuplet brackets / numbers ---
             //
@@ -2405,6 +2477,11 @@ extension LayoutEngine {
             clef: currentClef,
             key: currentKey,
             synthesizedEndBarLineIndex: synthesizedEndBarLineIndex,
+            relocations: relocations(of: out, moved: movedChords, extraIndices: movedExtraIndices),
+            invisibleRelocations: relocations(
+                of: invisibleOut, moved: movedChords, extraIndices: movedInvisibleExtraIndices,
+            ),
+            crossStaffBeams: crossStaffBeams,
         )
     }
 

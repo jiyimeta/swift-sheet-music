@@ -3,16 +3,15 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Chord {
-    /// Every direct `<Chord>` child this decoder reads, including
-    /// children interpreted by the voice decoder before this method
-    /// is called. Anything else becomes preserved markup.
+    /// Every direct `<Chord>` child this decoder reads, including children interpreted by the voice decoder before
+    /// this method is called. Anything else becomes preserved markup.
     private static let consumedChordChildren: Set = [
-        "Arpeggio", "Articulation", "ChordBracket", "ChordLine", "Lyrics",
+        "Arpeggio", "Articulation", "BeamMode", "ChordBracket", "ChordLine", "Lyrics",
         "Note", "NoteParenGroup", "Ornament", "Spanner", "Stem", "StemDirection", "Tremolo",
         "TremoloSingleChord", "TremoloTwoChord", "acciaccatura",
         "appoggiatura", "color", "dots", "durationType", "grace16",
         "grace16after", "grace32", "grace32after", "grace4", "grace8after",
-        "offset", "autoplace", "placement", "small", "track", "visible",
+        "move", "offset", "autoplace", "placement", "small", "staffMove", "track", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> Chord {
@@ -33,14 +32,7 @@ extension Chord {
         var notes = try decodeNotes(node)
         applyNoteParenGroup(node, to: &notes)
 
-        var arpeggio: Arpeggio?
-        if let arpeggioNode = node.first("Arpeggio") {
-            let subtype = Int(arpeggioNode.first("subtype")?.text ?? "0") ?? 0
-            let stretch = Double(arpeggioNode.first("timeStretch")?.text ?? "1") ?? 1.0
-            let userLen = Double(arpeggioNode.first("userLen1")?.text ?? "0") ?? 0.0
-            arpeggio = Arpeggio(subtype: subtype, timeStretch: stretch, userLen1: userLen)
-            arpeggio?.elementProperties = ElementProperties(decodingMSCXChildrenOf: arpeggioNode)
-        }
+        let arpeggio = decodeArpeggio(node)
 
         // MuseScore 3 (and 4.0) wrote an ornament as an `<Articulation>` with an ornament SymId; MuseScore 4.1 turns
         // each into an `<Ornament>` on load (`CompatUtils::replaceOldWithNewOrnaments`), and so does this decoder —
@@ -91,9 +83,22 @@ extension Chord {
             ),
         )
         chord.isWrittenDoubled = played != nil
+        chord.beamMode = BeamMode.decode(in: node)
+        chord.staffMove = decodeStaffMove(in: node)
         chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         chord.spanners = decodeChordSpanners(node)
         return chord
+    }
+
+    /// The chord's `<Arpeggio>`, nil when it has none.
+    private static func decodeArpeggio(_ node: XMLTreeNode) -> Arpeggio? {
+        guard let arpeggioNode = node.first("Arpeggio") else { return nil }
+        let subtype = Int(arpeggioNode.first("subtype")?.text ?? "0") ?? 0
+        let stretch = Double(arpeggioNode.first("timeStretch")?.text ?? "1") ?? 1.0
+        let userLen = Double(arpeggioNode.first("userLen1")?.text ?? "0") ?? 0.0
+        var arpeggio = Arpeggio(subtype: subtype, timeStretch: stretch, userLen1: userLen)
+        arpeggio.elementProperties = ElementProperties(decodingMSCXChildrenOf: arpeggioNode)
+        return arpeggio
     }
 
     /// How long a chord written doubled lasts — a two-note tremolo's chord, whose `<durationType>` MuseScore writes

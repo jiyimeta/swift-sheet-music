@@ -26,6 +26,33 @@ struct PlaybackSharedRulesTests {
         #expect(MixerChannel(id: .metronome, name: "Click", isMuted: true).isSilenced(soloing: false))
     }
 
+    @Test("playback plays a channel at its slider, or at nothing while it is silenced")
+    func playbackGain() {
+        var strip = part(0)
+        strip.volume = 0.6
+        #expect(strip.playbackGain(soloing: false) == 0.6)
+        #expect(strip.playbackGain(soloing: true) == 0)
+        strip.isMuted = true
+        #expect(strip.playbackGain(soloing: false) == 0)
+    }
+
+    @Test("a preview sounds at the slider whatever the mute and solo, until the score plays")
+    func previewGain() {
+        var muted = part(0, muted: true)
+        muted.volume = 0.6
+        var shutOut = part(1)
+        shutOut.volume = 0.4
+        #expect(muted.previewGain(soloing: false, isPlaying: false) == 0.6)
+        #expect(shutOut.previewGain(soloing: true, isPlaying: false) == 0.4)
+        // While playing it is the music's own channel: opening it would bring the part back in under the music.
+        #expect(muted.previewGain(soloing: false, isPlaying: true) == 0)
+        #expect(shutOut.previewGain(soloing: true, isPlaying: true) == 0)
+        // The slider still counts: a strip pulled to nothing previews at nothing.
+        var pulledDown = part(2)
+        pulledDown.volume = 0
+        #expect(pulledDown.previewGain(soloing: false, isPlaying: false) == 0)
+    }
+
     @Test("only a soloed channel on the solo bus engages it")
     func soloBus() {
         #expect([part(0), part(1, soloed: true)].isSoloing)

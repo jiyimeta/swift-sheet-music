@@ -7,6 +7,114 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`LoopRange.contains(_:)` and `LoopRange.seekTick(_:whilePlaying:)`** — the one rule for where a seek lands with an
+  A–B loop set: snapped to the loop's start while playing, where it was sent while stopped or paused. The Apple and
+  the Windows engine both seek by it.
+
+### Fixed
+
+- **The Windows engine's stopped or paused seek past an A–B loop stays where it was sent**, as the Apple engine does.
+  `WindowsPlaybackEngine.seek(to:)` used to snap it to the loop's start whatever the state, so a tap past the section
+  to set a new B landed on A. It now seeks by `LoopRange.seekTick(_:whilePlaying:)`, and the cursor and the current
+  time read where the seek put it; playing from there starts at the loop's start, as before. A pause just past B
+  reads and resumes where the loop's wrap would have put it. The Android engine (`AndroidPlaybackEngine.seek`) still
+  snaps a stopped seek.
+
+## [4.33.0] - 2026-11-09
+
+### Added
+
+- **`SetGradualTempoChange(over:type:factor:)`** — writes a gradual tempo change (rit., accel., rall., …) over a range,
+  placed like `SetTextLine` and the other line spanners and refused the same way (`.duplicateSpanner` where one already
+  begins, `.targetNotFound` for a range that resolves to nothing). It carries what MuseScore's palette puts on one: the
+  type, its abbreviation as the begin text and in parentheses as the continuation text (`rit.` / `(rit.)`), so it
+  draws the conventional label; `.undefined` writes a bare line. `factor` is the target tempo as a multiple of the
+  tempo where the change starts, `nil` for the type's default. The tempo map ramps over the new line and the MSCX
+  encoder writes it as `<Spanner type="GradualTempoChange">`.
+- **`EditIntent.setGradualTempoChange(over:type:factor:)` (wire index 96)** — the same edit as an intent, so a host
+  that relays intents (an Android or web mirror session) can write the line too. It follows the spanner group's rules:
+  a second one where one already begins is refused as `.duplicateSpanner`, and `removeSpanner(kind:
+  .gradualTempoChange)` takes it off. An unknown type spelling on the wire is a decode failure.
+
+### Changed
+
+- **A note preview sounds through mute and solo while the transport is stopped or paused.** A tapped or entered note
+  (`playPreview`) and a held key (`previewNoteOn`) on a part that is muted, or shut out by another channel's solo,
+  used to be silent: the preview strikes the part's own channel, and the mixer held that channel's CC 7 at 0. Mute
+  and solo choose what the playback is heard with, and a preview is the user asking to hear that one note, so every
+  engine now opens the channel to its slider before the note-on (`MixerChannel.previewGain`) and closes it again
+  before the transport starts — on the Apple engine on both the SwiftySynth and the AUMIDISynth path, on Windows,
+  and on Android (to the channel's remembered CC 7). While the score plays a preview keeps playback's level: it
+  strikes the channel the music is on, and opening it would bring the muted part back in under the music.
+
+## [4.32.0] - 2026-11-09
+
+### Added
+
+- **A staff hidden on its own reads as hidden (`Staff.isVisibleInScore`).** MuseScore 4 writes
+  `<isStaffVisible>0</isStaffVisible>` into a part's `<Staff>` when one staff is hidden with its eye in the Instruments
+  panel — the left hand of a piano, say. The MSCX decoder used to keep the tag as preserved markup only, so a host
+  could not see it and showed the staff. It now reads it the way MuseScore's `readBool()` does (only a non-zero
+  integer is visible), and the encoder writes it back, only for a hidden staff, after `<defaultClef>` and before
+  `<bracket>` as MuseScore does. Like `Part.isVisibleInScore`, it says what the file hides; the layout engine still
+  draws every staff it is given.
+- **`Score.authoredHiddenStaffAddresses`** — every staff the file hides in the score: all staves of a part with
+  `isVisibleInScore == false`, and each staff with its own `isVisibleInScore == false`. A host seeds it into its
+  hidden-staff set; the example app's Mac view does.
+- **`StaffWire.isAuthoredHidden`** (in `PartsStavesWire`) — 1 when `authoredHiddenStaffAddresses` holds the staff, so
+  an Android host seeds the same set without combining the part and staff flags itself.
+- **MuseScore's "hide empty staves" settings are read and written (`AutoOnOff`, `Staff.hideWhenEmpty`,
+  `Staff.showIfSystemEmpty`, `Part.hideWhenEmpty`, `Part.hideStavesWhenIndividuallyEmpty`, and `ScoreStyle`'s
+  `hideEmptyStaves`, `dontHideStavesInFirstSystem`, `alwaysShowBracketsWhenHidingStaves` and
+  `alwaysShowSquareBracketsWhenHidingStaves`).** The part and staff tags were kept as preserved markup. A 4.60
+  file's `auto` / `on` / `off` strings are read as they are; an older file's staff integers (MuseScore 3 and 4.0–4.5,
+  most files in the wild) are converted into the part and staff settings exactly as MuseScore 4.6 converts them,
+  against the score's `<hideEmptyStaves>` — inline or from the container's `score_style.mss`. The 4.60 output writes
+  the strings where MuseScore does (a staff's after `<defaultClef>`, a part's after `<trackName>`); the 3.02 output
+  writes each staff's integer, losing only an `on` multi-staff part that hides its staves together, which reads back
+  as following the style. The four style keys are read for layout and saved as the file had them, like
+  `lastSystemFillLimit`.
+- **The layout hides empty staves as MuseScore 4.6 does (`ScoreViewOptions.hidesEmptyStaves`, default on).** Each
+  system leaves out the staves those settings hide while they are empty in it: by the staff's own setting, else its
+  part's, else the style — which spares the first system, and the first after a section break, while
+  `dontHideStavesInFirstSystem` is on. A staff stays for a note, a measure repeat, a visible staff annotation
+  (dynamic, chord symbol, staff text, …) or a staff spanner reaching into the system, hidden ones and slurs included;
+  a part hiding its staves together keeps them while any one has content; a system left empty gets back its
+  `showIfSystemEmpty` staves or its first. Line breaks are decided first, so hiding never moves one. A system that
+  hides a staff has no row for it — `staffOrigins`, `staffAddresses` and `staffGeometries` hold the shown staves under
+  their score-wide addresses, so `flatIndex(for:)` returns nil — and draws nothing of it; brackets are trimmed to the
+  shown staves (dropped at one staff unless the style keeps them), part names move to the part's shown staves, and
+  tempo marks, rehearsal marks, measure numbers, markers, jumps and voltas move to the first shown staff. Ties across a
+  system break, post-pass spanners and the sticky header now find a staff by its address rather than its row.
+- **`Score.asksToHideEmptyStaves`** — whether some staff of the score hides while empty under the score's own
+  settings, so a host that lets the reader switch hiding on and off can start it on for a score that asks for it.
+- **`ScoreViewOptions.revealedStaff`** — where a host's editing caret is (a staff in a measure). The system holding it
+  that would hide that staff draws every staff instead, so a caret never sits on a staff the page leaves out; the
+  other systems hide as before. It is not part of the layout cache's keys, so a caret moving through the score lays
+  out again only the systems it opens or closes.
+- **A chord's or rest's manual beaming is honored (`BeamMode`, `Chord.beamMode`).** MuseScore writes `<BeamMode>` when
+  a beam is broken or joined by hand (`begin`, `mid`, `end`, `no`, `begin16`, `begin32`); the decoder kept it as
+  preserved markup and the layout beamed by the time signature alone. The beam grouping now starts a beam where a chord
+  says `begin`, leaves a `no` chord unbeamed, ends after `end`, and carries a beam across a rest marked `mid`, as
+  MuseScore's `BeamLayout` does; the encoder writes the mode back where MuseScore does. The MusicXML import sets the
+  same mode from `<beam>` (`begin` / `continue` / `end`, and a chord with no `<beam>` amid beamed ones), as MuseScore's
+  `computeBeamMode` does, so an imported file beams as its exporter drew it.
+- **Notes drawn on the other staff of a part are read, written and drawn (`Chord.staffMove`).** MuseScore writes
+  `<staffMove>` (MuseScore 2: `<move>`) on a chord crossed to the staff above (−1) or below (+1) — a right hand's run
+  dipping into the bass staff. The decoder kept it as preserved markup, so the notes were drawn on their own staff,
+  against its clef, with ledger lines down the page. Now `Part.effectiveStaffMove(_:fromStaff:)` and
+  `Score.effectiveStaffMove(of:at:)` give the move MuseScore applies (0 for a move off the part, onto a hidden staff or
+  onto a staff of another type), and the layout places such a chord against the target staff's clef and draws it — with its stem,
+  flag, dots, accidentals and articulations — on that staff, its stem pointing back toward its own staff; a beam group
+  moved as a whole does the same. A beam whose chords lie on both staves is drawn between them, its stems meeting it
+  from both sides, centered between the innermost noteheads and slanted as MuseScore's `calculateAnchorsCross` slants
+  it (the re-centering MuseScore does for secondary beams stacked on one side is not). A moved chord shares the
+  accidental state of the staff it is drawn on; a tie into or out of one still pairs; a staff that receives moved
+  notes does not hide as empty; and `Score.filtered(hidingStaves:)` re-expresses a move against the staves it keeps,
+  clearing one whose target it removes.
+
 ## [4.31.0] - 2026-11-08
 
 ### Added

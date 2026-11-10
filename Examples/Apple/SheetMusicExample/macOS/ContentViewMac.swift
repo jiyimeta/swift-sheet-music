@@ -243,14 +243,17 @@
 
         /// The score handed to the layout engine: the loaded score with
         /// the active transpose applied, so the engraving reflects it. When
-        /// `honorAuthoredHiding` is on, parts the file marked
-        /// `<Part><show>0</show>` are filtered out first — the same
-        /// `Score.filtered(hidingStaves:)` transform a host applies to honor
-        /// authored visibility.
+        /// `honorAuthoredHiding` is on, the staves the file hides
+        /// (`Score.authoredHiddenStaffAddresses` — a `<Part><show>0</show>`
+        /// part, or one `<isStaffVisible>0</isStaffVisible>` staff) are
+        /// filtered out first — the same `Score.filtered(hidingStaves:)`
+        /// transform a host applies to honor authored visibility. Part and
+        /// staff indices are unaffected by transpose, so the set is taken
+        /// from the pre-transpose score.
         private func laidOut(_ s: Score) -> Score {
             let transposed = s.transposed(bySemitones: transposeSemitones)
             guard honorAuthoredHiding else { return transposed }
-            let hidden = Self.authoredHiddenStaves(of: s)
+            let hidden = s.authoredHiddenStaffAddresses
             return hidden.isEmpty
                 ? transposed
                 : transposed.filtered(hidingStaves: hidden)
@@ -275,7 +278,7 @@
                 committed: committed, lyricSession: lyricSession, textSession: textSession,
             )
             let hidden = honorAuthoredHiding && layoutMode != .originalPDF
-                ? Self.authoredHiddenStaves(of: preview) : []
+                ? preview.authoredHiddenStaffAddresses : []
             return ScoreEditingAddressMap(
                 score: committed, hiddenStaves: hidden,
                 previewScore: layoutMode == .horizontal && textEntryPreviewIdentity != nil ? preview : nil,
@@ -355,26 +358,6 @@
         /// and deliberately never reaches this value.
         private var scoreForPDFExport: Score? {
             score.map(laidOut)
-        }
-
-        /// Staff addresses of every part the file authored as hidden
-        /// (`Part.isVisibleInScore == false`, i.e. `<Part><show>0</show>`).
-        /// `<show>` is a per-part flag, so a hidden part contributes all of
-        /// its staves. Part indices are unaffected by transpose, so this can
-        /// be computed from the pre-transpose score.
-        private static func authoredHiddenStaves(of score: Score) -> Set<StaffAddress> {
-            var hidden: Set<StaffAddress> = []
-            for (partIndex, part) in score.parts.enumerated()
-                where !part.isVisibleInScore
-            {
-                for staffIndexInPart in part.staves.indices {
-                    hidden.insert(StaffAddress(
-                        partIndex: partIndex,
-                        staffIndexInPart: staffIndexInPart,
-                    ))
-                }
-            }
-            return hidden
         }
 
         /// The content width of the score's own page geometry — the
@@ -3944,7 +3927,7 @@
             let screenScore = laidOut(preview)
             let addresses = ScoreEditingAddressMap(
                 score: committed,
-                hiddenStaves: honorAuthoredHiding ? Self.authoredHiddenStaves(of: preview) : [],
+                hiddenStaves: honorAuthoredHiding ? preview.authoredHiddenStaffAddresses : [],
                 previewScore: preview,
             )
             if renderedTextEntryPreview != nil || textEntryPreviewIdentity != nil {

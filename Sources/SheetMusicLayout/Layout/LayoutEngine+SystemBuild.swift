@@ -35,6 +35,8 @@ extension LayoutEngine {
         /// HBox room before the measure (0 for the system's first). Every walk over the measures' x — pass 1's
         /// `xOffsets`, `extractLineSpanners` and pass 2 — advances by it before the measure.
         let leadingGap: CGFloat
+        /// Beams whose chords are drawn on two staves, drawn once the staves are placed (`layOutCrossStaffBeams`).
+        var crossStaffBeams: [CrossStaffBeam] = []
     }
 
     // MARK: - Per-system layout
@@ -42,6 +44,12 @@ extension LayoutEngine {
     /// - Parameter widthPassAggregates: Every measure's tick aggregate as `packSystems`'s width pass computed it,
     ///   indexed by measure — what this reads when `context.cache` has no entry to serve it, rather than computing
     ///   the aggregate a second time. Empty means compute it here.
+    /// - Parameter shownStaves: Which staves, in `Score.allStaves` order, this system draws
+    ///   (`LayoutEngine.systemShownStaves`); empty means every one. A hidden staff is still placed — its clefs and
+    ///   keys carry into the next system — but nothing of it is drawn and it takes no room: the system's
+    ///   `staffOrigins`, `staffAddresses` and `staffGeometries` hold the shown staves only, under their own addresses,
+    ///   and its system objects (tempo, rehearsal marks, measure numbers, …) move to the next shown staff, as
+    ///   MuseScore moves them (`EngravingItem::effectiveStaffIdx`). Everything inside indexes staves score-wide.
     static func buildSystem( // swiftlint:disable:this function_body_length
         measureRange: Range<Int>,
         widths: [CGFloat],
@@ -52,12 +60,29 @@ extension LayoutEngine {
         activeClefs: inout [NotatedClef],
         activeKeys: inout [Int],
         widthPassAggregates: [TickAggregate?] = [],
+        shownStaves: [Bool] = [],
         context: RenderContext,
     ) -> LayoutSystem {
         let metrics = context.metrics
         let spacing = metrics.spacing
         let allStaves = context.score.allStaves
+        let flatIndexByAddress = Dictionary(
+            allStaves.enumerated().map { ($1.address, $0) }, uniquingKeysWith: { first, _ in first },
+        )
+        func flatIndex(of address: StaffAddress) -> Int? {
+            flatIndexByAddress[address]
+        }
         let staves = allStaves.map(\.staff)
+        let hidesStaves = shownStaves.count == staves.count && shownStaves.contains(false)
+            && shownStaves.contains(true)
+        func isShown(_ staffIdx: Int) -> Bool {
+            !hidesStaves || shownStaves[staffIdx]
+        }
+        let shownIndices = staves.indices.filter(isShown)
+        // Where the system's top-staff marks go — measure numbers, markers and jumps — and what the first staff's
+        // spacing rule keys on.
+        let topStaff = shownIndices.first ?? 0
+        let addresses = allStaves.map(\.address)
         // Per-staff line geometry, parallel to `staves` (and therefore
         // to `staffOrigins`). `metrics.staffHeight` remains the
         // five-line REFERENCE height that step→Y placement is expressed
@@ -264,6 +289,15 @@ extension LayoutEngine {
             var perStaff: [Int: [LayoutElement]] = [:]
             var perStaffInvisible: [Int: [LayoutElement]] = [:]
             var synthesizedEndBarLineIndices: [Int: Int] = [:]
+            // Chords drawn on a sibling staff: what each staff's placement handed over, and the beams across two
+            // staves. The clefs as the measure starts, because a staff placed before its sibling has already moved
+            // its own entry in `clefs` to the end of the measure.
+            var relocationsByStaff: [Int: (visible: [Int: Int], invisible: [Int: Int])] = [:]
+            var measureCrossStaffBeams: [CrossStaffBeam] = []
+            let clefsAtMeasureStart = clefs
+            let laneByStaff = systemElementsByStaff(
+                measureIdx: measureIdx, score: context.score, addresses: addresses, isShown: isShown,
+            )
             for (staffIdx, staff) in staves.enumerated() {
                 guard measureIdx < staff.measures.count else { continue }
                 let m = staff.measures[measureIdx]
@@ -288,23 +322,26 @@ extension LayoutEngine {
                     .indices.contains(measureIdx)
                     ? context.melismaContinuations[staffIdx][measureIdx]
                     : []
-                let canonicalStaff = StaffAddress(
-                    partIndex: 0, staffIndexInPart: 0,
-                )
                 let address = allStaves[staffIdx].address
-                let systemElementsForStaff: [PositionedSystemElement] =
-                    measureIdx < context.score.systemMeasures.count
-                        ? context.score.systemMeasures[measureIdx].elements
-                        .filter {
-                            ($0.originalStaff ?? canonicalStaff) == address
-                        }
-                        : []
+                let systemElementsForStaff = laneByStaff[staffIdx] ?? []
                 let measDuration = measureDuration(
                     staffMeasureDurations[staffIdx], at: measureIdx,
                 )
                 let staffCountInPart = context.score.parts.indices.contains(address.partIndex)
                     ? context.score.parts[address.partIndex].staves.count : 1
                 let breathOwners = barHeadBreathOwners(measureIdx: measureIdx, in: staff)
+                let staffMoves = movedChords(
+                    in: m, staffIndexInPart: address.staffIndexInPart, of: part,
+                    measureDuration: measDuration, division: context.score.division,
+                    targetClefAtStart: { sibling in
+                        flatIndex(of: StaffAddress(partIndex: address.partIndex, staffIndexInPart: sibling))
+                            .map { clefsAtMeasureStart[$0] }
+                    },
+                    targetMeasure: { sibling in
+                        let measures = part.staves[sibling].measures
+                        return measures.indices.contains(measureIdx) ? measures[measureIdx] : nil
+                    },
+                )
                 let placementInputs = LayoutCache.PlacementInputs(
                     measure: m,
                     isPitchedStaff: isPitchedStaff,
@@ -336,12 +373,15 @@ extension LayoutEngine {
                     followingClef: followingClefsHere[staffIdx],
                     staffCountInPart: staffCountInPart,
                     barHeadBreathOwners: breathOwners,
+                    movedChords: staffMoves,
                 )
                 let els: [LayoutElement]
                 let invisibleEls: [LayoutElement]
                 let synthesizedEndBarLineIndex: Int?
                 let newClef: NotatedClef
                 let newKey: Int
+                let staffRelocations: (visible: [Int: Int], invisible: [Int: Int])
+                let staffCrossBeams: [CrossStaffBeam]
                 if let cached = context.cache?
                     .entries[measureIdx]?.placements[staffIdx],
                     cached.inputs == placementInputs
@@ -352,6 +392,8 @@ extension LayoutEngine {
                         .synthesizedEndBarLineIndex
                     newClef = cached.newClef
                     newKey = cached.newKey
+                    staffRelocations = (cached.relocations, cached.invisibleRelocations)
+                    staffCrossBeams = cached.crossStaffBeams
                     context.cache?.placementHits += 1
                 } else {
                     let result = placeMeasureElements(
@@ -385,6 +427,7 @@ extension LayoutEngine {
                         followingClef: followingClefsHere[staffIdx],
                         staffCountInPart: staffCountInPart,
                         barHeadBreathOwners: breathOwners,
+                        movedChords: staffMoves,
                     )
                     els = result.elements
                     invisibleEls = result.invisibleElements
@@ -392,20 +435,29 @@ extension LayoutEngine {
                         .synthesizedEndBarLineIndex
                     newClef = result.clef
                     newKey = result.key
+                    staffRelocations = (result.relocations, result.invisibleRelocations)
+                    staffCrossBeams = result.crossStaffBeams
                     context.cache?.placementMisses += 1
                     if var entry = context.cache?.entries[measureIdx] {
-                        entry.placements[staffIdx] = LayoutCache
-                            .StaffPlacement(
-                                inputs: placementInputs,
-                                elements: els,
-                                invisibleElements: invisibleEls,
-                                synthesizedEndBarLineIndex: synthesizedEndBarLineIndex,
-                                newClef: newClef,
-                                newKey: newKey,
-                            )
+                        var placement = LayoutCache.StaffPlacement(
+                            inputs: placementInputs,
+                            elements: els,
+                            invisibleElements: invisibleEls,
+                            synthesizedEndBarLineIndex: synthesizedEndBarLineIndex,
+                            newClef: newClef,
+                            newKey: newKey,
+                        )
+                        placement.relocations = result.relocations
+                        placement.invisibleRelocations = result.invisibleRelocations
+                        placement.crossStaffBeams = result.crossStaffBeams
+                        entry.placements[staffIdx] = placement
                         context.cache?.entries[measureIdx] = entry
                     }
                 }
+                if !staffRelocations.visible.isEmpty || !staffRelocations.invisible.isEmpty {
+                    relocationsByStaff[staffIdx] = staffRelocations
+                }
+                measureCrossStaffBeams += staffCrossBeams
                 clefs[staffIdx] = newClef
                 keys[staffIdx] = newKey
                 perStaff[staffIdx] = els
@@ -457,6 +509,21 @@ extension LayoutEngine {
                     )
                 }
             }
+            // Chords and rests drawn on a sibling staff go to that staff's buffer, with the marks and beams drawn with
+            // them — after the courtesy pass above, which still indexes each staff's buffer as placement left it.
+            // A staff with no hidden element has no invisible buffer yet: what is placed is what `perStaff` holds.
+            // What a staff this system hides would hand over stays with it and goes when it goes: MuseScore draws
+            // nothing whose own staff is hidden, wherever it would be drawn (`Measure::visible(staffIdx)`).
+            let placedStaves = Set(perStaff.keys)
+            let handingOver = relocationsByStaff.filter { isShown($0.key) }
+            relocateMovedElements(
+                handingOver.mapValues(\.visible), in: &perStaff, placedStaves: placedStaves,
+                addressOf: { allStaves[$0].address }, flatIndex: flatIndex(of:),
+            )
+            relocateMovedElements(
+                handingOver.mapValues(\.invisible), in: &perStaffInvisible, placedStaves: placedStaves,
+                addressOf: { allStaves[$0].address }, flatIndex: flatIndex(of:),
+            )
             // Measure number — TOP STAFF ONLY. Engraving convention
             // places a single number above the topmost staff; how often
             // is `options.measureNumbers` (every system head by default,
@@ -476,6 +543,9 @@ extension LayoutEngine {
             // Appended AFTER the per-measure placement cache is written
             // above, so a cached `StaffPlacement` never carries a label
             // and toggling the policy cannot serve a stale one.
+            //
+            // "Top" is the top SHOWN staff: a measure number is a system object, and moves down with the others when
+            // the top staff is hidden as empty.
             if !staves.isEmpty,
                let displayed = context.score.displayedMeasureNumber(
                    at: measureIdx,
@@ -485,7 +555,7 @@ extension LayoutEngine {
                    isSystemStart: untranslated.isEmpty,
                )
             {
-                perStaff[0, default: []].append(.measureNumber(
+                perStaff[topStaff, default: []].append(.measureNumber(
                     text: "\(displayed)",
                     origin: CGPoint(
                         x: -metrics.sp * 0.5,
@@ -495,13 +565,15 @@ extension LayoutEngine {
             }
             // Markers and jumps — TOP STAFF ONLY, emitted here for the measure number's reason: this is the buffer the
             // skyline autoplace pass works on, and they are what it places last. Appended after the placement cache is
-            // written, like the number. Pass 2 lifts them back out into `LayoutMeasure.markers` / `.jumps`.
+            // written, like the number. Pass 2 lifts them back out into `LayoutMeasure.markers` / `.jumps`. They are
+            // read from, and named after, the score's first staff, which holds them; drawn on the top shown staff.
             if let first = staves.first, measureIdx < first.measures.count, let owner = allStaves.first?.address {
                 // Hidden barlines count: MuseScore lays them out with their width all the same.
-                let barElements = (perStaff[0] ?? []) + (perStaffInvisible[0] ?? [])
+                let barElements = (perStaff[topStaff] ?? []) + (perStaffInvisible[topStaff] ?? [])
                 let previous = untranslated.last.map {
                     (
-                        elements: ($0.perStaffElements[0] ?? []) + ($0.perStaffInvisibleElements[0] ?? []),
+                        elements: ($0.perStaffElements[topStaff] ?? [])
+                            + ($0.perStaffInvisibleElements[topStaff] ?? []),
                         width: $0.width, contentWidth: $0.contentWidth,
                     )
                 }
@@ -512,18 +584,18 @@ extension LayoutEngine {
                             start: startBarLine(in: barElements, previous: previous, sp: metrics.sp),
                             end: endBarLine(in: barElements, contentWidth: w, sp: metrics.sp) ?? BarLineSpan(at: w),
                         ),
-                        staffBottom: metrics.sp * 2 + staffHeights[0],
+                        staffBottom: metrics.sp * 2 + staffHeights[topStaff],
                         metrics: metrics,
                         showsInvisible: context.options.showsInvisibleElements,
                     ),
                 )
                 if !navigation.visible.isEmpty {
-                    perStaff[0, default: []].append(contentsOf: navigation.visible)
+                    perStaff[topStaff, default: []].append(contentsOf: navigation.visible)
                 }
                 // Hidden marks ride the invisible buffer: translated in pass 2 into `invisibleElements`, never in the
                 // skyline, the staff pads or the autoplace pass.
                 if !navigation.hidden.isEmpty {
-                    perStaffInvisible[0, default: []].append(contentsOf: navigation.hidden)
+                    perStaffInvisible[topStaff, default: []].append(contentsOf: navigation.hidden)
                 }
             }
             let staff0Measure: Measure? = measureIdx
@@ -540,6 +612,7 @@ extension LayoutEngine {
                 tickCols: tickCols,
                 multiMeasureRestCount: nil,
                 leadingGap: gapBefore[j],
+                crossStaffBeams: measureCrossStaffBeams,
             ))
         }
 
@@ -593,7 +666,9 @@ extension LayoutEngine {
         // dropped silently.
         synthesizeLineSpanners(
             into: &untranslated,
-            anchors: context.spannerAnchors,
+            anchors: hidesStaves
+                ? movingSystemSpanners(context.spannerAnchors, staffCount: staves.count, isShown: isShown)
+                : context.spannerAnchors,
             measureRange: measureRange,
             staffCount: staves.count,
             staffGeometries: staffGeometries,
@@ -603,8 +678,23 @@ extension LayoutEngine {
             metrics: metrics,
         )
 
+        // --- Hidden staves leave the buffer ---
+        //
+        // Everything of a staff this system hides goes here, once nothing more is written into the buffer: after the
+        // placement above (which a hidden staff still runs, for the clef and key it carries out) and the passes that
+        // insert into every staff's entry. From here on a hidden staff has no entry, so the skyline, the staff pads,
+        // the spanner extraction and pass 2 see only the shown ones.
+        if hidesStaves {
+            for index in untranslated.indices {
+                for staffIdx in staves.indices where !isShown(staffIdx) {
+                    untranslated[index].perStaffElements[staffIdx] = nil
+                    untranslated[index].perStaffInvisibleElements[staffIdx] = nil
+                }
+            }
+        }
+
         do {
-            for staffIdx in 0 ..< staves.count {
+            for staffIdx in shownIndices {
                 // The staff's OWN drawn band: placement puts the top
                 // line at `sp * 2`, and a staff that draws `n` lines
                 // ends its own height below that (zero for one line).
@@ -707,8 +797,8 @@ extension LayoutEngine {
             // so the baseline carries roughly 2 sp of clearance
             // — enough that the upper staff's lyrics or staff-
             // text dynamics don't visually fuse with this
-            // staff's top line.
-            let baseline: CGFloat = idx == 0 ? 0 : metrics.sp * 2
+            // staff's top line. "First" is the first staff drawn.
+            let baseline: CGFloat = idx == topStaff ? 0 : metrics.sp * 2
             return baseline + topOverflow
         }
 
@@ -769,20 +859,36 @@ extension LayoutEngine {
         }
 
         // --- Compute staffOrigins from cumulative extent ---
-        var staffOrigins: [CGPoint] = []
+        //
+        // Score-wide, like every other per-staff array here; only the shown staves stack. A hidden staff keeps a
+        // placeholder nothing reads — it has no buffer entry left — and leaves the system's arrays at the end.
+        var staffOrigins = [CGPoint](
+            repeating: CGPoint(x: partLabelWidth, y: topPad), count: staves.count,
+        )
         var currentY: CGFloat = topPad
-        for idx in 0 ..< staves.count {
+        for (position, idx) in shownIndices.enumerated() {
             currentY += staffTopPads[idx]
-            staffOrigins.append(CGPoint(
+            staffOrigins[idx] = CGPoint(
                 x: partLabelWidth, y: currentY,
-            ))
-            if idx < staves.count - 1 {
+            )
+            if position < shownIndices.count - 1 {
                 // Advance past the staff just placed, by ITS drawn
                 // height — a 1-line staff leaves the next staff 4 sp
                 // higher than a 5-line one would.
                 currentY += staffHeights[idx]
                     + staffBottomPads[idx] + minGap
             }
+        }
+
+        // Beams across two staves, now that both staves have a place.
+        for index in untranslated.indices where !untranslated[index].crossStaffBeams.isEmpty {
+            layOutCrossStaffBeams(
+                untranslated[index].crossStaffBeams,
+                in: &untranslated[index].perStaffElements,
+                flatIndex: flatIndex(of:),
+                staffOriginY: { staffOrigins[$0].y },
+                metrics: metrics,
+            )
         }
 
         // Build LayoutBrackets — one per visible BracketItem on each
@@ -803,17 +909,20 @@ extension LayoutEngine {
                         originFlat + bi.span - 1,
                         staffOrigins.count - 1,
                     )
-                    let topY = staffOrigins[originFlat].y
+                    guard let trimmed = trimmedBracketSpan(
+                        bi, from: originFlat, to: endFlat, isShown: isShown, style: context.score.style,
+                    ) else { continue }
+                    let topY = staffOrigins[trimmed.first].y
                     // Bottom edge of the LAST spanned staff, by its
                     // own drawn height.
-                    let bottomY = staffOrigins[endFlat].y
-                        + staffHeights[endFlat]
+                    let bottomY = staffOrigins[trimmed.last].y
+                        + staffHeights[trimmed.last]
                     brackets.append(LayoutBracket(
                         type: bi.type,
                         topY: topY,
                         bottomY: bottomY,
                         column: bi.column,
-                        staffCount: endFlat - originFlat + 1,
+                        staffCount: trimmed.shownCount,
                     ))
                 }
             }
@@ -836,11 +945,13 @@ extension LayoutEngine {
             // Locate the part's flat-staff range. A part with no
             // entries in `allStaves` (shouldn't normally happen — a
             // Part declares staves that always end up flattened)
-            // is skipped silently.
-            guard let firstFlat = allStaves.firstIndex(where: {
-                $0.address.partIndex == partIdx
-            }), let lastFlat = allStaves.lastIndex(where: {
-                $0.address.partIndex == partIdx
+            // is skipped silently. Only shown staves count: the name moves to the part's first shown staff and
+            // centers on its shown ones, and a part with none shown has no name in this system
+            // (`SystemLayout::layoutInstrumentNames`, `rendering/score/systemlayout.cpp:2748-2817`).
+            guard let firstFlat = allStaves.indices.first(where: {
+                allStaves[$0].address.partIndex == partIdx && isShown($0)
+            }), let lastFlat = allStaves.indices.last(where: {
+                allStaves[$0].address.partIndex == partIdx && isShown($0)
             }) else { return nil }
             let topY = staffOrigins[firstFlat].y
             // Bottom edge of the part's last staff, by its own drawn
@@ -948,7 +1059,7 @@ extension LayoutEngine {
                 // on lower staves instructs the renderer to draw the bar
                 // glyph without the number).
                 var elements: [LayoutElement] = []
-                for staffIdx in staves.indices {
+                for staffIdx in shownIndices {
                     guard staffIdx < staffOrigins.count else { continue }
                     let staffY = staffOrigins[staffIdx].y
                     let staffCenterY = staffY + staffHeights[staffIdx] / 2
@@ -1022,7 +1133,7 @@ extension LayoutEngine {
             var markers: [LayoutElement] = []
             var jumps: [LayoutElement] = []
             var dynamicExtents: [LayoutMeasure.DynamicExtent] = []
-            for staffIdx in staves.indices {
+            for staffIdx in shownIndices {
                 // Placement emits positions relative to "staff top
                 // at sp*2" (see `staffMidY` inside
                 // `placeMeasureElements`). Shift by the difference
@@ -1146,15 +1257,17 @@ extension LayoutEngine {
                 measureRestsAreBreves: sharedMeasureDurations.indices.contains(measureIdx)
                     && Self.measureRestBase(in: sharedMeasureDurations[measureIdx]) == .breve,
                 measureRepeatRests: Self.measureRepeatRests(
-                    at: measureIdx, staves: staves, addresses: allStaves.map(\.address),
+                    at: measureIdx, staves: shownIndices.map { staves[$0] },
+                    addresses: shownIndices.map { addresses[$0] },
                 ),
             ))
             xCursor += w
         }
 
-        // Baseline height: last staff's bottom + bottomPad.
-        let lastStaffBottom = (staffOrigins.last?.y ?? topPad)
-            + (staffHeights.last ?? metrics.staffHeight)
+        // Baseline height: last shown staff's bottom + bottomPad.
+        let lastShown = shownIndices.last
+        let lastStaffBottom = (lastShown.map { staffOrigins[$0].y } ?? topPad)
+            + (lastShown.map { staffHeights[$0] } ?? metrics.staffHeight)
         let baselineHeight = lastStaffBottom + bottomPad
 
         // Extend to fit the actual bounding box of emitted elements so
@@ -1214,13 +1327,14 @@ extension LayoutEngine {
         activeClefs = clefs
         activeKeys = keys
 
+        // The system's own staff arrays hold the shown staves only, each under its score-wide address.
         return LayoutSystem(
             origin: CGPoint(x: 0, y: systemOriginY),
             size: CGSize(width: xCursor, height: totalHeight + topShift),
             measures: adjustedMeasures,
-            staffOrigins: adjustedStaffOrigins,
-            staffAddresses: allStaves.map(\.address),
-            staffGeometries: staffGeometries,
+            staffOrigins: hidesStaves ? shownIndices.map { adjustedStaffOrigins[$0] } : adjustedStaffOrigins,
+            staffAddresses: shownIndices.map { addresses[$0] },
+            staffGeometries: hidesStaves ? shownIndices.map { staffGeometries[$0] } : staffGeometries,
             partLabels: adjustedLabels,
             brackets: adjustedBrackets,
             spanners: adjustedSpanners,

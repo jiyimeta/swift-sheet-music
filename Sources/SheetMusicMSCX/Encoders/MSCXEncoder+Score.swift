@@ -7,6 +7,7 @@ extension Score {
     func encode(options: MSCXEncoderOptions = .init()) throws -> XMLTreeNode {
         var options = options
         options.division = division
+        options.hideEmptyStaves = style.hideEmptyStaves
         var scoreChildren: [XMLTreeNode] = Self.layerHeader(options: options)
         scoreChildren.append(XMLTreeNode(
             name: "Division", text: String(division),

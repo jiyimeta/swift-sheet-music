@@ -8,6 +8,10 @@ enum MusicXMLDecodeContext {
     /// with no usable scaling, in which case MuseScore keeps its default 1.75 mm (`defaultSpatiumMillimeters`).
     @TaskLocal static var spatiumMillimeters: Double?
 
+    /// Whether the score carries beaming information (`MusicXMLStemBeam.hasBeamingInfo(root:)`), which leaves an eighth
+    /// no beam holds unbeamed rather than to the meter. `false` outside a decode.
+    @TaskLocal static var hasBeamingInfo = false
+
     /// MuseScore's default staff space, 1.75 mm (`Sid::spatium` 24.8 at 360 DPI), used when a file gives no scaling.
     static let defaultSpatiumMillimeters = 1.75
 

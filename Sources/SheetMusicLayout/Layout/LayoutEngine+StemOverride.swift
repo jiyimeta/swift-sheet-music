@@ -40,16 +40,21 @@ extension LayoutEngine {
 
     /// A beam group's direction (`BeamLayout::layout1`): one set on the beam (`Chord.beamStemDirection` — on the
     /// chord that leads it in a MuseScore file, taken from any member since the groups here are the layout's own)
-    /// wins over every rule; then `forced`, the voice's side when the measure splits into voices; then, outside a
-    /// split measure, the first member that sets its own stem (`findChordWithCustomStemDirection`); then the notes'
-    /// positions, `automatic`.
+    /// wins over every rule; then `staffMove`, the move the whole group shares when it is drawn on a sibling staff —
+    /// stems up below its own staff, down above it, as an unbeamed moved chord's (`maxCRMove` / `minCRMove`; measured
+    /// against MuseScore 4.6's render, since the code's `setUp(false)` for a downward move does not survive to the
+    /// page); then `forced`, the voice's side when the measure splits into voices; then, outside a split measure, the
+    /// first member that sets its own stem (`findChordWithCustomStemDirection`); then the notes' positions,
+    /// `automatic`.
     static func beamDirection(
-        members: [Int], in elements: [VoiceElement], forced: StemDirection?, automatic: () -> StemDirection,
+        members: [Int], in elements: [VoiceElement], staffMove: Int = 0, forced: StemDirection?,
+        automatic: () -> StemDirection,
     ) -> StemDirection {
         let chords = members.compactMap { index -> Chord? in
             if case let .chord(chord) = elements[index] { chord } else { nil }
         }
         if let set = chords.lazy.compactMap(\.beamStemDirection).first { return StemDirection(set) }
+        if staffMove != 0 { return staffMove > 0 ? .up : .down }
         if let forced { return forced }
         if let own = chords.lazy.compactMap(\.stemDirection).first { return StemDirection(own) }
         return automatic()

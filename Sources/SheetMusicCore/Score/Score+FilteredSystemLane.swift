@@ -26,7 +26,11 @@ extension Score {
 }
 
 extension PositionedSystemElement {
-    fileprivate var isScoreWide: Bool {
+    /// Whether this element belongs to the whole system — a MuseScore system object (`systemFlag`): tempo, rehearsal
+    /// mark, system text, system swing — rather than to the staff it was written on (staff text, staff swing,
+    /// instrument change). The layout reads it too: a system object on a staff hidden in a system moves to a shown
+    /// one, and a staff's own marks keep that staff from being hidden as empty.
+    package var isScoreWide: Bool {
         switch element {
         case .tempo, .rehearsalMark: true
         case let .staffText(text): text.isSystemText

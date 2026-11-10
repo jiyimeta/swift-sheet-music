@@ -50,6 +50,7 @@ extension ScoreStyle {
         // Read for layout and NOT consumed, like the chord-symbol case flags: the tag reaches the saved `<Style>`
         // verbatim as preserved markup.
         if let v = node.firstDouble("lastSystemFillLimit") { s.lastSystemFillLimit = v }
+        decodeEmptyStaffHiding(node, into: &s)
         s.textPlacement.overlay(node)
         // Preserved markup layers the same way the modeled fields do.
         // A `.mscz` can carry its style in `score_style.mss` AND an
@@ -86,6 +87,23 @@ private func decodeOttava(
 ) {
     if let raw = node.first("ottavaNumbersOnly")?.text {
         s.ottavaNumbersOnly = raw != "0"
+    }
+}
+
+/// Parse the four "hide empty staves" keys. Read for layout and NOT consumed, like `lastSystemFillLimit`: the tags
+/// reach the saved `<Style>` verbatim as preserved markup. A present tag reads the way MuseScore reads a boolean style,
+/// `bool(e.readInt())` (`style/style.cpp:131-132`), so a value that is not an integer is false; an absent one keeps
+/// the base value (`style/styledef.cpp:537-542`, or the container's `score_style.mss`).
+private func decodeEmptyStaffHiding(
+    _ node: XMLTreeNode, into s: inout ScoreStyle,
+) {
+    if let v = node.firstMuseScoreBool("hideEmptyStaves") { s.hideEmptyStaves = v }
+    if let v = node.firstMuseScoreBool("dontHideStavesInFirstSystem") { s.dontHideStavesInFirstSystem = v }
+    if let v = node.firstMuseScoreBool("alwaysShowBracketsWhenEmptyStavesAreHidden") {
+        s.alwaysShowBracketsWhenHidingStaves = v
+    }
+    if let v = node.firstMuseScoreBool("alwaysShowSquareBracketsWhenEmptyStavesAreHidden") {
+        s.alwaysShowSquareBracketsWhenHidingStaves = v
     }
 }
 
@@ -237,5 +255,12 @@ extension XMLTreeNode {
             return nil
         }
         return n != 0
+    }
+
+    /// A present tag as MuseScore's `bool(e.readInt())` reads it — anything but a non-zero integer is false — or nil
+    /// when the tag is absent.
+    fileprivate func firstMuseScoreBool(_ name: String) -> Bool? {
+        guard let raw = first(name)?.text else { return nil }
+        return (Int(raw) ?? 0) != 0
     }
 }
