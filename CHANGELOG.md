@@ -7,6 +7,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **`SheetMusicAudioCore` compiles on Windows again.** 4.34.0's `MappedRecording` and `RecordingPCMCacheWriter` read
+  the C `errno`, which Windows' CRT defines only as a macro Swift does not import, so every Windows build of the
+  package failed with `cannot find 'errno' in scope`. On Windows they now read it through `_errno()`; the other
+  platforms read `errno` as before.
+
 ## [4.34.0] - 2026-11-10
 
 ### Added

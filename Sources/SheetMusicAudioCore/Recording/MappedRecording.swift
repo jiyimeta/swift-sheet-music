@@ -147,12 +147,12 @@ public final class MappedRecording: @unchecked Sendable {
             deinit { base.deallocate() }
 
             static func load(path: String) throws -> (storage: Storage, frameCount: Int, sampleRate: Double) {
-                guard let file = fopen(path, "rb") else { throw Failure.unreadable(code: errno) }
+                guard let file = fopen(path, "rb") else { throw Failure.unreadable(code: cErrno) }
                 defer { fclose(file) }
                 var header = [UInt8](repeating: 0, count: headerSize)
                 guard fread(&header, 1, headerSize, file) == headerSize else { throw Failure.invalidCacheFile }
                 guard let parsed = RecordingPCMCacheFormat.parseHeader(header) else { throw Failure.invalidCacheFile }
-                guard fseek(file, 0, SEEK_END) == 0 else { throw Failure.unreadable(code: errno) }
+                guard fseek(file, 0, SEEK_END) == 0 else { throw Failure.unreadable(code: cErrno) }
                 let size = Int64(ftell(file))
                 guard size == RecordingPCMCacheFormat.fileSize(frameCount: parsed.frameCount) else {
                     throw Failure.invalidCacheFile
@@ -161,7 +161,7 @@ public final class MappedRecording: @unchecked Sendable {
                 let base = UnsafeMutableRawPointer.allocate(byteCount: length, alignment: 16)
                 guard fseek(file, 0, SEEK_SET) == 0, fread(base, 1, length, file) == length else {
                     base.deallocate()
-                    throw Failure.unreadable(code: errno)
+                    throw Failure.unreadable(code: cErrno)
                 }
                 return (Storage(base: base, length: length), parsed.frameCount, Double(parsed.sampleRate))
             }

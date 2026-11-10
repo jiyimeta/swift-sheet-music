@@ -8,6 +8,18 @@ import SheetMusicFoundation
     typealias CFile = OpaquePointer
 #endif
 
+// The calling thread's C `errno`. Windows' CRT defines it as the macro `(*_errno())`, which Swift does not import, so
+// there it is read through `_errno()`; every other C library this builds against exports `errno` itself.
+#if os(Windows)
+    var cErrno: Int32 {
+        _errno().pointee
+    }
+#else
+    var cErrno: Int32 {
+        errno
+    }
+#endif
+
 /// Writes a PCM cache file (`RecordingPCMCacheFormat`) from samples a platform's own decoder produces — Android's
 /// MediaCodec decoder hands its PCM here over JNI, so the format has one writer.
 ///
@@ -53,11 +65,11 @@ public final class RecordingPCMCacheWriter {
         let suffix = String(UInt64.random(in: 0 ... UInt64.max), radix: 16)
         temporaryPath = directory + "/.\(cacheKey)-\(suffix).tmp"
         self.sampleRate = sampleRate
-        guard let file = fopen(temporaryPath, "wb") else { throw .writeFailed(code: errno) }
+        guard let file = fopen(temporaryPath, "wb") else { throw .writeFailed(code: cErrno) }
         self.file = file
         let header = [UInt8](repeating: 0, count: RecordingPCMCacheFormat.headerSize)
         guard fwrite(header, 1, header.count, file) == header.count else {
-            let code = errno
+            let code = cErrno
             cancel()
             throw .writeFailed(code: code)
         }
@@ -105,18 +117,18 @@ public final class RecordingPCMCacheWriter {
             throw .invalidLength(frames: frames)
         }
         guard fseek(file, 0, SEEK_SET) == 0, fwrite(header, 1, header.count, file) == header.count else {
-            let code = errno
+            let code = cErrno
             cancel()
             throw .writeFailed(code: code)
         }
         self.file = nil
         guard fclose(file) == 0 else {
-            let code = errno
+            let code = cErrno
             remove(temporaryPath)
             throw .writeFailed(code: code)
         }
         guard rename(temporaryPath, destinationPath) == 0 else {
-            let code = errno
+            let code = cErrno
             remove(temporaryPath)
             throw .writeFailed(code: code)
         }
@@ -136,7 +148,7 @@ public final class RecordingPCMCacheWriter {
     ) throws(Failure) {
         // The format is little-endian, as every platform this runs on is; a big-endian host would swap here.
         guard fwrite(samples, MemoryLayout<Int16>.size, count, file) == count else {
-            let code = errno
+            let code = cErrno
             cancel()
             throw .writeFailed(code: code)
         }
