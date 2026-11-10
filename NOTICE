@@ -103,8 +103,8 @@ is permissive and imposes no reciprocal obligation on code that links it;
 it asks only that the copyright notice be retained, which vendoring the
 sources verbatim does.
 
-Vendored Signalsmith Stretch and Signalsmith Linear (Apple builds)
-------------------------------------------------------------------
+Vendored Signalsmith Stretch and Signalsmith Linear (Apple and Android builds)
+------------------------------------------------------------------------------
 
 `Sources/CSignalsmithStretch` carries Signalsmith Stretch 1.4.0
 (https://github.com/Signalsmith-Audio/signalsmith-stretch) and the parts of
@@ -112,8 +112,10 @@ Signalsmith Linear 0.6.4 (https://github.com/Signalsmith-Audio/linear) it
 includes, unmodified, under the MIT License; `VENDORED.md` there lists the
 files and commits. They time-stretch and transpose the recordings a host
 plays along with a score, through the `SheetMusicAudioSignalsmith` library
-product. An application that ships that product ships this code, and the
-MIT License asks it to carry the copyright and permission notices below.
+product, and on Android through the Swift JNI library of
+`Android/SheetMusicAndroid/`, which links it. An application that ships that
+product or the Android library ships this code, and the MIT License asks it
+to carry the copyright and permission notices below.
 
     Signalsmith Stretch
     Copyright (c) 2022 Geraint Luff / Signalsmith Audio Ltd.
@@ -153,8 +155,9 @@ depends, at build time via Gradle, on:
 - Oboe — Apache 2.0 (https://github.com/google/oboe)
 
 It synthesizes with SwiftySynth (MIT, https://github.com/jiyimeta/swiftysynth),
-the Swift package the Apple backend uses, compiled into the Swift JNI
-library of `Android/SheetMusicAndroid/`.
+the Swift package the Apple backend uses, and stretches recordings with the
+vendored Signalsmith Stretch above, both compiled into the Swift JNI library
+of `Android/SheetMusicAndroid/`.
 
 Browser playback dependencies
 ------------------------------
