@@ -28,6 +28,9 @@ extension Spanner {
     /// exactly the rest. `unread` names line tags the decoder could not parse: they stay in the bag.
     static func consumedPayloadChildren(for kind: Kind, unread: Set<String> = []) -> Set<String> {
         var consumed = consumedLineChildren
+        // A vibrato and a trill are not `TextLineBase` line variants here, but the encoder writes their `<subtype>`
+        // from the model, so the bag keeps everything but that.
+        if kind == .vibrato || kind == .trill { consumed.insert("subtype") }
         guard lineVariantKinds.contains(kind) else { return consumed }
         consumed.formUnion(linePropertyTags.subtracting(unread))
         switch kind {
@@ -42,12 +45,15 @@ extension Spanner {
     }
 
     /// A begin side's payload child: the line variants it carries and the children nothing models. Kinds with their
-    /// own payload path (slur, ottava, trill, vibrato, glissando, gradual tempo) keep it and keep no bag. A payload
+    /// own payload path (slur, ottava, glissando, gradual tempo) keep it and keep no bag; a vibrato and a trill keep
+    /// theirs and a bag of the children nothing models. A payload
     /// that sets no line property is `nil` — the value a spanner made in code carries — so a save round-trips it.
     static func decodeLinePayload(
         _ payload: XMLTreeNode?, kind: Kind,
     ) -> (lineProperties: LineProperties?, payloadMarkup: [PreservedXML]) {
-        guard let payload, lineVariantKinds.contains(kind) || kind == .other else { return (nil, []) }
+        guard let payload, lineVariantKinds.contains(kind) || [.other, .vibrato, .trill].contains(kind) else {
+            return (nil, [])
+        }
         var lineProperties: LineProperties?
         var unread: Set<String> = []
         if lineVariantKinds.contains(kind) {

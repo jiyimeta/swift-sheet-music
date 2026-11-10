@@ -111,11 +111,31 @@ extension Spanner {
             children += trailing
             return XMLTreeNode(name: rawType, children: children)
         }
+        if let payload = typedLinePayload(leading: leading, trailing: trailing, options: options) {
+            return payload
+        }
         // A pedal writes its line tags before the texts (`TWrite::write(const Pedal*)`,
         // `rw/write/twrite.cpp:2570-2590`):
         // `TRead::read(Pedal*)` (`rw/read460/tread.cpp:3632-3655`) clears the begin / continue texts on a non-NONE
         // `<beginHookType>` and resets the end text on `<lineVisible>`, so a text written first is lost on reopen.
         var children = kind == .pedal ? line + leading : leading + line
+        appendPreservedMarkup(payloadMarkup, to: &children, options: options)
+        return XMLTreeNode(name: rawType, children: children + trailing)
+    }
+
+    /// `<Vibrato>` / `<Trill>`: `TWrite::write(const Vibrato*)` / `write(const Trill*)` write `<subtype>` first, then
+    /// the line texts and element properties; the children nothing models ride after them, as read. Nil for any other
+    /// kind (or a spanner built without the payload).
+    private func typedLinePayload(
+        leading: [XMLTreeNode], trailing: [XMLTreeNode], options: MSCXEncoderOptions,
+    ) -> XMLTreeNode? {
+        let subtype: String? = switch kind {
+        case .vibrato: vibrato?.type.rawValue
+        case .trill: trill?.type.rawValue
+        default: nil
+        }
+        guard let subtype else { return nil }
+        var children = [XMLTreeNode(name: "subtype", text: subtype)] + leading
         appendPreservedMarkup(payloadMarkup, to: &children, options: options)
         return XMLTreeNode(name: rawType, children: children + trailing)
     }

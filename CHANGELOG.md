@@ -46,6 +46,13 @@ and this project adheres to
   file a user exports, keeps the placement of MuseScore's MIDI export. A chord with a guitar bend chain keeps the old
   placement everywhere.
 
+### Fixed
+
+- **A vibrato line keeps its type when saved; so does a trill.** `Spanner.payloadElement` had no branch for either, so
+  the `<subtype>` was never written and all four vibrato types came back `guitarVibrato` (a trill came back as the
+  default `trill`). Both now write `<subtype>` first, and the payload's children nothing models are kept in
+  `payloadMarkup`, as a gradual tempo change's are.
+
 ## [4.46.0] - 2026-11-21
 
 ### Added
