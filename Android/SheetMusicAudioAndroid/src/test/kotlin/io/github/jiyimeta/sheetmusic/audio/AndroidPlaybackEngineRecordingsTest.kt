@@ -349,6 +349,7 @@ class AndroidPlaybackEngineRecordingsTest {
         assertEquals(PlaybackState.PLAYING, engine.state.value)
         engine.pause()
         assertEquals("the user's rate after the count", 1.0, tempos.last(), 1e-9)
+        engine.teardown()
     }
 
     @Test fun `prefetch follows a play and a seek`() = runTest(scheduler) {
