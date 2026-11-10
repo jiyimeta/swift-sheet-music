@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.34.0] - 2026-11-10
+
 ### Added
 
 - **`LoopRange.contains(_:)` and `LoopRange.seekTick(_:whilePlaying:)`** — the one rule for where a seek lands with an
