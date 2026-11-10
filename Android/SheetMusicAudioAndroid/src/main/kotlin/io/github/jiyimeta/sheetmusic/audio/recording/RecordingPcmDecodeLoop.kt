@@ -59,9 +59,15 @@ internal const val DECODE_WAIT_MICROS = 10_000L
  *
  * Each turn feeds every input buffer the codec has free and takes one output buffer, neither waiting, so output that is
  * ready is drained back to back with input refilled as buffers free up. A turn waits — on the output side, at most
- * [waitMicros] — only after a turn in which the codec had no output, and only when no input could go in either: a busy
- * codec holds every input buffer, so waiting on the input side while output is coming is what held the decode near 2×
- * realtime.
+ * [waitMicros] — only after a turn in which the codec had no output, and only when no input could go in either.
+ *
+ * The loop's shape does not set the speed; the codec does. Measured 2026-11-10 on a Pixel 8a (Android 17) with a 224 s
+ * 48 kHz stereo AAC-LC file, five runs each: this loop 44.0 s median, the earlier one that waited 10 ms on the input side
+ * every pass 41.5 s, and one that waits on output every turn 44.9 s — within run-to-run drift of each other. MediaCodec
+ * alone (`c2.android.aac.decoder`, output dropped) took 37 s in synchronous mode and 27 s in asynchronous (callback)
+ * mode, about 3.5 and 2.5 ms per 1024-frame buffer; large-audio-frame batching (`KEY_BUFFER_BATCH_MAX_OUTPUT_SIZE`)
+ * changed nothing with one access unit per input buffer. Asynchronous mode is the lever left, at about a quarter of the
+ * codec's time.
  *
  * Cancelling the caller stops it between buffers and abandons any file begun.
  *
