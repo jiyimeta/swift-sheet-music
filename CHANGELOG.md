@@ -12,6 +12,52 @@ and this project adheres to
 - **`LoopRange.contains(_:)` and `LoopRange.seekTick(_:whilePlaying:)`** — the one rule for where a seek lands with an
   A–B loop set: snapped to the loop's start while playing, where it was sent while stopped or paused. The Apple and
   the Windows engine both seek by it.
+- **Recordings and the alignment on Android (`AndroidPlaybackEngine.setRecordingTracks`, `setRecordingMix`,
+  `recordings`, `setAlignment(warpSpans, segments, trackSegments)`, `hasAlignment`, `notatedSeconds(reportedSeconds)`,
+  `reportedSeconds(notatedSeconds)`).** Android's engine mixes decoded recordings with the score and follows a time
+  warp and segment tables as Apple's `PlaybackEngine` does, with Kotlin mirrors of its types (`RecordingTrack`,
+  `PlaybackTimeWarpSpan`, `RecordingSegment`, `PlaybackAlignment`). The tracks and the alignment belong to the host and
+  survive `prepare` and `teardown`; a track that keeps its id and `pcmPath` keeps its mapping and its place while its
+  mix, offset or transposition changes, and a gain change ramps over 5 ms. A recording strip sits on the instrument
+  strips' solo bus, the reader's transposition reaches it, and away from 100 % or transposed it is read through
+  Signalsmith Stretch. Under an alignment `currentTimeSeconds` and `totalTimeSeconds` report warped seconds,
+  `seek(toTimeSeconds)` and `skip` take them, and a count-in counts at the warped speed of the measure it counts into;
+  the conversions to and from the notated timeline are the score synth's, so a host no longer restates the warp in
+  Kotlin. An invalid warp throws `IllegalArgumentException` whether or not a score is prepared, and a prepare drops a
+  track list or an alignment its new synth refuses (a file deleted since), so `recordings` and `hasAlignment` say what
+  plays. The recordings' pages are read ahead after a play, a seek and every ten cursor polls, and the audio export
+  carries the recordings and the alignment and counts in by the same rule. The score, its recordings and the click
+  render in one native call per block, the click's speed following the score's, and the render no longer waits on the
+  synth driver's control calls (a track list mapping its files, an alignment, a SoundFont load, a clock read), which
+  take a lock of their own.
+- **`RecordingPcmDecoder` (Kotlin) decodes a recording into the PCM cache file a `RecordingTrack` plays** — Android's
+  counterpart of Apple's `RecordingPCMCache.prepare`. MediaExtractor and MediaCodec decode a `content:` or `file:` URI,
+  or a path, in any format the platform reads (AAC/M4A, MP3, FLAC, Ogg, WAV, …) at the source's own sample rate, float
+  output converted as Apple converts it and more than two channels cut to the front pair; the Swift writer writes
+  `<cacheKey>-<Hz>.pcm`, header last and renamed into place. A valid file already there is reused, looked up under the
+  rate the decoder puts out as well as the container's (HE-AAC's SBR doubles it). The decode waits on the codec only
+  when neither its input nor its output side can move. Cancelling the caller stops it between buffers, removes the
+  partial file and reaches the caller as its cancellation, not as a `DecodeException`.
+- **`RecordingPCMCacheFormat`, `RecordingPCMCacheWriter` and `MappedRecording.init(path:)` (`SheetMusicAudioCore`).**
+  The PCM cache file's layout is defined once (`RecordingPCMCacheFormat.fileName(cacheKey:sampleRate:)`,
+  `wholeHertz(_:)`), and a platform decoder that produces its own samples writes it through `RecordingPCMCacheWriter`
+  (`existingFile(directory:cacheKey:sampleRate:)`, `append(interleavedStereo:frameCount:)`,
+  `append(mono:frameCount:)`, `finish()`, `cancel()`): a temporary file, the header last, one rename into place. It is
+  what Android's decoder calls over JNI. Apple's `RecordingPCMCache` writes the same bytes as before.
+
+### Changed
+
+- **`MappedRecording` and `RecordingTrackRender` are declared in `SheetMusicAudioCore`**, and the recording mix behind
+  `SwiftySynthBackend` (the direct and stretched mix, the stretch groups, the gain ramps, the strip's gain and solo
+  rule) moved into the portable targets, so Android's synth runs the same code. `SheetMusicAudioApple` keeps both names
+  as public typealiases, so code that imports `SheetMusicAudio` or `SheetMusicAudioApple` compiles unchanged; only a
+  target that has adopted the `MemberImportVisibility` upcoming feature and imports `SheetMusicAudioApple` alone needs
+  an `import SheetMusicAudioCore` to reach their initializers and properties. Where there is no `mmap` (WebAssembly,
+  Windows) `MappedRecording` reads the file whole. No Apple-visible behavior changes.
+- **`SheetMusicAudioSignalsmith` is declared on every platform but Windows, and the Android JNI library links it.**
+  Android reads recordings away from 100 % through Signalsmith Stretch, on Signalsmith Linear's own C++ FFT; the
+  Accelerate FFT and its link stay Apple-only. An Android app that ships the AAR now ships Signalsmith Stretch and
+  Signalsmith Linear, MIT-licensed, and should carry the notices `NOTICE` credits them with.
 
 ### Fixed
 
