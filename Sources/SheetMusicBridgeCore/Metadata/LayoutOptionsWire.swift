@@ -173,6 +173,14 @@ public struct LayoutOptionsWire {
     /// compiling for every host built before it.
     public var writtenPitch: UInt8 = 0
 
+    /// Where the host's editing caret is, for `ScoreViewOptions.revealedStaff`: the system holding `measureIndex`
+    /// that would hide the staff ("hide empty staves") draws every staff instead. `nil`, the default, reveals nothing,
+    /// as every release before this field did. Addressed in the score the bridge lays out (after `hiddenStaves`).
+    ///
+    /// Optional and appended for the reasons `spacing` gives: an old blob decodes with `nil`, and the generated Kotlin
+    /// constructor gets `= null`, so every host built before it compiles unchanged.
+    public var revealedStaff: RevealedStaffWire?
+
     // swiftlint:disable:next function_default_parameter_at_end
     public init(
         layoutMode: UInt8,
@@ -193,6 +201,7 @@ public struct LayoutOptionsWire {
         smallNoteMag: Double = 0,
         spacing: EngravingSpacingWire? = nil,
         writtenPitch: UInt8 = 0,
+        revealedStaff: RevealedStaffWire? = nil,
     ) {
         self.layoutMode = layoutMode
         self.staffSize = staffSize
@@ -212,6 +221,21 @@ public struct LayoutOptionsWire {
         self.smallNoteMag = smallNoteMag
         self.spacing = spacing
         self.writtenPitch = writtenPitch
+        self.revealedStaff = revealedStaff
+    }
+}
+
+/// A staff in one measure, for `LayoutOptionsWire.revealedStaff` (`ScoreViewOptions.RevealedStaff`).
+@WireFormat
+public struct RevealedStaffWire {
+    public var partIndex: Int32
+    public var staffIndexInPart: Int32
+    public var measureIndex: Int32
+
+    public init(partIndex: Int32, staffIndexInPart: Int32, measureIndex: Int32) {
+        self.partIndex = partIndex
+        self.staffIndexInPart = staffIndexInPart
+        self.measureIndex = measureIndex
     }
 }
 

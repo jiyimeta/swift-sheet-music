@@ -33,6 +33,12 @@ unchanged; an old reader skips the unknown tag. No handwritten Kotlin model name
 `writtenPitch`, the last field added, touched none). The layout cache keys on the score handle, not the options, so a
 moving caret recomputes, as any options change does.
 
+The blob is never stored or sent over a network: it crosses from a host to the layout in one process (Kotlin to the
+`.so` over JNI, a Windows host to `ScorePages` in-process). The two sides can still be of different releases for a
+while in folino's Android app, whose Swift `.so` follows the SwiftPM pin and whose Kotlin follows `ssmVersion`, which
+the Android lane raises on its own schedule; the appended optional field reads correctly in both directions (an older
+Kotlin sends no field, which is `nil`; an older `.so` skips the unknown tag).
+
 **Tests.** `LayoutOptionsWireTests`: the field round-trips; a blob encoded without it decodes to `nil`; a negative
 index reads as `nil`. `ScorePageOptionsTests`: `wire()` carries it. A bridge test over the two-part fixture with a
 staff hidden in its middle system: without the field the system hides the staff, with it (the caret on that staff in

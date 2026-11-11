@@ -139,6 +139,34 @@
             #expect(decoded.engravingSpacing == EngravingSpacing.standard)
         }
 
+        /// `revealedStaff` (tag 20, appended in 4.35.0) round-trips, and reaches the engine's options.
+        @Test func revealedStaffRoundTrips() throws {
+            var wire = LayoutOptionsWire.verticalDefault
+            wire.revealedStaff = RevealedStaffWire(partIndex: 1, staffIndexInPart: 0, measureIndex: 7)
+            let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
+            #expect(decoded.revealedStaff?.measureIndex == 7)
+            #expect(decoded.revealedStaffValue == ScoreViewOptions.RevealedStaff(
+                staff: StaffAddress(partIndex: 1, staffIndexInPart: 0), measureIndex: 7,
+            ))
+        }
+
+        /// A blob without the field — every host before 4.35.0 — decodes with nothing revealed; being optional, the
+        /// field is not written when nil, so the tags the older blob carried are the ones written now.
+        @Test func absentRevealedStaffDecodesAsNothingRevealed() throws {
+            let decoded = try LayoutOptionsCodec.decode(LayoutOptionsWire.verticalDefault.encodeToData())
+            #expect(decoded.revealedStaff == nil)
+            #expect(decoded.revealedStaffValue == nil)
+        }
+
+        /// A negative index cannot name a staff or a measure: nothing is revealed.
+        @Test func aNegativeRevealedIndexRevealsNothing() {
+            var wire = LayoutOptionsWire.verticalDefault
+            for (part, staff, measure) in [(Int32(-1), Int32(0), Int32(0)), (0, -1, 0), (0, 0, -1)] {
+                wire.revealedStaff = RevealedStaffWire(partIndex: part, staffIndexInPart: staff, measureIndex: measure)
+                #expect(wire.revealedStaffValue == nil)
+            }
+        }
+
         /// The NOTATION half of the transpose clamp. It must match the two audio clamps
         /// (`PlaybackEngine.setTranspose`, `AndroidPlaybackEngine.setTranspose`) exactly: past a
         /// disagreement the score sounds in one key and reads in another.

@@ -7,6 +7,28 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`ScorePageOptions.revealedStaff`, carried to the layout as `LayoutOptionsWire.revealedStaff`.** A portable host's
+  editing caret now keeps its system whole as the Apple `ScoreView`'s does (`ScoreViewOptions.revealedStaff`): the
+  system holding the caret's measure, which "hide empty staves" would draw without the caret's staff, draws every staff
+  instead, and no other system changes. On the wire it is a new `RevealedStaffWire` (part, staff, measure), appended to
+  `LayoutOptionsWire` as an optional field: an older blob decodes with nothing revealed and lays out as before, the
+  generated Kotlin `LayoutOptionsWire` gets `revealedStaff: RevealedStaffWire? = null`, and a negative index reveals
+  nothing (`LayoutOptionsWire.revealedStaffValue`).
+- **`ScorePages.stickyHeader(scrollXPt:)`** — a horizontal strip's sticky pane (the clef, key and time signature in
+  force, the staff names and the bracket, MuseScore's continuous-view panel) as a one-page `ScorePages`, so a Windows
+  host can draw it on a `ScoreSurface` of its own pinned at the viewport's leading edge. It is the draw program the
+  Android bridge already had (`LayoutBridge.stickyHeaderPage`), now also as a document
+  (`LayoutBridge.stickyHeaderDocument`). Drawn black on white; a host shows it at MuseScore's 50 % by laying a 50 %
+  white over it.
+
+### Fixed
+
+- **The sticky pane scrolled past the last measure shows the last measure's header, as documented.** It showed the
+  first measure's (`LayoutBridge.stickyHeaderPage` read "right of the last measure" as bar 1), so on Android a pane
+  whose trailing edge passed the end of the strip jumped back to the opening clef and key.
+
 ## [4.34.1] - 2026-11-10
 
 ### Fixed

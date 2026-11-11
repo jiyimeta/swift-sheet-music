@@ -305,6 +305,7 @@ extension LayoutBridge {
         // default in a second place and let the two drift.
         if optionsWire.graceNoteMag > 0 { options.graceNoteMag = CGFloat(optionsWire.graceNoteMag) }
         if optionsWire.smallNoteMag > 0 { options.smallNoteMag = CGFloat(optionsWire.smallNoteMag) }
+        options.revealedStaff = optionsWire.revealedStaffValue
         return options
     }
 }

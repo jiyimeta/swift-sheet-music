@@ -106,6 +106,10 @@ public struct ScorePageOptions: Sendable, Equatable {
     /// edge-to-edge page the Android reader draws. Not part of the options the Android bridge carries: `ScorePages`
     /// hands them to the layout beside those.
     public var pageMarginsMM: PageMarginsMM
+    /// Where the host's editing caret is (`ScoreViewOptions.revealedStaff`): the system holding the measure that would
+    /// hide the staff ("hide empty staves") draws every staff instead. `nil`, the default, reveals nothing. Addressed
+    /// in the score the layout draws — `ScorePages.filteredScore`'s addresses, after `hiddenStaves`.
+    public var revealedStaff: ScoreViewOptions.RevealedStaff?
 
     public init(
         mode: Mode = .vertical,
@@ -127,6 +131,7 @@ public struct ScorePageOptions: Sendable, Equatable {
         smallNoteMag: Double? = nil,
         spacing: Spacing = Spacing(),
         pageMarginsMM: PageMarginsMM = .zero,
+        revealedStaff: ScoreViewOptions.RevealedStaff? = nil,
     ) {
         self.mode = mode
         self.staffSize = staffSize
@@ -147,6 +152,7 @@ public struct ScorePageOptions: Sendable, Equatable {
         self.smallNoteMag = smallNoteMag
         self.spacing = spacing
         self.pageMarginsMM = pageMarginsMM
+        self.revealedStaff = revealedStaff
     }
 
     /// Vertical mode at a 28 pt staff with every other option at its default: what the portable bridges lay out with
@@ -230,6 +236,13 @@ extension ScorePageOptions {
             graceNoteMag: graceNoteMag ?? 0,
             smallNoteMag: smallNoteMag ?? 0,
             spacing: spacing.wire(),
+            revealedStaff: revealedStaff.map { revealed in
+                RevealedStaffWire(
+                    partIndex: Int32(clamping: revealed.staff.partIndex),
+                    staffIndexInPart: Int32(clamping: revealed.staff.staffIndexInPart),
+                    measureIndex: Int32(clamping: revealed.measureIndex),
+                )
+            },
         )
     }
 

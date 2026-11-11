@@ -41,13 +41,40 @@ extension LayoutBridge {
         document: LayoutDocument,
         scrollXPt: Double,
     ) -> EncodablePage? {
+        guard let pane = stickyHeaderDocument(score: score, document: document, scrollXPt: scrollXPt) else {
+            return nil
+        }
+        return EncodablePage(
+            widthMM: Double(pane.size.width) * ptToMMScale,
+            heightMM: Double(pane.size.height) * ptToMMScale,
+            commands: buildCommands(layout: pane),
+        )
+    }
+
+    /// The sticky header for the measure under `scrollXPt` as a one-system `LayoutDocument` — what
+    /// `stickyHeaderPage` encodes, for a host that encodes it its own way (`ScorePages.stickyHeader`). Its `size` is
+    /// the synthesized system's; `nil` when `document` has no systems or `score` no measures, and a scroll past either
+    /// end clamps (see `stickyHeaderPage`).
+    public static func stickyHeaderDocument(
+        score: Score,
+        document: LayoutDocument,
+        scrollXPt: Double,
+    ) -> LayoutDocument? {
         guard let template = document.systems.first else { return nil }
         let contexts = LayoutEngine.measureContexts(for: score)
         guard !contexts.isEmpty else { return nil }
 
         // `measureIndex(atDocumentX:)` answers nil left of the first measure and right of the last;
-        // both clamp rather than refuse, for the reason in the doc comment above.
-        let rawIndex = document.measureIndex(atDocumentX: CGFloat(scrollXPt)) ?? 0
+        // both clamp rather than refuse, for the reason in the doc comment above — left to the first, right to the
+        // last. Until 4.35.0 both read as the first, so a pane scrolled past the end jumped back to bar 1.
+        let x = CGFloat(scrollXPt)
+        let rawIndex: Int = if let index = document.measureIndex(atDocumentX: x) {
+            index
+        } else if let last = template.measures.last, x >= template.origin.x + last.origin.x + last.width {
+            contexts.count - 1
+        } else {
+            0
+        }
         let index = max(0, min(rawIndex, contexts.count - 1))
 
         let synthesized = LayoutEngine.stickyHeaderSystem(
@@ -55,16 +82,11 @@ extension LayoutBridge {
             templateSystem: template,
             metrics: document.metrics,
         )
-        let pane = LayoutDocument(
+        return LayoutDocument(
             size: synthesized.size,
             systems: [synthesized],
             metrics: document.metrics,
             chordSymbolCase: document.chordSymbolCase,
-        )
-        return EncodablePage(
-            widthMM: Double(synthesized.size.width) * ptToMMScale,
-            heightMM: Double(synthesized.size.height) * ptToMMScale,
-            commands: buildCommands(layout: pane),
         )
     }
 }
