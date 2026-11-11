@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.35.0] - 2026-11-12
+
 ### Added
 
 - **`ScorePageOptions.revealedStaff`, carried to the layout as `LayoutOptionsWire.revealedStaff`.** A portable host's
