@@ -769,7 +769,8 @@ object SheetMusicJNI {
      * [itemBytes] is a `ScoreItemID` wire payload, full-score addressed — the value [nativeEditingHitTarget] returns —
      * re-addressed past the cached layout's hidden staves as [nativeEditingCaretFrame]'s is. Empty array = nothing to
      * answer: the handle is unknown, nothing is cached, the bytes do not decode or name an item on a hidden staff, the
-     * item is not a clef or an element (a note, rest, tuplet, text or grace note), or it is drawn nowhere.
+     * item is not a clef, an element or an engraved text (a note, rest, tuplet or grace note), or it is drawn nowhere.
+     * A text answers one frame, the union of its ink.
      */
     fun nativeSelectionInkFrames(
         scoreHandle: Long,
@@ -779,6 +780,45 @@ object SheetMusicJNI {
         return SwiftJavaJNI.nativeSelectionInkFrames(
             scoreHandle,
             SwiftData.fromByteArray(itemBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * The title-block credit (title, subtitle, composer, lyricist) whose engraved line lies under a tap at ([xMm],
+     * [yMm]) in the cached layout of [scoreHandle], as a `CreditTextFrameCodec` payload: `fieldCode` (0 title /
+     * 1 subtitle / 2 composer / 3 arranger / 4 lyricist / 5 copyright) and the line's document-mm frame. The reach is a
+     * quarter of a staff space around the line. Decode with the generated
+     * `io.github.jiyimeta.sheetmusic.audio.serialization.CreditTextFrameCodec`. Empty array when the handle is unknown,
+     * no layout is cached, or the point is on no credit.
+     */
+    fun nativeCreditTextHit(
+        scoreHandle: Long,
+        xMm: Double,
+        yMm: Double,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeCreditTextHit(
+            scoreHandle,
+            xMm,
+            yMm,
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * Where the credit [fieldCode] is engraved in the cached layout of [scoreHandle], as a `CreditTextFrameCodec`
+     * payload (see [nativeCreditTextHit]). Empty array when the handle is unknown, no layout is cached, the code is
+     * outside the table, or that credit is not engraved as an editable line.
+     */
+    fun nativeCreditTextFrame(
+        scoreHandle: Long,
+        fieldCode: Int,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeCreditTextFrame(
+            scoreHandle,
+            fieldCode,
             arena,
         ).toByteArray()
     }

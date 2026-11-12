@@ -7,6 +7,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **A selected text's ink frame on Android, and the credit hit test and frame.** `nativeSelectionInkFrames` now
+  answers a `.text` item with one frame, `ScoreHitTester.textHitRect(for:)` (the union of the text's ink) in
+  millimetres, where it used to answer empty. Two new JNI entry points, `nativeCreditTextHit(scoreHandle, xMm, yMm)`
+  and `nativeCreditTextFrame(scoreHandle, fieldCode)`, answer a new `CreditTextFrameWire` (`fieldCode`, `xMm`, `yMm`,
+  `widthMm`, `heightMm`; generated Kotlin `CreditTextFrame` / `CreditTextFrameCodec`) for the title-block credit under
+  a point (reach: a quarter of a staff space) or for a given field; both answer empty data for an unknown handle,
+  nothing cached, no credit there or an unknown code. The field table behind `ScoreInfoWriteWire` is now the public
+  `ScoreInfoFieldCode` (`code(of:)` / `field(code:)`), with the same order, so existing wire bytes are unchanged.
+
 ## [4.35.0] - 2026-11-12
 
 ### Added

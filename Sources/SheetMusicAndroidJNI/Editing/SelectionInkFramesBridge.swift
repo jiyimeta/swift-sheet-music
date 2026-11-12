@@ -19,20 +19,21 @@ import SheetMusicLayout
 /// off the glyph the reader selected, as an Apple host does.
 ///
 /// One frame per place the item is drawn, in document order: `ScoreHitTester.clefHitRects(for:)` for a `.clef`,
-/// `elementHitRects(for:)` for an `.element` — the geometry an Apple host floats its controls by. An element can be
-/// drawn in places nowhere near each other (a hairpin clipped across a system break, a key signature and its courtesy
-/// announcement), so the pieces come one by one rather than as their union, and picking the one beside the reader's tap
-/// is the host's call. Converted from document points to millimetres (`25.4 / 72.0`), with the cached document's own
-/// staff space, `StaffMetrics.sp`, once beside them, for a host spacing its control off the glyph.
+/// `elementHitRects(for:)` for an `.element`, and for a `.text` its one `textHitRect(for:)` (the union of the text's
+/// ink) — the geometry an Apple host floats its controls by. An element can be drawn in places nowhere near each other
+/// (a hairpin clipped across a system break, a key signature and its courtesy announcement), so the pieces come one by
+/// one rather than as their union, and picking the one beside the reader's tap is the host's call.
+/// Converted from document points to millimetres (`25.4 / 72.0`), with the cached document's own staff space,
+/// `StaffMetrics.sp`, once beside them, for a host spacing its control off the glyph.
 ///
 /// `itemBytes` is a `ScoreItemIDCodec` payload, full-score-addressed — the value `nativeEditingHitTarget` returns — and
 /// is re-addressed past the cache entry's hidden staves exactly as `nativeEditingCaretFrame`'s is (`cachedItem`). Like
 /// it, this takes no layout options.
 ///
 /// Empty `Data` when the handle is unknown, nothing is cached, `itemBytes` fails to decode or names an item on a hidden
-/// staff (its re-addressing falls back to a `.beat`), the item is any other kind (a note, rest, tuplet, text or grace
-/// note — the caret and the range box answer for those), or it is drawn nowhere. Otherwise a `SelectionInkFramesCodec`
-/// payload.
+/// staff (its re-addressing falls back to a `.beat`), the item is any other kind (a note, rest, tuplet or grace
+/// note — the caret and the range box answer for those), or it is drawn nowhere (a text no longer engraved included).
+/// Otherwise a `SelectionInkFramesCodec` payload.
 ///
 /// Not `@available`-annotated, as `nativeEditingHitTarget` is not: the jextract wrapper is generated without one. The
 /// hit tester's macOS 15 requirement is met by an `if #available` guard (always true on Android's Swift runtime).
@@ -66,7 +67,9 @@ private func inkRects(of item: ScoreItemID, in tester: ScoreHitTester) -> [CGRec
         tester.clefHitRects(for: anchor)
     case let .element(id):
         tester.elementHitRects(for: ScoreHitTarget(elementID: id))
-    case .note, .rest, .tuplet, .text, .graceNote:
+    case let .text(id):
+        tester.textHitRect(for: ScoreHitTarget(textID: id)).map { [$0] } ?? []
+    case .note, .rest, .tuplet, .graceNote:
         []
     }
 }
