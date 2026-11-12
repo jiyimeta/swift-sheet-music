@@ -1,3 +1,4 @@
+import Foundation
 @testable import SheetMusicCore
 import SheetMusicEditWire
 import Testing
@@ -81,6 +82,41 @@ struct EditIntentCodecScoreInfoTests {
             let wire = ScoreInfoWriteWire(from: ScoreInfoWrite(field: field, text: "x"))
             #expect(wire.field == byte, "\(field)")
             #expect(try wire.decoded().field == field)
+        }
+    }
+
+    /// The committed bytes of `ScoreInfoWriteWire` for a write of each field, now that its field byte goes through the
+    /// public `ScoreInfoFieldCode`: varint(length 7), tag 1 varint (`1 << 3 | 0` = 0x08) and the field code, tag 2
+    /// varint (0x10) and `hasText` 1, tag 3 length-delimited (`3 << 3 | 2` = 0x1A), varint(length 1) and "x" (0x78).
+    /// A reordered table, a reordered struct or a changed tag moves a byte here.
+    @Test func `each written credit encodes to its committed bytes`() {
+        let expected: [(ScoreInfoWrite.Field, [UInt8])] = [
+            (.title, [0x07, 0x08, 0x00, 0x10, 0x01, 0x1A, 0x01, 0x78]),
+            (.subtitle, [0x07, 0x08, 0x01, 0x10, 0x01, 0x1A, 0x01, 0x78]),
+            (.composer, [0x07, 0x08, 0x02, 0x10, 0x01, 0x1A, 0x01, 0x78]),
+            (.arranger, [0x07, 0x08, 0x03, 0x10, 0x01, 0x1A, 0x01, 0x78]),
+            (.lyricist, [0x07, 0x08, 0x04, 0x10, 0x01, 0x1A, 0x01, 0x78]),
+            (.copyright, [0x07, 0x08, 0x05, 0x10, 0x01, 0x1A, 0x01, 0x78]),
+        ]
+        for (field, bytes) in expected {
+            let wire = ScoreInfoWriteWire(from: ScoreInfoWrite(field: field, text: "x"))
+            #expect([UInt8](wire.encodeToData()) == bytes, "\(field)")
+        }
+    }
+
+    /// A cleared credit still sends every field: `hasText` 0 and an empty text (varint length 0), so the body is 6.
+    @Test func `a cleared credit encodes to its committed bytes`() {
+        let wire = ScoreInfoWriteWire(from: ScoreInfoWrite(field: .composer, text: nil))
+        #expect([UInt8](wire.encodeToData()) == [0x06, 0x08, 0x02, 0x10, 0x00, 0x1A, 0x00])
+    }
+
+    /// One past the table: the bytes decode as a struct, and `decoded()` refuses the field byte with the discriminator
+    /// error rather than folding it onto a default.
+    @Test func `a field byte of 6 is refused as an unknown discriminator`() throws {
+        let wire = try ScoreInfoWriteWire(decoding: Data([0x07, 0x08, 0x06, 0x10, 0x01, 0x1A, 0x01, 0x78]))
+        #expect(wire.field == 6)
+        #expect(throws: WireFormatError.unknownChoiceDiscriminator(6)) {
+            try wire.decoded()
         }
     }
 }

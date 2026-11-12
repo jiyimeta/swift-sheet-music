@@ -13,10 +13,11 @@ and this project adheres to
   answers a `.text` item with one frame, `ScoreHitTester.textHitRect(for:)` (the union of the text's ink) in
   millimetres, where it used to answer empty. Two new JNI entry points, `nativeCreditTextHit(scoreHandle, xMm, yMm)`
   and `nativeCreditTextFrame(scoreHandle, fieldCode)`, answer a new `CreditTextFrameWire` (`fieldCode`, `xMm`, `yMm`,
-  `widthMm`, `heightMm`, and `spMm`, one staff space, for a host sizing a control off the line; generated Kotlin `CreditTextFrame` / `CreditTextFrameCodec`) for the title-block credit under
-  a point (reach: a quarter of a staff space) or for a given field; both answer empty data for an unknown handle,
-  nothing cached, no credit there or an unknown code. The field table behind `ScoreInfoWriteWire` is now the public
-  `ScoreInfoFieldCode` (`code(of:)` / `field(code:)`), with the same order, so existing wire bytes are unchanged.
+  `widthMm`, `heightMm`, and `spMm`, one staff space, for a host sizing a control off the line; generated Kotlin
+  `CreditTextFrame` / `CreditTextFrameCodec`) for the title-block credit under a point (reach: a quarter of a staff
+  space) or for a given field; both answer empty data for an unknown handle, nothing cached, no credit there or an
+  unknown code. The field table behind `ScoreInfoWriteWire` is now the public `ScoreInfoFieldCode` (`code(of:)` /
+  `field(code:)`), with the same order, so existing wire bytes are unchanged.
 
 ### Changed
 
@@ -24,7 +25,8 @@ and this project adheres to
   lyric, a staff or system text, a chord symbol (accidental runs included) and a rehearsal mark (text and frame) in
   the selection color when its `LayoutElement.textItemID` is in the tint's IDs, the way Apple's renderer tints every
   layer of a selected text. The tint wins over the text's author color, and the color after the text is the ambient
-  one. A text whose ID is among a range's expanded IDs is tinted too. With no tint, the program is unchanged byte for byte.
+  one. A text whose ID is among a range's expanded IDs is tinted too. With no tint, the program is unchanged byte for
+  byte.
 
 ## [4.35.0] - 2026-11-12
 

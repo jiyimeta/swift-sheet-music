@@ -788,10 +788,9 @@ object SheetMusicJNI {
      * The title-block credit (title, subtitle, composer, lyricist) whose engraved line lies under a tap at ([xMm],
      * [yMm]) in the cached layout of [scoreHandle], as a `CreditTextFrameCodec` payload: `fieldCode` (0 title /
      * 1 subtitle / 2 composer / 3 arranger / 4 lyricist / 5 copyright), the line's document-mm frame and `spMm`, one
-     * staff space of the layout in millimetres. The reach is a
-     * quarter of a staff space around the line. Decode with the generated
-     * `io.github.jiyimeta.sheetmusic.audio.serialization.CreditTextFrameCodec`. Empty array when the handle is unknown,
-     * no layout is cached, or the point is on no credit.
+     * staff space of the layout in millimetres. The reach is a quarter of a staff space around the line. Decode with
+     * the generated `io.github.jiyimeta.sheetmusic.audio.serialization.CreditTextFrameCodec`. Empty array when the
+     * handle is unknown, no layout is cached, or the point is on no credit.
      */
     fun nativeCreditTextHit(
         scoreHandle: Long,
