@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.36.0] - 2026-11-12
+
 ### Added
 
 - **A selected text's ink frame on Android, and the credit hit test and frame.** `nativeSelectionInkFrames` now
