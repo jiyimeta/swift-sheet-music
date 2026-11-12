@@ -56,7 +56,8 @@
                 LayoutDocumentCache.release(handle)
             }
 
-            private static func expectMatches(_ frame: CreditTextFrameWire, _ rect: CGRect) {
+            private static func expectMatches(_ frame: CreditTextFrameWire, _ rect: CGRect, sp: CGFloat) {
+                #expect(abs(frame.spMm - Double(sp) * ptToMm) < 1e-9)
                 #expect(abs(frame.xMm - Double(rect.minX) * ptToMm) < 1e-9)
                 #expect(abs(frame.yMm - Double(rect.minY) * ptToMm) < 1e-9)
                 #expect(abs(frame.widthMm - Double(rect.width) * ptToMm) < 1e-9)
@@ -98,7 +99,7 @@
 
                 let wire = try CreditTextFrameCodec.decode(data)
                 #expect(wire.fieldCode == 2)
-                Self.expectMatches(wire, line.frame)
+                Self.expectMatches(wire, line.frame, sp: document.metrics.sp)
             }
 
             @Test func aPointOffEveryCreditHitsNothing() {
@@ -118,7 +119,7 @@
                 let wire = try CreditTextFrameCodec.decode(nativeCreditTextFrame(scoreHandle: handle, fieldCode: 0))
 
                 #expect(wire.fieldCode == 0)
-                Self.expectMatches(wire, line.frame)
+                Self.expectMatches(wire, line.frame, sp: document.metrics.sp)
             }
 
             @Test func anUnengravedFieldHasNoFrame() {

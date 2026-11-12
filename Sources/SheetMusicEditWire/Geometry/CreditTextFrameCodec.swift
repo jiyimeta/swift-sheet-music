@@ -19,11 +19,16 @@ import Wirelet
 /// tag 3: yMm        f64, fixed64
 /// tag 4: widthMm    f64, fixed64
 /// tag 5: heightMm   f64, fixed64
+/// tag 6: spMm       f64, fixed64 — `StaffMetrics.sp`, one staff space, for a host sizing a control off the line
+///                   (as `SelectionInkFramesCodec.spMm` does).
 /// ```
 public enum CreditTextFrameCodec {
-    public static func encode(fieldCode: Int32, xMm: Double, yMm: Double, widthMm: Double, heightMm: Double) -> Data {
-        CreditTextFrameWire(fieldCode: fieldCode, xMm: xMm, yMm: yMm, widthMm: widthMm, heightMm: heightMm)
-            .encodeToData()
+    public static func encode(
+        fieldCode: Int32, xMm: Double, yMm: Double, widthMm: Double, heightMm: Double, spMm: Double,
+    ) -> Data {
+        CreditTextFrameWire(
+            fieldCode: fieldCode, xMm: xMm, yMm: yMm, widthMm: widthMm, heightMm: heightMm, spMm: spMm,
+        ).encodeToData()
     }
 
     public static func decode(_ data: Data) throws -> CreditTextFrameWire {
@@ -38,8 +43,10 @@ public struct CreditTextFrameWire: Equatable {
     public var yMm: Double
     public var widthMm: Double
     public var heightMm: Double
+    public var spMm: Double
 
-    public init(fieldCode: Int32, xMm: Double, yMm: Double, widthMm: Double, heightMm: Double) {
+    public init(fieldCode: Int32, xMm: Double, yMm: Double, widthMm: Double, heightMm: Double, spMm: Double) {
+        self.spMm = spMm
         self.fieldCode = fieldCode
         self.xMm = xMm
         self.yMm = yMm

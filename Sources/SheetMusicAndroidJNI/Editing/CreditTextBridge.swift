@@ -35,7 +35,7 @@ public func nativeCreditTextHit(scoreHandle: Int64, xMm: Double, yMm: Double) ->
     guard let line = entry.document.creditTextLine(at: point, tolerance: entry.document.metrics.sp * 0.25) else {
         return Data()
     }
-    return encode(line)
+    return encode(line, sp: entry.document.metrics.sp)
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin `SheetMusicJNI.nativeCreditTextFrame(...)` call site: where
@@ -49,10 +49,12 @@ public func nativeCreditTextFrame(scoreHandle: Int64, fieldCode: Int32) -> Data 
           let field = ScoreInfoFieldCode.field(code: fieldCode),
           let line = entry.document.creditTextLine(for: field)
     else { return Data() }
-    return encode(line)
+    return encode(line, sp: entry.document.metrics.sp)
 }
 
-private func encode(_ line: CreditTextLine) -> Data {
+/// The frame in millimetres plus the document's staff space (`metrics.sp`) in millimetres, which a host sizes its
+/// controls by.
+private func encode(_ line: CreditTextLine, sp: CGFloat) -> Data {
     let ptToMm = 25.4 / 72.0
     return CreditTextFrameCodec.encode(
         fieldCode: ScoreInfoFieldCode.code(of: line.field),
@@ -60,5 +62,6 @@ private func encode(_ line: CreditTextLine) -> Data {
         yMm: Double(line.frame.minY) * ptToMm,
         widthMm: Double(line.frame.width) * ptToMm,
         heightMm: Double(line.frame.height) * ptToMm,
+        spMm: Double(sp) * ptToMm,
     )
 }
