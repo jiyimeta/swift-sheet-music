@@ -36,4 +36,30 @@ extension LayoutBridge {
         }
         return element.elementItemID.flatMap { tintColor(for: $0, tint: tint) }
     }
+
+    /// `tint.argb` when `element` is an engraved text (a lyric, a staff or system text, a chord symbol, a rehearsal
+    /// mark) whose `LayoutElement.textItemID` is selected — the identity Apple's renderer registers every layer of a
+    /// text under, so the draw program tints the same ink. `nil` otherwise.
+    static func textTintColor(
+        for element: LayoutElement,
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
+    ) -> UInt32? {
+        guard tint != nil else { return nil }
+        return element.textItemID.flatMap { tintColor(for: $0, tint: tint) }
+    }
+
+    /// The color to draw `element` in for the selection: its mark tint, else its text tint. `nil` when unselected.
+    static func selectionTintColor(
+        for element: LayoutElement,
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
+    ) -> UInt32? {
+        markTintColor(for: element, tint: tint) ?? textTintColor(for: element, tint: tint)
+    }
+
+    /// The author color a text is drawn in — `nil` while the selection tint is in force, so the tint wins over the
+    /// author color for the text's own commands (the way `navigationArgb` does for a marker).
+    static func textAuthorArgb(_ color: ScoreColor?, markArgb: UInt32?) -> UInt32? {
+        guard markArgb == nil else { return nil }
+        return color.flatMap(argb(from:))
+    }
 }

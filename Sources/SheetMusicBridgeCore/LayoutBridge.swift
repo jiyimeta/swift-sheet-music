@@ -371,7 +371,8 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // A selected clef or engraved element takes the selection color, the way Apple's renderer attaches an
         // element's ink to `elementItemID` and a clef's to `.clef(anchor)` — one predicate for what a click selects
         // and what a selection tints. Notes, rests and tuplets bracket their own commands below.
-        let markArgb = markTintColor(for: element, tint: tint)
+        // A selected text (`textItemID`) takes the same bracket; its author color is suppressed below.
+        let markArgb = selectionTintColor(for: element, tint: tint)
         if let markArgb { out.append(.setColor(argb: markArgb)) }
         defer { if markArgb != nil { out.append(.setColor(argb: ambientArgb)) } }
         switch element {
@@ -630,7 +631,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             } else if case let .lyrics(color, _, _, _, properties) = kind {
                 // Color and font override as the Apple renderers draw them. The face is not on the wire, so
                 // it stays the bundled one; size and bold/italic are.
-                let argb = color.flatMap(LayoutBridge.argb(from:))
+                let argb = textAuthorArgb(color, markArgb: markArgb)
                 if let argb { out.append(.setColor(argb: argb)) }
                 if let richText {
                     emitRichText(
@@ -667,7 +668,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             }
 
         case let .staffText(text, origin, color, style, _, _, properties, _, richText):
-            let argb = color.flatMap(LayoutBridge.argb(from:))
+            let argb = textAuthorArgb(color, markArgb: markArgb)
             if let argb { out.append(.setColor(argb: argb)) }
             if let richText {
                 emitRichText(
@@ -730,7 +731,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 originX: mox + Double(origin.x),
                 originY: moy + Double(origin.y),
                 frame: frame,
-                color: color,
+                color: markArgb == nil ? color : nil,
                 properties: properties,
                 rich: richText,
                 sp: sp,
@@ -883,6 +884,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 harmony: lh,
                 measureOriginX: mox, measureOriginY: moy,
                 sp: sp,
+                ignoreAuthorColor: markArgb != nil,
                 into: &out,
             )
 

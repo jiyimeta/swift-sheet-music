@@ -836,10 +836,12 @@ extension LayoutBridge {
         measureOriginX mox: Double,
         measureOriginY moy: Double,
         sp: Double,
+        // True while the selection tint is in force: the tint wins over the chord symbol's author color.
+        ignoreAuthorColor: Bool = false,
         into out: inout [DrawCommand],
     ) {
         guard !lh.runs.isEmpty else { return }
-        let argb = lh.harmony.color.flatMap(argb(from:))
+        let argb = ignoreAuthorColor ? nil : lh.harmony.color.flatMap(argb(from:))
         if let argb { out.append(.setColor(argb: argb)) }
         let metrics = StaffMetrics(staffSize: CGFloat(sp) * 4)
         let textFont = TextInkGeometry.font(

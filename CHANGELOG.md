@@ -18,6 +18,14 @@ and this project adheres to
   nothing cached, no credit there or an unknown code. The field table behind `ScoreInfoWriteWire` is now the public
   `ScoreInfoFieldCode` (`code(of:)` / `field(code:)`), with the same order, so existing wire bytes are unchanged.
 
+### Changed
+
+- **A selected text is tinted in the Android draw program.** `LayoutBridge.buildCommands(layout:tint:)` now brackets a
+  lyric, a staff or system text, a chord symbol (accidental runs included) and a rehearsal mark (text and frame) in
+  the selection color when its `LayoutElement.textItemID` is in the tint's IDs, the way Apple's renderer tints every
+  layer of a selected text. The tint wins over the text's author color, and the color after the text is the ambient
+  one. A text whose ID is among a range's expanded IDs is tinted too. With no tint, the program is unchanged byte for byte.
+
 ## [4.35.0] - 2026-11-12
 
 ### Added
