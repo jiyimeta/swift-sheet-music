@@ -716,9 +716,10 @@ object SheetMusicJNI {
     /**
      * Re-encodes the ALREADY-CACHED layout of [scoreHandle] as a draw-program payload with
      * [selectionBytes] (a `SelectionTintCodec` payload: packed ARGB color + full-score-addressed
-     * `ScoreItemID`s) tinted — a tuplet selection is expanded to every member note/rest its bracket spans.
-     * Never relayouts: an empty cache (no prior [nativeComputeLayout] call for this handle) returns an
-     * empty array, so call [nativeComputeLayout] first. Same wire format [nativeComputeLayout] returns, and
+     * `ScoreItemID`s, and optionally a selected title-block credit's `creditFieldCode`) tinted — a tuplet
+     * selection is expanded to every member note/rest its bracket spans, and the credit's engraved text is
+     * painted in the same color. Never relayouts: an empty cache (no prior [nativeComputeLayout] call for this
+     * handle) returns an empty array, so call [nativeComputeLayout] first. Same wire format [nativeComputeLayout] returns, and
      * reproduces its page count and per-page dimensions exactly in every layout mode (the cache carries the
      * `LayoutOptionsWire` and page size [nativeComputeLayout] was called with, so `.vertical`'s viewport
      * width and `.page`'s multi-page split are replayed, not approximated) — an empty selection reproduces

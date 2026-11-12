@@ -127,7 +127,8 @@ extension LayoutBridge {
     ///
     /// `tint` threads straight through to `buildCommands(layout:tint:)` for every page — `nil` (the default)
     /// reproduces `computeWithDocument`'s own untinted bytes exactly, since that is the only caller that
-    /// passes no tint.
+    /// passes no tint. `creditTint`, a selected title-block credit and its color, threads the same way to the page
+    /// holding the title block (`buildCommandsWithSpans(layout:tint:creditTint:drawsInvisibleElements:)`).
     ///
     /// - `.vertical` — one page, `pageWidthMM` wide (the caller's viewport — not `document.size.width`, which
     ///   is the narrower rendered content extent) by the document's own laid-out height. Wider only when a system
@@ -144,9 +145,11 @@ extension LayoutBridge {
         pageWidthMM: Double,
         pageHeightMM: Double,
         tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
+        creditTint: (argb: UInt32, field: ScoreInfoWrite.Field)? = nil,
     ) -> [EncodablePage] {
         encodePagesWithSpans(
-            document: document, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM, tint: tint,
+            document: document, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
+            margins: .zero, tint: tint, creditTint: creditTint, drawsInvisibleElements: true,
         ).pages
     }
 
@@ -171,12 +174,32 @@ extension LayoutBridge {
         tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
         drawsInvisibleElements: Bool = true,
     ) -> (pages: [EncodablePage], spans: [[SystemSpan]]) {
+        encodePagesWithSpans(
+            document: document, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
+            margins: margins, tint: tint, creditTint: nil, drawsInvisibleElements: drawsInvisibleElements,
+        )
+    }
+
+    /// `encodePagesWithSpans(document:options:pageWidthMM:pageHeightMM:margins:tint:drawsInvisibleElements:)` with
+    /// `creditTint`, a selected title-block credit and its color, drawn on the page holding the title block
+    /// (`appendTitleFrame(_:originY:creditTint:into:)`). Only `nativeEncodeDrawProgram` passes one, through
+    /// `encodePages`.
+    package static func encodePagesWithSpans(
+        document: LayoutDocument,
+        options optionsWire: LayoutOptionsWire,
+        pageWidthMM: Double,
+        pageHeightMM: Double,
+        margins: PageMargins,
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
+        creditTint: (argb: UInt32, field: ScoreInfoWrite.Field)?,
+        drawsInvisibleElements: Bool,
+    ) -> (pages: [EncodablePage], spans: [[SystemSpan]]) {
         let ptToMM = 25.4 / 72.0
 
         switch optionsWire.mode {
         case .vertical:
             let built = buildCommandsWithSpans(
-                layout: document, tint: tint, drawsInvisibleElements: drawsInvisibleElements,
+                layout: document, tint: tint, creditTint: creditTint, drawsInvisibleElements: drawsInvisibleElements,
             )
             // Widened to the music as page mode's sheets are, so a measure wider than the line is not cut by a
             // renderer that clips at the page (Windows, Android).
@@ -188,7 +211,7 @@ extension LayoutBridge {
 
         case .horizontal:
             let built = buildCommandsWithSpans(
-                layout: document, tint: tint, drawsInvisibleElements: drawsInvisibleElements,
+                layout: document, tint: tint, creditTint: creditTint, drawsInvisibleElements: drawsInvisibleElements,
             )
             return ([EncodablePage(
                 widthMM: Double(document.size.width) * ptToMM,
@@ -210,8 +233,10 @@ extension LayoutBridge {
             for (index, range) in ranges.enumerated() {
                 let pageDoc = pageDocument(index, of: ranges, in: document)
                 // Onto the paper: the leading and top margins in. Untouched for `.zero`.
+                // Only the first page carries the title block (`pageDocument`), so only it can draw the credit.
                 let built = margins.place(buildCommandsWithSpans(
-                    layout: pageDoc, tint: tint, drawsInvisibleElements: drawsInvisibleElements,
+                    layout: pageDoc, tint: tint, creditTint: creditTint,
+                    drawsInvisibleElements: drawsInvisibleElements,
                 ))
                 pages.append(EncodablePage(widthMM: paperWidthMM, heightMM: pageHeightMM, commands: built.commands))
                 spans.append(built.spans.map { span in

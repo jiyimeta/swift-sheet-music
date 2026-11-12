@@ -67,6 +67,8 @@ public enum TitleFrameRenderer {
     /// horizontal alignments.
     struct PlacedLine {
         let text: String
+        /// Index into `LayoutTitleFrame.texts` of the entry this line was split from.
+        let entryIndex: Int
         let position: CGPoint
         let anchor: UnitPoint
         let fontSize: CGFloat
@@ -85,6 +87,7 @@ public enum TitleFrameRenderer {
         frame.placedLines(origin: origin).map { line in
             PlacedLine(
                 text: line.text,
+                entryIndex: line.entryIndex,
                 position: line.position,
                 anchor: UnitPoint(x: line.horizontalAnchor, y: 0),
                 fontSize: line.fontSize,

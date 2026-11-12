@@ -5,12 +5,14 @@ import SwiftUI
 @available(macOS 15.0, *)
 extension ScoreView {
     /// The title block with its pictures (`LayoutDocument.titleImages`, in document coordinates, so the block sits at
-    /// the document's top-leading corner with no offset). Never culled, in either mode.
+    /// the document's top-leading corner with no offset), the selected credit in `creditTint`'s color. Never culled,
+    /// in either mode.
     @ViewBuilder
-    static func titleBlock(of doc: LayoutDocument) -> some View {
+    static func titleBlock(of doc: LayoutDocument, creditTint: CreditTint?) -> some View {
         if let titleFrame = doc.titleFrame {
             FrameContentView(
                 frame: titleFrame, images: doc.titleImages, width: doc.size.width, height: titleFrame.height,
+                creditTint: creditTint,
             )
         }
     }

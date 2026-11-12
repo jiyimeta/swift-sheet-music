@@ -200,6 +200,10 @@ public func nativeEditingCaretFrame(
 /// must call `SelectionExpansion` before handing IDs to the encoder, or a tuplet selection would tint only its
 /// bracket.
 ///
+/// The payload's optional `creditFieldCode` names a selected title-block credit, which is not a `ScoreItemID`: its
+/// engraved text is painted in the same color (`LayoutBridge.appendTitleFrame`), with or without ids beside it. A
+/// payload without one, or with a code no field has, tints no credit.
+///
 /// Reproduces `nativeComputeLayout`'s own page assembly exactly, mode for mode: `LayoutDocumentCache.Entry`
 /// carries the `LayoutOptionsWire` and `pageWidthMM`/`pageHeightMM` `nativeComputeLayout` was called with
 /// (`JNISymbols.swift`), so `LayoutBridge.encodePages(document:options:pageWidthMM:pageHeightMM:tint:)` — the
@@ -221,9 +225,9 @@ public func nativeEncodeDrawProgram(
           let entry = LayoutDocumentCache.entry(for: scoreHandle)
     else { return Data() }
 
-    let decoded: (argb: UInt32, ids: Set<ScoreItemID>)
+    let decoded: (argb: UInt32, ids: Set<ScoreItemID>, credit: ScoreInfoWrite.Field?)
     do {
-        decoded = try SelectionTintCodec.decode(selectionBytes)
+        decoded = try SelectionTintCodec.decodeWithCredit(selectionBytes)
     } catch {
         return Data()
     }
@@ -232,11 +236,14 @@ public func nativeEncodeDrawProgram(
     let tint: (argb: UInt32, ids: Set<ScoreItemID>)? = expandedIDs.isEmpty
         ? nil
         : (argb: decoded.argb, ids: expandedIDs)
+    // A selected credit is a title-block text, not an id: it needs no re-addressing (hidden staves never hide the
+    // title block) and is painted in the same color.
+    let creditTint = decoded.credit.map { (argb: decoded.argb, field: $0) }
 
     let pages = LayoutBridge.encodePages(
         document: entry.document, options: entry.options,
         pageWidthMM: entry.pageWidthMM, pageHeightMM: entry.pageHeightMM,
-        tint: tint,
+        tint: tint, creditTint: creditTint,
     )
     return DrawProgramCodec.encode(pages: pages)
 }

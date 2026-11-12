@@ -35,15 +35,21 @@ public struct ScoreView: View {
     private let providedDocument: LayoutDocument?
     private let selection: ScoreSelection
     private let voiceColors: [Int: Color]
+    private let selectedCredit: ScoreInfoWrite.Field?
     private let playbackCursor: ScoreCursor?
     private let playbackCursorColor: Color
     private let visibleRect: CGRect?
 
+    /// `selectedCredit` is a title-block credit the host holds as its selection (a credit is not a `ScoreItemID`, so
+    /// `selection` cannot name it): its engraved text, the line `LayoutDocument.creditTextLine(for:)` reports, is drawn
+    /// in `voiceColors[0]`, the color a selected text anchored in voice 0 (a tempo text) takes, or in ink without one.
+    /// `nil`, the default, draws the title block in ink.
     public init(
         score: Score,
         options: ScoreViewOptions = .init(),
         selection: ScoreSelection = .none,
         voiceColors: [Int: Color] = [:],
+        selectedCredit: ScoreInfoWrite.Field? = nil,
         playbackCursor: ScoreCursor? = nil,
         playbackCursorColor: Color = Color.blue.opacity(0.15),
         availableWidth: CGFloat? = nil,
@@ -55,6 +61,7 @@ public struct ScoreView: View {
         providedDocument = nil
         self.selection = selection
         self.voiceColors = voiceColors
+        self.selectedCredit = selectedCredit
         self.playbackCursor = playbackCursor
         self.playbackCursorColor = playbackCursorColor
         visibleRect = nil
@@ -87,12 +94,15 @@ public struct ScoreView: View {
     /// size either way, so scrolling, hit testing and anything else that
     /// maps document coordinates is unaffected; what is not mounted is
     /// simply not drawn.
+    ///
+    /// `selectedCredit` draws a selected title-block credit as the other initializer does.
     public init(
         document: LayoutDocument,
         score: Score,
         options: ScoreViewOptions = .init(),
         selection: ScoreSelection = .none,
         voiceColors: [Int: Color] = [:],
+        selectedCredit: ScoreInfoWrite.Field? = nil,
         playbackCursor: ScoreCursor? = nil,
         playbackCursorColor: Color = Color.blue.opacity(0.15),
         visibleRect: CGRect? = nil,
@@ -104,6 +114,7 @@ public struct ScoreView: View {
         providedDocument = document
         self.selection = selection
         self.voiceColors = voiceColors
+        self.selectedCredit = selectedCredit
         self.playbackCursor = playbackCursor
         self.playbackCursorColor = playbackCursorColor
         self.visibleRect = visibleRect
@@ -177,7 +188,7 @@ public struct ScoreView: View {
         // `origin.y` already accounts for its height. A box between
         // systems sits at its own `originY`, like a system.
         ZStack(alignment: .topLeading) {
-            Self.titleBlock(of: doc)
+            Self.titleBlock(of: doc, creditTint: creditTint(selection))
             Self.mountedFrames(of: doc, in: visibleRect)
             // Identified by the system's index in the WHOLE document, so
             // a system keeps its view (and its layer tree) as others
@@ -233,7 +244,7 @@ public struct ScoreView: View {
             ZStack(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 0) {
                     // No frames here: horizontal mode lays out none, but the title's pictures come with it.
-                    Self.titleBlock(of: doc)
+                    Self.titleBlock(of: doc, creditTint: creditTint(selection))
                     SystemLayerView(
                         system: system, metrics: doc.metrics,
                         selection: selection,
@@ -263,6 +274,12 @@ public struct ScoreView: View {
             .background(Color.white)
             .environment(\.colorScheme, .light)
         }
+    }
+
+    /// `selectedCredit` with the color its text is drawn in — `selection`'s voice-0 color, the one a selected text
+    /// anchored in voice 0 takes, else ink — or `nil` when no credit is selected.
+    private func creditTint(_ selection: SelectionRenderState) -> CreditTint? {
+        selectedCredit.map { CreditTint(field: $0, color: selection.voiceColors[0] ?? ScoreLayerBuilder.inkColor) }
     }
 }
 

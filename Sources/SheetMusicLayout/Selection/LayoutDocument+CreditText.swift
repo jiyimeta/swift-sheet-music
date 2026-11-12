@@ -65,20 +65,35 @@ public struct CreditTextLine: Sendable, Equatable {
     }
 }
 
+extension LayoutTitleFrame {
+    /// Index into `texts` of the entry engraved for `field`'s credit: the first entry of the field's `frameTextStyle`
+    /// (the text `SetScoreInfo` writes back), when it is one line. `nil` when the field has no title-block style, no
+    /// entry has it, or that entry spans several lines.
+    ///
+    /// The one rule for which text IS a credit: `LayoutDocument.creditTextLines` reports exactly these entries, and the
+    /// renderers draw a selected credit's entry in the selection color (`TitleFrameLayerBuilder`,
+    /// `LayoutBridge.appendTitleFrame`), so what a tap selects and what the selection paints cannot part.
+    package func creditEntryIndex(for field: ScoreInfoWrite.Field) -> Int? {
+        guard let style = field.frameTextStyle,
+              let index = texts.firstIndex(where: { $0.style == style }),
+              Self.lineCount(of: texts[index]) == 1
+        else { return nil }
+        return index
+    }
+}
+
 extension LayoutDocument {
     /// Every editable credit on this document's title block, in engraving order. Empty when there is no title block
     /// — a page other than the first, or a layout asked for without one.
     public var creditTextLines: [CreditTextLine] {
         guard let titleFrame else { return [] }
         let lines = titleFrame.placedLines()
-        var seenStyles: Set<FrameText.Style> = []
         var result: [CreditTextLine] = []
         for (index, entry) in titleFrame.texts.enumerated() {
             guard let field = ScoreInfoWrite.Field.allCases.first(where: { $0.frameTextStyle == entry.style }),
-                  seenStyles.insert(entry.style).inserted
+                  titleFrame.creditEntryIndex(for: field) == index,
+                  let line = lines.first(where: { $0.entryIndex == index })
             else { continue }
-            let entryLines = lines.filter { $0.entryIndex == index }
-            guard entryLines.count == 1, let line = entryLines.first else { continue }
             result.append(Self.creditTextLine(field: field, line: line))
         }
         return result

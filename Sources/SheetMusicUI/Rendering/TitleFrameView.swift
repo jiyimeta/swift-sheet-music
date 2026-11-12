@@ -39,6 +39,14 @@ struct TitleFrameView: View {
     }
 }
 
+/// A selected title-block credit and the color its text is drawn in: the selection's voice-0 color, the one a selected
+/// text anchored in voice 0 (a tempo text) takes. A credit is not a `ScoreItemID`, so the systems' selection paint
+/// (`ScoreLayerBuilder.applySelection`) never reaches it; the title block draws it in this color instead.
+struct CreditTint: Equatable {
+    let field: ScoreInfoWrite.Field
+    let color: CGColor
+}
+
 /// One box's layer-rendered content, its texts and its pictures, `width` × `height` points: the title block with
 /// `LayoutDocument.titleImages`, or a frame between systems with its own `images`. `ScoreView` places it at the box's
 /// top. Picture rects are in the box's own space, y down from its top.
@@ -48,25 +56,33 @@ struct FrameContentView: View {
     let images: [LayoutFrameImage]
     let width: CGFloat
     let height: CGFloat
+    /// The selected credit, drawn in its color; `nil` draws every text in ink. Only the title block carries one.
+    var creditTint: CreditTint?
 
     var body: some View {
         _LayerBackedTitleFrame(
-            content: FrameLayerContent(frame: frame, images: images, width: width, height: height),
+            content: FrameLayerContent(
+                frame: frame, images: images, width: width, height: height, creditTint: creditTint,
+            ),
         )
         .frame(width: width, height: height)
     }
 }
 
-/// What one box's layer tree is built from. The host views rebuild the tree only when it changes.
+/// What one box's layer tree is built from. The host views rebuild the tree only when it changes — a different
+/// selected credit, or its color, included.
 @available(macOS 15.0, *)
 private struct FrameLayerContent: Equatable {
     let frame: LayoutTitleFrame
     let images: [LayoutFrameImage]
     let width: CGFloat
     let height: CGFloat
+    let creditTint: CreditTint?
 
     func build() -> CALayer {
-        TitleFrameLayerBuilder.build(frame: frame, images: images, width: width, height: height)
+        TitleFrameLayerBuilder.build(
+            frame: frame, images: images, width: width, height: height, creditTint: creditTint,
+        )
     }
 }
 
@@ -104,16 +120,31 @@ public enum TitleFrameLayerBuilder {
     public static func build(
         frame: LayoutTitleFrame, images: [LayoutFrameImage], width: CGFloat, height: CGFloat,
     ) -> CALayer {
+        build(frame: frame, images: images, width: width, height: height, creditTint: nil)
+    }
+
+    /// `build(frame:images:width:height:)` with `creditTint`'s credit drawn in its color: every layer of the entry
+    /// `LayoutTitleFrame.creditEntryIndex(for:)` names for that field — the text a tap selects as the credit — is
+    /// filled with `creditTint.color` instead of ink. `nil`, or a field with no such entry, builds the same tree.
+    static func build(
+        frame: LayoutTitleFrame, images: [LayoutFrameImage], width: CGFloat, height: CGFloat,
+        creditTint: CreditTint?,
+    ) -> CALayer {
         let root = CALayer()
         root.frame = CGRect(
             origin: .zero,
             size: CGSize(width: width, height: height),
         )
         root.masksToBounds = false
+        // The selected credit's entry, every line of which takes its color; `nil` when no credit is selected or the
+        // selected one has no entry.
+        let creditEntry = creditTint.flatMap { frame.creditEntryIndex(for: $0.field) }
+        let creditColor = creditTint?.color ?? ScoreLayerBuilder.inkColor
         for line in TitleFrameRenderer.placedLines(frame) {
+            let color = line.entryIndex == creditEntry ? creditColor : ScoreLayerBuilder.inkColor
             if !line.richRuns.isEmpty {
                 if let path = ScoreLayerBuilder.richTextPath(runs: line.richRuns, decorations: line.richDecorations) {
-                    root.addSublayer(ScoreLayerBuilder.fillLayer(path: path, height: height))
+                    root.addSublayer(ScoreLayerBuilder.fillLayer(path: path, height: height, color: color))
                 }
                 continue
             }
@@ -127,7 +158,7 @@ public enum TitleFrameLayerBuilder {
                 // the line box, which is what `Canvas`'s
                 // `.topLeading` / `.top` / `.topTrailing` meant.
                 anchor: CGPoint(x: line.anchor.x, y: 0),
-                color: ScoreLayerBuilder.inkColor,
+                color: color,
                 font: TitleFrameRenderer.ctFont(size: line.fontSize),
                 height: height,
             ) else { continue }

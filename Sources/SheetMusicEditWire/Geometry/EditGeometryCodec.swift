@@ -11,28 +11,55 @@ import Wirelet
 /// this describes):
 /// ```
 /// varint(payloadLength) + payload, where payload is:
-/// tag 1: argb   u32, varint — packed ARGB (0xAARRGGBB), matching DrawCommand.setColor's own field.
-/// tag 2: items  [ScoreItemIDWire] — length-delimited array; see ScoreItemIDCodec.swift's doc comment for
-///               each element's own encoding.
+/// tag 1: argb             u32, varint — packed ARGB (0xAARRGGBB), matching DrawCommand.setColor's own field.
+/// tag 2: items            [ScoreItemIDWire] — length-delimited array; see ScoreItemIDCodec.swift's doc comment for
+///                         each element's own encoding.
+/// tag 3: creditFieldCode  i32, varint, OPTIONAL — the selected title-block credit, a `ScoreInfoFieldCode`; absent
+///                         when no credit is selected.
 /// ```
 public enum SelectionTintCodec {
     public static func encode(argb: UInt32, ids: Set<ScoreItemID>) -> Data {
+        encode(argb: argb, ids: ids, credit: nil)
+    }
+
+    /// `encode(argb:ids:)` with the selected title-block credit, which the draw program paints in `argb` too
+    /// (`LayoutBridge.appendTitleFrame`). `nil` writes no tag 3, so the payload is `encode(argb:ids:)`'s byte for byte.
+    package static func encode(argb: UInt32, ids: Set<ScoreItemID>, credit: ScoreInfoWrite.Field?) -> Data {
         SelectionTintWire(
             argb: argb,
             items: ids.map(ScoreItemIDWire.init(from:)),
+            creditFieldCode: credit.map(ScoreInfoFieldCode.code(of:)),
         ).encodeToData()
     }
 
     public static func decode(_ data: Data) throws -> (argb: UInt32, ids: Set<ScoreItemID>) {
+        let decoded = try decodeWithCredit(data)
+        return (argb: decoded.argb, ids: decoded.ids)
+    }
+
+    /// `decode(_:)` with the selected credit: `nil` when tag 3 is absent (every payload written before it existed) or
+    /// names no field this build knows (`ScoreInfoFieldCode.field(code:)`, which also answers `nil` for `-1`).
+    package static func decodeWithCredit(
+        _ data: Data,
+    ) throws -> (argb: UInt32, ids: Set<ScoreItemID>, credit: ScoreInfoWrite.Field?) {
         let wire = try SelectionTintWire(decoding: data)
-        return try (argb: wire.argb, ids: Set(wire.items.map { try $0.decoded() }))
+        return try (
+            argb: wire.argb,
+            ids: Set(wire.items.map { try $0.decoded() }),
+            credit: wire.creditFieldCode.flatMap(ScoreInfoFieldCode.field(code:)),
+        )
     }
 }
 
+/// Appended fields are Optional: Wirelet writes an Optional only when it holds a value and decodes its absence as
+/// `nil`, so a payload without tag 3 stays byte-identical and still decodes (a defaulted non-Optional field would
+/// be written every time and required on decode). The generated Kotlin `SelectionTint` takes it as
+/// `creditFieldCode: Int? = null`, so every Kotlin call site written before it compiles unchanged.
 @WireFormat
 struct SelectionTintWire {
     var argb: UInt32
     var items: [ScoreItemIDWire]
+    var creditFieldCode: Int32?
 }
 
 /// Codec for an *ordered* list of `ScoreItemID`s — what a marquee (rubber-band) query answers with.

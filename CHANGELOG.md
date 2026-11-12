@@ -18,6 +18,14 @@ and this project adheres to
   space) or for a given field; both answer empty data for an unknown handle, nothing cached, no credit there or an
   unknown code. The field table behind `ScoreInfoWriteWire` is now the public `ScoreInfoFieldCode` (`code(of:)` /
   `field(code:)`), with the same order, so existing wire bytes are unchanged.
+- **`ScoreView` draws a selected credit in the selection color.** A new `selectedCredit: ScoreInfoWrite.Field?`
+  parameter on both initializers (default `nil`) names a title-block credit the host holds as its selection: its
+  engraved text, the line `LayoutDocument.creditTextLine(for:)` reports, is filled with `voiceColors[0]`, the color a
+  selected tempo text takes, instead of ink. With `nil` the title block's layers are unchanged.
+- **The Android selection tint carries a credit.** `SelectionTintWire` gains an optional `creditFieldCode` (a
+  `ScoreInfoFieldCode`; generated Kotlin `SelectionTint.creditFieldCode: Int? = null`), and `nativeEncodeDrawProgram`
+  brackets that credit's engraved text in the tint's color, with or without ids beside it. A payload without the field
+  is byte-identical to before and still decodes; without a credit the draw program is unchanged byte for byte.
 
 ### Changed
 

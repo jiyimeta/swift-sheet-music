@@ -60,7 +60,7 @@ extension LayoutTitleFrame {
     private static func placedLines(of entry: LayoutFrameText, entryIndex: Int, origin: CGPoint) -> [PlacedLine] {
         let lines = entry.text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         let richLines = entry.richText?.lines
-        let count = richLines?.count ?? lines.count
+        let count = lineCount(of: entry)
         let x = origin.x + entry.position.x
         let y = origin.y + entry.position.y
         let tops: [CGFloat]
@@ -82,6 +82,13 @@ extension LayoutTitleFrame {
                 richLine: richLines?[lineIndex],
             )
         }
+    }
+
+    /// How many lines `entry` is placed as (`placedLines`): its typeset lines when it has runs, else its text split on
+    /// `\n`, empty lines included.
+    static func lineCount(of entry: LayoutFrameText) -> Int {
+        entry.richText?.lines.count
+            ?? entry.text.split(separator: "\n", omittingEmptySubsequences: false).count
     }
 
     /// The top edge of each line of an entry with runs. A rich line's baseline sits one of its OWN ascents below its

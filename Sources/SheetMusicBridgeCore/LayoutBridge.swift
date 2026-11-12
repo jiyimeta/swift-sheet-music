@@ -72,8 +72,9 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
     static func buildCommands(
         layout: LayoutDocument,
         tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
+        creditTint: (argb: UInt32, field: ScoreInfoWrite.Field)? = nil,
     ) -> [DrawCommand] {
-        buildCommandsWithSpans(layout: layout, tint: tint).commands
+        buildCommandsWithSpans(layout: layout, tint: tint, creditTint: creditTint).commands
     }
 
     /// `buildCommands`, also returning each system's run of commands (and the title block's) — see `SystemSpan`.
@@ -92,6 +93,10 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // `.setColor(argb: argb)` … `.setColor(argb: blackARGB)`. `ids` is expected to already be expanded
         // (see `LayoutBridge+Selection.swift`'s doc comment) — this function does no expansion of its own.
         tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
+        // A selected title-block credit (not a `ScoreItemID`, so `tint` cannot name it) and the selection color —
+        // apart from `tint` because a credit selection carries no ids. `nil` reproduces the untinted title block
+        // byte for byte; see `appendTitleFrame(_:originY:creditTint:into:)`.
+        creditTint: (argb: UInt32, field: ScoreInfoWrite.Field)? = nil,
         drawsInvisibleElements: Bool = true,
     ) -> (commands: [DrawCommand], spans: [SystemSpan]) {
         var out: [DrawCommand] = []
@@ -123,7 +128,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // down by that height. Mirrors the Apple `TitleFrameView`.
         if let titleFrame = layout.titleFrame {
             let start = out.count
-            appendTitleFrame(titleFrame, into: &out)
+            appendTitleFrame(titleFrame, creditTint: creditTint, into: &out)
             // Its pictures, in document coordinates, inside its span after its texts.
             appendImages(layout.titleImages, originY: 0, into: &out)
             closeSpan(systemIndex: nil, from: start, frameMM: DrawRect(

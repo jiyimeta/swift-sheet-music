@@ -29,25 +29,36 @@ extension LayoutBridge {
     /// texts are in document coordinates, and a box's top for a box after it (`LayoutFrame.content`), whose texts are
     /// frame-local in y. `Double`, not `CGFloat`: off Apple this file's `CGFloat` is a private alias an internal
     /// signature cannot name.
+    ///
+    /// `creditTint` is a selected title-block credit and the selection color: the commands of the entry engraved for
+    /// that credit (`LayoutTitleFrame.creditEntryIndex(for:)`, the text a tap selects as it) are bracketed in
+    /// `.setColor(argb:)` … `.setColor(argb: blackARGB)`, the way a selected engraved text is (`selectionTintColor`),
+    /// as Apple's `TitleFrameLayerBuilder` fills that entry's layers. A title-block text has no author color to
+    /// suppress. `nil`, or a credit with no such entry, emits the untinted commands byte for byte.
     static func appendTitleFrame(
         _ frame: LayoutTitleFrame,
         originY: Double = 0,
+        creditTint: (argb: UInt32, field: ScoreInfoWrite.Field)? = nil,
         into out: inout [DrawCommand],
     ) {
         // Only a rich entry needs layout's placement; a plain one keeps its own byte-identical stacking below.
         let placed = frame.texts.contains { $0.richText != nil }
             ? frame.placedLines(origin: CGPoint(x: 0, y: CGFloat(originY)))
             : []
+        let creditEntry = creditTint.flatMap { frame.creditEntryIndex(for: $0.field) }
         for (index, entry) in frame.texts.enumerated() {
-            guard entry.richText != nil else {
+            let tintArgb = index == creditEntry ? creditTint?.argb : nil
+            if let tintArgb { out.append(.setColor(argb: tintArgb)) }
+            if entry.richText == nil {
                 appendTitleEntry(entry, originY: originY, into: &out)
-                continue
+            } else {
+                // A rich entry draws the runs layout placed per line (`LayoutTitleFrame.PlacedLine.positionedRuns`),
+                // so a `<font size>` line steps further exactly as it does in the Apple renderers.
+                for line in placed where line.entryIndex == index {
+                    emitRichRuns(line.positionedRuns, decorations: line.decorations, into: &out)
+                }
             }
-            // A rich entry draws the runs layout placed per line (`LayoutTitleFrame.PlacedLine.positionedRuns`), so
-            // a `<font size>` line steps further exactly as it does in the Apple renderers.
-            for line in placed where line.entryIndex == index {
-                emitRichRuns(line.positionedRuns, decorations: line.decorations, into: &out)
-            }
+            if tintArgb != nil { out.append(.setColor(argb: blackARGB)) }
         }
     }
 
