@@ -98,6 +98,7 @@ enum MusicXMLNoteDecoder {
             headType: headType(noteheadValue: node.first("notehead")?.text),
             parentheses: parentheses,
             userVelocity: decodeUserVelocity(node),
+            fingerings: decodeFingerings(node),
         )
 
         if let grace = decodeGrace(node, note: note, duration: duration, isChord: isChord) { return grace }
