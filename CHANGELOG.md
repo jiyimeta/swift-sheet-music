@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.37.0] - 2026-11-13
+
 ### Added
 
 - **`Direct2DFrameCanvas` (Windows, `SheetMusicRenderWindows`): an offscreen canvas drawn on frame after frame.** Made
