@@ -28,14 +28,19 @@ extension WindowsPlaybackEngine {
     ///
     /// An engine made `.offline` at the format's rate renders in place: its transport plays the range from its start
     /// and ends stopped at the top, its loop as it was. Any other engine renders through a twin (`exportTwin`), so a
-    /// live engine keeps its position, loop and state. The loop is not played and there is no count-in. The file ends
-    /// where the transport does — the end of the score, repeats included, or of the range — at chunk resolution. On
-    /// cancellation or failure the partial file is deleted.
+    /// live engine keeps its position, loop and state. The loop is not played. The file ends where the transport does
+    /// — the end of the score, repeats included, or of the range — at chunk resolution. On cancellation or failure the
+    /// partial file is deleted.
+    ///
+    /// `countIn: true` puts the count live playback plays from the range's start (`play(from:in:countIn:)`) in front of
+    /// the music, as the Apple engine's export does: its clicks at the metronome strip's volume whatever the
+    /// metronome's mute says, then the range, so the file is longer by the count's pre-roll over the rate. A start with
+    /// no count-in (`CountInBeats.compute` is nil) exports as if it were `false`.
     ///
     /// Called from the engine's control thread like every other control call, and not while another export, a prepare
     /// or a teardown runs on the same engine.
     public func exportAudioFile(
-        to url: URL, score: Score, format: AudioFileFormat, range: AudioExportRange = .full,
+        to url: URL, score: Score, format: AudioFileFormat, range: AudioExportRange = .full, countIn: Bool = false,
         progress: (@Sendable (Double) -> Void)? = nil,
     ) async throws {
         guard let loaded, loaded.score == score else { throw AudioExportError.noScorePrepared }
@@ -54,7 +59,7 @@ extension WindowsPlaybackEngine {
                 renderer.teardown()
             }
         }
-        try await renderer.renderPrepared(to: url, format: format, ticks: ticks, progress: progress)
+        try await renderer.renderPrepared(to: url, format: format, ticks: ticks, countIn: countIn, progress: progress)
     }
 
     /// An `.offline` engine at `sampleRate` holding this engine's prepared score and what it plays it with — mixer,
@@ -100,6 +105,22 @@ extension WindowsPlaybackEngine {
         }
     }
 
+    /// Starts the count into the unrolled `startTick` as `play(from:in:countIn:)` starts it — counted to the onset of
+    /// the frame there, its beats from `CountInBeats` — and answers whether it did. False when the start has no count
+    /// (a score without a meter there, say), which plays the range uncounted.
+    private func startExportCountIn(at startTick: Int) -> Bool {
+        guard let loaded else { return false }
+        let timeline = loaded.derivation.timeline
+        let notated = loaded.derivation.unroll.notatedTick(fromUnrolled: startTick)
+        let frame = timeline.frame(atTick: notated)
+        var baseTick = startTick
+        if let frame {
+            baseTick -= notated - frame.tick
+        }
+        guard let plan = CountInBeats.compute(score: loaded.score, startCursor: frame?.cursor) else { return false }
+        return startCountIn(plan: plan, baseTick: baseTick, loaded: loaded)
+    }
+
     /// The range in unrolled ticks: the whole unrolled score for `.full` (and for `.currentLoop` with no loop), the
     /// first occurrence of each end otherwise — where `play(from:)` and the loop put them.
     private func unrolledTicks(of range: AudioExportRange, in loaded: LoadedScore) throws -> (start: Int, end: Int) {
@@ -115,10 +136,11 @@ extension WindowsPlaybackEngine {
         return (start, end)
     }
 
-    /// Plays `ticks` on this (offline) engine's transport and pulls it into a file on the export thread, then puts the
-    /// transport back as a prepare leaves it, with the loop it had.
+    /// Plays `ticks` on this (offline) engine's transport — counted in first with `countIn` — and pulls it into a file
+    /// on the export thread, then puts the transport back as a prepare leaves it, with the loop it had.
     private func renderPrepared(
-        to url: URL, format: AudioFileFormat, ticks: (start: Int, end: Int), progress: (@Sendable (Double) -> Void)?,
+        to url: URL, format: AudioFileFormat, ticks: (start: Int, end: Int), countIn: Bool,
+        progress: (@Sendable (Double) -> Void)?,
     ) async throws {
         let saved = core.shared.withLock { shared in
             let saved = (
@@ -127,14 +149,21 @@ extension WindowsPlaybackEngine {
             shared.stopPlayers(silence: .cut)
             shared.transportLoop = nil
             shared.loopRange = nil
-            shared.rewind(to: ticks.start)
             // The stepper stops the transport at `totalTicks`: that is where a range ends.
             shared.totalTicks = ticks.end
-            shared.startPlayers()
-            shared.state = .playing
-            shared.hasCursor = true
-            shared.reassertPending = true
             return saved
+        }
+        // The count live playback plays from the range's start, through the same path (`play(from:in:countIn:)`): the
+        // metronome counts while the score waits at its start, and the score starts on the render thread after it.
+        let countedIn = countIn && startExportCountIn(at: ticks.start)
+        core.shared.withLock { shared in
+            if !countedIn {
+                shared.rewind(to: ticks.start)
+                shared.startPlayers()
+                shared.state = .playing
+                shared.hasCursor = true
+            }
+            shared.reassertPending = true
         }
         let job = ExportJob(
             core: core, format: format, url: url, sampleRate: Self.sampleRate(of: format), ticks: ticks,
@@ -261,7 +290,8 @@ private final class ExportJob: @unchecked Sendable {
             }
             filled += chunk
             reachedEnd = pulled.reachedEnd
-            if pulled.tick != lastTick {
+            // A count-in parks the score at its start while the clicks play: that is not a stall.
+            if pulled.tick != lastTick || pulled.countingIn {
                 lastTick = pulled.tick
                 framesSinceMove = 0
             } else {

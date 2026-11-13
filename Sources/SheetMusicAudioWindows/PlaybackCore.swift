@@ -52,15 +52,16 @@ final class PlaybackCore: @unchecked Sendable {
 
     /// An export's pull: `frames` (a multiple of `chunkFrames`) through the same `Shared.render` the device thread
     /// calls, answering whether there was anything to render (a torn-down engine has no session and renders silence),
-    /// whether the transport reached its end in them, and where it is now (unrolled). Nothing goes to the host: an
-    /// export reports through its own progress, and its end is not playback's.
+    /// whether the transport reached its end in them, where it is now (unrolled), and whether a count-in is still
+    /// sounding (the score parked at its start, which an export does not take for a stall). Nothing goes to the host:
+    /// an export reports through its own progress, and its end is not playback's.
     func renderOffline(
         into buffer: UnsafeMutablePointer<Float>, frames: Int,
-    ) -> (hasSession: Bool, reachedEnd: Bool, tick: Int) {
+    ) -> (hasSession: Bool, reachedEnd: Bool, tick: Int, countingIn: Bool) {
         let scratch = metronomeScratch
         return shared.withLock { shared in
             let outcome = shared.render(into: buffer, frames: frames, scratch: scratch)
-            return (shared.session != nil, outcome.reachedEnd, shared.reportedScoreTick)
+            return (shared.session != nil, outcome.reachedEnd, shared.reportedScoreTick, shared.countIn != nil)
         }
     }
 

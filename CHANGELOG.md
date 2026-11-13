@@ -7,6 +7,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`Direct2DFrameCanvas` (Windows, `SheetMusicRenderWindows`): an offscreen canvas drawn on frame after frame.** Made
+  once with its fonts loaded once; each frame `clear(argb:)`, as many `paint(_:pxPerMM:offsetPx:)` calls of draw
+  commands and of `ScoreSurface.Overlay`s as it shows (each culled to the canvas), then `copyPixels(into:)` /
+  `pixels()` (BGRA premultiplied, top-down). The walk and the overlay painting are `ScoreSurface`'s; a frame equals
+  `Direct2DPageRenderer`'s one-shot render of the same commands. For a host's score video. `CDirect2D` gains
+  `cd2d_clear`, which begins drawing again on a WIC canvas after its pixels were read.
+- **`MP4VideoWriter` (Windows, `SheetMusicAudioWindows`): H.264 + AAC into an MP4 through Media Foundation.** BGRA
+  frames (top-down) and interleaved 16-bit PCM in; each stream's times from what has been written. Media Foundation is
+  loaded at run time behind `CMediaFoundation`'s existing loader (`cmf_mp4_*`), so a Windows "N" edition without the
+  Media Feature Pack still starts its host: there `isAvailable` is false and `init` throws `.unavailable`. Frames are
+  converted to NV12 in BT.709 studio range here and the stream is tagged so — the converter Media Foundation inserts for
+  RGB input ignored the tags and shifted colours by up to 13 levels. `probe(_:)` reads a file back (duration, size,
+  codecs).
+- **`WindowsPlaybackEngine.exportAudioFile(…, countIn:)`**, defaulting to `false`: the count live playback plays from
+  the range's start, through the same path (`play(from:in:countIn:)`), in front of the music — the file longer by the
+  pre-roll over the rate, as the Apple engine's export is. A start with no count-in exports as if it were `false`. The
+  export's stall check no longer takes the score parked at its start during the count for a stopped transport.
+
 ## [4.36.0] - 2026-11-12
 
 ### Added

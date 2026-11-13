@@ -218,8 +218,11 @@ int32_t cd2d_frame_present(cd2d_surface *surface);
 /// The buffer must stay valid until that present returns.
 void cd2d_surface_debug_read_back_next(cd2d_surface *surface, uint8_t *pixels, uint32_t width, uint32_t height);
 
-/// Probe aid: a WIC canvas's pixels (BGRA premultiplied, rows of `width * 4` bytes), after ending its drawing.
+/// A WIC canvas's pixels (BGRA premultiplied, rows of `width * 4` bytes), after ending its drawing.
 int32_t cd2d_copy_pixels(cd2d_canvas *canvas, uint8_t *pixels, uint32_t width, uint32_t height);
+/// Starts the next frame on a WIC canvas: begins drawing again if `cd2d_copy_pixels` or `cd2d_write_png` ended it,
+/// resets the transform, and fills the whole canvas with `argb`. What `Direct2DFrameCanvas` draws each frame on.
+int32_t cd2d_clear(cd2d_canvas *canvas, uint32_t argb);
 
 // MARK: PDF pages, drawn by the OS's own renderer (Windows.Data.Pdf and its Direct2D interop)
 

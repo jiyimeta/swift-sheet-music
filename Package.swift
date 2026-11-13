@@ -748,7 +748,8 @@ if isWindows {
                 .linkedLibrary("avrt"),
             ],
         ),
-        // Media Foundation's AAC encoder, for the audio export. Only COM and `mfuuid` (GUID data, no DLL) are linked:
+        // Media Foundation's AAC encoder, for the audio export, and its H.264 + AAC MP4 writer, for a host's score
+        // video (`MP4VideoWriter`). Only COM and `mfuuid` (GUID data, no DLL) are linked:
         // mfplat and mfreadwrite are loaded at run time, so a Windows without them still starts (see the header).
         .target(
             name: "CMediaFoundation",

@@ -1,7 +1,8 @@
 # 4.37.0: a reusable offscreen frame canvas, an MP4 writer and an export count-in, for Windows
 
 Date: 2026-11-13
-Status: draft for review (folino's Windows controller and the owner); not released.
+Status: implemented on branch `windows-frame-canvas`, tested on Windows (folino-qa: 41 tests in 7 suites); approved by
+the owner (2026-11-13), not released.
 Consumer: folino's Windows score video export.
 folino spec: `2026-11-13-windows-score-video-export-design.md` §5, §6, §7, §9.
 
@@ -33,8 +34,9 @@ public final class Direct2DFrameCanvas {
 }
 ```
 
-`Direct2DPageRenderer.renderPixels` and `renderOverlayPixels` become thin uses of it, so the tests that read them now
-cover the class. The stroke floor (`DrawCommandWalker.strokeFloorPx(pxPerMM:)`) applies per `paint` as it does today.
+As built: `Direct2DPageRenderer`'s functions are left as they are; a test asserts that a frame on the canvas equals
+their one-shot render of the same commands. The one C addition is `cd2d_clear` (`cd2d_copy_pixels` ends the drawing; the
+next frame begins it again). `paint` culls to the canvas. The stroke floor applies per `paint` as it does today.
 
 **Compatibility.** Additive; no existing signature changes. Not `Sendable`: one export thread draws on one canvas.
 
@@ -58,6 +60,11 @@ stop folino starting on an N edition. Beside the AAC sink, it shares the loader 
 - Swift, public: `MP4VideoWriter` in `SheetMusicAudioWindows` (or a new `SheetMusicVideoWindows` target, ssm's call) with
   `static var isAvailable`, `init(url:width:height:fps:videoBitRate:sampleRate:channels:audioBitRate:)`,
   `appendFrame(_:at:duration:)`, `appendAudio(_:frames:at:)`, `finish()`.
+- As built: frames are converted to NV12 here (BT.709 studio range, 8-bit integer coefficients, chroma from each 2x2
+  block's average) and handed to the encoder as NV12, the input and output types tagged BT.709 / 16–235. Handing it
+  RGB32 instead let Media Foundation insert a converter that ignored the tags: colours read back up to 13 levels off.
+  With NV12, Media Foundation read the colours back within 8 levels and AVFoundation on the Mac within 10 (its display
+  colour management lifting them slightly, as it does Apple's own videos).
 - The output type declares BT.709 primaries, matrix and transfer and the 16–235 nominal range; the input type a positive
   default stride (top-down rows). (folino's spike wrote an untagged stream whose colours a decoder lifted: RGB 40,120,200
   read back as 57,131,205.)

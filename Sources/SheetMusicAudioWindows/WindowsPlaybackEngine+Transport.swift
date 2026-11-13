@@ -72,7 +72,7 @@ extension WindowsPlaybackEngine {
     /// sequence per synth) and plays it. It carries the whole body behind its first pass
     /// (`MetronomeSequenceBuilder.countInSequenceWithWholeBody`), so a wrap, a seek or a later play maps onto that
     /// copy and nothing is attached again until the next prepare. Built and parsed before the lock.
-    private func startCountIn(plan: CountInBeats.Result, baseTick: Int, loaded: LoadedScore) -> Bool {
+    func startCountIn(plan: CountInBeats.Result, baseTick: Int, loaded: LoadedScore) -> Bool {
         let built = MetronomeSequenceBuilder.countInSequenceWithWholeBody(
             rendered: loaded.rendered, metronomeBeats: loaded.derivation.metronomeBeats, plan: plan,
             baseTick: baseTick, bodyEndTick: core.shared.withLock { $0.totalTicks },
