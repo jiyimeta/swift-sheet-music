@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.39.0] - 2026-11-15
+
+### Added
+
+- **`ScorePDF.pixels(page:pxPerMM:)` is public (Windows).** A page drawn whole on white, as BGRA premultiplied pixels,
+  for a host to rasterize once and composite itself — folino's score video draws its wordmark from it on a
+  `Direct2DFrameCanvas` (`draw(pixels:…opacity:)`). Unchanged otherwise; it was the one-shot path `ScorePDFTests` and
+  `PDFPageWorker` already used.
+
 ## [4.38.0] - 2026-11-14
 
 ### Added
