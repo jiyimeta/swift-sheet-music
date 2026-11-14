@@ -26,6 +26,13 @@ and this project adheres to
   would, and `ScoreSurface.darkensOverlays` says which happened. A new case of `Overlay`: a host that switches over it
   exhaustively needs one more arm.
 
+### Changed
+
+- **`Direct2DFrameCanvas.paint(_: [DrawCommand] / ArraySlice<DrawCommand>, …)` are `package` now (Windows)** — public
+  since 4.37.0, but `DrawCommand` is SheetMusicBridgeCore's, which is not a product, so no host could call them; a host
+  paints a score with `paint(_ pages: ScorePages, …)`. Not a breaking change for that reason. The Lint workflow now runs
+  `Scripts/check-windows-public-api.py`, which would have caught them and ran nowhere before.
+
 ## [4.38.0] - 2026-11-14
 
 ### Added
