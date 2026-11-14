@@ -9,9 +9,33 @@ and this project adheres to
 
 ### Added
 
+- **`WindowsPlaybackEngine` plays a score's recordings (Windows),** as the Apple and Android engines do: one
+  SwiftySynth render (`HostedSynth.renderMix`) mixes them onto the score synth, the score's speed follows their
+  alignment from each block start and the metronome's follows it, and a count-in counts at the speed of the measure it
+  counts into. The Apple engine's API under the same names: `RecordingTrack` (a PCM cache file, its offset,
+  transposition and strip mix), `setRecordingTracks(_:)`, `setRecordingMix(id:volume:isMuted:isSoloed:)`,
+  `setAlignment(warp:segments:)` / `(warp:segments:trackSegments:)`, `hasAlignment`, `notatedTimeSecondsContinuous`,
+  `notatedSeconds(forReportedSeconds:)`, `reportedSeconds(forNotatedSeconds:)` and `prefetchRecordings()`; under an
+  alignment `currentTimeSeconds`, `currentTimeSecondsContinuous` and `totalTimeSeconds` report warped seconds and
+  `seek(toTimeSeconds:)` / `skip(by:)` take them. Recordings sit on the instrument strips' solo bus, follow the
+  reader's transposition, and survive a prepare and a SoundFont reload. Away from 100 % or transposed they are read
+  through Signalsmith Stretch, now built on Windows too (Signalsmith Linear's own FFT, as on Android).
+- **`MediaFoundationAudio` (Windows): a recording's probe and decode through Media Foundation's source reader** — any
+  audio or video file with an audio stream Windows decodes, to 16-bit PCM at the stream's own rate and channels:
+  `probe(path:)` (status — read, unreadable, protected, no audio track — AAC-LC, bit rate, rate, channels, duration),
+  `decodePCM16(sourcePath:outputPath:)`, `decodeRecordingCache(sourcePath:directory:cacheKey:)` into
+  `RecordingPCMCacheWriter`'s format, a block-by-block `Reader`, and `isDecoderAvailable` (false on a Windows "N"
+  edition without the Media Feature Pack; Media Foundation is loaded at run time, as for the encoders). Its reader
+  trims the priming of Media Foundation's own AAC encoder, so no constant is subtracted.
 - **`Direct2DFrameCanvas.writePNG(to:)` (Windows):** the frame as a PNG file, for a host whose UI takes an image file
   (WinUI's `BitmapImage`) — folino's score video dialog shows its still preview so. Over `cd2d_write_png`, which
   `Direct2DPageRenderer.renderPNG` already used.
+
+### Changed
+
+- **`MappedRecording` maps its file on Windows** (`CreateFileMapping` / `MapViewOfFile`, `PrefetchVirtualMemory` for
+  `prefetch`) instead of reading it whole: a long recording costs address space rather than resident memory, and
+  opening it no longer waits for the whole read. WebAssembly keeps the whole-file read.
 
 ### Fixed
 
