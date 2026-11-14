@@ -1,4 +1,5 @@
 import CDirect2D
+import SheetMusicBridgeCore
 
 extension ScoreSurface {
     /// One overlay of `frame`, on its page: a filled shape through the shape cache, everything else walked as commands.
@@ -18,6 +19,8 @@ extension ScoreSurface {
             }
         case .fillRect, .strokeRect:
             Self.paint(overlay, with: &walker)
+        case .darkenRect:
+            darkensOverlays = Self.paintDarkening(overlay, with: &walker)
         }
     }
 
@@ -51,6 +54,22 @@ extension ScoreSurface {
             guard let shape = OverlayShapeCache.build(figures, clip: clip, on: walker.canvas) else { return }
             walker.fill(shape: shape, argb: argb)
             cd2d_shape_release(shape)
+        case .darkenRect:
+            _ = paintDarkening(overlay, with: &walker)
         }
+    }
+
+    /// A `darkenRect`: its color, opaque, under the minimum blend, and source-over put back after — or, where the
+    /// target cannot blend so, `argb` as a plain fill. `true` when it darkened.
+    static func paintDarkening(_ overlay: Overlay, with walker: inout DrawCommandWalker) -> Bool {
+        guard case let .darkenRect(_, rect, argb) = overlay else { return false }
+        let fill: [DrawCommand] = [.fillRect(x: rect.x, y: rect.y, w: rect.width, h: rect.height)]
+        guard cd2d_set_darken(walker.canvas, 1) == 0 else {
+            walker.paint(([.setColor(argb: argb)] + fill)[...])
+            return false
+        }
+        walker.paint(([.setColor(argb: 0xFF00_0000 | argb)] + fill)[...])
+        _ = cd2d_set_darken(walker.canvas, 0)
+        return true
     }
 }

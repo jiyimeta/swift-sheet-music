@@ -53,11 +53,18 @@ extension ScoreSurface {
         /// `fillPath` drawn only where it lies inside `clip` — ink a pixel eraser has cut. The intersection is built
         /// once per `id`, as `fillPath`'s shape is, and the same id must mean the same figures and the same clip.
         case clippedFillPath(page: Int, id: Int, figures: [[PagePointMM]], argb: UInt32, clip: OverlayClip)
+        /// The rectangle laid UNDER the engraving's ink rather than over it: `argb`'s color, opaque, is kept only where
+        /// it is darker than what is there, channel by channel (Direct2D's minimum blend) — so on white paper it shows
+        /// as that color and black ink stays black. Pass the color a translucent band would show on white (a staff
+        /// highlight's), and the band reads as Apple's `.multiply` does; over colored ink it gives the darker of the
+        /// two, which is close to a multiply but not equal to one. A target that cannot blend so draws `argb` as
+        /// `fillRect` does, alpha and all (`darkensOverlays` turns false).
+        case darkenRect(page: Int, rect: PageRectMM, argb: UInt32)
 
         var page: Int {
             switch self {
             case let .fillRect(page, _, _), let .strokeRect(page, _, _, _), let .fillPath(page, _, _, _),
-                 let .clippedFillPath(page, _, _, _, _): page
+                 let .clippedFillPath(page, _, _, _, _), let .darkenRect(page, _, _): page
             }
         }
     }

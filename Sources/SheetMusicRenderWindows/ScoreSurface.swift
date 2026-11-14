@@ -39,6 +39,9 @@ public final class ScoreSurface {
     public internal(set) var unreadablePDFPages: Set<Int> = []
     /// The `fillPath` overlays' shapes, by overlay id.
     var shapes = OverlayShapeCache()
+    /// Whether the last `darkenRect` overlay was drawn with the minimum blend (`true`) or, the target refusing it, as a
+    /// plain fill (`false`); `nil` until one is drawn. For a host to say so in its log.
+    public internal(set) var darkensOverlays: Bool?
     /// The scale the tiles on screen were rasterized at, while a gesture (and its settle delay) runs.
     private var settledPxPerMM: Double?
     private var lastGestureFrame: ContinuousClock.Instant?

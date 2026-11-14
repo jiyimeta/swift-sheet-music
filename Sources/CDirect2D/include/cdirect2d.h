@@ -56,6 +56,10 @@ void cd2d_stroke(cd2d_canvas *canvas, float width, float dash_on, float dash_off
 /// color, never dashed — and starts a new one, as `cd2d_stroke` does. The draw program's `fillPath` (beams).
 void cd2d_fill_path(cd2d_canvas *canvas);
 void cd2d_fill_rect(cd2d_canvas *canvas, float x, float y, float width, float height);
+/// With `darken` nonzero, every later draw keeps the darker of what it paints and what is there, channel by channel
+/// (`D2D1_PRIMITIVE_BLEND_MIN`), until a call with zero puts source-over back: an opaque color laid over the engraving
+/// tints the paper and leaves black ink black. Fails (and changes nothing) on a target that is not a device context.
+int32_t cd2d_set_darken(cd2d_canvas *canvas, int32_t darken);
 
 /// Draws an encoded picture (PNG, JPEG, … anything WIC decodes) stretched over the rectangle, as the Apple renderer
 /// does: the draw program's `drawImage`, a frame's picture. The bytes are decoded once per canvas resources and cached

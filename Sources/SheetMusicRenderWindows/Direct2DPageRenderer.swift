@@ -130,7 +130,7 @@ public enum Direct2DPageRenderer {
                     built = (cache.shape(id: id, figures: figures, canvas: canvas), argb)
                 case let .clippedFillPath(_, id, figures, argb, clip):
                     built = (cache.shape(id: id, figures: figures, clip: clip, canvas: canvas), argb)
-                case .fillRect, .strokeRect:
+                case .fillRect, .strokeRect, .darkenRect:
                     continue
                 }
                 guard let shape = built.shape else { continue }

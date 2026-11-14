@@ -19,6 +19,12 @@ and this project adheres to
   not a `ScoreItemID`, so `ids` could not name it; `credit` draws that credit's engraved line in `argb` on the page that
   holds the title block, as Apple's `ScoreView(selectedCredit:)` and Android's `nativeEncodeDrawProgram` already do.
   `nil` (the default) gives the pages `tinted(argb:ids:)` gave, byte for byte.
+- **`ScoreSurface.Overlay.darkenRect(page:rect:argb:)` (Windows): a band laid under the ink.** Its color, opaque, is
+  kept only where it is darker than what is there (Direct2D's minimum blend), so on white paper it shows as that color
+  and black ink stays black — a staff highlight that reads as Apple's `.multiply` does. Over colored ink it gives the
+  darker of the two, close to a multiply but not equal to one. A target that cannot blend so draws it as `fillRect`
+  would, and `ScoreSurface.darkensOverlays` says which happened. A new case of `Overlay`: a host that switches over it
+  exhaustively needs one more arm.
 
 ## [4.38.0] - 2026-11-14
 

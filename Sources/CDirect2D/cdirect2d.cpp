@@ -512,6 +512,14 @@ extern "C" void cd2d_fill_rect(cd2d_canvas *canvas, float x, float y, float widt
     canvas->target->FillRectangle(D2D1::RectF(x, y, x + width, y + height), canvas->brush.Get());
 }
 
+extern "C" int32_t cd2d_set_darken(cd2d_canvas *canvas, int32_t darken) {
+    ComPtr<ID2D1DeviceContext> context;
+    HRESULT hr = canvas->target.As(&context);
+    if (FAILED(hr)) return hr;
+    context->SetPrimitiveBlend(darken ? D2D1_PRIMITIVE_BLEND_MIN : D2D1_PRIMITIVE_BLEND_SOURCE_OVER);
+    return S_OK;
+}
+
 namespace {
 
 /// FNV-1a over the bytes: the picture cache's key, with the length beside it.
