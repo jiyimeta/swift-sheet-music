@@ -75,6 +75,14 @@ int32_t cmf_mp4_probe(const uint16_t *path, int64_t *duration_100ns, uint32_t *w
 /// top-left: its four bytes (B, G, R, X) into `bgra`. For tests of the colour tags and the row order.
 int32_t cmf_mp4_first_frame_pixel(const uint16_t *path, uint32_t x, uint32_t y, uint8_t *bgra);
 
+/// The YUV matrix the file's first video stream says it is in (`MFVideoTransferMatrix`: 1 BT.709, 2 BT.601), read by
+/// Media Foundation from the stream — 0 when it says none. For tests of the colour tags.
+int32_t cmf_mp4_video_matrix(const uint16_t *path, uint32_t *matrix);
+
+/// The first frame of the file at `path`, decoded to NV12 with no colour conversion, at pixel (`x`, `y`) from the
+/// top-left: its luma, Cb and Cr into `yuv`. What the stream holds, whichever matrix a player would assume.
+int32_t cmf_mp4_first_frame_yuv(const uint16_t *path, uint32_t x, uint32_t y, uint8_t *yuv);
+
 #ifdef __cplusplus
 }
 #endif

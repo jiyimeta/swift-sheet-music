@@ -165,6 +165,26 @@ public final class MP4VideoWriter {
         return (bgra[0], bgra[1], bgra[2])
     }
 
+    /// The file's first frame decoded to NV12 with no colour conversion, at (`x`, `y`) from the top-left: what the
+    /// stream holds, whichever matrix a decoder would assume. What a test checks the writer's conversion with.
+    package static func firstFrameYUV(_ url: URL, x: Int, y: Int) throws -> (luma: UInt8, cb: UInt8, cr: UInt8) {
+        var yuv = [UInt8](repeating: 0, count: 3)
+        let result = url.path.withCString(encodedAs: UTF16.self) { path in
+            yuv.withUnsafeMutableBufferPointer { cmf_mp4_first_frame_yuv(path, UInt32(x), UInt32(y), $0.baseAddress) }
+        }
+        guard result == 0 else { throw Failure.mediaFoundation(step: "read back the first frame", hresult: result) }
+        return (yuv[0], yuv[1], yuv[2])
+    }
+
+    /// The YUV matrix the file's video stream says it is in (`MFVideoTransferMatrix`: 1 BT.709, 2 BT.601), 0 for
+    /// none: a stream with none is decoded by most players as BT.601 below HD. What a test checks the tags with.
+    package static func videoMatrix(_ url: URL) throws -> UInt32 {
+        var matrix: UInt32 = 0
+        let result = url.path.withCString(encodedAs: UTF16.self) { cmf_mp4_video_matrix($0, &matrix) }
+        guard result == 0 else { throw Failure.mediaFoundation(step: "read the stream's matrix", hresult: result) }
+        return matrix
+    }
+
     /// E_NOTIMPL, what `cmf_mp4_open` answers when Media Foundation could not be loaded.
     private static let notImplemented = Int32(bitPattern: 0x8000_4001)
 }

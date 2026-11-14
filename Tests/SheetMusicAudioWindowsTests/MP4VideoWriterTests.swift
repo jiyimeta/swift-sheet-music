@@ -36,12 +36,24 @@ struct MP4VideoWriterTests {
 
     private typealias Color = (blue: UInt8, green: UInt8, red: UInt8)
 
-    private static func near(_ read: Color, _ wanted: Color) -> Bool {
-        // H.264 at this rate keeps a flat colour within a few levels once the tags say how to read it back.
-        let tolerance = 8
-        return abs(Int(read.blue) - Int(wanted.blue)) <= tolerance
-            && abs(Int(read.green) - Int(wanted.green)) <= tolerance
-            && abs(Int(read.red) - Int(wanted.red)) <= tolerance
+    /// `color` in BT.709, studio range — what the writer must put in the stream, worked out here in floating point
+    /// from the standard's coefficients rather than from the writer's integer ones.
+    private static func bt709(_ color: Color) -> (luma: Double, cb: Double, cr: Double) {
+        let red = Double(color.red), green = Double(color.green), blue = Double(color.blue)
+        let luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+        return (
+            16 + luma * 219 / 255,
+            128 + (blue - luma) / 1.8556 * 224 / 255,
+            128 + (red - luma) / 1.5748 * 224 / 255,
+        )
+    }
+
+    private static func near(_ read: (luma: UInt8, cb: UInt8, cr: UInt8), _ wanted: Color) -> Bool {
+        // H.264 at this rate keeps a flat colour within a level or two of what went in.
+        let expected = bt709(wanted)
+        let tolerance = 3.0
+        return abs(Double(read.luma) - expected.luma) <= tolerance && abs(Double(read.cb) - expected.cb) <= tolerance
+            && abs(Double(read.cr) - expected.cr) <= tolerance
     }
 
     private static func write(to url: URL, withAudio: Bool) throws {
@@ -75,8 +87,10 @@ struct MP4VideoWriterTests {
         #expect(abs(probe.durationSeconds - 1.0) < 0.1, "duration \(probe.durationSeconds) s")
     }
 
+    /// What the stream holds, read without any decoder's colour conversion: each half's BT.709 studio-range values,
+    /// the top half on top. A decoder that converted to RGB would answer by whatever matrix it assumed instead.
     @Test
-    func `the colours come back as written, top half on top`() throws {
+    func `the stream holds each half's BT.709 values, top half on top`() throws {
         let url = Self.temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         try Self.write(to: url, withAudio: false)
@@ -86,10 +100,20 @@ struct MP4VideoWriterTests {
             try? FileManager.default.removeItem(at: kept)
             try FileManager.default.copyItem(at: url, to: kept)
         }
-        let upper = try MP4VideoWriter.firstFramePixel(url, x: Self.width / 2, y: Self.height / 4)
-        let lower = try MP4VideoWriter.firstFramePixel(url, x: Self.width / 2, y: Self.height * 3 / 4)
-        #expect(Self.near(upper, Self.top), "top half read \(upper), wrote \(Self.top)")
-        #expect(Self.near(lower, Self.bottom), "bottom half read \(lower), wrote \(Self.bottom)")
+        let upper = try MP4VideoWriter.firstFrameYUV(url, x: Self.width / 2, y: Self.height / 4)
+        let lower = try MP4VideoWriter.firstFrameYUV(url, x: Self.width / 2, y: Self.height * 3 / 4)
+        #expect(Self.near(upper, Self.top), "top half read \(upper), wanted \(Self.bt709(Self.top))")
+        #expect(Self.near(lower, Self.bottom), "bottom half read \(lower), wanted \(Self.bt709(Self.bottom))")
+    }
+
+    /// The stream says it is BT.709, so a player reads it so: without the tag a player takes an SD stream for BT.601,
+    /// and every colour comes back up to 24 levels off (folino-win's hardware encoder wrote none, 2026-11-15).
+    @Test
+    func `the stream says it is BT.709`() throws {
+        let url = Self.temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Self.write(to: url, withAudio: false)
+        #expect(try MP4VideoWriter.videoMatrix(url) == 1, "MFVideoTransferMatrix_BT709")
     }
 
     @Test

@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **`MP4VideoWriter` (Windows): the stream always says it is BT.709.** The writer used whichever H.264 encoder Media
+  Foundation picked, and a hardware one may leave the colour tags out of the stream (folino-win's did: Constrained
+  Baseline, no colour description); a player then took an SD video for BT.601 and every colour came back up to 24
+  levels off, though the values written were right. The writer now uses software transforms only — Microsoft's own
+  encoder, which writes the tags. `MP4VideoWriterTests` checks the stream's matrix and its decoded NV12 values, not a
+  decoder's RGB, which depends on what that decoder assumes.
+
 ## [4.39.0] - 2026-11-15
 
 ### Added

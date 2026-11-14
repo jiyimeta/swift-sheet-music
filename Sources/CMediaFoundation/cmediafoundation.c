@@ -313,7 +313,10 @@ int32_t cmf_mp4_open(const uint16_t *path, uint32_t width, uint32_t height, uint
     if (SUCCEEDED(hr)) {
         hr = IMFAttributes_SetGUID(attributes, &MF_TRANSCODE_CONTAINERTYPE, &MFTranscodeContainerType_MPEG4);
     }
-    if (SUCCEEDED(hr)) hr = IMFAttributes_SetUINT32(attributes, &MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
+    // Software transforms only: Microsoft's own H.264 encoder writes the colour tags below into the stream's VUI, but a
+    // hardware encoder may not (folino-win's, 2026-11-15: Constrained Baseline, no colour description at all), and an
+    // untagged SD stream is decoded as BT.601 — its colours off by up to 24 levels on every player.
+    if (SUCCEEDED(hr)) hr = IMFAttributes_SetUINT32(attributes, &MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, FALSE);
     if (SUCCEEDED(hr)) hr = mf.create_sink_writer((LPCWSTR)path, NULL, attributes, &writer->sink);
     // Video: H.264 out; BGRA in (the frame canvas's pixels), the Sink Writer converting to the encoder's NV12.
     if (SUCCEEDED(hr)) hr = video_type(&h264, &MFVideoFormat_H264, width, height, fps);
@@ -488,6 +491,115 @@ int32_t cmf_mp4_first_frame_pixel(const uint16_t *path, uint32_t x, uint32_t y, 
     if (rgb) IMFMediaType_Release(rgb);
     if (reader) IMFSourceReader_Release(reader);
     if (attributes) IMFAttributes_Release(attributes);
+    if (started) mf.shutdown();
+    if (com) CoUninitialize();
+    return (int32_t)hr;
+}
+
+/// A source reader over `path` whose first video stream decodes to NV12 (no colour conversion), and that stream's
+/// current type. The caller releases both.
+static HRESULT open_nv12_reader(const uint16_t *path, IMFSourceReader **reader, IMFMediaType **current) {
+    *reader = NULL;
+    *current = NULL;
+    IMFMediaType *nv12 = NULL;
+    HRESULT hr = mf.create_source_reader((LPCWSTR)path, NULL, reader);
+    if (SUCCEEDED(hr)) hr = mf.create_media_type(&nv12);
+    if (SUCCEEDED(hr)) hr = IMFMediaType_SetGUID(nv12, &MF_MT_MAJOR_TYPE, &MFMediaType_Video);
+    if (SUCCEEDED(hr)) hr = IMFMediaType_SetGUID(nv12, &MF_MT_SUBTYPE, &MFVideoFormat_NV12);
+    if (SUCCEEDED(hr)) {
+        hr = IMFSourceReader_SetCurrentMediaType(*reader, (DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, nv12);
+    }
+    if (SUCCEEDED(hr)) {
+        hr = IMFSourceReader_GetCurrentMediaType(*reader, (DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, current);
+    }
+    if (nv12) IMFMediaType_Release(nv12);
+    return hr;
+}
+
+int32_t cmf_mp4_video_matrix(const uint16_t *path, uint32_t *matrix) {
+    *matrix = 0;
+    if (!ensure_loaded() || mf.create_source_reader == NULL) return (int32_t)E_NOTIMPL;
+    BOOL com = SUCCEEDED(CoInitializeEx(NULL, COINIT_MULTITHREADED));
+    HRESULT hr = mf.startup(MF_VERSION, MFSTARTUP_LITE);
+    BOOL started = SUCCEEDED(hr);
+    IMFSourceReader *reader = NULL;
+    IMFMediaType *current = NULL;
+    if (SUCCEEDED(hr)) hr = open_nv12_reader(path, &reader, &current);
+    if (SUCCEEDED(hr)) {
+        // What the decoder read from the stream; the container's own type first, which may carry none.
+        IMFMediaType *native = NULL;
+        UINT32 value = 0;
+        if (SUCCEEDED(IMFSourceReader_GetNativeMediaType(reader, (DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0,
+                                                         &native))) {
+            if (SUCCEEDED(IMFMediaType_GetUINT32(native, &MF_MT_YUV_MATRIX, &value))) *matrix = value;
+            IMFMediaType_Release(native);
+        }
+        if (*matrix == 0 && SUCCEEDED(IMFMediaType_GetUINT32(current, &MF_MT_YUV_MATRIX, &value))) *matrix = value;
+    }
+    if (current) IMFMediaType_Release(current);
+    if (reader) IMFSourceReader_Release(reader);
+    if (started) mf.shutdown();
+    if (com) CoUninitialize();
+    return (int32_t)hr;
+}
+
+int32_t cmf_mp4_first_frame_yuv(const uint16_t *path, uint32_t x, uint32_t y, uint8_t *yuv) {
+    memset(yuv, 0, 3);
+    if (!ensure_loaded() || mf.create_source_reader == NULL) return (int32_t)E_NOTIMPL;
+    BOOL com = SUCCEEDED(CoInitializeEx(NULL, COINIT_MULTITHREADED));
+    HRESULT hr = mf.startup(MF_VERSION, MFSTARTUP_LITE);
+    BOOL started = SUCCEEDED(hr);
+    IMFSourceReader *reader = NULL;
+    IMFMediaType *current = NULL;
+    IMFSample *sample = NULL;
+    IMFMediaBuffer *buffer = NULL;
+    IMF2DBuffer *buffer2d = NULL;
+    if (SUCCEEDED(hr)) hr = open_nv12_reader(path, &reader, &current);
+    // The decoded frame's allocated size: a 180-row picture may come in a 192-row frame, the chroma plane after it.
+    UINT32 frame_width = 0;
+    UINT32 frame_height = 0;
+    if (SUCCEEDED(hr)) {
+        UINT64 size = 0;
+        IMFMediaType_GetUINT64(current, &MF_MT_FRAME_SIZE, &size);
+        frame_width = (UINT32)(size >> 32);
+        frame_height = (UINT32)(size & 0xFFFFFFFF);
+        if (x >= frame_width || y >= frame_height) hr = E_INVALIDARG;
+    }
+    for (int attempt = 0; SUCCEEDED(hr) && sample == NULL && attempt < 16; attempt++) {
+        DWORD stream = 0;
+        DWORD flags = 0;
+        LONGLONG time = 0;
+        hr = IMFSourceReader_ReadSample(reader, (DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, &stream, &flags, &time,
+                                        &sample);
+        if (SUCCEEDED(hr) && sample == NULL && (flags & MF_SOURCE_READERF_ENDOFSTREAM)) hr = MF_E_END_OF_STREAM;
+    }
+    if (SUCCEEDED(hr) && sample == NULL) hr = E_FAIL;
+    if (SUCCEEDED(hr)) hr = IMFSample_GetBufferByIndex(sample, 0, &buffer);
+    BYTE *top = NULL;
+    LONG pitch = 0;
+    BOOL locked2d = FALSE;
+    BOOL locked = FALSE;
+    if (SUCCEEDED(hr) && SUCCEEDED(IMFMediaBuffer_QueryInterface(buffer, &IID_IMF2DBuffer, (void **)&buffer2d))) {
+        hr = IMF2DBuffer_Lock2D(buffer2d, &top, &pitch);
+        locked2d = SUCCEEDED(hr);
+    } else if (SUCCEEDED(hr)) {
+        hr = IMFMediaBuffer_Lock(buffer, &top, NULL, NULL);
+        pitch = (LONG)frame_width;
+        locked = SUCCEEDED(hr);
+    }
+    if (SUCCEEDED(hr)) {
+        const BYTE *chroma = top + (LONG)frame_height * pitch;
+        yuv[0] = top[(LONG)y * pitch + (LONG)x];
+        yuv[1] = chroma[(LONG)(y / 2) * pitch + (LONG)(x / 2) * 2];
+        yuv[2] = chroma[(LONG)(y / 2) * pitch + (LONG)(x / 2) * 2 + 1];
+    }
+    if (locked2d) IMF2DBuffer_Unlock2D(buffer2d);
+    if (locked) IMFMediaBuffer_Unlock(buffer);
+    if (buffer2d) IMF2DBuffer_Release(buffer2d);
+    if (buffer) IMFMediaBuffer_Release(buffer);
+    if (sample) IMFSample_Release(sample);
+    if (current) IMFMediaType_Release(current);
+    if (reader) IMFSourceReader_Release(reader);
     if (started) mf.shutdown();
     if (com) CoUninitialize();
     return (int32_t)hr;
