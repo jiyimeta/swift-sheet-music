@@ -42,6 +42,16 @@ extension ScoreSurface {
         BundledResources.fontFileNames.map { BundledResources.url($0).path }
     }
 
+    /// The bundled metrics table's path (`sheet-music.smft`, the table `installWindowsFontMetrics()` installs): for a
+    /// host that measures one piece of work in the table's own scope instead of through the installed provider — a
+    /// score video's layout, measured as Apple's and Android's are.
+    ///
+    /// Reading it loads `Bundle.module`, which stops the process when the resource bundle is missing (see
+    /// `BundledResources`).
+    public static var bundledMetricsTableFile: String {
+        BundledResources.url(BundledResources.metricsTableFileName).path
+    }
+
     /// A surface that draws with the faces bundled with this module: `init(fontFiles: ScoreSurface.bundledFontFiles)`.
     /// A host that ships its own copies passes them to `init(fontFiles:)` instead.
     ///

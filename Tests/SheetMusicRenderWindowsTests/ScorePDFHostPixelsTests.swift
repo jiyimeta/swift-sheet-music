@@ -1,9 +1,17 @@
+import Foundation
 import SheetMusicRenderWindows
 import Testing
 
 /// `ScorePDF.pixels(page:pxPerMM:)` as a host reaches it — imported without `@testable` — and handed to a frame
-/// canvas, as folino's score video composites its wordmark.
+/// canvas, as folino's score video composites its wordmark; and the bundled metrics table a host measures a video in.
 struct ScorePDFHostPixelsTests {
+    @Test func `a host reads the bundled metrics table`() throws {
+        let path = ScoreSurface.bundledMetricsTableFile
+        #expect(path.hasSuffix("sheet-music.smft"))
+        let bytes = try #require(FileManager.default.contents(atPath: path))
+        #expect(bytes.count > 1000)
+    }
+
     @Test func `a host draws a PDF page's pixels on a frame canvas`() throws {
         let pdf = try ScorePDF(path: ScorePDFTests.squarePDF())
         let drawn = try pdf.pixels(page: 0, pxPerMM: 1) // 210 × 297 px

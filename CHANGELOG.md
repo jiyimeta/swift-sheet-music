@@ -15,6 +15,9 @@ and this project adheres to
   for a host to rasterize once and composite itself — folino's score video draws its wordmark from it on a
   `Direct2DFrameCanvas` (`draw(pixels:…opacity:)`). Unchanged otherwise; it was the one-shot path `ScorePDFTests` and
   `PDFPageWorker` already used.
+- **`ScoreSurface.bundledMetricsTableFile` (Windows): the bundled `sheet-music.smft`'s path**, beside
+  `bundledFontFiles`, for a host that measures one piece of work in the table's own scope rather than through the
+  provider `installWindowsFontMetrics()` installs — folino's score video lays out in it, as Apple's and Android's do.
 - **`ScorePages.tinted(argb:ids:credit:)`: a selected title-block credit drawn in the selection color.** A credit is
   not a `ScoreItemID`, so `ids` could not name it; `credit` draws that credit's engraved line in `argb` on the page that
   holds the title block, as Apple's `ScoreView(selectedCredit:)` and Android's `nativeEncodeDrawProgram` already do.
