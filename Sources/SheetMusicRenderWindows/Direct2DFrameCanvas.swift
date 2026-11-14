@@ -168,6 +168,14 @@ public final class Direct2DFrameCanvas {
         return pixels
     }
 
+    /// The frame written as a PNG to `path` (replaced if it exists): a still a host shows where its UI takes an image
+    /// file — WinUI's `BitmapImage` reads one. Ends the frame, as `copyPixels(into:)` does; throws while a clip is
+    /// still pushed.
+    public func writePNG(to path: String) throws {
+        let native = String(path.map { $0 == "/" ? "\\" : $0 })
+        try Direct2DPageRenderer.check(withWide(native) { cd2d_write_png(canvas, $0) }, "writing \(path)")
+    }
+
     private var bounds: DrawRect {
         DrawRect(x: 0, y: 0, width: Double(widthPx), height: Double(heightPx))
     }

@@ -1,3 +1,4 @@
+import Foundation
 import SheetMusicBridgeCore
 @testable import SheetMusicRenderWindows
 import Testing
@@ -191,6 +192,22 @@ struct Direct2DFrameCanvasTests {
         let middle = Self.pixel(pixels, x: 60, y: 60)
         #expect(middle[0 ..< 3].allSatisfy { abs(Int($0) - 128) <= 2 }, "\(middle)")
         #expect(Self.pixel(pixels, x: 20, y: 20) == Self.white, "the picture painted outside its rect")
+    }
+
+    @Test
+    func `a frame written as a PNG reads back as the same pixels`() throws {
+        let canvas = try Direct2DFrameCanvas(widthPx: Self.sizePx, heightPx: Self.sizePx, fontFiles: [])
+        try canvas.clear(argb: 0xFFFF_FFFF)
+        canvas.paint(Self.square, pxPerMM: Self.pxPerMM, offsetPx: (x: 10, y: 10))
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("frame-\(UUID().uuidString).png").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        try canvas.writePNG(to: path)
+
+        let bytes = try #require(FileManager.default.contents(atPath: path))
+        #expect(bytes.prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), "not a PNG")
+        // The next frame starts again after the write ended this one.
+        try canvas.clear(argb: 0xFFFF_FFFF)
+        #expect(try Self.pixel(canvas.pixels(), x: 20, y: 20) == Self.white)
     }
 
     @Test

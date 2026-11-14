@@ -7,6 +7,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`Direct2DFrameCanvas.writePNG(to:)` (Windows):** the frame as a PNG file, for a host whose UI takes an image file
+  (WinUI's `BitmapImage`) — folino's score video dialog shows its still preview so. Over `cd2d_write_png`, which
+  `Direct2DPageRenderer.renderPNG` already used.
+
 ### Fixed
 
 - **`MP4VideoWriter` (Windows): the stream always says it is BT.709.** The writer used whichever H.264 encoder Media
