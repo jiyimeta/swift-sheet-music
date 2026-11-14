@@ -104,6 +104,8 @@ struct cd2d_canvas {
     bool figureOpen = false;
     D2D1::Matrix3x2F transform = D2D1::Matrix3x2F::Identity();
     bool drawing = false;
+    /// How many `cd2d_push_clip`s are not yet popped; `cd2d_copy_pixels` refuses while any is.
+    int clipDepth = 0;
 };
 
 namespace cd2d {

@@ -7,6 +7,22 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.38.0] - 2026-11-14
+
+### Added
+
+- **`Direct2DFrameCanvas.paint(_ pages: ScorePages, page:systems:pxPerMM:offsetPx:)` (Windows): a frame canvas paints a
+  score's own pages.** With `systems`, only those systems' runs — no title block, no box between systems — each walked
+  as `ScoreSurface` walks a tile's, from the draw program's default state; without, the whole page. The pages' commands
+  stay `package`: a host hands the `ScorePages` it computed. For a score video's modes that show systems, and the page
+  turn that shows a page.
+- **`Direct2DFrameCanvas.pushClip(x:y:width:height:)` / `popClip()` (Windows):** an axis-aligned clip in canvas
+  pixels, nested clips intersecting; `copyPixels(into:)` throws while one is still pushed. `CDirect2D` gains
+  `cd2d_push_clip` / `cd2d_pop_clip`.
+- **`Direct2DFrameCanvas.draw(pixels:widthPx:heightPx:in:opacity:)` (Windows):** BGRA premultiplied pixels stretched
+  over a rect at one opacity — a picture rasterized once and composited every frame, such as a wordmark. `CDirect2D`
+  gains `cd2d_draw_bitmap`.
+
 ## [4.37.0] - 2026-11-13
 
 ### Added

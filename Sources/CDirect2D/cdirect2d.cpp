@@ -658,8 +658,50 @@ extern "C" int32_t cd2d_clear(cd2d_canvas *canvas, uint32_t argb) {
     return S_OK;
 }
 
+extern "C" int32_t cd2d_push_clip(cd2d_canvas *canvas, float x, float y, float width, float height) {
+    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!canvas->drawing) return E_ILLEGAL_METHOD_CALL;
+    // The clip is in canvas pixels, whatever transform the last command left: the target applies its transform at the
+    // push, so it is reset first and the walk's own state is kept for its next command.
+    canvas->target->SetTransform(D2D1::Matrix3x2F::Identity());
+    canvas->target->PushAxisAlignedClip(
+        D2D1::RectF(x, y, x + (width > 0 ? width : 0), y + (height > 0 ? height : 0)), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    canvas->target->SetTransform(canvas->transform);
+    canvas->clipDepth += 1;
+    return S_OK;
+}
+
+extern "C" int32_t cd2d_pop_clip(cd2d_canvas *canvas) {
+    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!canvas->drawing || canvas->clipDepth <= 0) return E_ILLEGAL_METHOD_CALL;
+    canvas->target->PopAxisAlignedClip();
+    canvas->clipDepth -= 1;
+    return S_OK;
+}
+
+extern "C" int32_t cd2d_draw_bitmap(
+    cd2d_canvas *canvas, const uint8_t *pixels, uint32_t width, uint32_t height, float x, float y, float rect_width,
+    float rect_height, float opacity) {
+    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!canvas->drawing) return E_ILLEGAL_METHOD_CALL;
+    if (!pixels || width == 0 || height == 0 || rect_width <= 0 || rect_height <= 0) return E_INVALIDARG;
+    ComPtr<ID2D1Bitmap> bitmap;
+    const D2D1_BITMAP_PROPERTIES properties = D2D1::BitmapProperties(
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    HRESULT hr = canvas->target->CreateBitmap(D2D1::SizeU(width, height), pixels, width * 4, properties, &bitmap);
+    if (FAILED(hr)) return hr;
+    canvas->target->SetTransform(D2D1::Matrix3x2F::Identity());
+    const float clamped = opacity < 0 ? 0 : (opacity > 1 ? 1 : opacity);
+    canvas->target->DrawBitmap(
+        bitmap.Get(), D2D1::RectF(x, y, x + rect_width, y + rect_height), clamped,
+        D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+    canvas->target->SetTransform(canvas->transform);
+    return S_OK;
+}
+
 extern "C" int32_t cd2d_copy_pixels(cd2d_canvas *canvas, uint8_t *pixels, uint32_t width, uint32_t height) {
     if (!canvas->bitmap) return E_NOTIMPL;
+    if (canvas->clipDepth > 0) return E_ILLEGAL_METHOD_CALL;  // a frame ends with every clip popped
     if (canvas->drawing) {
         HRESULT hr = canvas->target->EndDraw();
         canvas->drawing = false;

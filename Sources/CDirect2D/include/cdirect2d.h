@@ -218,11 +218,23 @@ int32_t cd2d_frame_present(cd2d_surface *surface);
 /// The buffer must stay valid until that present returns.
 void cd2d_surface_debug_read_back_next(cd2d_surface *surface, uint8_t *pixels, uint32_t width, uint32_t height);
 
-/// A WIC canvas's pixels (BGRA premultiplied, rows of `width * 4` bytes), after ending its drawing.
+/// A WIC canvas's pixels (BGRA premultiplied, rows of `width * 4` bytes), after ending its drawing. E_ILLEGAL_METHOD_CALL
+/// while a `cd2d_push_clip` is not popped.
 int32_t cd2d_copy_pixels(cd2d_canvas *canvas, uint8_t *pixels, uint32_t width, uint32_t height);
 /// Starts the next frame on a WIC canvas: begins drawing again if `cd2d_copy_pixels` or `cd2d_write_png` ended it,
 /// resets the transform, and fills the whole canvas with `argb`. What `Direct2DFrameCanvas` draws each frame on.
 int32_t cd2d_clear(cd2d_canvas *canvas, uint32_t argb);
+/// Clips every later draw on a WIC canvas to the rectangle, in canvas pixels (antialiased edges), inside any clip
+/// already pushed, until the matching `cd2d_pop_clip`. E_NOTIMPL on another canvas; E_ILLEGAL_METHOD_CALL before
+/// `cd2d_clear` has begun a frame.
+int32_t cd2d_push_clip(cd2d_canvas *canvas, float x, float y, float width, float height);
+/// Ends the innermost `cd2d_push_clip`; E_ILLEGAL_METHOD_CALL with none pushed.
+int32_t cd2d_pop_clip(cd2d_canvas *canvas);
+/// Draws `pixels` — BGRA premultiplied, `width` x `height`, rows of `width * 4` bytes, top-down — stretched over the
+/// rectangle (canvas pixels) at `opacity` (0...1), on a WIC canvas mid-frame. The pixels are copied; nothing is kept.
+int32_t cd2d_draw_bitmap(
+    cd2d_canvas *canvas, const uint8_t *pixels, uint32_t width, uint32_t height, float x, float y, float rect_width,
+    float rect_height, float opacity);
 
 // MARK: PDF pages, drawn by the OS's own renderer (Windows.Data.Pdf and its Direct2D interop)
 

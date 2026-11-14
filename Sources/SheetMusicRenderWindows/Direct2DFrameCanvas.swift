@@ -1,5 +1,6 @@
 import CDirect2D
 import SheetMusicBridgeCore
+import SheetMusicPages
 
 /// An offscreen canvas a host draws frame after frame on — a score video's frames — through Direct2D and DirectWrite in
 /// software (WIC), the walk `ScoreSurface` draws the screen with. Made once, with its fonts loaded once; each frame
@@ -71,6 +72,74 @@ public final class Direct2DFrameCanvas {
             var walker = DrawCommandWalker(canvas: canvas, pxPerMM: pxPerMM, offset: offsetPx, cull: bounds)
             ScoreSurface.paint(overlay, with: &walker)
         }
+    }
+
+    /// Paints page `page` of `pages` at `pxPerMM`, the page's top-left corner at `offsetPx` on the canvas. With
+    /// `systems`, only the runs of those systems (indices into `pages.document.systems`) — neither the title block
+    /// nor a box between systems; without, the whole page. Each run is walked as `ScoreSurface` walks a tile's, from
+    /// the draw program's default state (`ScorePages.systemCommandRanges(onPage:)`), so a run alone paints what the
+    /// page paints there. A `page` outside the pages paints nothing.
+    public func paint(
+        _ pages: ScorePages, page: Int, systems: Set<Int>? = nil, pxPerMM: Double, offsetPx: (x: Double, y: Double),
+    ) {
+        guard page >= 0, page < pages.pages.count else { return }
+        paint(
+            pageCommands: pages.pages[page].commands, spans: page < pages.spans.count ? pages.spans[page] : [],
+            systems: systems, pxPerMM: pxPerMM, offsetPx: offsetPx,
+        )
+    }
+
+    /// One page's `commands`, cut into `spans`: the runs of `systems`, or every command without them.
+    package func paint(
+        pageCommands commands: [DrawCommand], spans: [SystemSpan], systems: Set<Int>?, pxPerMM: Double,
+        offsetPx: (x: Double, y: Double),
+    ) {
+        guard let systems else {
+            paint(commands[...], pxPerMM: pxPerMM, offsetPx: offsetPx)
+            return
+        }
+        for span in spans {
+            guard let index = span.systemIndex, systems.contains(index),
+                  span.commandRange.upperBound <= commands.count
+            else { continue }
+            paint(commands[span.commandRange], pxPerMM: pxPerMM, offsetPx: offsetPx)
+        }
+    }
+
+    /// Clips every later paint to the rectangle, in canvas pixels, inside any clip already pushed, until the matching
+    /// `popClip()`. Every clip a frame pushes is popped before its `copyPixels(into:)`, which throws otherwise.
+    public func pushClip(x: Double, y: Double, width: Double, height: Double) throws {
+        try Direct2DPageRenderer.check(
+            cd2d_push_clip(canvas, Float(x), Float(y), Float(width), Float(height)), "pushing a clip",
+        )
+    }
+
+    /// Ends the innermost `pushClip(x:y:width:height:)`.
+    public func popClip() throws {
+        try Direct2DPageRenderer.check(cd2d_pop_clip(canvas), "popping a clip")
+    }
+
+    /// Draws `pixels` — BGRA premultiplied, `widthPx` x `heightPx`, top-down, `widthPx * 4` bytes a row — stretched
+    /// over the rectangle (canvas pixels) at `opacity` (0...1): a picture rasterized once and composited every frame,
+    /// such as a wordmark at one opacity over the whole mark.
+    public func draw(
+        pixels: UnsafeRawBufferPointer, widthPx: Int, heightPx: Int,
+        in rect: (x: Double, y: Double, width: Double, height: Double), opacity: Double,
+    ) throws {
+        let needed = widthPx * heightPx * 4
+        guard widthPx > 0, heightPx > 0, pixels.count >= needed, let base = pixels.baseAddress else {
+            let invalidArgument = Int32(bitPattern: 0x8007_0057) // E_INVALIDARG
+            throw Direct2DPageRenderer.Failure(
+                step: "drawing a \(widthPx) x \(heightPx) picture from \(pixels.count) bytes", hresult: invalidArgument,
+            )
+        }
+        try Direct2DPageRenderer.check(
+            cd2d_draw_bitmap(
+                canvas, base.assumingMemoryBound(to: UInt8.self), UInt32(widthPx), UInt32(heightPx), Float(rect.x),
+                Float(rect.y), Float(rect.width), Float(rect.height), Float(opacity),
+            ),
+            "drawing a picture",
+        )
     }
 
     /// The frame's pixels — BGRA premultiplied, top-down, `widthPx * 4` bytes a row — into `pixels`, which holds at
