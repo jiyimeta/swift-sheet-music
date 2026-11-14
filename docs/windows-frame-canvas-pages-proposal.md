@@ -1,8 +1,8 @@
 # 4.38.0: the frame canvas paints a score's pages, clips, and composites a picture at an opacity (Windows)
 
 Date: 2026-11-14
-Status: approved by the owner (2026-11-14, the three items below); implemented on branch
-`windows-frame-canvas-pages`, Windows tests pending.
+Status: approved by the owner (2026-11-14, the three items below); released in 4.38.0. Tested on Windows (folino-qa):
+`Direct2DFrameCanvasTests` 12 tests, `SheetMusicRenderWindowsTests` 66 tests in 14 suites.
 Consumer: folino's Windows score video export, slice 2 (the frame drawer).
 folino spec: `2026-11-13-windows-score-video-export-design.md` §6, §9; follows `windows-frame-canvas-proposal.md`
 (4.37.0).
