@@ -623,6 +623,7 @@ extern "C" void cd2d_fill_text(
 
 extern "C" int32_t cd2d_write_png(cd2d_canvas *canvas, const uint16_t *path) {
     if (!canvas->bitmap) return E_NOTIMPL;  // only a WIC canvas has pixels to write
+    if (canvas->clipDepth > 0) return E_ILLEGAL_METHOD_CALL;  // as `cd2d_copy_pixels`: a frame ends with no clip
     HRESULT hr = S_OK;
     if (canvas->drawing) {
         hr = canvas->target->EndDraw();
@@ -645,12 +646,26 @@ extern "C" int32_t cd2d_write_png(cd2d_canvas *canvas, const uint16_t *path) {
     return hr;
 }
 
+namespace {
+
+/// Pops every clip a frame left pushed, so no clip outlives its frame and `EndDraw` never meets an unbalanced stack.
+void popAllClips(cd2d_canvas *canvas) {
+    while (canvas->clipDepth > 0) {
+        canvas->target->PopAxisAlignedClip();
+        canvas->clipDepth -= 1;
+    }
+}
+
+}  // namespace
+
 extern "C" int32_t cd2d_clear(cd2d_canvas *canvas, uint32_t argb) {
     if (!canvas->bitmap) return E_NOTIMPL;  // only a WIC canvas is drawn again after its pixels are read
     if (!canvas->drawing) {
         canvas->target->BeginDraw();
         canvas->drawing = true;
     }
+    // A frame whose pixels were refused for a clip still pushed starts the next one with none.
+    popAllClips(canvas);
     canvas->target->SetTransform(D2D1::Matrix3x2F::Identity());
     canvas->target->Clear(D2D1::ColorF(
         ((argb >> 16) & 0xFF) / 255.0f, ((argb >> 8) & 0xFF) / 255.0f, (argb & 0xFF) / 255.0f,
@@ -713,6 +728,7 @@ extern "C" int32_t cd2d_copy_pixels(cd2d_canvas *canvas, uint8_t *pixels, uint32
 extern "C" void cd2d_destroy(cd2d_canvas *canvas) {
     if (!canvas) return;
     if (canvas->drawing && canvas->bitmap) {
+        popAllClips(canvas);
         canvas->target->EndDraw();
     }
     cd2d_resources *owned = canvas->ownsResources ? canvas->resources : nullptr;

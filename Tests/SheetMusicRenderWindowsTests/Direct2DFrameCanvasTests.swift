@@ -164,6 +164,19 @@ struct Direct2DFrameCanvasTests {
     }
 
     @Test
+    func `a clip left pushed does not reach the next frame`() throws {
+        let canvas = try Direct2DFrameCanvas(widthPx: Self.sizePx, heightPx: Self.sizePx, fontFiles: [])
+        try canvas.clear(argb: 0xFFFF_FFFF)
+        try canvas.pushClip(x: 0, y: 0, width: 10, height: 10)
+        #expect(throws: Direct2DPageRenderer.Failure.self) { _ = try canvas.pixels() }
+
+        try canvas.clear(argb: 0xFFFF_FFFF)
+        canvas.paint(Self.square, pxPerMM: Self.pxPerMM, offsetPx: (x: 70, y: 60))
+        let pixels = try canvas.pixels()
+        #expect(Self.isDark(Self.pixel(pixels, x: 80, y: 70)), "the last frame's clip still holds")
+    }
+
+    @Test
     func `a picture at half opacity over white reads back mid-gray`() throws {
         let canvas = try Direct2DFrameCanvas(widthPx: Self.sizePx, heightPx: Self.sizePx, fontFiles: [])
         try canvas.clear(argb: 0xFFFF_FFFF)
