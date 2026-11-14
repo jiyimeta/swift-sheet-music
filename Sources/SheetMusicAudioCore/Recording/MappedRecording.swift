@@ -1,4 +1,7 @@
 import SheetMusicFoundation
+#if os(Windows)
+    import WinSDK
+#endif
 
 /// A decoded recording's PCM cache file (`RecordingPCMCacheFormat`) mapped read-only into memory. The kernel drops
 /// clean pages under pressure, so a long recording costs address space rather than resident memory. Immutable after
@@ -9,8 +12,8 @@ import SheetMusicFoundation
 /// a seek, a loop wrap or a cut to another segment, or pages dropped under pressure since) the host asks for the pages
 /// ahead of time from another thread (`prefetch(seconds:)`).
 ///
-/// Where the platform has no `mmap` (WebAssembly, Windows) the file is read into memory whole instead, so the type and
-/// its validation are the same everywhere.
+/// Windows maps the file with `CreateFileMapping` / `MapViewOfFile`. Where the platform has no file mapping
+/// (WebAssembly) the file is read into memory whole instead, so the type and its validation are the same everywhere.
 public final class MappedRecording: @unchecked Sendable {
     /// Why a file was not accepted as a PCM cache file.
     public enum Failure: Error, Equatable {
@@ -128,13 +131,79 @@ public final class MappedRecording: @unchecked Sendable {
         }
     }
 
+#elseif os(Windows)
+    extension MappedRecording {
+        /// The file mapped read-only with `CreateFileMappingW` / `MapViewOfFile`, unmapped when the recording is
+        /// released: a long recording costs address space, not resident memory, as with `mmap`. The handles are closed
+        /// once the view exists; the view keeps the mapping alive.
+        final class Storage {
+            let base: UnsafeMutableRawPointer
+            let length: Int
+
+            private init(base: UnsafeMutableRawPointer, length: Int) {
+                self.base = base
+                self.length = length
+            }
+
+            deinit { UnmapViewOfFile(base) }
+
+            static func load(path: String) throws -> (storage: Storage, frameCount: Int, sampleRate: Double) {
+                let file = path.withCString(encodedAs: UTF16.self) {
+                    CreateFileW(
+                        $0, GENERIC_READ, DWORD(FILE_SHARE_READ), nil, DWORD(OPEN_EXISTING),
+                        DWORD(FILE_ATTRIBUTE_NORMAL) | DWORD(FILE_FLAG_SEQUENTIAL_SCAN), nil,
+                    )
+                }
+                guard let file, file != INVALID_HANDLE_VALUE else { throw Failure.unreadable(code: lastError) }
+                defer { CloseHandle(file) }
+
+                var header = [UInt8](repeating: 0, count: headerSize)
+                var read: DWORD = 0
+                guard ReadFile(file, &header, DWORD(headerSize), &read, nil) else {
+                    throw Failure.unreadable(code: lastError)
+                }
+                guard read == headerSize else { throw Failure.invalidCacheFile }
+                guard let parsed = RecordingPCMCacheFormat.parseHeader(header) else { throw Failure.invalidCacheFile }
+                var size = LARGE_INTEGER()
+                guard GetFileSizeEx(file, &size) else { throw Failure.unreadable(code: lastError) }
+                guard Int64(size.QuadPart) == RecordingPCMCacheFormat.fileSize(frameCount: parsed.frameCount) else {
+                    throw Failure.invalidCacheFile
+                }
+
+                let length = headerSize + parsed.frameCount * 4
+                guard let mapping = CreateFileMappingW(file, nil, DWORD(PAGE_READONLY), 0, 0, nil) else {
+                    throw Failure.unreadable(code: lastError)
+                }
+                defer { CloseHandle(mapping) }
+                guard let address = MapViewOfFile(mapping, DWORD(FILE_MAP_READ), 0, 0, SIZE_T(length)) else {
+                    throw Failure.unreadable(code: lastError)
+                }
+                return (Storage(base: address, length: length), parsed.frameCount, Double(parsed.sampleRate))
+            }
+
+            /// `PrefetchVirtualMemory`, Windows' `MADV_WILLNEED`: asks for the pages and returns without waiting.
+            func prefetch(seconds: Range<TimeInterval>, sampleRate: Double, frameCount: Int) {
+                var info = SYSTEM_INFO()
+                GetSystemInfo(&info)
+                guard let bytes = MappedRecording.prefetchBytes(
+                    seconds: seconds, sampleRate: sampleRate, frameCount: frameCount, pageSize: Int(info.dwPageSize),
+                ) else { return }
+                var range = WIN32_MEMORY_RANGE_ENTRY(
+                    VirtualAddress: base + bytes.lowerBound, NumberOfBytes: SIZE_T(bytes.count),
+                )
+                _ = PrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0)
+            }
+
+            /// The calling thread's last Win32 error, as the `errno`-shaped code `Failure.unreadable` carries.
+            private static var lastError: Int32 {
+                Int32(bitPattern: GetLastError())
+            }
+        }
+    }
+
 #else
     extension MappedRecording {
-        /// The file read into memory whole, on a platform without `mmap`.
-        ///
-        /// Right for WebAssembly, which has no mapping to fall back on. Windows does: before it plays recordings, give
-        /// it a `CreateFileMapping` / `MapViewOfFile` storage of its own, since reading the whole file here makes a
-        /// long recording cost its full size in resident memory and blocks the call that maps it until the read ends.
+        /// The file read into memory whole, on a platform without a file mapping: WebAssembly.
         final class Storage {
             let base: UnsafeMutableRawPointer
             let length: Int

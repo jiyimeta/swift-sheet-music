@@ -83,8 +83,14 @@ struct MediaFoundationAudioTests {
         #expect(decoded.frames == 24000 && decoded.sampleRate == 48000)
         let existing = RecordingPCMCacheWriter.existingFile(directory: directory, cacheKey: "track", sampleRate: 48000)
         #expect(existing == path)
+        // Mapped with CreateFileMapping: the frames read back as written, and asking for pages ahead is harmless.
         let recording = try MappedRecording(path: path)
         #expect(abs(recording.durationSeconds - 0.5) < 1e-9)
+        recording.prefetch(seconds: 0 ..< 0.25)
+        let frames = recording.frames
+        let expected = Self.ramp(frames: 24000).map { Int16(($0 * 32767).rounded()) }
+        #expect(abs(Int(frames.base[2 * 1234]) - Int(expected[2 * 1234])) <= 1)
+        #expect(abs(Int(frames.base[2 * 23999 + 1]) - Int(expected[2 * 23999 + 1])) <= 1)
     }
 
     /// Where the click written at frame `clickFrame` of an AAC M4A lands in its decode: the frames of encoder priming
