@@ -26,6 +26,10 @@ extension WindowsPlaybackEngine {
             guard channel.isSoloable else { return }
             channel.isSoloed = soloed
         }
+        // One solo bus: an instrument's solo silences the unsoloed recordings too.
+        if !recordingDeck.tracks.isEmpty {
+            applyRecordingMix()
+        }
     }
 
     /// Swaps an instrument strip's program: on a drum strip, the kit in bank 128. No-op for the metronome.

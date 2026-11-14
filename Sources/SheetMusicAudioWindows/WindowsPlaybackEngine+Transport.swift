@@ -93,6 +93,14 @@ extension WindowsPlaybackEngine {
             // The score waits at its start; the first pass runs `preRollTicks - baseTick` ahead of it, from its top.
             shared.rewind(to: baseTick)
             player.seek(to: 0)
+            // Under a warp the count runs at the speed of the measure it counts into (`HostedSynth.countIn`), which
+            // reads where the score's sequence is parked: carry the rewind out first.
+            if alignment.warp != nil {
+                session.score.slot.carryOutPendingSeek(onlyIfPlaying: false)
+                if let speed = Self.countInSpeed(session: session, preRollTicks: plan.preRollTicks) {
+                    player.setTempo(Float(speed))
+                }
+            }
             shared.metronomeOffsetTicks = plan.preRollTicks - baseTick
             shared.countIn = PlaybackTransportStepper.CountIn(preRollTicks: plan.preRollTicks, scoreStartTick: baseTick)
             // Mutes again a strip a preview lifted (`applyPreviewChannelState`), before the score starts after the
@@ -184,11 +192,18 @@ extension WindowsPlaybackEngine {
     }
 
     /// Moves playback by `seconds` (negative: back), clamped to the score, keeping play / pause state: the frame at the
-    /// target time, through `seek(to:)` — the Apple engine's injected-backend `skip(by:)`.
+    /// target time, through `seek(to:)` — the Apple engine's injected-backend `skip(by:)`. Under an alignment the
+    /// seconds are warped ones, as `currentTimeSeconds` reports them.
     public func skip(by seconds: TimeInterval) {
         guard let loaded else { return }
         let timeline = loaded.derivation.timeline
-        let target = max(0, min(timeline.totalSeconds, currentTimeSeconds + seconds))
+        let target = max(0, min(totalTimeSeconds, currentTimeSeconds + seconds))
+        if let tick = unrolledTick(atOutputSeconds: target) {
+            let notated = loaded.derivation.unroll.notatedTick(fromUnrolled: tick)
+            guard let frame = timeline.frame(atTick: notated) else { return }
+            seek(to: frame.cursor)
+            return
+        }
         guard let frame = timeline.frame(atTime: target) else { return }
         seek(to: frame.cursor)
     }
@@ -260,6 +275,10 @@ extension WindowsPlaybackEngine {
         core.shared.withLock { shared in
             shared.transposeSemitones = clamped
             shared.applyTuning()
+        }
+        // The recordings follow the reader's transposition, on top of their own.
+        if !recordingDeck.tracks.isEmpty {
+            applyRecordingMix()
         }
     }
 

@@ -196,6 +196,12 @@ extension Shared {
 
     // MARK: Channel state
 
+    /// Whether the solo bus is engaged: an instrument strip or a recording soloed. One bus across both kinds, as on
+    /// the Apple engine.
+    var isSoloing: Bool {
+        mixerChannels.isSoloing || recordingSoloed
+    }
+
     /// Bank, program, CC 2, CC 7 and tuning on every strip's channel — the sole authority on them after a load, a seek
     /// or a wrap, as the Apple engine's `reapplyMixerPrograms` + `applyMixerState` are: the SMF's tick-0 program and
     /// CC 7 on these channels are stripped (`MidiSynthPostProcess`). `HostedSynth` keeps what this sends and sends it
@@ -203,7 +209,7 @@ extension Shared {
     /// prefetch (`HostedSynth.programSelect`) — so it may run on the render thread.
     func reassertChannelState() {
         guard let synth = session?.score else { return }
-        let soloing = mixerChannels.isSoloing
+        let soloing = isSoloing
         for strip in strips {
             synth.setDrumChannel(strip.channel, isDrum: strip.isDrum)
             let mixer = mixerChannels.first(where: { $0.id == strip.kind })
@@ -229,7 +235,7 @@ extension Shared {
     /// A preview lifts the strips past this while the transport is stopped (`applyPreviewChannelState`), and the synth
     /// keeps the lifted CC 7 across its resets, so every start of the transport sends this first.
     mutating func applyMixerState() {
-        let soloing = mixerChannels.isSoloing
+        let soloing = isSoloing
         if let synth = session?.score {
             for strip in strips {
                 let volume = Self.channelVolume(mixerChannels.first(where: { $0.id == strip.kind }), soloing: soloing)
@@ -262,7 +268,7 @@ extension Shared {
     /// Apple engine's `applyPreviewChannelState`.
     func applyPreviewChannelState() {
         guard let synth = session?.score else { return }
-        let soloing = mixerChannels.isSoloing
+        let soloing = isSoloing
         let isPlaying = state == .playing
         for strip in strips {
             let gain = mixerChannels.first(where: { $0.id == strip.kind })?

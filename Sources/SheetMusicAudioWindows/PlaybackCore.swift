@@ -187,6 +187,8 @@ struct Shared: Sendable {
     var transposeSemitones = 0
     var metronomeMuted = false
     var metronomeVolume: Float = 1
+    /// A recording strip is soloed: it engages the solo bus the instrument strips share (`isSoloing`).
+    var recordingSoloed = false
 
     // MARK: Master stage and host hooks
 

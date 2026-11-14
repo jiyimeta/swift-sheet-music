@@ -27,16 +27,17 @@ extension Shared {
         return outcome
     }
 
-    /// One `chunkFrames` block: both synths, the metronome summed in, then everything decided between blocks.
+    /// One `chunkFrames` block: both synths through `HostedSynth.renderMix` (the recordings mixed onto the score, the
+    /// score's speed following the alignment and the metronome's following the score's), the metronome summed in,
+    /// then everything decided between blocks.
     private mutating func renderChunk(
         session: Session, into out: UnsafeMutablePointer<Float>, scratch: UnsafeMutablePointer<Float>,
         outcome: inout RenderOutcome,
     ) {
         let chunk = PlaybackCore.chunkFrames
-        session.score.write(frames: Int32(chunk), into: out)
-        // Rendered even while silent, so the click transport keeps in step with the score's (the Apple backend keeps
-        // its muted metronome transport running for the same reason: an unmute lands on the beat).
-        session.metronome.write(frames: Int32(chunk), into: scratch)
+        // The metronome is rendered even while silent, so the click transport keeps in step with the score's (the
+        // Apple backend keeps its muted metronome transport running for the same reason: an unmute lands on the beat).
+        session.score.writeMix(metronome: session.metronome, frames: chunk, into: out, metronomeInto: scratch)
         let clickLevel = metronomeLevel
         if clickLevel > 0 {
             for index in 0 ..< chunk * 2 {

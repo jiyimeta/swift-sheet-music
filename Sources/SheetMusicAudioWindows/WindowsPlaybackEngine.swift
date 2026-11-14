@@ -95,6 +95,11 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
     let output: Output
     private(set) var deviceStream: AudioDeviceStream?
     private(set) var loaded: LoadedScore?
+    /// The host's recording strips and their mapped files (`setRecordingTracks`). The host's, not the score's: they
+    /// survive a prepare and a teardown, and every new score synth is handed them.
+    var recordingDeck = RecordingDeck()
+    /// The alignment the transport and the recordings follow (`setAlignment`), kept for the same reason.
+    var alignment = RecordingAlignment()
 
     /// Where generated metronome-click SoundFonts go (`MetronomeClickResolver`): the user's caches directory, as on
     /// the Apple engine.
@@ -155,24 +160,35 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
 
     /// Current playback position in seconds, snapped to the frame sounding (the Apple engine's AUMIDISynth
     /// `currentTimeSeconds`): during a count-in the start position's time, and in a loop the folded, audible one.
+    /// Under an alignment (`setAlignment`), the warped second of that frame's onset.
     public var currentTimeSeconds: TimeInterval {
         guard let loaded else { return 0 }
         let tick = core.shared.withLock { $0.foldedReportedScoreTick }
-        return loaded.derivation.timeline.frame(atTick: loaded.derivation.unroll.notatedTick(fromUnrolled: tick))?
-            .timeSeconds ?? 0
+        let notated = loaded.derivation.unroll.notatedTick(fromUnrolled: tick)
+        guard let frame = loaded.derivation.timeline.frame(atTick: notated) else { return 0 }
+        if let warped = outputSeconds(atUnrolledTick: tick - (notated - frame.tick)) {
+            return warped
+        }
+        return frame.timeSeconds
     }
 
-    /// Total playable duration in seconds for the loaded score (notated). Zero before `prepare(score:)`.
+    /// Total playable duration in seconds for the loaded score (notated; warped under an alignment). Zero before
+    /// `prepare(score:)`.
     public var totalTimeSeconds: TimeInterval {
-        loaded?.derivation.timeline.totalSeconds ?? 0
+        guard let loaded else { return 0 }
+        if let warped = outputSeconds(atUnrolledTick: core.shared.withLock { $0.totalTicks }) {
+            return warped
+        }
+        return loaded.derivation.timeline.totalSeconds
     }
 
     /// Like `currentTimeSeconds`, but continuous between frames — the Apple engine's `currentTimeSecondsContinuous`,
-    /// for a pitch bar or anything else that moves between chords.
+    /// for a pitch bar or anything else that moves between chords. Warped under an alignment;
+    /// `notatedTimeSecondsContinuous` stays notated.
     public var currentTimeSecondsContinuous: TimeInterval {
-        guard let derivation = loaded?.derivation else { return 0 }
+        guard hasAlignment else { return notatedTimeSecondsContinuous }
         let tick = core.shared.withLock { $0.foldedReportedScoreTick }
-        return derivation.timeline.seconds(atTick: derivation.unroll.notatedTick(fromUnrolled: Double(tick)))
+        return outputSeconds(atUnrolledTick: tick) ?? notatedTimeSecondsContinuous
     }
 
     /// The loaded score's derivation, for the probe's read-backs.
@@ -265,6 +281,9 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
             try prepareFully(prepared)
             return .fullyPrepared
         }
+        if let synth = core.shared.withLock({ $0.session?.score }) {
+            installRecordings(on: synth, isNew: false, score: prepared.score)
+        }
         self.loaded = LoadedScore(
             score: prepared.score, derivation: prepared.derivation, rendered: prepared.renderedMidi,
             sequences: sequences,
@@ -313,6 +332,8 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         } catch {
             return
         }
+        // Before it renders: the stretcher goes in ahead of the first track list.
+        installRecordings(on: scoreSynth, isNew: true, score: loaded.score)
         let retired = core.shared.withLock { shared -> Session? in
             let old = shared.session
             shared.adopt(Session(
@@ -340,6 +361,10 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
         let sampleRate = startOutputIfNeeded()
         stop()
         let (scoreSynth, metronomeSynth, built) = try synthsToPrepare(sampleRate: sampleRate)
+        // Before a new synth renders: the stretcher goes in ahead of the first track list.
+        installRecordings(
+            on: scoreSynth, isNew: built.contains { $0.isSame(as: scoreSynth) }, score: score,
+        )
 
         let retired: Session?
         do {
@@ -385,6 +410,10 @@ public final class WindowsPlaybackEngine: @unchecked Sendable {
             }
         }
         loaded = LoadedScore(score: score, derivation: derivation, rendered: rendered, sequences: sequences)
+        // The mixer went back to the score's defaults, and with it the solo bus the recordings' gains resolve against.
+        if !recordingDeck.tracks.isEmpty {
+            applyRecordingMix()
+        }
     }
 
     /// The score and metronome synths a prepare installs, and which of them are new. A loaded synth whose SoundFont is

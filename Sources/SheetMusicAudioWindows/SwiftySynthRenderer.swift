@@ -82,6 +82,29 @@ struct SynthHandle: @unchecked Sendable {
         }
     }
 
+    /// Renders `frames` (at most `SequenceSlot.capacity`) frames of this, the score's synth, into `out` with the
+    /// recordings mixed in, and of `metronome` into `metronomeOut`, both interleaved stereo and overwritten — through
+    /// `HostedSynth.renderMix`, so the score's speed follows the alignment from each block start and the metronome's
+    /// follows it. Each synth first carries out a seek asked of its playing sequence. Allocates nothing.
+    @inline(__always)
+    func writeMix(
+        metronome: SynthHandle, frames: Int, into out: UnsafeMutablePointer<Float>,
+        metronomeInto metronomeOut: UnsafeMutablePointer<Float>,
+    ) {
+        slot.carryOutPendingSeek(onlyIfPlaying: true)
+        metronome.slot.carryOutPendingSeek(onlyIfPlaying: true)
+        host.renderMix(
+            left: slot.left, right: slot.right, metronome: metronome.host, metronomeLeft: metronome.slot.left,
+            metronomeRight: metronome.slot.right, metronomeAudible: true, frames: frames,
+        )
+        for index in 0 ..< frames {
+            out[index * 2] = slot.left[index]
+            out[index * 2 + 1] = slot.right[index]
+            metronomeOut[index * 2] = metronome.slot.left[index]
+            metronomeOut[index * 2 + 1] = metronome.slot.right[index]
+        }
+    }
+
     func controlChange(channel: Int32, controller: Int32, value: Int32) {
         host.controlChange(channel: Int(channel), controller: Int(controller), value: Int(value))
     }
