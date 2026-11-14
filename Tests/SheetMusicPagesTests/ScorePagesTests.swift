@@ -162,6 +162,39 @@ struct ScorePagesTests {
         }
     }
 
+    @Test("tinted draws a selected credit in its color on the title block's page, and an unengraved one tints nothing")
+    func tintedCredit() throws {
+        try FontMetrics.$scopedProvider.withValue(Self.provider()) {
+            let base = try ScoreBridge.loadScore(bytes: Data(Self.musicXML().utf8))
+            var score = base
+            score.titleFrame = ScoreFrame(heightSp: 12, texts: [
+                FrameText(style: .title, text: "My Title"), FrameText(style: .composer, text: "A. Composer"),
+            ])
+            let pages = ScorePages.compute(
+                score: score, pageWidthMM: 210, pageHeightMM: 297, options: ScorePageOptions(mode: .page),
+            )
+            #expect(pages.document.titleFrame != nil, "control: the title block is laid out")
+            let color: UInt32 = 0xFF33_66FF
+            let marker = DrawCommand.setColor(argb: color)
+
+            let none = pages.tinted(argb: color, ids: [], credit: nil)
+            #expect(none.pages == pages.pages)
+            #expect(none.spans == pages.spans)
+
+            let composer = pages.tinted(argb: color, ids: [], credit: .composer)
+            let colorBefore = pages.pages[0].commands.contains(marker)
+            let colorAfter = composer.pages[0].commands.contains(marker)
+            #expect(composer.pageCount == pages.pageCount)
+            #expect(!colorBefore, "the untinted page already uses the selection color")
+            #expect(colorAfter, "the selected composer is not drawn in the selection color")
+            #expect(Array(composer.pages.dropFirst()) == Array(pages.pages.dropFirst()))
+
+            // The block engraves no lyricist: nothing to tint, so the pages come back as they were.
+            let lyricist = pages.tinted(argb: color, ids: [], credit: .lyricist)
+            #expect(lyricist.pages == pages.pages)
+        }
+    }
+
     /// Four parts of 96 measures of quarters: many systems of four staves, so several A4 pages.
     private static func musicXML() -> String {
         var xml = """

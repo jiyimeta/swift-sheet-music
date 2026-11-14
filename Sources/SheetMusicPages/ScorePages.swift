@@ -109,8 +109,12 @@ public struct ScorePages: Sendable {
     /// `ids` are addressed in the score `compute` was given — the addresses edits and a selection hold — and are
     /// moved to the document's addresses as `hiddenStaves` requires; an item on a hidden staff is not drawn, so it
     /// tints nothing. A tuplet tints its bracket and every note and rest it spans (`SelectionExpansion`). The tint
-    /// replaces any earlier one, and no id at all gives the untinted pages back.
-    public func tinted(argb: UInt32, ids: Set<ScoreItemID>) -> ScorePages {
+    /// replaces any earlier one, and no id and no credit at all gives the untinted pages back.
+    ///
+    /// `credit` is a selected title-block credit — not a `ScoreItemID`, so `ids` cannot name it — drawn in `argb` on
+    /// the page that engraves the title block, as Apple's `ScoreView(selectedCredit:)` and Android's draw program
+    /// draw it. A credit the block does not engrave on one line tints nothing (`LayoutTitleFrame.creditEntryIndex`).
+    public func tinted(argb: UInt32, ids: Set<ScoreItemID>, credit: ScoreInfoWrite.Field? = nil) -> ScorePages {
         var expanded: Set<ScoreItemID> = []
         for id in ids {
             guard case let .item(filtered) = sourceScore.translateCursorForHiddenStaves(
@@ -121,7 +125,8 @@ public struct ScorePages: Sendable {
         let tint: (argb: UInt32, ids: Set<ScoreItemID>)? = expanded.isEmpty ? nil : (argb: argb, ids: expanded)
         let built = LayoutBridge.encodePagesWithSpans(
             document: document, options: options.wire(), pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
-            margins: options.pageMarginsMM.bridge, tint: tint, drawsInvisibleElements: options.drawsInvisibleElements,
+            margins: options.pageMarginsMM.bridge, tint: tint, creditTint: credit.map { (argb: argb, field: $0) },
+            drawsInvisibleElements: options.drawsInvisibleElements,
         )
         return ScorePages(
             document: document, filteredScore: filteredScore, placement: placement, pages: built.pages,

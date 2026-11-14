@@ -15,6 +15,10 @@ and this project adheres to
   for a host to rasterize once and composite itself — folino's score video draws its wordmark from it on a
   `Direct2DFrameCanvas` (`draw(pixels:…opacity:)`). Unchanged otherwise; it was the one-shot path `ScorePDFTests` and
   `PDFPageWorker` already used.
+- **`ScorePages.tinted(argb:ids:credit:)`: a selected title-block credit drawn in the selection color.** A credit is
+  not a `ScoreItemID`, so `ids` could not name it; `credit` draws that credit's engraved line in `argb` on the page that
+  holds the title block, as Apple's `ScoreView(selectedCredit:)` and Android's `nativeEncodeDrawProgram` already do.
+  `nil` (the default) gives the pages `tinted(argb:ids:)` gave, byte for byte.
 
 ## [4.38.0] - 2026-11-14
 
