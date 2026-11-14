@@ -33,7 +33,7 @@ static struct {
     mf_create_sample_fn create_sample;
     mf_tenum_ex_fn tenum_ex;
     mf_create_sink_writer_fn create_sink_writer;
-    /// Only `cmf_mp4_probe` (a test's read-back) needs it, so its absence does not unload the rest.
+    /// The decoder, the probes and the tests' read-backs need it; its absence does not unload the encoders.
     mf_create_source_reader_fn create_source_reader;
 } mf = {INIT_ONCE_STATIC_INIT};
 
@@ -852,4 +852,230 @@ int32_t cmf_mp4_probe(const uint16_t *path, int64_t *duration_100ns, uint32_t *w
     if (started) mf.shutdown();
     if (com) CoUninitialize();
     return (int32_t)hr;
+}
+
+// MARK: - Audio decode and probe
+
+int32_t cmf_audio_decoder_available(void) {
+    return ensure_loaded() && mf.create_source_reader != NULL ? 1 : 0;
+}
+
+/// Whether `subtype` is the FourCC-based audio subtype for `fourcc`: what Media Foundation reports for a sample entry
+/// it has no named format for, such as FairPlay's `drms` or CENC's `enca`.
+static BOOL subtype_is_fourcc(const GUID *subtype, const char *fourcc) {
+    GUID expected = MFAudioFormat_PCM;
+    expected.Data1 = (DWORD)(BYTE)fourcc[0] | ((DWORD)(BYTE)fourcc[1] << 8) | ((DWORD)(BYTE)fourcc[2] << 16) |
+                     ((DWORD)(BYTE)fourcc[3] << 24);
+    return IsEqualGUID(subtype, &expected);
+}
+
+/// Whether an AAC stream's type names AAC-LC: the AudioSpecificConfig after the HEAACWAVEINFO fields in
+/// `MF_MT_USER_DATA` (object type 2), or failing that the profile-level indication (0x28 … 0x2B, the AAC profile).
+static int32_t aac_is_lc(IMFMediaType *type) {
+    // HEAACWAVEINFO's own fields after its WAVEFORMATEX: payload type, profile level, struct type, two reserved.
+    const UINT32 wave_info_fields = 12;
+    UINT32 size = 0;
+    if (SUCCEEDED(IMFMediaType_GetBlobSize(type, &MF_MT_USER_DATA, &size)) && size >= wave_info_fields + 2) {
+        BYTE *blob = (BYTE *)malloc(size);
+        int32_t lc = -1;
+        if (blob != NULL && SUCCEEDED(IMFMediaType_GetBlob(type, &MF_MT_USER_DATA, blob, size, NULL))) {
+            const BYTE *config = blob + wave_info_fields;
+            UINT32 object = config[0] >> 3;
+            if (object == 31) object = 32 + (((UINT32)(config[0] & 7) << 3) | (config[1] >> 5));
+            lc = object == 2 ? 1 : 0;
+        }
+        free(blob);
+        if (lc >= 0) return lc;
+    }
+    UINT32 level = 0;
+    if (SUCCEEDED(IMFMediaType_GetUINT32(type, &MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION, &level))) {
+        return level >= 0x28 && level <= 0x2B ? 1 : 0;
+    }
+    return 0;
+}
+
+int32_t cmf_audio_probe(const uint16_t *path, cmf_audio_probe_result *result) {
+    memset(result, 0, sizeof(*result));
+    result->status = CMF_AUDIO_UNREADABLE;
+    if (!ensure_loaded() || mf.create_source_reader == NULL) return (int32_t)E_NOTIMPL;
+    BOOL com = SUCCEEDED(CoInitializeEx(NULL, COINIT_MULTITHREADED));
+    HRESULT hr = mf.startup(MF_VERSION, MFSTARTUP_LITE);
+    BOOL started = SUCCEEDED(hr);
+    IMFSourceReader *reader = NULL;
+    if (SUCCEEDED(hr)) {
+        HRESULT opened = mf.create_source_reader((LPCWSTR)path, NULL, &reader);
+        // A file that does not open is a status, not a failure of the probe.
+        if (opened == MF_E_DRM_UNSUPPORTED) result->status = CMF_AUDIO_PROTECTED;
+    }
+    if (reader != NULL) {
+        PROPVARIANT value;
+        PropVariantInit(&value);
+        if (SUCCEEDED(IMFSourceReader_GetPresentationAttribute(reader, (DWORD)MF_SOURCE_READER_MEDIASOURCE,
+                                                               &MF_PD_DURATION, &value))) {
+            result->duration_100ns = (int64_t)value.uhVal.QuadPart;
+        }
+        PropVariantClear(&value);
+        IMFMediaType *type = NULL;
+        HRESULT audio = IMFSourceReader_GetNativeMediaType(reader, (DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, &type);
+        if (FAILED(audio)) {
+            // Some other stream (index 0) is there: a container with no audio track. None at all: unreadable.
+            IMFMediaType *other = NULL;
+            if (SUCCEEDED(IMFSourceReader_GetNativeMediaType(reader, 0, 0, &other))) {
+                result->status = CMF_AUDIO_NO_AUDIO_TRACK;
+                IMFMediaType_Release(other);
+            }
+        } else {
+            GUID subtype = GUID_NULL;
+            UINT32 rate = 0;
+            UINT32 channels = 0;
+            UINT32 bytes_per_second = 0;
+            IMFMediaType_GetGUID(type, &MF_MT_SUBTYPE, &subtype);
+            IMFMediaType_GetUINT32(type, &MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate);
+            IMFMediaType_GetUINT32(type, &MF_MT_AUDIO_NUM_CHANNELS, &channels);
+            if (subtype_is_fourcc(&subtype, "drms") || subtype_is_fourcc(&subtype, "enca")) {
+                result->status = CMF_AUDIO_PROTECTED;
+            } else if (rate > 0 && channels > 0) {
+                result->status = CMF_AUDIO_READ;
+                result->sample_rate = rate;
+                result->channels = channels;
+                result->is_aac_lc = IsEqualGUID(&subtype, &MFAudioFormat_AAC) ? aac_is_lc(type) : 0;
+                PropVariantInit(&value);
+                if (SUCCEEDED(IMFSourceReader_GetPresentationAttribute(reader, (DWORD)MF_SOURCE_READER_MEDIASOURCE,
+                                                                       &MF_PD_AUDIO_ENCODING_BITRATE, &value)) &&
+                    value.vt == VT_UI4) {
+                    result->bit_rate = value.ulVal;
+                }
+                PropVariantClear(&value);
+                if (result->bit_rate == 0 &&
+                    SUCCEEDED(IMFMediaType_GetUINT32(type, &MF_MT_AUDIO_AVG_BYTES_PER_SECOND, &bytes_per_second))) {
+                    result->bit_rate = bytes_per_second * 8;
+                }
+            }
+            IMFMediaType_Release(type);
+        }
+        IMFSourceReader_Release(reader);
+    }
+    if (started) mf.shutdown();
+    if (com) CoUninitialize();
+    return started ? 0 : (int32_t)hr;
+}
+
+struct cmf_audio_reader {
+    IMFSourceReader *reader;
+    uint32_t channels;
+    /// The last block, copied out of Media Foundation's buffer so the sample can be released at once.
+    BYTE *block;
+    DWORD block_capacity;
+    BOOL ended;
+    BOOL com_initialized;
+    BOOL mf_started;
+};
+
+int32_t cmf_audio_reader_open(const uint16_t *path, cmf_audio_reader **out, uint32_t *sample_rate,
+                              uint32_t *channels) {
+    *out = NULL;
+    *sample_rate = 0;
+    *channels = 0;
+    if (!ensure_loaded() || mf.create_source_reader == NULL) return (int32_t)E_NOTIMPL;
+    cmf_audio_reader *reader = (cmf_audio_reader *)calloc(1, sizeof(cmf_audio_reader));
+    if (reader == NULL) return (int32_t)E_OUTOFMEMORY;
+    reader->com_initialized = SUCCEEDED(CoInitializeEx(NULL, COINIT_MULTITHREADED));
+    HRESULT hr = mf.startup(MF_VERSION, MFSTARTUP_LITE);
+    reader->mf_started = SUCCEEDED(hr);
+    IMFMediaType *native = NULL;
+    IMFMediaType *pcm = NULL;
+    IMFMediaType *current = NULL;
+    UINT32 rate = 0;
+    UINT32 count = 0;
+    const DWORD audio = (DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM;
+    if (SUCCEEDED(hr)) hr = mf.create_source_reader((LPCWSTR)path, NULL, &reader->reader);
+    if (SUCCEEDED(hr)) hr = IMFSourceReader_SetStreamSelection(reader->reader, (DWORD)MF_SOURCE_READER_ALL_STREAMS, FALSE);
+    if (SUCCEEDED(hr)) hr = IMFSourceReader_SetStreamSelection(reader->reader, audio, TRUE);
+    if (SUCCEEDED(hr)) hr = IMFSourceReader_GetNativeMediaType(reader->reader, audio, 0, &native);
+    if (SUCCEEDED(hr)) hr = IMFMediaType_GetUINT32(native, &MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate);
+    if (SUCCEEDED(hr)) hr = IMFMediaType_GetUINT32(native, &MF_MT_AUDIO_NUM_CHANNELS, &count);
+    if (SUCCEEDED(hr) && (rate == 0 || count == 0)) hr = MF_E_INVALIDMEDIATYPE;
+    // The stream's own rate and channels, so the reader inserts only the decoder, never a resampler.
+    if (SUCCEEDED(hr)) hr = audio_type(&pcm, &MFAudioFormat_PCM, rate, count, rate * count * 2);
+    if (SUCCEEDED(hr)) hr = IMFSourceReader_SetCurrentMediaType(reader->reader, audio, NULL, pcm);
+    // What the decoder actually delivers: an HE-AAC stream can decode at twice the rate its sample entry states.
+    if (SUCCEEDED(hr)) hr = IMFSourceReader_GetCurrentMediaType(reader->reader, audio, &current);
+    if (SUCCEEDED(hr)) hr = IMFMediaType_GetUINT32(current, &MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate);
+    if (SUCCEEDED(hr)) hr = IMFMediaType_GetUINT32(current, &MF_MT_AUDIO_NUM_CHANNELS, &count);
+    if (native) IMFMediaType_Release(native);
+    if (pcm) IMFMediaType_Release(pcm);
+    if (current) IMFMediaType_Release(current);
+    if (FAILED(hr)) {
+        cmf_audio_reader_close(reader);
+        return (int32_t)hr;
+    }
+    reader->channels = count;
+    *sample_rate = rate;
+    *channels = count;
+    *out = reader;
+    return 0;
+}
+
+int32_t cmf_audio_reader_read(cmf_audio_reader *reader, const int16_t **samples, uint32_t *frames,
+                              int64_t *start_100ns, int32_t *end) {
+    *samples = (const int16_t *)reader->block;
+    *frames = 0;
+    *start_100ns = 0;
+    *end = 0;
+    if (reader->ended) {
+        *end = 1;
+        return 0;
+    }
+    IMFSample *sample = NULL;
+    HRESULT hr = S_OK;
+    // A read can bring a stream tick and no sample: read on until a block or the end comes.
+    while (SUCCEEDED(hr) && sample == NULL && !reader->ended) {
+        DWORD stream = 0;
+        DWORD flags = 0;
+        LONGLONG time = 0;
+        hr = IMFSourceReader_ReadSample(reader->reader, (DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, &stream, &flags,
+                                        &time, &sample);
+        if (SUCCEEDED(hr) && (flags & MF_SOURCE_READERF_ERROR)) hr = E_FAIL;
+        // The decoder changing its output mid-stream would change the frame size under the caller.
+        if (SUCCEEDED(hr) && (flags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED)) hr = MF_E_INVALIDMEDIATYPE;
+        if (SUCCEEDED(hr) && (flags & MF_SOURCE_READERF_ENDOFSTREAM)) reader->ended = TRUE;
+        if (SUCCEEDED(hr) && sample != NULL) *start_100ns = time;
+    }
+    IMFMediaBuffer *buffer = NULL;
+    if (SUCCEEDED(hr) && sample != NULL) hr = IMFSample_ConvertToContiguousBuffer(sample, &buffer);
+    if (SUCCEEDED(hr) && buffer != NULL) {
+        BYTE *data = NULL;
+        DWORD length = 0;
+        hr = IMFMediaBuffer_Lock(buffer, &data, NULL, &length);
+        if (SUCCEEDED(hr)) {
+            if (length > reader->block_capacity) {
+                BYTE *grown = (BYTE *)realloc(reader->block, length);
+                if (grown == NULL) {
+                    hr = E_OUTOFMEMORY;
+                } else {
+                    reader->block = grown;
+                    reader->block_capacity = length;
+                }
+            }
+            if (SUCCEEDED(hr)) {
+                memcpy(reader->block, data, length);
+                *samples = (const int16_t *)reader->block;
+                *frames = length / (reader->channels * 2);
+            }
+            IMFMediaBuffer_Unlock(buffer);
+        }
+    }
+    if (buffer) IMFMediaBuffer_Release(buffer);
+    if (sample) IMFSample_Release(sample);
+    if (SUCCEEDED(hr) && *frames == 0 && reader->ended) *end = 1;
+    return (int32_t)hr;
+}
+
+void cmf_audio_reader_close(cmf_audio_reader *reader) {
+    if (reader == NULL) return;
+    if (reader->reader) IMFSourceReader_Release(reader->reader);
+    free(reader->block);
+    if (reader->mf_started) mf.shutdown();
+    if (reader->com_initialized) CoUninitialize();
+    free(reader);
 }

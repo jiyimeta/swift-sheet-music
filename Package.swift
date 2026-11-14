@@ -631,13 +631,13 @@ if !isAppleFree {
 
 // Signalsmith Stretch (MIT) and the FFT it uses, header-only C++ vendored with a C shim
 // (`Sources/CSignalsmithStretch/VENDORED.md`). Only `SheetMusicAudioSignalsmith` imports it; everything else sees
-// `RecordingStretcher`. Apple and Android both read recordings through it: on Apple the FFT is Accelerate's vDSP, on
-// Android Signalsmith Linear's own C++ FFT, which `fft.h` falls back to when no platform FFT is defined. Both settings
-// are platform conditions rather than `unsafeFlags`, which would stop a host from resolving this package by version
-// — so there is no optimization flag either, and a Debug build runs the stretcher unoptimized. Off Windows, where
-// nothing plays recordings yet. Declared in the wasm shape as it always was — the Apple products there name it —
-// though nothing in the wasm graph builds it.
-if !isWindows {
+// `RecordingStretcher`. Apple, Android and Windows all read recordings through it: on Apple the FFT is Accelerate's
+// vDSP, on Android and Windows Signalsmith Linear's own C++ FFT, which `fft.h` falls back to when no platform FFT is
+// defined. Both settings are platform conditions rather than `unsafeFlags`, which would stop a host from resolving this
+// package by version — so there is no optimization flag either, and a Debug build runs the stretcher unoptimized.
+// Declared in the wasm shape as it always was — the Apple products there name it — though nothing in the wasm graph
+// builds it.
+do {
     let applePlatforms: [Platform] = [.macOS, .iOS, .tvOS, .watchOS, .visionOS, .macCatalyst]
     targets += [
         .target(
@@ -766,6 +766,8 @@ if isWindows {
                 "CMediaFoundation",
                 "CWASAPI",
                 "SheetMusicAudioCore",
+                // Recordings away from 100 % or transposed are read through Signalsmith Stretch.
+                "SheetMusicAudioSignalsmith",
                 "SheetMusicAudioSwiftySynthCore",
                 "SheetMusicBridgeCore",
                 "SheetMusicCore",
@@ -779,7 +781,8 @@ if isWindows {
         .testTarget(
             name: "SheetMusicAudioWindowsTests",
             dependencies: [
-                "SheetMusicAudioWindows", "SheetMusicAudioCore", "SheetMusicCore", "SheetMusicLoader",
+                "SheetMusicAudioWindows", "SheetMusicAudioCore", "SheetMusicAudioSignalsmith", "SheetMusicCore",
+                "SheetMusicLoader",
             ],
         ),
     ]
