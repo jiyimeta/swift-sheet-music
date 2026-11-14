@@ -53,3 +53,9 @@ jobs:
       # the pre-commit hook formats it, so CI checks it too.
       - name: SwiftFormat
         run: swiftformat Sources Tests Examples Tools --lint
+
+      # The Windows and print products' public API names product types only (the script's own header says why).
+      # It ran nowhere until 4.39.0, so 4.37.0 shipped two `paint` overloads that named `DrawCommand` and no build
+      # noticed. A text scan of the sources, so it needs no Windows runner.
+      - name: Windows public API names product types only
+        run: python3 Scripts/check-windows-public-api.py

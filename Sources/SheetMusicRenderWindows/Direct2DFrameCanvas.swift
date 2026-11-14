@@ -55,13 +55,16 @@ public final class Direct2DFrameCanvas {
 
     /// Paints `commands` at `pxPerMM`, their origin at `offsetPx` on the canvas, over what is there. Commands that
     /// certainly fall outside the canvas are skipped (paths are always walked).
-    public func paint(_ commands: ArraySlice<DrawCommand>, pxPerMM: Double, offsetPx: (x: Double, y: Double)) {
+    ///
+    /// `package` since 4.39.0 (public in 4.37.0 and 4.38.0): `DrawCommand` is SheetMusicBridgeCore's, which is not a
+    /// product, so no host could name it; a host paints a score through `paint(_ pages: ScorePages, …)`.
+    package func paint(_ commands: ArraySlice<DrawCommand>, pxPerMM: Double, offsetPx: (x: Double, y: Double)) {
         var walker = DrawCommandWalker(canvas: canvas, pxPerMM: pxPerMM, offset: offsetPx, cull: bounds)
         walker.paint(commands)
     }
 
     /// `paint(_:pxPerMM:offsetPx:)` for a whole list.
-    public func paint(_ commands: [DrawCommand], pxPerMM: Double, offsetPx: (x: Double, y: Double)) {
+    package func paint(_ commands: [DrawCommand], pxPerMM: Double, offsetPx: (x: Double, y: Double)) {
         paint(commands[...], pxPerMM: pxPerMM, offsetPx: offsetPx)
     }
 
