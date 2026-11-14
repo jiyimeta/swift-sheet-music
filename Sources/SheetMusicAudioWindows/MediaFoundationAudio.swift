@@ -94,7 +94,7 @@ public enum MediaFoundationAudio {
     ) throws(Failure) -> (path: String, decoded: Decoded) {
         let reader = try Reader(path: sourcePath)
         let writer: RecordingPCMCacheWriter
-        do {
+        do throws(RecordingPCMCacheWriter.Failure) {
             writer = try RecordingPCMCacheWriter(
                 directory: directory, cacheKey: cacheKey, sampleRate: Double(reader.sampleRate),
             )
@@ -107,9 +107,10 @@ public enum MediaFoundationAudio {
         var stereoFrames = 0
         defer { stereo.deallocate() }
         let decoded: Decoded
-        do {
+        // The thrown types spelled out: Windows' Swift 6.3 does not infer them for a `do` inside a closure.
+        do throws(Failure) {
             decoded = try reader.readAll { samples, frames throws(Failure) in
-                do {
+                do throws(RecordingPCMCacheWriter.Failure) {
                     switch channels {
                     case 1: try writer.append(mono: samples, frameCount: frames)
                     case 2: try writer.append(interleavedStereo: samples, frameCount: frames)
@@ -133,7 +134,7 @@ public enum MediaFoundationAudio {
             writer.cancel()
             throw error
         }
-        do {
+        do throws(RecordingPCMCacheWriter.Failure) {
             return try (writer.finish(), decoded)
         } catch {
             throw .cache(error)
@@ -147,7 +148,7 @@ public enum MediaFoundationAudio {
         guard let file = fopen(outputPath, "wb") else { throw .writeFailed(code: _errno().pointee) }
         let channels = reader.channels
         let decoded: Decoded
-        do {
+        do throws(Failure) {
             decoded = try reader.readAll { samples, frames throws(Failure) in
                 let count = frames * channels
                 guard fwrite(samples, 2, count, file) == count else { throw .writeFailed(code: _errno().pointee) }

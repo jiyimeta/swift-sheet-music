@@ -94,8 +94,10 @@ struct MediaFoundationAudioTests {
     }
 
     /// Where the click written at frame `clickFrame` of an AAC M4A lands in its decode: the frames of encoder priming
-    /// Media Foundation's reader leaves in (0 when it honours the file's edit list) — the constant a host trims by, as
-    /// Android's `AudioPriming` does. Recorded here as measured, so a Windows update that changes it fails.
+    /// Media Foundation's reader leaves in (0 when it honours the file's edit list) — the constant a host would trim
+    /// by, as Android's `AudioPriming` does. Measured on folino-win 2026-11-15: 0 frames, the reader trims Media
+    /// Foundation's own encoder priming, and ends 128 frames long (padding). Held to that, so a Windows update that
+    /// changes it fails.
     @Test
     func `an AAC M4A probes as AAC-LC, and the decode keeps the click near where it was written`() throws {
         let m4a = Self.temporaryPath(".m4a")
@@ -131,7 +133,8 @@ struct MediaFoundationAudioTests {
         print("MediaFoundationAudioTests: AAC click at \(clickFrame) decodes at \(onset) (shift \(shift) frames), "
             + "\(decoded.frames) frames decoded of \(frames) written, "
             + "first block at \(decoded.firstBlockStartSeconds) s")
-        #expect(abs(shift) < 4096, "the click moved \(shift) frames")
+        // Within a few frames: AAC smears an impulse, so the first sample past the threshold can move by one or two.
+        #expect(abs(shift) <= 8, "the click moved \(shift) frames")
     }
 
     @Test

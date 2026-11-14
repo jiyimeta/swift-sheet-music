@@ -152,14 +152,14 @@ struct RecordingPlaybackTests {
         let (engine, score) = try Self.engine()
         defer { engine.teardown() }
         let file = try Self.recording(seconds: 4) { frame in
-            Int16(12000 * sin(2 * Double.pi * 440 * Double(frame) / sampleRate))
+            Int16(12000 * sin(2 * Double.pi * 440 * Double(frame) / Self.sampleRate))
         }
         try engine.setRecordingTracks([RecordingTrack(id: "tone", pcmFile: file)])
         engine.setAlignment(warp: nil, segments: Self.wholeRecording(4))
         engine.setRate(0.7)
         engine.play(in: score)
         let samples = Self.render(engine, seconds: 2)
-        let pitch = Self.pitch(samples[Int(sampleRate) ..< Int(1.5 * sampleRate)])
+        let pitch = Self.pitch(samples[Int(Self.sampleRate) ..< Int(1.5 * Self.sampleRate)])
         #expect(abs(pitch - 440) <= 2, "pitch at 70 %: \(pitch) Hz")
     }
 }
