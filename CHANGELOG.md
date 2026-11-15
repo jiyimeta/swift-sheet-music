@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.41.0] - 2026-11-16
+
 ### Added
 
 - **`ScoreItemID.mappingStaves(_:)`**: an identity with every staff it names passed through a mapping and everything
