@@ -172,12 +172,20 @@ public enum MediaFoundationAudio {
         public let channels: Int
         private let reader: OpaquePointer
 
-        public init(path: String) throws(Failure) {
+        /// Opens the stream at its own rate and channel count, or — given `sampleRate` / `channels` — asks Media
+        /// Foundation's reader to deliver those instead; `.mediaFoundation(step: "open", …)` when it will not.
+        public init(path: String, sampleRate wantedRate: Int? = nil, channels wantedChannels: Int? = nil)
+            throws(Failure)
+        {
             guard MediaFoundationAudio.isDecoderAvailable else { throw .unavailable }
             var opened: OpaquePointer?
             var rate: UInt32 = 0
             var count: UInt32 = 0
-            let result = path.withCString(encodedAs: UTF16.self) { cmf_audio_reader_open($0, &opened, &rate, &count) }
+            let askRate = UInt32(clamping: wantedRate ?? 0)
+            let askChannels = UInt32(clamping: wantedChannels ?? 0)
+            let result = path.withCString(encodedAs: UTF16.self) {
+                cmf_audio_reader_open_as($0, askRate, askChannels, &opened, &rate, &count)
+            }
             guard result >= 0, let opened, rate > 0, count > 0 else {
                 cmf_audio_reader_close(opened)
                 throw .mediaFoundation(step: "open", hresult: result)
