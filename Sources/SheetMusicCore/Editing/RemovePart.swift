@@ -11,11 +11,18 @@ import SheetMusicFoundation
 /// - **Brackets.** A cross-part bracket spanning the removed staves shrinks over them, and one anchored ON a
 ///   removed staff re-anchors onto the first staff it still covers rather than disappearing. That is exactly the
 ///   pass `Score.filtered(hidingStaves:)` runs for hidden staves, shared as `Score.reanchoredBrackets`.
-/// - **System elements anchored into the part.** A tempo written on the instrument being removed must survive the
-///   instrument — dropping it would silently take the score's tempo with the part. Such an element re-anchors on
-///   `StaffAddress(partIndex: 0, staffIndexInPart: 0)`; addresses past the removed part move one part up.
+/// - **Score-wide system elements anchored into the part.** A tempo written on the instrument being removed must
+///   survive the instrument — dropping it would silently take the score's tempo with the part. Such an element
+///   re-anchors on `StaffAddress(partIndex: 0, staffIndexInPart: 0)`; addresses past the removed part move one part
+///   up. A STAFF-bound one — a `pizz.`, a staff swing, an instrument change — goes with its part, as MuseScore
+///   deletes a removed staff's annotations: re-anchored, it would have printed over the first part, and an
+///   instrument change would have changed the first part's sound.
+/// - **The top staff's system objects**, when the part removed is the first. Its measure flags
+///   (`MeasureFlagsHoist`) and its voltas and gradual tempo changes (`SystemSpannerHoist`) move onto the staff that
+///   becomes the top one, rather than leaving with the part.
 ///
-/// Neither is reversible by arithmetic, so the inverse carries both pre-images whole.
+/// None of it is reversible by arithmetic, so the inverse carries the pre-images whole: the brackets, the system
+/// lane, and the staff that became the top one.
 ///
 /// Removing a score's LAST part is refused. Not a taste judgment: `AddPart`'s restore form needs a reference staff
 /// to validate against, so its `apply` would throw against the emptied score — and `ScoreEditor.undo` pops the
@@ -47,15 +54,18 @@ public struct RemovePart: EditCommand {
         let removed = score.parts[partIndex]
         let removedID = score.parts.eid(at: partIndex)
         let brackets = score.parts.map { $0.staves.map(\.brackets) }
-        let originalStaves = score.systemMeasures.map { $0.elements.map(\.originalStaff) }
+        let lane = score.systemMeasures
 
-        // The part being removed may be the canonical one. Capture what the staff that will become canonical
-        // carries now, then move the flags onto it AFTER the removal (its address is (0, 0) only then).
+        // The part being removed may be the canonical one. Capture the staff that will become canonical as it is
+        // now, then move the system spanners onto it while both staves are still there, and the flags AFTER the
+        // removal (its address is (0, 0) only then).
         let becomesCanonical = partIndex == 0 && score.parts.count > 1
-        let canonicalFlagsBefore = becomesCanonical
-            ? MeasureFlagsHoist.column(of: StaffAddress(partIndex: 1, staffIndexInPart: 0), in: score)
-            : nil
+        let incoming = StaffAddress(partIndex: 1, staffIndexInPart: 0)
+        let incomingBefore = becomesCanonical ? score[incoming] : nil
         let removedFlags = becomesCanonical ? MeasureFlagsHoist.column(of: Score.canonicalStaff, in: score) : nil
+        if becomesCanonical {
+            SystemSpannerHoist.move(from: Score.canonicalStaff, to: incoming, in: &score, ids: &ids)
+        }
 
         // Computed against the PRE-removal parts — the re-anchor pass reads the original global staff order and
         // reports where each surviving bracket lands in the post-removal one.
@@ -92,20 +102,27 @@ public struct RemovePart: EditCommand {
         }
         return AddPart(
             restoring: removed, eid: removedID, at: partIndex,
-            brackets: brackets, originalStaves: originalStaves, canonicalFlags: canonicalFlagsBefore,
+            brackets: brackets, lane: lane, canonicalStaff: incomingBefore,
         )
     }
 
-    /// Re-homes every system-element anchor the removal invalidated. An address INTO the removed part falls back to
-    /// the score's first staff, which is always a real one: `apply` has refused the last-part case, so at least one
-    /// part survives.
+    /// Re-homes every system-element anchor the removal invalidated. A score-wide element INTO the removed part falls
+    /// back to the score's first staff, which is always a real one: `apply` has refused the last-part case, so at
+    /// least one part survives. A staff-bound one is removed with its part — an element with no staff is on the top
+    /// staff, so it is the removed part's when that part is the first.
     private func reanchorSystemElements(in score: inout Score) {
         for measureIndex in score.systemMeasures.indices {
             score.systemMeasures.updateValue(at: measureIndex) { column in
+                var dropped: [Int] = []
                 for elementIndex in column.elements.indices {
-                    guard let address = column.elements[elementIndex].originalStaff
+                    let element = column.elements[elementIndex]
+                    guard let address = element.originalStaff ?? (element.isScoreWide ? nil : Score.canonicalStaff)
                     else { continue }
                     if address.partIndex == partIndex {
+                        guard element.isScoreWide else {
+                            dropped.append(elementIndex)
+                            continue
+                        }
                         column.elements.updateValue(at: elementIndex) {
                             $0.originalStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
                         }
@@ -117,6 +134,9 @@ public struct RemovePart: EditCommand {
                             )
                         }
                     }
+                }
+                for elementIndex in dropped.reversed() {
+                    column.elements.removeSubrange(elementIndex ..< elementIndex + 1)
                 }
             }
         }

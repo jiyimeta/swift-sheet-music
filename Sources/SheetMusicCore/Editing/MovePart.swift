@@ -13,8 +13,11 @@ import SheetMusicFoundation
 /// The `Part` value carries its own instrument, staves and bars, so those need nothing. Two things do:
 ///
 /// - **`PositionedSystemElement.originalStaff`** — the one field in the model embedding a part index (see
-///   `AddPart`'s audit). Every address is re-stamped through the permutation, so a tempo written on the flute still
-///   names the flute afterwards.
+///   `AddPart`'s audit). Every address is re-stamped through the permutation, so a `pizz.` written on the flute still
+///   names the flute afterwards — except a score-wide mark on the top staff (`isTopSystemObject`: a tempo, a
+///   rehearsal mark, a system text), which stays on whichever staff is on top, as MuseScore's `Score::sortStaves`
+///   leaves a system object on track 0. Before that, a part dragged above the first took none of them, and the
+///   score's tempo and rehearsal marks went on printing over the part that used to be first.
 /// - **Brackets.** They anchor on a staff and count `span` staves downward in the GLOBAL flattened order, so a
 ///   permutation moves the anchor. Each bracket is carried to its anchor staff's new address verbatim — same
 ///   `type`, same `span`, same `column`. A brace travels with the part it braces; a group bracket stays the size
@@ -29,10 +32,14 @@ import SheetMusicFoundation
 /// something MuseScore hides into something it draws. `movedBrackets` says why this cannot go through
 /// `Score.reanchoredBrackets`, which the other two structural paths share.
 ///
+/// The rest of the top staff's system objects stay on top the same way: its measure flags (`MeasureFlagsHoist`) and
+/// its voltas and gradual tempo changes (`SystemSpannerHoist`), both moved onto the staff that becomes the top one.
+///
 /// The inverse still carries the pre-image of both fields whole and writes them back, exactly as `RemovePart`
-/// does. Carrying brackets verbatim under the inverse permutation is already exact, so this is a guarantee rather
-/// than a repair: it keeps undo byte-exact by construction instead of by an argument about the forward pass, and
-/// keeps it that way if that pass ever starts normalizing something.
+/// does — and, when the top staff changes, both top staves whole, which is what undoes the two hoists exactly.
+/// Carrying brackets verbatim under the inverse permutation is already exact, so this is a guarantee rather than a
+/// repair: it keeps undo byte-exact by construction instead of by an argument about the forward pass, and keeps it
+/// that way if that pass ever starts normalizing something.
 public struct MovePart: EditCommand {
     public let fromIndex: Int
     public let toIndex: Int
@@ -44,17 +51,17 @@ public struct MovePart: EditCommand {
     /// `[measureIndex][elementIndex]`. Captured for symmetry with `restoredBrackets`; the re-stamp alone would get
     /// there, and writing the pre-image over it is what makes that a guarantee rather than an argument.
     let restoredOriginalStaves: [[StaffAddress?]]?
-    /// Also inverse-only: the pre-image columns of the old and new canonical staves, captured in the PRE-forward-
-    /// move address space, keyed by that address. `nil` unless the move actually re-anchors the canonical staff
-    /// (`fromIndex == 0 || toIndex == 0`).
-    let restoredCanonicalFlags: [StaffAddress: [Measure.Flags]]?
+    /// Also inverse-only: the old and new canonical staves whole — their measure flags and their system spanners —
+    /// captured in the PRE-forward-move address space, keyed by that address. `nil` unless the move actually
+    /// re-anchors the canonical staff (`fromIndex == 0 || toIndex == 0`).
+    let restoredCanonicalStaves: [StaffAddress: Staff]?
 
     public init(from fromIndex: Int, to toIndex: Int) {
         self.fromIndex = fromIndex
         self.toIndex = toIndex
         restoredBrackets = nil
         restoredOriginalStaves = nil
-        restoredCanonicalFlags = nil
+        restoredCanonicalStaves = nil
     }
 
     init(
@@ -62,13 +69,13 @@ public struct MovePart: EditCommand {
         to toIndex: Int,
         brackets: [[[BracketItem]]],
         originalStaves: [[StaffAddress?]],
-        canonicalFlags: [StaffAddress: [Measure.Flags]]? = nil,
+        canonicalStaves: [StaffAddress: Staff]? = nil,
     ) {
         self.fromIndex = fromIndex
         self.toIndex = toIndex
         restoredBrackets = brackets
         restoredOriginalStaves = originalStaves
-        restoredCanonicalFlags = canonicalFlags
+        restoredCanonicalStaves = canonicalStaves
     }
 
     /// Where the move lands, not where it started — a host scrolling to the affected slot wants the part's new
@@ -96,13 +103,14 @@ public struct MovePart: EditCommand {
         let incoming = fromIndex == 0
             ? StaffAddress(partIndex: 1, staffIndexInPart: 0)
             : StaffAddress(partIndex: fromIndex, staffIndexInPart: 0)
-        let canonicalFlags: [StaffAddress: [Measure.Flags]]? = canonicalChanges
-            ? [
-                Score.canonicalStaff: MeasureFlagsHoist.column(of: Score.canonicalStaff, in: score),
-                incoming: MeasureFlagsHoist.column(of: incoming, in: score),
-            ]
+        let canonicalStaves: [StaffAddress: Staff]? = canonicalChanges
+            ? [Score.canonicalStaff, incoming].reduce(into: [:]) { staves, address in staves[address] = score[address] }
             : nil
         let outgoingFlags = canonicalChanges ? MeasureFlagsHoist.column(of: Score.canonicalStaff, in: score) : nil
+        if canonicalChanges {
+            // In the PRE-move address space, so the spanners then travel inside the part that becomes the top one.
+            SystemSpannerHoist.move(from: Score.canonicalStaff, to: incoming, in: &score, ids: &ids)
+        }
 
         let movedID = score.parts.eid(at: fromIndex)
         let anchor: EID? = toIndex == 0 ? nil
@@ -121,14 +129,14 @@ public struct MovePart: EditCommand {
             )
             MeasureFlagsHoist.write(outgoingFlags, to: Score.canonicalStaff, in: &score)
         }
-        restoreCanonicalFlags(&score)
+        restoreCanonicalStaves(&score)
 
         return MovePart(
             from: toIndex,
             to: fromIndex,
             brackets: brackets,
             originalStaves: originalStaves,
-            canonicalFlags: canonicalFlags,
+            canonicalStaves: canonicalStaves,
         )
     }
 
@@ -172,7 +180,11 @@ public struct MovePart: EditCommand {
         for measureIndex in score.systemMeasures.indices {
             score.systemMeasures.updateValue(at: measureIndex) { column in
                 for elementIndex in column.elements.indices {
-                    guard let address = column.elements[elementIndex].originalStaff
+                    let element = column.elements[elementIndex]
+                    // A score-wide mark on the top staff stays there: (0, 0) names the new top staff afterwards.
+                    // A staff-bound one with no staff is on the top staff too, and belongs to its part.
+                    guard !element.isTopSystemObject,
+                          let address = element.originalStaff ?? (element.isScoreWide ? nil : Score.canonicalStaff)
                     else { continue }
                     column.elements.updateValue(at: elementIndex) {
                         $0.originalStaff = StaffAddress(
@@ -248,12 +260,12 @@ public struct MovePart: EditCommand {
         }
     }
 
-    /// Inverse path only: the two pre-image columns were captured in the PRE-forward-move address space, which is
+    /// Inverse path only: the two pre-image staves were captured in the PRE-forward-move address space, which is
     /// exactly the order this inverse has just restored, so they are written back at those same addresses.
-    private func restoreCanonicalFlags(_ score: inout Score) {
-        guard let restoredCanonicalFlags else { return }
-        for (address, column) in restoredCanonicalFlags {
-            MeasureFlagsHoist.write(column, to: address, in: &score)
+    private func restoreCanonicalStaves(_ score: inout Score) {
+        guard let restoredCanonicalStaves else { return }
+        for (address, staff) in restoredCanonicalStaves {
+            score.replaceStaff(at: address, with: staff)
         }
     }
 }

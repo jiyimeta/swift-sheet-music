@@ -50,22 +50,23 @@ public struct AddPart: EditCommand {
     /// even though the removal's re-anchor pass is not a simple span decrement — a bracket whose anchor staff was
     /// removed re-anchors onto another part entirely, which cannot be reversed by arithmetic.
     let restoredBrackets: [[[BracketItem]]]?
-    /// Also inverse-only: every system element's `originalStaff` as it stood before the removal, indexed
-    /// `[measureIndex][elementIndex]`. Captured for the same reason as `restoredBrackets`: an element anchored
-    /// INTO the removed part is re-anchored onto the first staff, which loses the address it had.
-    let restoredOriginalStaves: [[StaffAddress?]]?
-    /// Also inverse-only: the flags the staff that became canonical after the removal carried BEFORE the hoist —
-    /// what `MeasureFlagsHoist` overwrote there. `nil` unless the removal actually re-anchored the canonical staff
-    /// (`partIndex == 0` with a survivor). Restored onto the demoted staff, part 1 once this part is back at 0.
-    let restoredCanonicalFlags: [Measure.Flags]?
+    /// Also inverse-only: the system lane as it stood before the removal. Captured whole for the same reason as
+    /// `restoredBrackets`: a score-wide element anchored INTO the removed part is re-anchored onto the first staff,
+    /// which loses the address it had, and a staff-bound one was removed with the part.
+    let restoredLane: IdentifiedArray<SystemMeasure>?
+    /// Also inverse-only: the staff that became canonical after the removal, as it was BEFORE the removal hoisted the
+    /// removed top staff's flags and system spanners onto it. `nil` unless the removal actually re-anchored the
+    /// canonical staff (`partIndex == 0` with a survivor). Restored onto the demoted staff, part 1 once this part is
+    /// back at 0.
+    let restoredCanonicalStaff: Staff?
 
     public init(plan: BlankScoreTemplate.PartPlan, at partIndex: Int) {
         self.partIndex = partIndex
         self.plan = plan
         restoredPart = nil
         restoredBrackets = nil
-        restoredOriginalStaves = nil
-        restoredCanonicalFlags = nil
+        restoredLane = nil
+        restoredCanonicalStaff = nil
     }
 
     init(
@@ -73,15 +74,15 @@ public struct AddPart: EditCommand {
         eid: EID,
         at partIndex: Int,
         brackets: [[[BracketItem]]],
-        originalStaves: [[StaffAddress?]],
-        canonicalFlags: [Measure.Flags]? = nil,
+        lane: IdentifiedArray<SystemMeasure>,
+        canonicalStaff: Staff? = nil,
     ) {
         self.partIndex = partIndex
         plan = nil
         restoredPart = (eid: eid, part: part)
         restoredBrackets = brackets
-        restoredOriginalStaves = originalStaves
-        restoredCanonicalFlags = canonicalFlags
+        restoredLane = lane
+        restoredCanonicalStaff = canonicalStaff
     }
 
     public var affectedLocation: VoiceElementID {
@@ -126,9 +127,9 @@ public struct AddPart: EditCommand {
         return RemovePart(partIndex: partIndex)
     }
 
-    /// The inverse-of-a-removal path: the part is already back in place, so the two captured pre-images are
-    /// written over whatever the removal computed. Sized against the pre-removal score, which the insertion above
-    /// has just restored, so the indices line up by construction.
+    /// The inverse-of-a-removal path: the part is already back in place, so the captured pre-images are written over
+    /// whatever the removal computed. Sized against the pre-removal score, which the insertion above has just
+    /// restored, so the indices line up by construction.
     private func restore(_ score: inout Score) {
         if let restoredBrackets {
             for part in score.parts.indices where restoredBrackets.indices.contains(part) {
@@ -143,24 +144,11 @@ public struct AddPart: EditCommand {
                 }
             }
         }
-        guard let restoredOriginalStaves else { return }
-        for measureIndex in score.systemMeasures.indices
-            where restoredOriginalStaves.indices.contains(measureIndex)
-        {
-            score.systemMeasures.updateValue(at: measureIndex) { column in
-                for elementIndex in column.elements.indices
-                    where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
-                {
-                    column.elements.updateValue(at: elementIndex) {
-                        $0.originalStaff = restoredOriginalStaves[measureIndex][elementIndex]
-                    }
-                }
-            }
+        if let restoredLane {
+            score.systemMeasures = restoredLane
         }
-        if let restoredCanonicalFlags, partIndex == 0 {
-            MeasureFlagsHoist.write(
-                restoredCanonicalFlags, to: StaffAddress(partIndex: 1, staffIndexInPart: 0), in: &score,
-            )
+        if let restoredCanonicalStaff, partIndex == 0 {
+            score.replaceStaff(at: StaffAddress(partIndex: 1, staffIndexInPart: 0), with: restoredCanonicalStaff)
         }
     }
 

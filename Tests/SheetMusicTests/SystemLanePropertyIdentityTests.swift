@@ -52,10 +52,11 @@ struct SystemLanePropertyIdentityTests {
         default: MovePart(from: 0, to: 1)
         }
         try editor.apply(command)
-        #expect(F.ids(editor.score) == F.ids(before))
+        // Removing the first part takes its own staff text with it; the other keeps its slot.
+        #expect(F.ids(editor.score) == (operation == 1 ? Array(F.ids(before).dropFirst()) : F.ids(before)))
         let expectedParts = switch operation {
         case 0: [1, 2]
-        case 1: [0, 0]
+        case 1: [0]
         default: [1, 0]
         }
         let actualParts = editor.score.systemMeasures[0].elements.map { $0.originalStaff?.partIndex }

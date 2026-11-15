@@ -7,6 +7,31 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **The score's tempo, rehearsal marks and system texts stay on the top staff when a part moves.** `MovePart` used to re-stamp every system-lane element through the permutation, so a tempo or a rehearsal
+  mark written on the top staff by name (`originalStaff` (0, 0), as every imported file and `Score.blank` write one)
+  stayed with the part that had been first and printed over it in the middle of the system. A score-wide mark on the
+  top staff (`isTopSystemObject`) now stays on whichever staff is on top, as MuseScore's `Score::sortStaves` leaves a
+  system object on track 0; staff-bound marks, and score-wide ones on a lower staff, still follow their part.
+- **The top staff's voltas and gradual tempo changes stay on top across `MovePart` and `RemovePart`.** They live in
+  the top staff's voices, so a part moved off the top took the repeat endings and rit. lines with it, and removing the
+  first part deleted them. `SystemSpannerHoist` moves them onto the staff that becomes the top one — a volta to the
+  head of its bar, a gradual tempo change before the chord or rest that staff starts at its beat (it stays where it
+  is when that staff starts nothing there) — beside the measure flags `MeasureFlagsHoist` already moved. Undo
+  restores both top staves whole.
+- **`RemovePart` removes the part's own staff-bound system-lane elements** — a staff text, a staff swing, an
+  instrument change — with it, as MuseScore deletes a removed staff's annotations. They used to re-anchor on the
+  first staff like a tempo: a `pizz.` printed over the first part, and an instrument change switched the first
+  part's sound. A score-wide element is still re-anchored there. The inverse restores the whole lane
+  (`AddPart(restoring:…lane:canonicalStaff:)`, replacing `originalStaves:` / `canonicalFlags:`).
+- **A system text, tempo or system swing at a beat the top staff starts nothing on can be selected and removed.**
+  A writer places one at the beat of whatever chord it is handed, on any staff, and layout draws it on the top staff;
+  with only that staff to look at, layout gave it no anchor — no `textID`, no hit, and a tap on it fell through to the
+  note below. It now takes the beat's chord or rest on the first other staff that starts one there
+  (`LayoutEngine.systemLaneFallbackAnchors`), which `SetStaffText`, `SetTempo` and `SetSwing` resolve to the same
+  beat. A staff text keeps no fallback: it is matched by its own staff.
+
 ## [4.40.0] - 2026-11-15
 
 ### Added

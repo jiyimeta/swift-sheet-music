@@ -64,25 +64,135 @@ struct MovePartTests {
         #expect(score == original)
     }
 
-    /// The one field in the model that embeds a part index. A tempo written on the flute has to still name the
-    /// flute after the flute has moved — the whole point of `originalStaff` is that it survives re-layout.
-    @Test("a system element's anchor follows its part through the permutation")
-    func moveRestampsSystemElementAddresses() throws {
-        var score = duet()
-        score.systemMeasures.updateValue(at: 1) { column in
+    private func appending(_ element: PositionedSystemElement, toMeasure measureIndex: Int, in score: inout Score) {
+        score.systemMeasures.updateValue(at: measureIndex) { column in
             let pairs = column.elements.indices.map { (column.elements.eid(at: $0), column.elements[$0]) }
-            column.elements = IdentifiedArray(pairs + [(.invalid, PositionedSystemElement(
-                position: .start,
-                element: .tempo(Tempo(beatsPerSecond: 3)),
-                originalStaff: StaffAddress(partIndex: 1, staffIndexInPart: 1),
-            ))])
+            column.elements = IdentifiedArray(pairs + [(.invalid, element)])
         }
+    }
+
+    private func systemSpanners(on staff: StaffAddress, measure measureIndex: Int, in score: Score) -> [Spanner] {
+        let measure = score[measure: MeasureRef(measureIndex: measureIndex), staff: staff]
+        return (measure?.voices ?? []).flatMap(\.elements.values).compactMap {
+            guard case let .spanner(spanner) = $0, SystemSpannerHoist.isSystemSpanner($0) else { return nil }
+            return spanner
+        }
+    }
+
+    /// Puts `elements` at the head of bar `measureIndex`'s first voice on `staff`, ahead of what is there.
+    private func prepending(
+        _ elements: [VoiceElement], toMeasure measureIndex: Int, on staff: StaffAddress, in score: inout Score,
+    ) throws {
+        let ref = MeasureRef(measureIndex: measureIndex)
+        var measure = try #require(score[measure: ref, staff: staff])
+        let existing = measure.voices[0].elements
+        measure.voices[0].elements = IdentifiedArray(
+            elements.map { (EID.invalid, $0) } + existing.indices.map { (existing.eid(at: $0), existing[$0]) },
+        )
+        score[measure: ref, staff: staff] = measure
+    }
+
+    private static let volta = VoiceElement.spanner(
+        Spanner(kind: .volta, rawType: "Volta", nextMeasuresOffset: 1, voltaEndings: [1]),
+    )
+    private static let rit = VoiceElement.spanner(
+        Spanner(kind: .gradualTempoChange, rawType: "GradualTempoChange", nextMeasuresOffset: 1),
+    )
+
+    /// MuseScore leaves a system object written on the top staff on track 0 when `Score::sortStaves` renumbers the
+    /// rest (`EngravingItem::isTopSystemObject`), so the score's tempo and rehearsal marks print over whichever part
+    /// is first. They used to ride the permutation with the part that had been first — the reported bug: drag the
+    /// second part to the top, and the tempo and the rehearsal mark stayed on the part now second.
+    @Test("a score-wide mark on the top staff stays on top, whichever part moves", arguments: [(0, 1), (1, 0)])
+    func moveKeepsTopSystemObjectsOnTop(from: Int, to: Int) throws {
+        var score = duet()
+        // `Score.blank` writes its opening tempo on (0, 0) by name, as an imported file does.
+        #expect(score.systemMeasures[0].elements[0].originalStaff == Score.canonicalStaff)
+        appending(PositionedSystemElement(
+            position: .start, element: .rehearsalMark(RehearsalMark(text: "A")),
+            originalStaff: Score.canonicalStaff,
+        ), toMeasure: 1, in: &score)
+        appending(PositionedSystemElement(
+            position: .start, element: .staffText(StaffText(text: "Swing", isSystemText: true)),
+        ), toMeasure: 1, in: &score)
+        let original = score
+        let inverse = try MovePart(from: from, to: to).apply(to: &score)
+        #expect(score.parts.map(\.instrument.id) == ["piano", "flute"])
+        #expect(score.systemMeasures[0].elements[0].originalStaff == Score.canonicalStaff)
+        #expect(score.systemMeasures[1].elements.map(\.originalStaff) == [Score.canonicalStaff, nil])
+        _ = try inverse.apply(to: &score)
+        #expect(score == original)
+    }
+
+    /// A staff-bound mark still names the staff it was written on — the part it belongs to, wherever that goes —
+    /// and so does a score-wide one written on a lower staff. A staff-bound mark with no staff is on the top staff,
+    /// so it belongs to the part that was first.
+    @Test("a staff-bound mark and a lower staff's mark follow their part through the permutation")
+    func moveRestampsPartBoundSystemElements() throws {
+        var score = duet()
+        appending(PositionedSystemElement(
+            position: .start, element: .staffText(StaffText(text: "pizz.")), originalStaff: Score.canonicalStaff,
+        ), toMeasure: 1, in: &score)
+        appending(PositionedSystemElement(
+            position: .start, element: .tempo(Tempo(beatsPerSecond: 3)),
+            originalStaff: StaffAddress(partIndex: 1, staffIndexInPart: 1),
+        ), toMeasure: 1, in: &score)
+        appending(PositionedSystemElement(
+            position: .start, element: .staffText(StaffText(text: "con sord.")),
+        ), toMeasure: 1, in: &score)
         let original = score
         let inverse = try MovePart(from: 0, to: 1).apply(to: &score)
         // The flute was part 0 and is now part 1; the piano was part 1 and is now part 0.
-        #expect(score.systemMeasures[0].elements[0].originalStaff == StaffAddress(partIndex: 1, staffIndexInPart: 0))
-        #expect(score.systemMeasures[1].elements[0].originalStaff == StaffAddress(partIndex: 0, staffIndexInPart: 1))
+        #expect(score.systemMeasures[1].elements.map(\.originalStaff) == [
+            StaffAddress(partIndex: 1, staffIndexInPart: 0),
+            StaffAddress(partIndex: 0, staffIndexInPart: 1),
+            StaffAddress(partIndex: 1, staffIndexInPart: 0),
+        ])
         #expect(score.staffDisplayName(at: StaffAddress(partIndex: 1, staffIndexInPart: 0)) == "Flute")
+        _ = try inverse.apply(to: &score)
+        #expect(score == original)
+    }
+
+    /// A volta and a gradual tempo change live in the top staff's voices, not in the lane, and MuseScore keeps them
+    /// on track 0 as it keeps a tempo. Left in the part, they printed over the part that was now second.
+    @Test("the top staff's voltas and gradual tempo changes move to the new top staff, and back on undo")
+    func moveHoistsSystemSpanners() throws {
+        var score = duet()
+        try prepending([Self.volta, Self.rit], toMeasure: 1, on: Score.canonicalStaff, in: &score)
+        let original = score
+        let piano = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let flute = StaffAddress(partIndex: 1, staffIndexInPart: 0)
+        let inverse = try MovePart(from: 1, to: 0).apply(to: &score)
+        #expect(score.parts.map(\.instrument.id) == ["piano", "flute"])
+        #expect(systemSpanners(on: piano, measure: 1, in: score).map(\.kind) == [.volta, .gradualTempoChange])
+        #expect(systemSpanners(on: flute, measure: 1, in: score).isEmpty)
+        // Still the first two elements of the bar, in the order they were written, so playback and layout read them
+        // where a volta and a line starting on the bar's first rest are written.
+        let head = try #require(score[measure: MeasureRef(measureIndex: 1), staff: piano]).voices[0].elements
+        #expect(head[0] == Self.volta)
+        _ = try inverse.apply(to: &score)
+        #expect(score == original)
+    }
+
+    /// A gradual tempo change hangs on the chord it starts at. Where the new top staff starts nothing at that beat
+    /// there is nothing to hang it on, so it stays where it was rather than moving to a different beat.
+    @Test("a gradual tempo change with no chord to hang on in the new top staff stays where it is")
+    func moveLeavesAnUnplaceableGradualTempoChange() throws {
+        var score = duet()
+        let ref = MeasureRef(measureIndex: 1)
+        var bar = try #require(score[measure: ref, staff: Score.canonicalStaff])
+        bar.voices[0].elements = IdentifiedArray([
+            .chord(Chord(duration: .half, notes: [Note(pitch: 72, tpc: 14)])),
+            Self.rit,
+            .chord(Chord(duration: .half, notes: [Note(pitch: 74, tpc: 16)])),
+        ])
+        score[measure: ref, staff: Score.canonicalStaff] = bar
+        let original = score
+        let inverse = try MovePart(from: 1, to: 0).apply(to: &score)
+        // The piano's bar is one measure rest: nothing starts at beat 3.
+        #expect(systemSpanners(on: StaffAddress(partIndex: 0, staffIndexInPart: 0), measure: 1, in: score).isEmpty)
+        #expect(systemSpanners(on: StaffAddress(partIndex: 1, staffIndexInPart: 0), measure: 1, in: score).map(\.kind)
+            == [.gradualTempoChange])
         _ = try inverse.apply(to: &score)
         #expect(score == original)
     }
