@@ -6,7 +6,7 @@ struct PartCommandTests {
     /// Two-part score — flute (one staff) and piano (grand staff) — 3 measures, a mid-score key change on
     /// measure 1 of every staff, and a whole-note chord on the flute's first bar so content survival is
     /// observable across an add / undo round trip.
-    private func fixture() throws -> Score {
+    func fixture() throws -> Score {
         var score = Score.blank(BlankScoreTemplate(
             title: "t",
             parts: [
@@ -41,7 +41,7 @@ struct PartCommandTests {
         return score
     }
 
-    private static let clarinet = BlankScoreTemplate.PartPlan(
+    static let clarinet = BlankScoreTemplate.PartPlan(
         instrumentID: "clarinet-bb", longName: "Clarinet in B♭",
         staves: [.init(clefType: "G")],
         transposeDiatonic: -1, transposeChromatic: -2, gmProgram: 71,
@@ -137,17 +137,6 @@ struct PartCommandTests {
         let session = ScoreEditSession(score: score)
         #expect(session.apply(.addPart(plan: Self.clarinet, at: 2)))
         #expect(session.score.parts[2].id == "10")
-    }
-
-    @Test("a system element anchored at or after the insertion point is re-stamped one part down")
-    func addPartRestampsSystemElementAddresses() throws {
-        let session = try ScoreEditSession(score: fixture())
-        #expect(session.apply(.addPart(plan: Self.clarinet, at: 0)))
-        let tempo = try #require(session.score.systemMeasures[0].elements.first)
-        let anchor = try #require(tempo.originalStaff)
-        #expect(anchor == StaffAddress(partIndex: 1, staffIndexInPart: 0))
-        // The address still resolves, and still names the flute it was anchored to.
-        #expect(session.score.staffDisplayName(at: anchor) == "Flute")
     }
 
     @Test("a percussion plan's bars carry the time signature but never a key")
@@ -273,67 +262,6 @@ struct PartCommandTests {
         guard case .tempo = score.systemMeasures[1].elements[0].element else {
             Issue.record("the tempo did not survive its anchor part's removal"); return
         }
-        _ = try inverse.apply(to: &score)
-        #expect(score == original)
-    }
-
-    /// A staff-bound mark belongs to its staff's music, as MuseScore deletes a removed staff's annotations. It used to
-    /// re-anchor on the first staff like a tempo: a `pizz.` then printed over the flute, and an instrument change —
-    /// which every consumer keys on its part — switched the flute's sound.
-    @Test("a staff-bound system element of the removed part goes with it, and comes back on undo")
-    func removePartDropsItsStaffBoundSystemElements() throws {
-        var score = try fixture()
-        let pianoLower = StaffAddress(partIndex: 1, staffIndexInPart: 1)
-        score.systemMeasures.updateValue(at: 1) { column in
-            let pairs = column.elements.indices.map { (column.elements.eid(at: $0), column.elements[$0]) }
-            column.elements = IdentifiedArray(pairs + [
-                (.invalid, PositionedSystemElement(
-                    position: .start, element: .staffText(StaffText(text: "pizz.")), originalStaff: pianoLower,
-                )),
-                (.invalid, PositionedSystemElement(
-                    position: .start,
-                    element: .instrumentChange(InstrumentChange(text: "to Harpsichord", instrument: Instrument(
-                        id: "harpsichord",
-                    ))),
-                    originalStaff: pianoLower,
-                )),
-                (.invalid, PositionedSystemElement(
-                    position: .start, element: .tempo(Tempo(beatsPerSecond: 3)), originalStaff: pianoLower,
-                )),
-            ])
-        }
-        let original = score
-        let inverse = try RemovePart(partIndex: 1).apply(to: &score)
-        let kept = score.systemMeasures[1].elements.values
-        #expect(kept.count == 1)
-        guard case .tempo = kept.first?.element else {
-            Issue.record("expected the tempo alone to survive, got \(kept)"); return
-        }
-        #expect(kept.first?.originalStaff == Score.canonicalStaff)
-        _ = try inverse.apply(to: &score)
-        #expect(score == original)
-    }
-
-    /// The first part's voltas and gradual tempo changes are the score's, not the instrument's: MuseScore keeps a top
-    /// system object on track 0. Removed with the part, the score lost its repeat endings and its rit. lines.
-    @Test("removing the first part moves its voltas and gradual tempo changes onto the new first staff")
-    func removeFirstPartHoistsSystemSpanners() throws {
-        var score = try fixture()
-        let ref = MeasureRef(measureIndex: 2)
-        var bar = try #require(score[measure: ref, staff: Score.canonicalStaff])
-        let existing = bar.voices[0].elements
-        let volta = VoiceElement.spanner(
-            Spanner(kind: .volta, rawType: "Volta", nextMeasuresOffset: 1, voltaEndings: [1]),
-        )
-        bar.voices[0].elements = IdentifiedArray(
-            [(EID.invalid, volta)] + existing.indices.map { (existing.eid(at: $0), existing[$0]) },
-        )
-        score[measure: ref, staff: Score.canonicalStaff] = bar
-        let original = score
-        let inverse = try RemovePart(partIndex: 0).apply(to: &score)
-        #expect(score.parts.map(\.instrument.id) == ["piano"])
-        let head = try #require(score[measure: ref, staff: Score.canonicalStaff]).voices[0].elements
-        #expect(head.first == volta)
         _ = try inverse.apply(to: &score)
         #expect(score == original)
     }

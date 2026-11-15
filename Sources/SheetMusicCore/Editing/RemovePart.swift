@@ -30,9 +30,25 @@ import SheetMusicFoundation
 /// the stack keyed to a score shape that no longer matches. The refusal is what keeps the undo stack coherent.
 public struct RemovePart: EditCommand {
     public let partIndex: Int
+    /// Set only when this command is the inverse of an `AddPart`: the system lane as it stood before the insertion,
+    /// written back whole instead of re-anchoring — an insertion at the top keeps the top staff's marks where they
+    /// were, which arithmetic on the way back could only approximate.
+    let restoredLane: IdentifiedArray<SystemMeasure>?
+    /// Also inverse-of-an-insertion only: the staff that was canonical before an insertion at index 0, which moved
+    /// its measure flags and system spanners onto the new part. Written back over (0, 0) once the inserted part is
+    /// gone, so the two hoists come undone exactly — the removal's own hoists do not run on this path.
+    let restoredCanonicalStaff: Staff?
 
     public init(partIndex: Int) {
         self.partIndex = partIndex
+        restoredLane = nil
+        restoredCanonicalStaff = nil
+    }
+
+    init(partIndex: Int, restoringLane lane: IdentifiedArray<SystemMeasure>, canonicalStaff: Staff?) {
+        self.partIndex = partIndex
+        restoredLane = lane
+        restoredCanonicalStaff = canonicalStaff
     }
 
     public var affectedLocation: VoiceElementID {
@@ -62,8 +78,10 @@ public struct RemovePart: EditCommand {
         let becomesCanonical = partIndex == 0 && score.parts.count > 1
         let incoming = StaffAddress(partIndex: 1, staffIndexInPart: 0)
         let incomingBefore = becomesCanonical ? score[incoming] : nil
-        let removedFlags = becomesCanonical ? MeasureFlagsHoist.column(of: Score.canonicalStaff, in: score) : nil
-        if becomesCanonical {
+        // Undoing an insertion writes the pre-images back instead of hoisting (`restoredCanonicalStaff`).
+        let hoists = becomesCanonical && restoredLane == nil
+        let removedFlags = hoists ? MeasureFlagsHoist.column(of: Score.canonicalStaff, in: score) : nil
+        if hoists {
             SystemSpannerHoist.move(from: Score.canonicalStaff, to: incoming, in: &score, ids: &ids)
         }
 
@@ -95,10 +113,17 @@ public struct RemovePart: EditCommand {
                 }
             }
         }
-        reanchorSystemElements(in: &score)
+        if let restoredLane {
+            score.systemMeasures = restoredLane
+        } else {
+            reanchorSystemElements(in: &score)
+        }
 
         if let removedFlags {
             MeasureFlagsHoist.write(removedFlags, to: Score.canonicalStaff, in: &score)
+        }
+        if let restoredCanonicalStaff, partIndex == 0 {
+            score.replaceStaff(at: Score.canonicalStaff, with: restoredCanonicalStaff)
         }
         return AddPart(
             restoring: removed, eid: removedID, at: partIndex,
@@ -108,8 +133,10 @@ public struct RemovePart: EditCommand {
 
     /// Re-homes every system-element anchor the removal invalidated. A score-wide element INTO the removed part falls
     /// back to the score's first staff, which is always a real one: `apply` has refused the last-part case, so at
-    /// least one part survives. A staff-bound one is removed with its part — an element with no staff is on the top
-    /// staff, so it is the removed part's when that part is the first.
+    /// least one part survives — unless the top staff already carries the same mark at the same beat, when it is
+    /// removed instead: it was a copy, MuseScore's linked one on a system-object staff, which goes with its staff.
+    /// A staff-bound one is removed with its part — an element with no staff is on the top staff, so it is the
+    /// removed part's when that part is the first.
     private func reanchorSystemElements(in score: inout Score) {
         for measureIndex in score.systemMeasures.indices {
             score.systemMeasures.updateValue(at: measureIndex) { column in
@@ -119,7 +146,12 @@ public struct RemovePart: EditCommand {
                     guard let address = element.originalStaff ?? (element.isScoreWide ? nil : Score.canonicalStaff)
                     else { continue }
                     if address.partIndex == partIndex {
-                        guard element.isScoreWide else {
+                        let copiesTopMark = column.elements.indices.contains { other in
+                            other != elementIndex && column.elements[other].isTopSystemObject
+                                && column.elements[other].position == element.position
+                                && column.elements[other].element == element.element
+                        }
+                        guard element.isScoreWide, !copiesTopMark || address == Score.canonicalStaff else {
                             dropped.append(elementIndex)
                             continue
                         }

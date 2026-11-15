@@ -13,11 +13,12 @@ import SheetMusicFoundation
 /// The `Part` value carries its own instrument, staves and bars, so those need nothing. Two things do:
 ///
 /// - **`PositionedSystemElement.originalStaff`** — the one field in the model embedding a part index (see
-///   `AddPart`'s audit). Every address is re-stamped through the permutation, so a `pizz.` written on the flute still
-///   names the flute afterwards — except a score-wide mark on the top staff (`isTopSystemObject`: a tempo, a
-///   rehearsal mark, a system text), which stays on whichever staff is on top, as MuseScore's `Score::sortStaves`
-///   leaves a system object on track 0. Before that, a part dragged above the first took none of them, and the
-///   score's tempo and rehearsal marks went on printing over the part that used to be first.
+///   `AddPart`'s audit). A staff-bound mark's address is re-stamped through the permutation, so a `pizz.` written on
+///   the flute still names the flute afterwards. A score-wide one — a tempo, a rehearsal mark, a system text — keeps
+///   its staff ROW instead, as MuseScore does: `Score::sortStaves` leaves a system object on track 0, so the top
+///   staff's stay on whichever staff is on top, and `sortSystemObjects` keeps a system-object staff's copies at its
+///   row. Before that, a part dragged above the first took none of them, and the score's tempo and rehearsal marks
+///   went on printing over the part that used to be first.
 /// - **Brackets.** They anchor on a staff and count `span` staves downward in the GLOBAL flattened order, so a
 ///   permutation moves the anchor. Each bracket is carried to its anchor staff's new address verbatim — same
 ///   `type`, same `span`, same `column`. A brace travels with the part it braces; a group bracket stays the size
@@ -112,11 +113,12 @@ public struct MovePart: EditCommand {
             SystemSpannerHoist.move(from: Score.canonicalStaff, to: incoming, in: &score, ids: &ids)
         }
 
+        let staffCountsBefore = score.parts.map(\.staves.count)
         let movedID = score.parts.eid(at: fromIndex)
         let anchor: EID? = toIndex == 0 ? nil
             : score.parts.eid(at: fromIndex < toIndex ? toIndex : toIndex - 1)
         score.parts.move(eid: movedID, after: anchor)
-        restampSystemElements(in: &score)
+        restampSystemElements(in: &score, staffCountsBefore: staffCountsBefore)
         Self.writeBack(rebased, to: &score)
         restore(&score)
 
@@ -174,27 +176,46 @@ public struct MovePart: EditCommand {
         return entries
     }
 
-    private func restampSystemElements(in score: inout Score) {
+    private func restampSystemElements(in score: inout Score, staffCountsBefore: [Int]) {
+        let staffCountsAfter = score.parts.map(\.staves.count)
         // The permutation is stated over the PRE-move indices, so this reads each address once and writes the
         // answer — re-stamping in place against the already-permuted parts would compose the map with itself.
         for measureIndex in score.systemMeasures.indices {
             score.systemMeasures.updateValue(at: measureIndex) { column in
                 for elementIndex in column.elements.indices {
                     let element = column.elements[elementIndex]
-                    // A score-wide mark on the top staff stays there: (0, 0) names the new top staff afterwards.
+                    // A score-wide mark with no staff is on the top staff, which a row that never moves already says.
                     // A staff-bound one with no staff is on the top staff too, and belongs to its part.
-                    guard !element.isTopSystemObject,
-                          let address = element.originalStaff ?? (element.isScoreWide ? nil : Score.canonicalStaff)
+                    guard let address = element.originalStaff ?? (element.isScoreWide ? nil : Score.canonicalStaff)
                     else { continue }
-                    column.elements.updateValue(at: elementIndex) {
-                        $0.originalStaff = StaffAddress(
-                            partIndex: permuted(address.partIndex),
-                            staffIndexInPart: address.staffIndexInPart,
+                    let restamped = element.isScoreWide
+                        ? Self.address(
+                            atRow: Self.row(of: address, staffCounts: staffCountsBefore), staffCounts: staffCountsAfter,
                         )
-                    }
+                        : StaffAddress(
+                            partIndex: permuted(address.partIndex), staffIndexInPart: address.staffIndexInPart,
+                        )
+                    guard let restamped else { continue }
+                    column.elements.updateValue(at: elementIndex) { $0.originalStaff = restamped }
                 }
             }
         }
+    }
+
+    /// `address`'s row in the flattened staff order of parts with `staffCounts` staves each.
+    private static func row(of address: StaffAddress, staffCounts: [Int]) -> Int {
+        staffCounts.prefix(address.partIndex).reduce(0, +) + address.staffIndexInPart
+    }
+
+    /// The staff at `row` in the flattened order of parts with `staffCounts` staves each, or `nil` past the last. A
+    /// move changes no staff count, so every row a score had before it still names a staff after it.
+    private static func address(atRow row: Int, staffCounts: [Int]) -> StaffAddress? {
+        var remaining = row
+        for (partIndex, count) in staffCounts.enumerated() {
+            if remaining < count { return StaffAddress(partIndex: partIndex, staffIndexInPart: remaining) }
+            remaining -= count
+        }
+        return nil
     }
 
     /// Strips every staff's brackets and re-lays the moved ones, untouched. Nothing here clamps or normalizes: a

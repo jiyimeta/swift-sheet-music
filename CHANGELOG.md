@@ -7,30 +7,46 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`ScoreItemID.mappingStaves(_:)`**: an identity with every staff it names passed through a mapping and everything
+  else left alone — what a host needs to keep a selection on the same music once `MovePart`, `RemovePart` or
+  `AddPart` has renumbered the parts. A rehearsal mark and a barline pass through; a tie maps both ends; `nil` when
+  a staff it names is gone.
+- **`SystemLaneSlot.anchor(at:measureIndex:in:)`** (and an overload over staves a caller already holds): the chord or
+  rest a score-wide lane mark — a tempo, a system text, a system swing — is addressed by, the lowest voice of the first
+  staff in score order that starts one at its beat. `LayoutEngine` now emits exactly this as such a mark's anchor,
+  whatever staff draws it, so a host can re-derive the identity a tap on the mark reports without a layout.
+
 ### Fixed
 
-- **The score's tempo, rehearsal marks and system texts stay on the top staff when a part moves.** `MovePart` used to re-stamp every system-lane element through the permutation, so a tempo or a rehearsal
+- **The score's tempo, rehearsal marks and system texts stay on the top staff when a part moves or is inserted at
+  the top.** `MovePart` used to re-stamp every system-lane element through the permutation, so a tempo or a rehearsal
   mark written on the top staff by name (`originalStaff` (0, 0), as every imported file and `Score.blank` write one)
-  stayed with the part that had been first and printed over it in the middle of the system. A score-wide mark on the
-  top staff (`isTopSystemObject`) now stays on whichever staff is on top, as MuseScore's `Score::sortStaves` leaves a
-  system object on track 0; staff-bound marks, and score-wide ones on a lower staff, still follow their part.
-- **The top staff's voltas and gradual tempo changes stay on top across `MovePart` and `RemovePart`.** They live in
-  the top staff's voices, so a part moved off the top took the repeat endings and rit. lines with it, and removing the
-  first part deleted them. `SystemSpannerHoist` moves them onto the staff that becomes the top one — a volta to the
-  head of its bar, a gradual tempo change before the chord or rest that staff starts at its beat (it stays where it
-  is when that staff starts nothing there) — beside the measure flags `MeasureFlagsHoist` already moved. Undo
-  restores both top staves whole.
+  stayed with the part that had been first and printed over it in the middle of the system; `AddPart(at: 0)` pushed
+  it down onto the old first part the same way. A score-wide mark now keeps its staff ROW through a move — the top
+  staff's stay on whichever staff is on top, as MuseScore's `Score::sortStaves` leaves a system object on track 0,
+  and a lower staff's (MuseScore's linked copy on a system-object staff) stays at its row, as
+  `Score::sortSystemObjects` keeps it — and an insertion at the top leaves the top staff's on top
+  (`moveDownWhenAddingStaves`). Staff-bound marks still follow their part.
+- **The top staff's measure flags, voltas and gradual tempo changes stay on top across `MovePart`, `RemovePart` and
+  `AddPart(at: 0)`.** The voltas and rit. lines live in the top staff's voices, so a move off the top took them with
+  the part and removing the first part deleted them; an insertion at the top left them, and the repeat flags, on the
+  part now second. `SystemSpannerHoist` moves them onto the staff that becomes the top one — a volta to the head of
+  its bar, a gradual tempo change before the chord or rest that staff starts at its beat (it stays where it is when
+  that staff starts nothing there) — beside the measure flags `MeasureFlagsHoist` moves. Every inverse restores the
+  two top staves whole.
 - **`RemovePart` removes the part's own staff-bound system-lane elements** — a staff text, a staff swing, an
   instrument change — with it, as MuseScore deletes a removed staff's annotations. They used to re-anchor on the
   first staff like a tempo: a `pizz.` printed over the first part, and an instrument change switched the first
-  part's sound. A score-wide element is still re-anchored there. The inverse restores the whole lane
-  (`AddPart(restoring:…lane:canonicalStaff:)`, replacing `originalStaves:` / `canonicalFlags:`).
+  part's sound. A score-wide element is still re-anchored there, unless the top staff already carries the same mark at
+  the same beat — then it was a copy, and goes with its staff instead of doubling the mark on top. The inverse
+  restores the whole lane.
 - **A system text, tempo or system swing at a beat the top staff starts nothing on can be selected and removed.**
   A writer places one at the beat of whatever chord it is handed, on any staff, and layout draws it on the top staff;
-  with only that staff to look at, layout gave it no anchor — no `textID`, no hit, and a tap on it fell through to the
-  note below. It now takes the beat's chord or rest on the first other staff that starts one there
-  (`LayoutEngine.systemLaneFallbackAnchors`), which `SetStaffText`, `SetTempo` and `SetSwing` resolve to the same
-  beat. A staff text keeps no fallback: it is matched by its own staff.
+  asked of that staff alone, layout gave it no anchor — no `textID`, no hit, and a tap on it fell through to the
+  note below. Its anchor is now `SystemLaneSlot.anchor(at:measureIndex:in:)`'s, which `SetStaffText`, `SetTempo`
+  and `SetSwing` resolve to the same beat. A staff text keeps its own staff's chord: it is matched by its staff.
 
 ## [4.40.0] - 2026-11-15
 

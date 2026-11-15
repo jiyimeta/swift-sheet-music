@@ -17,7 +17,10 @@ import SheetMusicFoundation
 /// field embeds one, and it is the only thing re-stamped here:
 ///
 /// - `PositionedSystemElement.originalStaff` — the staff a tempo / rehearsal mark / staff text was attached to.
-///   Every address whose own `partIndex` is at or past this command's insertion index moves one part down.
+///   Every address whose own `partIndex` is at or past this command's insertion index moves one part down — except
+///   a score-wide mark on the top staff, which stays on top. An insertion at index 0 also moves the old top staff's
+///   measure flags and system spanners onto the new part (`MeasureFlagsHoist`, `SystemSpannerHoist`), so the new
+///   top staff carries the score's system objects, as MuseScore keeps them on track 0.
 ///
 /// Everything else that looks like an address is not stored in the score:
 ///
@@ -100,12 +103,15 @@ public struct AddPart: EditCommand {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
 
+        // What the inverse writes back: the lane, and the staff that is canonical now if this insertion replaces it.
+        let laneBefore = score.systemMeasures
+        let canonicalBefore = partIndex == 0 ? score[Score.canonicalStaff] : nil
         if let restoredPart {
             let restored = restoredPart.part
             let anchor = partIndex == 0 ? nil : score.parts.eid(at: partIndex - 1)
             score.parts.insert(restored, after: anchor, id: restoredPart.eid)
             restore(&score)
-            return RemovePart(partIndex: partIndex)
+            return RemovePart(partIndex: partIndex, restoringLane: laneBefore, canonicalStaff: canonicalBefore)
         }
 
         guard let plan else { throw Self.refused(.emptyPayload) }
@@ -124,7 +130,14 @@ public struct AddPart: EditCommand {
         Self.restampSystemElements(in: &score, fromPartIndex: partIndex)
         let anchor = partIndex == 0 ? nil : score.parts.eid(at: partIndex - 1)
         score.parts.insert(part, after: anchor, id: ids.next())
-        return RemovePart(partIndex: partIndex)
+        if partIndex == 0 {
+            // The old top staff is (1, 0) now. Its measure flags and system spanners are the score's, so they move
+            // to the new top one, as its score-wide lane marks stayed on (0, 0) above.
+            let demoted = StaffAddress(partIndex: 1, staffIndexInPart: 0)
+            MeasureFlagsHoist.move(from: demoted, to: Score.canonicalStaff, in: &score)
+            SystemSpannerHoist.move(from: demoted, to: Score.canonicalStaff, in: &score, ids: &ids)
+        }
+        return RemovePart(partIndex: partIndex, restoringLane: laneBefore, canonicalStaff: canonicalBefore)
     }
 
     /// The inverse-of-a-removal path: the part is already back in place, so the captured pre-images are written over
@@ -224,13 +237,17 @@ public struct AddPart: EditCommand {
         }
     }
 
-    /// Moves every system element anchored at or after the insertion point one part down, so a tempo or a `pizz.`
-    /// keeps naming the staff it was written on.
+    /// Moves every system element anchored at or after the insertion point one part down, so a `pizz.` keeps naming
+    /// the staff it was written on — except a score-wide mark on the top staff (`isTopSystemObject`), which stays on
+    /// whichever staff is on top, as MuseScore keeps a top system object on track 0 when staves are inserted above it
+    /// (`moveDownWhenAddingStaves`). A staff-bound mark with no staff is on the top staff, so it moves with its part.
     private static func restampSystemElements(in score: inout Score, fromPartIndex partIndex: Int) {
         for measureIndex in score.systemMeasures.indices {
             score.systemMeasures.updateValue(at: measureIndex) { column in
                 for elementIndex in column.elements.indices {
-                    guard let address = column.elements[elementIndex].originalStaff,
+                    let element = column.elements[elementIndex]
+                    guard !element.isTopSystemObject,
+                          let address = element.originalStaff ?? (element.isScoreWide ? nil : Score.canonicalStaff),
                           address.partIndex >= partIndex
                     else { continue }
                     column.elements.updateValue(at: elementIndex) {

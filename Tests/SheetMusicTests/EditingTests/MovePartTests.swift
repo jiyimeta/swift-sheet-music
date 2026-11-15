@@ -124,10 +124,11 @@ struct MovePartTests {
         #expect(score == original)
     }
 
-    /// A staff-bound mark still names the staff it was written on — the part it belongs to, wherever that goes —
-    /// and so does a score-wide one written on a lower staff. A staff-bound mark with no staff is on the top staff,
-    /// so it belongs to the part that was first.
-    @Test("a staff-bound mark and a lower staff's mark follow their part through the permutation")
+    /// A staff-bound mark still names the staff it was written on — the part it belongs to, wherever that goes. A
+    /// staff-bound mark with no staff is on the top staff, so it belongs to the part that was first. A score-wide mark
+    /// on a lower staff keeps its ROW, as MuseScore's `Score::sortSystemObjects` keeps a system-object staff's copies:
+    /// flute (row 0) and piano (rows 1–2) become piano (rows 0–1) and flute (row 2).
+    @Test("a staff-bound mark follows its part; a lower staff's score-wide mark keeps its row")
     func moveRestampsPartBoundSystemElements() throws {
         var score = duet()
         appending(PositionedSystemElement(
@@ -145,7 +146,7 @@ struct MovePartTests {
         // The flute was part 0 and is now part 1; the piano was part 1 and is now part 0.
         #expect(score.systemMeasures[1].elements.map(\.originalStaff) == [
             StaffAddress(partIndex: 1, staffIndexInPart: 0),
-            StaffAddress(partIndex: 0, staffIndexInPart: 1),
+            StaffAddress(partIndex: 1, staffIndexInPart: 0),
             StaffAddress(partIndex: 1, staffIndexInPart: 0),
         ])
         #expect(score.staffDisplayName(at: StaffAddress(partIndex: 1, staffIndexInPart: 0)) == "Flute")
