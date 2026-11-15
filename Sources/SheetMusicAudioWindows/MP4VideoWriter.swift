@@ -12,6 +12,9 @@ import Foundation
 /// from 720 — and named in the file's `colr` box, since Media Foundation's encoders write no colour description into
 /// the stream. Apple's writer tags BT.709 at every size in the stream itself.
 ///
+/// Do not align this with Apple's always-BT.709: the difference is rooted in Windows alone. Media Foundation cannot
+/// write the stream's colour description, so a player that ignores `colr` guesses by height, and BT.709 SD is then off.
+///
 /// Used from one thread: the one that made it (`init` joins the multithreaded COM apartment there).
 public final class MP4VideoWriter {
     public struct Audio: Sendable, Equatable {
