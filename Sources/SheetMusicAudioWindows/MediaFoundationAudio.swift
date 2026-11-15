@@ -172,18 +172,23 @@ public enum MediaFoundationAudio {
         return decoded
     }
 
-    /// An encode that landed: the frames given to the encoder, at the output's rate, and the priming the encoder put
-    /// before them (`aacEncoderPrimingFrames`).
+    /// An encode that landed: the source's frames given to the encoder, at the output's rate, and the priming put
+    /// before them (`aacEncoderPrimingFrames`), which the host states in the file's edit list.
     public struct Encoded: Sendable, Equatable {
         public var frames: Int64
         public var primingFrames: Int
     }
 
-    /// The frames of priming Microsoft's AAC encoder puts before the first sample, which its MPEG-4 sink states in
-    /// the file's edit list and Media Foundation's reader trims. A host that rewrites the edit list states this.
-    /// Held by `MediaFoundationEncodeTests`, so a Windows update that changes it fails. (Not measured yet: the first
-    /// run on folino-qa prints the value.)
-    public static let aacEncoderPrimingFrames = 0
+    /// The frames of silence `encodeAAC` puts before the first sample, which a host states as the file's priming in its
+    /// edit list: 2112, the priming every AAC decoder assumes for a file that states none.
+    ///
+    /// Microsoft's encoder primes nothing that a decoder sees — its stream decodes from the first sample on
+    /// (`MediaFoundationEncodeTests`; ffmpeg reads the click where it was written) — and its MPEG-4 sink writes neither
+    /// an edit list nor `iTunSMPB`. AVFoundation then trims 2112 frames from such a file whatever its edit list says
+    /// (measured 2026-11-16 on a folino-win encode: no `elst`, `media_time` 0 and 1024 all read 2112 frames early).
+    /// Leading with this much silence makes the file read the same everywhere: Apple trims its assumed priming, and a
+    /// decoder that reads the edit list — Media Foundation, ffmpeg, Android — trims what the host states.
+    public static let aacEncoderPrimingFrames = 2112
 
     /// Decodes `sourcePath`'s first audio stream through Media Foundation's reader at `sampleRate` / `channels` and
     /// encodes it as AAC-LC at `bitRate` into an MPEG-4 file at `outputPath` (replaced). What a host's recording import
@@ -213,6 +218,12 @@ public enum MediaFoundationAudio {
         }
         var frames: Int64 = 0
         do throws(Failure) {
+            // The priming a host states (`aacEncoderPrimingFrames`), as silence ahead of the music.
+            let silence = [Int16](repeating: 0, count: aacEncoderPrimingFrames * channels)
+            let primed = silence.withUnsafeBufferPointer {
+                cmf_aac_write(writer, $0.baseAddress, UInt32(aacEncoderPrimingFrames))
+            }
+            guard primed == 0 else { throw .mediaFoundation(step: "encode", hresult: primed) }
             while true {
                 if isCancelled() { throw .cancelled }
                 guard let block = try reader.next() else { break }

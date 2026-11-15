@@ -71,14 +71,18 @@ struct MediaFoundationEncodeTests {
         let probe = MediaFoundationAudio.probe(path: m4a)
         #expect(probe.status == .read && probe.isAACLC)
         #expect(probe.sampleRate == rate && probe.channels == channels)
-        #expect(abs(probe.durationSeconds - 1) < 0.05, "duration \(probe.durationSeconds) s")
+        // The second, after the leading priming (`aacEncoderPrimingFrames`) the file holds until a host states it.
+        let primed = 1 + Double(MediaFoundationAudio.aacEncoderPrimingFrames) / Double(rate)
+        #expect(abs(probe.durationSeconds - primed) < 0.05, "duration \(probe.durationSeconds) s")
         #expect(reported.last == 1 && zip(reported, reported.dropFirst()).allSatisfy { $0 <= $1 })
     }
 
-    /// The priming Microsoft's encoder puts first, as its sink states it in the edit list: the constant a host that
-    /// rewrites the edit list states again (`aacEncoderPrimingFrames`). Prints what it found for the record.
+    /// The encode leads with `aacEncoderPrimingFrames` of silence and states nothing itself: the sink writes no edit
+    /// list, Media Foundation's reader then trims nothing, and the click decodes that much later than written —
+    /// which a host's edit list takes back off (folino's `MP4PrimingEditList`). Prints what it found for the record,
+    /// and keeps the file for a decode elsewhere.
     @Test
-    func `the encoder's edit list states the priming the constant says`() throws {
+    func `the encode leads with the priming a host states`() throws {
         let wav = Self.temporaryPath(".wav")
         let m4a = Self.temporaryPath(".m4a")
         let pcm = Self.temporaryPath(".pcm16")
@@ -99,10 +103,15 @@ struct MediaFoundationEncodeTests {
         let onset = left.firstIndex(where: { abs(Int($0)) > 8000 })
         print("MediaFoundationEncodeTests: elst media time \(mediaTime.map(String.init) ?? "none"), "
             + "click at 24000 decodes at \(onset.map(String.init) ?? "none"), \(decoded.frames) frames decoded")
-        #expect(mediaTime == Int64(MediaFoundationAudio.aacEncoderPrimingFrames))
-        if let onset {
-            #expect(abs(onset - 24000) <= 8, "the reader trims the priming the edit list states")
+        // Kept for a decode elsewhere (AVFoundation, ffmpeg), which the priming has to be stated for.
+        if let keep = ProcessInfo.processInfo.environment["SSM_KEEP_MP4_DIR"] {
+            try? FileManager.default.removeItem(atPath: keep + "/encode-click-24000.m4a")
+            try? FileManager.default.copyItem(atPath: m4a, toPath: keep + "/encode-click-24000.m4a")
         }
+        #expect(mediaTime == nil, "Media Foundation's sink states no priming; the host does")
+        let expected = 24000 + MediaFoundationAudio.aacEncoderPrimingFrames
+        let found = try #require(onset, "no click in the decode")
+        #expect(abs(found - expected) <= 8, "the click follows the leading silence: \(found), not \(expected)")
     }
 
     @Test

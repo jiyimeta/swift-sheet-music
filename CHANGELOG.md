@@ -13,8 +13,10 @@ and this project adheres to
   (Windows): any audio file Media Foundation decodes, read at the asked rate and channel count and encoded as AAC-LC
   into an MPEG-4 file — what a host's recording import stores. Microsoft's encoder takes 44.1 or 48 kHz, one or two
   channels and 96–192 kbit/s; anything else throws `.unsupportedFormat` before a file is made. Progress after each
-  block, a cancel between blocks (`.cancelled`), and any failure removes the output. `Encoded.primingFrames` is
-  `aacEncoderPrimingFrames`, the priming the encoder's sink states in the file's edit list.
+  block, a cancel between blocks (`.cancelled`), and any failure removes the output. The encode leads with
+  `aacEncoderPrimingFrames` (2112) of silence, returned as `Encoded.primingFrames` for the host to state in the file's
+  edit list: Microsoft's encoder primes nothing a decoder sees and its sink states no priming, and AVFoundation trims
+  2112 frames from such a file whatever its edit list says — so the file reads the same on every decoder.
 - **`MediaFoundationAudio.Reader(path:sampleRate:channels:)`** and `cmf_audio_reader_open_as`: a reader asked for a
   rate and channel count other than the stream's, which Media Foundation's source reader converts to.
 
