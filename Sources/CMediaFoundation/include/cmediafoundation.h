@@ -48,8 +48,10 @@ int32_t cmf_mp4_encoder_available(void);
 
 /// Opens an MPEG-4 file at `path` (UTF-16, replaced if it exists) with an H.264 stream of `width` x `height` (both
 /// even) at `fps` and `video_bit_rate` bits per second, taking BGRA frames with rows top-down; and, when `sample_rate`
-/// and `channels` are not 0, an AAC stream at `audio_bit_rate` taking 16-bit PCM. The video is tagged BT.709, studio
-/// range. E_NOTIMPL when Media Foundation is absent, E_INVALIDARG for an odd or empty size.
+/// and `channels` are not 0, an AAC stream at `audio_bit_rate` taking 16-bit PCM. The frames are written in studio
+/// range in the matrix a player assumes for an untagged stream of that height — BT.601 below 720 rows, BT.709 from 720
+/// — and `cmf_mp4_finish` names it in a `colr` box. E_NOTIMPL when Media Foundation is absent, E_INVALIDARG for an odd
+/// or empty size.
 int32_t cmf_mp4_open(const uint16_t *path, uint32_t width, uint32_t height, uint32_t fps, uint32_t video_bit_rate,
                      uint32_t sample_rate, uint32_t channels, uint32_t audio_bit_rate, cmf_mp4_writer **writer);
 
@@ -59,7 +61,8 @@ int32_t cmf_mp4_write_frame(cmf_mp4_writer *writer, const uint8_t *bgra);
 /// Encodes `frames` frames of interleaved 16-bit PCM after those written so far. E_UNEXPECTED without an audio stream.
 int32_t cmf_mp4_write_audio(cmf_mp4_writer *writer, const int16_t *samples, uint32_t frames);
 
-/// Completes the file. The writer is still to be closed.
+/// Completes the file and adds its `colr` box (S_FALSE when the file's layout left no room for one). The writer is
+/// still to be closed.
 int32_t cmf_mp4_finish(cmf_mp4_writer *writer);
 
 /// Releases everything the writer holds. Accepts NULL; after `cmf_mp4_finish`, or instead of it for a file abandoned
@@ -75,9 +78,11 @@ int32_t cmf_mp4_probe(const uint16_t *path, int64_t *duration_100ns, uint32_t *w
 /// top-left: its four bytes (B, G, R, X) into `bgra`. For tests of the colour tags and the row order.
 int32_t cmf_mp4_first_frame_pixel(const uint16_t *path, uint32_t x, uint32_t y, uint8_t *bgra);
 
-/// The YUV matrix the file's first video stream says it is in (`MFVideoTransferMatrix`: 1 BT.709, 2 BT.601), read by
-/// Media Foundation from the stream — 0 when it says none. For tests of the colour tags.
-int32_t cmf_mp4_video_matrix(const uint16_t *path, uint32_t *matrix);
+/// The colour the file's video sample entry names in its `colr` (nclx) box, read from the container itself: ISO/IEC
+/// 23091-2 codes for the primaries, the transfer and the matrix (1 BT.709, 6 BT.601), and the full-range flag. S_FALSE
+/// with zeros when there is no such box. For tests of the colour tag.
+int32_t cmf_mp4_colour(const uint16_t *path, uint16_t *primaries, uint16_t *transfer, uint16_t *matrix,
+                       uint8_t *full_range);
 
 /// The first frame of the file at `path`, decoded to NV12 with no colour conversion, at pixel (`x`, `y`) from the
 /// top-left: its luma, Cb and Cr into `yuv`. What the stream holds, whichever matrix a player would assume.

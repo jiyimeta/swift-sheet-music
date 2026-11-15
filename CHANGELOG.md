@@ -15,12 +15,18 @@ and this project adheres to
 
 ### Fixed
 
-- **`MP4VideoWriter` (Windows): the stream always says it is BT.709.** The writer used whichever H.264 encoder Media
-  Foundation picked, and a hardware one may leave the colour tags out of the stream (folino-win's did: Constrained
-  Baseline, no colour description); a player then took an SD video for BT.601 and every colour came back up to 24
-  levels off, though the values written were right. The writer now uses software transforms only — Microsoft's own
-  encoder, which writes the tags. `MP4VideoWriterTests` checks the stream's matrix and its decoded NV12 values, not a
-  decoder's RGB, which depends on what that decoder assumes.
+- **`MP4VideoWriter` (Windows): the colours are right on every player.** Media Foundation's H.264 encoders,
+  software and hardware, write no colour description into the stream, though the types they are handed carry it.
+  A player then guessed the matrix by the picture's height: BT.601 for SD, BT.709 for HD. The writer always wrote
+  BT.709, so an SD video's colours came back up to 24 levels off.
+  - The frames are now written in the matrix a player assumes for their height: BT.601 below 720 rows, BT.709 from
+    720.
+  - Once the file is complete, the writer adds a `colr` (nclx) box to the video sample entry. It names that matrix,
+    BT.709 primaries and transfer, and studio range, for the players that read it. The box grows only `moov`, which
+    Media Foundation writes after the media, so no chunk offset moves.
+  - Hardware encoders are allowed again.
+  - `MP4VideoWriterTests` reads the `colr` box from the container and the decoded NV12 values at each height. It no
+    longer reads a decoder's interpretation of either.
 
 ## [4.39.0] - 2026-11-15
 

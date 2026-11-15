@@ -185,6 +185,15 @@ void cmf_aac_close(cmf_aac_writer *writer) {
 
 // MARK: - MP4 (H.264 + AAC)
 
+/// A YUV matrix's studio-range coefficients in 1/256ths: luma from R, G, B, then Cb's and Cr's.
+typedef struct {
+    int yr, yg, yb, ur, ug, ub, vr, vg, vb;
+    /// What the matrix is called in an MP4 `colr` box (ISO/IEC 23091-2 MatrixCoefficients): 1 BT.709, 6 BT.601.
+    uint16_t colr_matrix;
+    /// What it is called in a Media Foundation type (`MFVideoTransferMatrix`).
+    UINT32 mf_matrix;
+} nv12_matrix;
+
 struct cmf_mp4_writer {
     IMFSinkWriter *sink;
     DWORD video_stream;
@@ -199,13 +208,32 @@ struct cmf_mp4_writer {
     LONGLONG audio_frames_written;
     /// The frame being handed over, as NV12: `width * height` luma bytes, then interleaved Cb Cr at half size.
     uint8_t *nv12;
+    /// The matrix the frames are converted in (`matrix_for_height`), which the `colr` box then names.
+    const nv12_matrix *matrix;
+    /// The file, for the `colr` box written once the Sink Writer has let go of it.
+    WCHAR *path;
     BOOL com_initialized;
     BOOL mf_started;
 };
 
-/// BGRA (premultiplied, opaque in a score video) to NV12 in BT.709 studio range — 8-bit integer coefficients, luma per
-/// pixel, chroma from each 2x2 block's average. Rows top-down in both.
-static void bgra_to_nv12(const uint8_t *bgra, uint8_t *nv12, uint32_t width, uint32_t height) {
+/// The two matrices' 8-bit studio-range coefficients (ITU-R BT.709 and BT.601), each row rounded so luma's sums to 220
+/// and each chroma's to 0, which keeps a grey's chroma at exactly 128 (BT.709's Cb, -25.8 -86.7 +112.4, gives its
+/// rounding to green).
+static const nv12_matrix matrix_bt709 = {47, 157, 16, -26, -86, 112, 112, -102, -10, 1, MFVideoTransferMatrix_BT709};
+static const nv12_matrix matrix_bt601 = {66, 129, 25, -38, -74, 112, 112, -94, -18, 6, MFVideoTransferMatrix_BT601};
+
+/// The matrix a frame `height` rows tall is written in: the one a player assumes for an untagged stream of that
+/// height — BT.601 below 720 rows (SD), BT.709 from 720 (HD) — so the colours are right whether or not the player
+/// reads the `colr` box that names it. Media Foundation's H.264 encoder writes no colour description into the stream
+/// (measured on folino-win, 2026-11-15: its output type held BT.709, the stream's VUI had none), so the container's
+/// box is the only tag, and many players read none.
+static const nv12_matrix *matrix_for_height(uint32_t height) {
+    return height < 720 ? &matrix_bt601 : &matrix_bt709;
+}
+
+/// BGRA (premultiplied, opaque in a score video) to NV12 in `m`, studio range — luma per pixel, chroma from each 2x2
+/// block's average. Rows top-down in both.
+static void bgra_to_nv12(const uint8_t *bgra, uint8_t *nv12, uint32_t width, uint32_t height, const nv12_matrix *m) {
     uint8_t *luma = nv12;
     uint8_t *chroma = nv12 + (size_t)width * height;
     for (uint32_t y = 0; y < height; y++) {
@@ -213,7 +241,7 @@ static void bgra_to_nv12(const uint8_t *bgra, uint8_t *nv12, uint32_t width, uin
         uint8_t *out = luma + (size_t)y * width;
         for (uint32_t x = 0; x < width; x++) {
             int b = row[x * 4], g = row[x * 4 + 1], r = row[x * 4 + 2];
-            out[x] = (uint8_t)(((47 * r + 157 * g + 16 * b + 128) >> 8) + 16);
+            out[x] = (uint8_t)(((m->yr * r + m->yg * g + m->yb * b + 128) >> 8) + 16);
         }
     }
     for (uint32_t y = 0; y < height; y += 2) {
@@ -226,8 +254,8 @@ static void bgra_to_nv12(const uint8_t *bgra, uint8_t *nv12, uint32_t width, uin
             int b = (p[0] + p[4] + q[0] + q[4] + 2) >> 2;
             int g = (p[1] + p[5] + q[1] + q[5] + 2) >> 2;
             int r = (p[2] + p[6] + q[2] + q[6] + 2) >> 2;
-            out[x] = (uint8_t)(((-26 * r - 87 * g + 112 * b + 128) >> 8) + 128);
-            out[x + 1] = (uint8_t)(((112 * r - 102 * g - 10 * b + 128) >> 8) + 128);
+            out[x] = (uint8_t)(((m->ur * r + m->ug * g + m->ub * b + 128) >> 8) + 128);
+            out[x + 1] = (uint8_t)(((m->vr * r + m->vg * g + m->vb * b + 128) >> 8) + 128);
         }
     }
 }
@@ -278,14 +306,203 @@ static HRESULT video_type(IMFMediaType **type, const GUID *subtype, uint32_t wid
     return hr;
 }
 
-/// The stream's colour, as Apple's writer tags it: BT.709 primaries, matrix and transfer, studio range (16–235).
-/// Without these a decoder guesses, and an untagged stream's colours came back lifted (40,120,200 read 57,131,205).
-static HRESULT tag_bt709(IMFMediaType *type) {
+/// The frames' colour on the types the Sink Writer is handed: BT.709 primaries and transfer (what the canvas draws in),
+/// `matrix`, studio range (16–235). The encoder keeps them on its output type but writes none into the stream, so the
+/// file's own tag is the `colr` box `add_colr` writes.
+static HRESULT tag_colour(IMFMediaType *type, const nv12_matrix *matrix) {
     HRESULT hr = IMFMediaType_SetUINT32(type, &MF_MT_VIDEO_PRIMARIES, MFVideoPrimaries_BT709);
-    if (SUCCEEDED(hr)) hr = IMFMediaType_SetUINT32(type, &MF_MT_YUV_MATRIX, MFVideoTransferMatrix_BT709);
+    if (SUCCEEDED(hr)) hr = IMFMediaType_SetUINT32(type, &MF_MT_YUV_MATRIX, matrix->mf_matrix);
     if (SUCCEEDED(hr)) hr = IMFMediaType_SetUINT32(type, &MF_MT_TRANSFER_FUNCTION, MFVideoTransFunc_709);
     if (SUCCEEDED(hr)) hr = IMFMediaType_SetUINT32(type, &MF_MT_VIDEO_NOMINAL_RANGE, MFNominalRange_16_235);
     return hr;
+}
+
+// MARK: - The `colr` box
+//
+// An MP4 says its video's colour in a `colr` box of type `nclx` inside the video sample entry (`avc1`), ISO/IEC
+// 14496-12 §12.1.5: primaries, transfer, matrix (ISO/IEC 23091-2 codes) and a full-range flag. Media Foundation's sink
+// writes none, and its encoder writes no colour description into the stream either, so the box is added once the file
+// is complete. The sink puts the `moov` box after the media data, so the box grows only `moov` and the boxes above the
+// sample entry inside it — no chunk offset (`stco`) moves. A file laid out otherwise is left as it is.
+
+/// The size of `moov` a file may have for the box to be added in memory; a score video's is a few hundred KB.
+static const uint64_t colr_moov_limit = 64u * 1024 * 1024;
+enum { colr_box_size = 19 };
+
+static uint32_t read_be32(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+}
+
+static void write_be32(uint8_t *p, uint32_t value) {
+    p[0] = (uint8_t)(value >> 24);
+    p[1] = (uint8_t)(value >> 16);
+    p[2] = (uint8_t)(value >> 8);
+    p[3] = (uint8_t)value;
+}
+
+/// The first box of `type` among the boxes in [start, end) of `box`: its offset, or -1. Boxes with a 64-bit size or
+/// running past `end` stop the search (none is expected inside `moov`).
+static long find_child(const uint8_t *box, size_t start, size_t end, const char *type) {
+    size_t offset = start;
+    while (offset + 8 <= end) {
+        uint32_t size = read_be32(box + offset);
+        if (size < 8 || offset + size > end) return -1;
+        if (memcmp(box + offset + 4, type, 4) == 0) return (long)offset;
+        offset += size;
+    }
+    return -1;
+}
+
+/// The video track's `avc1` sample entry in `moov` (read into memory): the offsets of the boxes that hold it, outermost
+/// first — moov, trak, mdia, minf, stbl, stsd, avc1 — into `chain`. FALSE when there is none.
+static BOOL find_avc1(const uint8_t *moov, size_t size, size_t chain[7]) {
+    chain[0] = 0;
+    size_t start = 8;
+    while (start + 8 <= size) {
+        long trak = find_child(moov, start, size, "trak");
+        if (trak < 0) return FALSE;
+        size_t trak_end = (size_t)trak + read_be32(moov + trak);
+        start = trak_end;
+        long mdia = find_child(moov, (size_t)trak + 8, trak_end, "mdia");
+        if (mdia < 0) continue;
+        size_t mdia_end = (size_t)mdia + read_be32(moov + mdia);
+        long hdlr = find_child(moov, (size_t)mdia + 8, mdia_end, "hdlr");
+        // hdlr: header (8), version and flags (4), pre_defined (4), then the handler type.
+        if (hdlr < 0 || (size_t)hdlr + 20 > mdia_end || memcmp(moov + hdlr + 16, "vide", 4) != 0) continue;
+        long minf = find_child(moov, (size_t)mdia + 8, mdia_end, "minf");
+        if (minf < 0) return FALSE;
+        size_t minf_end = (size_t)minf + read_be32(moov + minf);
+        long stbl = find_child(moov, (size_t)minf + 8, minf_end, "stbl");
+        if (stbl < 0) return FALSE;
+        size_t stbl_end = (size_t)stbl + read_be32(moov + stbl);
+        long stsd = find_child(moov, (size_t)stbl + 8, stbl_end, "stsd");
+        if (stsd < 0) return FALSE;
+        size_t stsd_end = (size_t)stsd + read_be32(moov + stsd);
+        // stsd: header (8), version and flags (4), entry count (4), then the sample entries.
+        long avc1 = find_child(moov, (size_t)stsd + 16, stsd_end, "avc1");
+        if (avc1 < 0) return FALSE;
+        size_t found[7] = {0, (size_t)trak, (size_t)mdia, (size_t)minf, (size_t)stbl, (size_t)stsd, (size_t)avc1};
+        memcpy(chain, found, sizeof(found));
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/// The offset and size of the file's `moov` box when it is the last box (Media Foundation's layout) and small enough
+/// to edit in memory; FALSE otherwise.
+static BOOL find_last_moov(HANDLE file, uint64_t *offset, uint64_t *size) {
+    LARGE_INTEGER length;
+    if (!GetFileSizeEx(file, &length)) return FALSE;
+    uint64_t at = 0;
+    BOOL found = FALSE;
+    while (at + 8 <= (uint64_t)length.QuadPart) {
+        uint8_t header[16];
+        DWORD read = 0;
+        LARGE_INTEGER position;
+        position.QuadPart = (LONGLONG)at;
+        if (!SetFilePointerEx(file, position, NULL, FILE_BEGIN) || !ReadFile(file, header, 16, &read, NULL) || read < 8) {
+            return FALSE;
+        }
+        uint64_t box = read_be32(header);
+        if (box == 1) {
+            if (read < 16) return FALSE;
+            box = ((uint64_t)read_be32(header + 8) << 32) | read_be32(header + 12);
+        } else if (box == 0) {
+            box = (uint64_t)length.QuadPart - at;
+        }
+        if (box < 8) return FALSE;
+        found = memcmp(header + 4, "moov", 4) == 0 && read_be32(header) != 1;
+        if (found) {
+            *offset = at;
+            *size = box;
+        }
+        at += box;
+    }
+    return found && *offset + *size == (uint64_t)length.QuadPart && *size <= colr_moov_limit;
+}
+
+/// Reads the file's `moov` box, if it is the last one, into a new buffer with room for one `colr` box after it.
+static uint8_t *read_moov(HANDLE file, uint64_t *offset, uint64_t *size) {
+    if (!find_last_moov(file, offset, size)) return NULL;
+    uint8_t *moov = (uint8_t *)malloc((size_t)*size + colr_box_size);
+    if (moov == NULL) return NULL;
+    LARGE_INTEGER position;
+    position.QuadPart = (LONGLONG)*offset;
+    DWORD read = 0;
+    if (!SetFilePointerEx(file, position, NULL, FILE_BEGIN) || !ReadFile(file, moov, (DWORD)*size, &read, NULL) ||
+        read != (DWORD)*size) {
+        free(moov);
+        return NULL;
+    }
+    return moov;
+}
+
+/// Adds a `colr` box naming BT.709 primaries and transfer, `matrix` and studio range to the file's video sample entry.
+/// S_FALSE, the file untouched, when it is laid out otherwise or already has one.
+static HRESULT add_colr(const WCHAR *path, uint16_t matrix) {
+    HANDLE file = CreateFileW(path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE) return HRESULT_FROM_WIN32(GetLastError());
+    HRESULT hr = S_FALSE;
+    uint64_t offset = 0, size = 0;
+    uint8_t *moov = read_moov(file, &offset, &size);
+    size_t chain[7];
+    if (moov != NULL && find_avc1(moov, (size_t)size, chain)) {
+        size_t avc1 = chain[6];
+        size_t avc1_end = avc1 + read_be32(moov + avc1);
+        // The visual sample entry's fixed fields take 78 bytes after its header; its child boxes follow.
+        if (find_child(moov, avc1 + 8 + 78, avc1_end, "colr") < 0) {
+            memmove(moov + avc1_end + colr_box_size, moov + avc1_end, (size_t)size - avc1_end);
+            uint8_t *box = moov + avc1_end;
+            const uint8_t fields[colr_box_size] = {
+                0, 0, 0, colr_box_size, 'c', 'o', 'l', 'r', 'n', 'c', 'l', 'x',
+                0, 1, // colour_primaries: BT.709
+                0, 1, // transfer_characteristics: BT.709
+                (uint8_t)(matrix >> 8), (uint8_t)matrix,
+                0, // full_range_flag 0: studio range
+            };
+            memcpy(box, fields, colr_box_size);
+            for (int i = 0; i < 7; i++) write_be32(moov + chain[i], read_be32(moov + chain[i]) + colr_box_size);
+            LARGE_INTEGER position;
+            position.QuadPart = (LONGLONG)offset;
+            DWORD written = 0;
+            DWORD total = (DWORD)size + colr_box_size;
+            hr = SetFilePointerEx(file, position, NULL, FILE_BEGIN) && WriteFile(file, moov, total, &written, NULL) &&
+                         written == total
+                     ? S_OK
+                     : HRESULT_FROM_WIN32(GetLastError());
+        }
+    }
+    free(moov);
+    CloseHandle(file);
+    return hr;
+}
+
+int32_t cmf_mp4_colour(const uint16_t *path, uint16_t *primaries, uint16_t *transfer, uint16_t *matrix,
+                       uint8_t *full_range) {
+    *primaries = *transfer = *matrix = 0;
+    *full_range = 0;
+    HANDLE file = CreateFileW((LPCWSTR)path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+                              NULL);
+    if (file == INVALID_HANDLE_VALUE) return (int32_t)HRESULT_FROM_WIN32(GetLastError());
+    HRESULT hr = S_FALSE;
+    uint64_t offset = 0, size = 0;
+    uint8_t *moov = read_moov(file, &offset, &size);
+    size_t chain[7];
+    if (moov != NULL && find_avc1(moov, (size_t)size, chain)) {
+        size_t avc1 = chain[6];
+        long colr = find_child(moov, avc1 + 8 + 78, avc1 + read_be32(moov + avc1), "colr");
+        if (colr >= 0 && read_be32(moov + colr) >= colr_box_size && memcmp(moov + colr + 8, "nclx", 4) == 0) {
+            const uint8_t *fields = moov + colr + 12;
+            *primaries = (uint16_t)((fields[0] << 8) | fields[1]);
+            *transfer = (uint16_t)((fields[2] << 8) | fields[3]);
+            *matrix = (uint16_t)((fields[4] << 8) | fields[5]);
+            *full_range = (uint8_t)(fields[6] >> 7);
+            hr = S_OK;
+        }
+    }
+    free(moov);
+    CloseHandle(file);
+    return (int32_t)hr;
 }
 
 int32_t cmf_mp4_open(const uint16_t *path, uint32_t width, uint32_t height, uint32_t fps, uint32_t video_bit_rate,
@@ -301,6 +518,12 @@ int32_t cmf_mp4_open(const uint16_t *path, uint32_t width, uint32_t height, uint
     writer->sample_rate = sample_rate;
     writer->channels = channels;
     writer->has_audio = sample_rate > 0 && channels > 0;
+    writer->matrix = matrix_for_height(height);
+    writer->path = _wcsdup((const wchar_t *)path);
+    if (writer->path == NULL) {
+        free(writer);
+        return (int32_t)E_OUTOFMEMORY;
+    }
     writer->com_initialized = SUCCEEDED(CoInitializeEx(NULL, COINIT_MULTITHREADED));
     HRESULT hr = mf.startup(MF_VERSION, MFSTARTUP_LITE);
     writer->mf_started = SUCCEEDED(hr);
@@ -313,22 +536,22 @@ int32_t cmf_mp4_open(const uint16_t *path, uint32_t width, uint32_t height, uint
     if (SUCCEEDED(hr)) {
         hr = IMFAttributes_SetGUID(attributes, &MF_TRANSCODE_CONTAINERTYPE, &MFTranscodeContainerType_MPEG4);
     }
-    // Software transforms only: Microsoft's own H.264 encoder writes the colour tags below into the stream's VUI, but a
-    // hardware encoder may not (folino-win's, 2026-11-15: Constrained Baseline, no colour description at all), and an
-    // untagged SD stream is decoded as BT.601 — its colours off by up to 24 levels on every player.
-    if (SUCCEEDED(hr)) hr = IMFAttributes_SetUINT32(attributes, &MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, FALSE);
+    // Hardware transforms are allowed: no encoder, software or hardware, was seen to write the colour into the stream,
+    // so the colour does not depend on which one Media Foundation picks (`matrix_for_height`, `add_colr`).
+    if (SUCCEEDED(hr)) hr = IMFAttributes_SetUINT32(attributes, &MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
     if (SUCCEEDED(hr)) hr = mf.create_sink_writer((LPCWSTR)path, NULL, attributes, &writer->sink);
     // Video: H.264 out; BGRA in (the frame canvas's pixels), the Sink Writer converting to the encoder's NV12.
     if (SUCCEEDED(hr)) hr = video_type(&h264, &MFVideoFormat_H264, width, height, fps);
     if (SUCCEEDED(hr)) hr = IMFMediaType_SetUINT32(h264, &MF_MT_AVG_BITRATE, video_bit_rate);
-    if (SUCCEEDED(hr)) hr = tag_bt709(h264);
+    if (SUCCEEDED(hr)) hr = tag_colour(h264, writer->matrix);
     if (SUCCEEDED(hr)) hr = IMFSinkWriter_AddStream(writer->sink, h264, &writer->video_stream);
     // NV12 in, converted here from the caller's BGRA (`bgra_to_nv12`) rather than by the converter the Sink Writer
-    // would insert for RGB32: that converter ignored the BT.709 tags and the colours came back shifted by up to 13
-    // levels. Converting here, the data is the tags' by construction. Rows top-down (a positive stride).
+    // would insert for RGB32: that converter ignored the colour tags and the colours came back shifted by up to 13
+    // levels. Converting here, the data is in the matrix the `colr` box names by construction. Rows top-down (a
+    // positive stride).
     if (SUCCEEDED(hr)) hr = video_type(&bgra, &MFVideoFormat_NV12, width, height, fps);
     if (SUCCEEDED(hr)) hr = IMFMediaType_SetUINT32(bgra, &MF_MT_DEFAULT_STRIDE, width);
-    if (SUCCEEDED(hr)) hr = tag_bt709(bgra);
+    if (SUCCEEDED(hr)) hr = tag_colour(bgra, writer->matrix);
     if (SUCCEEDED(hr)) hr = IMFSinkWriter_SetInputMediaType(writer->sink, writer->video_stream, bgra, NULL);
     if (SUCCEEDED(hr)) {
         writer->nv12 = (uint8_t *)malloc((size_t)width * height * 3 / 2);
@@ -382,7 +605,7 @@ int32_t cmf_mp4_write_frame(cmf_mp4_writer *writer, const uint8_t *bgra) {
     // Times from the frame count, so no rounding builds up over a long video.
     LONGLONG start = writer->frames_written * 10000000LL / writer->fps;
     LONGLONG end = (writer->frames_written + 1) * 10000000LL / writer->fps;
-    bgra_to_nv12(bgra, writer->nv12, writer->width, writer->height);
+    bgra_to_nv12(bgra, writer->nv12, writer->width, writer->height, writer->matrix);
     HRESULT hr = write_sample(writer->sink, writer->video_stream, writer->nv12, writer->width * writer->height * 3 / 2,
                               start, end);
     if (SUCCEEDED(hr)) writer->frames_written += 1;
@@ -399,12 +622,18 @@ int32_t cmf_mp4_write_audio(cmf_mp4_writer *writer, const int16_t *samples, uint
 }
 
 int32_t cmf_mp4_finish(cmf_mp4_writer *writer) {
-    return (int32_t)IMFSinkWriter_Finalize(writer->sink);
+    HRESULT hr = IMFSinkWriter_Finalize(writer->sink);
+    if (FAILED(hr)) return (int32_t)hr;
+    // The Sink Writer lets go of the file only when it is released; the box is written after.
+    IMFSinkWriter_Release(writer->sink);
+    writer->sink = NULL;
+    return (int32_t)add_colr(writer->path, writer->matrix->colr_matrix);
 }
 
 void cmf_mp4_close(cmf_mp4_writer *writer) {
     if (writer == NULL) return;
     if (writer->sink) IMFSinkWriter_Release(writer->sink);
+    free(writer->path);
     free(writer->nv12);
     if (writer->mf_started) mf.shutdown();
     if (writer->com_initialized) CoUninitialize();
@@ -514,33 +743,6 @@ static HRESULT open_nv12_reader(const uint16_t *path, IMFSourceReader **reader, 
     }
     if (nv12) IMFMediaType_Release(nv12);
     return hr;
-}
-
-int32_t cmf_mp4_video_matrix(const uint16_t *path, uint32_t *matrix) {
-    *matrix = 0;
-    if (!ensure_loaded() || mf.create_source_reader == NULL) return (int32_t)E_NOTIMPL;
-    BOOL com = SUCCEEDED(CoInitializeEx(NULL, COINIT_MULTITHREADED));
-    HRESULT hr = mf.startup(MF_VERSION, MFSTARTUP_LITE);
-    BOOL started = SUCCEEDED(hr);
-    IMFSourceReader *reader = NULL;
-    IMFMediaType *current = NULL;
-    if (SUCCEEDED(hr)) hr = open_nv12_reader(path, &reader, &current);
-    if (SUCCEEDED(hr)) {
-        // What the decoder read from the stream; the container's own type first, which may carry none.
-        IMFMediaType *native = NULL;
-        UINT32 value = 0;
-        if (SUCCEEDED(IMFSourceReader_GetNativeMediaType(reader, (DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0,
-                                                         &native))) {
-            if (SUCCEEDED(IMFMediaType_GetUINT32(native, &MF_MT_YUV_MATRIX, &value))) *matrix = value;
-            IMFMediaType_Release(native);
-        }
-        if (*matrix == 0 && SUCCEEDED(IMFMediaType_GetUINT32(current, &MF_MT_YUV_MATRIX, &value))) *matrix = value;
-    }
-    if (current) IMFMediaType_Release(current);
-    if (reader) IMFSourceReader_Release(reader);
-    if (started) mf.shutdown();
-    if (com) CoUninitialize();
-    return (int32_t)hr;
 }
 
 int32_t cmf_mp4_first_frame_yuv(const uint16_t *path, uint32_t x, uint32_t y, uint8_t *yuv) {

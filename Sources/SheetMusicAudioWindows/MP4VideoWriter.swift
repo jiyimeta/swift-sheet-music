@@ -7,8 +7,10 @@ import Foundation
 /// so a long video does not drift.
 ///
 /// Media Foundation is loaded at run time, never linked, so a Windows "N" edition without the Media Feature Pack still
-/// starts the host; there `isAvailable` is false and `init` throws `Failure.unavailable`. The video stream is tagged
-/// BT.709, studio range, as Apple's writer tags its own.
+/// starts the host; there `isAvailable` is false and `init` throws `Failure.unavailable`. The frames are written in
+/// studio range in the matrix a player assumes for an untagged stream of their height — BT.601 below 720 rows, BT.709
+/// from 720 — and named in the file's `colr` box, since Media Foundation's encoders write no colour description into
+/// the stream. Apple's writer tags BT.709 at every size in the stream itself.
 ///
 /// Used from one thread: the one that made it (`init` joins the multithreaded COM apartment there).
 public final class MP4VideoWriter {
@@ -120,13 +122,14 @@ public final class MP4VideoWriter {
         guard result == 0 else { throw Failure.mediaFoundation(step: "write audio", hresult: result) }
     }
 
-    /// Completes the file and lets go of the writer.
+    /// Completes the file, names its colour in a `colr` box, and lets go of the writer. A file whose layout left no
+    /// room for the box (S_FALSE) is still complete; its colours are then right for players that go by its height.
     public func finish() throws {
         guard let writer else { return }
         let result = cmf_mp4_finish(writer)
         cmf_mp4_close(writer)
         self.writer = nil
-        guard result == 0 else { throw Failure.mediaFoundation(step: "finalize", hresult: result) }
+        guard result >= 0 else { throw Failure.mediaFoundation(step: "finalize", hresult: result) }
     }
 
     /// Lets go of the writer without completing the file, which the caller then deletes (a cancelled export).
@@ -176,13 +179,18 @@ public final class MP4VideoWriter {
         return (yuv[0], yuv[1], yuv[2])
     }
 
-    /// The YUV matrix the file's video stream says it is in (`MFVideoTransferMatrix`: 1 BT.709, 2 BT.601), 0 for
-    /// none: a stream with none is decoded by most players as BT.601 below HD. What a test checks the tags with.
-    package static func videoMatrix(_ url: URL) throws -> UInt32 {
-        var matrix: UInt32 = 0
-        let result = url.path.withCString(encodedAs: UTF16.self) { cmf_mp4_video_matrix($0, &matrix) }
-        guard result == 0 else { throw Failure.mediaFoundation(step: "read the stream's matrix", hresult: result) }
-        return matrix
+    /// The colour the file's `colr` box names, read from the container (ISO/IEC 23091-2 codes: 1 BT.709, 6 BT.601), or
+    /// nil when it has none. What a test checks the tag with — the box itself, not what a decoder makes of it.
+    package static func colour(
+        _ url: URL,
+    ) throws -> (primaries: UInt16, transfer: UInt16, matrix: UInt16, fullRange: Bool)? {
+        var primaries: UInt16 = 0, transfer: UInt16 = 0, matrix: UInt16 = 0
+        var fullRange: UInt8 = 0
+        let result = url.path.withCString(encodedAs: UTF16.self) {
+            cmf_mp4_colour($0, &primaries, &transfer, &matrix, &fullRange)
+        }
+        guard result >= 0 else { throw Failure.mediaFoundation(step: "read the colr box", hresult: result) }
+        return result == 0 ? (primaries, transfer, matrix, fullRange != 0) : nil
     }
 
     /// E_NOTIMPL, what `cmf_mp4_open` answers when Media Foundation could not be loaded.
