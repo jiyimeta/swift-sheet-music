@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.42.0] - 2026-11-16
+
 ### Added
 
 - **`MediaFoundationAudio.encodeAAC(sourcePath:outputPath:sampleRate:channels:bitRate:progress:isCancelled:)`**
