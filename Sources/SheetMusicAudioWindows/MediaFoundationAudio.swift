@@ -22,11 +22,17 @@ public enum MediaFoundationAudio {
         case cache(RecordingPCMCacheWriter.Failure)
         /// The raw PCM output could not be written; `code` is the `errno`.
         case writeFailed(code: Int32)
+        /// An encode asked for a rate, channel count or bit rate Microsoft's AAC encoder does not take.
+        case unsupportedFormat
+        /// The caller stopped the encode.
+        case cancelled
 
         public var description: String {
             switch self {
             case .unavailable: "Media Foundation's source reader is not available on this Windows"
             case .empty: "the file decoded to no audio"
+            case .unsupportedFormat: "Microsoft's AAC encoder does not take that rate, channel count or bit rate"
+            case .cancelled: "the encode was cancelled"
             case let .mediaFoundation(step, hresult):
                 "Media Foundation \(step) failed (HRESULT 0x\(String(UInt32(bitPattern: hresult), radix: 16)))"
             case let .cache(failure): "the PCM cache could not be written (\(failure))"
@@ -164,6 +170,70 @@ public enum MediaFoundationAudio {
             throw .writeFailed(code: code)
         }
         return decoded
+    }
+
+    /// An encode that landed: the frames given to the encoder, at the output's rate, and the priming the encoder put
+    /// before them (`aacEncoderPrimingFrames`).
+    public struct Encoded: Sendable, Equatable {
+        public var frames: Int64
+        public var primingFrames: Int
+    }
+
+    /// The frames of priming Microsoft's AAC encoder puts before the first sample, which its MPEG-4 sink states in
+    /// the file's edit list and Media Foundation's reader trims. A host that rewrites the edit list states this.
+    /// Held by `MediaFoundationEncodeTests`, so a Windows update that changes it fails. (Not measured yet: the first
+    /// run on folino-qa prints the value.)
+    public static let aacEncoderPrimingFrames = 0
+
+    /// Decodes `sourcePath`'s first audio stream through Media Foundation's reader at `sampleRate` / `channels` and
+    /// encodes it as AAC-LC at `bitRate` into an MPEG-4 file at `outputPath` (replaced). What a host's recording import
+    /// stores. Microsoft's encoder takes 44.1 or 48 kHz, one or two channels, 96 / 128 / 160 / 192 kbit/s; anything
+    /// else throws `.unsupportedFormat` before a file is made.
+    ///
+    /// `progress` is told the share of the source done, 0…1, after each block; `isCancelled` is asked before each,
+    /// and a true answer throws `.cancelled`. Any failure removes the output. Runs on the calling thread, never the
+    /// render thread.
+    public static func encodeAAC(
+        sourcePath: String, outputPath: String, sampleRate: Int, channels: Int, bitRate: Int,
+        progress: (Double) -> Void = { _ in }, isCancelled: () -> Bool = { false },
+    ) throws(Failure) -> Encoded {
+        guard [44100, 48000].contains(sampleRate), (1 ... 2).contains(channels),
+              [96000, 128_000, 160_000, 192_000].contains(bitRate)
+        else { throw .unsupportedFormat }
+        let duration = probe(path: sourcePath).durationSeconds
+        let reader = try Reader(path: sourcePath, sampleRate: sampleRate, channels: channels)
+        var opened: OpaquePointer?
+        let result = outputPath.withCString(encodedAs: UTF16.self) {
+            cmf_aac_open($0, UInt32(sampleRate), UInt32(channels), UInt32(bitRate), &opened)
+        }
+        guard result == 0, let writer = opened else {
+            cmf_aac_close(opened)
+            remove(outputPath)
+            throw .mediaFoundation(step: "encoder open", hresult: result)
+        }
+        var frames: Int64 = 0
+        do throws(Failure) {
+            while true {
+                if isCancelled() { throw .cancelled }
+                guard let block = try reader.next() else { break }
+                let written = cmf_aac_write(writer, block.samples, UInt32(block.frames))
+                guard written == 0 else { throw .mediaFoundation(step: "encode", hresult: written) }
+                frames += Int64(block.frames)
+                if duration > 0 {
+                    progress(min(1, Double(frames) / Double(sampleRate) / duration))
+                }
+            }
+            guard frames > 0 else { throw .empty }
+            let finished = cmf_aac_finish(writer)
+            guard finished == 0 else { throw .mediaFoundation(step: "encoder finish", hresult: finished) }
+        } catch {
+            cmf_aac_close(writer)
+            remove(outputPath)
+            throw error
+        }
+        cmf_aac_close(writer)
+        progress(1)
+        return Encoded(frames: frames, primingFrames: aacEncoderPrimingFrames)
     }
 
     /// A file's first audio stream, decoding block by block.
