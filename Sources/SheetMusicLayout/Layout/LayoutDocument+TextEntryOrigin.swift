@@ -127,9 +127,11 @@ extension LayoutDocument {
     /// anchor it is handed to a `MeasurePosition` (`SystemLaneSlot.position(of:in:)`). Layout must still name
     /// one voice element when it emits the glyph, and `LayoutEngine.systemLaneAnchor(atTick:…)` picks the
     /// lowest-numbered voice carrying a chord or rest at that tick — on the CANONICAL staff when the mark
-    /// belongs to no staff at all. That emitted `VoiceElementID` is therefore narrower than the mark's real
-    /// address, and the identity-matching overload above misses whenever the caller holds a different — equally
-    /// correct — name for the same beat. Both misses it documents are of that shape.
+    /// belongs to no staff at all, or for a score-wide mark at a tick that staff starts nothing on, on the first
+    /// other staff that starts something there (`systemLaneFallbackAnchors`). That emitted `VoiceElementID` is
+    /// therefore narrower than the mark's real address, and the identity-matching overload above misses whenever
+    /// the caller holds a different — equally correct — name for the same beat. Both misses it documents are of
+    /// that shape.
     ///
     /// So this resolves BOTH sides to a beat and compares those. Neither side re-derives the arithmetic: the
     /// caller's anchor and the emitted anchor go through the same `SystemLaneSlot.position(of:in:)` the writer
@@ -151,9 +153,9 @@ extension LayoutDocument {
     /// staff; a system text deliberately does not, because it has none and is laid out on the canonical staff
     /// whatever staff the caller is editing from. That single exception IS miss 2.
     ///
-    /// **What still returns `nil`:** a mark at a beat no chord or rest starts (a `<location>`-shifted lane
-    /// element — the v1 limit `SystemLaneSlot` records), an anchor naming a non-timed element, and an anchor
-    /// whose bar this document does not lay out.
+    /// **What still returns `nil`:** a staff text at a beat its staff starts no chord or rest on, a system text at
+    /// a beat no staff starts one on (a `<location>`-shifted lane element — the v1 limit `SystemLaneSlot`
+    /// records), an anchor naming a non-timed element, and an anchor whose bar this document does not lay out.
     public func staffTextOrigin(
         at anchor: VoiceElementID,
         style: TextStyleType,

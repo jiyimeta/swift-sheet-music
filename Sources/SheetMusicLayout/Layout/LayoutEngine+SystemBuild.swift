@@ -327,6 +327,19 @@ extension LayoutEngine {
                 let measDuration = measureDuration(
                     staffMeasureDurations[staffIdx], at: measureIdx,
                 )
+                let laneFallbacks = systemLaneFallbackAnchors(
+                    for: systemElementsForStaff, in: m, staff: address, measureIndex: measureIdx,
+                    measureDuration: measDuration, division: context.score.division,
+                ) {
+                    staves.indices.compactMap { other in
+                        guard other != staffIdx, staves[other].measures.indices.contains(measureIdx) else { return nil }
+                        return (
+                            address: allStaves[other].address,
+                            measure: staves[other].measures[measureIdx],
+                            measureDuration: measureDuration(staffMeasureDurations[other], at: measureIdx),
+                        )
+                    }
+                }
                 let staffCountInPart = context.score.parts.indices.contains(address.partIndex)
                     ? context.score.parts[address.partIndex].staves.count : 1
                 let breathOwners = barHeadBreathOwners(measureIdx: measureIdx, in: staff)
@@ -363,6 +376,7 @@ extension LayoutEngine {
                     incomingMelismas: incomingMelismas,
                     graceNoteMag: context.options.graceNoteMag,
                     systemElements: systemElementsForStaff,
+                    laneFallbackAnchors: laneFallbacks,
                     showsInvisibleElements: context.options.showsInvisibleElements,
                     lyricsVisible: context.options.lyricsVisible,
                     measureDuration: measDuration,
@@ -420,6 +434,7 @@ extension LayoutEngine {
                         isFirstSystem: isFirstSystem,
                         incomingMelismas: incomingMelismas,
                         systemElements: systemElementsForStaff,
+                        laneFallbackAnchors: laneFallbacks,
                         textPlacementStyle: context.score.style.textPlacement,
                         chordSymbolCase: context.score.style.chordSymbolCase,
                         maxAboveLyricVerse: maxAboveVerses[staffIdx],

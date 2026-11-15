@@ -242,6 +242,65 @@
             )
         }
 
+        /// A flute's two halves over a piano's four quarters, and a system text written from the piano's second
+        /// quarter — at beat 2, where the top staff, which draws it, starts nothing.
+        private static func halvesOverQuarters() -> Score {
+            let halves = Staff(measures: [Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .half, notes: [Note(pitch: 72, tpc: 14)])),
+                .chord(Chord(duration: .half, notes: [Note(pitch: 74, tpc: 16)])),
+            ])])])
+            let quarters = Staff(measures: [Measure(voices: [Voice(elements: (0 ..< 4).map { index in
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60 + index, tpc: 14)]))
+            })])])
+            return Score(division: 480, parts: [
+                Part(id: "P1", instrument: Instrument(id: "flute"), staves: [halves]),
+                Part(id: "P2", instrument: Instrument(id: "piano"), staves: [quarters]),
+            ])
+        }
+
+        /// The reported iOS bug: such a text drew with no anchor, so it could not be selected, and a tap on it fell
+        /// through to the note below — whose Delete then took the NOTE. The beat's chord on the lower staff is an
+        /// address the text's own command resolves to that beat.
+        @Test("A system text at a beat the top staff starts nothing on is hit by the beat's chord on another staff")
+        func systemTextOffTheTopStaffsBeatsIsHit() throws {
+            guard #available(macOS 15.0, *) else { return }
+            var score = Self.halvesOverQuarters()
+            let lower = VoiceElementID(
+                staff: StaffAddress(partIndex: 1, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+            )
+            _ = try SetStaffText(anchor: lower, text: "Swing", isSystemText: true).apply(to: &score)
+
+            let doc = layout(score)
+            let origin = try #require(doc.staffTextOrigin(at: lower, style: .systemText, in: score))
+            let hit = ScoreHitTester(document: doc).hitTest(at: CGPoint(x: origin.x + 2, y: origin.y - 2))
+            #expect(hit == .staffText(anchor: lower, style: .systemText))
+            // And that address removes it.
+            _ = try SetStaffText(anchor: lower, text: nil, isSystemText: true).apply(to: &score)
+            #expect(score.systemMeasures[0].elements.isEmpty)
+        }
+
+        /// A staff text is matched by its own staff, so another staff's chord would not name it: one at a beat its
+        /// staff starts nothing on keeps no anchor.
+        @Test("A staff text at a beat its staff starts nothing on gets no other staff's anchor")
+        func staffTextOffItsStaffsBeatsKeepsNoAnchor() {
+            guard #available(macOS 15.0, *) else { return }
+            var score = Self.halvesOverQuarters()
+            score.systemMeasures = IdentifiedArray([SystemMeasure(elements: [PositionedSystemElement(
+                position: MeasurePosition(numerator: 1, denominator: 4),
+                element: .staffText(StaffText(text: "pizz.")),
+                originalStaff: EditingFixtures.staff0,
+            )])])
+
+            let doc = layout(score)
+            let elements = doc.systems.flatMap(\.measures).flatMap(\.elements)
+            let anchors = elements.compactMap { element -> VoiceElementID?? in
+                guard case let .staffText(_, _, _, .staffText, anchor, _, _, _, _) = element else { return nil }
+                return .some(anchor)
+            }
+            #expect(anchors.count == 1)
+            #expect(anchors.first == .some(nil))
+        }
+
         // MARK: - What the pass refuses to report
 
         /// A one-measure, one-system document holding exactly `elements`, at the default `staffSize: 28`

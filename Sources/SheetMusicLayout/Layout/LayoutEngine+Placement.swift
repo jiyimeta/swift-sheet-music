@@ -76,6 +76,9 @@ extension LayoutEngine {
         isFirstSystem: Bool = false,
         incomingMelismas: [MelismaContinuation] = [],
         systemElements: [PositionedSystemElement] = [],
+        // For a score-wide mark at a tick this staff starts nothing on, the chord or rest another staff starts there
+        // (`LayoutEngine.systemLaneFallbackAnchors`), keyed by tick.
+        laneFallbackAnchors: [Int: VoiceElementID] = [:],
         textPlacementStyle: TextPlacementStyles = TextPlacementStyles(),
         // The score's chord-symbol case style: the string a chord symbol draws is measured here and in
         // `aggregatedTickWeights`, which must be given the same value.
@@ -2315,6 +2318,12 @@ extension LayoutEngine {
             let tick = positioned.position.ticks(division: division)
             let xAtTick = tickColumns[tick]
                 ?? headerSchedule.contentStartX
+            // The address a host selects and removes the mark by: the chord or rest this staff starts at the tick,
+            // or — for a score-wide mark, which a writer may have placed from any staff's beat — another staff's.
+            let laneAnchor = systemLaneAnchor(
+                atTick: tick, in: measure, staff: staffAddress,
+                measureIndex: measureIndex, measureDuration: measureDuration, division: division,
+            ) ?? (positioned.isScoreWide ? laneFallbackAnchors[tick] : nil)
             switch positioned.element {
             case let .tempo(t):
                 guard t.visible || options.showsInvisibleElements else { break }
@@ -2328,10 +2337,7 @@ extension LayoutEngine {
                 )
                 let element = LayoutElement.textMark(
                     kind: .tempo(
-                        anchor: systemLaneAnchor(
-                            atTick: tick, in: measure, staff: staffAddress,
-                            measureIndex: measureIndex, measureDuration: measureDuration, division: division,
-                        ),
+                        anchor: laneAnchor,
                         color: t.elementProperties.color,
                         properties: t.properties.fontOverrides,
                     ),
@@ -2373,14 +2379,7 @@ extension LayoutEngine {
                     ),
                     color: st.color,
                     style: st.styleType,
-                    anchor: systemLaneAnchor(
-                        atTick: tick,
-                        in: measure,
-                        staff: staffAddress,
-                        measureIndex: measureIndex,
-                        measureDuration: measureDuration,
-                        division: division,
-                    ),
+                    anchor: laneAnchor,
                     placement: TextPlacementMetadata(side: side, autoplace: st.elementProperties.autoplace ?? true),
                     properties: st.properties.fontOverrides,
                     richText: rich,
@@ -2407,14 +2406,7 @@ extension LayoutEngine {
                     // the mark, and the host opens its editor. The two channels are deliberately exclusive —
                     // see `LayoutElement.staffText`.
                     anchor: nil,
-                    identity: systemLaneAnchor(
-                        atTick: tick,
-                        in: measure,
-                        staff: staffAddress,
-                        measureIndex: measureIndex,
-                        measureDuration: measureDuration,
-                        division: division,
-                    ).map { ScoreElementID.swing(anchor: $0) },
+                    identity: laneAnchor.map { ScoreElementID.swing(anchor: $0) },
                     richText: s.richText.map {
                         LayoutRichText($0, style: s.isSystemText ? .systemText : .staffText, metrics: metrics)
                     },
@@ -2629,6 +2621,51 @@ extension LayoutEngine {
             }
         }
         return nil
+    }
+
+    /// For each score-wide mark of `elements` (a tempo, a system text, a system swing) at a tick `measure` starts no
+    /// chord or rest on, the one the first other staff in score order starts there — keyed by tick, and empty when
+    /// every mark has an anchor on its own staff.
+    ///
+    /// A writer places a score-wide mark at the beat of whatever chord it is handed, on any staff (`SetStaffText`
+    /// reduces its anchor to a `MeasurePosition`), and layout draws it on the top staff — which need not start
+    /// anything at that beat: two halves above four quarters. With only its own staff to look at, such a mark had no
+    /// anchor, so it could be neither selected nor removed, and a tap on it fell through to the note below. Another
+    /// staff's chord at the same beat is an address every command that reaches the mark resolves to that same beat
+    /// (`SystemLaneSlot.position(of:in:)`), and a score-wide mark matches by beat whatever staff its anchor names. A
+    /// staff-bound mark gets no fallback: it is matched by its own staff, so another staff's chord would not name it.
+    ///
+    /// `otherStaves` is asked at most once, and only when a mark needs it.
+    static func systemLaneFallbackAnchors(
+        for elements: [PositionedSystemElement],
+        in measure: Measure,
+        staff: StaffAddress,
+        measureIndex: Int,
+        measureDuration: Fraction,
+        division: Int,
+        otherStaves: () -> [(address: StaffAddress, measure: Measure, measureDuration: Fraction)],
+    ) -> [Int: VoiceElementID] {
+        var fallbacks: [Int: VoiceElementID] = [:]
+        var candidates: [(address: StaffAddress, measure: Measure, measureDuration: Fraction)]?
+        for positioned in elements where positioned.isScoreWide {
+            let tick = positioned.position.ticks(division: division)
+            guard fallbacks[tick] == nil, systemLaneAnchor(
+                atTick: tick, in: measure, staff: staff,
+                measureIndex: measureIndex, measureDuration: measureDuration, division: division,
+            ) == nil else { continue }
+            let others = candidates ?? otherStaves()
+            candidates = others
+            for other in others {
+                if let anchor = systemLaneAnchor(
+                    atTick: tick, in: other.measure, staff: other.address,
+                    measureIndex: measureIndex, measureDuration: other.measureDuration, division: division,
+                ) {
+                    fallbacks[tick] = anchor
+                    break
+                }
+            }
+        }
+        return fallbacks
     }
 
     /// Decide which notes in a chord need to render on the OPPOSITE

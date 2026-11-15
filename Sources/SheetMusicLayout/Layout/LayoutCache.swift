@@ -336,6 +336,10 @@ public final class LayoutCache: @unchecked Sendable {
         /// changes here invalidate the placement cache so reflows
         /// pick up edited or relocated system markings.
         let systemElements: [PositionedSystemElement]
+        /// Another staff's chord or rest at a score-wide mark's tick this staff starts nothing on
+        /// (`LayoutEngine.systemLaneFallbackAnchors`). Read from staves other than this snapshot's `measure`, so an
+        /// edit there that moves the beat's onset has to invalidate the placement in its own right.
+        var laneFallbackAnchors: [Int: VoiceElementID] = [:]
         /// Whether hidden annotations are laid out into the invisible
         /// container. Part of the cache-hit predicate so flipping the
         /// `showsInvisibleElements` toggle invalidates stale placements.
