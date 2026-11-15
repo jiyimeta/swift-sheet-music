@@ -127,6 +127,12 @@ typedef struct cmf_audio_reader cmf_audio_reader;
 int32_t cmf_audio_reader_open(const uint16_t *path, cmf_audio_reader **reader, uint32_t *sample_rate,
                               uint32_t *channels);
 
+/// `cmf_audio_reader_open`, asking the reader for 16-bit PCM at `want_rate` Hz and `want_channels` channels instead
+/// of the stream's own (0 keeps the stream's). `sample_rate` and `channels` receive what the reader agreed to deliver;
+/// a failing HRESULT when it will not convert to them.
+int32_t cmf_audio_reader_open_as(const uint16_t *path, uint32_t want_rate, uint32_t want_channels,
+                                 cmf_audio_reader **reader, uint32_t *sample_rate, uint32_t *channels);
+
 /// Decodes the next block: `*frames` frames written to `*samples` (the reader's buffer, valid until the next call or
 /// the close), 0 frames with `*end` = 1 at the end of the stream. A block's start is the time Media Foundation stamps
 /// it with, `*start_100ns`, which a caller compares with the frames it has so far to see a gap or a priming trim.

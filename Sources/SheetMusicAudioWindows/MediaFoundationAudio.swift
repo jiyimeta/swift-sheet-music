@@ -22,11 +22,17 @@ public enum MediaFoundationAudio {
         case cache(RecordingPCMCacheWriter.Failure)
         /// The raw PCM output could not be written; `code` is the `errno`.
         case writeFailed(code: Int32)
+        /// An encode asked for a rate, channel count or bit rate Microsoft's AAC encoder does not take.
+        case unsupportedFormat
+        /// The caller stopped the encode.
+        case cancelled
 
         public var description: String {
             switch self {
             case .unavailable: "Media Foundation's source reader is not available on this Windows"
             case .empty: "the file decoded to no audio"
+            case .unsupportedFormat: "Microsoft's AAC encoder does not take that rate, channel count or bit rate"
+            case .cancelled: "the encode was cancelled"
             case let .mediaFoundation(step, hresult):
                 "Media Foundation \(step) failed (HRESULT 0x\(String(UInt32(bitPattern: hresult), radix: 16)))"
             case let .cache(failure): "the PCM cache could not be written (\(failure))"
@@ -166,18 +172,101 @@ public enum MediaFoundationAudio {
         return decoded
     }
 
+    /// An encode that landed: the source's frames given to the encoder, at the output's rate, and the priming put
+    /// before them (`aacEncoderPrimingFrames`), which the host states in the file's edit list.
+    public struct Encoded: Sendable, Equatable {
+        public var frames: Int64
+        public var primingFrames: Int
+    }
+
+    /// The frames of silence `encodeAAC` puts before the first sample, which a host states as the file's priming in its
+    /// edit list: 2112, the priming every AAC decoder assumes for a file that states none.
+    ///
+    /// Microsoft's encoder primes nothing that a decoder sees — its stream decodes from the first sample on
+    /// (`MediaFoundationEncodeTests`; ffmpeg reads the click where it was written) — and its MPEG-4 sink writes neither
+    /// an edit list nor `iTunSMPB`. AVFoundation then trims 2112 frames from such a file whatever its edit list says
+    /// (measured 2026-11-16 on a folino-win encode: no `elst`, `media_time` 0 and 1024 all read 2112 frames early).
+    /// Leading with this much silence makes the file read the same everywhere: Apple trims its assumed priming, and a
+    /// decoder that reads the edit list — Media Foundation, ffmpeg, Android — trims what the host states.
+    public static let aacEncoderPrimingFrames = 2112
+
+    /// Decodes `sourcePath`'s first audio stream through Media Foundation's reader at `sampleRate` / `channels` and
+    /// encodes it as AAC-LC at `bitRate` into an MPEG-4 file at `outputPath` (replaced). What a host's recording import
+    /// stores. Microsoft's encoder takes 44.1 or 48 kHz, one or two channels, 96 / 128 / 160 / 192 kbit/s; anything
+    /// else throws `.unsupportedFormat` before a file is made.
+    ///
+    /// `progress` is told the share of the source done, 0…1, after each block; `isCancelled` is asked before each,
+    /// and a true answer throws `.cancelled`. Any failure removes the output. Runs on the calling thread, never the
+    /// render thread.
+    public static func encodeAAC(
+        sourcePath: String, outputPath: String, sampleRate: Int, channels: Int, bitRate: Int,
+        progress: (Double) -> Void = { _ in }, isCancelled: () -> Bool = { false },
+    ) throws(Failure) -> Encoded {
+        guard [44100, 48000].contains(sampleRate), (1 ... 2).contains(channels),
+              [96000, 128_000, 160_000, 192_000].contains(bitRate)
+        else { throw .unsupportedFormat }
+        let duration = probe(path: sourcePath).durationSeconds
+        let reader = try Reader(path: sourcePath, sampleRate: sampleRate, channels: channels)
+        var opened: OpaquePointer?
+        let result = outputPath.withCString(encodedAs: UTF16.self) {
+            cmf_aac_open($0, UInt32(sampleRate), UInt32(channels), UInt32(bitRate), &opened)
+        }
+        guard result == 0, let writer = opened else {
+            cmf_aac_close(opened)
+            remove(outputPath)
+            throw .mediaFoundation(step: "encoder open", hresult: result)
+        }
+        var frames: Int64 = 0
+        do throws(Failure) {
+            // The priming a host states (`aacEncoderPrimingFrames`), as silence ahead of the music.
+            let silence = [Int16](repeating: 0, count: aacEncoderPrimingFrames * channels)
+            let primed = silence.withUnsafeBufferPointer {
+                cmf_aac_write(writer, $0.baseAddress, UInt32(aacEncoderPrimingFrames))
+            }
+            guard primed == 0 else { throw .mediaFoundation(step: "encode", hresult: primed) }
+            while true {
+                if isCancelled() { throw .cancelled }
+                guard let block = try reader.next() else { break }
+                let written = cmf_aac_write(writer, block.samples, UInt32(block.frames))
+                guard written == 0 else { throw .mediaFoundation(step: "encode", hresult: written) }
+                frames += Int64(block.frames)
+                if duration > 0 {
+                    progress(min(1, Double(frames) / Double(sampleRate) / duration))
+                }
+            }
+            guard frames > 0 else { throw .empty }
+            let finished = cmf_aac_finish(writer)
+            guard finished == 0 else { throw .mediaFoundation(step: "encoder finish", hresult: finished) }
+        } catch {
+            cmf_aac_close(writer)
+            remove(outputPath)
+            throw error
+        }
+        cmf_aac_close(writer)
+        progress(1)
+        return Encoded(frames: frames, primingFrames: aacEncoderPrimingFrames)
+    }
+
     /// A file's first audio stream, decoding block by block.
     public final class Reader {
         public let sampleRate: Int
         public let channels: Int
         private let reader: OpaquePointer
 
-        public init(path: String) throws(Failure) {
+        /// Opens the stream at its own rate and channel count, or — given `sampleRate` / `channels` — asks Media
+        /// Foundation's reader to deliver those instead; `.mediaFoundation(step: "open", …)` when it will not.
+        public init(path: String, sampleRate wantedRate: Int? = nil, channels wantedChannels: Int? = nil)
+            throws(Failure)
+        {
             guard MediaFoundationAudio.isDecoderAvailable else { throw .unavailable }
             var opened: OpaquePointer?
             var rate: UInt32 = 0
             var count: UInt32 = 0
-            let result = path.withCString(encodedAs: UTF16.self) { cmf_audio_reader_open($0, &opened, &rate, &count) }
+            let askRate = UInt32(clamping: wantedRate ?? 0)
+            let askChannels = UInt32(clamping: wantedChannels ?? 0)
+            let result = path.withCString(encodedAs: UTF16.self) {
+                cmf_audio_reader_open_as($0, askRate, askChannels, &opened, &rate, &count)
+            }
             guard result >= 0, let opened, rate > 0, count > 0 else {
                 cmf_audio_reader_close(opened)
                 throw .mediaFoundation(step: "open", hresult: result)

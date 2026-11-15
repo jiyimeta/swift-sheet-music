@@ -973,6 +973,11 @@ struct cmf_audio_reader {
 
 int32_t cmf_audio_reader_open(const uint16_t *path, cmf_audio_reader **out, uint32_t *sample_rate,
                               uint32_t *channels) {
+    return cmf_audio_reader_open_as(path, 0, 0, out, sample_rate, channels);
+}
+
+int32_t cmf_audio_reader_open_as(const uint16_t *path, uint32_t want_rate, uint32_t want_channels,
+                                 cmf_audio_reader **out, uint32_t *sample_rate, uint32_t *channels) {
     *out = NULL;
     *sample_rate = 0;
     *channels = 0;
@@ -995,7 +1000,9 @@ int32_t cmf_audio_reader_open(const uint16_t *path, cmf_audio_reader **out, uint
     if (SUCCEEDED(hr)) hr = IMFMediaType_GetUINT32(native, &MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate);
     if (SUCCEEDED(hr)) hr = IMFMediaType_GetUINT32(native, &MF_MT_AUDIO_NUM_CHANNELS, &count);
     if (SUCCEEDED(hr) && (rate == 0 || count == 0)) hr = MF_E_INVALIDMEDIATYPE;
-    // The stream's own rate and channels, so the reader inserts only the decoder, never a resampler.
+    // The stream's own rate and channels unless the caller asks for others, so a plain open inserts only the decoder.
+    if (SUCCEEDED(hr) && want_rate != 0) rate = want_rate;
+    if (SUCCEEDED(hr) && want_channels != 0) count = want_channels;
     if (SUCCEEDED(hr)) hr = audio_type(&pcm, &MFAudioFormat_PCM, rate, count, rate * count * 2);
     if (SUCCEEDED(hr)) hr = IMFSourceReader_SetCurrentMediaType(reader->reader, audio, NULL, pcm);
     // What the decoder actually delivers: an HE-AAC stream can decode at twice the rate its sample entry states.
