@@ -125,13 +125,12 @@ extension LayoutDocument {
     ///
     /// A lane mark is addressed by beat and staff, never by voice or by slot: `SetStaffText` reduces whatever
     /// anchor it is handed to a `MeasurePosition` (`SystemLaneSlot.position(of:in:)`). Layout must still name
-    /// one voice element when it emits the glyph, and `LayoutEngine.systemLaneAnchor(atTick:…)` picks the
-    /// lowest-numbered voice carrying a chord or rest at that tick — on the CANONICAL staff when the mark
-    /// belongs to no staff at all, or for a score-wide mark at a tick that staff starts nothing on, on the first
-    /// other staff that starts something there (`systemLaneFallbackAnchors`). That emitted `VoiceElementID` is
-    /// therefore narrower than the mark's real address, and the identity-matching overload above misses whenever
-    /// the caller holds a different — equally correct — name for the same beat. Both misses it documents are of
-    /// that shape.
+    /// one voice element when it emits the glyph: the lowest-numbered voice carrying a chord or rest at that tick —
+    /// on the mark's own staff for a staff text (`LayoutEngine.systemLaneAnchor(atTick:…)`), and for a system text
+    /// on the first staff in score order that starts one there (`SystemLaneSlot.anchor(at:measureIndex:in:)`). That
+    /// emitted `VoiceElementID` is therefore narrower than the mark's real address, and the identity-matching
+    /// overload above misses whenever the caller holds a different — equally correct — name for the same beat. Both
+    /// misses it documents are of that shape.
     ///
     /// So this resolves BOTH sides to a beat and compares those. Neither side re-derives the arithmetic: the
     /// caller's anchor and the emitted anchor go through the same `SystemLaneSlot.position(of:in:)` the writer

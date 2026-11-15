@@ -25,6 +25,54 @@ public enum SystemLaneSlot {
         return MeasurePosition(numerator: onset.tick, denominator: 4 * score.division)
     }
 
+    /// The chord or rest a SCORE-WIDE lane mark — a tempo, a system text, a system swing — at `position` of bar
+    /// `measureIndex` is addressed by: the lowest voice of the first staff, in score order, that starts one at that
+    /// tick. `nil` when no staff does (a `<location>`-shifted mark).
+    ///
+    /// **One answer, whatever staff draws the mark.** A score-wide mark is matched by beat alone (`SetStaffText`,
+    /// `SetTempo`, `SetSwing`), so every chord at its beat names it equally well; this picks one, and `LayoutEngine`
+    /// emits it as the mark's anchor, so a host can re-derive the very identity a tap on the mark reports — after a
+    /// part move, say — without a layout to ask. It does not depend on which staff draws the mark, which can be one
+    /// that starts nothing at the beat, or one empty-staff hiding chose.
+    public static func anchor(at position: MeasurePosition, measureIndex: Int, in score: Score) -> VoiceElementID? {
+        anchor(
+            at: position, measureIndex: measureIndex, division: score.division,
+            staves: score.allStaves.lazy.compactMap { entry in
+                let measures = entry.staff.measures
+                guard measures.indices.contains(measureIndex) else { return nil }
+                return (entry.address, measures[measureIndex], { measures.effectiveMeasureDurations()[measureIndex] })
+            },
+        )
+    }
+
+    /// `anchor(at:measureIndex:in:)` over staves a caller already holds, in score order, each with its bar and a way
+    /// to that bar's effective duration — asked only of a bar with a voice to walk — for `LayoutEngine`, which has
+    /// both at hand for every staff it places.
+    public static func anchor(
+        at position: MeasurePosition, measureIndex: Int, division: Int,
+        staves: some Sequence<(StaffAddress, Measure, () -> Fraction)>,
+    ) -> VoiceElementID? {
+        let tick = position.ticks(division: division)
+        for (address, measure, measureDuration) in staves where !measure.voices.isEmpty {
+            let duration = measureDuration()
+            for (voiceIndex, voice) in measure.voices.enumerated() {
+                var running = 0
+                for elementIndex in voice.elements.indices {
+                    let element = voice.elements[elementIndex]
+                    if running == tick, case .chord = element {
+                        return VoiceElementID(
+                            staff: address, measureIndex: measureIndex, voiceIndex: voiceIndex,
+                            elementIndex: elementIndex,
+                        )
+                    }
+                    running += element.cursorAdvance(division: division, in: duration)
+                    if running > tick { break }
+                }
+            }
+        }
+        return nil
+    }
+
     /// Index of the first element of `measure` at `position` that `matches`, or `nil`.
     static func firstIndex(
         in measure: SystemMeasure, at position: MeasurePosition,
