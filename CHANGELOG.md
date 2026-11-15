@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.40.0] - 2026-11-15
+
 ### Added
 
 - **`WindowsPlaybackEngine` plays a score's recordings (Windows),** as the Apple and Android engines do: one
