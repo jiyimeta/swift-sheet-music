@@ -354,6 +354,8 @@ if !isWasm {
                 "SheetMusicPDFWriter", "SheetMusicBridgeCore", "SheetMusicPages", "SheetMusicPDF",
                 "SheetMusicPDFSyntax",
             ],
+            // Encrypted originals other generators made (`Fixtures/Encrypted/README.md`), read through `#filePath`.
+            exclude: ["Fixtures"],
         ),
         // The two readings of malformed syntax the PDF readers share, and the name bytes both keep.
         .testTarget(name: "SheetMusicPDFSyntaxTests", dependencies: ["SheetMusicPDFSyntax"]),

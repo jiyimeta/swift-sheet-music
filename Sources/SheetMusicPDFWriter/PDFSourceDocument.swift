@@ -3,8 +3,11 @@ import SheetMusicPDFSyntax
 
 /// Why annotations could not be appended to an existing PDF.
 public enum PDFAppendError: Error, Equatable, Sendable {
-    /// Updating encrypted objects requires the original encryption key.
+    /// The file is encrypted and cannot be read here: no cryptography was given, or its security handler, revision or
+    /// method is one this package does not implement (a public-key handler, an unknown crypt filter).
     case encrypted
+    /// The file is encrypted under a user password, so it cannot be opened, let alone written, without it.
+    case passwordRequired
     /// The file cannot be followed or represented as a safe incremental update.
     case unreadable
     /// A requested zero-based page index lies outside the file's page tree.
@@ -21,6 +24,16 @@ final class PDFSourceDocument {
         let entries: [Int: Location]
     }
 
+    /// What to do with an encrypted file.
+    enum Encryption {
+        /// Refuse it (`PDFAppendError.encrypted`), as every reader did before the security handler existed.
+        case refuse
+        /// Open it with these primitives when its user password is empty, decrypting every string and stream read.
+        case decrypt(any PDFCryptoPrimitives)
+        /// Read only its encryption dictionary (`encryptDictionary`) — the permissions, which need no key.
+        case dictionaryOnly
+    }
+
     let bytes: [UInt8]
     let trailer: [String: PDFObject]
     let startXRef: Int
@@ -28,10 +41,17 @@ final class PDFSourceDocument {
     let size: Int
     var locations: [Int: Location] = [:]
     var objectStreams: [Int: [Int: PDFObject]] = [:]
+    /// The trailer's `/Encrypt` dictionary, resolved; nil for a file that is not encrypted.
+    private(set) var encryptDictionary: [String: PDFObject]?
+    /// The handler every string and stream is read through; nil unless the file is encrypted and was opened with
+    /// `.decrypt`.
+    private(set) var security: PDFStandardSecurity?
+    /// The encryption dictionary's own object, whose strings are never encrypted.
+    private var encryptObject: Int?
     private var loading: Set<Int> = []
     private var boundaries: PDFSourceBoundaries?
 
-    init(_ data: Data) throws {
+    init(_ data: Data, encryption: Encryption = .refuse) throws {
         bytes = Array(data)
         guard bytes.starts(with: Array("%PDF-".utf8)),
               let marker = Self.find(
@@ -57,16 +77,17 @@ final class PDFSourceDocument {
         self.size = size
         var visited: Set<Int> = []
         var current: Section? = latest
+        var olderSectionEncrypted = false
         while let section = current {
             guard visited.insert(section.offset).inserted else { throw PDFAppendError.unreadable }
-            if section.dictionary["Encrypt"] != nil { throw PDFAppendError.encrypted }
+            olderSectionEncrypted = olderSectionEncrypted || section.dictionary["Encrypt"] != nil
             var entries = section.entries
             if let hybrid = section.dictionary["XRefStm"]?.integerValue {
                 let supplement = try Self.section(bytes, at: hybrid)
                 guard supplement.isStream, visited.insert(supplement.offset).inserted else {
                     throw PDFAppendError.unreadable
                 }
-                if supplement.dictionary["Encrypt"] != nil { throw PDFAppendError.encrypted }
+                olderSectionEncrypted = olderSectionEncrypted || supplement.dictionary["Encrypt"] != nil
                 // Merge one hybrid section before older entries compete with newer definitions.
                 entries.merge(supplement.entries) { _, streamEntry in streamEntry }
             }
@@ -78,6 +99,24 @@ final class PDFSourceDocument {
                 current = try Self.section(bytes, at: offset)
             } else { current = nil }
         }
+        try openEncryption(encryption, olderSectionEncrypted: olderSectionEncrypted)
+    }
+
+    /// Reads the newest trailer's `/Encrypt` per `encryption`. Every update of an encrypted file carries it forward
+    /// (ISO 32000-2 §7.5.6), so a file whose older section names one and whose newest does not is not followed.
+    private func openEncryption(_ encryption: Encryption, olderSectionEncrypted: Bool) throws {
+        guard let encrypt = trailer["Encrypt"] else {
+            if olderSectionEncrypted { throw PDFAppendError.encrypted }
+            return
+        }
+        if case .refuse = encryption { throw PDFAppendError.encrypted }
+        encryptObject = encrypt.referenceValue?.number
+        // Read before `security` exists, so nothing in it is decrypted: its strings never are.
+        guard let dictionary = try resolve(encrypt).dictionaryValue else { throw PDFAppendError.unreadable }
+        encryptDictionary = dictionary
+        guard case let .decrypt(crypto) = encryption else { return }
+        let documentID = trailer["ID"]?.arrayValue?.first.flatMap(\.stringBytes) ?? []
+        security = try PDFStandardSecurity(encrypt: dictionary, documentID: documentID, crypto: crypto)
     }
 
     private func merge(_ entries: [Int: Location]) {
@@ -94,12 +133,14 @@ final class PDFSourceDocument {
         case .free: return .null
         case let .offset(offset):
             var parser = PDFObjectParser(bytes, at: offset)
-            if !bytes.indices.contains(offset) || parser.parseObjectHeader()?.number != number {
+            var header = bytes.indices.contains(offset) ? parser.parseObjectHeader() : nil
+            if header?.number != number {
                 let recovered = try objectHeader(number, near: offset)
                 parser = PDFObjectParser(bytes, at: recovered)
-                guard parser.parseObjectHeader()?.number == number else { throw PDFAppendError.unreadable }
+                header = parser.parseObjectHeader()
+                guard header?.number == number else { throw PDFAppendError.unreadable }
             }
-            return try readValue(&parser)
+            return try decrypted(readValue(&parser), number: number, generation: header?.generation ?? 0)
         case let .compressed(stream, index):
             if objectStreams[stream] == nil { try loadObjectStream(stream) }
             guard index >= 0, let value = objectStreams[stream]?[number] else { throw PDFAppendError.unreadable }
@@ -125,6 +166,55 @@ final class PDFSourceDocument {
         let length = try dictionary["Length"].flatMap { try resolve($0).integerValue }
         let raw = try Self.rawStream(bytes, parser: &parser, length: length)
         return .stream(dictionary: dictionary, raw: raw)
+    }
+
+    /// `value`, object `number` `generation` as read, with its strings and stream payload decrypted (ISO 32000-2
+    /// §7.6.2). Left as read: everything in an unencrypted file, the encryption dictionary, cross-reference streams,
+    /// a metadata stream the file leaves clear, and a stream whose own `/Crypt` filter is `/Identity`. An object
+    /// stream is decrypted here as a stream; the objects inside it are then read as they are (`loadObjectStream`).
+    private func decrypted(_ value: PDFObject, number: Int, generation: Int) throws -> PDFObject {
+        guard let security, number != encryptObject else { return value }
+        guard case let .stream(dictionary, raw) = value else {
+            return try Self.mapStrings(value) {
+                try security.decrypt($0, number: number, generation: generation, method: security.stringMethod)
+            }
+        }
+        let strings = try Self.mapStrings(.dictionary(dictionary)) {
+            try security.decrypt($0, number: number, generation: generation, method: security.stringMethod)
+        }.dictionaryValue ?? dictionary
+        let type = dictionary["Type"]?.nameValue
+        if type == "XRef" || (type == "Metadata" && !security.encryptMetadata) {
+            return .stream(dictionary: strings, raw: raw)
+        }
+        if let filter = Self.cryptFilterName(dictionary) {
+            guard filter == "Identity" else { throw PDFAppendError.encrypted }
+            return .stream(dictionary: strings, raw: raw)
+        }
+        let plain = try security.decrypt(raw, number: number, generation: generation, method: security.streamMethod)
+        return .stream(dictionary: strings, raw: plain)
+    }
+
+    /// `value` with every string, at any depth, replaced by `transform` of its bytes.
+    static func mapStrings(_ value: PDFObject, _ transform: ([UInt8]) throws -> [UInt8]) throws -> PDFObject {
+        switch value {
+        case let .string(bytes): try .string(transform(bytes))
+        case let .array(items): try .array(items.map { try mapStrings($0, transform) })
+        case let .dictionary(entries): try .dictionary(entries.mapValues { try mapStrings($0, transform) })
+        case let .stream(dictionary, raw):
+            try .stream(
+                dictionary: mapStrings(.dictionary(dictionary), transform).dictionaryValue ?? dictionary, raw: raw,
+            )
+        default: value
+        }
+    }
+
+    /// The name of a stream's own crypt filter (`/Filter /Crypt` or a filter array starting with it): `/Identity`
+    /// unless its decode parameters name another. Nil when the stream has none.
+    private static func cryptFilterName(_ dictionary: [String: PDFObject]) -> String? {
+        let filters = dictionary["Filter"]?.arrayValue ?? dictionary["Filter"].map { [$0] } ?? []
+        guard filters.first?.nameValue == "Crypt" else { return nil }
+        let parameters = dictionary["DecodeParms"]?.arrayValue?.first ?? dictionary["DecodeParms"]
+        return parameters?.dictionaryValue?["Name"]?.nameValue ?? "Identity"
     }
 
     private func objectHeader(_ number: Int, near offset: Int) throws -> Int {
