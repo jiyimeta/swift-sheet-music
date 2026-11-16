@@ -753,14 +753,16 @@ if isWindows {
             ],
         ),
         // Media Foundation's AAC encoder, for the audio export, and its H.264 + AAC MP4 writer, for a host's score
-        // video (`MP4VideoWriter`). Only COM and `mfuuid` (GUID data, no DLL) are linked:
-        // mfplat and mfreadwrite are loaded at run time, so a Windows without them still starts (see the header).
+        // video (`MP4VideoWriter`). Only COM, `mfuuid` and `strmiids` (GUID data, no DLL; the latter for
+        // IID_ICodecAPI, the encoder's rate control) are linked: mfplat and mfreadwrite are loaded at run time, so a
+        // Windows without them still starts (see the header).
         .target(
             name: "CMediaFoundation",
             path: "Sources/CMediaFoundation",
             linkerSettings: [
                 .linkedLibrary("ole32"),
                 .linkedLibrary("mfuuid"),
+                .linkedLibrary("strmiids"),
             ],
         ),
         .target(

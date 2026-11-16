@@ -76,13 +76,19 @@ struct MP4VideoWriterTests {
             && abs(Double(read.cr) - expected.cr) <= tolerance
     }
 
-    private static func write(to url: URL, size: Size = sd, withAudio: Bool) throws {
+    @discardableResult
+    private static func write(
+        to url: URL, size: Size = sd, withAudio: Bool, rateControl: MP4VideoWriter.RateControl = .constantBitRate,
+        seconds: Int = 1,
+    ) throws -> MP4VideoWriter.AcceptedRateControl {
         let audio = withAudio ? MP4VideoWriter.Audio(sampleRate: 48000, channels: 2, bitRate: 128_000) : nil
         let writer = try MP4VideoWriter(
-            url: url, width: size.width, height: size.height, fps: fps, videoBitRate: 2_000_000, audio: audio,
+            url: url, width: size.width, height: size.height, fps: fps, videoBitRate: 2_000_000,
+            rateControl: rateControl, audio: audio,
         )
+        let accepted = writer.acceptedRateControl
         let pixels = frame(size)
-        for _ in 0 ..< fps {
+        for _ in 0 ..< fps * seconds {
             try pixels.withUnsafeBytes { try writer.appendFrame($0) }
         }
         if withAudio {
@@ -93,6 +99,11 @@ struct MP4VideoWriterTests {
             }
         }
         try writer.finish()
+        return accepted
+    }
+
+    private static func size(of url: URL) throws -> Int {
+        try #require(try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int)
     }
 
     @Test
@@ -146,6 +157,48 @@ struct MP4VideoWriterTests {
         // The box grows the moov without moving the media: the file still plays its whole length.
         let probe = try #require(MP4VideoWriter.probe(url))
         #expect(abs(probe.durationSeconds - 1.0) < 0.1, "duration \(probe.durationSeconds) s")
+    }
+
+    /// Quality mode spends what a frame that barely changes needs, not the average bit rate: the same two seconds of a
+    /// still frame come out smaller than at constant bit rate, read back whole, with the colours where they were. What
+    /// the encoder took is reported, never "not asked"; on folino-qa's hardware encoder it is Quality mode itself.
+    @Test(arguments: [sd, hd])
+    func `quality mode writes a still frame smaller than constant bit rate, colours intact`(_ size: Size) throws {
+        let constant = Self.temporaryURL()
+        let quality = Self.temporaryURL()
+        defer {
+            try? FileManager.default.removeItem(at: constant)
+            try? FileManager.default.removeItem(at: quality)
+        }
+        let notAsked = try Self.write(to: constant, size: size, withAudio: false, seconds: 2)
+        let accepted = try Self.write(
+            to: quality, size: size, withAudio: false, rateControl: .quality(60), seconds: 2,
+        )
+        #expect(notAsked == .notAsked)
+        #expect(accepted != .notAsked, "accepted \(accepted)")
+        let constantBytes = try Self.size(of: constant), qualityBytes = try Self.size(of: quality)
+        #expect(qualityBytes < constantBytes, "quality \(qualityBytes) B, constant \(constantBytes) B, \(accepted)")
+        let probe = try #require(MP4VideoWriter.probe(quality))
+        #expect(probe.videoIsH264)
+        #expect(abs(probe.durationSeconds - 2.0) < 0.1, "duration \(probe.durationSeconds) s")
+        let upper = try MP4VideoWriter.firstFrameYUV(quality, x: size.width / 2, y: size.height / 4)
+        let lower = try MP4VideoWriter.firstFrameYUV(quality, x: size.width / 2, y: size.height * 3 / 4)
+        #expect(Self.near(upper, Self.top, in: size), "top half read \(upper)")
+        #expect(Self.near(lower, Self.bottom, in: size), "bottom half read \(lower)")
+        let colour = try #require(try MP4VideoWriter.colour(quality), "no colr box")
+        #expect(colour.matrix == size.matrix, "matrix \(colour.matrix)")
+    }
+
+    /// The quality asked for is clamped to 0–100 before it reaches the encoder.
+    @Test
+    func `a quality outside 0 to 100 is clamped`() throws {
+        let url = Self.temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let accepted = try Self.write(to: url, withAudio: false, rateControl: .quality(250))
+        if case let .quality(took) = accepted {
+            #expect((0 ... 100).contains(took), "took \(took)")
+        }
+        #expect(MP4VideoWriter.probe(url)?.videoIsH264 == true)
     }
 
     @Test

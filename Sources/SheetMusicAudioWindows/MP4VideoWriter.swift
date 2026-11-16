@@ -54,6 +54,30 @@ public final class MP4VideoWriter {
         }
     }
 
+    /// How the H.264 stream spends its bits.
+    public enum RateControl: Sendable, Equatable {
+        /// The encoder's defaults: constant bit rate at `videoBitRate`, Baseline profile. A score video, which barely
+        /// changes from frame to frame, comes out about five times the size Apple's writer makes of it.
+        case constantBitRate
+        /// Quality mode at 0–100, High profile, a key frame every half second — what Apple's AVAssetWriter does with
+        /// the same average bit rate, which it treats as a ceiling. An encoder that will not take Quality mode is asked
+        /// for unconstrained VBR with `videoBitRate` as its mean, and failing that keeps its default
+        /// (`acceptedRateControl` says which).
+        case quality(Int)
+    }
+
+    /// The rate control the encoder took, read back once it was in the stream.
+    public enum AcceptedRateControl: Sendable, Equatable {
+        /// `.constantBitRate` was asked for: the encoder runs its defaults, not asked again.
+        case notAsked
+        case quality(Int)
+        case unconstrainedVBR
+        /// The encoder kept a mode of its own (an `eAVEncCommonRateControlMode`; 0 is CBR).
+        case encoderMode(Int)
+        /// The encoder could not be asked; it writes at its default.
+        case unknown
+    }
+
     /// What `probe(_:)` reads back from a file.
     public struct Probe: Sendable, Equatable {
         public var durationSeconds: Double
@@ -71,11 +95,17 @@ public final class MP4VideoWriter {
     public let height: Int
     public let fps: Int
     public let audio: Audio?
+    public let rateControl: RateControl
+    /// What the encoder took for `rateControl`, read when the writer opened.
+    public private(set) var acceptedRateControl: AcceptedRateControl = .notAsked
     private var writer: OpaquePointer?
 
     /// Opens `url` (replaced if it exists) for `width` x `height` frames at `fps`, H.264 at `videoBitRate` bits per
-    /// second, and an AAC stream when `audio` is given.
-    public init(url: URL, width: Int, height: Int, fps: Int, videoBitRate: Int, audio: Audio?) throws {
+    /// second spent as `rateControl` says, and an AAC stream when `audio` is given.
+    public init(
+        url: URL, width: Int, height: Int, fps: Int, videoBitRate: Int, rateControl: RateControl = .constantBitRate,
+        audio: Audio?,
+    ) throws {
         guard width > 0, height > 0, width % 2 == 0, height % 2 == 0 else {
             throw Failure.invalidSize(width: width, height: height)
         }
@@ -85,18 +115,46 @@ public final class MP4VideoWriter {
         self.height = height
         self.fps = fps
         self.audio = audio
+        self.rateControl = rateControl
+        let quality: Int32 = switch rateControl {
+        case .constantBitRate: -1
+        case let .quality(value): Int32(min(max(value, 0), 100))
+        }
         var opened: OpaquePointer?
-        let result = url.path.withCString(encodedAs: UTF16.self) { path in
-            cmf_mp4_open(
-                path, UInt32(width), UInt32(height), UInt32(fps), UInt32(videoBitRate),
-                UInt32(audio?.sampleRate ?? 0), UInt32(audio?.channels ?? 0), UInt32(audio?.bitRate ?? 0), &opened,
-            )
+        var result = Self.open(url, width, height, fps, videoBitRate, quality, audio, &opened)
+        // An encoder that refuses the High profile or the Quality parameters fails the stream's setup itself: the file
+        // is then written as before, at the encoder's defaults, rather than not at all.
+        if result != 0, result != Self.notImplemented, quality >= 0 {
+            result = Self.open(url, width, height, fps, videoBitRate, -1, audio, &opened)
+            if result == 0 { acceptedRateControl = .unknown }
+        } else if result == 0, quality >= 0, let opened {
+            var mode: Int32 = -1, took: Int32 = -1
+            _ = cmf_mp4_rate_control(opened, &mode, &took)
+            acceptedRateControl = switch mode {
+            case 3: .quality(Int(took))
+            case 2: .unconstrainedVBR
+            case ..<0: .unknown
+            default: .encoderMode(Int(mode))
+            }
         }
         guard result == 0, let opened else {
             if result == Self.notImplemented { throw Failure.unavailable }
             throw Failure.mediaFoundation(step: "open", hresult: result)
         }
         writer = opened
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    private static func open(
+        _ url: URL, _ width: Int, _ height: Int, _ fps: Int, _ videoBitRate: Int, _ quality: Int32, _ audio: Audio?,
+        _ opened: inout OpaquePointer?,
+    ) -> Int32 {
+        url.path.withCString(encodedAs: UTF16.self) { path in
+            cmf_mp4_open(
+                path, UInt32(width), UInt32(height), UInt32(fps), UInt32(videoBitRate), quality,
+                UInt32(audio?.sampleRate ?? 0), UInt32(audio?.channels ?? 0), UInt32(audio?.bitRate ?? 0), &opened,
+            )
+        }
     }
 
     deinit {

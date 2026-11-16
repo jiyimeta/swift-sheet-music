@@ -52,8 +52,18 @@ int32_t cmf_mp4_encoder_available(void);
 /// range in the matrix a player assumes for an untagged stream of that height — BT.601 below 720 rows, BT.709 from 720
 /// — and `cmf_mp4_finish` names it in a `colr` box. E_NOTIMPL when Media Foundation is absent, E_INVALIDARG for an odd
 /// or empty size.
+///
+/// `video_quality` -1 leaves the encoder its defaults: CBR at `video_bit_rate`, Baseline. 0–100 asks for Quality mode
+/// at that quality, High profile and a half-second GOP; an encoder that keeps another mode is then asked for
+/// unconstrained VBR with `video_bit_rate` as its mean, and failing that keeps its own (`cmf_mp4_rate_control`).
 int32_t cmf_mp4_open(const uint16_t *path, uint32_t width, uint32_t height, uint32_t fps, uint32_t video_bit_rate,
-                     uint32_t sample_rate, uint32_t channels, uint32_t audio_bit_rate, cmf_mp4_writer **writer);
+                     int32_t video_quality, uint32_t sample_rate, uint32_t channels, uint32_t audio_bit_rate,
+                     cmf_mp4_writer **writer);
+
+/// The rate control the H.264 encoder took when a quality was asked for: `mode` an `eAVEncCommonRateControlMode` (0 CBR,
+/// 2 unconstrained VBR, 3 Quality) and `quality` its 0–100 in Quality mode, else -1; both -1 when no quality was asked
+/// for or the encoder could not be asked.
+int32_t cmf_mp4_rate_control(cmf_mp4_writer *writer, int32_t *mode, int32_t *quality);
 
 /// Encodes the next frame: `width * height * 4` bytes of BGRA, top-down. Its time is the frame count over `fps`.
 int32_t cmf_mp4_write_frame(cmf_mp4_writer *writer, const uint8_t *bgra);

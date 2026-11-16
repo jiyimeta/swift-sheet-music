@@ -7,6 +7,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`MP4VideoWriter`'s `rateControl:` (Windows)**: `.quality(0…100)` asks Media Foundation's H.264 encoder for Quality
+  mode, High profile and a key frame every half second — how Apple's AVAssetWriter spends the same average bit rate,
+  as a ceiling. An encoder that keeps another mode is asked for unconstrained VBR with `videoBitRate` as its mean, and
+  one that refuses the profile or the parameters outright is opened again at its defaults; `acceptedRateControl` reads
+  back what it took. A still score page at 1358 × 1920, 30 fps, came out at 1.9 Mbit/s against 9.5 at constant bit
+  rate (folino-qa's hardware encoder), with an SSIM of 0.999 between the two. The default stays `.constantBitRate`.
+- `cmf_mp4_open` takes `video_quality` (-1 for the encoder's defaults) and `cmf_mp4_rate_control` reads back the
+  encoder's mode; `strmiids` is linked for `IID_ICodecAPI`.
+
 ## [4.43.0] - 2026-11-16
 
 ### Added
