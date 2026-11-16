@@ -54,7 +54,9 @@ public final class MP4VideoWriter {
         }
     }
 
-    /// How the H.264 stream spends its bits.
+    /// How the H.264 stream spends its bits. Windows only, like this writer: the package declares
+    /// `SheetMusicAudioWindows` on Windows alone and writes no video elsewhere — Apple hosts use AVAssetWriter, whose
+    /// average bit rate already behaves this way, and Android and WebAssembly have no video writer here.
     public enum RateControl: Sendable, Equatable {
         /// The encoder's defaults: constant bit rate at `videoBitRate`, Baseline profile. A score video, which barely
         /// changes from frame to frame, comes out about five times the size Apple's writer makes of it.
