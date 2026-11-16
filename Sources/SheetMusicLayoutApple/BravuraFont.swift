@@ -26,30 +26,33 @@ public enum BravuraFont {
             category: "BravuraFont",
         )
 
-        if let url = SheetMusicFonts.bravuraURL {
-            var error: Unmanaged<CFError>?
-            let ok = CTFontManagerRegisterFontsForURL(
-                url as CFURL, .process, &error,
-            )
-            if ok {
-                logger.info("Bravura registered from \(url.path, privacy: .public)")
-                return true
-            }
-            let desc = error?.takeRetainedValue().localizedDescription
-                ?? "unknown CTFontManager error"
-            // kCTFontManagerErrorAlreadyRegistered (105) is harmless — it
-            // means a previous register call (e.g. in the same process)
-            // already installed the font.
-            if let cfErr = error?.takeUnretainedValue(),
-               CFErrorGetCode(cfErr) == 105
-            {
-                logger.info("Bravura already registered (reused)")
-                return true
-            }
-            logger.error("CTFontManagerRegisterFontsForURL failed: \(desc, privacy: .public)")
-        } else {
+        guard let url = SheetMusicFonts.bravuraURL else {
             logger.error("Bravura.otf not found in any known bundle")
+            return false
         }
-        return false
+        return registerFont(at: url, logger: logger)
     }()
+
+    /// Registers the font at `url` for the process. `true` when CoreText now has it — registered here, or already
+    /// registered before (kCTFontManagerErrorAlreadyRegistered, 105: a host such as `SheetMusicFonts.register(urls:)`
+    /// may have installed the same file first).
+    ///
+    /// The error CoreText hands back is +1: it is taken retained exactly once, and its code read from that reference.
+    /// Reading it again unretained after the retained take could read a released object: it crashed a release-built
+    /// host (folino's video probe, 2026-11-16), though in this package's tests CoreText kept the error alive.
+    static func registerFont(at url: URL, logger: Logger) -> Bool {
+        var error: Unmanaged<CFError>?
+        if CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
+            logger.info("Bravura registered from \(url.path, privacy: .public)")
+            return true
+        }
+        let failure = error?.takeRetainedValue()
+        if let failure, CFErrorGetCode(failure) == 105 {
+            logger.info("Bravura already registered (reused)")
+            return true
+        }
+        let desc = failure?.localizedDescription ?? "unknown CTFontManager error"
+        logger.error("CTFontManagerRegisterFontsForURL failed: \(desc, privacy: .public)")
+        return false
+    }
 }
