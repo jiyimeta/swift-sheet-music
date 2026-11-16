@@ -224,7 +224,24 @@ struct cmf_mp4_writer {
     /// the encoder could not be asked; and its quality (0–100) in Quality mode, else -1.
     int32_t rate_mode;
     int32_t rate_quality;
+    /// Where a frame's time goes (`cmf_mp4_stats`): QueryPerformanceCounter ticks in `bgra_to_nv12` and in
+    /// `write_sample` (the copy into a buffer and IMFSinkWriter_WriteSample, which encodes), summed over the frames.
+    LONGLONG convert_ticks;
+    LONGLONG write_ticks;
+    /// The H.264 encoder the Sink Writer put in the video stream, read once after the first frame: its friendly name
+    /// (empty when it gives none) and whether it is a hardware MFT (1), a software one (0), or unknown (-1).
+    BOOL encoder_read;
+    WCHAR encoder_name[128];
+    int32_t encoder_hardware;
 };
+
+// IMFSinkWriterEx and two MFT attributes, defined here rather than taken from mfuuid.lib: the encoder query is the only
+// use, and the rest of this file needs no import library.
+static const IID s_iid_sink_writer_ex = {0x588d72ab, 0x5bc1, 0x496a, {0x87, 0x14, 0xb7, 0x06, 0x17, 0x14, 0x1b, 0x25}};
+static const GUID s_mft_friendly_name = {0x314ffbae, 0x5b41, 0x4c95, {0x9c, 0x19, 0x4e, 0x7d, 0x58, 0x6f, 0xac, 0xe3}};
+static const GUID s_mft_hardware_url = {0x2fb866ac, 0xb078, 0x4942, {0xab, 0x6c, 0x00, 0x3d, 0x05, 0xcd, 0xa6, 0x74}};
+static const GUID s_category_video_encoder = {
+    0xf79eac7d, 0xe545, 0x4387, {0xbd, 0xee, 0xd6, 0x47, 0xd7, 0xbd, 0xe4, 0x2a}};
 
 /// The two matrices' 8-bit studio-range coefficients (ITU-R BT.709 and BT.601), each row rounded so luma's sums to 220
 /// and each chroma's to 0, which keeps a grey's chroma at exactly 128 (BT.709's Cb, -25.8 -86.7 +112.4, gives its
@@ -661,15 +678,77 @@ static HRESULT write_sample(IMFSinkWriter *sink, DWORD stream, const void *data,
     return hr;
 }
 
+/// The video stream's encoder, from the Sink Writer's transform chain: its friendly name, and whether the MFT says it is
+/// hardware (it names a hardware URL). Read once; a writer whose sink gives no IMFSinkWriterEx keeps "unknown".
+static void read_encoder(cmf_mp4_writer *writer) {
+    writer->encoder_read = TRUE;
+    writer->encoder_hardware = -1;
+    writer->encoder_name[0] = 0;
+    IMFSinkWriterEx *ex = NULL;
+    if (FAILED(IMFSinkWriter_QueryInterface(writer->sink, &s_iid_sink_writer_ex, (void **)&ex))) return;
+    for (DWORD index = 0;; index++) {
+        GUID category;
+        IMFTransform *transform = NULL;
+        if (FAILED(IMFSinkWriterEx_GetTransformForStream(ex, writer->video_stream, index, &category, &transform))) break;
+        if (IsEqualGUID(&category, &s_category_video_encoder)) {
+            IMFAttributes *attributes = NULL;
+            if (SUCCEEDED(IMFTransform_GetAttributes(transform, &attributes)) && attributes) {
+                UINT32 length = 0;
+                IMFAttributes_GetString(attributes, &s_mft_friendly_name, writer->encoder_name,
+                                        (UINT32)(sizeof(writer->encoder_name) / sizeof(WCHAR)), &length);
+                writer->encoder_hardware = SUCCEEDED(IMFAttributes_GetStringLength(attributes, &s_mft_hardware_url,
+                                                                                   &length)) ? 1 : 0;
+                IMFAttributes_Release(attributes);
+            }
+            IMFTransform_Release(transform);
+            break;
+        }
+        IMFTransform_Release(transform);
+    }
+    IMFSinkWriterEx_Release(ex);
+}
+
 int32_t cmf_mp4_write_frame(cmf_mp4_writer *writer, const uint8_t *bgra) {
     // Times from the frame count, so no rounding builds up over a long video.
     LONGLONG start = writer->frames_written * 10000000LL / writer->fps;
     LONGLONG end = (writer->frames_written + 1) * 10000000LL / writer->fps;
-    cmf_bgra_to_nv12(bgra, writer->nv12, writer->width, writer->height, &writer->matrix->coefficients);
+    LARGE_INTEGER t0, t1, t2;
+    QueryPerformanceCounter(&t0);
+    // Measurement only (this branch is not released): CMF_NV12_REFERENCE=1 converts with the first converter, so one
+    // probe build times both.
+    static int use_reference = -1;
+    if (use_reference < 0) use_reference = getenv("CMF_NV12_REFERENCE") != NULL;
+    if (use_reference) {
+        cmf_bgra_to_nv12_reference(bgra, writer->nv12, writer->width, writer->height, &writer->matrix->coefficients);
+    } else {
+        cmf_bgra_to_nv12(bgra, writer->nv12, writer->width, writer->height, &writer->matrix->coefficients);
+    }
+    QueryPerformanceCounter(&t1);
     HRESULT hr = write_sample(writer->sink, writer->video_stream, writer->nv12, writer->width * writer->height * 3 / 2,
                               start, end);
+    QueryPerformanceCounter(&t2);
+    writer->convert_ticks += t1.QuadPart - t0.QuadPart;
+    writer->write_ticks += t2.QuadPart - t1.QuadPart;
     if (SUCCEEDED(hr)) writer->frames_written += 1;
+    if (SUCCEEDED(hr) && !writer->encoder_read) read_encoder(writer);
     return (int32_t)hr;
+}
+
+int32_t cmf_mp4_stats(cmf_mp4_writer *writer, double *convert_seconds, double *write_seconds, uint16_t *encoder_name,
+                      uint32_t name_capacity, int32_t *encoder_hardware) {
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
+    double hz = frequency.QuadPart > 0 ? (double)frequency.QuadPart : 1.0;
+    *convert_seconds = (double)writer->convert_ticks / hz;
+    *write_seconds = (double)writer->write_ticks / hz;
+    *encoder_hardware = writer->encoder_read ? writer->encoder_hardware : -1;
+    if (encoder_name && name_capacity > 0) {
+        size_t length = wcslen(writer->encoder_name);
+        if (length >= name_capacity) length = name_capacity - 1;
+        memcpy(encoder_name, writer->encoder_name, length * sizeof(WCHAR));
+        encoder_name[length] = 0;
+    }
+    return 0;
 }
 
 int32_t cmf_mp4_write_audio(cmf_mp4_writer *writer, const int16_t *samples, uint32_t frames) {
