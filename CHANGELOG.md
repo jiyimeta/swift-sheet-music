@@ -29,6 +29,13 @@ and this project adheres to
 - `pageSizes(of:)` and `pageBoxes(of:)` read an encrypted original with `PDFPlatformCrypto.primitives`, so on Apple
   platforms and Windows they now return its pages where they threw `.encrypted` before. Android is unchanged.
 
+### Fixed
+
+- `BravuraFont.register` no longer reads CoreText's error after releasing it. When Bravura was already registered
+  (`kCTFontManagerErrorAlreadyRegistered`, as after a host's `SheetMusicFonts.register(urls:)`), it took the error
+  retained and then read it again unretained, which could crash in `objc_retain`. It now takes it once and reads its
+  code from that reference.
+
 ## [4.42.0] - 2026-11-16
 
 ### Added
