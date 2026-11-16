@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.43.0] - 2026-11-16
+
 ### Added
 
 - **Annotating an encrypted original PDF.** `PDFIncrementalAnnotator.append(_:to:crypto:)` appends ink and highlights
