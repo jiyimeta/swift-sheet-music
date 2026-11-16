@@ -185,6 +185,36 @@ public final class MP4VideoWriter {
         guard result == 0 else { throw Failure.mediaFoundation(step: "write audio", hresult: result) }
     }
 
+    /// Where the frames' time has gone so far, and the H.264 encoder Media Foundation chose (read after the first
+    /// frame). Before `finish()`; nil after it.
+    public struct Stats: Sendable, Equatable {
+        /// Seconds converting the BGRA frames to the encoder's NV12, summed.
+        public var conversionSeconds: Double
+        /// Seconds handing the frames to the Sink Writer, whose WriteSample encodes them, summed.
+        public var writeSampleSeconds: Double
+        /// The encoder MFT's friendly name; empty when it gives none or none was read yet.
+        public var encoderName: String
+        /// true for a hardware MFT, false for a software one, nil when not known.
+        public var encoderIsHardware: Bool?
+    }
+
+    public var stats: Stats? {
+        guard let writer else { return nil }
+        var conversion = 0.0
+        var write = 0.0
+        var hardware: Int32 = -1
+        var name = [UInt16](repeating: 0, count: 128)
+        _ = name.withUnsafeMutableBufferPointer {
+            cmf_mp4_stats(writer, &conversion, &write, $0.baseAddress, UInt32($0.count), &hardware)
+        }
+        let length = name.firstIndex(of: 0) ?? name.count
+        return Stats(
+            conversionSeconds: conversion, writeSampleSeconds: write,
+            encoderName: String(decoding: name[..<length], as: UTF16.self),
+            encoderIsHardware: hardware < 0 ? nil : hardware == 1,
+        )
+    }
+
     /// Completes the file, names its colour in a `colr` box, and lets go of the writer. A file whose layout left no
     /// room for the box (S_FALSE) is still complete; its colours are then right for players that go by its height.
     public func finish() throws {
