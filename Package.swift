@@ -329,6 +329,8 @@ var targets: [Target] = [
             "SheetMusicPages", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicFoundation", "SheetMusicLayout",
             "SheetMusicPDFSyntax",
         ],
+        // The standard security handler's primitives on Windows (`WindowsCryptoPrimitives`): CNG, in bcrypt.dll.
+        linkerSettings: [.linkedLibrary("bcrypt", .when(platforms: [.windows]))],
     ),
     .testTarget(
         name: "SheetMusicAudioCoreTests",
@@ -352,6 +354,8 @@ if !isWasm {
                 "SheetMusicPDFWriter", "SheetMusicBridgeCore", "SheetMusicPages", "SheetMusicPDF",
                 "SheetMusicPDFSyntax",
             ],
+            // Encrypted originals other generators made (`Fixtures/Encrypted/README.md`), read through `#filePath`.
+            exclude: ["Fixtures"],
         ),
         // The two readings of malformed syntax the PDF readers share, and the name bytes both keep.
         .testTarget(name: "SheetMusicPDFSyntaxTests", dependencies: ["SheetMusicPDFSyntax"]),

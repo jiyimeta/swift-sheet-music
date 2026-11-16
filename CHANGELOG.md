@@ -7,6 +7,28 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Annotating an encrypted original PDF.** `PDFIncrementalAnnotator.append(_:to:crypto:)` appends ink and highlights
+  to a file encrypted by the standard security handler whose user password is empty (an owner-password-only original,
+  revisions 2 to 6: RC4 40–128, AES-128, AES-256): the original bytes stay, the update carries `/Encrypt` and `/ID`,
+  and what it adds is encrypted under the file's own key and methods, so the file opens where it opened before, with
+  the restrictions it had. It does not read `/P`; a caller that honors the owner's restrictions asks
+  `PDFIncrementalAnnotator.permissions(of:)` first, which reads them without a key (`PDFPermissions`,
+  `allowsAnnotations` = bit 6, `allowsPrinting` = bit 3). `append(_:to:)` still refuses an encrypted original.
+- **`PDFCryptoPrimitives`**: MD5, SHA-256/384/512, RC4, AES-CBC and random bytes — the operations the handler is built
+  from, every rule of which is portable Swift. `PDFPlatformCrypto.primitives` supplies them from CryptoKit and
+  CommonCrypto on Apple platforms and from CNG on Windows (`bcrypt` is linked there); elsewhere it is nil, and a host
+  that has them (Android's `javax.crypto`) passes its own. No new dependency.
+- `pageSizes(of:crypto:)` and `pageBoxes(of:crypto:)` read an encrypted original's pages with given primitives, or
+  refuse it with nil.
+- `PDFAppendError.passwordRequired`: a file whose empty user password does not open it.
+
+### Changed
+
+- `pageSizes(of:)` and `pageBoxes(of:)` read an encrypted original with `PDFPlatformCrypto.primitives`, so on Apple
+  platforms and Windows they now return its pages where they threw `.encrypted` before. Android is unchanged.
+
 ## [4.42.0] - 2026-11-16
 
 ### Added

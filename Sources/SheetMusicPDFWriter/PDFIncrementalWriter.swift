@@ -2,20 +2,27 @@ import SheetMusicFoundation
 import SheetMusicPDFSyntax
 
 /// Appended objects and their cross-references. Original objects are never modified in place.
+///
+/// For an encrypted original, `security` is its handler: each new stream's payload is encrypted under the stream's
+/// own object key, and the cross-reference stream is not (ISO 32000-2 §7.6.2). The bodies given to `object` and
+/// `rewrite` are written as they come, so their strings must already be encrypted — `PDFAnnotationObjects` writes
+/// none, and `PDFIncrementalAnnotator` encrypts a rewritten page's before serializing it.
 final class PDFIncrementalWriter: PDFObjectSink {
     private var bytes: [UInt8]
     private var next: Int
     private var exhausted = false
     private var written: [Int: (offset: Int, generation: Int)] = [:]
+    private let security: PDFStandardSecurity?
 
     var hasObjects: Bool {
         !written.isEmpty
     }
 
-    init(original: Data, nextNumber: Int) {
+    init(original: Data, nextNumber: Int, security: PDFStandardSecurity? = nil) {
         bytes = Array(original)
         if let last = bytes.last, last != 10, last != 13 { bytes.append(10) }
         next = nextNumber
+        self.security = security
     }
 
     func reserve() -> Int {
@@ -33,8 +40,16 @@ final class PDFIncrementalWriter: PDFObjectSink {
 
     func stream(_ number: Int, dictionary: String, data: Data, compress: Bool) throws {
         guard !exhausted else { throw PDFAppendError.unreadable }
+        let encrypt = security.map { security in
+            { (payload: [UInt8]) in
+                try security.encrypt(payload, number: number, generation: 0, method: security.streamMethod)
+            }
+        }
+        let body = try PDFObjectWriter.streamBody(
+            dictionary: dictionary, data: data, compress: compress, encrypt: encrypt,
+        )
         begin(number, generation: 0)
-        bytes += try PDFObjectWriter.streamBody(dictionary: dictionary, data: data, compress: compress)
+        bytes += body
         append("endobj\n")
     }
 
