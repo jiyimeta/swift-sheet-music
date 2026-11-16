@@ -155,6 +155,37 @@ public final class MP4VideoWriter {
         )
     }
 
+    /// MEASUREMENT ONLY: the H.264 rate control asked for (`CMF_RATE_CONTROL`) and what the encoder reported taking,
+    /// read after the first frame. Each value is nil where it was not asked for or the encoder gave none.
+    public struct RateInfo: Sendable, Equatable {
+        /// nil for the encoder's default (CBR); otherwise an `eAVEncCommonRateControlMode` (1 peak-constrained VBR,
+        /// 2 unconstrained VBR, 3 quality).
+        public var requestedMode: Int?
+        public var requestedQuality: Int?
+        public var mode: Int?
+        public var quality: Int?
+        public var meanBitRate: Int?
+        public var gopSize: Int?
+        /// 66 Baseline, 77 Main, 100 High.
+        public var profile: Int?
+    }
+
+    public var rateInfo: RateInfo? {
+        guard let writer else { return nil }
+        var requestedMode: Int32 = -1, requestedQuality: Int32 = -1, mode: Int32 = -1, quality: Int32 = -1
+        var meanBitRate: Int32 = -1, gopSize: Int32 = -1, profile: Int32 = -1
+        _ = cmf_mp4_rate_info(
+            writer, &requestedMode, &requestedQuality, &mode, &quality, &meanBitRate, &gopSize, &profile,
+        )
+        func known(_ value: Int32) -> Int? {
+            value < 0 ? nil : Int(value)
+        }
+        return RateInfo(
+            requestedMode: known(requestedMode), requestedQuality: known(requestedQuality), mode: known(mode),
+            quality: known(quality), meanBitRate: known(meanBitRate), gopSize: known(gopSize), profile: known(profile),
+        )
+    }
+
     /// Completes the file, names its colour in a `colr` box, and lets go of the writer. A file whose layout left no
     /// room for the box (S_FALSE) is still complete; its colours are then right for players that go by its height.
     public func finish() throws {

@@ -757,6 +757,8 @@ if isWindows {
             linkerSettings: [
                 .linkedLibrary("ole32"),
                 .linkedLibrary("mfuuid"),
+                // IID_ICodecAPI, for reading back the rate control the H.264 encoder took.
+                .linkedLibrary("strmiids"),
             ],
         ),
         .target(

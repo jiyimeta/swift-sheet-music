@@ -68,6 +68,14 @@ int32_t cmf_mp4_write_audio(cmf_mp4_writer *writer, const int16_t *samples, uint
 int32_t cmf_mp4_stats(cmf_mp4_writer *writer, double *convert_seconds, double *write_seconds, uint16_t *encoder_name,
                       uint32_t name_capacity, int32_t *encoder_hardware);
 
+/// MEASUREMENT ONLY. The rate control asked for (from `CMF_RATE_CONTROL`; -1 the encoder's default CBR, else an
+/// `eAVEncCommonRateControlMode`, and the quality asked for in Quality mode, else -1) and what the encoder reported
+/// after the first frame: its rate control mode, quality, mean bit rate, GOP size and the output type's H.264 profile
+/// (66 Baseline, 77 Main, 100 High); -1 for each it did not give. Before `cmf_mp4_finish`.
+int32_t cmf_mp4_rate_info(cmf_mp4_writer *writer, int32_t *requested_mode, int32_t *requested_quality,
+                          int32_t *rate_mode, int32_t *quality, int32_t *mean_bit_rate, int32_t *gop,
+                          int32_t *profile);
+
 /// Completes the file and adds its `colr` box (S_FALSE when the file's layout left no room for one). The writer is
 /// still to be closed.
 int32_t cmf_mp4_finish(cmf_mp4_writer *writer);

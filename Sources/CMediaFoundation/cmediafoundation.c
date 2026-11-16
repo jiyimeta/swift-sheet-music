@@ -5,8 +5,14 @@
 #include <mfidl.h>
 #include <mfreadwrite.h>
 #include <mferror.h>
+#include <strmif.h>
+// CODECAPI_* defined here (codecapi.h declares them with DEFINE_GUID); IID_ICodecAPI comes from strmiids.lib.
+#include <initguid.h>
+#include <codecapi.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 #include "cmediafoundation.h"
 
@@ -194,6 +200,55 @@ typedef struct {
     UINT32 mf_matrix;
 } nv12_matrix;
 
+/// The H.264 rate control asked of the encoder. `mode` is -1 for the encoder's own default (CBR at the average bit rate,
+/// Baseline, no GOP set — the writer as it was), otherwise an `eAVEncCommonRateControlMode`, with High profile and a
+/// GOP of half a second; `quality` (0–100) is read in Quality mode only.
+///
+/// MEASUREMENT ONLY: read from the environment (`CMF_RATE_CONTROL` = `cbr`, `vbr`, `pvbr` or `quality:<0-100>`) so a
+/// probe can compare them on one build. A release takes the chosen setting as a parameter instead.
+typedef struct {
+    int32_t mode;
+    uint32_t quality;
+} cmf_rate_request;
+
+static cmf_rate_request rate_request(void) {
+    cmf_rate_request request = {-1, 0};
+    WCHAR value[32];
+    DWORD length = GetEnvironmentVariableW(L"CMF_RATE_CONTROL", value, 32);
+    if (length == 0 || length >= 32) return request;
+    if (wcscmp(value, L"vbr") == 0) {
+        request.mode = eAVEncCommonRateControlMode_UnconstrainedVBR;
+    } else if (wcscmp(value, L"pvbr") == 0) {
+        request.mode = eAVEncCommonRateControlMode_PeakConstrainedVBR;
+    } else if (wcsncmp(value, L"quality:", 8) == 0) {
+        request.mode = eAVEncCommonRateControlMode_Quality;
+        long quality = wcstol(value + 8, NULL, 10);
+        request.quality = (uint32_t)(quality < 0 ? 0 : quality > 100 ? 100 : quality);
+    }
+    return request;
+}
+
+static HRESULT set_uint32(IMFAttributes *attributes, const GUID *key, UINT32 value) {
+    return IMFAttributes_SetUINT32(attributes, key, value);
+}
+
+/// The encoding parameters the Sink Writer hands the encoder for `request` (NULL for the default): rate control, its
+/// mean bit rate (`video_bit_rate`, the same formula as Apple's average) or quality, and a half-second GOP.
+static HRESULT encoding_parameters(cmf_rate_request request, uint32_t video_bit_rate, uint32_t fps,
+                                   IMFAttributes **out) {
+    *out = NULL;
+    if (request.mode < 0) return S_OK;
+    HRESULT hr = mf.create_attributes(out, 4);
+    if (SUCCEEDED(hr)) hr = set_uint32(*out, &CODECAPI_AVEncCommonRateControlMode, (UINT32)request.mode);
+    if (SUCCEEDED(hr) && request.mode == eAVEncCommonRateControlMode_Quality) {
+        hr = set_uint32(*out, &CODECAPI_AVEncCommonQuality, request.quality);
+    } else if (SUCCEEDED(hr)) {
+        hr = set_uint32(*out, &CODECAPI_AVEncCommonMeanBitRate, video_bit_rate);
+    }
+    if (SUCCEEDED(hr)) hr = set_uint32(*out, &CODECAPI_AVEncMPVGOPSize, fps > 1 ? fps / 2 : 1);
+    return hr;
+}
+
 struct cmf_mp4_writer {
     IMFSinkWriter *sink;
     DWORD video_stream;
@@ -223,6 +278,14 @@ struct cmf_mp4_writer {
     BOOL encoder_read;
     WCHAR encoder_name[128];
     int32_t encoder_hardware;
+    /// The rate control asked for (`rate_request`) and what the encoder reports back after the first frame
+    /// (`cmf_mp4_rate_info`); -1 where nothing was read.
+    cmf_rate_request request;
+    int32_t got_rate_mode;
+    int32_t got_quality;
+    int32_t got_mean_bit_rate;
+    int32_t got_gop;
+    int32_t got_profile;
 };
 
 // IMFSinkWriterEx and two MFT attributes, defined here rather than taken from mfuuid.lib: the encoder query is the only
@@ -558,10 +621,18 @@ int32_t cmf_mp4_open(const uint16_t *path, uint32_t width, uint32_t height, uint
     if (SUCCEEDED(hr)) hr = IMFAttributes_SetUINT32(attributes, &MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
     if (SUCCEEDED(hr)) hr = mf.create_sink_writer((LPCWSTR)path, NULL, attributes, &writer->sink);
     // Video: H.264 out; BGRA in (the frame canvas's pixels), the Sink Writer converting to the encoder's NV12.
+    writer->request = rate_request();
+    writer->got_rate_mode = writer->got_quality = writer->got_mean_bit_rate = -1;
+    writer->got_gop = writer->got_profile = -1;
+    IMFAttributes *encoding = NULL;
     if (SUCCEEDED(hr)) hr = video_type(&h264, &MFVideoFormat_H264, width, height, fps);
     if (SUCCEEDED(hr)) hr = IMFMediaType_SetUINT32(h264, &MF_MT_AVG_BITRATE, video_bit_rate);
+    if (SUCCEEDED(hr) && writer->request.mode >= 0) {
+        hr = IMFMediaType_SetUINT32(h264, &MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High);
+    }
     if (SUCCEEDED(hr)) hr = tag_colour(h264, writer->matrix);
     if (SUCCEEDED(hr)) hr = IMFSinkWriter_AddStream(writer->sink, h264, &writer->video_stream);
+    if (SUCCEEDED(hr)) hr = encoding_parameters(writer->request, video_bit_rate, fps, &encoding);
     // NV12 in, converted here from the caller's BGRA (`bgra_to_nv12`) rather than by the converter the Sink Writer
     // would insert for RGB32: that converter ignored the colour tags and the colours came back shifted by up to 13
     // levels. Converting here, the data is in the matrix the `colr` box names by construction. Rows top-down (a
@@ -569,7 +640,8 @@ int32_t cmf_mp4_open(const uint16_t *path, uint32_t width, uint32_t height, uint
     if (SUCCEEDED(hr)) hr = video_type(&bgra, &MFVideoFormat_NV12, width, height, fps);
     if (SUCCEEDED(hr)) hr = IMFMediaType_SetUINT32(bgra, &MF_MT_DEFAULT_STRIDE, width);
     if (SUCCEEDED(hr)) hr = tag_colour(bgra, writer->matrix);
-    if (SUCCEEDED(hr)) hr = IMFSinkWriter_SetInputMediaType(writer->sink, writer->video_stream, bgra, NULL);
+    if (SUCCEEDED(hr)) hr = IMFSinkWriter_SetInputMediaType(writer->sink, writer->video_stream, bgra, encoding);
+    if (encoding) IMFAttributes_Release(encoding);
     if (SUCCEEDED(hr)) {
         writer->nv12 = (uint8_t *)malloc((size_t)width * height * 3 / 2);
         if (writer->nv12 == NULL) hr = E_OUTOFMEMORY;
@@ -618,6 +690,42 @@ static HRESULT write_sample(IMFSinkWriter *sink, DWORD stream, const void *data,
     return hr;
 }
 
+/// `key` read back from the encoder as an integer, or -1 when it gives none (an encoder may not support the property).
+/// Only integer VARIANTs are taken, so nothing needs VariantClear.
+static int32_t codec_value(ICodecAPI *api, const GUID *key) {
+    VARIANT value;
+    memset(&value, 0, sizeof(value));
+    if (FAILED(ICodecAPI_GetValue(api, key, &value))) return -1;
+    switch (value.vt) {
+    case VT_UI4: return (int32_t)value.ulVal;
+    case VT_I4: return (int32_t)value.lVal;
+    case VT_UI8: return value.ullVal > INT32_MAX ? INT32_MAX : (int32_t)value.ullVal;
+    case VT_BOOL: return value.boolVal ? 1 : 0;
+    default: return -1;
+    }
+}
+
+/// What the encoder says it is doing — rate control mode, quality, mean bit rate, GOP — and the H.264 profile on its
+/// output type, so a probe reports the setting the encoder took rather than the one asked for.
+static void read_rate_control(cmf_mp4_writer *writer, IMFTransform *transform) {
+    ICodecAPI *api = NULL;
+    if (SUCCEEDED(IMFTransform_QueryInterface(transform, &IID_ICodecAPI, (void **)&api)) && api) {
+        writer->got_rate_mode = codec_value(api, &CODECAPI_AVEncCommonRateControlMode);
+        writer->got_quality = codec_value(api, &CODECAPI_AVEncCommonQuality);
+        writer->got_mean_bit_rate = codec_value(api, &CODECAPI_AVEncCommonMeanBitRate);
+        writer->got_gop = codec_value(api, &CODECAPI_AVEncMPVGOPSize);
+        ICodecAPI_Release(api);
+    }
+    IMFMediaType *type = NULL;
+    if (SUCCEEDED(IMFTransform_GetOutputCurrentType(transform, 0, &type)) && type) {
+        UINT32 profile = 0;
+        if (SUCCEEDED(IMFMediaType_GetUINT32(type, &MF_MT_MPEG2_PROFILE, &profile))) {
+            writer->got_profile = (int32_t)profile;
+        }
+        IMFMediaType_Release(type);
+    }
+}
+
 /// The video stream's encoder, from the Sink Writer's transform chain: its friendly name, and whether the MFT says it is
 /// hardware (it names a hardware URL). Read once; a writer whose sink gives no IMFSinkWriterEx keeps "unknown".
 static void read_encoder(cmf_mp4_writer *writer) {
@@ -640,6 +748,7 @@ static void read_encoder(cmf_mp4_writer *writer) {
                                                                                    &length)) ? 1 : 0;
                 IMFAttributes_Release(attributes);
             }
+            read_rate_control(writer, transform);
             IMFTransform_Release(transform);
             break;
         }
@@ -680,6 +789,20 @@ int32_t cmf_mp4_stats(cmf_mp4_writer *writer, double *convert_seconds, double *w
         memcpy(encoder_name, writer->encoder_name, length * sizeof(WCHAR));
         encoder_name[length] = 0;
     }
+    return 0;
+}
+
+int32_t cmf_mp4_rate_info(cmf_mp4_writer *writer, int32_t *requested_mode, int32_t *requested_quality,
+                          int32_t *rate_mode, int32_t *quality, int32_t *mean_bit_rate, int32_t *gop,
+                          int32_t *profile) {
+    *requested_mode = writer->request.mode;
+    *requested_quality = writer->request.mode == eAVEncCommonRateControlMode_Quality
+        ? (int32_t)writer->request.quality : -1;
+    *rate_mode = writer->got_rate_mode;
+    *quality = writer->got_quality;
+    *mean_bit_rate = writer->got_mean_bit_rate;
+    *gop = writer->got_gop;
+    *profile = writer->got_profile;
     return 0;
 }
 
