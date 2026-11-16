@@ -329,6 +329,8 @@ var targets: [Target] = [
             "SheetMusicPages", "SheetMusicBridgeCore", "SheetMusicCore", "SheetMusicFoundation", "SheetMusicLayout",
             "SheetMusicPDFSyntax",
         ],
+        // The standard security handler's primitives on Windows (`WindowsCryptoPrimitives`): CNG, in bcrypt.dll.
+        linkerSettings: [.linkedLibrary("bcrypt", .when(platforms: [.windows]))],
     ),
     .testTarget(
         name: "SheetMusicAudioCoreTests",
