@@ -205,16 +205,18 @@ struct PDFStandardSecurity {
 
     // MARK: - Revisions 5 and 6
 
-    /// The hash of the (empty) password with `salt`: SHA-256 alone at revision 5 (Adobe's extension level 3), and
-    /// Algorithm 2.B's rounds of AES-128 and SHA-2 at revision 6.
-    private static func hash(salt: [UInt8], revision: Int, _ crypto: any PDFCryptoPrimitives) throws -> [UInt8] {
-        let password: [UInt8] = []
-        var key = try crypto.sha2(password + salt, bits: 256)
+    /// The hash of `password` with `salt` and, for an owner password, `userData` (the 48 bytes of `/U`): SHA-256
+    /// alone at revision 5 (Adobe's extension level 3), and Algorithm 2.B's rounds of AES-128 and SHA-2 at revision
+    /// 6. Opening a file needs only the empty user password; the tests' R6 writer hashes an owner password too.
+    static func hash(
+        password: [UInt8] = [], salt: [UInt8], userData: [UInt8] = [], revision: Int, _ crypto: any PDFCryptoPrimitives,
+    ) throws -> [UInt8] {
+        var key = try crypto.sha2(password + salt + userData, bits: 256)
         guard revision == 6 else { return key }
         var block: [UInt8] = [0]
         var round = 0
         while round < 64 || Int(block.last ?? 0) > round - 32 {
-            let combined = password + key
+            let combined = password + key + userData
             let repeated = [UInt8](Array(repeating: combined, count: 64).joined())
             block = try crypto.aesCBC(
                 key: Array(key[0 ..< 16]), iv: Array(key[16 ..< 32]), data: repeated, encrypt: true, padded: false,

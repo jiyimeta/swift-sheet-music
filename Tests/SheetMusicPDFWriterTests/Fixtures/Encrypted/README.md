@@ -1,8 +1,8 @@
 # Encrypted originals
 
-Fixtures for `PDFEncryptedReadTests` and `PDFEncryptedAppendTests`: one page of a small unencrypted PDF (`plain.pdf`, written by macOS Quartz, Info
-`/Title (Sample Title)`), encrypted by generators other than this package so the security handler is checked against
-files it did not write. Every one has an owner password ("owner-only") and, except `aes128-user-password.pdf`, an
+Fixtures for `PDFEncryptedReadTests`, `PDFEncryptedAppendTests` and `PDFEncryptedR6Tests`: a small unencrypted PDF
+(`plain.pdf`, two pages, written by macOS Quartz, Info `/Title (Sample Title)`), encrypted by generators other than
+this package so the security handler is checked against files it did not write. Every one has an owner password ("owner-only") and, except `aes128-user-password.pdf`, an
 empty user password — the shape of a score's original that opens without a password but restricts what may be done
 to it.
 
@@ -53,7 +53,8 @@ with open("rc4-128-page-string.pdf", "wb") as out:
 ## CoreGraphics (AES-128)
 
 CoreGraphics writes `/V 4 /R 4 /CFM /AESV2` when asked for a 128-bit key, and refuses 256 (`CGContext` comes back
-nil), so it cannot make the AES-256 (R6) fixture. The page of `plain.pdf` is drawn into a PDF context:
+nil), so it cannot make the AES-256 (R6) fixture. The first page of `plain.pdf` is drawn into a PDF context, so these
+three have one page:
 
 ```swift
 var info: [CFString: Any] = [
@@ -67,6 +68,12 @@ info[kCGPDFContextUserPassword] = "user-secret"
 let context = CGContext(url as CFURL, mediaBox: &box, info as CFDictionary)
 context.beginPDFPage(nil); context.drawPDFPage(page); context.endPDFPage(); context.closePDF()
 ```
+
+## AES-256 (R6)
+
+No generator on the machine writes AES-256 yet, so `PDFEncryptedR6Tests` encrypts `plain.pdf` itself
+(`R6TestEncryption`, in the tests) and hands the result to PDFKit, which derives the key its own way: PDFKit opening it
+without a password, reading its title and taking the owner password is the independent check.
 
 ## Still to add
 
