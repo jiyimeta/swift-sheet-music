@@ -75,6 +75,13 @@ int32_t cmf_mp4_write_frame(cmf_mp4_writer *writer, const uint8_t *bgra);
 /// Encodes `frames` frames of interleaved 16-bit PCM after those written so far. E_UNEXPECTED without an audio stream.
 int32_t cmf_mp4_write_audio(cmf_mp4_writer *writer, const int16_t *samples, uint32_t frames);
 
+/// Where the frames' time has gone so far: seconds in the BGRA to NV12 conversion and in handing the frames to the
+/// Sink Writer (its WriteSample encodes), summed; and the H.264 encoder it chose, read after the first frame — its
+/// friendly name (UTF-16, cut to `name_capacity - 1` and terminated; empty when it gives none) and 1 for a hardware
+/// MFT, 0 for a software one, -1 when not known. Before `cmf_mp4_finish`.
+int32_t cmf_mp4_stats(cmf_mp4_writer *writer, double *convert_seconds, double *write_seconds, uint16_t *encoder_name,
+                      uint32_t name_capacity, int32_t *encoder_hardware);
+
 /// Completes the file and adds its `colr` box (S_FALSE when the file's layout left no room for one). The writer is
 /// still to be closed.
 int32_t cmf_mp4_finish(cmf_mp4_writer *writer);
