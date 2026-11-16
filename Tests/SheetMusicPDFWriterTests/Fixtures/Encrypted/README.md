@@ -1,6 +1,6 @@
 # Encrypted originals
 
-Fixtures for `PDFEncryptedReadTests`: one page of a small unencrypted PDF (`plain.pdf`, written by macOS Quartz, Info
+Fixtures for `PDFEncryptedReadTests` and `PDFEncryptedAppendTests`: one page of a small unencrypted PDF (`plain.pdf`, written by macOS Quartz, Info
 `/Title (Sample Title)`), encrypted by generators other than this package so the security handler is checked against
 files it did not write. Every one has an owner password ("owner-only") and, except `aes128-user-password.pdf`, an
 empty user password — the shape of a score's original that opens without a password but restricts what may be done
@@ -10,6 +10,7 @@ to it.
 | --- | --- | --- |
 | `rc4-40.pdf` | R2, RC4 40-bit | pypdf 6.14 |
 | `rc4-128.pdf` | R3, RC4 128-bit | pypdf 6.14 |
+| `rc4-128-page-string.pdf` | R3, RC4 128-bit; the page holds a string of its own | pypdf 6.14 |
 | `aes128-allowed.pdf` | R4, AESV2 (AES-128), annotations allowed | CoreGraphics |
 | `aes128-forbidden.pdf` | R4, AESV2, printing only (no `/P` bit 6) | CoreGraphics |
 | `aes128-user-password.pdf` | R4, AESV2, user password "user-secret" | CoreGraphics |
@@ -30,6 +31,24 @@ for name, algorithm in (("rc4-40", "RC4-40"), ("rc4-128", "RC4-128")):
 ```
 
 (These two are folino's `ReaderTests/Resources/encrypted-owner-only-rc4-{40,128}.pdf`, made the same way.)
+
+`rc4-128-page-string.pdf` gives the page a string before encrypting, so a test can see that a page rewritten with the
+ink keeps its own strings readable — they are decrypted on reading and must be encrypted again under the page's number:
+
+```python
+from pypdf.generic import DictionaryObject, NameObject, TextStringObject
+
+writer = PdfWriter(clone_from=PdfReader("plain.pdf"))
+writer.pages[0][NameObject("/PieceInfo")] = DictionaryObject({
+    NameObject("/folino"): DictionaryObject({
+        NameObject("/LastModified"): TextStringObject("D:20261116000000Z"),
+        NameObject("/Private"): TextStringObject("a page's own string"),
+    }),
+})
+writer.encrypt(user_password="", owner_password="owner-only", algorithm="RC4-128")
+with open("rc4-128-page-string.pdf", "wb") as out:
+    writer.write(out)
+```
 
 ## CoreGraphics (AES-128)
 

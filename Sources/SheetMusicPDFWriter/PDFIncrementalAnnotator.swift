@@ -49,15 +49,32 @@ public enum PDFIncrementalAnnotator {
     /// Adds annotations by zero-based page index, after each page's existing annotations. Geometry is in the
     /// displayed space reported by `pageSizes`. Nothing drawable to add returns the original bytes unchanged.
     /// Encrypted or unreadable files and indices outside the page tree throw `PDFAppendError`.
+    ///
+    /// An encrypted original is refused here even where the platform has primitives: writing into one is the caller's
+    /// decision, since its owner's `/P` may forbid annotations (`permissions(of:)`). `append(_:to:crypto:)` writes it.
     public static func append(_ annotations: [Int: [PDFPageAnnotation]], to original: Data) throws -> Data {
+        try append(annotations, to: original, crypto: nil)
+    }
+
+    /// `append(_:to:)` that also writes into an encrypted original whose user password is empty, with `crypto` —
+    /// `PDFPlatformCrypto.primitives`, or Android's from its host. The original bytes stay as they are, the update
+    /// carries the trailer's `/Encrypt` and `/ID`, and what it adds is encrypted under the original's key and methods,
+    /// so the file opens where it opened before, with the restrictions it had. This does not read `/P`: a caller that
+    /// honors the owner's restrictions asks `permissions(of:)` first. Nil `crypto` refuses an encrypted original
+    /// (`.encrypted`); a file that needs a user password throws `.passwordRequired`.
+    public static func append(
+        _ annotations: [Int: [PDFPageAnnotation]], to original: Data, crypto: (any PDFCryptoPrimitives)?,
+    ) throws -> Data {
         let wanted = annotations.filter { !$0.value.isEmpty }
         guard !wanted.isEmpty else { return original }
         do {
-            let document = try PDFSourceDocument(original)
+            let document = try PDFSourceDocument(original, encryption: encryption(crypto))
             let pages = try document.pages()
             guard wanted.keys.allSatisfy(pages.indices.contains) else { throw PDFAppendError.pageOutOfRange }
             guard document.locations.keys.allSatisfy({ $0 < document.size }) else { throw PDFAppendError.unreadable }
-            let writer = PDFIncrementalWriter(original: original, nextNumber: document.size)
+            let writer = PDFIncrementalWriter(
+                original: original, nextNumber: document.size, security: document.security,
+            )
             for index in wanted.keys.sorted() {
                 let page = pages[index]
                 let added = try PDFAnnotationObjects.write(wanted[index] ?? [], in: page.space, into: writer)
@@ -74,9 +91,11 @@ public enum PDFIncrementalAnnotator {
                 }
                 // An indirect array may be shared by other pages: give only this page its own updated array.
                 dictionary["Annots"] = .array(existing + added)
-                writer.rewrite(
-                    page.number, generation: page.generation, PDFObject.dictionary(dictionary).serialized,
+                let rewritten = try encrypted(
+                    .dictionary(dictionary), number: page.number, generation: page.generation,
+                    security: document.security,
                 )
+                writer.rewrite(page.number, generation: page.generation, rewritten.serialized)
             }
             guard writer.hasObjects else { return original }
             return try writer.finish(
@@ -91,6 +110,18 @@ public enum PDFIncrementalAnnotator {
 
     private static func encryption(_ crypto: (any PDFCryptoPrimitives)?) -> PDFSourceDocument.Encryption {
         crypto.map { .decrypt($0) } ?? .refuse
+    }
+
+    /// A rewritten object's strings, encrypted under its own number and generation. The document decrypted every
+    /// string it read — a page from an object stream held them in the clear to begin with — so each is plain here and
+    /// all of them are encrypted again; without `security` the object is returned as it is.
+    static func encrypted(
+        _ object: PDFObject, number: Int, generation: Int, security: PDFStandardSecurity?,
+    ) throws -> PDFObject {
+        guard let security else { return object }
+        return try PDFSourceDocument.mapStrings(object) {
+            try security.encrypt($0, number: number, generation: generation, method: security.stringMethod)
+        }
     }
 }
 

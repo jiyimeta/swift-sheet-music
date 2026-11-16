@@ -34,9 +34,13 @@ final class PDFObjectWriter: PDFObjectSink {
     }
 
     /// A stream object's body after its `N G obj` line: `dictionary`'s entries plus `/Length` (and with `compress`
-    /// `/Filter /FlateDecode`), then the payload. Shared with `PDFIncrementalWriter`.
-    static func streamBody(dictionary: String, data: Data, compress: Bool) throws -> [UInt8] {
-        let payload = compress ? try PDFFlate.encode(data) : data
+    /// `/Filter /FlateDecode`), then the payload. Shared with `PDFIncrementalWriter`, whose `encrypt` runs on the
+    /// payload after Flate — the order a reader undoes (ISO 32000-2 §7.6.2) — so `/Length` is the encrypted length.
+    static func streamBody(
+        dictionary: String, data: Data, compress: Bool, encrypt: (([UInt8]) throws -> [UInt8])? = nil,
+    ) throws -> [UInt8] {
+        let filtered = compress ? try PDFFlate.encode(data) : data
+        let payload = try encrypt.map { try Data($0(Array(filtered))) } ?? filtered
         let filter = compress ? " /Filter /FlateDecode" : ""
         let entries = dictionary.isEmpty ? "" : "\(dictionary) "
         return Array("<< \(entries)/Length \(payload.count)\(filter) >>\nstream\n".utf8) + payload
