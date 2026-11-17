@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.44.0] - 2026-11-17
+
 ### Added
 
 - **`MP4VideoWriter`'s `rateControl:` (Windows)**: `.quality(0…100)` asks Media Foundation's H.264 encoder for Quality
