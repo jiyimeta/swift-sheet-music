@@ -20,6 +20,13 @@ struct MP4VideoWriterTests {
             "\(width) x \(height)"
         }
 
+        /// The codes a file may name the matrix by. BT.601's two codes, 5 (BT.470BG) and 6 (SMPTE 170M), carry the
+        /// same coefficients: the writer names 6, but on folino-qa's hardware encoder the sink writes its own `colr`
+        /// first, naming 5, and the writer leaves a box that is there (2026-11-17; files from 4.42.0 read the same).
+        var matrices: Set<UInt16> {
+            matrix == 6 ? [5, 6] : [matrix]
+        }
+
         /// The luma and chroma weights of red and blue in `matrix`.
         var weights: (red: Double, blue: Double) {
             matrix == 1 ? (0.2126, 0.0722) : (0.299, 0.114)
@@ -143,14 +150,15 @@ struct MP4VideoWriterTests {
 
     /// The file names the matrix its frames are in, so a player that reads the tag decodes them right: Media
     /// Foundation's encoder writes no colour description into the stream (measured on folino-win, 2026-11-15), so the
-    /// container's `colr` box is the tag. BT.709 primaries and transfer, studio range, at every size.
+    /// container's `colr` box is the tag. BT.709 primaries and transfer, studio range, at every size. On folino-qa's
+    /// hardware encoder the sink writes a `colr` of its own first, naming BT.601 as 5 rather than 6 (`matrices`).
     @Test(arguments: [sd, hd])
     func `the colr box names the frames' matrix`(_ size: Size) throws {
         let url = Self.temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         try Self.write(to: url, size: size, withAudio: true)
         let colour = try #require(try MP4VideoWriter.colour(url), "no colr box")
-        #expect(colour.matrix == size.matrix, "matrix \(colour.matrix)")
+        #expect(size.matrices.contains(colour.matrix), "matrix \(colour.matrix)")
         #expect(colour.primaries == 1, "primaries \(colour.primaries)")
         #expect(colour.transfer == 1, "transfer \(colour.transfer)")
         #expect(!colour.fullRange)
@@ -186,7 +194,7 @@ struct MP4VideoWriterTests {
         #expect(Self.near(upper, Self.top, in: size), "top half read \(upper)")
         #expect(Self.near(lower, Self.bottom, in: size), "bottom half read \(lower)")
         let colour = try #require(try MP4VideoWriter.colour(quality), "no colr box")
-        #expect(colour.matrix == size.matrix, "matrix \(colour.matrix)")
+        #expect(size.matrices.contains(colour.matrix), "matrix \(colour.matrix)")
     }
 
     /// The quality asked for is clamped to 0–100 before it reaches the encoder.
