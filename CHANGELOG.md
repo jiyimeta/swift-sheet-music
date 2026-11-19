@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.45.0] - 2026-11-20
+
 ### Added
 
 - **`WindowsAudioCapture` (Windows)**: the microphone, as WASAPI capture beside the playback output — shared mode,
