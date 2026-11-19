@@ -27,6 +27,25 @@ and this project adheres to
   to draw a 1358 × 1920 page-turn frame. Only the canvas that made a picture draws it; another throws instead of losing
   the frame. In C: `cd2d_picture_create`, `cd2d_draw_picture`, `cd2d_picture_release`.
 
+### Changed
+
+- **A score's timing questions no longer walk the staff on every call.** `onset(of:)`, `end(of:)`,
+  `effectiveMeasureDuration(at:measureIndex:)`, `resolveTickInMeasure(for:)`, `onsetNoteIDs(of:)` and
+  `voiceElements(in:)` each rebuilt the staff's measure-duration table from all its bars — in a bar without a time
+  signature, every element of every voice — and one selection question paid that two to six times. Each `Staff` now
+  keeps the table, built on its first read, until its `measures` change; a copy shares it until one of them changes its
+  bars. On a six-staff, 127-measure score (release build, median per call over its 4,934 chords and rests):
+  `effectiveMeasureDuration` 11.6 → 0.17 µs, `resolveTickInMeasure` 11.7 → 0.22 µs, `chronologicalBounds(of:)`
+  23.4 → 0.47 µs, `voiceElements(in:)` over one slot 86.0 → 4.0 µs. Writing an element and asking again went from 8.5
+  to 8.9 µs. `Score.effectiveMeasureDurations(partIndex:staffIndex:)`, the edit planners and the layout's cursor frame
+  read the same table. `Staff.measures` is now computed over the stored bars, and its `_modify` keeps a write into one
+  bar in place from any module; `Staff`'s `==` still compares the bars alone.
+- **`MP4VideoWriter` converts a frame to NV12 in one pass (Windows)**, two rows at a time and eight pixels per SSE2
+  step, with the same bytes as before (the first converter stays as `cmf_bgra_to_nv12_reference`, and
+  `NV12ConversionTests` hold the two together at six sizes in BT.709 and BT.601). On folino-qa, writing a 30 fps
+  page-turn score video, the conversion went from 17.4 to 4.4 ms a frame and the write from 0.85× to 1.26× real time.
+  The converter is Windows-free C in `cmf_nv12.c`.
+
 ## [4.44.0] - 2026-11-17
 
 ### Added
