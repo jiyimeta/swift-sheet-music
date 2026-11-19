@@ -789,6 +789,8 @@ if isWindows {
             dependencies: [
                 "SheetMusicAudioWindows", "SheetMusicAudioCore", "SheetMusicAudioSignalsmith", "SheetMusicCore",
                 "SheetMusicLoader",
+                // The MP4 writer's BGRA to NV12 converter, held to its reference byte for byte (NV12ConversionTests).
+                "CMediaFoundation",
             ],
         ),
     ]

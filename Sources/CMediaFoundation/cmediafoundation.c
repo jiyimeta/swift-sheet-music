@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "cmediafoundation.h"
+#include "cmf_nv12.h"
 
 // Media Foundation's entry points, looked up once in DLLs loaded at run time (see the header for why).
 typedef HRESULT(WINAPI *mf_startup_fn)(ULONG, DWORD);
@@ -190,9 +191,9 @@ void cmf_aac_close(cmf_aac_writer *writer) {
 
 // MARK: - MP4 (H.264 + AAC)
 
-/// A YUV matrix's studio-range coefficients in 1/256ths: luma from R, G, B, then Cb's and Cr's.
+/// A YUV matrix: its studio-range coefficients (`cmf_nv12.h`, which converts the frames in them) and its names.
 typedef struct {
-    int yr, yg, yb, ur, ug, ub, vr, vg, vb;
+    cmf_nv12_coefficients coefficients;
     /// What the matrix is called in an MP4 `colr` box (ISO/IEC 23091-2 MatrixCoefficients): 1 BT.709, 6 BT.601.
     uint16_t colr_matrix;
     /// What it is called in a Media Foundation type (`MFVideoTransferMatrix`).
@@ -228,8 +229,8 @@ struct cmf_mp4_writer {
 /// The two matrices' 8-bit studio-range coefficients (ITU-R BT.709 and BT.601), each row rounded so luma's sums to 220
 /// and each chroma's to 0, which keeps a grey's chroma at exactly 128 (BT.709's Cb, -25.8 -86.7 +112.4, gives its
 /// rounding to green).
-static const nv12_matrix matrix_bt709 = {47, 157, 16, -26, -86, 112, 112, -102, -10, 1, MFVideoTransferMatrix_BT709};
-static const nv12_matrix matrix_bt601 = {66, 129, 25, -38, -74, 112, 112, -94, -18, 6, MFVideoTransferMatrix_BT601};
+static const nv12_matrix matrix_bt709 = {{47, 157, 16, -26, -86, 112, 112, -102, -10}, 1, MFVideoTransferMatrix_BT709};
+static const nv12_matrix matrix_bt601 = {{66, 129, 25, -38, -74, 112, 112, -94, -18}, 6, MFVideoTransferMatrix_BT601};
 
 /// The matrix a frame `height` rows tall is written in: the one a player assumes for an untagged stream of that
 /// height — BT.601 below 720 rows (SD), BT.709 from 720 (HD) — so the colours are right whether or not the player
@@ -240,34 +241,6 @@ static const nv12_matrix *matrix_for_height(uint32_t height) {
     return height < 720 ? &matrix_bt601 : &matrix_bt709;
 }
 
-/// BGRA (premultiplied, opaque in a score video) to NV12 in `m`, studio range — luma per pixel, chroma from each 2x2
-/// block's average. Rows top-down in both.
-static void bgra_to_nv12(const uint8_t *bgra, uint8_t *nv12, uint32_t width, uint32_t height, const nv12_matrix *m) {
-    uint8_t *luma = nv12;
-    uint8_t *chroma = nv12 + (size_t)width * height;
-    for (uint32_t y = 0; y < height; y++) {
-        const uint8_t *row = bgra + (size_t)y * width * 4;
-        uint8_t *out = luma + (size_t)y * width;
-        for (uint32_t x = 0; x < width; x++) {
-            int b = row[x * 4], g = row[x * 4 + 1], r = row[x * 4 + 2];
-            out[x] = (uint8_t)(((m->yr * r + m->yg * g + m->yb * b + 128) >> 8) + 16);
-        }
-    }
-    for (uint32_t y = 0; y < height; y += 2) {
-        const uint8_t *top = bgra + (size_t)y * width * 4;
-        const uint8_t *bottom = top + (size_t)width * 4;
-        uint8_t *out = chroma + (size_t)(y / 2) * width;
-        for (uint32_t x = 0; x < width; x += 2) {
-            const uint8_t *p = top + x * 4;
-            const uint8_t *q = bottom + x * 4;
-            int b = (p[0] + p[4] + q[0] + q[4] + 2) >> 2;
-            int g = (p[1] + p[5] + q[1] + q[5] + 2) >> 2;
-            int r = (p[2] + p[6] + q[2] + q[6] + 2) >> 2;
-            out[x] = (uint8_t)(((m->ur * r + m->ug * g + m->ub * b + 128) >> 8) + 128);
-            out[x + 1] = (uint8_t)(((m->vr * r + m->vg * g + m->vb * b + 128) >> 8) + 128);
-        }
-    }
-}
 
 /// Whether an encoder that outputs `subtype` in `category` is registered — software or hardware.
 static int32_t encoder_listed(const GUID *category, const GUID *major, const GUID *subtype) {
@@ -630,7 +603,7 @@ int32_t cmf_mp4_open(const uint16_t *path, uint32_t width, uint32_t height, uint
     }
     if (SUCCEEDED(hr)) hr = tag_colour(h264, writer->matrix);
     if (SUCCEEDED(hr)) hr = IMFSinkWriter_AddStream(writer->sink, h264, &writer->video_stream);
-    // NV12 in, converted here from the caller's BGRA (`bgra_to_nv12`) rather than by the converter the Sink Writer
+    // NV12 in, converted here from the caller's BGRA (`cmf_bgra_to_nv12`) rather than by the converter the Sink Writer
     // would insert for RGB32: that converter ignored the colour tags and the colours came back shifted by up to 13
     // levels. Converting here, the data is in the matrix the `colr` box names by construction. Rows top-down (a
     // positive stride).
@@ -692,7 +665,7 @@ int32_t cmf_mp4_write_frame(cmf_mp4_writer *writer, const uint8_t *bgra) {
     // Times from the frame count, so no rounding builds up over a long video.
     LONGLONG start = writer->frames_written * 10000000LL / writer->fps;
     LONGLONG end = (writer->frames_written + 1) * 10000000LL / writer->fps;
-    bgra_to_nv12(bgra, writer->nv12, writer->width, writer->height, writer->matrix);
+    cmf_bgra_to_nv12(bgra, writer->nv12, writer->width, writer->height, &writer->matrix->coefficients);
     HRESULT hr = write_sample(writer->sink, writer->video_stream, writer->nv12, writer->width * writer->height * 3 / 2,
                               start, end);
     if (SUCCEEDED(hr)) writer->frames_written += 1;

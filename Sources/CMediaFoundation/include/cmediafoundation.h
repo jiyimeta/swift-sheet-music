@@ -14,6 +14,10 @@
 
 #include <stdint.h>
 
+// The frame converter, apart from Media Foundation; included here because this header is the module's umbrella, so its
+// declarations reach Swift (the tests hold it to its reference).
+#include "cmf_nv12.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
