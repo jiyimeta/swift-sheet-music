@@ -18,8 +18,9 @@ and this project adheres to
   default, and `init(deviceID:)` opens one of them. Following the default, a new default microphone or the stream's
   device going away closes the stream and opens again after playback's 250 ms settle, reported as `.lost`, `.removed`
   and `.recovered(format)`. `Format` carries the stream latency and the device period for a host's latency model.
-- `cwasapi_capture_*`, `cwasapi_capture_devices` and `cwasapi_is_access_denied`. The endpoint watcher keeps a capture
-  flag of its own (`cwasapi_watch_take_capture_change`), so a new default microphone does not wake playback.
+- `cwasapi_capture_*` (the stream, and `cwasapi_capture_devices` with its `cwasapi_device_list_*` accessors) and
+  `cwasapi_is_access_denied`. The endpoint watcher keeps a capture flag of its own
+  (`cwasapi_watch_take_capture_change`), so a new default microphone does not wake playback.
 
 ## [4.44.0] - 2026-11-17
 
