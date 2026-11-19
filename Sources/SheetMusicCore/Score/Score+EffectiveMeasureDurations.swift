@@ -114,8 +114,8 @@ extension Score {
         guard partIndex < parts.count,
               staffIndex < parts[partIndex].staves.count
         else { return [] }
-        return parts[partIndex].staves[staffIndex].measures
-            .effectiveMeasureDurations()
+        // The staff's remembered table (`Staff.measureDurations`), rebuilt only after its measures change.
+        return parts[partIndex].staves[staffIndex].measureDurations
     }
 
     /// Effective duration of one measure on one staff — the value a
@@ -127,9 +127,11 @@ extension Score {
     /// staff 0, because `actualLength` (unlike the time signature) is
     /// per-measure and so can differ between staves.
     ///
-    /// This walks the staff's whole measure list, so call it once per
-    /// edit — not once per measure of a loop. A loop wants
-    /// `effectiveMeasureDurations()` and an index.
+    /// Reads the staff's remembered table (`Staff.measureDurations`):
+    /// the first question after the staff's measures change walks the
+    /// whole staff, the rest are a lookup. It used to walk the staff on
+    /// every call, which made a per-element caller (folino's column
+    /// navigation, the range questions) quadratic in the staff's length.
     public func effectiveMeasureDuration(
         at staff: StaffAddress, measureIndex: Int,
     ) -> Fraction {

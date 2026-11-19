@@ -49,7 +49,15 @@ public struct Staff: Sendable, Equatable {
     /// staff comes back (`SystemLayout::hideEmptyStaves`, `rendering/score/systemlayout.cpp:722-741`); without any such
     /// staff the system keeps its first one. C++: `Staff::showIfEntireSystemEmpty()`.
     public var showIfSystemEmpty = false
-    public var measures: [Measure]
+    /// Any change to the bars drops the remembered measure durations (`Staff+MeasureDurationCache.swift`). The
+    /// observer reads no `oldValue`, so `measures[i].… = x` is still modified in place.
+    public var measures: [Measure] {
+        didSet { timingCache = StaffTimingCache() }
+    }
+
+    /// The effective measure durations of `measures`, built on first use (`measureDurations`). Not part of the value:
+    /// its `==` is always true.
+    var timingCache = StaffTimingCache()
     /// Source markup inside this staff declaration's `<StaffType>`
     /// that the model does not represent.
     public var staffTypePreservedMarkup: [PreservedXML] = []

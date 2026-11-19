@@ -1,11 +1,13 @@
 import SheetMusicFoundation
 
-// Per-staff answers a planner reads once for a whole walk, instead of once per element. Both questions are answered
-// by walking a staff from its first bar — `Score.effectiveMeasureDuration(at:measureIndex:)` builds the staff's
+// Per-staff answers a planner reads once for a whole walk, instead of once per element. Both questions were answered
+// by walking a staff from its first bar — `Score.effectiveMeasureDuration(at:measureIndex:)` built the staff's
 // whole duration table, `Score.activeKey(staff:measureIndex:)` rescans every bar up to the one asked about — so a
 // walk asking once per chord is quadratic in the length of the staff. The whole-score transposition of a 130-bar,
 // six-part score spent about three quarters of its time rebuilding the same duration table, and ran 37 s in a debug
-// build (folino's Windows round-trip golden, 2026-10-12).
+// build (folino's Windows round-trip golden, 2026-10-12). The durations are now remembered on the staff itself
+// (`Staff.measureDurations`, until its measures change), but a planner rewrites its working copy as it walks, which
+// drops that memory at every step; the table below keeps the walk reading the score it started from.
 //
 // A table is built from one score and answers for that score. A planner that keeps reading it while its own steps
 // rewrite a working copy relies on those steps leaving time signatures, `actualLength` and key signatures where they
@@ -22,7 +24,7 @@ struct MeasureDurationTable {
         self.score = score
         var durations: [StaffAddress: [Fraction]] = [:]
         for staff in staves where durations[staff] == nil {
-            durations[staff] = score[staff]?.measures.effectiveMeasureDurations()
+            durations[staff] = score[staff]?.measureDurations
         }
         self.durations = durations
     }
