@@ -17,7 +17,8 @@ and this project adheres to
   (`WindowsAudioCaptureError`). `inputDevices()` lists the active capture endpoints with their names and which is the
   default, and `init(deviceID:)` opens one of them. Following the default, a new default microphone or the stream's
   device going away closes the stream and opens again after playback's 250 ms settle, reported as `.lost`, `.removed`
-  and `.recovered(format)`. `Format` carries the stream latency and the device period for a host's latency model.
+  and `.recovered(format)`. `Format` carries the stream latency and the device period for a host's latency model;
+  `Format` and `Device` have public initializers for a host's fakes and tests.
 - `cwasapi_capture_*` (the stream, and `cwasapi_capture_devices` with its `cwasapi_device_list_*` accessors) and
   `cwasapi_is_access_denied`. The endpoint watcher keeps a capture flag of its own
   (`cwasapi_watch_take_capture_change`), so a new default microphone does not wake playback.
