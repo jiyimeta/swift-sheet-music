@@ -240,6 +240,20 @@ int32_t cd2d_draw_bitmap(
     cd2d_canvas *canvas, const uint8_t *pixels, uint32_t width, uint32_t height, float x, float y, float rect_width,
     float rect_height, float opacity);
 
+/// A picture kept on a WIC canvas's target: `cd2d_draw_bitmap`'s pixels copied in once, then drawn frame after frame
+/// without copying them again — a score video's page, the same in every frame it shows. It holds that target, so it
+/// stays valid after `cd2d_destroy`, but only that canvas draws it.
+typedef struct cd2d_picture cd2d_picture;
+/// `pixels` as `cd2d_draw_bitmap` takes them, copied into a new picture for `canvas`, between frames or mid-frame.
+/// E_NOTIMPL on a canvas that is not a WIC canvas. Release the result with `cd2d_picture_release`.
+int32_t cd2d_picture_create(
+    cd2d_canvas *canvas, const uint8_t *pixels, uint32_t width, uint32_t height, cd2d_picture **out);
+/// `picture` stretched over the rectangle (canvas pixels) at `opacity` (0...1), as `cd2d_draw_bitmap` draws, on the
+/// WIC canvas it was made for, mid-frame. D2DERR_WRONG_RESOURCE_DOMAIN, drawing nothing, for another canvas's picture.
+int32_t cd2d_draw_picture(
+    cd2d_canvas *canvas, cd2d_picture *picture, float x, float y, float rect_width, float rect_height, float opacity);
+void cd2d_picture_release(cd2d_picture *picture);
+
 // MARK: PDF pages, drawn by the OS's own renderer (Windows.Data.Pdf and its Direct2D interop)
 
 typedef struct cd2d_pdf cd2d_pdf;

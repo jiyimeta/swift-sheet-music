@@ -194,6 +194,86 @@ struct Direct2DFrameCanvasTests {
         #expect(Self.pixel(pixels, x: 20, y: 20) == Self.white, "the picture painted outside its rect")
     }
 
+    /// An 8 x 8 premultiplied picture with every pixel different: color ramps across, alpha falling down the rows.
+    private static let ramp: [UInt8] = (0 ..< 8 * 8).flatMap { index -> [UInt8] in
+        let x = index % 8
+        let y = index / 8
+        let alpha = 255 - y * 24
+        // Premultiplied: no channel above its alpha.
+        return [UInt8(alpha * x / 7), UInt8(alpha * (7 - x) / 7), UInt8(alpha / 2), UInt8(alpha)]
+    }
+
+    private static let pictureRect = (x: 30.0, y: 20.0, width: 56.0, height: 72.0)
+
+    /// A kept picture is `draw(pixels:)` made once: stretched and blended the same, pixel for pixel.
+    @Test
+    func `a kept picture draws the pixels drawing them each time does`() throws {
+        let canvas = try Direct2DFrameCanvas(widthPx: Self.sizePx, heightPx: Self.sizePx, fontFiles: [])
+        try canvas.clear(argb: 0xFFFF_FFFF)
+        canvas.paint(Self.square, pxPerMM: Self.pxPerMM, offsetPx: (x: 40, y: 40))
+        try Self.ramp.withUnsafeBytes {
+            try canvas.draw(pixels: $0, widthPx: 8, heightPx: 8, in: Self.pictureRect, opacity: 0.7)
+        }
+        let copiedEachTime = try canvas.pixels()
+
+        let picture = try Self.ramp.withUnsafeBytes { try canvas.makePicture(pixels: $0, widthPx: 8, heightPx: 8) }
+        #expect(picture.widthPx == 8 && picture.heightPx == 8)
+        try canvas.clear(argb: 0xFFFF_FFFF)
+        canvas.paint(Self.square, pxPerMM: Self.pxPerMM, offsetPx: (x: 40, y: 40))
+        try canvas.draw(picture, in: Self.pictureRect, opacity: 0.7)
+        #expect(try canvas.pixels() == copiedEachTime)
+    }
+
+    /// The point of keeping it: made once, before any frame, it draws in every later frame, and what it draws was
+    /// copied when it was made — the buffer it came from is not read again.
+    @Test
+    func `a kept picture draws frame after frame from its own copy`() throws {
+        let canvas = try Direct2DFrameCanvas(widthPx: Self.sizePx, heightPx: Self.sizePx, fontFiles: [])
+        var black: [UInt8] = (0 ..< 4 * 4 * 4).map { $0 % 4 == 3 ? 255 : 0 }
+        let picture = try black.withUnsafeBytes { try canvas.makePicture(pixels: $0, widthPx: 4, heightPx: 4) }
+        // Overwritten where it lies, so a picture still reading it would draw white.
+        for index in black.indices {
+            black[index] = 255
+        }
+
+        for frame in 0 ..< 3 {
+            try canvas.clear(argb: 0xFFFF_FFFF)
+            try canvas.draw(picture, in: (x: 40, y: 40, width: 40, height: 40), opacity: 1)
+            let pixels = try canvas.pixels()
+            #expect(Self.pixel(pixels, x: 60, y: 60) == [0, 0, 0, 255], "frame \(frame) lost the picture")
+            #expect(Self.pixel(pixels, x: 20, y: 20) == Self.white, "frame \(frame) painted outside its rect")
+        }
+    }
+
+    /// A picture belongs to the canvas that made it. Another canvas refuses it at once, rather than losing the whole
+    /// frame when Direct2D would fail its end.
+    @Test
+    func `another canvas refuses a picture and keeps its frame`() throws {
+        let maker = try Direct2DFrameCanvas(widthPx: 8, heightPx: 8, fontFiles: [])
+        let picture = try Self.ramp.withUnsafeBytes { try maker.makePicture(pixels: $0, widthPx: 8, heightPx: 8) }
+        let canvas = try Direct2DFrameCanvas(widthPx: Self.sizePx, heightPx: Self.sizePx, fontFiles: [])
+        try canvas.clear(argb: 0xFFFF_FFFF)
+        canvas.paint(Self.square, pxPerMM: Self.pxPerMM, offsetPx: (x: 10, y: 10))
+        #expect(throws: Direct2DPageRenderer.Failure.self) {
+            try canvas.draw(picture, in: (x: 60, y: 60, width: 40, height: 40), opacity: 1)
+        }
+        let pixels = try canvas.pixels()
+        #expect(Self.isDark(Self.pixel(pixels, x: 20, y: 20)), "the frame lost what it drew before the refusal")
+        #expect(Self.pixel(pixels, x: 80, y: 80) == Self.white, "the refused picture was drawn")
+    }
+
+    @Test
+    func `an empty picture or a short buffer is refused`() throws {
+        let canvas = try Direct2DFrameCanvas(widthPx: 8, heightPx: 8, fontFiles: [])
+        let bytes = [UInt8](repeating: 0, count: 4 * 4 * 4)
+        #expect(throws: Direct2DPageRenderer.Failure.self) {
+            _ = try bytes.withUnsafeBytes { try canvas.makePicture(pixels: $0, widthPx: 0, heightPx: 4) }
+        }
+        #expect(throws: Direct2DPageRenderer.Failure.self) {
+            _ = try bytes.withUnsafeBytes { try canvas.makePicture(pixels: $0, widthPx: 4, heightPx: 5) }
+        }
+    }
+
     @Test
     func `a frame written as a PNG reads back as the same pixels`() throws {
         let canvas = try Direct2DFrameCanvas(widthPx: Self.sizePx, heightPx: Self.sizePx, fontFiles: [])

@@ -145,6 +145,62 @@ public final class Direct2DFrameCanvas {
         )
     }
 
+    /// A picture copied onto this canvas once by `makePicture(pixels:widthPx:heightPx:)` and drawn by
+    /// `draw(_:in:opacity:)` frame after frame without copying its pixels again — a score video's page, the same in
+    /// every frame it shows, where `draw(pixels:…)` copies the whole picture each time. Only the canvas it was made on
+    /// draws it; it keeps that canvas alive.
+    public final class Picture {
+        public let widthPx: Int
+        public let heightPx: Int
+        fileprivate let picture: OpaquePointer
+        fileprivate let canvas: Direct2DFrameCanvas
+
+        fileprivate init(picture: OpaquePointer, canvas: Direct2DFrameCanvas, widthPx: Int, heightPx: Int) {
+            self.picture = picture
+            self.canvas = canvas
+            self.widthPx = widthPx
+            self.heightPx = heightPx
+        }
+
+        deinit {
+            cd2d_picture_release(picture)
+        }
+    }
+
+    /// `pixels` — as `draw(pixels:…)` takes them — copied into a picture of this canvas, between frames or during
+    /// one. Nothing of `pixels` is read after this returns.
+    public func makePicture(pixels: UnsafeRawBufferPointer, widthPx: Int, heightPx: Int) throws -> Picture {
+        guard widthPx > 0, heightPx > 0, pixels.count >= widthPx * heightPx * 4, let base = pixels.baseAddress else {
+            let invalidArgument = Int32(bitPattern: 0x8007_0057) // E_INVALIDARG
+            throw Direct2DPageRenderer.Failure(
+                step: "making a \(widthPx) x \(heightPx) picture from \(pixels.count) bytes", hresult: invalidArgument,
+            )
+        }
+        var created: OpaquePointer?
+        try Direct2DPageRenderer.check(
+            cd2d_picture_create(
+                canvas, base.assumingMemoryBound(to: UInt8.self), UInt32(widthPx), UInt32(heightPx), &created,
+            ),
+            "making a picture",
+        )
+        guard let made = created else { throw Direct2DPageRenderer.Failure(step: "making a picture", hresult: -1) }
+        return Picture(picture: made, canvas: self, widthPx: widthPx, heightPx: heightPx)
+    }
+
+    /// `picture` stretched over the rectangle (canvas pixels) at `opacity` (0...1), drawn as `draw(pixels:…)` draws
+    /// the same pixels. Throws, drawing nothing, for a picture another canvas made.
+    public func draw(
+        _ picture: Picture, in rect: (x: Double, y: Double, width: Double, height: Double), opacity: Double,
+    ) throws {
+        try Direct2DPageRenderer.check(
+            cd2d_draw_picture(
+                canvas, picture.picture, Float(rect.x), Float(rect.y), Float(rect.width), Float(rect.height),
+                Float(opacity),
+            ),
+            "drawing a kept picture",
+        )
+    }
+
     /// The frame's pixels — BGRA premultiplied, top-down, `widthPx * 4` bytes a row — into `pixels`, which holds at
     /// least `widthPx * heightPx * 4` bytes. Ends the frame; the next `clear(argb:)` starts another.
     public func copyPixels(into pixels: UnsafeMutableRawBufferPointer) throws {
