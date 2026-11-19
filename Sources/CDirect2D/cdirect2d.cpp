@@ -656,6 +656,10 @@ extern "C" int32_t cd2d_write_png(cd2d_canvas *canvas, const uint16_t *path) {
 
 namespace {
 
+// Measurement only (s1-draw-measure): see `cd2d_frame_ticks`. One drawing thread, as the factory is single-threaded.
+cd2d_frame_ticks measured = {};
+bool measureFlush = false;
+
 /// Pops every clip a frame left pushed, so no clip outlives its frame and `EndDraw` never meets an unbalanced stack.
 void popAllClips(cd2d_canvas *canvas) {
     while (canvas->clipDepth > 0) {
@@ -711,26 +715,57 @@ extern "C" int32_t cd2d_draw_bitmap(
     ComPtr<ID2D1Bitmap> bitmap;
     const D2D1_BITMAP_PROPERTIES properties = D2D1::BitmapProperties(
         D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    LARGE_INTEGER t0, t1, t2;
+    QueryPerformanceCounter(&t0);
     HRESULT hr = canvas->target->CreateBitmap(D2D1::SizeU(width, height), pixels, width * 4, properties, &bitmap);
     if (FAILED(hr)) return hr;
+    QueryPerformanceCounter(&t1);
     canvas->target->SetTransform(D2D1::Matrix3x2F::Identity());
     const float clamped = opacity < 0 ? 0 : (opacity > 1 ? 1 : opacity);
     canvas->target->DrawBitmap(
         bitmap.Get(), D2D1::RectF(x, y, x + rect_width, y + rect_height), clamped,
         D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
     canvas->target->SetTransform(canvas->transform);
+    if (measureFlush) canvas->target->Flush();
+    QueryPerformanceCounter(&t2);
+    measured.bitmap_create += t1.QuadPart - t0.QuadPart;
+    measured.bitmap_draw += t2.QuadPart - t1.QuadPart;
     return S_OK;
+}
+
+extern "C" int32_t cd2d_flush(cd2d_canvas *canvas) {
+    if (!canvas->bitmap || !canvas->drawing) return S_OK;
+    return canvas->target->Flush();
+}
+
+extern "C" void cd2d_frame_ticks_read(cd2d_frame_ticks *ticks) {
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
+    *ticks = measured;
+    ticks->frequency = frequency.QuadPart;
+}
+
+extern "C" void cd2d_frame_ticks_reset(int32_t flush) {
+    measured = cd2d_frame_ticks{};
+    measureFlush = flush != 0;
 }
 
 extern "C" int32_t cd2d_copy_pixels(cd2d_canvas *canvas, uint8_t *pixels, uint32_t width, uint32_t height) {
     if (!canvas->bitmap) return E_NOTIMPL;
     if (canvas->clipDepth > 0) return E_ILLEGAL_METHOD_CALL;  // a frame ends with every clip popped
+    LARGE_INTEGER t0, t1, t2;
+    QueryPerformanceCounter(&t0);
     if (canvas->drawing) {
         HRESULT hr = canvas->target->EndDraw();
         canvas->drawing = false;
         if (FAILED(hr)) return hr;
     }
-    return canvas->bitmap->CopyPixels(nullptr, width * 4, width * height * 4, pixels);
+    QueryPerformanceCounter(&t1);
+    HRESULT hr = canvas->bitmap->CopyPixels(nullptr, width * 4, width * height * 4, pixels);
+    QueryPerformanceCounter(&t2);
+    measured.end_draw += t1.QuadPart - t0.QuadPart;
+    measured.copy_pixels += t2.QuadPart - t1.QuadPart;
+    return hr;
 }
 
 extern "C" void cd2d_destroy(cd2d_canvas *canvas) {

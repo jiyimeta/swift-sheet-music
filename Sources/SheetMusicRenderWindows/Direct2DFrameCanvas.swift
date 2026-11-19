@@ -50,7 +50,7 @@ public final class Direct2DFrameCanvas {
 
     /// Starts a frame: the whole canvas filled with `argb` (0xAARRGGBB), whatever the last frame drew.
     public func clear(argb: UInt32) throws {
-        try Direct2DPageRenderer.check(cd2d_clear(canvas, argb), "clearing the canvas")
+        try timed(\.clear) { try Direct2DPageRenderer.check(cd2d_clear(canvas, argb), "clearing the canvas") }
     }
 
     /// Paints `commands` at `pxPerMM`, their origin at `offsetPx` on the canvas, over what is there. Commands that
@@ -71,9 +71,11 @@ public final class Direct2DFrameCanvas {
     /// Paints `overlays` the way `ScoreSurface` paints them, in their order, at `pxPerMM` with their page's origin at
     /// `offsetPx` (an overlay's `page` is not read: the caller places it).
     public func paint(_ overlays: [ScoreSurface.Overlay], pxPerMM: Double, offsetPx: (x: Double, y: Double)) {
-        for overlay in overlays {
-            var walker = DrawCommandWalker(canvas: canvas, pxPerMM: pxPerMM, offset: offsetPx, cull: bounds)
-            ScoreSurface.paint(overlay, with: &walker)
+        timed(\.paintOverlays) {
+            for overlay in overlays {
+                var walker = DrawCommandWalker(canvas: canvas, pxPerMM: pxPerMM, offset: offsetPx, cull: bounds)
+                ScoreSurface.paint(overlay, with: &walker)
+            }
         }
     }
 
@@ -86,10 +88,12 @@ public final class Direct2DFrameCanvas {
         _ pages: ScorePages, page: Int, systems: Set<Int>? = nil, pxPerMM: Double, offsetPx: (x: Double, y: Double),
     ) {
         guard page >= 0, page < pages.pages.count else { return }
-        paint(
-            pageCommands: pages.pages[page].commands, spans: page < pages.spans.count ? pages.spans[page] : [],
-            systems: systems, pxPerMM: pxPerMM, offsetPx: offsetPx,
-        )
+        timed(\.paintPages) {
+            paint(
+                pageCommands: pages.pages[page].commands, spans: page < pages.spans.count ? pages.spans[page] : [],
+                systems: systems, pxPerMM: pxPerMM, offsetPx: offsetPx,
+            )
+        }
     }
 
     /// One page's `commands`, cut into `spans`: the runs of `systems`, or every command without them.
@@ -112,14 +116,16 @@ public final class Direct2DFrameCanvas {
     /// Clips every later paint to the rectangle, in canvas pixels, inside any clip already pushed, until the matching
     /// `popClip()`. Every clip a frame pushes is popped before its `copyPixels(into:)`, which throws otherwise.
     public func pushClip(x: Double, y: Double, width: Double, height: Double) throws {
-        try Direct2DPageRenderer.check(
-            cd2d_push_clip(canvas, Float(x), Float(y), Float(width), Float(height)), "pushing a clip",
-        )
+        try timed(\.clips) {
+            try Direct2DPageRenderer.check(
+                cd2d_push_clip(canvas, Float(x), Float(y), Float(width), Float(height)), "pushing a clip",
+            )
+        }
     }
 
     /// Ends the innermost `pushClip(x:y:width:height:)`.
     public func popClip() throws {
-        try Direct2DPageRenderer.check(cd2d_pop_clip(canvas), "popping a clip")
+        try timed(\.clips) { try Direct2DPageRenderer.check(cd2d_pop_clip(canvas), "popping a clip") }
     }
 
     /// Draws `pixels` — BGRA premultiplied, `widthPx` x `heightPx`, top-down, `widthPx * 4` bytes a row — stretched
@@ -136,13 +142,15 @@ public final class Direct2DFrameCanvas {
                 step: "drawing a \(widthPx) x \(heightPx) picture from \(pixels.count) bytes", hresult: invalidArgument,
             )
         }
-        try Direct2DPageRenderer.check(
-            cd2d_draw_bitmap(
-                canvas, base.assumingMemoryBound(to: UInt8.self), UInt32(widthPx), UInt32(heightPx), Float(rect.x),
-                Float(rect.y), Float(rect.width), Float(rect.height), Float(opacity),
-            ),
-            "drawing a picture",
-        )
+        try timed(\.bitmap) {
+            try Direct2DPageRenderer.check(
+                cd2d_draw_bitmap(
+                    canvas, base.assumingMemoryBound(to: UInt8.self), UInt32(widthPx), UInt32(heightPx), Float(rect.x),
+                    Float(rect.y), Float(rect.width), Float(rect.height), Float(opacity),
+                ),
+                "drawing a picture",
+            )
+        }
     }
 
     /// The frame's pixels — BGRA premultiplied, top-down, `widthPx * 4` bytes a row — into `pixels`, which holds at
@@ -155,10 +163,12 @@ public final class Direct2DFrameCanvas {
                 step: "reading \(needed) bytes into \(pixels.count)", hresult: invalidArgument,
             )
         }
-        try Direct2DPageRenderer.check(
-            cd2d_copy_pixels(canvas, base.assumingMemoryBound(to: UInt8.self), UInt32(widthPx), UInt32(heightPx)),
-            "reading the pixels",
-        )
+        try timed(\.copy) {
+            try Direct2DPageRenderer.check(
+                cd2d_copy_pixels(canvas, base.assumingMemoryBound(to: UInt8.self), UInt32(widthPx), UInt32(heightPx)),
+                "reading the pixels",
+            )
+        }
     }
 
     /// The frame's pixels as a new array — `copyPixels(into:)` for a test or a single picture.
@@ -178,5 +188,62 @@ public final class Direct2DFrameCanvas {
 
     private var bounds: DrawRect {
         DrawRect(x: 0, y: 0, width: Double(widthPx), height: Double(heightPx))
+    }
+
+    /// Measurement only: `body` timed into `stage`, the canvas's batched drawing flushed after it when
+    /// `Direct2DFrameTiming.flushEachStage`, so the rasterization it queued counts there.
+    private func timed<T>(
+        _ stage: WritableKeyPath<Direct2DFrameTiming.Stages, Duration>, _ body: () throws -> T,
+    ) rethrows -> T {
+        let start = ContinuousClock.now
+        defer {
+            if Direct2DFrameTiming.flushEachStage { _ = cd2d_flush(canvas) }
+            Direct2DFrameTiming.stages[keyPath: stage] += ContinuousClock.now - start
+        }
+        return try body()
+    }
+}
+
+/// Measurement only (ssm branch s1-draw-measure, never released): where a `Direct2DFrameCanvas` frame's time goes,
+/// summed over every canvas since `reset(flushEachStage:)`. One drawing thread, as the canvas is.
+public enum Direct2DFrameTiming {
+    public struct Stages: Sendable {
+        public var clear: Duration = .zero
+        public var paintPages: Duration = .zero
+        public var paintOverlays: Duration = .zero
+        public var clips: Duration = .zero
+        public var bitmap: Duration = .zero
+        public var copy: Duration = .zero
+    }
+
+    /// The C side's split of `bitmap` and `copy`, in seconds.
+    public struct Native: Sendable {
+        public var bitmapCreate: Double
+        public var bitmapDraw: Double
+        public var endDraw: Double
+        public var copyPixels: Double
+    }
+
+    nonisolated(unsafe) static var stages = Stages()
+    nonisolated(unsafe) static var flushEachStage = false
+
+    public static func reset(flushEachStage flush: Bool) {
+        stages = Stages()
+        flushEachStage = flush
+        cd2d_frame_ticks_reset(flush ? 1 : 0)
+    }
+
+    public static var measured: Stages {
+        stages
+    }
+
+    public static var native: Native {
+        var ticks = cd2d_frame_ticks()
+        cd2d_frame_ticks_read(&ticks)
+        let frequency = Double(max(ticks.frequency, 1))
+        return Native(
+            bitmapCreate: Double(ticks.bitmap_create) / frequency, bitmapDraw: Double(ticks.bitmap_draw) / frequency,
+            endDraw: Double(ticks.end_draw) / frequency, copyPixels: Double(ticks.copy_pixels) / frequency,
+        )
     }
 }
