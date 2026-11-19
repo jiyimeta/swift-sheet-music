@@ -69,7 +69,10 @@ struct StaffMeasureDurationCacheTests {
         var staff = Staff(measures: [Self.bar((4, 4)), Self.bar(), Self.bar()])
         #expect(staff.measureDurations == [Self.fourFour, Self.fourFour, Self.fourFour])
 
-        staff.measures[1].voices[0].elements.insert(.timeSignature(TimeSignature(numerator: 3, denominator: 4)), at: 0)
+        // An element of the bar rewritten in place: its first rest becomes a 3/4 time signature.
+        staff.measures[1].voices[0].elements.updateValue(at: 0) {
+            $0 = .timeSignature(TimeSignature(numerator: 3, denominator: 4))
+        }
         #expect(staff.measureDurations == [Self.fourFour, Self.threeFour, Self.threeFour])
 
         staff.measures[2].actualLength = Self.sixEight
@@ -91,7 +94,9 @@ struct StaffMeasureDurationCacheTests {
         #expect(score.effectiveMeasureDuration(at: address, measureIndex: 1) == Self.fourFour)
         #expect(score.onset(of: secondRest)?.tick == 480)
 
-        score.parts[0].staves[0].measures[1].actualLength = Self.threeFour
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { $0.measures[1].actualLength = Self.threeFour }
+        }
         #expect(score.effectiveMeasureDuration(at: address, measureIndex: 1) == Self.threeFour)
         #expect(score.effectiveMeasureDurations() == [Self.fourFour, Self.threeFour])
         #expect(score.end(of: secondRest)?.tick == 960)
