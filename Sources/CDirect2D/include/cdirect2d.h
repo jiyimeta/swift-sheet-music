@@ -254,6 +254,20 @@ int32_t cd2d_draw_picture(
     cd2d_canvas *canvas, cd2d_picture *picture, float x, float y, float rect_width, float rect_height, float opacity);
 void cd2d_picture_release(cd2d_picture *picture);
 
+// MARK: Measurement only (branch s1-draw-measure, never released)
+
+/// Runs a WIC canvas's batched drawing now (ID2D1RenderTarget::Flush), so a probe can put the rasterization a stage
+/// queued on that stage instead of on the frame's EndDraw.
+int32_t cd2d_flush(cd2d_canvas *canvas);
+/// QueryPerformanceCounter ticks summed since the last reset, over every WIC canvas: `cd2d_draw_bitmap`'s CreateBitmap
+/// and DrawBitmap (with a flush after it when `flush` was set), and `cd2d_copy_pixels`' EndDraw and CopyPixels. A kept
+/// picture counts its one CreateBitmap (`cd2d_picture_create`) and each `cd2d_draw_picture` in the same two.
+typedef struct {
+    int64_t bitmap_create, bitmap_draw, end_draw, copy_pixels, frequency;
+} cd2d_frame_ticks;
+void cd2d_frame_ticks_read(cd2d_frame_ticks *ticks);
+void cd2d_frame_ticks_reset(int32_t flush);
+
 // MARK: PDF pages, drawn by the OS's own renderer (Windows.Data.Pdf and its Direct2D interop)
 
 typedef struct cd2d_pdf cd2d_pdf;
