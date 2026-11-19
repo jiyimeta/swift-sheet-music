@@ -24,7 +24,10 @@ struct StaffMeasureDurationCacheTests {
     private static func score(staves: [[Measure]]) -> Score {
         Score(
             division: 480,
-            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: staves.map { Staff(measures: $0) })],
+            parts: [Part(
+                id: "1", instrument: Instrument(id: "x"),
+                staves: IdentifiedArray(staves.map { Staff(measures: $0) }),
+            )],
             systemMeasures: IdentifiedArray(Array(repeating: SystemMeasure(), count: staves.first?.count ?? 0)),
         )
     }
@@ -32,10 +35,10 @@ struct StaffMeasureDurationCacheTests {
     @Test func `the remembered table is the table a fresh walk builds`() {
         let shapes: [[Measure]] = [
             [],
-            [bar(), bar()],
-            [bar((3, 4)), bar(), bar((6, 8)), bar()],
+            [Self.bar(), Self.bar()],
+            [Self.bar((3, 4)), Self.bar(), Self.bar((6, 8)), Self.bar()],
             // A pickup: an `actualLength` shorter than the prevailing time signature.
-            [bar((4, 4), actualLength: Fraction(numerator: 1, denominator: 8)), bar(), bar()],
+            [Self.bar((4, 4), actualLength: Fraction(numerator: 1, denominator: 8)), Self.bar(), Self.bar()],
         ]
         for measures in shapes {
             let staff = Staff(measures: measures)
@@ -48,8 +51,8 @@ struct StaffMeasureDurationCacheTests {
     /// `actualLength` is per bar, so two staves of one score can differ; each answers from its own bars.
     @Test func `each staff answers from its own bars`() {
         let score = Self.score(staves: [
-            [bar((4, 4)), bar()],
-            [bar((4, 4)), bar(actualLength: Self.threeFour)],
+            [Self.bar((4, 4)), Self.bar()],
+            [Self.bar((4, 4)), Self.bar(actualLength: Self.threeFour)],
         ])
         let upper = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let lower = StaffAddress(partIndex: 0, staffIndexInPart: 1)
@@ -63,7 +66,7 @@ struct StaffMeasureDurationCacheTests {
     /// Every way of changing the bars drops the remembered table: an element written into a bar in place, a bar's
     /// `actualLength`, a bar inserted, the whole list replaced.
     @Test func `a change to the bars is answered with the new durations`() {
-        var staff = Staff(measures: [bar((4, 4)), bar(), bar()])
+        var staff = Staff(measures: [Self.bar((4, 4)), Self.bar(), Self.bar()])
         #expect(staff.measureDurations == [Self.fourFour, Self.fourFour, Self.fourFour])
 
         staff.measures[1].voices[0].elements.insert(.timeSignature(TimeSignature(numerator: 3, denominator: 4)), at: 0)
@@ -82,7 +85,7 @@ struct StaffMeasureDurationCacheTests {
 
     /// The questions the cache serves read the new bars through the score too, not only through the staff.
     @Test func `the score's timing questions follow a change to the bars`() {
-        var score = Self.score(staves: [[bar((4, 4)), bar()]])
+        var score = Self.score(staves: [[Self.bar((4, 4)), Self.bar()]])
         let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let secondRest = VoiceElementID(staff: address, measureIndex: 1, voiceIndex: 0, elementIndex: 1)
         #expect(score.effectiveMeasureDuration(at: address, measureIndex: 1) == Self.fourFour)
@@ -96,7 +99,7 @@ struct StaffMeasureDurationCacheTests {
 
     /// A copy shares the box only until one of them changes its bars; the other keeps its own answer.
     @Test func `a changed copy leaves the original's table alone`() {
-        let original = Staff(measures: [bar((4, 4)), bar()])
+        let original = Staff(measures: [Self.bar((4, 4)), Self.bar()])
         #expect(original.measureDurations == [Self.fourFour, Self.fourFour])
         var copy = original
         copy.measures[0].actualLength = Self.threeFour
@@ -106,13 +109,13 @@ struct StaffMeasureDurationCacheTests {
 
     /// The cache is not part of the value: whether a staff has built its table never makes it unequal to another.
     @Test func `equal staves stay equal whatever their caches hold`() {
-        let built = Staff(measures: [bar((3, 4)), bar()])
+        let built = Staff(measures: [Self.bar((3, 4)), Self.bar()])
         _ = built.measureDurations
-        let unbuilt = Staff(measures: [bar((3, 4)), bar()])
+        let unbuilt = Staff(measures: [Self.bar((3, 4)), Self.bar()])
         #expect(built == unbuilt)
         _ = unbuilt.measureDurations
         #expect(built == unbuilt)
-        let other = Staff(measures: [bar((4, 4)), bar()])
+        let other = Staff(measures: [Self.bar((4, 4)), Self.bar()])
         #expect(built != other)
     }
 
