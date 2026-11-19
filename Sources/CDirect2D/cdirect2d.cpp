@@ -722,6 +722,48 @@ extern "C" int32_t cd2d_draw_bitmap(
     return S_OK;
 }
 
+struct cd2d_picture {
+    ComPtr<ID2D1Bitmap> bitmap;
+    /// The target the bitmap belongs to: held, so the bitmap never outlives it, and compared, so no other draws it.
+    ComPtr<ID2D1RenderTarget> target;
+};
+
+extern "C" int32_t cd2d_picture_create(
+    cd2d_canvas *canvas, const uint8_t *pixels, uint32_t width, uint32_t height, cd2d_picture **out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!pixels || width == 0 || height == 0) return E_INVALIDARG;
+    // `cd2d_draw_bitmap`'s copy, made once: drawing the picture later reads this bitmap and nothing of `pixels`.
+    ComPtr<ID2D1Bitmap> bitmap;
+    const D2D1_BITMAP_PROPERTIES properties = D2D1::BitmapProperties(
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    HRESULT hr = canvas->target->CreateBitmap(D2D1::SizeU(width, height), pixels, width * 4, properties, &bitmap);
+    if (FAILED(hr)) return hr;
+    *out = new cd2d_picture{bitmap, canvas->target};
+    return S_OK;
+}
+
+extern "C" int32_t cd2d_draw_picture(
+    cd2d_canvas *canvas, cd2d_picture *picture, float x, float y, float rect_width, float rect_height, float opacity) {
+    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!canvas->drawing) return E_ILLEGAL_METHOD_CALL;
+    if (!picture || rect_width <= 0 || rect_height <= 0) return E_INVALIDARG;
+    // Direct2D itself would accept the draw and fail the frame's EndDraw, losing everything else the frame drew.
+    if (picture->target.Get() != canvas->target.Get()) return D2DERR_WRONG_RESOURCE_DOMAIN;
+    canvas->target->SetTransform(D2D1::Matrix3x2F::Identity());
+    const float clamped = opacity < 0 ? 0 : (opacity > 1 ? 1 : opacity);
+    canvas->target->DrawBitmap(
+        picture->bitmap.Get(), D2D1::RectF(x, y, x + rect_width, y + rect_height), clamped,
+        D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+    canvas->target->SetTransform(canvas->transform);
+    return S_OK;
+}
+
+extern "C" void cd2d_picture_release(cd2d_picture *picture) {
+    delete picture;
+}
+
 extern "C" int32_t cd2d_copy_pixels(cd2d_canvas *canvas, uint8_t *pixels, uint32_t width, uint32_t height) {
     if (!canvas->bitmap) return E_NOTIMPL;
     if (canvas->clipDepth > 0) return E_ILLEGAL_METHOD_CALL;  // a frame ends with every clip popped

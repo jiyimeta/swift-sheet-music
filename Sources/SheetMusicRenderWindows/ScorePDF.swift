@@ -66,7 +66,8 @@ public final class ScorePDF: @unchecked Sendable {
 
     /// Page `page` drawn whole on white at `pxPerMM`: its pixel size and its pixels (BGRA premultiplied, top-down,
     /// rows of `width * 4` bytes) — a picture a host rasterizes once and composites itself, such as a logo on a frame
-    /// canvas (`Direct2DFrameCanvas.draw(pixels:widthPx:heightPx:in:opacity:)`).
+    /// canvas (`Direct2DFrameCanvas.draw(pixels:widthPx:heightPx:in:opacity:)`, or
+    /// `makePicture(pixels:widthPx:heightPx:)` for one drawn in frame after frame).
     public func pixels(page: Int, pxPerMM: Double) throws -> (width: Int, height: Int, bgra: [UInt8]) {
         try checkPage(page)
         let size = pageSizeMM(page)

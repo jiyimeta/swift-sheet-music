@@ -21,6 +21,11 @@ and this project adheres to
 - `cwasapi_capture_*` (the stream, and `cwasapi_capture_devices` with its `cwasapi_device_list_*` accessors) and
   `cwasapi_is_access_denied`. The endpoint watcher keeps a capture flag of its own
   (`cwasapi_watch_take_capture_change`), so a new default microphone does not wake playback.
+- **`Direct2DFrameCanvas.Picture` (Windows)**: `makePicture(pixels:widthPx:heightPx:)` copies a BGRA picture onto the
+  canvas once, and `draw(_:in:opacity:)` draws it frame after frame without copying it again, the pixels
+  `draw(pixels:…)` draws. That copy was a score video's page in full every frame: 5.9 ms of the 18.4 ms folino-qa took
+  to draw a 1358 × 1920 page-turn frame. Only the canvas that made a picture draws it; another throws instead of losing
+  the frame. In C: `cd2d_picture_create`, `cd2d_draw_picture`, `cd2d_picture_release`.
 
 ## [4.44.0] - 2026-11-17
 
