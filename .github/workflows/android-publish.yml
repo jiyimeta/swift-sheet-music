@@ -49,6 +49,14 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # The AAR's `.so` carries SheetMusicEngine.version, which a host's skew gate compares with its own image. An
+      # AAR published as one release while stamping another would defeat that gate, so a tag that disagrees with the
+      # constant publishes nothing.
+      - name: SheetMusicEngine.version is the version being published
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: python3 Scripts/check-engine-version.py --expect "$VERSION"
+
       - name: Install Swift 6.3.3 toolchain
         run: |
           curl -fLO https://download.swift.org/swift-6.3.3-release/xcode/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-osx.pkg

@@ -59,3 +59,9 @@ jobs:
       # noticed. A text scan of the sources, so it needs no Windows runner.
       - name: Windows public API names product types only
         run: python3 Scripts/check-windows-public-api.py
+
+      # SheetMusicEngine.version is what Android's engine-skew gate hashes, and it stayed "4.14.1" from 4.14.2 to
+      # 4.45.0 because release commits moved only the CHANGELOG. A release heading without the bump fails here, on
+      # the branch, before a tag exists.
+      - name: SheetMusicEngine.version is CHANGELOG's newest release
+        run: python3 Scripts/check-engine-version.py

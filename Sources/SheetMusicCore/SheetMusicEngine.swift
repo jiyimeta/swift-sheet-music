@@ -2,14 +2,16 @@ import SheetMusicFoundation
 
 /// Build identity for this copy of the engine.
 ///
-/// On Android two separately linked images of this module coexist in one process — one inside the
-/// library's own `.so`, one inside the host app's. They stay in step only because they are the same
-/// build. This type gives a host something to compare: its own compiled-in stamp against the one it
-/// reads over JNI, before opening an edit session, so it can refuse to open one on a mismatch. No
-/// host performs that comparison yet — this is the primitive, not the enforcement.
+/// On Android two separately linked images of this module coexist in one process — one inside the library's own `.so`,
+/// one inside the host app's. They stay in step only because they are the same build. This type gives a host something
+/// to compare: its own compiled-in stamp against the one it reads over JNI, before opening an edit session, so it can
+/// refuse to open one on a mismatch. folino's Android editor does (`EditSessionRelay.open`, its version gate).
 public enum SheetMusicEngine {
-    /// Bumped by hand alongside `CHANGELOG.md` when this is tagged as a release — there is no automated release
-    /// process that does this; a hand-edited test is the only thing currently enforcing the bump.
+    /// Bumped by hand in the commit that adds the release's `CHANGELOG.md` heading. `Scripts/check-engine-version.py`
+    /// enforces it: Lint fails a push whose newest heading differs from this, and the Android publish workflow refuses
+    /// a tag that differs. Before that check, from 4.14.2 to 4.45.0, every release commit added its heading alone and
+    /// this read "4.14.1" throughout, so every build in that range stamped alike and the gate passed any skew among
+    /// them.
     ///
     /// Both images compute `versionStamp` from this same source constant, so the mismatch gate only fires when the
     /// two builds carry different version *strings*. A stale `.so` left over from a local rebuild at an unchanged
@@ -22,7 +24,7 @@ public enum SheetMusicEngine {
     /// the gate above would be blind to exactly the case it was added for. Keep that split for the
     /// next topic build: suffix the work-in-progress stamp, and bump to the plain release string in
     /// a release-only commit that is never published locally.
-    public static let version = "4.14.1"
+    public static let version = "4.45.0"
 
     /// `version` as a fixed 64-bit number — FNV-1a, so both images agree without a seed.
     public static var versionStamp: Int64 {

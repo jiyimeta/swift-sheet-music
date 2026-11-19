@@ -17,11 +17,12 @@ struct SheetMusicEngineTests {
 
     @Test("the version string matches the released version")
     func versionMatchesRelease() {
-        // A hand-edited literal is the only thing enforcing the bump; there is no automated
-        // release process that touches it. The in-flight build carried a `-w9` suffix and was
-        // published only to a local `~/.m2`, so it stamps differently from this tagged one — see
-        // the constant's own doc for why that difference is load-bearing.
-        #expect(SheetMusicEngine.version == "4.14.1")
+        // Moved with the release's CHANGELOG heading; `Scripts/check-engine-version.py` (Lint, and the Android
+        // publish against its tag) fails when the two differ. It stayed "4.14.1" from 4.14.2 to 4.45.0, when only
+        // this literal enforced it and no release commit touched it. A work-in-progress build carries a suffix
+        // (`-w9`) and is published only to a local `~/.m2`, so it stamps differently from the tagged one — see the
+        // constant's own doc for why that difference is load-bearing.
+        #expect(SheetMusicEngine.version == "4.45.0")
     }
 
     @Test("the stamp is the FNV-1a of the version string")
@@ -31,7 +32,8 @@ struct SheetMusicEngineTests {
         // wrong hash agree with itself. 1.13.1 was 7339729597660573583 and 1.15.0 was
         // 3598528033961937950, so the three are visibly distinct. The digest is unsigned and this
         // is `Int64`, so a release whose hash lands above 2^63 reads negative — 2.0.0 was the first
-        // one that did. Nothing compares it for order; only for equality.
-        #expect(SheetMusicEngine.versionStamp == -7_883_022_461_973_448_961)
+        // one that did. Nothing compares it for order; only for equality. 4.14.1, which every release from 4.14.2 to
+        // 4.45.0 still carried, was -7883022461973448961.
+        #expect(SheetMusicEngine.versionStamp == 9_131_761_535_404_244_810)
     }
 }

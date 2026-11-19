@@ -7,6 +7,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **`SheetMusicEngine.version` reads the release again.** It stayed "4.14.1" from 4.14.2 through 4.45.0 — release
+  commits moved only this file — so `versionStamp` was the same in every build of that range, and a host's
+  engine-skew gate (Android compares the library's `.so` with its own image before opening an edit session) let any
+  pairing of them through. It now reads the release, and `Scripts/check-engine-version.py` keeps it there: Lint fails
+  a push whose newest `CHANGELOG.md` heading differs from the constant, and the Android publish workflow refuses a tag
+  that differs. A host whose two images come from different releases at or after this one now sees the skew, where
+  before it saw none.
+
 ## [4.45.0] - 2026-11-20
 
 ### Added
