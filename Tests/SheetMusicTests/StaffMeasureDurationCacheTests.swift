@@ -86,6 +86,23 @@ struct StaffMeasureDurationCacheTests {
         #expect(staff.measureDurations == [Self.threeFour])
     }
 
+    /// A write into one bar must not copy the staff's bars. This test target is another module, as folino is, and
+    /// that is where a `didSet` on `measures` copied the whole array on every write; the `_modify` keeps the buffer.
+    @Test func `a write into a bar keeps the bars in place`() {
+        var staff = Staff(measures: (0 ..< 32).map { _ in Self.bar() })
+        let before = staff.measures.withUnsafeBufferPointer { UInt(bitPattern: $0.baseAddress) }
+
+        staff.measures[3].actualLength = Self.threeFour
+        staff.measures[5].voices[0].elements.updateValue(at: 0) {
+            $0 = .timeSignature(TimeSignature(numerator: 6, denominator: 8))
+        }
+
+        #expect(staff.measures.withUnsafeBufferPointer { UInt(bitPattern: $0.baseAddress) } == before)
+        // …and the in-place writes still drop the table.
+        #expect(staff.measureDurations[3] == Self.threeFour)
+        #expect(staff.measureDurations[5] == Self.sixEight)
+    }
+
     /// The questions the cache serves read the new bars through the score too, not only through the staff.
     @Test func `the score's timing questions follow a change to the bars`() {
         var score = Self.score(staves: [[Self.bar((4, 4)), Self.bar()]])

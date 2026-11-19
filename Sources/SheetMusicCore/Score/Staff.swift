@@ -49,11 +49,28 @@ public struct Staff: Sendable, Equatable {
     /// staff comes back (`SystemLayout::hideEmptyStaves`, `rendering/score/systemlayout.cpp:722-741`); without any such
     /// staff the system keeps its first one. C++: `Staff::showIfEntireSystemEmpty()`.
     public var showIfSystemEmpty = false
-    /// Any change to the bars drops the remembered measure durations (`Staff+MeasureDurationCache.swift`). The
-    /// observer reads no `oldValue`, so `measures[i].… = x` is still modified in place.
+    /// The staff's bars. Any change to them drops the remembered measure durations
+    /// (`Staff+MeasureDurationCache.swift`).
+    ///
+    /// A `_modify` over `storedMeasures` rather than a `didSet`, so that `measures[i].… = x` stays in place. A
+    /// `didSet` — even an empty one — made every such write from another module (folino, or any target of this package
+    /// but Core) copy the whole array first: 1.2 µs a write at 200 bars and 15 µs at 2000, against about 25 ns
+    /// whatever the size with `_modify` (measured 2026-11-19, `swiftc -O`, the write and the type in two modules).
     public var measures: [Measure] {
-        didSet { timingCache = StaffTimingCache() }
+        @inlinable get { storedMeasures }
+        set {
+            storedMeasures = newValue
+            timingCache = StaffTimingCache()
+        }
+        _modify {
+            defer { timingCache = StaffTimingCache() }
+            yield &storedMeasures
+        }
     }
+
+    /// Storage of `measures`. Written only through `measures`, whose setter and `_modify` drop `timingCache`; a direct
+    /// write here would leave the remembered durations stale.
+    @usableFromInline var storedMeasures: [Measure]
 
     /// The effective measure durations of `measures`, built on first use (`measureDurations`). Not part of the value:
     /// its `==` is always true.
@@ -82,7 +99,7 @@ public struct Staff: Sendable, Equatable {
         self.defaultClefType = defaultClefType
         self.brackets = brackets
         self.isVisibleInScore = isVisibleInScore
-        self.measures = measures
+        storedMeasures = measures
         self.staffTypePreservedMarkup = staffTypePreservedMarkup
         self.preservedMarkup = preservedMarkup
     }

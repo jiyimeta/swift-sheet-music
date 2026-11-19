@@ -12,10 +12,11 @@ import SheetMusicFoundation
 // `actualLength` and the first `.timeSignature` among its voices' elements. Nothing on the part or the score enters
 // it: the time signature is carried forward within the staff's own bars, a pickup is that bar's `actualLength`, and a
 // part's transposition or a staff's visibility play no part in a bar's length. So replacing the cache whenever
-// `measures` is set — `Staff.measures`'s `didSet` — is the whole invalidation rule.
+// `measures` is written — the setter and `_modify` of `Staff.measures` — is the whole invalidation rule. (Not a
+// `didSet`: that copies the whole array on every write from another module; `Staff.measures` has the measurement.)
 //
-// **Why lazy, behind a box.** The `didSet` only swaps in an empty box (one allocation); the table is built the first
-// time something asks, once. Building it in the `didSet` would put a whole-staff walk on every write, and an edit that
+// **Why lazy, behind a box.** A write only swaps in an empty box (one allocation); the table is built the first
+// time something asks, once. Building it on the write would put a whole-staff walk on every write, and an edit that
 // writes element by element (transposing every note) would turn quadratic. A box rather than a stored array because a
 // non-mutating read has to fill it. Copies of a staff share the box until one of them changes its measures, which is
 // right: equal measures, equal table.
