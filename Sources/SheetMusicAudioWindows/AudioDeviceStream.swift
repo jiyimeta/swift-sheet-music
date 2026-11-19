@@ -54,11 +54,12 @@ final class AudioDeviceStream: @unchecked Sendable {
     /// The rate the synths are made at when the stream starts with no device to ask.
     static let fallbackSampleRate = 48000.0
 
-    /// How long a device change settles before the reopen.
-    private static let rebuildDelay = 0.25
+    /// How long a device change settles before the reopen. The microphone (`WindowsAudioCapture`) settles with it too.
+    static let rebuildDelay = 0.25
 
-    /// How often a stream-less thread tries the default device without being told anything changed.
-    private static let retryInterval = Duration.seconds(2)
+    /// How often a stream-less thread tries the default device without being told anything changed. The microphone's
+    /// too.
+    static let retryInterval = Duration.seconds(2)
 
     private struct Control {
         var exitRequested = false

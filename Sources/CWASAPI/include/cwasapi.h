@@ -1,4 +1,5 @@
-// WASAPI shared-mode output for SheetMusicAudioWindows: the few calls the playback engine makes, in C.
+// WASAPI shared-mode output and capture for SheetMusicAudioWindows: the few calls the playback engine and the
+// microphone (`WindowsAudioCapture`) make, in C.
 //
 // The Windows SDK module the Swift toolchain ships (WinSDK) carries COM but not the Core Audio headers
 // (audioclient.h, mmdeviceapi.h), and COM interfaces are simpler to drive from C through COBJMACROS than through
@@ -57,12 +58,15 @@ void cwasapi_endpoint_release(cwasapi_endpoint *endpoint);
 /// nothing without the variable.
 void cwasapi_arm_fault(int32_t device_removed);
 
-/// Watches the endpoints for a change of the default render device or of a device's state, through an
+/// Watches the endpoints for a change of the default render or capture device or of a device's state, through an
 /// `IMMNotificationClient`. The callbacks arrive on a system thread; they only set a flag and signal an event.
 typedef struct cwasapi_watcher cwasapi_watcher;
 int32_t cwasapi_watch_create(cwasapi_watcher **watcher);
 /// 1 when the default render device or a device's state changed since the last call, and clears it; else 0.
 int32_t cwasapi_watch_take_change(cwasapi_watcher *watcher);
+/// 1 when the default capture device (eCapture / eConsole) or a device's state changed since the last call, and clears
+/// it; else 0. Kept apart from `cwasapi_watch_take_change`, so a new default microphone does not wake playback.
+int32_t cwasapi_watch_take_capture_change(cwasapi_watcher *watcher);
 /// An auto-reset event signaled on every change, for a thread waiting with no stream (no device).
 void *cwasapi_watch_event(cwasapi_watcher *watcher);
 /// Blocks until the watcher's event is signaled or `timeout_ms` passes: 0 when signaled, 1 on timeout. Leaves the
@@ -92,6 +96,63 @@ void cwasapi_close(cwasapi_stream *stream);
 /// `cwasapi_leave_pro_audio`, or NULL when the scheduler refused (the thread then runs at normal priority).
 void *cwasapi_enter_pro_audio(void);
 void cwasapi_leave_pro_audio(void *handle);
+
+// MARK: - Capture
+
+/// Whether `hresult` says the system refused the microphone (E_ACCESSDENIED, which `IMMDevice::Activate` returns while
+/// Settings ▸ Privacy & security ▸ Microphone keeps this app out). Returns 1 or 0.
+int32_t cwasapi_is_access_denied(int32_t hresult);
+
+typedef struct cwasapi_capture cwasapi_capture;
+
+typedef struct {
+    /// The rate asked for; Windows converts from the device's own (AUTOCONVERTPCM).
+    uint32_t sample_rate;
+    /// Always 1: mono float, whatever the device has (Windows mixes the channels down).
+    uint32_t channels;
+    /// The shared buffer's size in frames: how much can wait unread before the device overwrites it.
+    uint32_t buffer_frames;
+    /// `IAudioClient::GetStreamLatency`, in seconds.
+    double latency_seconds;
+    /// The device's default period (`IAudioClient::GetDevicePeriod`), in seconds: how often a packet arrives.
+    double period_seconds;
+} cwasapi_capture_format;
+
+/// Opens a capture endpoint in shared, event-driven mode as 32-bit float mono at `sample_rate`: the default one
+/// (eCapture / eConsole) when `device_id` is NULL, else the one with that id (UTF-8, as `cwasapi_capture_devices` lists
+/// it). An id that names no endpoint, or one that is not active (unplugged, disabled), fails as `cwasapi_is_no_device`.
+int32_t cwasapi_capture_open(
+    cwasapi_capture **capture, cwasapi_capture_format *format, uint32_t sample_rate, const char *device_id);
+int32_t cwasapi_capture_start(cwasapi_capture *capture);
+int32_t cwasapi_capture_stop(cwasapi_capture *capture);
+/// Blocks until the device has a packet or `timeout_ms` passes. Returns 0 when signaled, 1 on timeout.
+int32_t cwasapi_capture_wait(cwasapi_capture *capture, uint32_t timeout_ms);
+/// The next packet waiting, if any: `*frames` 0 when none is (and then there is nothing to release). `*silent` 1 when
+/// the device marked it silent — `*data` must then be read as zeros, not read at all; `*discontinuity` 1 when frames
+/// were lost before it (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY). A packet read must be released before the next.
+int32_t cwasapi_capture_next(
+    cwasapi_capture *capture, uint32_t *frames, float **data, int32_t *silent, int32_t *discontinuity);
+int32_t cwasapi_capture_release(cwasapi_capture *capture, uint32_t frames);
+/// Whether `capture` is on the current default capture endpoint (eCapture / eConsole): 1 or 0, as
+/// `cwasapi_is_current_default` for a render stream.
+int32_t cwasapi_capture_is_current_default(cwasapi_capture *capture);
+/// `capture`'s endpoint, with a reference for the caller (`cwasapi_endpoint_release`), as `cwasapi_stream_endpoint`.
+cwasapi_endpoint *cwasapi_capture_endpoint(cwasapi_capture *capture);
+/// Releases everything `cwasapi_capture_open` acquired. Accepts NULL.
+void cwasapi_capture_close(cwasapi_capture *capture);
+
+/// The active capture endpoints, each with its id and its friendly name (UTF-8), in the order Windows lists them.
+typedef struct cwasapi_device_list cwasapi_device_list;
+int32_t cwasapi_capture_devices(cwasapi_device_list **list);
+uint32_t cwasapi_device_list_count(cwasapi_device_list *list);
+/// The strings belong to the list and live until `cwasapi_device_list_free`. An endpoint whose name cannot be read is
+/// listed with an empty name.
+const char *cwasapi_device_list_id(cwasapi_device_list *list, uint32_t index);
+const char *cwasapi_device_list_name(cwasapi_device_list *list, uint32_t index);
+/// The index of the default capture endpoint in the list, or -1 when there is none.
+int32_t cwasapi_device_list_default_index(cwasapi_device_list *list);
+/// Accepts NULL.
+void cwasapi_device_list_free(cwasapi_device_list *list);
 
 #ifdef __cplusplus
 }
