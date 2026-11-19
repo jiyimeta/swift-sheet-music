@@ -7,6 +7,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`WindowsAudioCapture` (Windows)**: the microphone, as WASAPI capture beside the playback output — shared mode,
+  event-driven, mono 32-bit float at the rate asked for (Windows mixes the device's channels down and converts its
+  rate, `AUTOCONVERTPCM`). Each packet goes to `samples` on a Pro Audio thread at the length it came, unscaled; a packet
+  the device marked silent goes as that many zeros. `start()` opens the first stream before it returns, so the system's
+  privacy setting refusing the app throws `.accessDenied` and a machine with no microphone `.noDevice`
+  (`WindowsAudioCaptureError`). `inputDevices()` lists the active capture endpoints with their names and which is the
+  default, and `init(deviceID:)` opens one of them. Following the default, a new default microphone or the stream's
+  device going away closes the stream and opens again after playback's 250 ms settle, reported as `.lost`, `.removed`
+  and `.recovered(format)`. `Format` carries the stream latency and the device period for a host's latency model.
+- `cwasapi_capture_*`, `cwasapi_capture_devices` and `cwasapi_is_access_denied`. The endpoint watcher keeps a capture
+  flag of its own (`cwasapi_watch_take_capture_change`), so a new default microphone does not wake playback.
+
 ## [4.44.0] - 2026-11-17
 
 ### Added

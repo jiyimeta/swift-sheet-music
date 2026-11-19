@@ -4,6 +4,7 @@
 #include <audioclient.h>
 #include <avrt.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "cwasapi.h"
 
@@ -298,6 +299,7 @@ struct cwasapi_watcher {
     IMMNotificationClient client;  // first: the COM pointer is the struct's address
     LONG references;
     volatile LONG changed;
+    volatile LONG capture_changed;
     HANDLE event;
     IMMDeviceEnumerator *enumerator;
 };
@@ -306,9 +308,25 @@ static cwasapi_watcher *cwasapi_watcher_of(IMMNotificationClient *client) {
     return (cwasapi_watcher *)client;
 }
 
+// A change of the default render device: the render flag only.
 static void cwasapi_watcher_signal(IMMNotificationClient *client) {
     cwasapi_watcher *watcher = cwasapi_watcher_of(client);
     InterlockedExchange(&watcher->changed, 1);
+    SetEvent(watcher->event);
+}
+
+// A change of the default capture device: the capture flag only.
+static void cwasapi_watcher_signal_capture(IMMNotificationClient *client) {
+    cwasapi_watcher *watcher = cwasapi_watcher_of(client);
+    InterlockedExchange(&watcher->capture_changed, 1);
+    SetEvent(watcher->event);
+}
+
+// A device's state changed or a device went away, which may concern either direction: both flags.
+static void cwasapi_watcher_signal_both(IMMNotificationClient *client) {
+    cwasapi_watcher *watcher = cwasapi_watcher_of(client);
+    InterlockedExchange(&watcher->changed, 1);
+    InterlockedExchange(&watcher->capture_changed, 1);
     SetEvent(watcher->event);
 }
 
@@ -334,7 +352,7 @@ static ULONG STDMETHODCALLTYPE cwasapi_watcher_release(IMMNotificationClient *cl
 static HRESULT STDMETHODCALLTYPE cwasapi_watcher_state_changed(IMMNotificationClient *client, LPCWSTR id, DWORD state) {
     (void)id;
     (void)state;
-    cwasapi_watcher_signal(client);
+    cwasapi_watcher_signal_both(client);
     return S_OK;
 }
 
@@ -346,16 +364,19 @@ static HRESULT STDMETHODCALLTYPE cwasapi_watcher_added(IMMNotificationClient *cl
 
 static HRESULT STDMETHODCALLTYPE cwasapi_watcher_removed(IMMNotificationClient *client, LPCWSTR id) {
     (void)id;
-    cwasapi_watcher_signal(client);
+    cwasapi_watcher_signal_both(client);
     return S_OK;
 }
 
 static HRESULT STDMETHODCALLTYPE cwasapi_watcher_default_changed(
     IMMNotificationClient *client, EDataFlow flow, ERole role, LPCWSTR id) {
     (void)id;
-    // The engine opens eRender / eConsole; the other roles change alongside it or not at all for playback.
-    if (flow == eRender && role == eConsole) {
+    // The engine opens eRender / eConsole and the capture eCapture / eConsole; the other roles change alongside them
+    // or not at all for either.
+    if (role == eConsole && flow == eRender) {
         cwasapi_watcher_signal(client);
+    } else if (role == eConsole && flow == eCapture) {
+        cwasapi_watcher_signal_capture(client);
     }
     return S_OK;
 }
@@ -414,6 +435,10 @@ int32_t cwasapi_watch_take_change(cwasapi_watcher *watcher) {
     return InterlockedExchange(&watcher->changed, 0) != 0 ? 1 : 0;
 }
 
+int32_t cwasapi_watch_take_capture_change(cwasapi_watcher *watcher) {
+    return InterlockedExchange(&watcher->capture_changed, 0) != 0 ? 1 : 0;
+}
+
 void *cwasapi_watch_event(cwasapi_watcher *watcher) {
     return watcher->event;
 }
@@ -430,4 +455,439 @@ void cwasapi_watch_destroy(cwasapi_watcher *watcher) {
     IMMDeviceEnumerator_Release(watcher->enumerator);
     CloseHandle(watcher->event);
     free(watcher);
+}
+
+// MARK: - Capture
+
+static const IID cwasapi_iid_capture = {0xC8ADBD64, 0xE71E, 0x48A0, {0xA4, 0xDE, 0x18, 0x5C, 0x39, 0x5C, 0xD3, 0x17}};
+static const IID cwasapi_iid_endpoint = {0x1BE09788, 0x6894, 0x4089, {0x85, 0x86, 0x9A, 0x2A, 0x6C, 0x26, 0x5A, 0xC5}};
+// PKEY_Device_FriendlyName
+static const PROPERTYKEY cwasapi_pkey_friendly_name = {
+    {0xA45C254E, 0xDF1C, 0x4EFD, {0x80, 0x20, 0x67, 0xD1, 0x46, 0xA8, 0x50, 0xE0}}, 14};
+
+// 40 ms of buffer, as for playback: how long the capture thread may be late before the device overwrites unread audio.
+// A packet still arrives every device period; the buffer only bounds how far reading may fall behind.
+static const REFERENCE_TIME cwasapi_capture_buffer_duration = 400000;
+
+struct cwasapi_capture {
+    IMMDeviceEnumerator *enumerator;
+    IMMDevice *device;
+    IAudioClient *client;
+    IAudioCaptureClient *capture;
+    HANDLE event;
+};
+
+int32_t cwasapi_is_access_denied(int32_t hresult) {
+    return hresult == (int32_t)E_ACCESSDENIED ? 1 : 0;
+}
+
+// `text` (UTF-8) as a new UTF-16 string, or NULL when it is not UTF-8 or memory ran out. Free with `free`.
+static WCHAR *cwasapi_wide(const char *text) {
+    int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text, -1, NULL, 0);
+    if (count <= 0) {
+        return NULL;
+    }
+    WCHAR *wide = malloc((size_t)count * sizeof(WCHAR));
+    if (wide == NULL) {
+        return NULL;
+    }
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text, -1, wide, count) != count) {
+        free(wide);
+        return NULL;
+    }
+    return wide;
+}
+
+// `wide` (UTF-16; NULL reads as empty) as a new UTF-8 string, empty when it cannot be converted. NULL only when memory
+// ran out. Free with `free`.
+static char *cwasapi_utf8(LPCWSTR wide) {
+    int count = wide != NULL ? WideCharToMultiByte(CP_UTF8, 0, wide, -1, NULL, 0, NULL, NULL) : 0;
+    char *text = malloc(count > 0 ? (size_t)count : 1);
+    if (text == NULL) {
+        return NULL;
+    }
+    if (count <= 0 || WideCharToMultiByte(CP_UTF8, 0, wide, -1, text, count, NULL, NULL) != count) {
+        text[0] = '\0';
+    }
+    return text;
+}
+
+// Whether `device` is an active capture endpoint.
+static int cwasapi_is_active_capture(IMMDevice *device) {
+    DWORD state = 0;
+    if (FAILED(IMMDevice_GetState(device, &state)) || state != DEVICE_STATE_ACTIVE) {
+        return 0;
+    }
+    IMMEndpoint *endpoint = NULL;
+    if (FAILED(IMMDevice_QueryInterface(device, &cwasapi_iid_endpoint, (void **)&endpoint))) {
+        return 0;
+    }
+    EDataFlow flow = eRender;
+    HRESULT hr = IMMEndpoint_GetDataFlow(endpoint, &flow);
+    IMMEndpoint_Release(endpoint);
+    return SUCCEEDED(hr) && flow == eCapture ? 1 : 0;
+}
+
+// The default capture endpoint (eCapture / eConsole) for a NULL `device_id`, else the active capture endpoint with that
+// id. Anything else — an id Windows does not know, a malformed one, a render endpoint's, one unplugged or disabled —
+// fails as E_NOTFOUND, which `cwasapi_is_no_device` reads.
+static HRESULT cwasapi_capture_device(IMMDeviceEnumerator *enumerator, const char *device_id, IMMDevice **device) {
+    *device = NULL;
+    if (device_id == NULL) {
+        return IMMDeviceEnumerator_GetDefaultAudioEndpoint(enumerator, eCapture, eConsole, device);
+    }
+    WCHAR *wide = cwasapi_wide(device_id);
+    if (wide == NULL) {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+    HRESULT hr = IMMDeviceEnumerator_GetDevice(enumerator, wide, device);
+    free(wide);
+    if (FAILED(hr)) {
+        *device = NULL;
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+    if (!cwasapi_is_active_capture(*device)) {
+        IMMDevice_Release(*device);
+        *device = NULL;
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+    return S_OK;
+}
+
+int32_t cwasapi_capture_open(
+    cwasapi_capture **capture, cwasapi_capture_format *format, uint32_t sample_rate, const char *device_id) {
+    *capture = NULL;
+    if (sample_rate == 0) {
+        return (int32_t)E_INVALIDARG;
+    }
+    cwasapi_capture *c = calloc(1, sizeof *c);
+    if (c == NULL) {
+        return (int32_t)E_OUTOFMEMORY;
+    }
+    REFERENCE_TIME latency = 0;
+    REFERENCE_TIME period = 0;
+    REFERENCE_TIME minimum_period = 0;
+    UINT32 buffer_frames = 0;
+    WAVEFORMATEXTENSIBLE wanted;
+    ZeroMemory(&wanted, sizeof wanted);
+
+    // RPC_E_CHANGED_MODE: the thread is already in a single-threaded apartment, which serves as well.
+    HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
+        goto fail;
+    }
+    hr = CoCreateInstance(
+        &cwasapi_clsid_enumerator, NULL, CLSCTX_ALL, &cwasapi_iid_enumerator, (void **)&c->enumerator);
+    if (FAILED(hr)) {
+        goto fail;
+    }
+    hr = cwasapi_capture_device(c->enumerator, device_id, &c->device);
+    if (FAILED(hr)) {
+        goto fail;
+    }
+    // E_ACCESSDENIED here is the privacy setting: Activate is where Windows asks whether this app may use the
+    // microphone.
+    hr = IMMDevice_Activate(c->device, &cwasapi_iid_client, CLSCTX_ALL, NULL, (void **)&c->client);
+    if (FAILED(hr)) {
+        goto fail;
+    }
+
+    wanted.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    wanted.Format.nChannels = 1;
+    wanted.Format.nSamplesPerSec = sample_rate;
+    wanted.Format.wBitsPerSample = 32;
+    wanted.Format.nBlockAlign = sizeof(float);
+    wanted.Format.nAvgBytesPerSec = sample_rate * wanted.Format.nBlockAlign;
+    wanted.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+    wanted.Samples.wValidBitsPerSample = 32;
+    wanted.dwChannelMask = SPEAKER_FRONT_CENTER;
+    wanted.SubFormat = cwasapi_subtype_float;
+
+    // AUTOCONVERTPCM mixes a stereo or multichannel microphone down to the one channel asked for and converts its rate
+    // to `sample_rate`, as it lets playback keep its own format.
+    DWORD flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+        | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
+    hr = IAudioClient_Initialize(
+        c->client, AUDCLNT_SHAREMODE_SHARED, flags, cwasapi_capture_buffer_duration, 0, (WAVEFORMATEX *)&wanted,
+        NULL);
+    if (FAILED(hr)) {
+        goto fail;
+    }
+    c->event = CreateEventW(NULL, FALSE, FALSE, NULL);
+    if (c->event == NULL) {
+        hr = HRESULT_FROM_WIN32(GetLastError());
+        goto fail;
+    }
+    hr = IAudioClient_SetEventHandle(c->client, c->event);
+    if (FAILED(hr)) {
+        goto fail;
+    }
+    hr = IAudioClient_GetBufferSize(c->client, &buffer_frames);
+    if (FAILED(hr)) {
+        goto fail;
+    }
+    hr = IAudioClient_GetService(c->client, &cwasapi_iid_capture, (void **)&c->capture);
+    if (FAILED(hr)) {
+        goto fail;
+    }
+    // Both are figures for the host's latency model, not conditions for capturing: a failure reads as 0.
+    if (FAILED(IAudioClient_GetStreamLatency(c->client, &latency))) {
+        latency = 0;
+    }
+    if (FAILED(IAudioClient_GetDevicePeriod(c->client, &period, &minimum_period))) {
+        period = 0;
+    }
+
+    format->sample_rate = sample_rate;
+    format->channels = 1;
+    format->buffer_frames = buffer_frames;
+    format->latency_seconds = (double)latency / 1e7;
+    format->period_seconds = (double)period / 1e7;
+    *capture = c;
+    return 0;
+
+fail:
+    cwasapi_capture_close(c);
+    return (int32_t)hr;
+}
+
+int32_t cwasapi_capture_start(cwasapi_capture *capture) {
+    return (int32_t)IAudioClient_Start(capture->client);
+}
+
+int32_t cwasapi_capture_stop(cwasapi_capture *capture) {
+    return (int32_t)IAudioClient_Stop(capture->client);
+}
+
+int32_t cwasapi_capture_wait(cwasapi_capture *capture, uint32_t timeout_ms) {
+    return WaitForSingleObject(capture->event, timeout_ms) == WAIT_OBJECT_0 ? 0 : 1;
+}
+
+int32_t cwasapi_capture_next(
+    cwasapi_capture *capture, uint32_t *frames, float **data, int32_t *silent, int32_t *discontinuity) {
+    *frames = 0;
+    *data = NULL;
+    *silent = 0;
+    *discontinuity = 0;
+    UINT32 waiting = 0;
+    HRESULT hr = IAudioCaptureClient_GetNextPacketSize(capture->capture, &waiting);
+    if (FAILED(hr)) {
+        return (int32_t)hr;
+    }
+    if (waiting == 0) {
+        return 0;
+    }
+    BYTE *bytes = NULL;
+    UINT32 count = 0;
+    DWORD packet_flags = 0;
+    hr = IAudioCaptureClient_GetBuffer(capture->capture, &bytes, &count, &packet_flags, NULL, NULL);
+    if (FAILED(hr)) {
+        return (int32_t)hr;
+    }
+    // AUDCLNT_S_BUFFER_EMPTY is a success with no packet, and nothing to release.
+    if (hr == AUDCLNT_S_BUFFER_EMPTY || count == 0) {
+        return 0;
+    }
+    *frames = count;
+    *data = (float *)bytes;
+    *silent = (packet_flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0 ? 1 : 0;
+    *discontinuity = (packet_flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) != 0 ? 1 : 0;
+    return 0;
+}
+
+int32_t cwasapi_capture_release(cwasapi_capture *capture, uint32_t frames) {
+    return (int32_t)IAudioCaptureClient_ReleaseBuffer(capture->capture, frames);
+}
+
+int32_t cwasapi_capture_is_current_default(cwasapi_capture *capture) {
+    IMMDevice *current = NULL;
+    if (FAILED(IMMDeviceEnumerator_GetDefaultAudioEndpoint(capture->enumerator, eCapture, eConsole, &current))) {
+        return 0;
+    }
+    LPWSTR current_id = NULL;
+    LPWSTR own_id = NULL;
+    int32_t same = 0;
+    if (SUCCEEDED(IMMDevice_GetId(current, &current_id)) && SUCCEEDED(IMMDevice_GetId(capture->device, &own_id))) {
+        same = lstrcmpW(current_id, own_id) == 0 ? 1 : 0;
+    }
+    CoTaskMemFree(current_id);
+    CoTaskMemFree(own_id);
+    IMMDevice_Release(current);
+    return same;
+}
+
+cwasapi_endpoint *cwasapi_capture_endpoint(cwasapi_capture *capture) {
+    IMMDevice_AddRef(capture->device);
+    return (cwasapi_endpoint *)capture->device;
+}
+
+void cwasapi_capture_close(cwasapi_capture *capture) {
+    if (capture == NULL) {
+        return;
+    }
+    if (capture->client != NULL) {
+        IAudioClient_Stop(capture->client);
+    }
+    if (capture->capture != NULL) {
+        IAudioCaptureClient_Release(capture->capture);
+    }
+    if (capture->client != NULL) {
+        IAudioClient_Release(capture->client);
+    }
+    if (capture->device != NULL) {
+        IMMDevice_Release(capture->device);
+    }
+    if (capture->enumerator != NULL) {
+        IMMDeviceEnumerator_Release(capture->enumerator);
+    }
+    if (capture->event != NULL) {
+        CloseHandle(capture->event);
+    }
+    free(capture);
+}
+
+// MARK: - Capture endpoints
+
+struct cwasapi_device_list {
+    uint32_t count;
+    int32_t default_index;
+    char **ids;
+    char **names;
+};
+
+// `device`'s friendly name ("Microphone (USB Audio Device)") as a new UTF-8 string, empty when it cannot be read. NULL
+// only when memory ran out.
+static char *cwasapi_device_name(IMMDevice *device) {
+    IPropertyStore *store = NULL;
+    char *name = NULL;
+    if (SUCCEEDED(IMMDevice_OpenPropertyStore(device, STGM_READ, &store))) {
+        PROPVARIANT value;
+        PropVariantInit(&value);
+        if (SUCCEEDED(IPropertyStore_GetValue(store, &cwasapi_pkey_friendly_name, &value)) && value.vt == VT_LPWSTR) {
+            name = cwasapi_utf8(value.pwszVal);
+        }
+        PropVariantClear(&value);
+        IPropertyStore_Release(store);
+    }
+    return name != NULL ? name : cwasapi_utf8(NULL);
+}
+
+int32_t cwasapi_capture_devices(cwasapi_device_list **out) {
+    *out = NULL;
+    cwasapi_device_list *list = calloc(1, sizeof *list);
+    if (list == NULL) {
+        return (int32_t)E_OUTOFMEMORY;
+    }
+    list->default_index = -1;
+    IMMDeviceEnumerator *enumerator = NULL;
+    IMMDeviceCollection *collection = NULL;
+    IMMDevice *default_device = NULL;
+    LPWSTR default_id = NULL;
+    UINT count = 0;
+
+    HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
+        goto done;
+    }
+    hr = CoCreateInstance(&cwasapi_clsid_enumerator, NULL, CLSCTX_ALL, &cwasapi_iid_enumerator, (void **)&enumerator);
+    if (FAILED(hr)) {
+        goto done;
+    }
+    hr = IMMDeviceEnumerator_EnumAudioEndpoints(enumerator, eCapture, DEVICE_STATE_ACTIVE, &collection);
+    if (FAILED(hr)) {
+        goto done;
+    }
+    hr = IMMDeviceCollection_GetCount(collection, &count);
+    if (FAILED(hr)) {
+        goto done;
+    }
+    // No default (E_NOTFOUND) when there is no endpoint, which is not a failure of the listing.
+    if (SUCCEEDED(IMMDeviceEnumerator_GetDefaultAudioEndpoint(enumerator, eCapture, eConsole, &default_device))) {
+        if (FAILED(IMMDevice_GetId(default_device, &default_id))) {
+            default_id = NULL;
+        }
+    }
+    if (count > 0) {
+        list->ids = calloc(count, sizeof(char *));
+        list->names = calloc(count, sizeof(char *));
+        if (list->ids == NULL || list->names == NULL) {
+            hr = E_OUTOFMEMORY;
+            goto done;
+        }
+    }
+    for (UINT index = 0; index < count; index++) {
+        IMMDevice *device = NULL;
+        if (FAILED(IMMDeviceCollection_Item(collection, index, &device))) {
+            continue;
+        }
+        LPWSTR id = NULL;
+        if (SUCCEEDED(IMMDevice_GetId(device, &id))) {
+            char *id_text = cwasapi_utf8(id);
+            char *name_text = cwasapi_device_name(device);
+            if (id_text == NULL || name_text == NULL) {
+                free(id_text);
+                free(name_text);
+                CoTaskMemFree(id);
+                IMMDevice_Release(device);
+                hr = E_OUTOFMEMORY;
+                goto done;
+            }
+            if (default_id != NULL && lstrcmpW(id, default_id) == 0) {
+                list->default_index = (int32_t)list->count;
+            }
+            list->ids[list->count] = id_text;
+            list->names[list->count] = name_text;
+            list->count += 1;
+            CoTaskMemFree(id);
+        }
+        IMMDevice_Release(device);
+    }
+    hr = S_OK;
+
+done:
+    CoTaskMemFree(default_id);
+    if (default_device != NULL) {
+        IMMDevice_Release(default_device);
+    }
+    if (collection != NULL) {
+        IMMDeviceCollection_Release(collection);
+    }
+    if (enumerator != NULL) {
+        IMMDeviceEnumerator_Release(enumerator);
+    }
+    if (FAILED(hr)) {
+        cwasapi_device_list_free(list);
+        return (int32_t)hr;
+    }
+    *out = list;
+    return 0;
+}
+
+uint32_t cwasapi_device_list_count(cwasapi_device_list *list) {
+    return list->count;
+}
+
+const char *cwasapi_device_list_id(cwasapi_device_list *list, uint32_t index) {
+    return index < list->count ? list->ids[index] : "";
+}
+
+const char *cwasapi_device_list_name(cwasapi_device_list *list, uint32_t index) {
+    return index < list->count ? list->names[index] : "";
+}
+
+int32_t cwasapi_device_list_default_index(cwasapi_device_list *list) {
+    return list->default_index;
+}
+
+void cwasapi_device_list_free(cwasapi_device_list *list) {
+    if (list == NULL) {
+        return;
+    }
+    for (uint32_t index = 0; index < list->count; index++) {
+        free(list->ids[index]);
+        free(list->names[index]);
+    }
+    free(list->ids);
+    free(list->names);
+    free(list);
 }
