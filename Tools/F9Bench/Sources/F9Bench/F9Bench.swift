@@ -54,6 +54,83 @@ enum F9Bench {
             writes.append(microseconds(since: started) / Double(max(writeSlots.count, 1)))
         }
         report("write + effectiveMeasureDuration", median(writes))
+
+        splitWriteAndRead(writeSlots: writeSlots, score: &score, repeats: repeats)
+    }
+
+    /// The split of `write + effectiveMeasureDuration` (S2, 2026-11-20): the write alone, the walk alone on the written
+    /// slots' staves, and models of the two costs F9 adds to a write followed by a read — a box allocated per write
+    /// (the old one freed), and two serial-queue locks around the read's miss and store (`SerialLock` is
+    /// `DispatchQueue.sync` on Apple). The walk and the models run the same code against both commits.
+    private static func splitWriteAndRead(writeSlots: [VoiceElementID], score: inout Score, repeats: Int) {
+        let count = Double(max(writeSlots.count, 1))
+        var writeOnly: [Double] = []
+        for _ in 0 ..< repeats {
+            let started = ContinuousClock.now
+            for slot in writeSlots {
+                rewrite(slot, in: &score)
+            }
+            writeOnly.append(microseconds(since: started) / count)
+        }
+        report("write only", median(writeOnly))
+
+        let frozen = score
+        var walkSink = 0
+        var walks: [Double] = []
+        for _ in 0 ..< repeats {
+            let started = ContinuousClock.now
+            for slot in writeSlots {
+                let staff = frozen.parts[slot.staff.partIndex].staves[slot.staff.staffIndexInPart]
+                walkSink &+= staff.measures.effectiveMeasureDurations().count
+            }
+            walks.append(microseconds(since: started) / count)
+        }
+        report("walk of the slot's staff (sink \(walkSink & 0xFF))", median(walks))
+
+        let table = frozen.parts[0].staves[0].measures.effectiveMeasureDurations()
+        let queue = DispatchQueue(label: "f9bench.model-lock")
+        var holder = ModelBox()
+        var boxes: [Double] = []
+        for _ in 0 ..< repeats {
+            let started = ContinuousClock.now
+            for _ in writeSlots {
+                holder = ModelBox()
+            }
+            boxes.append(microseconds(since: started) / count)
+        }
+        report("model: a box per write", median(boxes))
+
+        var lockSink = 0
+        var locks: [Double] = []
+        for _ in 0 ..< repeats {
+            let started = ContinuousClock.now
+            for _ in writeSlots {
+                let box = holder
+                if queue.sync(execute: { box.durations }) == nil {
+                    queue.sync { box.durations = table }
+                }
+                lockSink &+= box.durations?.count ?? 0
+                box.durations = nil
+            }
+            locks.append(microseconds(since: started) / count)
+        }
+        report("model: miss + store under two locks (sink \(lockSink & 0xFF))", median(locks))
+
+        var bothSink = 0
+        var both: [Double] = []
+        for _ in 0 ..< repeats {
+            let started = ContinuousClock.now
+            for _ in writeSlots {
+                holder = ModelBox()
+                let box = holder
+                if queue.sync(execute: { box.durations }) == nil {
+                    queue.sync { box.durations = table }
+                }
+                bothSink &+= box.durations?.count ?? 0
+            }
+            both.append(microseconds(since: started) / count)
+        }
+        report("model: box + two locks (sink \(bothSink & 0xFF))", median(both))
     }
 
     /// Every chord and rest (a rest is a chord without notes), in staff, measure, voice, element order.
@@ -115,6 +192,11 @@ enum F9Bench {
     }
 
     private static func report(_ name: String, _ microseconds: Double) {
-        print(name.padding(toLength: 46, withPad: " ", startingAt: 0) + String(format: "%9.3f us/call", microseconds))
+        print(name.padding(toLength: 56, withPad: " ", startingAt: 0) + String(format: "%9.3f us/call", microseconds))
     }
+}
+
+/// The shape of F9's `StaffTimingCache`: one optional table behind a class reference.
+private final class ModelBox: @unchecked Sendable {
+    var durations: [Fraction]?
 }
