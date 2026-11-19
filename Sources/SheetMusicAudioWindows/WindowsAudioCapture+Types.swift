@@ -43,6 +43,13 @@ extension WindowsAudioCapture {
         public let name: String
         /// Whether it is the default capture device now.
         public let isDefault: Bool
+
+        /// Public for a host's fakes and tests; a real list comes from `inputDevices()`.
+        public init(id: String, name: String, isDefault: Bool) {
+            self.id = id
+            self.name = name
+            self.isDefault = isDefault
+        }
     }
 
     /// What an open stream delivers.
@@ -57,6 +64,18 @@ extension WindowsAudioCapture {
         public let latencySeconds: Double
         /// The device's default period, in seconds: how often a packet arrives.
         public let periodSeconds: Double
+
+        /// Public for a host's fakes and tests (a `.recovered` notice, a route figure); a real one comes from
+        /// `start()`.
+        public init(
+            sampleRate: Double, channels: Int, bufferFrames: Int, latencySeconds: Double, periodSeconds: Double,
+        ) {
+            self.sampleRate = sampleRate
+            self.channels = channels
+            self.bufferFrames = bufferFrames
+            self.latencySeconds = latencySeconds
+            self.periodSeconds = periodSeconds
+        }
     }
 
     /// A step of a device change. See `WindowsAudioCapture`'s discussion.
