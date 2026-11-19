@@ -106,6 +106,13 @@ struct cd2d_canvas {
     bool drawing = false;
     /// How many `cd2d_push_clip`s are not yet popped; `cd2d_copy_pixels` refuses while any is.
     int clipDepth = 0;
+
+    /// Measurement only (s1-draw-measure2, spike (b)): a frame canvas drawing on a Direct3D device's context into
+    /// `deviceTarget` and read back through the CPU-readable `deviceReadback`, in place of the WIC bitmap. Made by
+    /// `cd2d_create` when CD2D_FRAME_DEVICE is `hw` or `warp`.
+    cd2d::ComPtr<ID2D1DeviceContext> deviceContext;
+    cd2d::ComPtr<ID2D1Bitmap1> deviceTarget;
+    cd2d::ComPtr<ID2D1Bitmap1> deviceReadback;
 };
 
 namespace cd2d {

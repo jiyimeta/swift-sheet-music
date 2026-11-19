@@ -1,8 +1,15 @@
 #include "cdirect2d_internal.h"
 
+#include <d3d11.h>
+
 using cd2d::ComPtr;
 
 namespace {
+
+/// A canvas drawn frame after frame and read back: a WIC canvas, or (measurement only, spike (b)) a device canvas.
+bool frameCanvas(const cd2d_canvas *canvas) {
+    return canvas->bitmap || canvas->deviceTarget;
+}
 
 /// Fills `geometry` under `placement` (then the canvas transform).
 void fillGeometry(cd2d_canvas *canvas, ID2D1Geometry *geometry, const D2D1::Matrix3x2F &placement) {
@@ -347,12 +354,78 @@ extern "C" int32_t cd2d_create_wic(cd2d_canvas **out, cd2d_resources *resources,
     return S_OK;
 }
 
+namespace {
+
+/// Measurement only (spike (b)): which canvas `cd2d_create` makes — 0 the WIC one, 1 a hardware device's, 2 WARP's —
+/// from CD2D_FRAME_DEVICE (`hw`, `warp`; anything else or unset is WIC).
+int frameDeviceChoice() {
+    char value[8] = {};
+    const DWORD length = GetEnvironmentVariableA("CD2D_FRAME_DEVICE", value, sizeof(value));
+    if (length == 0 || length >= sizeof(value)) return 0;
+    if (std::strcmp(value, "hw") == 0) return 1;
+    if (std::strcmp(value, "warp") == 0) return 2;
+    return 0;
+}
+
+/// Measurement only (spike (b)): a frame canvas on a Direct3D 11 device (hardware, or WARP), drawing with the
+/// resources' factory into a TARGET bitmap and read back through a CPU_READ one — no silent fallback to the other
+/// driver, so a run says which one it measured by succeeding.
+HRESULT createDeviceCanvas(
+    cd2d_canvas **out, cd2d_resources *resources, uint32_t width, uint32_t height, bool warp) {
+    *out = nullptr;
+    const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1};
+    ComPtr<ID3D11Device> d3d;
+    HRESULT hr = D3D11CreateDevice(
+        nullptr, warp ? D3D_DRIVER_TYPE_WARP : D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+        levels, 3, D3D11_SDK_VERSION, &d3d, nullptr, nullptr);
+    ComPtr<IDXGIDevice> dxgi;
+    if (SUCCEEDED(hr)) hr = d3d.As(&dxgi);
+    ComPtr<ID2D1Device> device;
+    if (SUCCEEDED(hr)) hr = resources->d2d->CreateDevice(dxgi.Get(), &device);
+    if (FAILED(hr)) return hr;
+    auto canvas = new cd2d_canvas();
+    canvas->resources = resources;
+    hr = device->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &canvas->deviceContext);
+    const D2D1_PIXEL_FORMAT format = D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED);
+    if (SUCCEEDED(hr)) {
+        canvas->deviceContext->SetDpi(96.0f, 96.0f);
+        const auto targetProperties = D2D1::BitmapProperties1(
+            D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW, format, 96.0f, 96.0f);
+        hr = canvas->deviceContext->CreateBitmap(
+            D2D1::SizeU(width, height), nullptr, 0, targetProperties, &canvas->deviceTarget);
+    }
+    if (SUCCEEDED(hr)) {
+        const auto readbackProperties = D2D1::BitmapProperties1(
+            D2D1_BITMAP_OPTIONS_CPU_READ | D2D1_BITMAP_OPTIONS_CANNOT_DRAW, format, 96.0f, 96.0f);
+        hr = canvas->deviceContext->CreateBitmap(
+            D2D1::SizeU(width, height), nullptr, 0, readbackProperties, &canvas->deviceReadback);
+    }
+    if (SUCCEEDED(hr)) {
+        canvas->target = canvas->deviceContext;
+        hr = canvas->target->CreateSolidColorBrush(D2D1::ColorF(0, 0, 0, 1), &canvas->brush);
+    }
+    if (FAILED(hr)) {
+        delete canvas;
+        return hr;
+    }
+    canvas->deviceContext->SetTarget(canvas->deviceTarget.Get());
+    canvas->target->BeginDraw();
+    canvas->drawing = true;
+    canvas->target->Clear(D2D1::ColorF(1, 1, 1, 1));
+    *out = canvas;
+    return S_OK;
+}
+
+}  // namespace
+
 extern "C" int32_t cd2d_create(cd2d_canvas **out, uint32_t width, uint32_t height) {
     *out = nullptr;
     cd2d_resources *resources = nullptr;
     HRESULT hr = cd2d_resources_create(&resources);
     if (FAILED(hr)) return hr;
-    hr = cd2d_create_wic(out, resources, width, height);
+    const int device = frameDeviceChoice();
+    hr = device == 0 ? cd2d_create_wic(out, resources, width, height)
+                     : createDeviceCanvas(out, resources, width, height, device == 2);
     if (FAILED(hr)) {
         cd2d_resources_destroy(resources);
         return hr;
@@ -630,7 +703,7 @@ extern "C" void cd2d_fill_text(
 }
 
 extern "C" int32_t cd2d_write_png(cd2d_canvas *canvas, const uint16_t *path) {
-    if (!canvas->bitmap) return E_NOTIMPL;  // only a WIC canvas has pixels to write
+    if (!canvas->bitmap) return E_NOTIMPL;  // only a WIC canvas has pixels to write (spike (b): not a device one)
     if (canvas->clipDepth > 0) return E_ILLEGAL_METHOD_CALL;  // as `cd2d_copy_pixels`: a frame ends with no clip
     HRESULT hr = S_OK;
     if (canvas->drawing) {
@@ -671,8 +744,10 @@ void popAllClips(cd2d_canvas *canvas) {
 }  // namespace
 
 extern "C" int32_t cd2d_clear(cd2d_canvas *canvas, uint32_t argb) {
-    if (!canvas->bitmap) return E_NOTIMPL;  // only a WIC canvas is drawn again after its pixels are read
+    if (!frameCanvas(canvas)) return E_NOTIMPL;  // only a WIC canvas is drawn again after its pixels are read
     if (!canvas->drawing) {
+        // A device canvas lets go of its target to read it back (`cd2d_copy_pixels`), so it takes it again here.
+        if (canvas->deviceContext) canvas->deviceContext->SetTarget(canvas->deviceTarget.Get());
         canvas->target->BeginDraw();
         canvas->drawing = true;
     }
@@ -686,7 +761,7 @@ extern "C" int32_t cd2d_clear(cd2d_canvas *canvas, uint32_t argb) {
 }
 
 extern "C" int32_t cd2d_push_clip(cd2d_canvas *canvas, float x, float y, float width, float height) {
-    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!frameCanvas(canvas)) return E_NOTIMPL;
     if (!canvas->drawing) return E_ILLEGAL_METHOD_CALL;
     // The clip is in canvas pixels, whatever transform the last command left: the target applies its transform at the
     // push, so it is reset first and the walk's own state is kept for its next command.
@@ -699,7 +774,7 @@ extern "C" int32_t cd2d_push_clip(cd2d_canvas *canvas, float x, float y, float w
 }
 
 extern "C" int32_t cd2d_pop_clip(cd2d_canvas *canvas) {
-    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!frameCanvas(canvas)) return E_NOTIMPL;
     if (!canvas->drawing || canvas->clipDepth <= 0) return E_ILLEGAL_METHOD_CALL;
     canvas->target->PopAxisAlignedClip();
     canvas->clipDepth -= 1;
@@ -709,7 +784,7 @@ extern "C" int32_t cd2d_pop_clip(cd2d_canvas *canvas) {
 extern "C" int32_t cd2d_draw_bitmap(
     cd2d_canvas *canvas, const uint8_t *pixels, uint32_t width, uint32_t height, float x, float y, float rect_width,
     float rect_height, float opacity) {
-    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!frameCanvas(canvas)) return E_NOTIMPL;
     if (!canvas->drawing) return E_ILLEGAL_METHOD_CALL;
     if (!pixels || width == 0 || height == 0 || rect_width <= 0 || rect_height <= 0) return E_INVALIDARG;
     ComPtr<ID2D1Bitmap> bitmap;
@@ -743,7 +818,7 @@ extern "C" int32_t cd2d_picture_create(
     cd2d_canvas *canvas, const uint8_t *pixels, uint32_t width, uint32_t height, cd2d_picture **out) {
     if (!out) return E_POINTER;
     *out = nullptr;
-    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!frameCanvas(canvas)) return E_NOTIMPL;
     if (!pixels || width == 0 || height == 0) return E_INVALIDARG;
     // `cd2d_draw_bitmap`'s copy, made once: drawing the picture later reads this bitmap and nothing of `pixels`.
     ComPtr<ID2D1Bitmap> bitmap;
@@ -761,7 +836,7 @@ extern "C" int32_t cd2d_picture_create(
 
 extern "C" int32_t cd2d_draw_picture(
     cd2d_canvas *canvas, cd2d_picture *picture, float x, float y, float rect_width, float rect_height, float opacity) {
-    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!frameCanvas(canvas)) return E_NOTIMPL;
     if (!canvas->drawing) return E_ILLEGAL_METHOD_CALL;
     if (!picture || rect_width <= 0 || rect_height <= 0) return E_INVALIDARG;
     // Direct2D itself would accept the draw and fail the frame's EndDraw, losing everything else the frame drew.
@@ -785,7 +860,7 @@ extern "C" void cd2d_picture_release(cd2d_picture *picture) {
 }
 
 extern "C" int32_t cd2d_flush(cd2d_canvas *canvas) {
-    if (!canvas->bitmap || !canvas->drawing) return S_OK;
+    if (!frameCanvas(canvas) || !canvas->drawing) return S_OK;
     return canvas->target->Flush();
 }
 
@@ -802,7 +877,7 @@ extern "C" void cd2d_frame_ticks_reset(int32_t flush) {
 }
 
 extern "C" int32_t cd2d_copy_pixels(cd2d_canvas *canvas, uint8_t *pixels, uint32_t width, uint32_t height) {
-    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!frameCanvas(canvas)) return E_NOTIMPL;
     if (canvas->clipDepth > 0) return E_ILLEGAL_METHOD_CALL;  // a frame ends with every clip popped
     LARGE_INTEGER t0, t1, t2;
     QueryPerformanceCounter(&t0);
@@ -812,7 +887,24 @@ extern "C" int32_t cd2d_copy_pixels(cd2d_canvas *canvas, uint8_t *pixels, uint32
         if (FAILED(hr)) return hr;
     }
     QueryPerformanceCounter(&t1);
-    HRESULT hr = canvas->bitmap->CopyPixels(nullptr, width * 4, width * height * 4, pixels);
+    HRESULT hr = S_OK;
+    if (canvas->deviceContext) {
+        // Spike (b): the target copied on the device into the CPU-readable bitmap, mapped, and its rows copied out.
+        canvas->deviceContext->SetTarget(nullptr);
+        hr = canvas->deviceReadback->CopyFromBitmap(nullptr, canvas->deviceTarget.Get(), nullptr);
+        D2D1_MAPPED_RECT mapped = {};
+        if (SUCCEEDED(hr)) hr = canvas->deviceReadback->Map(D2D1_MAP_OPTIONS_READ, &mapped);
+        if (SUCCEEDED(hr)) {
+            for (uint32_t row = 0; row < height; ++row) {
+                std::memcpy(
+                    pixels + static_cast<size_t>(row) * width * 4, mapped.bits + static_cast<size_t>(row) * mapped.pitch,
+                    static_cast<size_t>(width) * 4);
+            }
+            canvas->deviceReadback->Unmap();
+        }
+    } else {
+        hr = canvas->bitmap->CopyPixels(nullptr, width * 4, width * height * 4, pixels);
+    }
     QueryPerformanceCounter(&t2);
     measured.end_draw += t1.QuadPart - t0.QuadPart;
     measured.copy_pixels += t2.QuadPart - t1.QuadPart;
@@ -821,7 +913,7 @@ extern "C" int32_t cd2d_copy_pixels(cd2d_canvas *canvas, uint8_t *pixels, uint32
 
 extern "C" void cd2d_destroy(cd2d_canvas *canvas) {
     if (!canvas) return;
-    if (canvas->drawing && canvas->bitmap) {
+    if (canvas->drawing && frameCanvas(canvas)) {
         popAllClips(canvas);
         canvas->target->EndDraw();
     }
