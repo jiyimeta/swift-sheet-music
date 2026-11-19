@@ -364,7 +364,7 @@ extension LayoutDocument {
         if ordinal < staffMeasureDurations.count, staffMeasureDurations[ordinal].count == staff.measures.count {
             return staffMeasureDurations[ordinal]
         }
-        return staff.measures.effectiveMeasureDurations()
+        return staff.measureDurations
     }
 
     private func measureTickLength(

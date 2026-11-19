@@ -12,7 +12,7 @@ extension Score {
         let elements = voices[itemID.voiceIndex].elements
         guard itemID.elementIndex >= 0, itemID.elementIndex <= elements.count else { return nil }
 
-        let measureDuration = staff.measures.effectiveMeasureDurations()[itemID.measureIndex]
+        let measureDuration = staff.measureDurations[itemID.measureIndex]
         var tick = 0
         for i in 0 ..< itemID.elementIndex {
             tick += elements[i].cursorAdvance(division: division, in: measureDuration)

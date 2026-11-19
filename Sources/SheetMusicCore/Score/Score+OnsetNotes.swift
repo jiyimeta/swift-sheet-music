@@ -22,7 +22,7 @@ extension Score {
               let staff = self[item.staff],
               staff.measures.indices.contains(item.measureIndex)
         else { return [] }
-        let measureDuration = staff.measures.effectiveMeasureDurations()[item.measureIndex]
+        let measureDuration = staff.measureDurations[item.measureIndex]
         var noteIDs: [NoteID] = []
         for (voiceIndex, voice) in staff.measures[item.measureIndex].voices.enumerated() {
             // The whole voice, not up to the target: a jog can move the cursor backwards.

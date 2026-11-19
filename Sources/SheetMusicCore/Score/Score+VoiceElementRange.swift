@@ -53,7 +53,7 @@ extension Score {
     ) -> [VoiceElementID] {
         var result: [VoiceElementID] = []
         for (address, staff) in allStaves where staves.contains(address) {
-            let durations = staff.measures.effectiveMeasureDurations()
+            let durations = staff.measureDurations
             for measureIndex in posLo.measure ... posHi.measure where staff.measures.indices.contains(measureIndex) {
                 for (voiceIndex, voice) in staff.measures[measureIndex].voices.enumerated() {
                     var tick = 0

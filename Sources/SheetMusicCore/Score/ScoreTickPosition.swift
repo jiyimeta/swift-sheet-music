@@ -43,7 +43,7 @@ extension Score {
     /// Running tick from the start of `id`'s staff to the element's onset, or `nil` when the path does not resolve.
     func absoluteTick(of id: VoiceElementID) -> Int? {
         guard let position = onset(of: id), let staff = self[id.staff] else { return nil }
-        let durations = staff.measures.effectiveMeasureDurations()
+        let durations = staff.measureDurations
         guard durations.indices.contains(id.measureIndex) else { return nil }
         let precedingTicks = durations[..<id.measureIndex].reduce(0) {
             $0 + $1.ticks(division: division)
@@ -55,7 +55,7 @@ extension Score {
     /// chords before it plus any `.locationShift` jogs among them. `nil` when the path does not resolve.
     func onset(of id: VoiceElementID) -> ScoreTickPosition? {
         guard let staff = self[id.staff], staff.measures.indices.contains(id.measureIndex) else { return nil }
-        return onset(of: id, measureDuration: staff.measures.effectiveMeasureDurations()[id.measureIndex])
+        return onset(of: id, measureDuration: staff.measureDurations[id.measureIndex])
     }
 
     /// `onset(of:)` with the measure's effective duration already known — for a walk that reads it off a
@@ -76,7 +76,7 @@ extension Score {
     /// the onset of whatever follows `id` in the voice.
     func end(of id: VoiceElementID) -> ScoreTickPosition? {
         guard let start = onset(of: id), let staff = self[id.staff], let element = self[id] else { return nil }
-        let measureDuration = staff.measures.effectiveMeasureDurations()[id.measureIndex]
+        let measureDuration = staff.measureDurations[id.measureIndex]
         let ticks = element.cursorAdvance(division: division, in: measureDuration)
         return ScoreTickPosition(measure: start.measure, tick: start.tick + ticks)
     }
