@@ -434,6 +434,21 @@ extern "C" int32_t cd2d_create(cd2d_canvas **out, uint32_t width, uint32_t heigh
     return S_OK;
 }
 
+extern "C" int32_t cd2d_create_on(cd2d_canvas **out, uint32_t width, uint32_t height, int32_t device) {
+    if (device == 0) return cd2d_create(out, width, height);  // CD2D_FRAME_DEVICE still applies, as for (b)'s runs
+    *out = nullptr;
+    cd2d_resources *resources = nullptr;
+    HRESULT hr = cd2d_resources_create(&resources);
+    if (FAILED(hr)) return hr;
+    hr = createDeviceCanvas(out, resources, width, height, device == 2);
+    if (FAILED(hr)) {
+        cd2d_resources_destroy(resources);
+        return hr;
+    }
+    (*out)->ownsResources = true;
+    return S_OK;
+}
+
 extern "C" int32_t cd2d_add_font_file(cd2d_canvas *canvas, const uint16_t *path) {
     return cd2d_resources_add_font_file(canvas->resources, path);
 }
@@ -857,10 +872,12 @@ extern "C" int32_t cd2d_draw_picture(
 
 extern "C" int32_t cd2d_draw_picture_at(
     cd2d_canvas *canvas, cd2d_picture *picture, int32_t x, int32_t y, float opacity) {
-    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!frameCanvas(canvas)) return E_NOTIMPL;
     if (!canvas->drawing) return E_ILLEGAL_METHOD_CALL;
     if (!picture) return E_INVALIDARG;
     if (picture->target.Get() != canvas->target.Get()) return D2DERR_WRONG_RESOURCE_DOMAIN;
+    LARGE_INTEGER t0, t1;
+    QueryPerformanceCounter(&t0);
     // Whole pixels at the bitmap's own size: nearest neighbor then reads each source pixel for exactly one canvas
     // pixel, where linear filtering would blend a page picture a fraction of a pixel off its clip on every frame.
     const D2D1_SIZE_U size = picture->bitmap->GetPixelSize();
@@ -873,6 +890,9 @@ extern "C" int32_t cd2d_draw_picture_at(
         D2D1::RectF(left, top, left + static_cast<float>(size.width), top + static_cast<float>(size.height)), clamped,
         D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
     canvas->target->SetTransform(canvas->transform);
+    if (measureFlush) canvas->target->Flush();
+    QueryPerformanceCounter(&t1);
+    measured.bitmap_draw += t1.QuadPart - t0.QuadPart;
     return S_OK;
 }
 

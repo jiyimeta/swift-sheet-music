@@ -271,6 +271,9 @@ typedef struct {
 } cd2d_frame_ticks;
 void cd2d_frame_ticks_read(cd2d_frame_ticks *ticks);
 void cd2d_frame_ticks_reset(int32_t flush);
+/// Spike (d): `cd2d_create` with the canvas named per call rather than by CD2D_FRAME_DEVICE for the whole process —
+/// 0 as `cd2d_create` (the WIC canvas, or what CD2D_FRAME_DEVICE names), 1 a hardware device's, 2 WARP's.
+int32_t cd2d_create_on(cd2d_canvas **canvas, uint32_t width, uint32_t height, int32_t device);
 
 // MARK: PDF pages, drawn by the OS's own renderer (Windows.Data.Pdf and its Direct2D interop)
 

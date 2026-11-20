@@ -14,9 +14,16 @@ public final class Direct2DFrameCanvas {
     public let heightPx: Int
     private let canvas: OpaquePointer
 
+    /// Measurement only (spike (d), s1-draw-measure4): what draws a canvas — the WIC bitmap (or what CD2D_FRAME_DEVICE
+    /// names), or a WARP device's context, chosen per canvas.
+    public enum Renderer: Sendable {
+        case wic
+        case warp
+    }
+
     /// A white `widthPx` x `heightPx` canvas with `fontFiles` (those `ScoreSurface(fontFiles:)` takes; the bundled ones
     /// are `ScoreSurface.bundledFontFiles`) loaded. With no font files only the installed fonts draw.
-    public init(widthPx: Int, heightPx: Int, fontFiles: [String]) throws {
+    public init(widthPx: Int, heightPx: Int, fontFiles: [String], renderer: Renderer = .wic) throws {
         guard widthPx > 0, heightPx > 0 else {
             let invalidArgument = Int32(bitPattern: 0x8007_0057) // E_INVALIDARG
             throw Direct2DPageRenderer.Failure(
@@ -24,7 +31,10 @@ public final class Direct2DFrameCanvas {
             )
         }
         var created: OpaquePointer?
-        try Direct2DPageRenderer.check(cd2d_create(&created, UInt32(widthPx), UInt32(heightPx)), "creating the canvas")
+        let device: Int32 = renderer == .warp ? 2 : 0
+        try Direct2DPageRenderer.check(
+            cd2d_create_on(&created, UInt32(widthPx), UInt32(heightPx), device), "creating the canvas",
+        )
         guard let made = created else { throw Direct2DPageRenderer.Failure(step: "creating the canvas", hresult: -1) }
         do {
             for file in fontFiles {
@@ -222,9 +232,11 @@ public final class Direct2DFrameCanvas {
             let invalidArgument = Int32(bitPattern: 0x8007_0057) // E_INVALIDARG
             throw Direct2DPageRenderer.Failure(step: "drawing a kept picture at (\(x), \(y))", hresult: invalidArgument)
         }
-        try Direct2DPageRenderer.check(
-            cd2d_draw_picture_at(canvas, picture.picture, left, top, Float(opacity)), "drawing a kept picture 1:1",
-        )
+        try timed(\.bitmap) {
+            try Direct2DPageRenderer.check(
+                cd2d_draw_picture_at(canvas, picture.picture, left, top, Float(opacity)), "drawing a kept picture 1:1",
+            )
+        }
     }
 
     /// The frame's pixels — BGRA premultiplied, top-down, `widthPx * 4` bytes a row — into `pixels`, which holds at
