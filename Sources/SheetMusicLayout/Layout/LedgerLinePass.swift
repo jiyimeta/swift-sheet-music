@@ -54,8 +54,8 @@ public enum LedgerLinePass {
         // MuseScore's `ledgerLineWidth`, heavier than a staff line; `metrics` already carries the chord's `mag`.
         let thickness = metrics.ledgerLineThickness
 
-        // A ledger crossing a mirrored notehead has to reach it, so
-        // widen that side by the mirror offset.
+        /// A ledger crossing a mirrored notehead has to reach it, so
+        /// widen that side by the mirror offset.
         func bounds(forLedgerStep ledger: Int) -> (CGFloat, CGFloat) {
             var leftExt: CGFloat = 0
             var rightExt: CGFloat = 0

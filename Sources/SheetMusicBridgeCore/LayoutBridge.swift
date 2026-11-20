@@ -101,7 +101,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
     ) -> (commands: [DrawCommand], spans: [SystemSpan]) {
         var out: [DrawCommand] = []
         var spans: [SystemSpan] = []
-        // Closes the span that started at `start`: its frame is `frameMM` joined with its commands' bounds.
+        /// Closes the span that started at `start`: its frame is `frameMM` joined with its commands' bounds.
         func closeSpan(systemIndex: Int?, from start: Int, frameMM: DrawRect) {
             var bounds = DrawCommandBounds()
             for command in out[start...] {
@@ -140,7 +140,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // The boxes between systems, top to bottom: each just before the first system below it (those after the last
         // system at the end), in a span of its own, so a walker of the spans meets the page in order.
         var pendingFrames = layout.frames[...]
-        // Emits, each in its own span, the pending frames whose top is above `limitY` (all of them for nil).
+        /// Emits, each in its own span, the pending frames whose top is above `limitY` (all of them for nil).
         func emitFrames(above limitY: Double?) {
             while let frame = pendingFrames.first {
                 if let limitY, Double(frame.originY) >= limitY { return }
