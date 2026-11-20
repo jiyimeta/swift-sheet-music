@@ -16,12 +16,9 @@
     /// flipped back per glyph exactly as `StaffRenderer.smuflGlyphPath` does.
     @available(macOS 15.0, *)
     enum DrawProgramCGRenderer {
-        /// Minimum stroke width in device pixels — the Kotlin renderer's `coerceAtLeast(1.5f)` and `canvas.ts`'s
-        /// `MIN_STROKE_PX`. Kept here so this walk measures what those renderers ship, not an idealized version.
-        static let minStrokePx: CGFloat = 1.5
-
         static func render(
             _ commands: [DrawCommand], widthPx: Int, heightPx: Int, pxPerMM: CGFloat, offsetPx: CGPoint,
+            strokes: Strokes = .pen,
         ) throws -> CGImage {
             guard widthPx > 0, heightPx > 0 else { throw RenderError.zeroSize }
             guard let ctx = CGContext(
@@ -37,7 +34,7 @@
             ctx.scaleBy(x: 1, y: -1)
             ctx.translateBy(x: offsetPx.x, y: offsetPx.y)
 
-            var walker = Walker(ctx: ctx, pxPerMM: pxPerMM)
+            var walker = Walker(ctx: ctx, pxPerMM: pxPerMM, strokes: strokes)
             walker.applyColor()
             for command in commands {
                 walker.paint(command)
@@ -51,6 +48,7 @@
         private struct Walker {
             let ctx: CGContext
             let pxPerMM: CGFloat
+            let strokes: Strokes
             var argb: UInt32 = 0xFF00_0000
             var dashOn: CGFloat = 0
             var dashOff: CGFloat = 0
@@ -58,18 +56,14 @@
             var textStyleFlags: UInt8 = DrawCommand.TextStyleFlag.none
             let images = ImageCache()
 
-            init(ctx: CGContext, pxPerMM: CGFloat) {
+            init(ctx: CGContext, pxPerMM: CGFloat, strokes: Strokes) {
                 self.ctx = ctx
                 self.pxPerMM = pxPerMM
+                self.strokes = strokes
             }
 
             var color: CGColor {
-                CGColor(
-                    red: CGFloat((argb >> 16) & 0xFF) / 255,
-                    green: CGFloat((argb >> 8) & 0xFF) / 255,
-                    blue: CGFloat(argb & 0xFF) / 255,
-                    alpha: CGFloat((argb >> 24) & 0xFF) / 255,
-                )
+                DrawProgramCGRenderer.color(argb)
             }
 
             func applyColor() {
@@ -107,13 +101,16 @@
                         control2: CGPoint(x: px(cx2), y: px(cy2)),
                     )
                 case let .stroke(width):
-                    ctx.setLineWidth(max(px(width), DrawProgramCGRenderer.minStrokePx))
+                    let pen = DrawProgramCGRenderer.pen(widthMM: width, pxPerMM: pxPerMM, argb: argb, strokes: strokes)
+                    ctx.setLineWidth(pen.width)
+                    ctx.setStrokeColor(pen.color)
                     if dashOn > 0, dashOff > 0 {
                         ctx.setLineDash(phase: 0, lengths: [dashOn, dashOff])
                     } else {
                         ctx.setLineDash(phase: 0, lengths: [])
                     }
                     ctx.strokePath()
+                    ctx.setStrokeColor(color)
                 case let .fillRect(x, y, w, h):
                     ctx.fill(CGRect(x: px(x), y: px(y), width: px(w), height: px(h)))
                 case let .glyph(codepoint, x, y, size, fontId):

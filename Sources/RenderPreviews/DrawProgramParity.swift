@@ -31,6 +31,16 @@
     ///   SM_PARITY            — `samples` (every `Samples.catalog` score) or a path to a `.mscz` / `.mscx`
     ///   SM_PARITY_OUT        — output directory (default `tmp/parity`)
     ///   SM_PARITY_WIDTH      — available width in points (default: natural width)
+    ///   SM_PARITY_SCALE      — pixels per point both renders are drawn at (default 2, a Retina Mac at 100%). A
+    ///                          Windows reader at zoom Z on a display at composition scale C draws 96/72 × Z × C:
+    ///                          0.333 is zoom 25% at 100% (96 dpi), 2 is zoom 100% at 150%
+    ///   SM_PARITY_STAFF_SIZE — the staff's height in points (default 28). A score's own size is four of its spatium:
+    ///                          19.84 for MuseScore's default 1.75 mm, which its own renders are drawn at
+    ///   SM_PARITY_STROKE_SET — `1` also writes the walk two other ways from the same layout, for comparing how strokes
+    ///                          are widened: `<name>-drawprogram-floor.png`, every stroke raised to 1.5 px at full
+    ///                          opacity (the Kotlin `ScoreCanvas` and `canvas.ts`, and the Windows walk before
+    ///                          `StrokeRaster`), and `<name>-drawprogram-mswidths.png`, the pen with staff lines,
+    ///                          ledger lines and stems at MuseScore's default widths (`museScoreLineWidths`)
     ///   SM_PARITY_THRESHOLD  — per-pixel max-channel difference that counts as "differing", 0–255 (default 48)
     ///   SM_PARITY_SHIFT      — whole-pixel nudge "dx,dy" applied to the draw-program render (default 0,0)
     ///   SM_PARITY_ONLY       — with `samples`, run just the catalog entry with this name
@@ -109,6 +119,9 @@
                 return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : .zero
             } ?? .zero
             let only = env["SM_PARITY_ONLY"]
+            let scale = env["SM_PARITY_SCALE"].flatMap { Double($0) }.map { CGFloat($0) } ?? 2
+            let staffSize = env["SM_PARITY_STAFF_SIZE"].flatMap { Double($0) }.map { CGFloat($0) } ?? 28
+            let strokeSet = env["SM_PARITY_STROKE_SET"] == "1"
 
             let subjects: [(name: String, score: Score)]
             if target == "samples" {
@@ -129,7 +142,7 @@
             for (name, score) in subjects {
                 let row = try compare(
                     name: name, score: score, width: width, threshold: threshold, nudge: nudge, outDir: outDir,
-                    exports: exports, boxes: boxes,
+                    exports: exports, boxes: boxes, scale: scale, staffSize: staffSize, strokeSet: strokeSet,
                 )
                 rows.append(row)
                 print(row.line)
@@ -161,18 +174,20 @@
             name: String, score: Score, width: CGFloat?, threshold: UInt8, nudge: CGPoint, outDir: URL,
             exports: Bool = false,
             boxes: Bool = false,
+            scale: CGFloat = 2,
+            staffSize: CGFloat = 28,
+            strokeSet: Bool = false,
         ) throws -> Row {
             // `includeTitleFrame` follows `boxes`, which is off by default: the draw program draws the title block
             // and the boxes whenever they are laid out, so the Apple side draws them exactly when they are
             // (`renderDocumentImage(drawsBoxes:)`) and the two never disagree on something that is not a renderer
             // difference. Without `boxes` the probe is about the systems alone, as it always was.
             let options = ScoreViewOptions(
-                staffSize: 28, systemGap: 40, wrapToViewWidth: width != nil, includeTitleFrame: boxes,
+                staffSize: staffSize, systemGap: 40, wrapToViewWidth: width != nil, includeTitleFrame: boxes,
             )
             let available = width ?? LayoutEngine.naturalContentWidth(score: score, options: options)
             let document = LayoutEngine.layout(score: score, options: options, availableWidth: available)
 
-            let scale: CGFloat = 2
             let padding: CGFloat = 16
             let apple = try renderDocumentImage(document, scale: scale, padding: padding, drawsBoxes: boxes)
 
@@ -206,6 +221,23 @@
                     page, name: name, outDir: outDir,
                     widthPx: apple.width, heightPx: apple.height, pxPerMM: scale / ptToMM, offsetPx: offset,
                 )
+            }
+
+            if strokeSet {
+                let floor = try DrawProgramCGRenderer.render(
+                    page.commands, widthPx: apple.width, heightPx: apple.height, pxPerMM: scale / ptToMM,
+                    offsetPx: offset, strokes: .floor,
+                )
+                try writePNG(floor, to: outDir.appendingPathComponent("\(name)-drawprogram-floor.png"))
+                let museScoreCommands = museScoreLineWidths(page.commands, spMM: Double(staffSize) / 4 * ptToMM)
+                let swapped = zip(page.commands, museScoreCommands).count { $0.0 != $0.1 }
+                let strokes = page.commands.count { if case .stroke = $0 { true } else { false } }
+                print("  \(name): \(swapped) of \(strokes) strokes at MuseScore's widths")
+                let museScore = try DrawProgramCGRenderer.render(
+                    museScoreCommands, widthPx: apple.width, heightPx: apple.height,
+                    pxPerMM: scale / ptToMM, offsetPx: offset,
+                )
+                try writePNG(museScore, to: outDir.appendingPathComponent("\(name)-drawprogram-mswidths.png"))
             }
 
             let result = try BitmapDiff.compare(apple, program, threshold: threshold)

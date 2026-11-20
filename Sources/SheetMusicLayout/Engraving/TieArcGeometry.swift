@@ -80,4 +80,57 @@ public enum TieArcGeometry {
         )
         return ControlPoints(p0: startPt, p1: p1, p2: p2, p3: endPt)
     }
+
+    // MARK: - The crescent a tie is filled as
+
+    /// How far the crescent's two curves' control points stand off the centre line, in staff-spaces: zero width at the
+    /// tips, `0.75 × 2 × 0.15 = 0.225 sp` thick at the shoulder — MuseScore's `tieMidWidth` (0.21 sp) give or take.
+    public static let midThicknessSp: CGFloat = 0.15
+
+    /// A tie as a closed, filled shape: two cubic curves sharing their ends, as MuseScore's
+    /// `SlurTieLayout::computeBezier` makes it. Every renderer fills this one shape — the Apple `TieRenderer` and
+    /// `ScoreLayerBuilder.drawTieArc`, and the draw program (`LayoutBridge.encodeTieArc`) the Android, web and
+    /// Windows renderers draw — so a tie is the same crescent everywhere.
+    public struct Crescent: Equatable, Sendable {
+        /// Where both curves start and end: the tie's two tips.
+        public let start: CGPoint
+        public let end: CGPoint
+        /// The outer curve's control points (further from the notes), drawn from `start` to `end`.
+        public let outer1: CGPoint
+        public let outer2: CGPoint
+        /// The inner curve's control points (closer to the notes), drawn from `end` back to `start`.
+        public let inner1: CGPoint
+        public let inner2: CGPoint
+
+        public init(
+            start: CGPoint, end: CGPoint, outer1: CGPoint, outer2: CGPoint, inner1: CGPoint, inner2: CGPoint,
+        ) {
+            self.start = start
+            self.end = end
+            self.outer1 = outer1
+            self.outer2 = outer2
+            self.inner1 = inner1
+            self.inner2 = inner2
+        }
+    }
+
+    /// The crescent of a tie from `from` to `to` (notehead anchors) on the `above` side, `sp` points to the staff
+    /// space: `controlPoints` at `shoulderHeightSp` for the tie's length, each control point moved `midThicknessSp`
+    /// away from the notes for the outer curve and towards them for the inner one.
+    public static func crescent(from: CGPoint, to: CGPoint, above: Bool, sp: CGFloat) -> Crescent {
+        let points = controlPoints(
+            from: from, to: to, above: above,
+            heightSp: shoulderHeightSp(tieLengthSp: abs(to.x - from.x) / max(sp, .leastNonzeroMagnitude)),
+            sp: sp,
+        )
+        let vertSign: CGFloat = above ? -1 : 1
+        let thickDy = sp * midThicknessSp * vertSign * -1
+        return Crescent(
+            start: points.p0, end: points.p3,
+            outer1: CGPoint(x: points.p1.x, y: points.p1.y - thickDy),
+            outer2: CGPoint(x: points.p2.x, y: points.p2.y - thickDy),
+            inner1: CGPoint(x: points.p2.x, y: points.p2.y + thickDy),
+            inner2: CGPoint(x: points.p1.x, y: points.p1.y + thickDy),
+        )
+    }
 }

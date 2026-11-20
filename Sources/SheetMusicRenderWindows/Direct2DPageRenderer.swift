@@ -5,9 +5,10 @@ import SheetMusicBridgeCore
 /// and how the parity probe compares the Windows renderer with the Mac's pixel for pixel. The walk itself is
 /// `DrawCommandWalker`, the one `ScoreSurface` draws the screen with.
 public enum Direct2DPageRenderer {
-    /// The Kotlin renderer's `coerceAtLeast(1.5f)`, `canvas.ts`'s `MIN_STROKE_PX`, `DrawProgramCGRenderer.minStrokePx`.
-    /// Below ~3.75 px/mm the walk floors strokes thinner than this (`DrawCommandWalker.strokeFloorPx(pxPerMM:)`).
-    public static let minStrokePx = DrawCommandWalker.minStrokePx
+    /// The floor the walk once raised every stroke to — the Kotlin renderer's `coerceAtLeast(1.5f)`, `canvas.ts`'s
+    /// `MIN_STROKE_PX`. The walk keeps none now: a stroke is drawn at its own width (`StrokeRaster`).
+    @available(*, deprecated, message: "The Windows walk has no stroke floor; strokes draw as StrokeRaster.pen says")
+    public static let minStrokePx = 1.5
 
     public struct Failure: Error, CustomStringConvertible {
         public let step: String

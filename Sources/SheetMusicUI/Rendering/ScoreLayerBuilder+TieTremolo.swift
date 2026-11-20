@@ -18,31 +18,11 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let points = TieArcGeometry.controlPoints(
-            from: from, to: to, above: above,
-            heightSp: TieArcGeometry.shoulderHeightSp(tieLengthSp: abs(to.x - from.x) / metrics.sp),
-            sp: metrics.sp,
-        )
-        let startPt = points.p0
-        let endPt = points.p3
-        let ctrl1 = points.p1
-        let ctrl2 = points.p2
-        let vertSign: CGFloat = above ? -1 : 1
-        let midThickness = metrics.sp * 0.15
-        let thickDy = midThickness * vertSign * -1
-
+        let crescent = TieArcGeometry.crescent(from: from, to: to, above: above, sp: metrics.sp)
         let path = CGMutablePath()
-        path.move(to: startPt)
-        path.addCurve(
-            to: endPt,
-            control1: CGPoint(x: ctrl1.x, y: ctrl1.y - thickDy),
-            control2: CGPoint(x: ctrl2.x, y: ctrl2.y - thickDy),
-        )
-        path.addCurve(
-            to: startPt,
-            control1: CGPoint(x: ctrl2.x, y: ctrl2.y + thickDy),
-            control2: CGPoint(x: ctrl1.x, y: ctrl1.y + thickDy),
-        )
+        path.move(to: crescent.start)
+        path.addCurve(to: crescent.end, control1: crescent.outer1, control2: crescent.outer2)
+        path.addCurve(to: crescent.start, control1: crescent.inner1, control2: crescent.inner2)
         path.closeSubpath()
         parent.addSublayer(fillLayer(
             path: path, height: height,

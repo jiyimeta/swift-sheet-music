@@ -324,13 +324,13 @@ extension LayoutBridge {
         }
     }
 
-    // MARK: - Tie arc (tessellated)
+    // MARK: - Tie arc
 
-    // Emit a tie's cubic Bezier directly via the wire format
-    // `.cubicTo` opcode. Compose's native Path.cubicTo renders the
-    // curve with proper anti-aliasing — a polyline tessellation of
-    // the same curve washes out at the staff-line stroke thickness.
-    // Geometry shared with Apple via `TieArcGeometry`.
+    // A tie as the filled crescent the Apple renderer draws (`TieArcGeometry.crescent`, MuseScore's shape): two
+    // `.cubicTo` curves sharing their ends, then `fillPath` — zero width at the tips, ~0.225 sp at the shoulder. It was
+    // one curve stroked at a constant 0.13 sp, which every other renderer drew as an even arc with blunt ends (folino
+    // owner's QA, 2026-11-20). The cubics go over the wire as they are: a polyline tessellation of the same curve
+    // washes out at that thickness.
     // swiftlint:disable:next function_parameter_count
     static func encodeTieArc(
         fromX: Double, fromY: Double,
@@ -339,33 +339,25 @@ extension LayoutBridge {
         sp: Double,
         into out: inout [DrawCommand],
     ) {
-        // Shoulder height scales with sqrt(tie length) via the shared
-        // `TieArcGeometry.shoulderHeightSp`, so Android matches Apple's
-        // TieRenderer (long ties flatten, short ties stay ~0.3 sp)
-        // instead of the old fixed 1 sp.
-        let tieLengthSp = abs(toX - fromX) / max(sp, .leastNonzeroMagnitude)
-        let pts = TieArcGeometry.controlPoints(
+        let crescent = TieArcGeometry.crescent(
             from: CGPoint(x: CGFloat(fromX), y: CGFloat(fromY)),
             to: CGPoint(x: CGFloat(toX), y: CGFloat(toY)),
             above: above,
-            heightSp: TieArcGeometry.shoulderHeightSp(
-                tieLengthSp: CGFloat(tieLengthSp),
-            ),
             sp: CGFloat(sp),
         )
-        out.append(.moveTo(
-            x: Double(pts.p0.x) * ptToMMScale,
-            y: Double(pts.p0.y) * ptToMMScale,
-        ))
-        out.append(.cubicTo(
-            cx1: Double(pts.p1.x) * ptToMMScale,
-            cy1: Double(pts.p1.y) * ptToMMScale,
-            cx2: Double(pts.p2.x) * ptToMMScale,
-            cy2: Double(pts.p2.y) * ptToMMScale,
-            x: Double(pts.p3.x) * ptToMMScale,
-            y: Double(pts.p3.y) * ptToMMScale,
-        ))
-        out.append(.stroke(width: sp * 0.13 * ptToMMScale))
+        func mm(_ point: CGPoint) -> (x: Double, y: Double) {
+            (Double(point.x) * ptToMMScale, Double(point.y) * ptToMMScale)
+        }
+        let start = mm(crescent.start)
+        let end = mm(crescent.end)
+        let outer1 = mm(crescent.outer1)
+        let outer2 = mm(crescent.outer2)
+        let inner1 = mm(crescent.inner1)
+        let inner2 = mm(crescent.inner2)
+        out.append(.moveTo(x: start.x, y: start.y))
+        out.append(.cubicTo(cx1: outer1.x, cy1: outer1.y, cx2: outer2.x, cy2: outer2.y, x: end.x, y: end.y))
+        out.append(.cubicTo(cx1: inner1.x, cy1: inner1.y, cx2: inner2.x, cy2: inner2.y, x: start.x, y: start.y))
+        out.append(.fillPath)
     }
 
     // MARK: - Tuplet bracket

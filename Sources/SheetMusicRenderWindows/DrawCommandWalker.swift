@@ -8,8 +8,9 @@ import SheetMusicBridgeCore
 /// band, and a whole page into one for the probe's untiled reference).
 ///
 /// Like that walk, and like `canvas.ts` and the Kotlin `ScoreCanvas` it was ported from, it takes commands in
-/// document millimetres, multiplies them by `pxPerMM`, clamps strokes to a floor, and fills glyphs and text as
-/// outlines. Direct2D is Y-down like the stream, so unlike the CoreGraphics walk nothing is flipped. SMuFL glyphs come
+/// document millimetres, multiplies them by `pxPerMM`, and fills glyphs and text as outlines. A stroke is drawn as
+/// MuseScore's Qt draws it (`StrokeRaster`): at its own width, or one pixel wide at its width's opacity when thinner —
+/// no floor. Direct2D is Y-down like the stream, so unlike the CoreGraphics walk nothing is flipped. SMuFL glyphs come
 /// from Bravura, the system face from Segoe UI (the face `WindowsFontMetricsProvider` measured it in) and everything
 /// else from Edwin, with the weight (bold over semibold over regular) and italic taken from the family's own faces and
 /// never synthesized, which is what CoreText's symbolic traits do on the Mac.
@@ -17,25 +18,14 @@ import SheetMusicBridgeCore
 /// A walker starts in the draw program's default state (black, solid, no rotation, no text style), which is also the
 /// state at every `SystemSpan` boundary.
 struct DrawCommandWalker {
-    /// The Kotlin renderer's `coerceAtLeast(1.5f)`, `canvas.ts`'s `MIN_STROKE_PX`, `DrawProgramCGRenderer.minStrokePx`.
-    static let minStrokePx = 1.5
-    /// The floor in document millimetres once zoomed out: a quarter of a 1.75 mm staff space, give or take. A fixed
-    /// 1.5 px floor is wider than that below ~3.75 px/mm, and at zoom 25% on a 100% display (~0.95 px/mm) the staff's
-    /// five lines, ~1.65 px apart, merge into a gray band. Above that the 1.5 px floor holds as before.
-    static let minStrokeMM = 0.4
-
-    /// The thinnest stroke drawn at `pxPerMM`: `minStrokePx`, or `minStrokeMM` when that is thinner.
-    static func strokeFloorPx(pxPerMM: Double) -> Double {
-        min(minStrokePx, minStrokeMM * pxPerMM)
-    }
-
     let canvas: OpaquePointer
     let pxPerMM: Double
     let offset: (x: Double, y: Double)
     /// Canvas pixels outside which a fill cannot show (a band's own rectangle): glyphs, text and rectangles that
     /// certainly miss it are skipped. Paths are always walked — a path's extent is only known at its stroke.
     let cull: DrawRect?
-    private let strokeFloor: Float
+    /// The draw program's current colour, which a thin stroke's pen dims for itself alone.
+    private var argb: UInt32 = 0xFF00_0000
     private var dashOn: Float = 0
     private var dashOff: Float = 0
     private var textStyleFlags: UInt8 = DrawCommand.TextStyleFlag.none
@@ -46,8 +36,7 @@ struct DrawCommandWalker {
         self.pxPerMM = pxPerMM
         self.offset = offset
         self.cull = cull
-        strokeFloor = Float(Self.strokeFloorPx(pxPerMM: pxPerMM))
-        cd2d_set_color(canvas, 0xFF00_0000)
+        cd2d_set_color(canvas, argb)
         setRotation(radians: 0, pivotX: 0, pivotY: 0)
     }
 
@@ -67,7 +56,7 @@ struct DrawCommandWalker {
         case let .cubicTo(cx1, cy1, cx2, cy2, x, y):
             cd2d_cubic_to(canvas, px(cx1), px(cy1), px(cx2), px(cy2), px(x), px(y))
         case let .stroke(width):
-            cd2d_stroke(canvas, max(px(width), strokeFloor), dashOn, dashOff)
+            stroke(StrokeRaster.pen(widthMM: width, pxPerMM: pxPerMM))
         case .fillPath:
             // Closed, nonzero, in the current color; the dash does not apply.
             cd2d_fill_path(canvas)
@@ -81,7 +70,8 @@ struct DrawCommandWalker {
             fillText(text, x: x, y: y, size: size, fontId: fontId)
         case let .setTextStyle(flags):
             textStyleFlags = flags
-        case let .setColor(argb):
+        case let .setColor(newARGB):
+            argb = newARGB
             cd2d_set_color(canvas, argb)
         case let .stretchedGlyph(codepoint, rightEdgeX, topY, bottomY, fontSize, xScale, fontId):
             withWide(family(fontId)) { family in
@@ -110,6 +100,7 @@ struct DrawCommandWalker {
     /// three points has no area and is skipped; with none left nothing is drawn.
     mutating func fill(figures: [[PagePointMM]], argb: UInt32) {
         guard figures.contains(where: { $0.count >= 3 }) else { return }
+        self.argb = argb
         cd2d_set_color(canvas, argb)
         for figure in figures where figure.count >= 3 {
             cd2d_move_to(canvas, px(figure[0].x), px(figure[0].y))
@@ -123,12 +114,21 @@ struct DrawCommandWalker {
     /// Fills a shape `OverlayShapeCache` built once from `fillPath` figures — the per-frame path for ink, where
     /// `fill(figures:argb:)` would build every outline again every frame.
     mutating func fill(shape: OpaquePointer, argb: UInt32) {
+        self.argb = argb
         cd2d_set_color(canvas, argb)
         cd2d_fill_shape(canvas, shape, Float(pxPerMM))
     }
 
     private func px(_ mm: Double) -> Float {
         Float(mm * pxPerMM)
+    }
+
+    /// The open path stroked with `pen`: its width, and the colour dimmed by its opacity for this stroke alone.
+    private func stroke(_ pen: StrokeRaster.Pen) {
+        let dimmed = StrokeRaster.color(argb, opacity: pen.opacity)
+        if dimmed != argb { cd2d_set_color(canvas, dimmed) }
+        cd2d_stroke(canvas, Float(pen.widthPx), dashOn, dashOff)
+        if dimmed != argb { cd2d_set_color(canvas, argb) }
     }
 
     /// DirectWrite's weight for the style flags: bold (700) over semibold (600) over regular (400).
