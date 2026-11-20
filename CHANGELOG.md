@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A scanned PDF page whose staff spacing the OMR misread no longer crashes the import.** `OMRPrepNormalize` scaled
+  the page by `target / spacing`, so a misread spacing of a pixel or less asked for a page dozens to thousands of
+  times the original's area: allocating it (1–5 GB) trapped (folino 2.4.1–2.5.0, Crashlytics `8e17057a`), and a scale
+  large enough to be infinite trapped converting the size to `Int`. A normalized page is now sized in `Double` and
+  refused past `OMRPrepNormalize.maximumPixelCount` (64 MP; a real 300 dpi page is about 9 MP) before anything is
+  allocated, so the detector reads nothing from that page and reports that it could not normalize its spacing.
+
 ## [4.45.0] - 2026-11-20
 
 ### Added

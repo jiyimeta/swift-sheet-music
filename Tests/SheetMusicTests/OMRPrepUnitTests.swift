@@ -102,6 +102,36 @@
             ) == nil)
         }
 
+        /// A misread spacing of a fraction of a pixel asks for a page thousands of times the original's area. Before
+        /// the pixel budget that allocated 1–5 GB and trapped (folino 2.4.1–2.5.0, Crashlytics 8e17057a); now the page
+        /// is refused before anything is allocated.
+        @Test func aSpacingThatWouldBlowThePageUpPastTheBudgetIsRefused() {
+            let page = RasterTestBitmaps.blank(widthPx: 1000, heightPx: 1000, dpi: 300)
+            #expect(OMRPrepNormalize.normalize(
+                page, staffSpacingPx: 0.1, targetStaffSpacePx: 12,
+            ) == nil)
+        }
+
+        @Test func aSpacingSoSmallTheScaleIsInfiniteIsRefused() {
+            let page = RasterTestBitmaps.blank(widthPx: 40, heightPx: 40, dpi: 300)
+            #expect(OMRPrepNormalize.normalize(
+                page, staffSpacingPx: .leastNonzeroMagnitude, targetStaffSpacePx: 12,
+            ) == nil)
+        }
+
+        /// The budget is for misreads, not for low-resolution scans: a coarse page whose staff space is half the
+        /// model's is still scaled up.
+        @Test func aCoarseScanIsStillScaledUp() throws {
+            let page = RasterTestBitmaps.staff(
+                widthPx: 600, heightPx: 800, dpi: 72, topY: 100, spacingPx: 6,
+            )
+            let out = try #require(OMRPrepNormalize.normalize(
+                page, staffSpacingPx: 6, targetStaffSpacePx: 12,
+            ))
+            #expect(out.bitmap.width == 1200)
+            #expect(out.bitmap.height == 1600)
+        }
+
         private func rowInk(_ bitmap: GrayBitmap, _ y: Int) -> Int {
             (0 ..< bitmap.width).reduce(0) { $0 + Int(bitmap[$1, y]) }
         }
