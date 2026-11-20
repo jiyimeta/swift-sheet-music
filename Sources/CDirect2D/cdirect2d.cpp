@@ -855,6 +855,27 @@ extern "C" int32_t cd2d_draw_picture(
     return S_OK;
 }
 
+extern "C" int32_t cd2d_draw_picture_at(
+    cd2d_canvas *canvas, cd2d_picture *picture, int32_t x, int32_t y, float opacity) {
+    if (!canvas->bitmap) return E_NOTIMPL;
+    if (!canvas->drawing) return E_ILLEGAL_METHOD_CALL;
+    if (!picture) return E_INVALIDARG;
+    if (picture->target.Get() != canvas->target.Get()) return D2DERR_WRONG_RESOURCE_DOMAIN;
+    // Whole pixels at the bitmap's own size: nearest neighbor then reads each source pixel for exactly one canvas
+    // pixel, where linear filtering would blend a page picture a fraction of a pixel off its clip on every frame.
+    const D2D1_SIZE_U size = picture->bitmap->GetPixelSize();
+    const float left = static_cast<float>(x);
+    const float top = static_cast<float>(y);
+    canvas->target->SetTransform(D2D1::Matrix3x2F::Identity());
+    const float clamped = opacity < 0 ? 0 : (opacity > 1 ? 1 : opacity);
+    canvas->target->DrawBitmap(
+        picture->bitmap.Get(),
+        D2D1::RectF(left, top, left + static_cast<float>(size.width), top + static_cast<float>(size.height)), clamped,
+        D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
+    canvas->target->SetTransform(canvas->transform);
+    return S_OK;
+}
+
 extern "C" void cd2d_picture_release(cd2d_picture *picture) {
     delete picture;
 }

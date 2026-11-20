@@ -213,6 +213,20 @@ public final class Direct2DFrameCanvas {
         }
     }
 
+    /// `picture` at its own size, its top-left corner on the canvas pixel (`x`, `y`), at `opacity` (0...1): each of its
+    /// pixels on one canvas pixel, nothing resampled — for a picture made at the size it is shown at, such as a score
+    /// video's page, which `draw(_:in:opacity:)` would filter across the whole frame for a clip a fraction of a pixel
+    /// off. Throws, drawing nothing, for a picture another canvas made.
+    public func draw(_ picture: Picture, atX x: Int, y: Int, opacity: Double) throws {
+        guard let left = Int32(exactly: x), let top = Int32(exactly: y) else {
+            let invalidArgument = Int32(bitPattern: 0x8007_0057) // E_INVALIDARG
+            throw Direct2DPageRenderer.Failure(step: "drawing a kept picture at (\(x), \(y))", hresult: invalidArgument)
+        }
+        try Direct2DPageRenderer.check(
+            cd2d_draw_picture_at(canvas, picture.picture, left, top, Float(opacity)), "drawing a kept picture 1:1",
+        )
+    }
+
     /// The frame's pixels — BGRA premultiplied, top-down, `widthPx * 4` bytes a row — into `pixels`, which holds at
     /// least `widthPx * heightPx * 4` bytes. Ends the frame; the next `clear(argb:)` starts another.
     public func copyPixels(into pixels: UnsafeMutableRawBufferPointer) throws {

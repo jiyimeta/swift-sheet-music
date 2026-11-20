@@ -252,6 +252,10 @@ int32_t cd2d_picture_create(
 /// WIC canvas it was made for, mid-frame. D2DERR_WRONG_RESOURCE_DOMAIN, drawing nothing, for another canvas's picture.
 int32_t cd2d_draw_picture(
     cd2d_canvas *canvas, cd2d_picture *picture, float x, float y, float rect_width, float rect_height, float opacity);
+/// `picture` at its own size with its top-left corner on the canvas pixel (`x`, `y`), at `opacity` (0...1): each of its
+/// pixels lands on one canvas pixel, unfiltered (nearest neighbor at 1:1), so nothing is resampled. Otherwise as
+/// `cd2d_draw_picture`, refusals included.
+int32_t cd2d_draw_picture_at(cd2d_canvas *canvas, cd2d_picture *picture, int32_t x, int32_t y, float opacity);
 void cd2d_picture_release(cd2d_picture *picture);
 
 // MARK: Measurement only (branch s1-draw-measure, never released)
