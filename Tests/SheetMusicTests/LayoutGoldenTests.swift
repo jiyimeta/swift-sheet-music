@@ -411,8 +411,16 @@
         /// height move; nothing else did. The `guitarbend_*` fixtures carry their modes on graces, which are not
         /// grouped, and did not move. Rendered `tie_cross_voice_split184061` and read it against MuseScore 4.7's own
         /// render: the dotted eighth and the sixteenth stand flagged, as there.
+        ///
+        /// **Re-recorded 2026-11-21 when the ledger line took MuseScore's `ledgerLineWidth` (0.16 sp, was 0.195), after
+        /// checking the diff mechanically** against origin/main `a42edfae` (`f539778f…`, which matched the hash here on
+        /// the Mac that recorded this; another Mac wrote `c0bd5460…` for the same main, so compare main with main
+        /// before reading a digest across machines). 114 lines in 30 blocks changed, every one a `ledgerLine`'s
+        /// `thickness:` (1.365 → 1.12 at sp 7, the grace and cue lines in proportion); line counts are equal (4285) and
+        /// no coordinate moved. The staff line, stem, slur and lyric-line widths of the same change are not in this
+        /// digest.
         private static let expectedDigestSHA256 =
-            "f539778f1585c69e17ce2f937354bf4bb39ebffde14749fea977b1f9eb59e730"
+            "32bf39cea9468329aaec7d1447ff8b8e6298d08ff336bc87afa332b3bf8b1d83"
 
         @Test("write digest")
         func writeDigest() throws {
