@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.45.1] - 2026-11-20
+
 ### Fixed
 
 - **`SheetMusicEngine.version` reads the release again.** It stayed "4.14.1" from 4.14.2 through 4.45.0 — release
