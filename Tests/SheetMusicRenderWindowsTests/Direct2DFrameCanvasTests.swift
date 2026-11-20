@@ -257,9 +257,43 @@ struct Direct2DFrameCanvasTests {
         #expect(throws: Direct2DPageRenderer.Failure.self) {
             try canvas.draw(picture, in: (x: 60, y: 60, width: 40, height: 40), opacity: 1)
         }
+        #expect(throws: Direct2DPageRenderer.Failure.self) {
+            try canvas.draw(picture, atX: 80, y: 80, opacity: 1)
+        }
         let pixels = try canvas.pixels()
         #expect(Self.isDark(Self.pixel(pixels, x: 20, y: 20)), "the frame lost what it drew before the refusal")
         #expect(Self.pixel(pixels, x: 80, y: 80) == Self.white, "the refused picture was drawn")
+    }
+
+    /// An opaque 8 x 8 picture with every pixel different: blue across, green down.
+    private static let opaqueRamp: [UInt8] = (0 ..< 8 * 8).flatMap { index -> [UInt8] in
+        [UInt8(index % 8 * 32), UInt8(index / 8 * 32), 128, 255]
+    }
+
+    /// Drawn 1:1, a picture is its own pixels on the canvas — each one where it belongs, none blended with a
+    /// neighbor or bled past the picture's edge.
+    @Test
+    func `a picture drawn 1:1 lands pixel for pixel`() throws {
+        let canvas = try Direct2DFrameCanvas(widthPx: Self.sizePx, heightPx: Self.sizePx, fontFiles: [])
+        let picture = try Self.opaqueRamp.withUnsafeBytes {
+            try canvas.makePicture(pixels: $0, widthPx: 8, heightPx: 8)
+        }
+        try canvas.clear(argb: 0xFFFF_FFFF)
+        try canvas.draw(picture, atX: 30, y: 20, opacity: 1)
+        let pixels = try canvas.pixels()
+        for y in 0 ..< 8 {
+            for x in 0 ..< 8 {
+                let index = (y * 8 + x) * 4
+                #expect(
+                    Self.pixel(pixels, x: 30 + x, y: 20 + y) == Array(Self.opaqueRamp[index ..< index + 4]),
+                    "picture pixel (\(x), \(y))",
+                )
+            }
+        }
+        #expect(Self.pixel(pixels, x: 29, y: 20) == Self.white, "bled left")
+        #expect(Self.pixel(pixels, x: 38, y: 27) == Self.white, "bled right")
+        #expect(Self.pixel(pixels, x: 30, y: 19) == Self.white, "bled up")
+        #expect(Self.pixel(pixels, x: 37, y: 28) == Self.white, "bled down")
     }
 
     @Test

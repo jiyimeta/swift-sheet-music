@@ -7,6 +7,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`Direct2DFrameCanvas.draw(_:atX:y:opacity:)` (Windows)**: a kept picture at its own size on whole canvas pixels,
+  unfiltered, so each of its pixels lands on one canvas pixel. A score video's page made at the size it is shown at
+  then costs a copy per frame, where `draw(_:in:opacity:)` filters the whole page across a clip a fraction of a pixel
+  off. In C: `cd2d_draw_picture_at`.
+
 ## [4.45.0] - 2026-11-20
 
 ### Added
