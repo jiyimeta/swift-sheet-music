@@ -36,11 +36,9 @@
     ///                          0.333 is zoom 25% at 100% (96 dpi), 2 is zoom 100% at 150%
     ///   SM_PARITY_STAFF_SIZE — the staff's height in points (default 28). A score's own size is four of its spatium:
     ///                          19.84 for MuseScore's default 1.75 mm, which its own renders are drawn at
-    ///   SM_PARITY_STROKE_SET — `1` also writes the walk two other ways from the same layout, for comparing how strokes
-    ///                          are widened: `<name>-drawprogram-floor.png`, every stroke raised to 1.5 px at full
-    ///                          opacity (the Kotlin `ScoreCanvas` and `canvas.ts`, and the Windows walk before
-    ///                          `StrokeRaster`), and `<name>-drawprogram-mswidths.png`, the pen with staff lines,
-    ///                          ledger lines and stems at MuseScore's default widths (`museScoreLineWidths`)
+    ///   SM_PARITY_STROKE_SET — `1` also writes the walk with every stroke raised to 1.5 px at full opacity, from the
+    ///                          same layout: `<name>-drawprogram-floor.png`, what the Kotlin `ScoreCanvas` and
+    ///                          `canvas.ts` still draw, and the Windows walk drew before `StrokeRaster`
     ///   SM_PARITY_THRESHOLD  — per-pixel max-channel difference that counts as "differing", 0–255 (default 48)
     ///   SM_PARITY_SHIFT      — whole-pixel nudge "dx,dy" applied to the draw-program render (default 0,0)
     ///   SM_PARITY_ONLY       — with `samples`, run just the catalog entry with this name
@@ -229,15 +227,6 @@
                     offsetPx: offset, strokes: .floor,
                 )
                 try writePNG(floor, to: outDir.appendingPathComponent("\(name)-drawprogram-floor.png"))
-                let museScoreCommands = museScoreLineWidths(page.commands, spMM: Double(staffSize) / 4 * ptToMM)
-                let swapped = zip(page.commands, museScoreCommands).count { $0.0 != $0.1 }
-                let strokes = page.commands.count { if case .stroke = $0 { true } else { false } }
-                print("  \(name): \(swapped) of \(strokes) strokes at MuseScore's widths")
-                let museScore = try DrawProgramCGRenderer.render(
-                    museScoreCommands, widthPx: apple.width, heightPx: apple.height,
-                    pxPerMM: scale / ptToMM, offsetPx: offset,
-                )
-                try writePNG(museScore, to: outDir.appendingPathComponent("\(name)-drawprogram-mswidths.png"))
             }
 
             let result = try BitmapDiff.compare(apple, program, threshold: threshold)

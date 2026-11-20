@@ -28,14 +28,29 @@ public struct StaffMetrics: Sendable, Equatable {
         self.spacing = spacing
     }
 
-    /// Thickness of a staff line. Engraving: typically 0.13 sp.
+    /// Thickness of a staff line: MuseScore's `staffLineWidth`, 0.11 sp (`styledef.cpp:286`). It was 0.13 sp until
+    /// 2026-11-21, which drew every staff a fifth heavier than MuseScore's (folino owner's call).
     public var staffLineThickness: CGFloat {
-        sp * 0.13
+        sp * 0.11
     }
 
-    /// Thickness of a stem. Engraving: typically 0.12 sp.
+    /// Thickness of a stem: MuseScore's `stemWidth`, 0.10 sp (`styledef.cpp:266`), scaled by a grace or cue
+    /// chord's magnification where it is drawn, as MuseScore scales it. It was 0.12 sp until 2026-11-21.
     public var stemThickness: CGFloat {
-        sp * 0.12
+        sp * 0.10
+    }
+
+    /// Thickness of a ledger line: MuseScore's `ledgerLineWidth`, 0.16 sp (`styledef.cpp:287`). It was 1.5 times the
+    /// staff line (0.195 sp) until 2026-11-21.
+    public var ledgerLineThickness: CGFloat {
+        sp * 0.16
+    }
+
+    /// Thickness of a lyric's melisma line and of a lyric hyphen: MuseScore's `lyricsLineThickness` and
+    /// `lyricsDashLineThickness`, both 0.1 sp (`styledef.cpp:122`, `:127`). Every renderer reads it here; until
+    /// 2026-11-21 the draw program drew both 0.13 sp while Apple drew 0.1.
+    public var lyricsLineThickness: CGFloat {
+        sp * 0.1
     }
 
     /// Typical stem length for isolated notes: 3.5 sp.

@@ -317,7 +317,10 @@
         /// Re-recorded 2026-10-18 when a justified system began sharing its leftover room by one stretch across every
         /// measure (`justifiedWidths`) instead of scaling each by one ratio: the first bar no longer takes a share for
         /// its clef, so the three whole notes move. The encoder is unchanged.
-        private static let textFreeProgramSHA256 = "234410354a01179dfa063ea79b456588b5436e96071e3c38636086c33fbe8fde"
+        ///
+        /// Re-recorded 2026-11-21 when the staff line took MuseScore's `staffLineWidth` (0.11 sp, was 0.13): the score
+        /// has no stem, tie or slur, so its staff lines' stroke width is all that moved.
+        private static let textFreeProgramSHA256 = "800299fd0589605df0dfcd912bc46107060f36cd44e262fa5a1c7a165ee58433"
 
         /// Three whole-note bars on one staff: no title, no lyrics, no staff text, no instrument name — nothing whose
         /// position depends on a system font's measurement, so the hash pins the encoder and not the machine's fonts.

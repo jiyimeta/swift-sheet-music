@@ -156,16 +156,15 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let control = SpannerGeometry.slurControlPoint(
-            from: from, to: to, sp: metrics.sp,
-        )
+        // MuseScore's filled crescent (`SpannerGeometry.slurCrescent`), the shape every renderer fills.
+        let crescent = SpannerGeometry.slurCrescent(from: from, to: to, sp: metrics.sp)
         let p = CGMutablePath()
-        p.move(to: from)
-        p.addQuadCurve(to: to, control: control)
-        parent.addSublayer(strokeLayer(
-            path: p, height: height,
-            lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
-        ))
+        p.move(to: crescent.outerStart)
+        p.addCurve(to: crescent.outerEnd, control1: crescent.outer1, control2: crescent.outer2)
+        p.addLine(to: crescent.innerStart)
+        p.addCurve(to: crescent.innerEnd, control1: crescent.inner1, control2: crescent.inner2)
+        p.closeSubpath()
+        parent.addSublayer(fillLayer(path: p, height: height))
     }
 
     private static func drawVolta(

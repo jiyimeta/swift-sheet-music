@@ -360,6 +360,32 @@ extension LayoutBridge {
         out.append(.fillPath)
     }
 
+    /// A slur as the filled crescent the Apple renderer fills (`SpannerGeometry.slurCrescent`, MuseScore's shape): the
+    /// outer cubic, a line across the far tip, the inner cubic back, then `fillPath`. It was the curve stroked at a
+    /// constant `strokeThicknessSp` until 2026-11-21.
+    static func encodeSlurCrescent(_ crescent: SpannerGeometry.SlurCrescent, into out: inout [DrawCommand]) {
+        func mm(_ point: CGPoint) -> (x: Double, y: Double) {
+            (Double(point.x) * ptToMMScale, Double(point.y) * ptToMMScale)
+        }
+        let outerStart = mm(crescent.outerStart)
+        let outer1 = mm(crescent.outer1)
+        let outer2 = mm(crescent.outer2)
+        let outerEnd = mm(crescent.outerEnd)
+        let innerStart = mm(crescent.innerStart)
+        let inner1 = mm(crescent.inner1)
+        let inner2 = mm(crescent.inner2)
+        let innerEnd = mm(crescent.innerEnd)
+        out.append(.moveTo(x: outerStart.x, y: outerStart.y))
+        out.append(.cubicTo(
+            cx1: outer1.x, cy1: outer1.y, cx2: outer2.x, cy2: outer2.y, x: outerEnd.x, y: outerEnd.y,
+        ))
+        out.append(.lineTo(x: innerStart.x, y: innerStart.y))
+        out.append(.cubicTo(
+            cx1: inner1.x, cy1: inner1.y, cx2: inner2.x, cy2: inner2.y, x: innerEnd.x, y: innerEnd.y,
+        ))
+        out.append(.fillPath)
+    }
+
     // MARK: - Tuplet bracket
 
     // swiftlint:disable:next function_parameter_count
@@ -482,33 +508,7 @@ extension LayoutBridge {
         let line = Double(sp) * Double(SpannerGeometry.lineThicknessSp)
         switch kind {
         case .slur:
-            let control = SpannerGeometry.slurControlPoint(
-                from: from, to: to, sp: CGFloat(sp),
-            )
-            // Convert quad(P0, C, P1) → cubic(P0, C1, C2, P1).
-            //   C1 = (P0 + 2C) / 3
-            //   C2 = (P1 + 2C) / 3
-            let c1 = CGPoint(
-                x: (from.x + 2 * control.x) / 3,
-                y: (from.y + 2 * control.y) / 3,
-            )
-            let c2 = CGPoint(
-                x: (to.x + 2 * control.x) / 3,
-                y: (to.y + 2 * control.y) / 3,
-            )
-            out.append(.moveTo(
-                x: Double(from.x) * ptToMMScale,
-                y: Double(from.y) * ptToMMScale,
-            ))
-            out.append(.cubicTo(
-                cx1: Double(c1.x) * ptToMMScale,
-                cy1: Double(c1.y) * ptToMMScale,
-                cx2: Double(c2.x) * ptToMMScale,
-                cy2: Double(c2.y) * ptToMMScale,
-                x: Double(to.x) * ptToMMScale,
-                y: Double(to.y) * ptToMMScale,
-            ))
-            out.append(.stroke(width: stroke * ptToMMScale))
+            encodeSlurCrescent(SpannerGeometry.slurCrescent(from: from, to: to, sp: CGFloat(sp)), into: &out)
 
         case let .volta(endings):
             let pts = SpannerGeometry.voltaBracketPoints(

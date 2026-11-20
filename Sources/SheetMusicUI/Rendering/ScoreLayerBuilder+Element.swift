@@ -431,10 +431,8 @@ extension ScoreLayerBuilder {
             }
         case let .lyricsMelisma(from, to, _),
              let .lyricHyphen(from, to, _):
-            // Hyphens reuse the melisma rule's stroke (0.1 sp,
-            // matching MuseScore's `lyricsDashLineThickness`); the
-            // layout decides position and length per
-            // `LyricsLayout::layoutDashes`.
+            // Hyphens reuse the melisma rule's stroke (`StaffMetrics.lyricsLineThickness`); the layout decides
+            // position and length per `LyricsLayout::layoutDashes`.
             drawLyricsMelisma(
                 from: shift(from), to: shift(to),
                 metrics: metrics, height: height, into: parent,
@@ -497,13 +495,10 @@ extension ScoreLayerBuilder {
         let path = CGMutablePath()
         path.move(to: from)
         path.addLine(to: to)
-        // MuseScore uses ~0.1 sp for the melisma rule (engraving
-        // default `LYRICS_LINE_WIDTH`). That's a touch thinner than
-        // a staff line — slim enough that the rule doesn't pull
-        // visual weight from the noteheads above.
+        // MuseScore's `lyricsLineThickness` / `lyricsDashLineThickness`, shared with every renderer.
         parent.addSublayer(strokeLayer(
             path: path, height: height,
-            lineWidth: metrics.sp * 0.1,
+            lineWidth: metrics.lyricsLineThickness,
         ))
     }
 }

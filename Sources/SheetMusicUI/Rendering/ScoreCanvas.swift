@@ -434,18 +434,17 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             context.stroke(
                 path,
                 with: .color(.primary),
-                lineWidth: metrics.sp * 0.1,
+                lineWidth: metrics.lyricsLineThickness,
             )
         case let .lyricHyphen(from, to, _):
-            // Same line thickness as the melisma rule; MuseScore's
-            // `lyricsDashLineThickness` default is 0.1 sp.
+            // Same line thickness as the melisma rule (`StaffMetrics.lyricsLineThickness`).
             var path = Path()
             path.move(to: shift(from))
             path.addLine(to: shift(to))
             context.stroke(
                 path,
                 with: .color(.primary),
-                lineWidth: metrics.sp * 0.1,
+                lineWidth: metrics.lyricsLineThickness,
             )
         case let .multiMeasureRest(count, p):
             MultiMeasureRestRenderer.draw(

@@ -309,16 +309,13 @@
                 )
                 let item = ScoreItemID.element(sample.id)
                 let layers = try #require(context.items[item])
-                // Each lens, slur stroke, single-line text path or mark's runs emit exactly one layer.
+                // Each lens, slur crescent, single-line text path or mark's runs emit exactly one layer, filled: a slur
+                // is MuseScore's filled crescent since 2026-11-21, not a stroked curve.
                 try #require(layers.count == 1)
                 #expect(context.items.count == 2)
                 #expect(parent.sublayers?.count == 2)
                 #expect(layers[0] === parent.sublayers?.last)
-                if case .spannerSegment(.slur, _, _, _, _, _, _, _, _) = sample.element {
-                    #expect(layers[0].fillColor == nil && layers[0].strokeColor != nil)
-                } else {
-                    #expect(layers[0].fillColor != nil && layers[0].strokeColor == nil)
-                }
+                #expect(layers[0].fillColor != nil && layers[0].strokeColor == nil)
                 try checkSelection3Tint(items: context.items, item: item, count: 1, neighbors: [neighbor])
             }
 

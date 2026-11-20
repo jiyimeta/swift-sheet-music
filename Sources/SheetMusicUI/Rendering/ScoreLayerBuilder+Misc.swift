@@ -201,7 +201,7 @@ extension ScoreLayerBuilder {
         let hook = metrics.sp * 0.8
         let hookSign: CGFloat = isAbove ? 1 : -1
         let hookDy = hook * hookSign
-        let lineWidth = metrics.sp * 0.12
+        let lineWidth = metrics.sp * TupletBracketGeometry.lineThicknessSp
 
         for endpoint in [from, to] {
             let p = CGMutablePath()

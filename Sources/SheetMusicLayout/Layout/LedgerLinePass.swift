@@ -20,8 +20,6 @@
 public enum LedgerLinePass {
     /// Half-width of a ledger stroke, before mirror extensions.
     private static let halfWidthInSp: CGFloat = 0.9
-    /// Ledger strokes are drawn heavier than staff lines.
-    private static let thicknessFactor: CGFloat = 1.5
 
     /// Ledger strokes for one chord's notes.
     ///
@@ -53,10 +51,11 @@ public enum LedgerLinePass {
         let staffMidY = ref.origin.y + CGFloat(ref.step) * metrics.sp / 2
         let chordX = ref.origin.x
         let halfWidth = metrics.sp * halfWidthInSp
-        let thickness = metrics.staffLineThickness * thicknessFactor
+        // MuseScore's `ledgerLineWidth`, heavier than a staff line; `metrics` already carries the chord's `mag`.
+        let thickness = metrics.ledgerLineThickness
 
-        /// A ledger crossing a mirrored notehead has to reach it, so
-        /// widen that side by the mirror offset.
+        // A ledger crossing a mirrored notehead has to reach it, so
+        // widen that side by the mirror offset.
         func bounds(forLedgerStep ledger: Int) -> (CGFloat, CGFloat) {
             var leftExt: CGFloat = 0
             var rightExt: CGFloat = 0

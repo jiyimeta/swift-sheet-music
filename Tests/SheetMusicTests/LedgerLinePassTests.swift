@@ -69,7 +69,9 @@ struct LedgerLinePassTests {
         #expect(to.y == from.y)
         #expect(from.x == 100 - metrics.sp * 0.9)
         #expect(to.x == 100 + metrics.sp * 0.9)
-        #expect(thickness == metrics.staffLineThickness * 1.5)
+        // MuseScore's `ledgerLineWidth`, 0.16 sp (was 1.5 staff lines, 0.195 sp, until 2026-11-21).
+        #expect(thickness == metrics.ledgerLineThickness)
+        #expect(abs(thickness - metrics.sp * 0.16) < 1e-12)
     }
 
     @Test func oddStepSnapsToTheLineBelowIt() {
