@@ -7,6 +7,48 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.46.0] - 2026-11-21
+
+### Added
+
+- **`StrokeRaster.pen(widthMM:pxPerMM:)` (SheetMusicBridgeCore)**: the pen a draw-program walker strokes with, as Qt's
+  raster engine draws MuseScore's lines — a stroke a device pixel wide or wider at its own width; a thinner one one
+  pixel wide at an opacity of its width (`qpaintengine_raster.cpp` fast pen, `qcosmeticstroker.cpp`), with no snapping
+  to the pixel grid; a zero or invalid width as the device's hairline. `StrokeRaster.color(_:opacity:)` scales a
+  colour's alpha by it.
+- **`TieArcGeometry.crescent(from:to:above:sp:)`** and **`SpannerGeometry.slurCrescent(from:to:sp:)`**: a tie's and a
+  slur's filled shape, computed once for every renderer. The slur's is MuseScore's (`SlurTieLayout::computeBezier`,
+  `computeMidThickness`, `TDraw::draw(SlurSegment)`): 0.05 sp at the tips (`slurEndWidth`), 0.21 sp at the shoulder
+  of a slur 4 sp or longer (`slurMidWidth`), less for a shorter one (`slurMidThicknessSp(lengthSp:)`).
+- **`StaffMetrics.ledgerLineThickness`** (MuseScore's `ledgerLineWidth`, 0.16 sp) and
+  **`StaffMetrics.lyricsLineThickness`** (`lyricsLineThickness` / `lyricsDashLineThickness`, 0.1 sp).
+
+### Changed
+
+- **Lines are drawn at MuseScore's default widths.** A staff line is 0.11 sp (was 0.13), a stem 0.10 sp (was 0.12;
+  a grace or cue stem still scaled by its chord's magnification) and a ledger line 0.16 sp (was 1.5 staff lines,
+  0.195 sp) — `styledef.cpp`'s `staffLineWidth`, `stemWidth` and `ledgerLineWidth`. The line that joins a system's
+  staves at its start is drawn at the staff line's width as before, so it thins with it. Barlines, hairpins, voltas,
+  ottavas and tuplet brackets keep their widths. Layout does not move: the stem's width offsets nothing a layout
+  golden records, and the ledger lines' own thickness is all `LayoutGoldenTests`' digest changed.
+- **A slur is a filled crescent on every platform**, as MuseScore draws it, where every renderer stroked one curve at
+  a constant 0.15 sp. `SpannerRenderer`, `ScoreLayerBuilder`'s slur layer (now a filled layer, not a stroked one) and
+  the draw program (move, cubic, line, cubic, fill) all draw `slurCrescent`. Dotted and dashed slurs are still not
+  modeled.
+- **A tie is one crescent everywhere.** The Apple renderer already filled MuseScore's crescent; the draw program
+  stroked one curve at a constant 0.13 sp, which Android, the web and Windows drew as an even arc. `encodeTieArc` now
+  emits the crescent as two cubics and a fill, from `TieArcGeometry.crescent` (the Apple render is pixel-identical).
+- **A lyric's melisma line and hyphen are 0.1 sp in the draw program**, as Apple has drawn them: the draw program used
+  0.13 sp. All three renderers read `StaffMetrics.lyricsLineThickness`.
+- **Windows strokes with `StrokeRaster.pen`** (`DrawCommandWalker`, dimming the colour for that stroke alone), where it
+  raised every stroke to 1.5 device pixels at full opacity: on a 96 dpi screen a staff line drew about 1.7 times its
+  width at zoom 100% and more the further out it zoomed. Android's `ScoreCanvas` and the web's `canvas.ts` keep their
+  1.5 px floor for now.
+
+### Deprecated
+
+- **`Direct2DPageRenderer.minStrokePx` (Windows)**: nothing reads it since the walker strokes with `StrokeRaster.pen`.
+
 ## [4.45.1] - 2026-11-20
 
 ### Fixed
