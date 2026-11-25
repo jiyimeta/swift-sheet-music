@@ -137,8 +137,8 @@ extension LayoutEngine {
         // Some voice ends the bar with a bar line of its own — shown or hidden — so none is synthesized there.
         var voiceEndsBar = false
         // Elements drawn with a moved chord that name no owner of their own — the beams of a group that moved as a
-        // whole, a moved chord's fingerings and symbols — by index in `out` / `invisibleOut`, with the move; and the
-        // beams across two staves.
+        // whole, a moved chord's fingerings, symbols and ornaments — by index in `out` / `invisibleOut`, with the
+        // move; and the beams across two staves.
         var movedExtraIndices: [Int: Int] = [:]
         var movedInvisibleExtraIndices: [Int: Int] = [:]
         var crossStaffBeams: [CrossStaffBeam] = []
@@ -229,6 +229,9 @@ extension LayoutEngine {
         let columnsOnStaff = hasTrailingGraces(measure)
             ? staffColumns(of: measure, measureDuration: measureDuration, division: division)
             : StaffColumns()
+        // The chords that carry ornaments, in every voice: placed once every voice is laid out and beamed
+        // (`emitOrnaments`).
+        var ornamentHosts: [OrnamentHost] = []
         for (voiceIdx, voice) in measure.voices.enumerated() {
             var tickCursor = 0
             var inHeader = true
@@ -1153,6 +1156,7 @@ extension LayoutEngine {
                     // MuseScore's `Chord::layoutArticulations` — see
                     // `articulationElements(for:…)`. Re-placed after the beam
                     // pass fixes a beamed chord's stem direction.
+                    let articulationStart = out.count
                     out.append(contentsOf: Self.articulationElements(
                         for: chord.articulations,
                         anchor: elementAddress,
@@ -1165,6 +1169,22 @@ extension LayoutEngine {
                         lineGeometry: lineGeometry,
                         metrics: metrics,
                     ))
+                    if !chord.ornaments.isEmpty {
+                        ornamentHosts.append(OrnamentHost(
+                            ornaments: chord.ornaments,
+                            slot: VoiceSlot(voiceIndex: voiceIdx, elementIndex: voiceElemIdx),
+                            columnX: chordX,
+                            element: mainElement,
+                            outIndex: voiceChordOutIndex[voiceElemIdx],
+                            articulations: articulationStart ..< out.count,
+                            hasVoices: FingeringGeometry.hasVoices(
+                                in: measure, chordTick: tickCursor,
+                                chordTicks: chord.duration.resolved(in: measureDuration).ticks(division: division),
+                                division: division, measureDuration: measureDuration,
+                            ),
+                            staffMove: moved?.staffMove,
+                        ))
+                    }
                     // Trailing graces stand before what follows the chord on
                     // the staff — the next column, in any voice, or the
                     // barline — as MuseScore appends them to the next segment
@@ -2217,6 +2237,18 @@ extension LayoutEngine {
                 )
                 guard let label else { continue }
                 if tuplet.appearance.visible { out.append(label) } else { invisibleOut.append(label) }
+            }
+        }
+
+        emitOrnaments(
+            ornamentHosts, movedChords: movedChords, lineGeometry: lineGeometry, metrics: metrics, options: options,
+            out: &out, invisibleOut: &invisibleOut,
+        ) { move, visible, invisible in
+            for index in visible {
+                movedExtraIndices[index] = move
+            }
+            for index in invisible {
+                movedInvisibleExtraIndices[index] = move
             }
         }
 

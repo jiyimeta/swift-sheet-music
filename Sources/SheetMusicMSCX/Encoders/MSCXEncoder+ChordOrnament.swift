@@ -8,7 +8,7 @@ extension ChordOrnament {
     /// Child order follows `TWrite::write(const Ornament*, …)`
     /// (`rw/write/twrite.cpp:815`) and the `Articulation` properties it
     /// delegates to (`:794`): accidentals, then the ornament's own properties,
-    /// then `<subtype>`, `<play>`, and `<ornamentStyle>`. MuseScore's reader
+    /// then `<subtype>`, `<play>`, `<ornamentStyle>` and `<anchor>`. MuseScore's reader
     /// dispatches these by tag name, so the order is cosmetic except for the
     /// shared trailing `<color>` rule documented on
     /// `ElementProperties.mscxTrailingChildren()`.
@@ -47,6 +47,9 @@ extension ChordOrnament {
         }
         if let ornamentStyle {
             children.append(XMLTreeNode(name: "ornamentStyle", text: ornamentStyle.rawValue))
+        }
+        if let anchor {
+            children.append(XMLTreeNode(name: "anchor", text: String(anchor.rawValue)))
         }
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)

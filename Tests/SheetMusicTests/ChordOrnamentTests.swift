@@ -168,6 +168,35 @@ struct ChordOrnamentDecodeTests {
         #expect(ornament.plays == nil)
     }
 
+    /// MuseScore 4 writes three ordinals; MuseScore 3's two chord-relative ones name a side as well. Anything else
+    /// is the default, and the tag is never left behind as preserved markup to be written twice.
+    @Test(arguments: [
+        ("0", ChordOrnament.Anchor?.some(.top)), ("1", .bottom), ("2", .auto), ("3", .top), ("4", .bottom), ("9", nil),
+    ])
+    func decodesTheAnchor(_ text: String, _ anchor: ChordOrnament.Anchor?) throws {
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Ornament><subtype>ornamentTrill</subtype><anchor>\(text)</anchor></Ornament>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        let ornament = try #require(chord.ornaments.first)
+        #expect(ornament.anchor == anchor)
+        #expect(ornament.preservedMarkup.isEmpty)
+        #expect(ornament.encode().all("anchor").map(\.text) == anchor.map { [String($0.rawValue)] } ?? [])
+    }
+
+    @Test func anAnchorIsInTheFingerprintAndNoneAddsNothing() {
+        func fingerprint(_ ornament: ChordOrnament) -> UInt64 {
+            var hasher = FNV1a()
+            hasher.combineOccupied([ornament], tag: 33)
+            return hasher.value
+        }
+        let plain = fingerprint(ChordOrnament(kind: .trill))
+        let top = fingerprint(ChordOrnament(kind: .trill, anchor: .top))
+        #expect(plain != top)
+        #expect(top != fingerprint(ChordOrnament(kind: .trill, anchor: .bottom)))
+    }
+
     @Test func decodesSeveralOrnamentsInDocumentOrder() throws {
         let chord = try parseChord("""
         <durationType>quarter</durationType>

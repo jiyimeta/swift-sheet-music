@@ -1224,11 +1224,11 @@ above / belowのaccidental、`ornamentShowAccidental` / `ornamentShowCueNote` /
   寄せるとround-tripのelement形が変わり（`Chord/Articulation`が`Chord/Ornament`になる）、
   gateに嘘のlossが出る。compat変換はparityとは別問題。testで固定してある。
 
-**残っているのはplaybackとlayout。** intervalとaccidentalはmodelにあるが、
-`MidiRenderer`はornamentを音に展開しないし、engravingもglyphを置かない。
-これは「単独で追加できるMISSING」の外側——`LayoutElement`はwasm / Android bridgeにも
-mirrorされるので、それぞれ別sliceになる。intervalをmodelに入れたのは、
-その2つが読む先を用意するため。
+**［2026-11-25 追記］playbackとlayoutも実装した。** 再生は`SheetMusicMIDI`の`OrnamentFigure` /
+`OrnamentPlan`（MuseScore 4の`OrnamentsRenderer`と同じ音、trill lineも含む）、描画は
+`SheetMusicLayout`の`LayoutEngine+Ornaments.swift`（`LayoutElement.figure`なのでbridge側の追加は無い）。
+まだ無いのは、cue noteの描画、`ornamentShowAccidental`によるaccidentalの導出、trill line自身の
+intervalの再生、選択と編集、MusicXMLの`<ornaments>`の取り込み。
 
 ---
 

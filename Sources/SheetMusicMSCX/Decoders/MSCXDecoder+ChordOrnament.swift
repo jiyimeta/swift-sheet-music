@@ -14,7 +14,7 @@ extension ChordOrnament {
     private static let consumedChildren: Set = [
         "Accidental", "intervalAbove", "intervalBelow", "ornamentShowAccidental",
         "ornamentShowCueNote", "ornamentStyle", "play", "startOnUpperNote",
-        "subtype", "color", "offset", "autoplace", "placement", "visible",
+        "subtype", "color", "offset", "autoplace", "placement", "visible", "anchor",
     ]
 
     /// The `<Ornament>` children of a `<Chord>`, in document order.
@@ -50,6 +50,7 @@ extension ChordOrnament {
             plays: node.first("play").map { $0.text != "0" },
             accidentalAbove: above,
             accidentalBelow: below,
+            anchor: decodeAnchor(node),
             preservedMarkup: node.preservedMarkup(consuming: consumedChildren),
         )
         ornament.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
@@ -88,6 +89,25 @@ extension ChordOrnament {
             return nil
         }
         return value
+    }
+
+    /// `<anchor>` is persisted as `ArticulationAnchor`'s ordinal. MuseScore 3 — whose ornaments are articulations —
+    /// had five: `TOP_STAFF`, `BOTTOM_STAFF`, `CHORD`, `TOP_CHORD` and `BOTTOM_CHORD`, whose first three line up with
+    /// MuseScore 4's and whose last two name a side as well.
+    private static func decodeAnchor(_ node: XMLTreeNode) -> Anchor? {
+        guard let text = node.first("anchor")?.text else { return nil }
+        switch Int(text) {
+        case 0, 3: return .top
+        case 1, 4: return .bottom
+        case 2: return .auto
+        default:
+            mscxDecoderWarn(
+                code: "mscx.ornament.unsupportedAnchor",
+                message: "Unknown <anchor> '\(text)' — using the default",
+                location: "Chord/Ornament",
+            )
+            return nil
+        }
     }
 
     /// The accidentals drawn on the auxiliary notes.

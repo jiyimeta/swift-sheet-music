@@ -9,6 +9,17 @@ and this project adheres to
 
 ### Added
 
+- **A chord's ornaments are drawn.** Trills, turns, mordents and the rest of MuseScore's ornament palette
+  (`Chord.ornaments`, every `ChordOrnament.Kind` but `.unknown`) were read from a file and written back, and no
+  renderer drew them. Each is placed as MuseScore's `layoutArticulations2` places it: above for an upper voice and below
+  for a lower one, on the stem's side where several voices sound, outside the chord's articulations, stem, beam and
+  heads and outside the staff, 0.4 sp apart, with the accidentals the file carries at 0.6 of its size. A fermata or a
+  tuplet's number over it moves out. Apple, Android, Windows and the web draw it through `LayoutElement.figure`
+  (new `LayoutFigure.Kind.ornament`), so a host that switches over the kind has a case to add. It cannot be selected or
+  edited yet — a tap on it lands as a tap beside the chord does — and the cue note MuseScore may draw beside the chord
+  is not drawn.
+- **`ChordOrnament.anchor`** (`ChordOrnament.Anchor`): the side the author put an ornament on, MuseScore's `<anchor>`,
+  which was kept only as preserved markup. MuseScore 3's five anchors are read as the three MuseScore 4 has.
 - **Ornaments play.** A chord's trill, mordent, turn or other ornament (`Chord.ornaments`), and every chord under a
   trill line, sound as the notes MuseScore 4's playback gives them (`OrnamentsRenderer`), in playback, in audio export
   and in the MIDI file. The neighbor is the key's, read with the accidentals earlier in the bar, unless the ornament
