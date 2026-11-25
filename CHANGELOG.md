@@ -46,6 +46,15 @@ and this project adheres to
   file a user exports, keeps the placement of MuseScore's MIDI export. A chord with a guitar bend chain keeps the old
   placement everywhere.
 
+### Fixed
+
+- **A diatonic glissando plays in the key in force, not the score's first.** The voice walk started every bar from the
+  first bar's key signature and saw only the signatures in its own voice and bar, so a change in an earlier bar, or one
+  written in voice 1 while voice 2 plays, was lost — on every pass of a repeat and after a jump alike. The key is now
+  the staff's (`KeyTimeline`, which the ornaments read too): the one where the glissando stands, or, when it slides over
+  a barline, the one of the bar it ends in, as MuseScore's `chromaticPitchSteps` reads it. A measure repeat plays the
+  key of the bar it repeats.
+
 ## [4.46.0] - 2026-11-21
 
 ### Added

@@ -25,7 +25,7 @@ extension VoiceElement {
     /// (`advanceWriteCursor`), `Score+FermataHolds`, `LayoutEngine+Spanners` and the MIDI renderer all fold the
     /// delta in. A walker that summed durations alone would describe a beat the file is not positioned at, and a
     /// lane mark anchored through `SystemLaneSlot.position` would land there.
-    func cursorAdvance(division: Int, in measureDuration: Fraction) -> Int {
+    package func cursorAdvance(division: Int, in measureDuration: Fraction) -> Int {
         switch self {
         case let .chord(chord):
             chord.duration.resolved(in: measureDuration).ticks(division: division)
