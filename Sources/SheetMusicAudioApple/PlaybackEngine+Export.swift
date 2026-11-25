@@ -377,7 +377,8 @@ extension PlaybackEngine {
         metronomeSampler: AVAudioUnitMIDIInstrument?,
         countIn: ExportCountIn?,
     ) throws -> AVAudioSequencer {
-        var midi = try MidiRenderer.render(score: score)
+        // As live playback sounds it (`render(score:emittingChokes:)`), not as a MIDI file is written.
+        var midi = try MidiRenderer.render(score: score, emittingChokes: false)
         // Collapse the MuseScore-exact multi-port SMF onto the same
         // live single-port channel set `exportSynth` was built against
         // — BEFORE `postProcessForMIDISynth` below, which strips tick-0

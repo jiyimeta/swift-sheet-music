@@ -22,11 +22,14 @@ public enum MidiRenderer {
         try render(score: score, includingSustainPedal: false)
     }
 
-    /// `render(score:)` with the choke marker (`ChokeMarker`) at the end of every choked tie chain, for a sequence a
-    /// synthesizer plays rather than a file a user exports. `renderForPlayback(score:)` turns it on; so does an audio
-    /// export that renders through a `SynthBackend`.
+    /// `render(score:)` for a sequence a synthesizer plays rather than a file a user exports: grace notes fall where
+    /// MuseScore's playback puts them, on the beat (`GraceTiming.performance`), and `emittingChokes` adds the choke
+    /// marker (`ChokeMarker`) at the end of every choked tie chain. `renderForPlayback(score:)` and an audio export
+    /// through a `SynthBackend` turn the marker on.
     public static func render(score: Score, emittingChokes: Bool) throws -> MidiFile {
-        try render(score: score, includingSustainPedal: false, emitsChokes: emittingChokes)
+        try render(
+            score: score, includingSustainPedal: false, emitsChokes: emittingChokes, graceTiming: .performance,
+        )
     }
 
     /// `render(score:)` with the sustain pedal switched on — the path pedal playback will take once every engine
@@ -34,6 +37,7 @@ public enum MidiRenderer {
     /// (`render(score:emittingChokes:)`).
     static func render( // swiftlint:disable:this function_body_length
         score: Score, includingSustainPedal: Bool, emitsChokes: Bool = false,
+        graceTiming: GraceTiming = .smfExport,
     ) throws -> MidiFile {
         // Hold each tie chain at its head note's sounding pitch so a tie
         // whose endpoints differ in pitch (e.g. C♯ tied across a key change
@@ -107,6 +111,7 @@ public enum MidiRenderer {
                     route: route,
                     isFirstTrack: staffTrack == 0,
                     emitsChokes: emitsChokes,
+                    graceTiming: graceTiming,
                     division: score.division,
                     swingMap: staffTrack < swingMaps.count
                         ? swingMaps[staffTrack]
@@ -309,6 +314,7 @@ public enum MidiRenderer {
         route: PartChannelRoute,
         isFirstTrack: Bool,
         emitsChokes: Bool,
+        graceTiming: GraceTiming,
         division: Int,
         swingMap: SwingMap,
         systemElementsByMeasure: [[PositionedSystemElement]],
@@ -336,6 +342,7 @@ public enum MidiRenderer {
                 emitsTempoEvents: isFirstTrack && voiceIndex == 0,
                 bookends: bookends,
                 emitsChokes: emitsChokes,
+                graceTiming: graceTiming,
             )
             voiceEventBuckets.append(voiceEvents)
             lyricAnchors.append(contentsOf: anchors)

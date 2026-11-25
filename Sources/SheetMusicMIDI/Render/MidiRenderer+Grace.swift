@@ -77,6 +77,14 @@ extension MidiRenderer {
     /// Mirrors `CompatMidiRender::renderGraceNotesBefore` /
     /// `renderGraceNotesAfter` semantics, simplified for this codebase
     /// (no per-grace velocity scaling — see spec Non-goals).
+    ///
+    /// That is `graceTiming: .smfExport`. Under `.performance` every grace
+    /// note before the chord takes its time from the chord's head
+    /// (`GraceTiming`). A chord whose notes carry a bend chain keeps the
+    /// export's placement either way: its wheel is written against it.
+    ///
+    /// `ornaments` says how each note is ornamented, by its place in
+    /// `originalChord.notes`.
     static func renderChordWithGraces( // swiftlint:disable:this function_body_length function_parameter_count
         _ originalChord: Chord,
         tick: Int,
@@ -94,6 +102,9 @@ extension MidiRenderer {
         chokes: inout ChokeChains,
         playedTicksOverride: Int? = nil,
         pitchShift: Int = 0,
+        graceTiming: GraceTiming = .smfExport,
+        isCompoundMeter: Bool = false,
+        ornaments: [NoteOrnament?] = [],
     ) {
         // Apply an ottava transposition to every sounding pitch
         // (parent + grace notes). Clamping to MIDI's 0..127 keeps a
@@ -126,15 +137,13 @@ extension MidiRenderer {
         // so swung chords keep proportional grace timing.
         let mainTicks = playedTicksOverride
             ?? chord.duration.ticks(division: division)
-        let stealFromPrev = totalStealFromPrev(
-            chord.graceNotesBefore.values, division: division,
+        let graces = graceLayout(
+            for: chord, timing: bendChainSlots == nil ? graceTiming : .smfExport,
+            tick: tick, mainTicks: mainTicks, division: division, isCompoundMeter: isCompoundMeter,
         )
-        let stealFromHead = totalStealFromMainHead(
-            chord.graceNotesBefore.values, mainTicks: mainTicks, division: division,
-        )
-        let stealFromTail = totalStealFromMainTail(
-            chord.graceNotesAfter.values, mainTicks: mainTicks, division: division,
-        )
+        let stealFromPrev = graces.stealFromPrev
+        let stealFromHead = graces.stealFromHead
+        let stealFromTail = graces.stealFromTail
 
         // 1. Pull preceding noteOffs (this voice / channel only) back
         // by `stealFromPrev`, clamped so they never precede their
@@ -168,28 +177,12 @@ extension MidiRenderer {
             }
         }
 
-        // 2. Emit before-graces. Two independent cursors so an
-        // acciaccatura order-mixed with non-acciaccaturas still
-        // lands in the correct steal-region:
-        //   prevCursor walks the [tick - stealFromPrev, tick) slot
-        //   headCursor walks the [tick, tick + stealFromHead)  slot
-        var prevCursor = max(0, tick - stealFromPrev)
-        var headCursor = tick
+        // 2. Emit before-graces.
         for (graceIndex, g) in chord.graceNotesBefore.enumerated() {
-            let dur = playbackTicks(
-                for: g, mainTicks: mainTicks, division: division,
-            )
-            let onset: Int
-            if g.graceType == .acciaccatura {
-                onset = prevCursor
-                prevCursor += dur
-            } else {
-                onset = headCursor
-                headCursor += dur
-            }
+            let slot = graces.before[graceIndex]
             emitGraceChord(
                 g, slot: shiftedBendSlots?.before[graceIndex],
-                onset: max(0, onset), durationTicks: dur,
+                onset: max(0, tick + slot.offset), durationTicks: slot.ticks,
                 velocity: velocity, channel: channel, events: &events,
             )
         }
@@ -247,7 +240,7 @@ extension MidiRenderer {
             let chainPitch = parentSlot == nil
                 ? nil
                 : bendChainNote(in: chord.notes)?.pitch
-            for note in chord.notes {
+            for (noteIndex, note) in chord.notes.enumerated() {
                 // A bent, slid or legacy-bent note releases on its own curve, outside the gate account.
                 let isShaped = (parentSlot != nil && note.pitch == chainPitch)
                     || (note.glissando != nil && shiftedGlissandoEnd != nil)
@@ -286,12 +279,36 @@ extension MidiRenderer {
                         events: &events,
                     )
                 } else {
+                    var onTick = mainOnset
+                    if ornaments.indices.contains(noteIndex), let ornament = ornaments[noteIndex],
+                       let subNotes = ornament.figure.subNotes(
+                           totalTicks: playedTicks, division: division, beatsPerSecond: tempoBps,
+                           isContinuing: ornament.isContinuing,
+                       )
+                    {
+                        guard let held = emitOrnament(
+                            subNotes, of: note, ornament: ornament, onset: mainOnset, mainOff: mainOff,
+                            velocity: mainVelocity, channel: channel, events: &events,
+                        ) else {
+                            tieGateDebt[note.pitch] = nil
+                            continue
+                        }
+                        onTick = held
+                    } else if ornaments.indices.contains(noteIndex), ornaments[noteIndex]?.isContinuing == true {
+                        // Too short to carry the trill its tie brought, whose notes are all let go of: struck again.
+                        emitOrnamentNote(
+                            note, semitones: 0, from: mainOnset, to: mainOff,
+                            velocity: mainVelocity, channel: channel, events: &events,
+                        )
+                        tieGateDebt[note.pitch] = nil
+                        continue
+                    }
                     let offTick = tieGatedOff(
                         of: note, mainOff: mainOff, droppedByGate: playedTicks - gatedTicks, debt: &tieGateDebt,
                     )
                     emitNoteEventsForGrace(
                         note: note, channel: channel, velocity: mainVelocity,
-                        onTick: mainOnset, offTick: offTick, events: &events,
+                        onTick: onTick, offTick: offTick, events: &events,
                     )
                     release(note, at: offTick)
                 }
@@ -299,18 +316,49 @@ extension MidiRenderer {
         }
 
         // 4. After-graces — share the tail slot the main gave up.
-        var afterCursor = mainOnset + playedTicks
         for (graceIndex, g) in chord.graceNotesAfter.enumerated() {
-            let dur = playbackTicks(
-                for: g, mainTicks: mainTicks, division: division,
-            )
+            let slot = graces.after[graceIndex]
             emitGraceChord(
                 g, slot: shiftedBendSlots?.after[graceIndex],
-                onset: afterCursor, durationTicks: dur,
+                onset: tick + slot.offset, durationTicks: slot.ticks,
                 velocity: velocity, channel: channel, events: &events,
             )
-            afterCursor += dur
         }
+    }
+
+    /// Emit an ornament's notes. A figure that ends by holding the written note leaves that last note to the caller,
+    /// which strikes it at the returned tick and lets go of it by the tie's rules; `nil` says everything is emitted.
+    private static func emitOrnament(
+        _ subNotes: [OrnamentFigure.SubNote], of note: Note, ornament: NoteOrnament, onset: Int, mainOff: Int,
+        velocity: Int, channel: Int, events: inout [TimedMidiEvent],
+    ) -> Int? {
+        for (index, sub) in subNotes.enumerated() {
+            let isLast = index == subNotes.count - 1
+            if isLast, sub.step == 0, !ornament.figure.repeatsBody { return onset + sub.offset }
+            emitOrnamentNote(
+                note, semitones: ornament.semitones(forStep: sub.step), from: onset + sub.offset,
+                to: isLast ? max(onset + sub.offset, mainOff) : onset + sub.offset + sub.ticks - 1,
+                velocity: velocity, channel: channel, events: &events,
+            )
+        }
+        return nil
+    }
+
+    /// One struck and released note of an ornament. The written note keeps its own tuning; a neighbor outside MIDI's
+    /// range is left out.
+    private static func emitOrnamentNote(
+        _ note: Note, semitones: Int, from onTick: Int, to offTick: Int,
+        velocity: Int, channel: Int, events: inout [TimedMidiEvent],
+    ) {
+        let pitch = note.pitch + semitones
+        guard note.play, (0 ... 127).contains(pitch) else { return }
+        events.append(.noteOn(
+            tick: onTick, channel: channel, pitch: pitch, velocity: note.customizedVelocity(velocity),
+            cents: semitones == 0 ? note.playbackCents : 0,
+        ))
+        events.append(TimedMidiEvent(
+            tick: max(onTick, offTick), event: .noteOff(channel: channel, pitch: pitch, velocity: 0),
+        ))
     }
 
     /// Every slot of `slots` with its sounding key transposed — the chain

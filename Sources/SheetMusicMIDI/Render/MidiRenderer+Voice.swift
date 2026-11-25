@@ -13,7 +13,8 @@ extension MidiRenderer {
     /// map as MuseScore's export does (`importexport/midi/internal/midiexport/exportmidi.cpp:177-204`); `bookends`
     /// are that track's fermata bookends, which decide with it whether a jump's target needs its tempo re-stated.
     /// `staffIndex` is `staff`'s place in `part.staves`: the voice plays every dynamic of the part that reaches it.
-    /// `emitsChokes` appends the choke marker at the end of every choked tie chain (`ChokeChains`).
+    /// `emitsChokes` appends the choke marker at the end of every choked tie chain (`ChokeChains`); `graceTiming`
+    /// places the grace notes.
     static func renderVoice( // swiftlint:disable:this function_body_length cyclomatic_complexity
         voiceIndex: Int,
         staffIndex: Int = 0,
@@ -28,6 +29,7 @@ extension MidiRenderer {
         emitsTempoEvents: Bool = false,
         bookends: BookendTempoTrack = BookendTempoTrack(),
         emitsChokes: Bool = false,
+        graceTiming: GraceTiming = .smfExport,
     ) throws -> (events: [TimedMidiEvent], endTick: Int, lyricAnchors: [LyricMidiCodec.Anchor]) {
         let measureDurations = staff.measures.effectiveMeasureDurations()
         // Swing reads a beat position out of a tick, so its grid has to be measured from the BAR rather than from
@@ -57,6 +59,10 @@ extension MidiRenderer {
             tempoMap: tempoMap,
         )
         let capoPoints = CapoRanges.collect(staff: staff, division: division, tempoMap: tempoMap)
+        var ornamentPlanner = OrnamentPlanner(
+            staff: staff, voiceIndex: voiceIndex, isDrumset: part.instrument.useDrumset,
+            division: division, tempoMap: tempoMap,
+        )
         // Original-tick base for each measure index, used to map
         // playback ticks (which include unrolled repeats) back to
         // pre-repeat ticks for ramp lookup.
@@ -318,6 +324,14 @@ extension MidiRenderer {
                     )
                     continue
                 }
+                var ornaments: [NoteOrnament?] = []
+                if case let .chord(chord) = element {
+                    ornaments = ornamentPlanner.ornaments(
+                        for: chord, measureIndex: entry.measureIndex, tick: nominalOriginalTick,
+                        tickInMeasure: nominalOriginalTick - originalMeasureBase[entry.measureIndex],
+                        ticks: chord.duration.resolved(in: measureDuration).ticks(division: division),
+                    )
+                }
                 renderVoiceElement(
                     element,
                     elementIndex: elementIndex,
@@ -342,6 +356,9 @@ extension MidiRenderer {
                     ottavaRanges: ottavaRanges,
                     capo: capo,
                     originalTickDelta: nominalDelta,
+                    graceTiming: graceTiming,
+                    isCompoundMeter: ornamentPlanner.isCompoundMeter(atMeasure: entry.measureIndex),
+                    ornaments: ornaments,
                     tieGateDebt: &tieGateDebt,
                     chokes: &chokes,
                 )
@@ -396,6 +413,9 @@ extension MidiRenderer {
         ottavaRanges: [OttavaRange],
         capo: CapoPoint?,
         originalTickDelta: Int,
+        graceTiming: GraceTiming,
+        isCompoundMeter: Bool,
+        ornaments: [NoteOrnament?],
         tieGateDebt: inout [Int: Int],
         chokes: inout ChokeChains,
     ) {
@@ -524,6 +544,9 @@ extension MidiRenderer {
                     ? nil
                     : max(1, chordTicks + adjust.lengthDelta),
                 pitchShift: ottavaShift + (capo?.fret ?? 0),
+                graceTiming: graceTiming,
+                isCompoundMeter: isCompoundMeter,
+                ornaments: ornaments,
             )
             localTick += chordTicks
         case .fermata:

@@ -7,6 +7,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Ornaments play.** A chord's trill, mordent, turn or other ornament (`Chord.ornaments`), and every chord under a
+  trill line, sound as the notes MuseScore 4's playback gives them (`OrnamentsRenderer`), in playback, in audio export
+  and in the MIDI file. The neighbor is the key's, read with the accidentals earlier in the bar, unless the ornament
+  states its interval; a trill runs on through a tie. An ornament with `<play>0</play>`, a symbol MuseScore's playback
+  has no realization for, and a drum staff play the note plain. The MIDI file follows the same table, not the one
+  MuseScore's own MIDI export has. The interval of a trill line's own ornament is not read yet: it alternates with
+  the second above.
+
+### Changed
+
+- **Grace notes are on the beat in playback and audio export**, as MuseScore 4 plays them (`GraceChordCtx`): a slashed
+  grace starts on the beat and delays its note by a 64th, where it used to sound before the beat in time taken from
+  the note before. A lone unslashed grace takes its written length, up to half of the note (two thirds in a compound
+  meter); a run gets a 64th each. `MidiRenderer.renderForPlayback(score:)` and `render(score:emittingChokes:)` — now
+  documented as the render a synthesizer plays, whatever `emittingChokes` says — place them so; `render(score:)`, the
+  file a user exports, keeps the placement of MuseScore's MIDI export. A chord with a guitar bend chain keeps the old
+  placement everywhere.
+
 ## [4.46.0] - 2026-11-21
 
 ### Added

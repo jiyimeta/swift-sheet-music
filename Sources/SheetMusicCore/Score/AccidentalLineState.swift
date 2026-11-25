@@ -57,7 +57,7 @@ struct AccidentalLineState: Equatable {
     /// TPC of each natural letter, `C D E F G A B` order.
     static let naturalTpcByLetter = [14, 16, 18, 13, 15, 17, 19]
     /// Semitone offset of each natural letter from C, `C D E F G A B` order.
-    private static let naturalSemitoneByLetter = [0, 2, 4, 5, 7, 9, 11]
+    static let naturalSemitoneByLetter = [0, 2, 4, 5, 7, 9, 11]
 
     /// The WRITTEN `(letter, octave, alteration)` behind a `pitch` / `tpc` pair — letter 0=C … 6=B, middle C in octave
     /// 4, alteration ♮=0, ♯=+1, ♭=−1 and so on — or nil when the two disagree or the tpc is outside MuseScore's range
