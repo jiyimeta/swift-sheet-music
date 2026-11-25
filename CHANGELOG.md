@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.47.0] - 2026-11-26
+
 ### Added
 
 - **A chord's ornaments are drawn.** Trills, turns, mordents and the rest of MuseScore's ornament palette

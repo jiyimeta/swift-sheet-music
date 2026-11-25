@@ -22,7 +22,7 @@ struct SheetMusicEngineTests {
         // this literal enforced it and no release commit touched it. A work-in-progress build carries a suffix
         // (`-w9`) and is published only to a local `~/.m2`, so it stamps differently from the tagged one — see the
         // constant's own doc for why that difference is load-bearing.
-        #expect(SheetMusicEngine.version == "4.46.0")
+        #expect(SheetMusicEngine.version == "4.47.0")
     }
 
     @Test("the stamp is the FNV-1a of the version string")
@@ -34,6 +34,6 @@ struct SheetMusicEngineTests {
         // is `Int64`, so a release whose hash lands above 2^63 reads negative — 2.0.0 was the first
         // one that did. Nothing compares it for order; only for equality. 4.14.1, which every release from 4.14.2 to
         // 4.45.0 still carried, was -7883022461973448961.
-        #expect(SheetMusicEngine.versionStamp == -7_457_686_396_910_507_045)
+        #expect(SheetMusicEngine.versionStamp == -8_016_874_921_122_670_764)
     }
 }
