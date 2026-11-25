@@ -15,9 +15,17 @@ and this project adheres to
   for a lower one, on the stem's side where several voices sound, outside the chord's articulations, stem, beam and
   heads and outside the staff, 0.4 sp apart, with the accidentals the file carries at 0.6 of its size. A fermata or a
   tuplet's number over it moves out. Apple, Android, Windows and the web draw it through `LayoutElement.figure`
-  (new `LayoutFigure.Kind.ornament`), so a host that switches over the kind has a case to add. It cannot be selected or
-  edited yet — a tap on it lands as a tap beside the chord does — and the cue note MuseScore may draw beside the chord
-  is not drawn.
+  (new `LayoutFigure.Kind.ornament(anchor:kind:)`), so a host that switches over the kind has a case to add. The cue
+  note MuseScore may draw beside the chord is not drawn.
+- **Ornaments can be entered, selected and removed.** `SetOrnament(at:kind:present:)` puts one kind on a chord or takes
+  it off, as MuseScore's `Score::toggleArticulation` does: a different kind is added beside the one that is there, and a
+  write leaves an ornament of the kind that is already there as it is, with its intervals, accidentals, anchor and
+  playback. `EditIntent.setOrnament(at:kind:present:)` relays it (wire index 97; the kind as its
+  `ChordOrnament.Kind.mscxToken`, an unknown token as `.unknown`). A drawn ornament is an item,
+  `ScoreElementID.ornament(anchor:kind:)` (wire choice 19) and `ScoreHitTarget.ornament(anchor:kind:)`: a click on its
+  glyphs or its accidentals selects it, the selection color reaches it on Apple and in the draw program — over the
+  author's color — and `removalCommand` takes it off. A host that switches over either enum has a case to add; the
+  Kotlin `ScoreElementID` has `Ornament(anchor, kind)`.
 - **`ChordOrnament.anchor`** (`ChordOrnament.Anchor`): the side the author put an ornament on, MuseScore's `<anchor>`,
   which was kept only as preserved markup. MuseScore 3's five anchors are read as the three MuseScore 4 has.
 - **Ornaments play.** A chord's trill, mordent, turn or other ornament (`Chord.ornaments`), and every chord under a

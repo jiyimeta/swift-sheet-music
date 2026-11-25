@@ -112,6 +112,7 @@ own substantive logic.
 | `SetJumps` | not in the example — host command registry | — |
 | `SetMarkers` | not in the example — host command registry | — |
 | `SetArticulation` | not in the example — host command registry | sugar |
+| `SetOrnament` | not in the example — host command registry (one ornament kind on or off a chord; a write keeps an ornament of the kind that is already there, a clear takes every one of the kind; `EditIntent.setOrnament`, wire index 97, provisional until the unreleased vibrato properties land) | sugar |
 | `SetGraceNotes` | not in the example — host command registry | sugar |
 | `SetTremolo` | not in the example — host command registry | sugar |
 | `SetArpeggio` | not in the example — host command registry | sugar |
@@ -145,7 +146,7 @@ own substantive logic.
 | `RemoveSlur(_:)` — removes one chord/rest slur by slur-only ordinal (hidden entries included), or one standalone voice slot; does not remove sibling slurs | Backspace / forward Delete on a selected slur | sugar over `ReplaceVoiceElement` / `ReplaceVoiceElements` |
 | `RemoveJump(staff:measureIndex:index:)` — removes one entry from that staff's jumps list; other staves' duplicate copies remain | Backspace / forward Delete on a selected jump | staff-scoped read–replace–write sugar |
 | `RemoveMarker(staff:measureIndex:index:)` — removes one entry from that staff's markers list; other staves' duplicate copies remain | Backspace / forward Delete on a selected marker | staff-scoped read–replace–write sugar |
-| `ScoreElementID.removalCommand` — resolves tie, slur, jump, marker and glissando identities (a glissando resolves to `SetGlissando(at: start, glissando: nil)`, the command that also edits it); returns nil for the previous twelve visual kinds, including legacy `.spanner` identities | selected-element Delete dispatch | factory, not an `EditCommand` |
+| `ScoreElementID.removalCommand` — resolves tie, slur, jump, marker, glissando and ornament identities (a glissando resolves to `SetGlissando(at: start, glissando: nil)`, the command that also edits it, and an ornament to `SetOrnament(at: anchor, kind: kind, present: false)`); returns nil for the previous twelve visual kinds, including legacy `.spanner` identities | selected-element Delete dispatch | factory, not an `EditCommand` |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -185,6 +186,10 @@ predates the project and keeps its own earlier wire index.
 (`setLyricSyllables`, steps 1–6 of the same chain) has no command of its
 own — it carries a list of `SetLyric` writes so one keystroke is one undo
 step — which is why it appears nowhere in the table above.
+
+`SetOrnament` is intent **97**, and its chain is `ReplayChain.ornaments`.
+The index is provisional: an unreleased branch takes 97–99 for vibrato and
+chord-line playback properties, and whichever lands second renumbers.
 
 `SetTextVisible` is marked *partly* sugar because only one of its four
 arms is: a chord symbol is a `VoiceElement`, so that arm delegates to
@@ -262,7 +267,7 @@ else is known to be missing:
 
 | Feature | Why it is out of reach today |
 | --- | --- |
-| Ornaments other than trill (turn, mordent, …) | the model has `Chord.ornaments` (`ChordOrnament`, 2026-09-04) and it round-trips through MSCX, and `SheetMusicLayout` draws it, but no command writes it and a drawn ornament is no selectable item (`ScoreElementID` has no case for it). |
+| An ornament's intervals, accidentals, style, playback and side | `SetOrnament` (#97) writes and removes a kind; the rest of `ChordOrnament` round-trips through MSCX, is drawn and played, and no command writes it. |
 | Manual stem direction | the model has the fields (`Chord.stemDirection`, `Chord.beamStemDirection`, 2026-10-26) — read from MSCX `<StemDirection>` and MusicXML `<stem>`, saved, and drawn — but no edit command writes them yet (MuseScore's Flip, `Score::cmdFlip`). |
 | Slash notation | no dedicated voice element represents it — a slash is neither a `Chord` nor a `Rest` in the model. |
 | Figured bass | no dedicated annotation type carries it — the model has nothing analogous to `Harmony` for a figured-bass numeral. |

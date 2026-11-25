@@ -1227,8 +1227,9 @@ above / belowのaccidental、`ornamentShowAccidental` / `ornamentShowCueNote` /
 **［2026-11-25 追記］playbackとlayoutも実装した。** 再生は`SheetMusicMIDI`の`OrnamentFigure` /
 `OrnamentPlan`（MuseScore 4の`OrnamentsRenderer`と同じ音、trill lineも含む）、描画は
 `SheetMusicLayout`の`LayoutEngine+Ornaments.swift`（`LayoutElement.figure`なのでbridge側の追加は無い）。
-まだ無いのは、cue noteの描画、`ornamentShowAccidental`によるaccidentalの導出、trill line自身の
-intervalの再生、選択と編集、MusicXMLの`<ornaments>`の取り込み。
+選択と、種類ごとの追加・削除（`SetOrnament`、`ScoreElementID.ornament`）もある。まだ無いのは、cue noteの描画、
+`ornamentShowAccidental`によるaccidentalの導出、trill line自身のintervalの再生、intervalやaccidentalなど
+種類以外の編集、MusicXMLの`<ornaments>`の取り込み。
 
 ---
 
