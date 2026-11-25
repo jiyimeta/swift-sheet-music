@@ -54,6 +54,14 @@ and this project adheres to
   the staff's (`KeyTimeline`, which the ornaments read too): the one where the glissando stands, or, when it slides over
   a barline, the one of the bar it ends in, as MuseScore's `chromaticPitchSteps` reads it. A measure repeat plays the
   key of the bar it repeats.
+- **A range copy cut short by the range's end keeps what is on its last note.** A note that starts in the range and
+  sounds past its end is copied shortened, and the copy kept only its notes, arpeggio, bracket and lyrics. As in
+  MuseScore, where the shortened chord is the same chord (`read460.cpp:602-633`), it keeps everything: articulations,
+  ornaments, grace notes, chord lines, a single-chord tremolo, its stem, beam and visibility settings, and the tie into
+  it from a copied note. Where its new length takes several tied notes the first has the marks, and the tremolo runs
+  through them all — also where a barline does the cutting, and there the lyric and the arpeggio no longer repeat on the
+  notes after the first. A two-note tremolo whose pair the range's end cuts is taken off, and both notes are written as
+  long as they last.
 
 ## [4.46.0] - 2026-11-21
 
