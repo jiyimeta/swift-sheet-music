@@ -100,6 +100,19 @@ class ScoreElementIDDecoderTest {
     }
 
     @Test
+    fun ornamentVectorDecodesItsAnchorAndToken() {
+        // Choice 19 (0x13), the bytes `ScoreItemIDCodecTests.ornamentElementWirePayload` pins on the Swift side: the
+        // 12-byte anchor, then "ornamentTurn" as field 2's 12-byte string.
+        val bytes = byteArrayOf(
+            0x20, 0x05, 0x0A, 0x1D, 0x13, 0x0A,
+            0x0C, 0x0A, 0x04, 0x08, 0x04, 0x10, 0x02, 0x10, 0x06, 0x18, 0x02, 0x20, 0x08,
+            0x12, 0x0C, 0x6F, 0x72, 0x6E, 0x61, 0x6D, 0x65, 0x6E, 0x74, 0x54, 0x75, 0x72, 0x6E,
+        )
+        val expected = ScoreElementID.Ornament(anchor = anchor, kind = "ornamentTurn")
+        assertEquals(ScoreItemID.Element(expected), ScoreItemIDCodec.decode(bytes))
+    }
+
+    @Test
     fun previousElementDiscriminatorsRemainCompatible() {
         // Hand-derived TLV vectors for choices 0..8 except the signatures (5, 6), whose payload changed shape and
         // has its own test below. Anchor payload length is 12 (0x0C):

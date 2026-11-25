@@ -100,9 +100,9 @@ extension LayoutEngine {
 
     /// The slot an element of a staff's placement belongs to, when it belongs to one chord or rest of that staff and is
     /// drawn with it: the chord itself, its rest glyph, and the marks that are the chord's children in MuseScore
-    /// (articulations, tremolo bars, arpeggio, chord line). Lyrics, graces, beams, ties and the segment's marks
-    /// (fermata, breath) answer nil: a lyric and a segment mark stay on the staff they are written on, a grace has a
-    /// move of its own, and beams and ties are placed by passes that know their members.
+    /// (articulations, ornaments, tremolo bars, arpeggio, chord line). Lyrics, graces, beams, ties and the segment's
+    /// marks (fermata, breath) answer nil: a lyric and a segment mark stay on the staff they are written on, a grace
+    /// has a move of its own, and beams and ties are placed by passes that know their members.
     static func ownerSlot(of element: LayoutElement) -> VoiceSlot? {
         func slot(_ id: VoiceElementID?) -> VoiceSlot? {
             id.map { VoiceSlot(voiceIndex: $0.voiceIndex, elementIndex: $0.elementIndex) }
@@ -113,6 +113,8 @@ extension LayoutEngine {
         case let .rest(_, _, _, restID, _):
             return VoiceSlot(voiceIndex: restID.voiceIndex, elementIndex: restID.elementIndex)
         case let .articulation(_, _, _, anchor):
+            return slot(anchor)
+        case let .figure(.ornament(anchor, _), _, _, _):
             return slot(anchor)
         case let .tremoloBars(_, _, owner):
             return slot(owner)

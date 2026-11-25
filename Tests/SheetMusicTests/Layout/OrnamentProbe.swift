@@ -45,6 +45,9 @@ enum OrnamentProbe {
     struct Drawn {
         let figure: LayoutFigure
         let color: ScoreColor?
+        /// What the figure names: the ornament's chord and kind.
+        let anchor: VoiceElementID?
+        let kind: ChordOrnament.Kind
 
         var ink: CGRect {
             figure.ink
@@ -63,8 +66,8 @@ enum OrnamentProbe {
 
     static func ornaments(_ elements: [LayoutElement]) -> [Drawn] {
         elements.compactMap { element in
-            guard case let .figure(.ornament, figure, color, _) = element else { return nil }
-            return Drawn(figure: figure, color: color)
+            guard case let .figure(.ornament(anchor, kind), figure, color, _) = element else { return nil }
+            return Drawn(figure: figure, color: color, anchor: anchor, kind: kind)
         }
     }
 

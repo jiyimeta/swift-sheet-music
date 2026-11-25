@@ -15,7 +15,8 @@ import SheetMusicFoundation
 /// A chord that carries ornaments, as the ornament pass finds it.
 struct OrnamentHost {
     let ornaments: [ChordOrnament]
-    let slot: VoiceSlot
+    /// The chord's own slot, which every ornament it carries names (`ScoreElementID.ornament`).
+    let anchor: VoiceElementID
     /// The chord's column: the x its unmirrored heads stand at.
     let columnX: CGFloat
     /// The chord as first placed — what a hidden chord, which is in no buffer, is measured by.
@@ -26,8 +27,8 @@ struct OrnamentHost {
     let articulations: Range<Int>
     /// Whether another voice sounds under the chord (`Measure::hasVoices`).
     let hasVoices: Bool
-    /// The sibling staff the chord is drawn on (`MovedChordPlacement.staffMove`).
-    let staffMove: Int?
+    /// Whether the chord is drawn on a sibling staff, and so placed in that staff's frame (`MovedChordPlacement`).
+    let isMoved: Bool
 }
 
 extension LayoutEngine {
@@ -98,27 +99,23 @@ extension LayoutEngine {
 
     /// Places every host's ornaments, appending each as a `.figure` to `out` — to `invisibleOut`, where they take no
     /// room, when hidden — and lifts the fermatas and tuplet markings they would run into, which MuseScore lays out
-    /// after them.
-    ///
-    /// `moved` hears the indices a chord drawn on a sibling staff takes along (`relocations`): the figure names no
-    /// owner, since an ornament is not an item a command can address yet.
+    /// after them. A chord drawn on a sibling staff takes its ornaments along, as it does its articulations: each names
+    /// the chord (`ownerSlot`).
     static func emitOrnaments(
         _ hosts: [OrnamentHost], movedChords: [VoiceSlot: MovedChordPlacement], lineGeometry: StaffLineGeometry,
         metrics: StaffMetrics, options: ScoreViewOptions,
         out: inout [LayoutElement], invisibleOut: inout [LayoutElement],
-        moved: (_ staffMove: Int, _ visible: Range<Int>, _ invisible: Range<Int>) -> Void,
     ) {
         guard !hosts.isEmpty else { return }
         let obstacles = ornamentObstacles(in: out, movedChords: movedChords)
         for host in hosts {
-            let visibleStart = out.count
-            let invisibleStart = invisibleOut.count
             for placed in ornamentFigures(
-                of: host, elements: out, obstacles: host.staffMove == nil ? obstacles : [],
+                of: host, elements: out, obstacles: host.isMoved ? [] : obstacles,
                 lineGeometry: lineGeometry, metrics: metrics, options: options,
             ) {
                 let element = LayoutElement.figure(
-                    kind: .ornament, figure: placed.figure, color: placed.ornament.elementProperties.color,
+                    kind: .ornament(anchor: host.anchor, kind: placed.ornament.kind), figure: placed.figure,
+                    color: placed.ornament.elementProperties.color,
                 )
                 guard placed.ornament.elementProperties.visible else {
                     invisibleOut.append(element)
@@ -126,9 +123,6 @@ extension LayoutEngine {
                 }
                 out.append(element)
                 clearOrnament(placed.figure.ink, side: placed.side, metrics: metrics, elements: &out)
-            }
-            if let move = host.staffMove {
-                moved(move, visibleStart ..< out.count, invisibleStart ..< invisibleOut.count)
             }
         }
     }
@@ -158,7 +152,7 @@ extension LayoutEngine {
                   let figure = ornamentFigure(ornament, sp: sp, mag: mag)
             else { continue }
             let side = ornamentSide(
-                ornament, stem: stem, voiceIndex: host.slot.voiceIndex, hasVoices: host.hasVoices,
+                ornament, stem: stem, voiceIndex: host.anchor.voiceIndex, hasVoices: host.hasVoices,
             )
             let above = side == .above
             let dy = above ? limits.top - distance - figure.ink.maxY : limits.bottom + distance - figure.ink.minY

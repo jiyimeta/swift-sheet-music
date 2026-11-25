@@ -177,6 +177,8 @@ extension Score {
             return .item(.element(.spanner(anchor: anchor.withStaff(staff), kind: kind)))
         case let .articulation(anchor, kind):
             return .item(.element(.articulation(anchor: anchor.withStaff(staff), kind: kind)))
+        case let .ornament(anchor, kind):
+            return .item(.element(.ornament(anchor: anchor.withStaff(staff), kind: kind)))
         case let .slur(.chord(anchor, ordinal)):
             return .item(.element(.slur(.chord(anchor: anchor.withStaff(staff), ordinal: ordinal))))
         case let .slur(.voice(anchor)):

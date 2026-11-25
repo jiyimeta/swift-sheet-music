@@ -9,9 +9,9 @@ extension SetElementVisible {
     /// run before its chord, the breath after it (at the head of the next bar, for a breath the bar's last chord owns),
     /// and a line at its anchor, which names the `.spanner` element itself (`RemoveSpanner`).
     ///
-    /// `nil` for a mark written on its chord or note — an articulation, an arpeggio, a chord line, a tremolo, a tie, a
-    /// slur, a glissando — which carries no flag this command writes; for a tempo or a swing, which the system carries;
-    /// for an element addressed by bar or by staff; and for a mark the score no longer holds.
+    /// `nil` for a mark written on its chord or note — an articulation, an ornament, an arpeggio, a chord line, a
+    /// tremolo, a tie, a slur, a glissando — which carries no flag this command writes; for a tempo or a swing, which
+    /// the system carries; for an element addressed by bar or by staff; and for a mark the score no longer holds.
     public static func slot(of element: ScoreElementID, in score: Score) -> VoiceElementID? {
         switch element {
         case let .dynamic(anchor):
@@ -22,8 +22,8 @@ extension SetElementVisible {
             SetBreath.existingSlot(after: anchor, in: score)
         case let .spanner(anchor, _):
             if case .spanner? = score[anchor] { anchor } else { nil }
-        case .tempo, .swing, .articulation, .arpeggio, .chordLine, .tremolo, .tie, .slur, .glissando, .keySignature,
-             .timeSignature, .barLine, .jump, .marker, .partName:
+        case .tempo, .swing, .articulation, .arpeggio, .chordLine, .tremolo, .ornament, .tie, .slur, .glissando,
+             .keySignature, .timeSignature, .barLine, .jump, .marker, .partName:
             nil
         }
     }

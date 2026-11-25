@@ -195,6 +195,10 @@ public enum ScoreElementIDWire {
     case arpeggio(anchor: VoiceElementIDWire)
     case chordLine(anchor: VoiceElementIDWire)
     case tremolo(anchor: VoiceElementIDWire)
+    /// Appended for a chord's ornaments (choice 19). `kind` is `ChordOrnament.Kind.mscxToken`, as `setOrnament` carries
+    /// it, rather than a choice of its own: a token the Core table does not know is `.unknown(subtype:)`. Never
+    /// renumber anything above it.
+    case ornament(anchor: VoiceElementIDWire, kind: String)
 
     public init(from value: ScoreElementID) {
         switch value {
@@ -226,6 +230,8 @@ public enum ScoreElementIDWire {
         case let .arpeggio(anchor): self = .arpeggio(anchor: VoiceElementIDWire(from: anchor))
         case let .chordLine(anchor): self = .chordLine(anchor: VoiceElementIDWire(from: anchor))
         case let .tremolo(anchor): self = .tremolo(anchor: VoiceElementIDWire(from: anchor))
+        case let .ornament(anchor, kind):
+            self = .ornament(anchor: VoiceElementIDWire(from: anchor), kind: kind.mscxToken)
         }
     }
 
@@ -256,6 +262,10 @@ public enum ScoreElementIDWire {
         case let .arpeggio(anchor): return .arpeggio(anchor: anchor.decoded())
         case let .chordLine(anchor): return .chordLine(anchor: anchor.decoded())
         case let .tremolo(anchor): return .tremolo(anchor: anchor.decoded())
+        case let .ornament(anchor, kind):
+            return .ornament(
+                anchor: anchor.decoded(), kind: ChordOrnament.Kind(mscxToken: kind) ?? .unknown(subtype: kind),
+            )
         }
     }
 }

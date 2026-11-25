@@ -16,6 +16,7 @@ struct ScoreElementSelectionIdentityTests {
         .tempo(anchor: anchor), .spanner(anchor: anchor, kind: .hairpin),
         .articulation(anchor: anchor, kind: .accent),
         .arpeggio(anchor: anchor), .chordLine(anchor: anchor), .tremolo(anchor: anchor),
+        .ornament(anchor: anchor, kind: .trill),
     ]
 
     private static let barAddressed: [ScoreElementID] = [
@@ -81,6 +82,7 @@ struct ScoreElementSelectionIdentityTests {
             .tempo(anchor: Self.anchor), .spanner(anchor: Self.anchor, kind: .hairpin),
             .articulation(anchor: Self.anchor, kind: .accent),
             .arpeggio(anchor: Self.anchor), .chordLine(anchor: Self.anchor), .tremolo(anchor: Self.anchor),
+            .ornament(anchor: Self.anchor, kind: .trill),
             .keySignature(measureIndex: 13, staff: Self.anchor.staff),
             .timeSignature(measureIndex: 13, staff: Self.anchor.staff),
             .barLine(measureIndex: 13, role: .explicit),
@@ -114,6 +116,7 @@ struct ScoreElementSelectionIdentityTests {
             { .dynamic(anchor: $0) }, { .fermata(anchor: $0) }, { .breath(anchor: $0) },
             { .tempo(anchor: $0) }, { .spanner(anchor: $0, kind: .pedal) },
             { .articulation(anchor: $0, kind: .unknown(subtype: "custom-mark")) },
+            { .ornament(anchor: $0, kind: .upPrall) },
             // A signature names its glyph's staff, so it re-stamps exactly as an anchor does.
             { .keySignature(measureIndex: $0.measureIndex, staff: $0.staff) },
             { .timeSignature(measureIndex: $0.measureIndex, staff: $0.staff) },
@@ -166,6 +169,29 @@ struct ScoreElementSelectionIdentityTests {
         #expect(Set([ScoreHitTarget(elementID: id)]).contains(decodedTarget))
         let items: [ScoreItemID] = [.text(.rehearsalMark(measureIndex: 2)), item]
         #expect(try ScoreItemIDCodec.decodeArray(ScoreItemIDCodec.encodeArray(items)) == items)
+    }
+
+    /// An ornament's kind crosses as its token, so an unknown one that spells a modeled token IS that kind on the far
+    /// side — as `setOrnament` reads it too.
+    @Test("Every ornament kind survives the wire as its token; an unknown token stays unknown")
+    func ornamentKinds() throws {
+        let kinds = ChordOrnament.Kind.modeled + [.unknown(subtype: "ornamentComma")]
+        let ids = kinds.map { ScoreElementID.ornament(anchor: Self.anchor, kind: $0) }
+        #expect(Set(ids).count == 24)
+        #expect(Set(ids.map { ScoreHitTarget(elementID: $0) }).count == 24)
+        for (id, kind) in zip(ids, kinds) {
+            guard case let .ornament(_, token) = ScoreElementIDWire(from: id) else {
+                Issue.record("Expected an ornament wire identity")
+                continue
+            }
+            #expect(token == kind.mscxToken)
+            let item = ScoreItemID.element(id)
+            #expect(try ScoreItemIDCodec.decode(ScoreItemIDCodec.encode(item)) == item)
+        }
+        let spelled = ScoreElementIDWire(from: .ornament(
+            anchor: Self.anchor, kind: .unknown(subtype: "ornamentTrill"),
+        ))
+        #expect(try spelled.decoded() == .ornament(anchor: Self.anchor, kind: .trill))
     }
 
     @Test("Kind payloads remain distinct even when an unknown articulation spells a known token")

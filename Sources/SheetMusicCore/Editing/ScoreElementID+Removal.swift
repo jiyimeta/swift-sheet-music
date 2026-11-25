@@ -18,6 +18,7 @@ extension ScoreElementID {
         case let .arpeggio(anchor): return SetArpeggio(at: anchor, arpeggio: nil)
         case let .chordLine(anchor): return SetChordLine(at: anchor, kind: nil, isStraight: false)
         case let .tremolo(anchor): return SetTremolo(at: anchor, tremolo: nil)
+        case let .ornament(anchor, kind): return SetOrnament(at: anchor, kind: kind, present: false)
         // A part name is not removed: its label is the part's own, and "no name" is a value `SetPartNames` writes
         // through the editor that shows both names, not something Delete should do to a label clicked in passing.
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature,

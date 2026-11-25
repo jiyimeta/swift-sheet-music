@@ -31,6 +31,8 @@ extension LayoutElement {
             return anchor.map { .breath(anchor: $0) }
         case let .articulation(kind, _, _, anchor):
             return anchor.map { .articulation(anchor: $0, kind: kind.modelKind) }
+        case let .figure(.ornament(anchor, kind), _, _, _):
+            return anchor.map { .ornament(anchor: $0, kind: kind) }
         case let .arpeggioWiggle(_, _, _, anchor):
             return anchor.map { .arpeggio(anchor: $0) }
         case let .chordLine(_, _, _, anchor):

@@ -151,6 +151,9 @@ public enum ScoreHitTarget: Hashable, Sendable {
     case chordLine(anchor: VoiceElementID)
     /// A chord's tremolo, addressed by `SetTremolo`; see `ScoreElementID.tremolo`.
     case tremolo(anchor: VoiceElementID)
+    /// An owning chord's ornament kind, addressed by `SetOrnament`; see `ScoreElementID.ornament`. A click on an
+    /// ornament's accidental means the ornament.
+    case ornament(anchor: VoiceElementID, kind: ChordOrnament.Kind)
 }
 
 extension ScoreHitTarget {
@@ -187,7 +190,7 @@ extension ScoreHitTarget {
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote:
             return nil
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
+             .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo, .ornament:
             return nil
         }
     }
@@ -211,7 +214,7 @@ extension ScoreHitTarget {
         case .lyric, .staffText, .harmony, .rehearsalMark:
             return textID.map(ScoreItemID.text)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
+             .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo, .ornament:
             return elementID.map(ScoreItemID.element)
         }
     }
@@ -249,6 +252,7 @@ extension ScoreHitTarget {
         case let .arpeggio(anchor): self = .arpeggio(anchor: anchor)
         case let .chordLine(anchor): self = .chordLine(anchor: anchor)
         case let .tremolo(anchor): self = .tremolo(anchor: anchor)
+        case let .ornament(anchor, kind): self = .ornament(anchor: anchor, kind: kind)
         }
     }
 
@@ -285,6 +289,7 @@ extension ScoreHitTarget {
         case let .arpeggio(anchor): return .arpeggio(anchor: anchor)
         case let .chordLine(anchor): return .chordLine(anchor: anchor)
         case let .tremolo(anchor): return .tremolo(anchor: anchor)
+        case let .ornament(anchor, kind): return .ornament(anchor: anchor, kind: kind)
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
              .lyric, .staffText, .harmony, .rehearsalMark:
             return nil

@@ -56,5 +56,69 @@
             #expect(commands[index...].contains(.setColor(argb: LayoutBridge.blackARGB)))
             #expect(Self.commands([ChordOrnament(kind: .unknown(subtype: "ornamentComma"))]) == Self.commands([]))
         }
+
+        private static let anchor = VoiceElementID(
+            staff: AnnotationFixtures.address, measureIndex: 0, voiceIndex: 0, elementIndex: 0,
+        )
+        private static let tint: UInt32 = 0xFFAB_CDEF
+
+        private static func commands(
+            _ ornaments: [ChordOrnament], selecting items: Set<ScoreItemID>,
+        ) -> [DrawCommand] {
+            LayoutBridge.buildCommands(
+                layout: AnnotationFixtures.layout(AnnotationFixtures.score([
+                    .chord(Chord(
+                        duration: .half, notes: ChordNotes([Note(pitch: 72, tpc: 14)]), ornaments: ornaments,
+                    )),
+                ])),
+                tint: (argb: tint, ids: items),
+            )
+        }
+
+        /// The color each glyph is painted in, in order.
+        private static func colors(_ commands: [DrawCommand]) -> [(codepoint: UInt32, argb: UInt32)] {
+            var argb = LayoutBridge.blackARGB
+            var result: [(codepoint: UInt32, argb: UInt32)] = []
+            for command in commands {
+                switch command {
+                case let .setColor(color): argb = color
+                case let .glyph(codepoint, _, _, _, _): result.append((codepoint, argb))
+                default: continue
+                }
+            }
+            return result
+        }
+
+        @Test("a selected one is tinted whole, its accidental and its author color included; nothing else is")
+        func selectedTint() throws {
+            var red = ChordOrnament(kind: .upMordent, accidentalAbove: .sharp)
+            red.elementProperties.color = ScoreColor(red: 255, green: 0, blue: 0, alpha: 255)
+            let ornaments = [red, ChordOrnament(kind: .trill)]
+            let item = ScoreItemID.element(.ornament(anchor: Self.anchor, kind: .upMordent))
+            let plain = Self.colors(Self.commands(ornaments))
+            let tinted = Self.colors(Self.commands(ornaments, selecting: [item]))
+            #expect(tinted.map(\.codepoint) == plain.map(\.codepoint))
+            // Five pieces and the sharp, red until selected; the trill, the notehead and the rest of the page as
+            // before.
+            #expect(plain.count { $0.argb == 0xFFFF_0000 } == 6)
+            #expect(tinted.count { $0.argb == Self.tint } == 6)
+            #expect(!tinted.contains { $0.argb == 0xFFFF_0000 })
+            let trill = try #require(tinted.first { $0.codepoint == 0xE566 })
+            #expect(trill.argb == LayoutBridge.blackARGB)
+            for (before, after) in zip(plain, tinted) where before.argb != 0xFFFF_0000 {
+                #expect(before.argb == after.argb)
+            }
+            // Another kind on the same chord, and the note itself, are other items.
+            for other in [
+                ScoreItemID.element(.ornament(anchor: Self.anchor, kind: .turn)),
+                .note(NoteID(
+                    staff: AnnotationFixtures.address, measureIndex: 0, voiceIndex: 0, elementIndex: 0,
+                    noteIndexInChord: 0,
+                )),
+            ] {
+                let untouched = Self.colors(Self.commands(ornaments, selecting: [other]))
+                #expect(untouched.count { $0.argb == 0xFFFF_0000 } == 6)
+            }
+        }
     }
 #endif

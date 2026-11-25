@@ -21,4 +21,5 @@ sealed class ScoreElementID {
     data class Arpeggio(val anchor: VoiceElementID) : ScoreElementID()
     data class ChordLine(val anchor: VoiceElementID) : ScoreElementID()
     data class Tremolo(val anchor: VoiceElementID) : ScoreElementID()
+    data class Ornament(val anchor: VoiceElementID, val kind: String) : ScoreElementID()
 }

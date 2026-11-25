@@ -330,8 +330,8 @@ public enum LayoutElement: Sendable, Equatable {
         text: String, origin: CGPoint, identity: ScoreElementID? = nil, richText: LayoutRichText? = nil,
         color: ScoreColor? = nil, placement: TextPlacementMetadata? = nil,
     )
-    /// Strokes, ellipses and glyph / text runs: ambitus, figured bass, fret diagrams, string-number circles and
-    /// `<Symbol>`s. `figure.ink` is its measure-local extent for the skyline, ink rects and Y bounds.
+    /// Strokes, ellipses and glyph / text runs: ambitus, figured bass, fret diagrams, string-number circles, ornaments
+    /// and `<Symbol>`s. `figure.ink` is its measure-local extent for the skyline, ink rects and Y bounds.
     case figure(
         kind: LayoutFigure.Kind, figure: LayoutFigure, color: ScoreColor? = nil,
         placement: TextPlacementMetadata? = nil,

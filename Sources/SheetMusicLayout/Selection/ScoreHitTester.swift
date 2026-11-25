@@ -101,7 +101,7 @@ public struct ScoreHitTester: Sendable {
         case let .clef(anchor): return .clef(anchor)
         case let .graceNote(id): return .graceNote(id)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
+             .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo, .ornament:
             return target.elementID.map(ScoreItemID.element)
         case .stem, .flag, .beam, .lyric, .staffText, .harmony, .rehearsalMark:
             return nil

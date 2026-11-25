@@ -91,6 +91,7 @@ extension ScoreElementID {
         case let .tremolo(anchor): slot(anchor).map { .tremolo(anchor: $0) }
         case let .spanner(anchor, kind): slot(anchor).map { .spanner(anchor: $0, kind: kind) }
         case let .articulation(anchor, kind): slot(anchor).map { .articulation(anchor: $0, kind: kind) }
+        case let .ornament(anchor, kind): slot(anchor).map { .ornament(anchor: $0, kind: kind) }
         case let .slur(.chord(anchor, ordinal)): slot(anchor).map { .slur(.chord(anchor: $0, ordinal: ordinal)) }
         case let .slur(.voice(anchor)): slot(anchor).map { .slur(.voice($0)) }
         case let .glissando(start): note(start).map { .glissando(start: $0) }

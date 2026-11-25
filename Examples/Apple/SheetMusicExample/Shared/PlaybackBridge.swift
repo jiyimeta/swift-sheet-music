@@ -84,7 +84,7 @@ func primaryItemID(of target: ScoreHitTarget?) -> ScoreItemID? {
         return nil
     case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
          .articulation, .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine,
-         .tremolo:
+         .tremolo, .ornament:
         // An engraved marking is selectable, but seeking to the chord it hangs from would move the
         // playhead on a click aimed at the marking — the same reasoning as text above.
         return nil

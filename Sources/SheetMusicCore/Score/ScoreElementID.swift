@@ -107,12 +107,17 @@ public enum ScoreElementID: Hashable, Sendable {
     /// tremolo is stored on, and named by, its first chord.
     case tremolo(anchor: VoiceElementID)
 
+    /// The ornaments of `kind` on the chord at `anchor` — `SetOrnament`'s own address, as an articulation's is
+    /// `SetArticulation`'s; a write with `present: false` removes them. Two of the same kind on one chord share this
+    /// identity, as they do the command. An ornament's accidentals are drawn with it and name it.
+    case ornament(anchor: VoiceElementID, kind: ChordOrnament.Kind)
+
     /// The voice-element owner anchor, or `nil` for bar and staff-owned navigation lists and for a part name.
     public var anchor: VoiceElementID? {
         switch self {
         case let .dynamic(anchor), let .fermata(anchor), let .breath(anchor), let .tempo(anchor),
              let .spanner(anchor, _), let .articulation(anchor, _), let .swing(anchor), let .arpeggio(anchor),
-             let .chordLine(anchor), let .tremolo(anchor): return anchor
+             let .chordLine(anchor), let .tremolo(anchor), let .ornament(anchor, _): return anchor
         case let .tie(start, _), let .glissando(start): return VoiceElementID(start)
         case let .slur(id): return id.anchor
         case .keySignature, .timeSignature, .barLine, .jump, .marker, .partName: return nil
@@ -124,7 +129,7 @@ public enum ScoreElementID: Hashable, Sendable {
         switch self {
         case let .keySignature(index, _), let .timeSignature(index, _), let .barLine(index, _): return index
         case .dynamic, .fermata, .breath, .tempo, .spanner, .articulation, .tie, .slur, .jump, .marker,
-             .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
+             .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo, .ornament:
             return nil
         }
     }
@@ -138,7 +143,7 @@ public enum ScoreElementID: Hashable, Sendable {
              let .jump(staff, _, _), let .marker(staff, _, _): return staff
         case let .partName(partIndex, _): return StaffAddress(partIndex: partIndex, staffIndexInPart: 0)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .barLine, .articulation, .tie, .slur, .glissando, .swing,
-             .arpeggio, .chordLine, .tremolo:
+             .arpeggio, .chordLine, .tremolo, .ornament:
             return nil
         }
     }

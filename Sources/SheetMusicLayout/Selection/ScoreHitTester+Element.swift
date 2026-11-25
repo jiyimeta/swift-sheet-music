@@ -224,8 +224,9 @@ extension ScoreHitTester {
     /// Barlines use stroke/dot ink bounds; pedals, key signatures and time signatures use glyph ink bounds.
     /// Markers and jumps use the box of their typeset runs (`navigationLabelRect`).
     /// Remaining kinds use skyline measurements: fermatas, breaths and articulations use glyph path bounds
-    /// with the skyline helper's fallback; dynamics and tempo mix glyph and font metrics; hairpins, ottavas
-    /// and voltas use coarse span reservations. No universal ink-coverage claim follows.
+    /// with the skyline helper's fallback; an ornament its figure's ink, accidentals included; dynamics and tempo mix
+    /// glyph and font metrics; hairpins, ottavas and voltas use coarse span reservations. No universal ink-coverage
+    /// claim follows.
     private func elementRects(_ element: LayoutElement) -> [CGRect] {
         if let rects = arcInkRects(element) ?? glissandoInkRects(element) { return rects }
         if let rects = navigationRects(element) { return rects }

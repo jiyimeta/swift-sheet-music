@@ -196,13 +196,14 @@ struct OrnamentSurroundingsTests {
 
     @Test("the skyline sees it as an articulation, so annotations keep clear of it, and the system makes room for it")
     func skylineAndBounds() throws {
-        let element = LayoutElement.figure(kind: .ornament, figure: LayoutFigure(primitives: []))
+        let kind = LayoutFigure.Kind.ornament(anchor: nil, kind: .trill)
+        let element = LayoutElement.figure(kind: kind, figure: LayoutFigure(primitives: []))
         #expect(LayoutElementShape.kind(of: element) == .articulation)
         let drawn = try #require(P.ornaments(P.layout([P.chord(79, .half, [
             ChordOrnament(kind: .trill), ChordOrnament(kind: .turnUp), ChordOrnament(kind: .trill),
         ])])).last)
         let points = LayoutEngine.elementYPoints(
-            .figure(kind: .ornament, figure: drawn.figure), sp: P.sp,
+            .figure(kind: kind, figure: drawn.figure), sp: P.sp,
         )
         #expect(points.min() == drawn.ink.minY)
         let text = VoiceElement.harmony(Harmony(name: "", rootTpc: 14))
@@ -218,25 +219,5 @@ struct OrnamentSurroundingsTests {
         let free = try harmonyY([])
         let pushed = try harmonyY([ChordOrnament(kind: .trill), ChordOrnament(kind: .trill)])
         #expect(pushed > free + P.sp / 2)
-    }
-
-    @Test("it names no item: a tap on it lands where a tap on an unaddressed mark does")
-    func notSelectable() throws {
-        guard #available(macOS 15.0, iOS 16.0, *) else { return }
-        let document = P.layout([P.chord(72, .half, [ChordOrnament(kind: .trill)])])
-        let system = try #require(document.systems.first)
-        let measure = try #require(system.measures.first)
-        let ink = try #require(P.ornaments(document).first).ink
-        let point = CGPoint(
-            x: system.origin.x + measure.origin.x + ink.midX, y: system.origin.y + measure.origin.y + ink.midY,
-        )
-        #expect(ScoreHitTester(document: document).hitTest(at: point) == nil)
-        let chord = try #require(P.chords(document).first?.notes.first)
-        let rescued = document.editingHitTest(at: point, activeVoice: 0, nearMissTolerance: P.sp * 6)
-        #expect(rescued == .note(chord.noteID))
-        #expect(measure.elements.allSatisfy { element in
-            guard case .figure(.ornament, _, _, _) = element else { return true }
-            return element.elementID == nil
-        })
     }
 }

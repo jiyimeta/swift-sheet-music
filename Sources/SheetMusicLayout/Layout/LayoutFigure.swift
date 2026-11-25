@@ -8,7 +8,11 @@ import SheetMusicFoundation
 /// `<Symbol>`s: strokes, ellipses and glyph / text runs, in measure-local points.
 public struct LayoutFigure: Sendable, Equatable {
     public enum Kind: Sendable, Equatable {
-        case symbol, ambitus, figuredBass, fretDiagram, stringNumber, ornament
+        case symbol, ambitus, figuredBass, fretDiagram, stringNumber
+        /// One of a chord's ornaments, its accidentals included. `anchor` is the owning chord and `kind` the
+        /// ornament's: the two halves of its identity (`ScoreElementID.ornament`). Duplicate entries of one kind share
+        /// it, matching `SetOrnament`. An absent `anchor` names no item.
+        case ornament(anchor: VoiceElementID?, kind: ChordOrnament.Kind)
 
         /// How the skyline sees it: a symbol not at all (MuseScore neither autoplaces a segment's symbol nor lets it
         /// widen the segment, `dom/segment.cpp:2682-2683`); an ambitus as the header element it is; figured bass and

@@ -194,4 +194,21 @@ struct LayoutElementIdentityTests {
         }
         #expect(Self.elements(score).compactMap(\.elementID).isEmpty)
     }
+
+    @Test("An ornament names its chord and kind, in the voice and staff it is written in, through beam replacement")
+    func ornamentCommandAddress() throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        var score = Self.score([Self.chord(.eighth), Self.chord(.eighth), Self.chord(.half)])
+        let expected = Self.address(1)
+        let kinds: [ChordOrnament.Kind] = [.trill, .turn, .upPrall]
+        for kind in kinds {
+            _ = try SetOrnament(at: expected, kind: kind, present: true).apply(to: &score)
+        }
+        let ids = Self.elements(score).compactMap(\.elementID)
+        #expect(ids == kinds.map { .ornament(anchor: expected, kind: $0) })
+        for id in ids {
+            _ = try #require(id.removalCommand).apply(to: &score)
+        }
+        #expect(Self.elements(score).compactMap(\.elementID).isEmpty)
+    }
 }

@@ -100,6 +100,7 @@ enum ElementHitFixtures {
             element: .articulation(kind: .accent, origin: origin, isAbove: true, anchor: anchor),
             id: .articulation(anchor: anchor, kind: .accent),
         ),
+        ornament,
         Sample(element: spanner(.hairpinOpen), id: .spanner(anchor: anchor, kind: .hairpin)),
         Sample(element: spanner(.pedal), id: .spanner(anchor: anchor, kind: .pedal)),
         Sample(
@@ -123,6 +124,22 @@ enum ElementHitFixtures {
         ),
         Sample(element: bar("end-repeat"), id: .barLine(measureIndex: 0, role: .explicit)),
     ]
+
+    /// An ornament as layout emits it: its glyphs and accidental in one figure. Installs the suite's provider first,
+    /// for `navigationText`'s reason.
+    static let ornament: Sample = {
+        _ = TestSupport.installFontMetrics
+        let figure = LayoutEngine.ornamentFigure(
+            ChordOrnament(kind: .turn, accidentalAbove: .sharp), sp: metrics.sp, mag: 1,
+        )
+        return Sample(
+            element: .figure(
+                kind: .ornament(anchor: anchor, kind: .turn),
+                figure: (figure ?? LayoutFigure(primitives: [])).translated(dx: origin.x, dy: origin.y),
+            ),
+            id: .ornament(anchor: anchor, kind: .turn),
+        )
+    }()
 
     static let variants: [Sample] = [
         Sample(element: .keySignature(

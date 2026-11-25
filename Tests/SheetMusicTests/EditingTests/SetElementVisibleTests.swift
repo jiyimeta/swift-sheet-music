@@ -131,6 +131,7 @@ struct SetElementVisibleTests {
         #expect(SetElementVisible.slot(of: .fermata(anchor: chord), in: score) == Self.slot(2))
         #expect(SetElementVisible.slot(of: .breath(anchor: chord), in: score) == Self.slot(4))
         #expect(SetElementVisible.slot(of: .articulation(anchor: chord, kind: .staccato), in: score) == nil)
+        #expect(SetElementVisible.slot(of: .ornament(anchor: chord, kind: .trill), in: score) == nil)
         #expect(SetElementVisible.slot(of: .tempo(anchor: chord), in: score) == nil)
         // A rest wearing none of them resolves to nothing rather than to the rest.
         #expect(SetElementVisible.slot(of: .dynamic(anchor: Self.slot(5)), in: score) == nil)

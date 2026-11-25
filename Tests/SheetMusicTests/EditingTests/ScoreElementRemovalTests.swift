@@ -38,6 +38,9 @@ struct ScoreElementRemovalTests {
             .removalCommand as? RemoveJump)
         let marker = try #require(ScoreElementID.marker(staff: Self.staff, measureIndex: 3, index: 2)
             .removalCommand as? RemoveMarker)
+        let ornament = try #require(ScoreElementID.ornament(anchor: Self.anchor, kind: .mordent)
+            .removalCommand as? SetOrnament)
+        #expect(ornament.location == Self.anchor && ornament.kind == .mordent && !ornament.present)
         let location = VoiceElementID(staff: Self.staff, measureIndex: 3, voiceIndex: 0, elementIndex: 0)
         #expect(jump.staff == Self.staff && jump.measureIndex == 3 && jump.index == 2)
         #expect(marker.staff == Self.staff && marker.measureIndex == 3 && marker.index == 2)
@@ -74,6 +77,7 @@ struct ScoreElementRemovalTests {
             .tie(start: note, end: note), .slur(.chord(anchor: Self.anchor, ordinal: 0)),
             .slur(.voice(Self.anchor)), .jump(staff: Self.staff, measureIndex: 3, index: 0),
             .marker(staff: Self.staff, measureIndex: 3, index: 0),
+            .ornament(anchor: Self.anchor, kind: .trill),
         ]
         for id in ids {
             var score = ScoreEditor(score: Score(division: 480)).score

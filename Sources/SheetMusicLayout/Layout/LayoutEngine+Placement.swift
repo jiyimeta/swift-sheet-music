@@ -137,8 +137,8 @@ extension LayoutEngine {
         // Some voice ends the bar with a bar line of its own — shown or hidden — so none is synthesized there.
         var voiceEndsBar = false
         // Elements drawn with a moved chord that name no owner of their own — the beams of a group that moved as a
-        // whole, a moved chord's fingerings, symbols and ornaments — by index in `out` / `invisibleOut`, with the
-        // move; and the beams across two staves.
+        // whole, a moved chord's fingerings and symbols — by index in `out` / `invisibleOut`, with the move; and the
+        // beams across two staves.
         var movedExtraIndices: [Int: Int] = [:]
         var movedInvisibleExtraIndices: [Int: Int] = [:]
         var crossStaffBeams: [CrossStaffBeam] = []
@@ -1172,7 +1172,7 @@ extension LayoutEngine {
                     if !chord.ornaments.isEmpty {
                         ornamentHosts.append(OrnamentHost(
                             ornaments: chord.ornaments,
-                            slot: VoiceSlot(voiceIndex: voiceIdx, elementIndex: voiceElemIdx),
+                            anchor: elementAddress,
                             columnX: chordX,
                             element: mainElement,
                             outIndex: voiceChordOutIndex[voiceElemIdx],
@@ -1182,7 +1182,7 @@ extension LayoutEngine {
                                 chordTicks: chord.duration.resolved(in: measureDuration).ticks(division: division),
                                 division: division, measureDuration: measureDuration,
                             ),
-                            staffMove: moved?.staffMove,
+                            isMoved: moved != nil,
                         ))
                     }
                     // Trailing graces stand before what follows the chord on
@@ -2243,14 +2243,7 @@ extension LayoutEngine {
         emitOrnaments(
             ornamentHosts, movedChords: movedChords, lineGeometry: lineGeometry, metrics: metrics, options: options,
             out: &out, invisibleOut: &invisibleOut,
-        ) { move, visible, invisible in
-            for index in visible {
-                movedExtraIndices[index] = move
-            }
-            for index in invisible {
-                movedInvisibleExtraIndices[index] = move
-            }
-        }
+        )
 
         // The clef the next bar opens with, small, before this bar's barline
         // — the room `aggregatedTickWeights` kept after the content. It names

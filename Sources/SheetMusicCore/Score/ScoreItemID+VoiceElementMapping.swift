@@ -1,7 +1,8 @@
 import SheetMusicFoundation
 
 extension ScoreItemID {
-    // Maps owned voice slots while preserving note, verse, articulation, slur, glissando, and grace identities.
+    // Maps owned voice slots while preserving note, verse, articulation, ornament, slur, glissando, and grace
+    // identities.
     // Bar addresses and staff-owned navigation lists do not own a voice slot.
     //
     // Not optimized on Windows: SILCombine gives an instruction in this function a return location, which the
@@ -59,15 +60,15 @@ extension ScoreItemID {
             case let .spanner(anchor, kind): return transform(anchor).map { .element(.spanner(anchor: $0, kind: kind)) }
             case let .articulation(anchor, kind):
                 return transform(anchor).map { .element(.articulation(anchor: $0, kind: kind)) }
+            case let .ornament(anchor, kind):
+                return transform(anchor).map { .element(.ornament(anchor: $0, kind: kind)) }
             case let .tie(start, end):
                 guard let start = note(start), let end = note(end) else { return nil }
                 return .element(.tie(start: start, end: end))
-            case let .glissando(start):
-                return note(start).map { .element(.glissando(start: $0)) }
+            case let .glissando(start): return note(start).map { .element(.glissando(start: $0)) }
             case let .slur(.chord(anchor, ordinal)):
                 return transform(anchor).map { .element(.slur(.chord(anchor: $0, ordinal: ordinal))) }
-            case let .slur(.voice(anchor)):
-                return transform(anchor).map { .element(.slur(.voice($0))) }
+            case let .slur(.voice(anchor)): return transform(anchor).map { .element(.slur(.voice($0))) }
             case .keySignature, .timeSignature, .barLine, .jump, .marker, .partName: return self
             }
         case let .graceNote(id):

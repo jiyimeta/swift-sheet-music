@@ -863,7 +863,10 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             out.append(.stroke(width: ctx.lyricsLineThickness * ptToMM))
 
         case let .figure(_, figure, color, _):
-            encodeFigure(figure.translated(dx: CGFloat(mox), dy: CGFloat(moy)), color: color, into: &out)
+            // A selected ornament's author color gives way to the tint.
+            encodeFigure(
+                figure.translated(dx: CGFloat(mox), dy: CGFloat(moy)), color: markArgb == nil ? color : nil, into: &out,
+            )
 
         case let .tupletLabel(fromOrigin, toOrigin, text, hasBracket, isAbove, tid):
             // The whole tuplet marking (number + bracket hooks/segments) is one visual unit under a single

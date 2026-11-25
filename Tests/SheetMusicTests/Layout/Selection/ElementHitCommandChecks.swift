@@ -20,8 +20,7 @@ enum ElementHitCommandChecks {
                 anchor: anchor,
                 settings: SetSwing.Settings(text: "Swing", unit: .eighth, ratio: 60),
             )
-        case let .dynamic(anchor):
-            command = SetDynamic(at: anchor, subtype: "ff")
+        case let .dynamic(anchor): command = SetDynamic(at: anchor, subtype: "ff")
         case let .fermata(anchor):
             command = SetFermata(at: anchor, subtype: "fermataLongAbove", timeStretch: 2)
         case let .breath(anchor):
@@ -30,6 +29,7 @@ enum ElementHitCommandChecks {
             command = SetTempo(anchor: anchor, marking: .init(beatsPerSecond: 3))
         case let .articulation(anchor, kind):
             command = SetArticulation(at: anchor, kind: kind, anchor: nil, present: true)
+        case let .ornament(anchor, kind): command = SetOrnament(at: anchor, kind: kind, present: true)
         case let .spanner(anchor, kind):
             // The source slot is 1; a chord at slot 0 proves this is not an inferred head-of-voice address.
             score.parts.updateValue(at: 0) { part in

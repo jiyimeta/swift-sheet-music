@@ -196,6 +196,22 @@ extension ScoreItemIDCodecTests {
         }
     }
 
+    /// Choice 19: the 12-byte anchor (field 1) and the kind's token (field 2) — element payload 29 (0x1D), outer
+    /// payload 32 (0x20). `ScoreElementIDDecoderTest.ornamentVectorDecodesItsAnchorAndToken` decodes these bytes in
+    /// Kotlin.
+    @Test("An ornament appends at choice 19 and carries its kind as a token")
+    func ornamentElementWirePayload() throws {
+        let item = ScoreItemID.element(.ornament(anchor: VoiceElementID(Self.start), kind: .turn))
+        let bytes: [UInt8] = [
+            0x20, 0x05, 0x0A, 0x1D, 0x13, 0x0A,
+            0x0C, 0x0A, 0x04, 0x08, 0x04, 0x10, 0x02, 0x10, 0x06, 0x18, 0x02, 0x20, 0x08,
+            0x12, 0x0C, 0x6F, 0x72, 0x6E, 0x61, 0x6D, 0x65, 0x6E, 0x74, 0x54, 0x75, 0x72, 0x6E,
+        ]
+        #expect([UInt8](ScoreItemIDCodec.encode(item)) == bytes)
+        #expect(try ScoreItemIDCodec.decode(Data(bytes)) == item)
+        #expect(try ScoreItemIDCodec.decodeArray(ScoreItemIDCodec.encodeArray([item, item])) == [item, item])
+    }
+
     /// The articulation-kind choice is append-only: the choke takes the ordinal after the laissez vibrer (24), so its
     /// payload is the laissez vibrer's with that one discriminator byte moved on, and it round-trips.
     @Test("The choke articulation kind appends at 25 and round-trips")

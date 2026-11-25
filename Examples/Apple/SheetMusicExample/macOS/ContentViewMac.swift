@@ -3112,7 +3112,7 @@
             case .timeSignature: "Time signatures can't be deleted yet."
             case .barLine: "Barlines can't be deleted yet."
             case .articulation: "Articulations can't be deleted yet."
-            case .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo:
+            case .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio, .chordLine, .tremolo, .ornament:
                 "This element can't be deleted."
             }
         }
@@ -3498,7 +3498,7 @@
                 return
             case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
                  .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote, .swing, .partName, .arpeggio,
-                 .chordLine, .tremolo:
+                 .chordLine, .tremolo, .ornament:
                 // An engraved marking or a grace note selects itself rather than the chord beside it, so the
                 // renderer tints just that. It takes no part in the note-range logic below.
                 selection = target.selectableItem.map { .single($0) } ?? .none
@@ -3571,7 +3571,7 @@
             case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
                  .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
                  .articulation, .tie, .slur, .jump, .marker, .glissando, .swing, .partName, .arpeggio,
-                 .chordLine, .tremolo:
+                 .chordLine, .tremolo, .ornament:
                 return
             }
             textEntryFocused = true
