@@ -36,6 +36,10 @@ struct ScoreItemIDStaffMappingTests {
             (.element(.tempo(anchor: Self.slot(Self.from))), .element(.tempo(anchor: Self.slot(Self.to)))),
             (.element(.dynamic(anchor: Self.slot(Self.from))), .element(.dynamic(anchor: Self.slot(Self.to)))),
             (
+                .element(.ornament(anchor: Self.slot(Self.from), kind: .upPrall)),
+                .element(.ornament(anchor: Self.slot(Self.to), kind: .upPrall)),
+            ),
+            (
                 .element(.keySignature(measureIndex: 3, staff: Self.from)),
                 .element(.keySignature(measureIndex: 3, staff: Self.to)),
             ),

@@ -172,6 +172,19 @@ struct OrnamentSelectionTests {
         #expect(rescued == .note(chord.noteID))
     }
 
+    @Test("a selection of it follows its chord's slot, keeping the kind")
+    func mappingFollowsTheChord() {
+        let id = ScoreItemID.element(.ornament(anchor: Self.slot(1), kind: .linePrall))
+        let moved = id.mappingVoiceElements { location in
+            VoiceElementID(
+                staff: location.staff, measureIndex: location.measureIndex, voiceIndex: location.voiceIndex,
+                elementIndex: location.elementIndex + 4,
+            )
+        }
+        #expect(moved == .element(.ornament(anchor: Self.slot(5), kind: .linePrall)))
+        #expect(id.mappingVoiceElements { _ in nil } == nil)
+    }
+
     @Test("a figure built with no chord, and a figure of another kind, name nothing")
     func unaddressed() {
         let figure = LayoutElement.figure(
