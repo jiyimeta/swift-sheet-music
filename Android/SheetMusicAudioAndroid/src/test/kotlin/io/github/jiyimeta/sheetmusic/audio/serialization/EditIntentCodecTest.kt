@@ -23,7 +23,7 @@ import java.io.File
  * them with the generated Kotlin codec and re-encoding must reproduce the same bytes; that is the
  * only assertion that says the two languages spell one wire format.
  *
- * Three chains cover `EditIntent` cases 30…73 (parity), 74…75 (lyrics), and 76…79 (properties).
+ * Four chains cover `EditIntent` cases 30…73 (parity), 74…75 (lyrics), 76…79 (properties), and 97 (ornaments).
  * `standard` is deliberately not included: it predates this codec's cases and adds no vocabulary
  * these chains do not already cover. Undo steps have no binary asset and do not count toward a floor.
  */
@@ -47,6 +47,8 @@ class EditIntentCodecTest {
             "editReplay-lyrics" to 13,
             // Eleven scripted steps minus two undos (zero-based indices 5 and 9).
             "editReplay-properties" to 9,
+            // Eight scripted steps minus one undo (zero-based index 2).
+            "editReplay-ornaments" to 7,
         )
 
         fun stepsIn(chain: String): List<File> {

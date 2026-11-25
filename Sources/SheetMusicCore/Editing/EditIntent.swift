@@ -589,4 +589,13 @@ public enum EditIntent: Sendable, Equatable {
     /// abbreviation; `factor` is the target tempo as a multiple of the tempo where it starts, `nil` for the type's
     /// default. See `SetGradualTempoChange`.
     case setGradualTempoChange(over: VoiceElementRange, type: GradualTempoChangeType, factor: Double?)
+
+    // Appended for entering ornaments (folino #14) — index 97, provisional until this and the vibrato properties (an
+    // unreleased branch that also starts at 97) have both landed. One of the note / chord group's intents (50…57) in
+    // every respect, appended rather than slotted in because the discriminator order is frozen.
+
+    /// Put an ornament of `kind` on the chord at `at`, or take every entry of that kind off it with `present: false`.
+    /// Other kinds are untouched, and so is an ornament of the kind that is already there. Resolves to nothing to
+    /// apply when the chord already reads exactly this way. See `SetOrnament`.
+    case setOrnament(at: VoiceElementID, kind: ChordOrnament.Kind, present: Bool)
 }

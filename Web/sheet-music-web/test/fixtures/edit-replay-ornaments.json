@@ -1,0 +1,46 @@
+{
+  "fingerprints" : [
+    "-4059957878035358318",
+    "6682607507539636288",
+    "8562831984309018610",
+    "6682607507539636288",
+    "8562831984309018610",
+    "7048405688029814121",
+    "8062091491230714638",
+    "-2160144463993038787",
+    "8062091491230714638"
+  ],
+  "steps" : [
+    {
+      "base64" : "ImEKHwoMCgQIABAAEAAYACACEg1vcm5hbWVudFRyaWxsGAE=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "IWEKHgoMCgQIABAAEAAYACACEgxvcm5hbWVudFR1cm4YAQ==",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "IWEKHgoMCgQIABAAEAAYACACEgxvcm5hbWVudFR1cm4YAQ==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "ImEKHwoMCgQIABAAEAAYACACEg1vcm5hbWVudFRyaWxsGAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "ImEKHwoMCgQIABAAEAAYACACEg1vcm5hbWVudENvbW1hGAE=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JmEKIwoMCgQIABAAEAAYACAEEhFvcm5hbWVudFVwTW9yZGVudBgB",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JmEKIwoMCgQIABAAEAAYACAEEhFvcm5hbWVudFVwTW9yZGVudBgA",
+      "op" : "intentBytes"
+    }
+  ]
+}

@@ -143,6 +143,7 @@ import Wirelet
 /// 94 = setStripMix(SetStripMixIntentWire), see EditIntentPayloads+Range.swift
 /// 95 = revoiceDrumStaff(RevoiceDrumStaffIntentWire), see EditIntentPayloads+Range.swift
 /// 96 = setGradualTempoChange(SetGradualTempoChangeIntentWire), see EditIntentPayloads+Spanners2.swift
+/// 97 = setOrnament(SetOrnamentIntentWire) — PROVISIONAL, see below
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -160,8 +161,11 @@ import Wirelet
 /// range form of the dot key, and the whole-score transposition. Case 89 was appended for the text font and color
 /// inspector — a tempo marking's font patch. Case 90 was appended for swing. Case 91 was appended for Format
 /// Rhythms; its number is final. Case 92 was appended for folino's pattern edit — a run re-timed in place. Case 93
-/// was appended for removing a selected slur, 94 for saving the mix to the score, 95 for drum voice conversion, and
-/// 96 for a gradual tempo change (rit. / accel.) — 96 is the catalogue's last.
+/// was appended for removing a selected slur, 94 for saving the mix to the score, 95 for drum voice conversion, 96 for
+/// a gradual tempo change (rit. / accel.), and 97 for entering ornaments — the catalogue's last. **97 is provisional**:
+/// the vibrato and chord-line playback properties, on an unreleased branch, also take 97 and on (97…99), so whichever
+/// of the two lands second renumbers its own cases — and, for this one, re-records the `ornaments` replay chain. No
+/// release has carried either.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -628,6 +632,14 @@ import Wirelet
 /// tag 3: hasAnchor  u8, varint — 0 = no anchor written, 1 = `anchor` names one
 /// tag 4: anchor     u8, varint — 0 above / 1 below, else throws; 0 when hasAnchor == 0
 /// tag 5: present    u8, varint — 1 = write the mark, 0 = take every entry of that kind off
+/// ```
+///
+/// `SetOrnamentIntentWire` (`setOrnament`'s payload, index 97 — listed beside the articulation it is modeled on):
+/// ```
+/// tag 1: location  VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: kind      string — `ChordOrnament.Kind.mscxToken`; an UNKNOWN token decodes to `.unknown(subtype:)` rather
+///                  than throwing, the articulation's exception
+/// tag 3: present   u8, varint — 1 = write the ornament, 0 = take every entry of that kind off
 /// ```
 ///
 /// `GraceNoteWire` (one element of `GraceChordWire.notes`):
@@ -1178,6 +1190,8 @@ public enum EditIntentWire {
     /// Appended for folino's rit. / accel. lines in a score made from a recording (2026-11-09) — index 96. Never
     /// renumber anything above it.
     case setGradualTempoChange(SetGradualTempoChangeIntentWire)
+    /// Appended for entering ornaments (folino #14) — index 97, provisional: see this file's doc comment.
+    case setOrnament(SetOrnamentIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1394,6 +1408,8 @@ public enum EditIntentWire {
             self = .revoiceDrumStaff(RevoiceDrumStaffIntentWire(staff: staff, assignments: assignments, policy: policy))
         case let .setGradualTempoChange(range, type, factor):
             self = .setGradualTempoChange(SetGradualTempoChangeIntentWire(range: range, type: type, factor: factor))
+        case let .setOrnament(location, kind, present):
+            self = .setOrnament(SetOrnamentIntentWire(location: location, kind: kind, present: present))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         case let .setElementColor(target, color):
@@ -1697,6 +1713,9 @@ public enum EditIntentWire {
         case let .setGradualTempoChange(wire):
             let decoded = try wire.decoded()
             return .setGradualTempoChange(over: decoded.range, type: decoded.type, factor: decoded.factor)
+        case let .setOrnament(wire):
+            let decoded = wire.decoded()
+            return .setOrnament(at: decoded.location, kind: decoded.kind, present: decoded.present)
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)

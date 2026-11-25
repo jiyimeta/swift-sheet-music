@@ -65,7 +65,7 @@ import Testing
                  .setGlissando, .setTie:
                 .preserved
             // Chord / element value writes.
-            case .setArticulation, .setTremolo, .setArpeggio, .setChordLine,
+            case .setArticulation, .setOrnament, .setTremolo, .setArpeggio, .setChordLine,
                  .setElementVisible, .setStemVisible, .setBeamVisible,
                  .setElementColor, .setElementPlacement:
                 .preserved

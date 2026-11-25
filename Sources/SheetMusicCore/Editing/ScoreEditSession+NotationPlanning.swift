@@ -1,7 +1,8 @@
 import SheetMusicFoundation
 
-/// `ScoreEditSession`'s planning half for the parity project's note / chord intents (50…57). Its own file for the
-/// reason `+MarkPlanning.swift` exists: `+Planning.swift` sits at its line budget.
+/// `ScoreEditSession`'s planning half for the parity project's note / chord intents (50…57) and the ones appended to
+/// that group since. Its own file for the reason `+MarkPlanning.swift` exists: `+Planning.swift` sits at its line
+/// budget.
 ///
 /// Every planner here follows the standing rule: an intent that restates what the score already says plans to
 /// `nil` (`.nothingToApply`), never to a self-restoring undo entry. Each reads the score through the command's own
@@ -23,6 +24,10 @@ extension ScoreEditSession {
             guard let current = SetArticulation.current(at: location, kind: kind, in: score) else { return command }
             let wanted = present ? [ChordArticulation(kind: kind, anchor: anchor)] : []
             return current == wanted ? nil : command
+        case let .setOrnament(location, kind, present):
+            let command = SetOrnament(at: location, kind: kind, present: present)
+            guard let current = SetOrnament.current(at: location, kind: kind, in: score) else { return command }
+            return current.isEmpty == !present ? nil : command
         case let .setGraceNotes(location, before, after):
             let command = SetGraceNotes(at: location, before: before, after: after)
             guard let current = SetGraceNotes.current(at: location, in: score) else { return command }

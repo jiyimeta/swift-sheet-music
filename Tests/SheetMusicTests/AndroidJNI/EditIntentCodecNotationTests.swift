@@ -4,8 +4,8 @@ import Testing
 import Wirelet
 
 /// Round trips, discriminator pins and hand-mutated-wire refusals for the note / chord payloads (intents 50…57,
-/// edit-command parity group 4). Its own file, like `EditIntentCodecMarkTests`, because `EditIntentCodecTests.swift`
-/// is past SwiftLint's 400-line budget already.
+/// edit-command parity group 4, and 97, `setOrnament`). Its own file, like `EditIntentCodecMarkTests`, because
+/// `EditIntentCodecTests.swift` is past SwiftLint's 400-line budget already.
 @Suite("EditIntentCodec — notation payloads")
 struct EditIntentCodecNotationTests {
     private static let staff = StaffAddress(partIndex: 1, staffIndexInPart: 1)
@@ -45,6 +45,9 @@ struct EditIntentCodecNotationTests {
         .setChordLine(at: slot, kind: nil, isStraight: false),
         .setNoteParentheses(at: note, parentheses: .both),
         .setNoteParentheses(at: note, parentheses: .none),
+        .setOrnament(at: slot, kind: .trill, present: true),
+        .setOrnament(at: slot, kind: .precompMordentUpperPrefix, present: false),
+        .setOrnament(at: slot, kind: .unknown(subtype: "ornamentComma"), present: true),
     ]
 
     @Test("every notation intent survives an encode/decode round trip", arguments: cases)
@@ -140,6 +143,28 @@ struct EditIntentCodecNotationTests {
         grace.before[0].graceType = "quaver"
         #expect(throws: WireFormatError.unknownChoiceDiscriminator(0)) {
             try EditIntentCodec.decode(EditIntentWire.setGraceNotes(grace).encodeToData())
+        }
+    }
+
+    /// Intent 97's bytes, derived by hand from the tag table in `EditIntentCodec`'s doc comment: the discriminator, the
+    /// 12-byte slot, the token and the flag. The index is provisional (see that comment); the payload is not.
+    @Test func `an ornament crosses as its token`() throws {
+        let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let slot = VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
+        let intent = EditIntent.setOrnament(at: slot, kind: .turn, present: true)
+        let expected: [UInt8] = [
+            0x21, 0x61, 0x0A, 0x1E,
+            0x0A, 0x0C, 0x0A, 0x04, 0x08, 0x00, 0x10, 0x00, 0x10, 0x00, 0x18, 0x00, 0x20, 0x00,
+            0x12, 0x0C, 0x6F, 0x72, 0x6E, 0x61, 0x6D, 0x65, 0x6E, 0x74, 0x54, 0x75, 0x72, 0x6E,
+            0x18, 0x01,
+        ]
+        #expect([UInt8](EditIntentCodec.encode(intent)) == expected)
+        #expect(EditIntentCodec.encode(intent)[1] == 97)
+        for kind in ChordOrnament.Kind.modeled {
+            for present in [true, false] {
+                let intent = EditIntent.setOrnament(at: Self.slot, kind: kind, present: present)
+                #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
+            }
         }
     }
 

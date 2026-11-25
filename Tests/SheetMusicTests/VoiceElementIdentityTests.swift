@@ -142,6 +142,20 @@ struct VoiceElementIdentityTests {
         #expect(identifiers(editor.score) == before)
     }
 
+    @Test func ornamentChangesValueAndKeepsIdentity() throws {
+        let editor = ScoreEditor(score: score([chord()]))
+        let before = identifiers(editor.score)
+        try editor.apply(SetOrnament(at: location, kind: .trill, present: true))
+        #expect(elements(editor.score)[0] != chord())
+        #expect(identifiers(editor.score) == before)
+        try editor.apply(SetOrnament(at: location, kind: .trill, present: false))
+        #expect(elements(editor.score)[0] == chord())
+        #expect(identifiers(editor.score) == before)
+        try editor.undo()
+        #expect(elements(editor.score)[0] != chord())
+        #expect(identifiers(editor.score) == before)
+    }
+
     @Test func splitRestKeepsOnlyOnsetPieceIdentity() throws {
         let editor = ScoreEditor(score: score([.rest(duration: .whole)]))
         let before = identifiers(editor.score)

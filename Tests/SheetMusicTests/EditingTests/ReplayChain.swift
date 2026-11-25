@@ -149,5 +149,22 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
         minimumDistinctFingerprints: 10,
     )
 
-    static let all: [ReplayChain] = [.standard, .parity, .lyrics, .properties]
+    /// Intent 97's chain, `setOrnament`: a chain of its own because `standard` and `parity` are frozen and the other
+    /// two are other projects' families.
+    ///
+    /// **Its index is provisional** (`EditIntentCodec`'s doc comment): should 97 be renumbered before a release, every
+    /// `step-N.bin` and the web fixture's payloads are re-recorded for it. That is the one re-recording this chain
+    /// expects; its fingerprints do not move with it.
+    static let ornaments = ReplayChain(
+        name: "ornaments",
+        androidAssetDir: "editReplay-ornaments",
+        androidTestFileName: "EditSessionReplayOrnamentsTest.kt",
+        webFixtureStem: "edit-replay-ornaments",
+        fixture: { EditingFixtures.twoConsecutiveC4Chords() },
+        steps: { EditReplayScript.ornaments(staff: $0) },
+        // The initial state and the five the script introduces, derived before recording: see the script's doc comment.
+        minimumDistinctFingerprints: 6,
+    )
+
+    static let all: [ReplayChain] = [.standard, .parity, .lyrics, .properties, .ornaments]
 }

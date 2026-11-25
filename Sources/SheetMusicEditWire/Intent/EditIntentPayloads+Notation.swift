@@ -2,10 +2,11 @@ import SheetMusicCore
 import SheetMusicFoundation
 import Wirelet
 
-// Payload structs for intents 50…53 (edit-command parity, group 4) and the two list element mirrors
-// `SetGraceNotesIntentWire` carries. Tag layouts live in `EditIntentCodec.swift`'s file comment beside the older
-// payloads; the rules there apply unchanged — every field mandatory, optionals as `has` + value pairs, enums this
-// codec does not own as raw strings, small closed enums as `u8` with a hand-written throwing table.
+// Payload structs for intents 50…53 (edit-command parity, group 4), for `setOrnament` (97), which is modeled on
+// `setArticulation`, and for the two list element mirrors `SetGraceNotesIntentWire` carries. Tag layouts live in
+// `EditIntentCodec.swift`'s file comment beside the older payloads; the rules there apply unchanged — every field
+// mandatory, optionals as `has` + value pairs, enums this codec does not own as raw strings, small closed enums as `u8`
+// with a hand-written throwing table.
 //
 // `SetGraceNotesIntentWire` is the codec's first NESTED list of structs: a `[GraceChordWire]` each element of
 // which holds a `[GraceNoteWire]`. Wirelet frames both the same way it frames `SetJumpsIntentWire.jumps`
@@ -41,6 +42,29 @@ public struct SetArticulationIntentWire {
             location: location.decoded(),
             kind: ChordArticulation.Kind(mscxToken: kind) ?? .unknown(subtype: kind),
             anchor: hasAnchor == 0 ? nil : (anchor == 1 ? .below : .above),
+            present: present != 0,
+        )
+    }
+}
+
+@WireFormat
+public struct SetOrnamentIntentWire {
+    public var location: VoiceElementIDWire
+    public var kind: String
+    public var present: UInt8
+
+    public init(location: VoiceElementID, kind: ChordOrnament.Kind, present: Bool) {
+        self.location = VoiceElementIDWire(from: location)
+        self.kind = kind.mscxToken
+        self.present = present ? 1 : 0
+    }
+
+    /// A token the Core table does not know becomes `.unknown(subtype:)` — `SetArticulationIntentWire`'s rule, for its
+    /// reason.
+    public func decoded() -> (location: VoiceElementID, kind: ChordOrnament.Kind, present: Bool) {
+        (
+            location: location.decoded(),
+            kind: ChordOrnament.Kind(mscxToken: kind) ?? .unknown(subtype: kind),
             present: present != 0,
         )
     }

@@ -46,6 +46,28 @@ struct NotationPlanningTests {
         #expect(ScoreEditSession.notationCommand(for: clearOther, in: score) == nil)
     }
 
+    @Test("a restating ornament plans to nothing, whatever the one on the chord carries")
+    func ornament() {
+        var score = EditingFixtures.parityFixture()
+        let target = Self.bar2(0)
+        let write = EditIntent.setOrnament(at: target, kind: .trill, present: true)
+        let clear = EditIntent.setOrnament(at: target, kind: .trill, present: false)
+        #expect(ScoreEditSession.notationCommand(for: write, in: score) is SetOrnament)
+        #expect(ScoreEditSession.notationCommand(for: clear, in: score) == nil)
+        guard case var .chord(chord)? = score[target] else { return #expect(Bool(false)) }
+        chord.ornaments = [ChordOrnament(kind: .trill, plays: false, anchor: .bottom)]
+        score[target] = .chord(chord)
+        #expect(ScoreEditSession.notationCommand(for: write, in: score) == nil)
+        #expect(ScoreEditSession.notationCommand(for: clear, in: score) is SetOrnament)
+        // Another kind is neither: it is added beside the one that is there, and has nothing to take off.
+        #expect(ScoreEditSession.notationCommand(
+            for: .setOrnament(at: target, kind: .turn, present: true), in: score,
+        ) is SetOrnament)
+        #expect(ScoreEditSession.notationCommand(
+            for: .setOrnament(at: target, kind: .turn, present: false), in: score,
+        ) == nil)
+    }
+
     @Test("grace notes restate only when both lists match")
     func graceNotes() throws {
         var score = EditingFixtures.parityFixture()
@@ -182,6 +204,7 @@ struct NotationPlanningTests {
         EditIntent.setDots(at: missing, dots: 0),
         EditIntent.setChordLine(at: missing, kind: nil, isStraight: false),
         EditIntent.setNoteParentheses(at: missingNote, parentheses: .none),
+        EditIntent.setOrnament(at: missing, kind: .trill, present: false),
     ])
     func missingTargetPlansToTheCommand(intent: EditIntent) {
         let score = EditingFixtures.parityFixture()

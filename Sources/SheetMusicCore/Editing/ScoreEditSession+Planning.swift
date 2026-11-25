@@ -144,7 +144,7 @@ extension ScoreEditSession {
              .setJumps, .setMarkers, .setChordSymbol, .setLyricSyllables:
             return markCommand(for: intent, in: score)
         case .setArticulation, .setGraceNotes, .setTremolo, .setArpeggio, .setGlissando, .setDots, .setChordLine,
-             .setNoteParentheses, .setNoteSmall, .setNotePlay:
+             .setNoteParentheses, .setNoteSmall, .setNotePlay, .setOrnament:
             return notationCommand(for: intent, in: score)
         case .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible, .setTextVisible:
             return visibilityCommand(for: intent, in: score)
