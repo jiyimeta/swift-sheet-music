@@ -84,7 +84,7 @@ enum RangeCopyPlacement {
         // Where each source tuplet's members ended up, keyed by its index into `stream.tuplets`.
         var tupletMembers: [Int: [TupletMember]] = [:]
 
-        for (absoluteTick, lengthTicks, element) in stream.elements {
+        for (absoluteTick, lengthTicks, element) in breakingCutTremoloPairs(stream.elements, division: division) {
             guard case let .chord(chord) = element else {
                 // A non-timed element the copy carries — a clef, a dynamic, a chord symbol. It is placed at its
                 // own offset and nothing else: it has no extent, so the cut path below would have nothing to
@@ -182,22 +182,52 @@ enum RangeCopyPlacement {
             matchesStored = chord.duration.ticks(division: division) == length
         }
         guard !matchesStored else { return [.chord(chord)] }
-        guard chord.notes.isEmpty else {
-            return DurationChangeAlgorithm.makeChordChain(
-                from: chord,
-                durations: bar.durations(forTicks: length, at: position.tick, isRest: false),
-                onsetOwnership: .headIsOnset,
-            )
-        }
-        return bar.rests(forTicks: length, at: position.tick)
+        return cutPieces(
+            of: chord, ticks: length, rtickStart: position.tick, bar: bar, isHead: true, endsElement: true,
+        )
     }
 
-    /// The overhang path: `chord` is being cut into `ticks` worth of material starting at `rtickStart` within the
-    /// destination measure. `isHead` marks the call that carries the source chord's own onset; `endsElement`
+    /// `elements` with no two-note tremolo left on a pair the range's end cuts. MuseScore takes it off the note before
+    /// a shortened one, so that no pair has two lengths (`read460.cpp:606-625`), and refuses to copy a pair cut in its
+    /// first note (`checkEndForPartialCopy`, `dom/select.cpp:1434`) — that note lands here with no partner. Both are
+    /// then written as long as they last (`Chord.isWrittenDoubled`).
+    private static func breakingCutTremoloPairs(
+        _ elements: [RangeCopySource.CopiedElement], division: Int,
+    ) -> [RangeCopySource.CopiedElement] {
+        func unpair(_ chord: inout Chord) {
+            chord.tremolo = nil
+            chord.isWrittenDoubled = false
+        }
+        var result = elements
+        var before: Int?
+        for (index, entry) in elements.enumerated() {
+            guard case var .chord(chord) = entry.element else { continue }
+            defer { before = index }
+            // A `.measure` length is the bar's own, and no chord of that length is half of a pair.
+            if case .measure = chord.duration { continue }
+            guard !chord.notes.isEmpty, chord.duration.ticks(division: division) > entry.lengthTicks else { continue }
+            if chord.tremolo?.span == .between { unpair(&chord) }
+            if let before, case var .chord(first) = result[before].element, first.tremolo?.span == .between {
+                unpair(&first)
+                result[before].element = .chord(first)
+                chord.isWrittenDoubled = false
+            }
+            result[index].element = .chord(chord)
+        }
+        return result
+    }
+
+    /// `chord` re-spelled as `ticks` worth of material starting at `rtickStart` within the destination measure:
+    /// the part of an overhanging element that lies in one bar, or a whole element whose stored duration no longer
+    /// says how long it is. `isHead` marks the call that carries the source chord's own onset; `endsElement`
     /// marks the call that reaches the far end of the whole (possibly multi-piece) element. Every piece besides
     /// the true head ties back to what came before it, and every piece besides the true tail ties forward to
-    /// more material — `isHead` and `endsElement` are never both true, since a fully-fitting element never
-    /// reaches this helper.
+    /// more material.
+    ///
+    /// The head is the source chord with another duration, so it keeps everything on it — a shortened copy is the
+    /// same `Chord` in MuseScore too (`read460.cpp:602-633`). What follows it keeps the notes and a single-chord
+    /// tremolo, and nothing else (`Score::pasteChordRest`, `dom/paste.cpp:163-206`; `Chord::removeMarkings(true)`,
+    /// `dom/chord.cpp:2045`).
     private static func cutPieces(
         of chord: Chord, ticks: Int, rtickStart: Int, bar: BarMeter, isHead: Bool, endsElement: Bool,
     ) -> [VoiceElement] {
@@ -207,21 +237,24 @@ enum RangeCopyPlacement {
         let durations = bar.durations(forTicks: ticks, at: rtickStart, isRest: false)
         guard !durations.isEmpty else { return [] }
 
-        var pieces: [VoiceElement]
+        var pieces: [VoiceElement] = []
         if isHead {
             var head = chord
             head.duration = durations[0]
-            pieces = [settingTie(.chord(head), forward: 1)]
-            let continuationDurations = Array(durations.dropFirst())
-            if !continuationDurations.isEmpty {
-                pieces += DurationChangeAlgorithm.makeChordChain(
-                    from: chord, durations: continuationDurations, onsetOwnership: .allContinuation,
-                )
+            let isWhole = endsElement && durations.count == 1
+            pieces.append(isWhole ? .chord(head) : settingTie(.chord(head), forward: 1))
+        }
+        pieces += DurationChangeAlgorithm.makeChordChain(
+            from: chord, durations: Array(isHead ? durations.dropFirst() : durations[...]),
+            onsetOwnership: .allContinuation,
+        ).map { piece in
+            // `makeChordChain` takes its first piece for the onset, which here it never is.
+            transforming(piece) {
+                $0.arpeggio = nil
+                $0.bracket = nil
+                $0.lyrics = []
+                $0.tremolo = chord.tremolo?.span == .single ? chord.tremolo : nil
             }
-        } else {
-            pieces = DurationChangeAlgorithm.makeChordChain(
-                from: chord, durations: durations, onsetOwnership: .allContinuation,
-            )
         }
 
         // Every piece but the true head of the element is a continuation, so it always ties back to what came
@@ -242,7 +275,7 @@ enum RangeCopyPlacement {
     /// Sets `tieBack` and/or `tieForward` to `back`/`forward` on every note of a chord element. A `nil` argument
     /// leaves that side of the tie as the element already has it.
     private static func settingTie(_ element: VoiceElement, back: Int? = nil, forward: Int? = nil) -> VoiceElement {
-        settingTie(chordOf: element) { chord in
+        transforming(element) { chord in
             for index in chord.notes.indices {
                 chord.notes.updateNote(at: index) {
                     if let back { $0.tieBack = back }
@@ -252,7 +285,7 @@ enum RangeCopyPlacement {
         }
     }
 
-    private static func settingTie(chordOf element: VoiceElement, _ transform: (inout Chord) -> Void) -> VoiceElement {
+    private static func transforming(_ element: VoiceElement, _ transform: (inout Chord) -> Void) -> VoiceElement {
         guard case var .chord(chord) = element else { return element }
         transform(&chord)
         return .chord(chord)

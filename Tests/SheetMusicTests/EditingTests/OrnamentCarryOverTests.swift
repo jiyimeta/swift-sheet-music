@@ -4,8 +4,8 @@ import Foundation
 import Testing
 
 /// What every edit that rebuilds or moves a chord does with its ornaments: the same as with its articulations, each
-/// ornament with everything it carries. An edit that takes a chord's onset away — another note written over it, a copy
-/// cut short — drops both.
+/// ornament with everything it carries. An edit that takes a chord's onset away — another note written over it — drops
+/// both.
 @Suite("Ornaments carried through edits")
 struct OrnamentCarryOverTests {
     private static let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
@@ -252,8 +252,8 @@ struct OrnamentCarryOverTests {
         #expect(Self.carriers(after) == ["0.0 42", "0.1 36"])
     }
 
-    /// The edits that drop the marks: each takes the chord's onset away and leaves at most a tied continuation of it,
-    /// or a copy with its length re-spelled. The articulations go the same way; `carriers` is what says so.
+    /// The edits that drop the marks: each takes the chord's onset away and leaves at most a tied continuation of it.
+    /// The articulations go the same way; `carriers` is what says so.
     private static let drops: [Edit] = [
         Edit(
             name: "another note lengthened over its head",
@@ -281,14 +281,14 @@ struct OrnamentCarryOverTests {
         #expect(Self.chords(session.score).count == edit.chordCount)
     }
 
-    @Test("a copy cut short by the range's end drops them, as its articulations")
+    @Test("a copy cut short by the range's end keeps them, as its articulations")
     func cutCopy() throws {
         // The second voice's marked whole note starts inside the range and sounds past its end; its copy lands on the
         // half it still sounded for.
         let session = ScoreEditSession(score: Self.score(second: [Self.chord(72, .whole, marked: true)]))
         let range = Self.range(Self.slot(0, 1), Self.slot(0, 2))
         try #require(session.apply(.duplicateRange(over: range)))
-        #expect(Self.carriers(session.score) == ["0.0 72", "0.0 72", "0.1 72", "1.0 76"])
+        #expect(Self.carriers(session.score) == ["0.0 72", "0.0 72", "0.1 72", "0.1 72", "1.0 76"])
         #expect(Self.chords(session.score).filter { $0.place == "0.1 72" }.map(\.chord.duration) == [.half, .half])
     }
 }
