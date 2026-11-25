@@ -25,6 +25,9 @@ import SheetMusicFoundation
 /// - **`<offset>` and `<placement>`.** Shared `EngravingItem` state modeled by
 ///   `elementProperties`, not ornament-specific state or preserved markup.
 ///
+/// Drawn by `LayoutEngine.emitOrnaments` (SheetMusicLayout), every kind but
+/// `.unknown`.
+///
 /// Playback is not wired up: this library's MIDI renderer mirrors MuseScore's
 /// compat SMF export and does not yet realize ornaments into notes. The
 /// intervals are modeled so that it can.
@@ -62,6 +65,10 @@ public struct ChordOrnament: Sendable, Equatable {
     /// is `BELOW` (`dom/engravingitem.cpp:1689`), so the below accidental is
     /// written bare.
     public var accidentalBelow: Accidental?
+    /// Which side of the chord the author put the ornament on. `<anchor>`,
+    /// written as the enum's ordinal. `nil` means absent (`.auto` applies).
+    /// C++: `Pid::ARTICULATION_ANCHOR`.
+    public var anchor: Anchor?
     /// Base element properties shared with every engravable element, including
     /// the spatium-unit `<offset>`.
     public var elementProperties: ElementProperties
@@ -80,6 +87,7 @@ public struct ChordOrnament: Sendable, Equatable {
         plays: Bool? = nil,
         accidentalAbove: Accidental? = nil,
         accidentalBelow: Accidental? = nil,
+        anchor: Anchor? = nil,
         elementProperties: ElementProperties = .default,
         preservedMarkup: [PreservedXML] = [],
     ) {
@@ -93,6 +101,7 @@ public struct ChordOrnament: Sendable, Equatable {
         self.plays = plays
         self.accidentalAbove = accidentalAbove
         self.accidentalBelow = accidentalBelow
+        self.anchor = anchor
         self.elementProperties = elementProperties
         self.preservedMarkup = preservedMarkup
     }
@@ -258,6 +267,17 @@ extension ChordOrnament {
     /// interval and the `trillAlwaysShowCueNote` style.
     public enum CueNoteVisibility: String, Sendable, CaseIterable {
         case auto, on, off
+    }
+
+    /// Which side of the chord the ornament sits on.
+    /// C++: `mu::engraving::ArticulationAnchor` (`dom/articulation.h:59`).
+    /// Persisted as the ordinal.
+    public enum Anchor: Int, Sendable, CaseIterable {
+        case top = 0
+        case bottom = 1
+        /// MuseScore's choice: above for an upper voice, below for a lower
+        /// one, on the stem's side where several voices sound.
+        case auto = 2
     }
 
     /// Realization convention. C++: `mu::engraving::OrnamentStyle`

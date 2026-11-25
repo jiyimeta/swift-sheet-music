@@ -262,7 +262,7 @@ else is known to be missing:
 
 | Feature | Why it is out of reach today |
 | --- | --- |
-| Ornaments other than trill (turn, mordent, …) | the model has `Chord.ornaments` (`ChordOrnament`, 2026-09-04) and it round-trips through MSCX, but nothing consumes it — `SheetMusicLayout` and `SheetMusicMIDI` reference it zero times, so a turn or mordent read from a file is neither drawn nor played. An edit command would write a value with no visible or audible effect. What is out of reach is the engraving and the playback, not the model field. |
+| Ornaments other than trill (turn, mordent, …) | the model has `Chord.ornaments` (`ChordOrnament`, 2026-09-04) and it round-trips through MSCX, and `SheetMusicLayout` draws it, but no command writes it and a drawn ornament is no selectable item (`ScoreElementID` has no case for it). |
 | Manual stem direction | the model has the fields (`Chord.stemDirection`, `Chord.beamStemDirection`, 2026-10-26) — read from MSCX `<StemDirection>` and MusicXML `<stem>`, saved, and drawn — but no edit command writes them yet (MuseScore's Flip, `Score::cmdFlip`). |
 | Slash notation | no dedicated voice element represents it — a slash is neither a `Chord` nor a `Rest` in the model. |
 | Figured bass | no dedicated annotation type carries it — the model has nothing analogous to `Harmony` for a figured-bass numeral. |

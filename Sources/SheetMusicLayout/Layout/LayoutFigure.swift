@@ -4,22 +4,23 @@
 import SheetMusicCore
 import SheetMusicFoundation
 
-/// What a non-text annotation draws — ambitus, figured bass, fret diagrams, circled string numbers and `<Symbol>`s:
-/// strokes, ellipses and glyph / text runs, in measure-local points.
+/// What a non-text annotation draws — ambitus, figured bass, fret diagrams, circled string numbers, chord ornaments and
+/// `<Symbol>`s: strokes, ellipses and glyph / text runs, in measure-local points.
 public struct LayoutFigure: Sendable, Equatable {
     public enum Kind: Sendable, Equatable {
-        case symbol, ambitus, figuredBass, fretDiagram, stringNumber
+        case symbol, ambitus, figuredBass, fretDiagram, stringNumber, ornament
 
         /// How the skyline sees it: a symbol not at all (MuseScore neither autoplaces a segment's symbol nor lets it
         /// widen the segment, `dom/segment.cpp:2682-2683`); an ambitus as the header element it is; figured bass and
         /// a string number as a fixed obstacle (their placement says `autoplace: false`); a fret diagram with the chord
-        /// symbols it is laid out among.
+        /// symbols it is laid out among; an ornament as the articulation MuseScore's is.
         var shapeKind: ShapeItemKind? {
             switch self {
             case .symbol: nil
             case .ambitus: .keySignature
             case .figuredBass, .stringNumber: .staffText
             case .fretDiagram: .harmony
+            case .ornament: .articulation
             }
         }
     }

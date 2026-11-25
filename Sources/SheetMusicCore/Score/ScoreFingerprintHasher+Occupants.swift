@@ -70,6 +70,11 @@ extension FNV1a {
         combine(ornaments.count)
         for ornament in ornaments {
             combine(ornament)
+            // An ornament without an anchor hashes as it did before the field existed.
+            if let anchor = ornament.anchor {
+                combine(140)
+                combine(anchor.rawValue)
+            }
         }
     }
 
