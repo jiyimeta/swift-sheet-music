@@ -74,12 +74,14 @@ struct OrnamentPlanner {
     private let trillRanges: [TrillRange]
     /// Unpitched staves have no neighboring note to alternate with.
     private let isPitched: Bool
-    private let keyByMeasure: [Int]
+    private let keys: KeyTimeline
     private let compoundByMeasure: [Bool]
     /// The trill an open tie carries into its next chord.
     private var openFigure: OrnamentFigure?
 
-    init(staff: Staff, voiceIndex: Int, isDrumset: Bool, division: Int, tempoMap: ResolvedTempoMap) {
+    init(
+        staff: Staff, voiceIndex: Int, isDrumset: Bool, division: Int, tempoMap: ResolvedTempoMap, keys: KeyTimeline,
+    ) {
         self.staff = staff
         self.division = division
         durations = staff.measures.effectiveMeasureDurations()
@@ -87,31 +89,18 @@ struct OrnamentPlanner {
             staff: staff, voiceIndex: voiceIndex, division: division, tempoMap: tempoMap,
         )
         isPitched = !isDrumset && staff.group != "percussion"
-        var key = 0
+        self.keys = keys
         var isCompound = false
-        var keys: [Int] = []
         var compounds: [Bool] = []
         for measure in staff.measures {
-            // A signature standing inside the bar takes effect in the bars after it.
-            var later: Int?
             for voice in measure.voices {
-                var isAtStart = true
                 for element in voice.elements {
-                    switch element {
-                    case .chord: isAtStart = false
-                    case let .keySignature(signature):
-                        if isAtStart { key = signature.concertKey } else { later = signature.concertKey }
-                    case let .timeSignature(meter):
-                        isCompound = meter.numerator > 3 && meter.numerator.isMultiple(of: 3)
-                    default: break
-                    }
+                    guard case let .timeSignature(meter) = element else { continue }
+                    isCompound = meter.numerator > 3 && meter.numerator.isMultiple(of: 3)
                 }
             }
-            keys.append(key)
             compounds.append(isCompound)
-            key = later ?? key
         }
-        keyByMeasure = keys
         compoundByMeasure = compounds
     }
 
@@ -166,7 +155,8 @@ struct OrnamentPlanner {
         else { return nil }
         return MeasureAccidentals.semitones(
             from: note, bySteps: up ? interval.staffSteps : -interval.staffSteps, tick: tickInMeasure,
-            in: staff.measures[measureIndex], keySig: keyByMeasure[measureIndex],
+            // The key the bar opens in: a signature standing inside it takes effect in the bars after it.
+            in: staff.measures[measureIndex], keySig: keys.key(atMeasure: measureIndex),
             division: division, measureDuration: durations[measureIndex],
         ).map(abs)
     }

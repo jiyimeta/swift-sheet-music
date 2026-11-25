@@ -88,29 +88,35 @@ extension MidiRenderer {
         return 3.0 * omu * omu * u * easeIn + 3.0 * omu * u * u * (1.0 - easeOut) + u * u * u
     }
 
-    // MARK: - End-pitch lookup
+    // MARK: - End lookup
 
     /// Find the pitch of the first note of the next chord in the voice,
     /// scanning forward within `voiceElements` first and then into subsequent
-    /// measures' same-voice elements. Returns `nil` if no further chord
-    /// exists (the glissando caller then renders the start note normally).
-    static func glissandoEndPitch(
+    /// measures' same-voice elements, and the bar that chord is in. Returns
+    /// `nil` if no further chord exists (the glissando caller then renders the
+    /// start note normally).
+    ///
+    /// The bar says which key a diatonic glissando slides through: MuseScore
+    /// reads the accidentals of the END note's measure
+    /// (`chromaticPitchSteps`, `engraving/dom/utils.cpp:807`), so a slide
+    /// over a barline takes the key it arrives in.
+    static func glissandoEnd(
         voiceElements: [VoiceElement],
         afterElementIndex: Int,
         measures: [Measure],
         measureIndex: Int,
         voiceIndex: Int,
-    ) -> Int? {
+    ) -> (pitch: Int, measureIndex: Int)? {
         for i in (afterElementIndex + 1) ..< voiceElements.count {
             if case let .chord(next) = voiceElements[i], let first = next.notes.first {
-                return first.pitch
+                return (first.pitch, measureIndex)
             }
         }
         for m in (measureIndex + 1) ..< measures.count {
             guard voiceIndex < measures[m].voices.count else { continue }
             for element in measures[m].voices[voiceIndex].elements {
                 if case let .chord(next) = element, let first = next.notes.first {
-                    return first.pitch
+                    return (first.pitch, m)
                 }
             }
         }

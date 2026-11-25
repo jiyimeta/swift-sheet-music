@@ -59,9 +59,10 @@ extension MidiRenderer {
             tempoMap: tempoMap,
         )
         let capoPoints = CapoRanges.collect(staff: staff, division: division, tempoMap: tempoMap)
+        let keys = KeyTimeline(staff: staff, division: division)
         var ornamentPlanner = OrnamentPlanner(
             staff: staff, voiceIndex: voiceIndex, isDrumset: part.instrument.useDrumset,
-            division: division, tempoMap: tempoMap,
+            division: division, tempoMap: tempoMap, keys: keys,
         )
         // Original-tick base for each measure index, used to map
         // playback ticks (which include unrolled repeats) back to
@@ -156,17 +157,18 @@ extension MidiRenderer {
             // We do NOT bail early on `voiceIndex >= measure.voices.count`:
             // a measure that only has voice 0 may still need voice 1 played
             // when it's a repeat-group whose source has voice 1.
-            guard let effectiveVoice = MidiRenderer.resolvedVoice(
+            guard let source = MidiRenderer.resolvedSource(
                 measureIndex: entry.measureIndex,
                 staff: staff,
                 voiceIndex: voiceIndex,
             ) else { continue }
+            let effectiveVoice = source.voice
 
             // Guitar-bend chains resolve in a pre-pass over the whole voice:
             // a chain's suppression decisions depend on elements the walk has
             // not reached yet (does the next chord close the chain?), so they
             // cannot be taken element by element. Keyed by element index the
-            // way `glissandoEndPitch` is resolved per element below.
+            // way `glissandoEnd` is resolved per element below.
             let bendChainSlots = guitarBendChains(
                 voiceElements: effectiveVoice.elements.values,
             )
@@ -197,7 +199,6 @@ extension MidiRenderer {
 
             var localTick = entry.tickOffset
             var pauseTicksInMeasure = 0
-            var currentKey = firstKeySignature(in: staff)?.concertKey ?? 0
             let originalTickDelta = originalMeasureBase[entry.measureIndex] - entry.tickOffset
             // Tempo metas come from the resolved tempo map, written once on track 0 / voice 0
             // (`emitsTempoEvents`; MuseScore writes all tempo into the first track, exportmidi.cpp:55).
@@ -266,7 +267,6 @@ extension MidiRenderer {
                 let nominalDelta = originalTickDelta - pauseTicksInMeasure
                 let nominalOriginalTick = localTick + nominalDelta
                 var channel = channel(atOriginalTick: nominalOriginalTick)
-                if case let .keySignature(k) = element { currentKey = k.concertKey }
                 if consumedByTremolo.contains(elementIndex) {
                     consumedByTremolo.remove(elementIndex)
                     if case let .chord(c) = element {
@@ -341,7 +341,8 @@ extension MidiRenderer {
                     measures: staff.measures,
                     measureIndex: entry.measureIndex,
                     measureDuration: measureDuration,
-                    currentKey: currentKey,
+                    keys: keys,
+                    sourceMeasureIndex: source.measureIndex,
                     localTick: &localTick,
                     currentTempoBps: &currentTempoBps,
                     swingMap: swingMap,
@@ -356,6 +357,7 @@ extension MidiRenderer {
                     ottavaRanges: ottavaRanges,
                     capo: capo,
                     originalTickDelta: nominalDelta,
+                    originalMeasureBase: originalMeasureBase[entry.measureIndex],
                     graceTiming: graceTiming,
                     isCompoundMeter: ornamentPlanner.isCompoundMeter(atMeasure: entry.measureIndex),
                     ornaments: ornaments,
@@ -396,7 +398,9 @@ extension MidiRenderer {
         measures: [Measure],
         measureIndex: Int,
         measureDuration: Fraction,
-        currentKey: Int,
+        keys: KeyTimeline,
+        // The bar the played material is written in: `measureIndex`, or the bar a measure repeat stands for.
+        sourceMeasureIndex: Int,
         localTick: inout Int,
         currentTempoBps: inout Double,
         swingMap: SwingMap,
@@ -413,6 +417,7 @@ extension MidiRenderer {
         ottavaRanges: [OttavaRange],
         capo: CapoPoint?,
         originalTickDelta: Int,
+        originalMeasureBase: Int,
         graceTiming: GraceTiming,
         isCompoundMeter: Bool,
         ornaments: [NoteOrnament?],
@@ -460,8 +465,8 @@ extension MidiRenderer {
             // chord is recorded — even lyric-free ones — so melisma
             // continuations can be placed on the chords they cover.
             lyricAnchors.append(LyricMidiCodec.Anchor(tick: localTick, lyrics: chord.lyrics))
-            let glissandoEndPitch = chord.notes.contains(where: { $0.glissando != nil })
-                ? MidiRenderer.glissandoEndPitch(
+            let glissandoEnd = chord.notes.contains(where: { $0.glissando != nil })
+                ? MidiRenderer.glissandoEnd(
                     voiceElements: voiceElements,
                     afterElementIndex: elementIndex,
                     measures: measures,
@@ -469,6 +474,14 @@ extension MidiRenderer {
                     voiceIndex: voiceIndex,
                 )
                 : nil
+            let glissandoKey = if let glissandoEnd, glissandoEnd.measureIndex != measureIndex {
+                keys.key(atMeasure: glissandoEnd.measureIndex)
+            } else {
+                keys.key(
+                    atMeasure: sourceMeasureIndex,
+                    tickInMeasure: localTick + originalTickDelta - originalMeasureBase,
+                )
+            }
             // A legacy `<Bend>` curve needs the note's whole sounding
             // length, so its tie chain is resolved here — one element's
             // ticks are not enough, and the walk cannot see forward once
@@ -533,10 +546,10 @@ extension MidiRenderer {
                 instrument: instrument,
                 tempoBps: currentTempoBps,
                 division: division,
-                glissandoEndPitch: glissandoEndPitch,
+                glissandoEndPitch: glissandoEnd?.pitch,
                 bendChainSlots: bendChainSlots,
                 legacyBendSpans: legacyBendSpans,
-                currentKey: currentKey,
+                currentKey: glissandoKey,
                 events: &events,
                 tieGateDebt: &tieGateDebt,
                 chokes: &chokes,

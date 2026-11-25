@@ -52,6 +52,12 @@ and this project adheres to
   the `<subtype>` was never written and all four vibrato types came back `guitarVibrato` (a trill came back as the
   default `trill`). Both now write `<subtype>` first, and the payload's children nothing models are kept in
   `payloadMarkup`, as a gradual tempo change's are.
+- **A diatonic glissando plays in the key in force, not the score's first.** The voice walk started every bar from the
+  first bar's key signature and saw only the signatures in its own voice and bar, so a change in an earlier bar, or one
+  written in voice 1 while voice 2 plays, was lost — on every pass of a repeat and after a jump alike. The key is now
+  the staff's (`KeyTimeline`, which the ornaments read too): the one where the glissando stands, or, when it slides over
+  a barline, the one of the bar it ends in, as MuseScore's `chromaticPitchSteps` reads it. A measure repeat plays the
+  key of the bar it repeats.
 
 ## [4.46.0] - 2026-11-21
 

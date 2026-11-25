@@ -98,6 +98,15 @@ extension MidiRenderer {
         staff: Staff,
         voiceIndex: Int,
     ) -> Voice? {
+        resolvedSource(measureIndex: measureIndex, staff: staff, voiceIndex: voiceIndex)?.voice
+    }
+
+    /// `resolvedVoice` with the bar the notes are written in, which is not `measureIndex` in a measure repeat.
+    static func resolvedSource(
+        measureIndex: Int,
+        staff: Staff,
+        voiceIndex: Int,
+    ) -> (measureIndex: Int, voice: Voice)? {
         let measure = staff.measures[measureIndex]
         if let rep = explicitMeasureRepeatInAnyVoice(of: measure) {
             return chase(measureIndex: measureIndex - rep.numMeasures, staff: staff, voiceIndex: voiceIndex)
@@ -106,7 +115,7 @@ extension MidiRenderer {
             return chase(measureIndex: measureIndex - rep.numMeasures, staff: staff, voiceIndex: voiceIndex)
         }
         if voiceIndex < measure.voices.count {
-            return measure.voices[voiceIndex]
+            return (measureIndex, measure.voices[voiceIndex])
         }
         return nil
     }
@@ -166,7 +175,9 @@ extension MidiRenderer {
     /// Follow MeasureRepeat chains: if the source is also a repeat measure,
     /// keep walking back until a real measure is found, then strip metadata
     /// (KeySig/TimeSig/Clef) so we don't re-emit signatures the original set.
-    static func chase(measureIndex: Int, staff: Staff, voiceIndex: Int) -> Voice {
+    static func chase(
+        measureIndex: Int, staff: Staff, voiceIndex: Int,
+    ) -> (measureIndex: Int, voice: Voice) {
         var idx = measureIndex
         while idx >= 0 {
             guard voiceIndex < staff.measures[idx].voices.count else {
@@ -196,8 +207,8 @@ extension MidiRenderer {
                 }
             }
             let pairs = survivors.map { (candidate.elements.eid(at: $0), candidate.elements[$0]) }
-            return Voice(elements: IdentifiedArray(pairs))
+            return (idx, Voice(elements: IdentifiedArray(pairs)))
         }
-        return Voice(elements: [])
+        return (measureIndex, Voice(elements: []))
     }
 }
